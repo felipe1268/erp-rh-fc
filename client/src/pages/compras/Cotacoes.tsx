@@ -473,8 +473,11 @@ export default function Cotacoes() {
   const [editFreteTipo, setEditFreteTipo] = useState<Record<number, string>>({});
   const [editFormaPag, setEditFormaPag] = useState<Record<number, string>>({});
   const [condModalFornId, setCondModalFornId] = useState<number | null>(null);
-  const [condModoCustom, setCondModoCustom] = useState<Record<number, boolean>>({});
+  const [condModo, setCondModo] = useState<Record<number, "padrao" | "custom" | "fechamento">>({});
   const [condCustomParcelas, setCondCustomParcelas] = useState<Record<number, { valor: string; data: string }[]>>({});
+  const [condFechCiclo, setCondFechCiclo] = useState<Record<number, string>>({});
+  const [condFechDiaFixo, setCondFechDiaFixo] = useState<Record<number, string>>({});
+  const [condFechPrazo, setCondFechPrazo] = useState<Record<number, string>>({});
   const [editValorFrete, setEditValorFrete] = useState<Record<number, string>>({});
   const [editTransportadora, setEditTransportadora] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
@@ -1067,24 +1070,22 @@ export default function Cotacoes() {
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Parcelamento</p>
                 <div className="flex bg-gray-100 rounded-lg p-0.5">
-                  <button type="button" onClick={() => { setCondModoCustom(prev => ({ ...prev, [fId]: false })); }}
-                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${!condModoCustom[fId] ? "bg-white text-violet-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-                    Padrão
-                  </button>
-                  <button type="button" onClick={() => {
-                    setCondModoCustom(prev => ({ ...prev, [fId]: true }));
-                    if (!condCustomParcelas[fId]?.length) {
-                      const hoje = new Date().toISOString().split("T")[0];
-                      setCondCustomParcelas(prev => ({ ...prev, [fId]: [{ valor: fornTotal.toFixed(2), data: hoje }] }));
-                    }
-                  }}
-                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${condModoCustom[fId] ? "bg-white text-violet-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-                    Personalizado
-                  </button>
+                  {([["padrao", "Padrão"], ["fechamento", "Fechamento"], ["custom", "Personalizado"]] as const).map(([mode, label]) => (
+                    <button key={mode} type="button" onClick={() => {
+                      setCondModo(prev => ({ ...prev, [fId]: mode }));
+                      if (mode === "custom" && !condCustomParcelas[fId]?.length) {
+                        const hoje = new Date().toISOString().split("T")[0];
+                        setCondCustomParcelas(prev => ({ ...prev, [fId]: [{ valor: fornTotal.toFixed(2), data: hoje }] }));
+                      }
+                    }}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${(condModo[fId] ?? "padrao") === mode ? "bg-white text-violet-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {!condModoCustom[fId] ? (
+              {(condModo[fId] ?? "padrao") === "padrao" ? (
                 <>
                   <div className="grid grid-cols-3 gap-1.5">
                     {TIPOS_PAGAMENTO.map(t => (
@@ -1122,6 +1123,103 @@ export default function Cotacoes() {
                     ) : null;
                   })()}
                 </>
+              ) : (condModo[fId] ?? "padrao") === "fechamento" ? (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                    <p className="text-xs text-blue-700">O fornecedor agrupa as compras em ciclos e emite a cobrança após o fechamento. Defina o ciclo e o prazo de pagamento após cada fechamento.</p>
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Ciclo de Fechamento</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { v: "7", l: "Semanal", desc: "A cada 7 dias" },
+                        { v: "15", l: "Quinzenal", desc: "A cada 15 dias" },
+                        { v: "30", l: "Mensal", desc: "A cada 30 dias" },
+                        { v: "fixo", l: "Dias fixos", desc: "Ex: dia 1 e 15" },
+                      ].map(c => (
+                        <button key={c.v} type="button" onClick={() => setCondFechCiclo(prev => ({ ...prev, [fId]: prev[fId] === c.v ? "" : c.v }))}
+                          className={`flex flex-col items-start px-3 py-2.5 rounded-xl border-2 transition-all ${condFechCiclo[fId] === c.v ? "bg-blue-100 text-blue-700 border-blue-400 ring-2 ring-blue-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                          <span className="text-sm font-medium">{c.l}</span>
+                          <span className="text-[10px] opacity-70">{c.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {condFechCiclo[fId] === "fixo" && (
+                    <div>
+                      <label className="text-[11px] text-gray-500 mb-1 block">Dias de fechamento no mês (separar por vírgula)</label>
+                      <input type="text" placeholder="Ex: 1, 15" value={condFechDiaFixo[fId] ?? ""}
+                        onChange={e => setCondFechDiaFixo(prev => ({ ...prev, [fId]: e.target.value }))}
+                        className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none" />
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Prazo após Fechamento</p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {["7", "14", "21", "28", "30", "45", "60", "90"].map(d => (
+                        <button key={d} type="button" onClick={() => setCondFechPrazo(prev => ({ ...prev, [fId]: prev[fId] === d ? "" : d }))}
+                          className={`px-2 py-2 rounded-lg text-xs font-medium border-2 transition-all text-center ${condFechPrazo[fId] === d ? "bg-blue-100 text-blue-700 border-blue-400 ring-2 ring-blue-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                          {d} dias
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {condFechCiclo[fId] && condFechPrazo[fId] && (() => {
+                    const hoje = new Date();
+                    const ciclo = condFechCiclo[fId];
+                    const prazo = parseInt(condFechPrazo[fId]);
+
+                    let proximoFech: Date;
+                    if (ciclo === "fixo") {
+                      const dias = (condFechDiaFixo[fId] ?? "1,15").split(",").map(d => parseInt(d.trim())).filter(d => !isNaN(d) && d >= 1 && d <= 31).sort((a, b) => a - b);
+                      if (dias.length === 0) return null;
+                      const proximo = dias.find(d => d > hoje.getDate());
+                      proximoFech = new Date(hoje.getFullYear(), hoje.getMonth(), proximo ?? dias[0]);
+                      if (!proximo) proximoFech.setMonth(proximoFech.getMonth() + 1);
+                    } else {
+                      const cicloDias = parseInt(ciclo);
+                      proximoFech = new Date(hoje);
+                      proximoFech.setDate(proximoFech.getDate() + (cicloDias - (hoje.getDate() % cicloDias)));
+                    }
+
+                    const vencimento = new Date(proximoFech);
+                    vencimento.setDate(vencimento.getDate() + prazo);
+
+                    const cicloLabel = ciclo === "fixo" ? `Dias fixos (${condFechDiaFixo[fId] || "1, 15"})` : ciclo === "7" ? "Semanal" : ciclo === "15" ? "Quinzenal" : "Mensal";
+
+                    return (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                        <p className="text-xs font-bold text-blue-700 mb-3">Simulação</p>
+                        <div className="space-y-2">
+                          <div className="flex justify-between bg-white rounded-lg px-3 py-2 border border-blue-100">
+                            <span className="text-xs text-blue-600">Ciclo</span>
+                            <span className="text-xs font-bold text-blue-800">{cicloLabel}</span>
+                          </div>
+                          <div className="flex justify-between bg-white rounded-lg px-3 py-2 border border-blue-100">
+                            <span className="text-xs text-blue-600">Próximo fechamento</span>
+                            <span className="text-xs font-bold text-blue-800">{proximoFech.toLocaleDateString("pt-BR")}</span>
+                          </div>
+                          <div className="flex justify-between bg-white rounded-lg px-3 py-2 border border-blue-100">
+                            <span className="text-xs text-blue-600">Prazo pós-fechamento</span>
+                            <span className="text-xs font-bold text-blue-800">{prazo} dias</span>
+                          </div>
+                          <div className="flex justify-between bg-white rounded-lg px-3 py-2.5 border-2 border-blue-300 bg-blue-100">
+                            <span className="text-xs font-bold text-blue-700">Vencimento estimado</span>
+                            <span className="text-sm font-bold text-blue-900">{vencimento.toLocaleDateString("pt-BR")}</span>
+                          </div>
+                          <div className="flex justify-between bg-white rounded-lg px-3 py-2 border border-blue-100">
+                            <span className="text-xs text-blue-600">Valor</span>
+                            <span className="text-sm font-bold text-blue-800">{formatCurrency(fornTotal)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
