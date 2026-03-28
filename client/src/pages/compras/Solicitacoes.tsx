@@ -43,28 +43,8 @@ const PRIORIDADE_COR: Record<string, string> = {
 };
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "vb"];
 
-const CONVERSOES_UNIDADE: { padrao: RegExp; unidade: string; fator: number; nomeConversao: string }[] = [
-  { padrao: /cimento/i, unidade: "kg", fator: 50, nomeConversao: "sacos de 50kg" },
-  { padrao: /cal\s|cal$/i, unidade: "kg", fator: 20, nomeConversao: "sacos de 20kg" },
-  { padrao: /argamassa/i, unidade: "kg", fator: 20, nomeConversao: "sacos de 20kg" },
-  { padrao: /areia|brita|pedra|pedrisco/i, unidade: "m³", fator: 6, nomeConversao: "caminhões (6m³)" },
-  { padrao: /tinta.*18|18.*litro|lata.*18/i, unidade: "L", fator: 18, nomeConversao: "latas de 18L" },
-  { padrao: /tinta.*3[,.]?6|galão|galao/i, unidade: "L", fator: 3.6, nomeConversao: "galões de 3,6L" },
-  { padrao: /tinta/i, unidade: "L", fator: 18, nomeConversao: "latas de 18L" },
-  { padrao: /bloco|tijolo/i, unidade: "un", fator: 1000, nomeConversao: "milheiros" },
-  { padrao: /vergalhão|vergalhao|aço.*ca-?50|aço.*ca-?60|barra.*aço/i, unidade: "kg", fator: 12, nomeConversao: "barras (~12m)" },
-];
 
-function getConversao(descricao: string, unidade: string, quantidade: number): string | null {
-  if (quantidade <= 0) return null;
-  for (const conv of CONVERSOES_UNIDADE) {
-    if (conv.padrao.test(descricao) && conv.unidade === unidade) {
-      const qtdConvertida = quantidade / conv.fator;
-      return `≈ ${qtdConvertida < 1 ? qtdConvertida.toFixed(2) : Math.ceil(qtdConvertida).toLocaleString("pt-BR")} ${conv.nomeConversao}`;
-    }
-  }
-  return null;
-}
+
 
 interface ItemForm {
   descricao: string; unidade: string; quantidade: string; observacoes: string;
@@ -183,6 +163,43 @@ export default function Solicitacoes() {
     { companyId, obraId: parseInt(form.obraId), busca: insumoBusca || undefined },
     { enabled: modoSC === "insumo" && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 30_000 }
   );
+
+  const conversaoInput = useMemo(() => {
+    const items = insumosConsolidadosQ.data ?? [];
+    if (!items.length) return [];
+    return items.slice(0, 50).map((ins: any) => ({
+      descricao: ins.descricao as string,
+      unidade: (ins.unidade || "un") as string,
+      quantidade: ins.qtdTotalOrcada as number,
+    }));
+  }, [insumosConsolidadosQ.data]);
+
+  const conversaoQ = trpc.compras.getConversaoComercial.useQuery(
+    { insumos: conversaoInput },
+    { enabled: conversaoInput.length > 0, staleTime: 5 * 60_000 }
+  );
+
+  const conversaoMap = useMemo(() => {
+    const map: Record<string, { embalagem: string; fator: number }> = {};
+    if (!conversaoQ.data) return map;
+    for (let i = 0; i < conversaoQ.data.length; i++) {
+      const item = conversaoQ.data[i];
+      if (item.conversao && conversaoInput[i]) {
+        const key = `${conversaoInput[i].descricao.toLowerCase().trim()}|${conversaoInput[i].unidade.toLowerCase().trim()}`;
+        map[key] = { embalagem: item.conversao.embalagem, fator: item.conversao.fator };
+      }
+    }
+    return map;
+  }, [conversaoQ.data, conversaoInput]);
+
+  function getConversao(descricao: string, unidade: string, quantidade: number): string | null {
+    if (quantidade <= 0) return null;
+    const key = `${descricao.toLowerCase().trim()}|${unidade.toLowerCase().trim()}`;
+    const conv = conversaoMap[key];
+    if (!conv || !conv.fator || conv.fator <= 0) return null;
+    const qtdConvertida = quantidade / conv.fator;
+    return `≈ ${qtdConvertida < 1 ? qtdConvertida.toFixed(2) : Math.ceil(qtdConvertida).toLocaleString("pt-BR")} ${conv.embalagem}`;
+  }
 
   const sugestoesQ = trpc.compras.getSugestoesCompra.useQuery(
     { companyId, obraId: parseInt(form.obraId) },
@@ -1162,7 +1179,7 @@ export default function Solicitacoes() {
                           <span className="col-span-1 text-right">Saldo</span>
                           <span className="col-span-1 text-right">Comp.</span>
                           <span className="col-span-1 text-center">Qtd</span>
-                          <span className="col-span-2 text-center">Conversão</span>
+                          <span className="col-span-2 text-center flex items-center justify-center gap-1">Conversão {conversaoQ.isLoading && <span className="inline-block w-2.5 h-2.5 border border-purple-400 border-t-transparent rounded-full animate-spin" />}</span>
                         </div>
                         <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
                           {(insumosConsolidadosQ.data ?? []).map((ins: any) => {

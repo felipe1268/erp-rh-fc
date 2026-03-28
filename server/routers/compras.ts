@@ -41,6 +41,101 @@ setInterval(() => {
   }
 }, 60000);
 
+const conversaoCache = new Map<string, { unidadeComercial: string; fatorConversao: number; embalagem: string }>();
+
+async function ensureConversaoCacheTable() {
+  const db = await getDb();
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS insumos_conversao_cache (
+      chave TEXT PRIMARY KEY,
+      unidade_comercial TEXT NOT NULL,
+      fator_conversao NUMERIC NOT NULL,
+      embalagem TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+}
+let conversaoTableReady = false;
+
+async function getConversaoIA(insumos: { descricao: string; unidade: string }[]): Promise<Record<string, { unidadeComercial: string; fatorConversao: number; embalagem: string }>> {
+  if (!conversaoTableReady) {
+    await ensureConversaoCacheTable();
+    conversaoTableReady = true;
+  }
+  const db = await getDb();
+
+  const toResolve: { descricao: string; unidade: string; chave: string }[] = [];
+  const result: Record<string, { unidadeComercial: string; fatorConversao: number; embalagem: string }> = {};
+
+  for (const ins of insumos) {
+    const chave = `${ins.descricao.toLowerCase().trim()}|${ins.unidade.toLowerCase().trim()}`;
+    if (conversaoCache.has(chave)) {
+      result[chave] = conversaoCache.get(chave)!;
+      continue;
+    }
+    const dbRow = await db.execute(sql`SELECT unidade_comercial, fator_conversao, embalagem FROM insumos_conversao_cache WHERE chave = ${chave} LIMIT 1`);
+    const rows = (dbRow as any).rows || [];
+    if (rows.length > 0) {
+      const cached = { unidadeComercial: rows[0].unidade_comercial, fatorConversao: parseFloat(rows[0].fator_conversao), embalagem: rows[0].embalagem };
+      conversaoCache.set(chave, cached);
+      result[chave] = cached;
+      continue;
+    }
+    toResolve.push({ ...ins, chave });
+  }
+
+  if (toResolve.length === 0) return result;
+
+  const batchSize = 20;
+  for (let i = 0; i < toResolve.length; i += batchSize) {
+    const batch = toResolve.slice(i, i + batchSize);
+    const lista = batch.map((b, idx) => `${idx + 1}. "${b.descricao}" (unidade orçamento: ${b.unidade})`).join("\n");
+
+    try {
+      const aiResult = await invokeLLM({
+        messages: [
+          { role: "system", content: `Você é um especialista em materiais de construção civil no Brasil. Para cada insumo, informe como ele é REALMENTE vendido no mercado (embalagem comercial, unidade de venda, fator de conversão).
+
+REGRAS:
+- Responda APENAS com JSON válido, sem markdown
+- O JSON deve ser um array de objetos com: idx, embalagem, unidadeComercial, fatorConversao
+- embalagem: descrição curta da embalagem comercial real (ex: "saco 50kg", "balde 18L", "tambor 200L", "barra 12m", "caminhão 6m³", "m²", "m³")
+- unidadeComercial: unidade de venda (ex: "saco", "balde", "lata", "galão", "barra", "caminhão", "m²", "rolo")
+- fatorConversao: quantas unidades orçadas cabem em 1 embalagem comercial (ex: 1 saco de cimento = 50kg, então fator = 50)
+- Se o insumo já é vendido na mesma unidade do orçamento (ex: m², m³, un), retorne fatorConversao = 1 e embalagem = unidade original
+- NÃO invente embalagens que não existem no mercado. Cal líquido é vendido em baldes/tambores, não em sacos.
+- Considere as formas de comercialização mais comuns no mercado brasileiro de construção civil` },
+          { role: "user", content: `Determine a embalagem comercial real para cada insumo:\n${lista}` }
+        ],
+        maxTokens: 2048,
+      });
+
+      const content = aiResult.choices[0]?.message?.content || "";
+      const textContent = typeof content === "string" ? content : (content as any[]).map((c: any) => c.text || "").join("");
+      const jsonMatch = textContent.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as { idx: number; embalagem: string; unidadeComercial: string; fatorConversao: number }[];
+        for (const item of parsed) {
+          const batchItem = batch[item.idx - 1];
+          if (!batchItem) continue;
+          const fator = Number(item.fatorConversao);
+          if (!isFinite(fator) || fator <= 0) continue;
+          const conv = { unidadeComercial: item.unidadeComercial || "", fatorConversao: fator, embalagem: item.embalagem || "" };
+          result[batchItem.chave] = conv;
+          conversaoCache.set(batchItem.chave, conv);
+          try {
+            await db.execute(sql`INSERT INTO insumos_conversao_cache (chave, unidade_comercial, fator_conversao, embalagem) VALUES (${batchItem.chave}, ${conv.unidadeComercial}, ${conv.fatorConversao}, ${conv.embalagem}) ON CONFLICT (chave) DO UPDATE SET unidade_comercial = ${conv.unidadeComercial}, fator_conversao = ${conv.fatorConversao}, embalagem = ${conv.embalagem}`);
+          } catch {}
+        }
+      }
+    } catch (e: any) {
+      console.error("[ConversaoIA] Erro:", e.message);
+    }
+  }
+
+  return result;
+}
+
 async function calcScoreFornecedor(db: any, fornecedorId: number, companyId: number) {
   const ocsRows = await db.select().from(comprasOrdens)
     .where(and(
@@ -5177,6 +5272,34 @@ Retorne APENAS um JSON válido neste formato:
           insumosCobertos,
         };
       }).filter(r => r.totalInsumos > 0);
+    }),
+
+  getConversaoComercial: protectedProcedure
+    .input(z.object({
+      insumos: z.array(z.object({
+        descricao: z.string(),
+        unidade: z.string(),
+        quantidade: z.number(),
+      })).max(50),
+    }))
+    .query(async ({ input }) => {
+      const conversoes = await getConversaoIA(input.insumos);
+      return input.insumos.map(ins => {
+        const chave = `${ins.descricao.toLowerCase().trim()}|${ins.unidade.toLowerCase().trim()}`;
+        const conv = conversoes[chave];
+        if (!conv || conv.fatorConversao <= 0 || conv.fatorConversao === 1) return { descricao: ins.descricao, conversao: null };
+        const qtdConvertida = ins.quantidade / conv.fatorConversao;
+        return {
+          descricao: ins.descricao,
+          conversao: {
+            texto: `≈ ${qtdConvertida < 1 ? qtdConvertida.toFixed(2) : Math.ceil(qtdConvertida).toLocaleString("pt-BR")} ${conv.embalagem}`,
+            embalagem: conv.embalagem,
+            fator: conv.fatorConversao,
+            unidadeComercial: conv.unidadeComercial,
+            qtdConvertida: Math.ceil(qtdConvertida),
+          },
+        };
+      });
     }),
 
   editarSolicitacao: protectedProcedure

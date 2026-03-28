@@ -5730,4 +5730,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 23:30:00",
   },
+  {
+    version: 841,
+    titulo: "Compras: Conversão comercial inteligente por IA",
+    descricao: "A conversao de unidades agora usa inteligencia artificial para determinar como cada insumo e realmente vendido no mercado brasileiro de construcao civil. Cal liquido agora mostra baldes/tambores (nao sacos), vergalhao mostra barras com peso correto, etc. Resultados sao cacheados no banco para desempenho. Substitui as regras fixas anteriores por avaliacao real de mercado.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 23:45:00",
+  },
 ];
