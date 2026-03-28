@@ -1787,32 +1787,13 @@ Retorne APENAS um JSON válido neste formato:
       const isPdf = input.mimeType === "application/pdf";
 
       if (isPdf) {
-        let textoExtraido = "";
-        try {
-          const pdfParse = (await import("pdf-parse")).default;
-          const buffer = Buffer.from(input.fileBase64, "base64");
-          const pdfData = await pdfParse(buffer);
-          textoExtraido = pdfData.text ?? "";
-        } catch { /* ignore pdf parse errors */ }
-
-        if (textoExtraido.trim().length >= 50) {
-          const result = await invokeLLM({
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: `${prompt}\n\nTEXTO DO DOCUMENTO:\n${textoExtraido}` },
-            ],
-            maxTokens: 4096,
-          });
-          resultText = result.choices?.[0]?.message?.content ?? "";
-        } else {
-          resultText = await invokeAnthropicVision({
-            prompt: prompt + "\n\nNOTA: O PDF parece ser escaneado/imagem. Analise a imagem do documento.",
-            base64: input.fileBase64,
-            mimeType: "image/jpeg",
-            systemPrompt,
-            maxTokens: 4096,
-          });
-        }
+        resultText = await invokeAnthropicVision({
+          prompt,
+          base64: input.fileBase64,
+          mimeType: "application/pdf",
+          systemPrompt,
+          maxTokens: 4096,
+        });
       } else {
         resultText = await invokeAnthropicVision({
           prompt,

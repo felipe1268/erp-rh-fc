@@ -341,18 +341,31 @@ export async function invokeAnthropicVision(params: {
   const client = getAnthropicClient();
   if (!client) throw new Error("Anthropic não configurado");
 
+  const isPdf = params.mimeType === "application/pdf";
+
+  const contentBlock: any = isPdf
+    ? {
+        type: "document",
+        source: {
+          type: "base64",
+          media_type: "application/pdf",
+          data: params.base64,
+        },
+      }
+    : {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: params.mimeType as Anthropic.Messages.Base64ImageSource["media_type"],
+          data: params.base64,
+        },
+      };
+
   const messages: Anthropic.Messages.MessageParam[] = [
     {
       role: "user",
       content: [
-        {
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: params.mimeType as Anthropic.Messages.Base64ImageSource["media_type"],
-            data: params.base64,
-          },
-        },
+        contentBlock,
         { type: "text", text: params.prompt },
       ],
     },

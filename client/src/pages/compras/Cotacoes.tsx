@@ -1380,7 +1380,8 @@ export default function Cotacoes() {
                                                   const reader = new FileReader();
                                                   reader.onload = ev => {
                                                     const base64 = (ev.target?.result as string).split(",")[1];
-                                                    const mime = blob.type || (url.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+                                                    const nome = ((p as any).arquivoNome || url).toLowerCase();
+                                                const mime = blob.type || (nome.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
                                                     extrairIA.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: (p as any).arquivoNome || "arquivo", mimeType: mime });
                                                   };
                                                   reader.readAsDataURL(blob);
