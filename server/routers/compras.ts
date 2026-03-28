@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getCompaniesForUser } from "../db";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
+import { getTipoPagamentoInfo } from "../../shared/paymentConditions";
 import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { storagePut } from "../storage";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
@@ -1638,6 +1639,7 @@ Responda APENAS com um objeto JSON no formato:
       prazoEntregaDias: z.number().nullable().optional(),
       condicaoPagamento: z.string().optional(),
       tipoPagamento: z.string().optional(),
+      formaPagamento: z.string().optional(),
       numeroParcelas: z.number().optional(),
       freteTipo: z.string().optional(),
       valorFrete: z.number().optional(),
@@ -1684,6 +1686,7 @@ Responda APENAS com um objeto JSON no formato:
         prazoEntregaDias: input.prazoEntregaDias ?? null,
         condicaoPagamento: input.condicaoPagamento ?? null,
         tipoPagamento: input.tipoPagamento ?? null,
+        formaPagamento: input.formaPagamento ?? null,
         numeroParcelas: input.numeroParcelas ?? null,
         freteTipo: input.freteTipo ?? "cif",
         valorFrete: String(valorFrete.toFixed(2)),
@@ -1734,6 +1737,37 @@ Responda APENAS com um objeto JSON no formato:
       await db.update(comprasCotacaoFornecedores)
         .set({ totalOrcado: String(newTotal.toFixed(2)) } as any)
         .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      return { ok: true };
+    }),
+
+  salvarCondicoesComerciais: protectedProcedure
+    .input(z.object({
+      cotacaoId: z.number(),
+      fornecedorId: z.number(),
+      companyId: z.number(),
+      formaPagamento: z.string().optional(),
+      tipoPagamento: z.string().optional(),
+      condicaoPagamento: z.string().optional(),
+      numeroParcelas: z.number().optional(),
+      prazoEntregaDias: z.number().optional(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [cot] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (!cot || cot.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Cotação não pertence à empresa" });
+      const updateData: any = {};
+      if (input.formaPagamento !== undefined) updateData.formaPagamento = input.formaPagamento;
+      if (input.tipoPagamento !== undefined) updateData.tipoPagamento = input.tipoPagamento;
+      if (input.condicaoPagamento !== undefined) updateData.condicaoPagamento = input.condicaoPagamento;
+      if (input.numeroParcelas !== undefined) updateData.numeroParcelas = input.numeroParcelas;
+      if (input.prazoEntregaDias !== undefined) updateData.prazoEntregaDias = input.prazoEntregaDias;
+      if (input.observacoes !== undefined) updateData.observacoes = input.observacoes;
+      if (Object.keys(updateData).length > 0) {
+        await db.update(comprasCotacaoFornecedores)
+          .set(updateData)
+          .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      }
       return { ok: true };
     }),
 
@@ -1843,7 +1877,9 @@ INSTRUÇÕES:
 3. IMPORTANTE: Se um item do fornecedor corresponde a vários itens da SC (mesmo produto em linhas diferentes), use matchItemIds (array com todos os IDs)
 4. Se o item do fornecedor corresponde a apenas um item da SC, use matchItemId (singular)
 5. Compare a quantidade cotada pelo fornecedor com a quantidade total solicitada na SC
-6. Extraia condição de pagamento e prazo de entrega se mencionados
+6. Extraia condição de pagamento, prazo de entrega e forma de pagamento se mencionados
+7. FORMA DE PAGAMENTO: identifique como o pagamento será feito (boleto, pix, transferencia, cheque, cartao, deposito). Procure menções a "boleto", "PIX", "transferência bancária", "depósito", etc.
+8. PARCELAMENTO: identifique o tipo de parcelamento. Classifique como um destes valores: a_vista, 7ddl, 14ddl, 21ddl, 28ddl, 30ddl, 30_60, 30_60_90, entrada_30, entrada_30_60, medicao. Se não corresponder a nenhum, use "personalizado".
 
 Retorne APENAS um JSON válido neste formato:
 {
@@ -1861,6 +1897,8 @@ Retorne APENAS um JSON válido neste formato:
     }
   ],
   "condicaoPagamento": "30 DDL" ou null,
+  "formaPagamento": "boleto" ou "pix" ou "transferencia" ou "cheque" ou "cartao" ou "deposito" ou null,
+  "tipoPagamento": "30ddl" ou "30_60" ou "a_vista" etc. ou null,
   "prazoEntrega": "15 dias" ou null,
   "observacoes": "informações relevantes extraídas" ou null
 }`;
@@ -2022,6 +2060,22 @@ Retorne APENAS um JSON válido neste formato:
             }
           }
 
+          const iaFormaPag = parsed.formaPagamento ?? null;
+          const iaTipoPag = parsed.tipoPagamento ?? null;
+          if (iaFormaPag || iaTipoPag || parsed.condicaoPagamento) {
+            const updateCond: any = {};
+            if (iaFormaPag) updateCond.formaPagamento = iaFormaPag;
+            if (iaTipoPag) updateCond.tipoPagamento = iaTipoPag;
+            if (parsed.condicaoPagamento) updateCond.condicaoPagamento = parsed.condicaoPagamento;
+            if (iaTipoPag) {
+              const tipoInfo = getTipoPagamentoInfo(iaTipoPag);
+              if (tipoInfo) updateCond.numeroParcelas = tipoInfo.parcelas;
+            }
+            await db.update(comprasCotacaoFornecedores)
+              .set(updateCond)
+              .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+          }
+
           iaExtractionJobs.set(jobId, {
             status: "done",
             startedAt: Date.now(),
@@ -2032,6 +2086,8 @@ Retorne APENAS um JSON válido neste formato:
               itensExtras,
               alertas,
               condicaoPagamento: parsed.condicaoPagamento ?? null,
+              formaPagamento: iaFormaPag,
+              tipoPagamento: iaTipoPag,
               prazoEntrega: parsed.prazoEntrega ?? null,
               observacoes: parsed.observacoes ?? null,
               totalItensExtraidos: itensExtraidos.length,
@@ -2397,8 +2453,9 @@ Retorne APENAS um JSON válido neste formato:
         prazoEntregaDias: p.prazoEntregaDias ?? null,
         condicaoPagamento: p.condicaoPagamento ?? null,
         tipoPagamento: p.tipoPagamento ?? null,
+        formaPagamento: (p as any).formaPagamento ?? null,
         numeroParcelas: p.numeroParcelas ?? null,
-      }).where(eq(comprasCotacoes.id, input.cotacaoId));
+      } as any).where(eq(comprasCotacoes.id, input.cotacaoId));
       return { ok: true };
     }),
 
@@ -2581,6 +2638,7 @@ Retorne APENAS um JSON válido neste formato:
         total: String(totalOC.toFixed(2)),
         condicaoPagamento: fornInfo?.condicaoPagamento ?? cot.condicaoPagamento ?? null,
         tipoPagamento: fornInfo?.tipoPagamento ?? cot.tipoPagamento ?? null,
+        formaPagamento: (fornInfo as any)?.formaPagamento ?? (cot as any).formaPagamento ?? null,
         numeroParcelas: fornInfo?.numeroParcelas ?? cot.numeroParcelas ?? 1,
         freteTipo: freteTipoOC,
         transportadora: transportadoraOC,
@@ -2614,6 +2672,7 @@ Retorne APENAS um JSON válido neste formato:
           supplierNome: forn?.[0]?.razaoSocial || null,
           valorTotal: n(oc.total),
           tipoPagamento: oc.tipoPagamento,
+          formaPagamento: (oc as any).formaPagamento || null,
           numeroParcelas: oc.numeroParcelas ?? 1,
           dataBase: oc.dataEntregaPrevista || null,
           numero: oc.numeroOc,
@@ -2629,28 +2688,6 @@ Retorne APENAS um JSON válido neste formato:
       await db.update(comprasCotacoes).set({ status: "aprovada" }).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (cot.solicitacaoId) {
         await db.update(comprasSolicitacoes).set({ status: "aprovado", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
-      }
-
-      if (oc.fornecedorId) {
-        const [forn] = await db.select({ razaoSocial: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, oc.fornecedorId));
-        const { entryIds, apIds } = await criarParcelasFinanceiras({
-          ocId: oc.id,
-          companyId: input.companyId,
-          obraId: oc.obraId ?? undefined,
-          supplierId: oc.fornecedorId,
-          supplierNome: forn?.razaoSocial || null,
-          valorTotal: n(oc.total),
-          tipoPagamento: oc.tipoPagamento,
-          numeroParcelas: oc.numeroParcelas ?? 1,
-          dataBase: oc.dataEntregaPrevista || null,
-          numero: oc.numeroOc,
-        }, input.userId ?? 0, input.userName ?? "Sistema");
-
-        if (entryIds.length > 0) {
-          await db.update(comprasOrdens).set({
-            financialEntryId: entryIds[0],
-          }).where(eq(comprasOrdens.id, oc.id));
-        }
       }
 
       return oc;

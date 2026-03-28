@@ -88,6 +88,7 @@ export async function criarParcelasFinanceiras(
         parcelaNumero: parcela.numero,
         parcelaTotal: totalParcelas,
         parcelaGrupoId: grupoId,
+        formaPagamento: input.formaPagamento || null,
         criadoPorId: userId,
         criadoPorNome: userName,
       } as any).returning({ id: (financialEntries as any).id });

@@ -471,6 +471,7 @@ export default function Cotacoes() {
   const [editCondPag, setEditCondPag] = useState<Record<number, string>>({});
   const [editTipoPag, setEditTipoPag] = useState<Record<number, string>>({});
   const [editFreteTipo, setEditFreteTipo] = useState<Record<number, string>>({});
+  const [editFormaPag, setEditFormaPag] = useState<Record<number, string>>({});
   const [editValorFrete, setEditValorFrete] = useState<Record<number, string>>({});
   const [editTransportadora, setEditTransportadora] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
@@ -719,6 +720,7 @@ export default function Cotacoes() {
       }
 
       const tipoPagInicial: Record<number, string> = {};
+      const formaPagInicial: Record<number, string> = {};
       const freteTipoInicial: Record<number, string> = {};
       const valorFreteInicial: Record<number, string> = {};
       const transportadoraInicial: Record<number, string> = {};
@@ -726,6 +728,7 @@ export default function Cotacoes() {
         prazoInicial[p.fornecedorId] = p.prazoEntregaDias ? String(p.prazoEntregaDias) : "";
         condInicial[p.fornecedorId] = p.condicaoPagamento ?? "";
         tipoPagInicial[p.fornecedorId] = (p as any).tipoPagamento ?? "";
+        formaPagInicial[p.fornecedorId] = (p as any).formaPagamento ?? "";
         freteTipoInicial[p.fornecedorId] = (p as any).freteTipo ?? "cif";
         valorFreteInicial[p.fornecedorId] = (p as any).valorFrete ? String(parseFloat((p as any).valorFrete)) : "0";
         transportadoraInicial[p.fornecedorId] = (p as any).transportadora ?? "";
@@ -736,6 +739,7 @@ export default function Cotacoes() {
       setEditPrazo(prazoInicial);
       setEditCondPag(condInicial);
       setEditTipoPag(tipoPagInicial);
+      setEditFormaPag(formaPagInicial);
       setEditFreteTipo(freteTipoInicial);
       setEditValorFrete(valorFreteInicial);
       setEditTransportadora(transportadoraInicial);
@@ -830,10 +834,27 @@ export default function Cotacoes() {
             </div>
           </div>
 
-          {d.condicaoPagamento && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-sm text-blue-800">
-              <strong>Condição de Pagamento:</strong> {d.condicaoPagamento}
-              {d.prazoEntrega && <> | <strong>Prazo Entrega:</strong> {d.prazoEntrega}</>}
+          {(d.condicaoPagamento || d.formaPagamento || d.tipoPagamento) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-sm text-blue-800 flex items-center gap-3 flex-wrap">
+              {d.formaPagamento && (
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                  d.formaPagamento === "pix" ? "bg-green-100 text-green-700 border border-green-200" :
+                  d.formaPagamento === "boleto" ? "bg-blue-100 text-blue-700 border border-blue-200" :
+                  d.formaPagamento === "transferencia" ? "bg-indigo-100 text-indigo-700 border border-indigo-200" :
+                  "bg-gray-100 text-gray-700 border border-gray-200"
+                }`}>
+                  {d.formaPagamento === "pix" ? "⚡ PIX" :
+                   d.formaPagamento === "boleto" ? "📄 Boleto" :
+                   d.formaPagamento === "transferencia" ? "🏦 Transferência" :
+                   d.formaPagamento === "cheque" ? "📝 Cheque" :
+                   d.formaPagamento === "cartao" ? "💳 Cartão" :
+                   d.formaPagamento === "deposito" ? "💰 Depósito" :
+                   d.formaPagamento}
+                </span>
+              )}
+              {d.condicaoPagamento && <><strong>Condição:</strong> {d.condicaoPagamento}</>}
+              {d.tipoPagamento && <><strong>Parcelamento:</strong> {(() => { const info = getTipoPagamentoInfo(d.tipoPagamento); return info ? info.label : d.tipoPagamento; })()}</>}
+              {d.prazoEntrega && <><strong>Prazo:</strong> {d.prazoEntrega}</>}
             </div>
           )}
           {d.observacoes && (
@@ -1040,6 +1061,7 @@ export default function Cotacoes() {
         prazoEntregaDias: editPrazo[fornecedorId] ? parseInt(editPrazo[fornecedorId]) : undefined,
         condicaoPagamento: editCondPag[fornecedorId] || undefined,
         tipoPagamento: editTipoPag[fornecedorId] || undefined,
+        formaPagamento: editFormaPag[fornecedorId] || undefined,
         freteTipo: editFreteTipo[fornecedorId] || "cif",
         valorFrete: parseFloat(editValorFrete[fornecedorId] ?? "0") || 0,
         transportadora: editTransportadora[fornecedorId] || undefined,
@@ -1771,30 +1793,63 @@ export default function Cotacoes() {
                                     <div className={`border-t border-gray-100 border-r border-gray-200 text-xs text-gray-400 bg-blue-50/20 ${isMelhor ? "bg-emerald-50/20" : ""}`}>
                                       <div className="px-1 py-1 text-center truncate" style={{ minWidth: 0 }}>
                                         {editingFornId === p.fornecedorId ? (
-                                          <div className="space-y-1 px-1">
+                                          <div className="space-y-1.5 px-1">
+                                            <div className="flex flex-wrap gap-1">
+                                              {[
+                                                { v: "boleto", l: "Boleto", icon: "📄" },
+                                                { v: "pix", l: "PIX", icon: "⚡" },
+                                                { v: "transferencia", l: "Transf.", icon: "🏦" },
+                                                { v: "cheque", l: "Cheque", icon: "📝" },
+                                                { v: "cartao", l: "Cartão", icon: "💳" },
+                                                { v: "deposito", l: "Depósito", icon: "💰" },
+                                              ].map(fp => (
+                                                <button key={fp.v} type="button" onClick={() => setEditFormaPag(prev => ({ ...prev, [p.fornecedorId]: prev[p.fornecedorId] === fp.v ? "" : fp.v }))}
+                                                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${editFormaPag[p.fornecedorId] === fp.v ? "bg-violet-100 text-violet-700 border-violet-300 ring-1 ring-violet-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                                                  {fp.icon} {fp.l}
+                                                </button>
+                                              ))}
+                                            </div>
                                             <div className="flex gap-1">
-                                              <input type="number" placeholder="Prazo" value={editPrazo[p.fornecedorId] ?? ""} onChange={e => setEditPrazo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-20 h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900" />
+                                              <input type="number" placeholder="Prazo (dias)" value={editPrazo[p.fornecedorId] ?? ""} onChange={e => setEditPrazo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-20 h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900" />
                                               <select value={editTipoPag[p.fornecedorId] ?? ""} onChange={e => {
                                                 const val = e.target.value;
                                                 setEditTipoPag(prev => ({ ...prev, [p.fornecedorId]: val }));
                                                 const info = getTipoPagamentoInfo(val);
                                                 if (info) setEditCondPag(prev => ({ ...prev, [p.fornecedorId]: info.label }));
-                                              }} className="flex-1 h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900">
-                                                <option value="">— cond. —</option>
+                                              }} className="flex-1 h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900">
+                                                <option value="">— parcelamento —</option>
                                                 {TIPOS_PAGAMENTO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                               </select>
                                             </div>
                                             <div className="flex gap-1">
-                                              <select value={editFreteTipo[p.fornecedorId] ?? "cif"} onChange={e => setEditFreteTipo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-20 h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900">
+                                              <select value={editFreteTipo[p.fornecedorId] ?? "cif"} onChange={e => setEditFreteTipo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-20 h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900">
                                                 <option value="cif">CIF</option>
                                                 <option value="fob">FOB</option>
                                               </select>
-                                              <input type="number" step="0.01" min="0" placeholder="Frete R$" value={editValorFrete[p.fornecedorId] ?? "0"} onChange={e => setEditValorFrete(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-24 h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900" />
-                                              <input type="text" placeholder="Transportadora" value={editTransportadora[p.fornecedorId] ?? ""} onChange={e => setEditTransportadora(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="flex-1 h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900" />
+                                              <input type="number" step="0.01" min="0" placeholder="Frete R$" value={editValorFrete[p.fornecedorId] ?? "0"} onChange={e => setEditValorFrete(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-24 h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900" />
+                                              <input type="text" placeholder="Transportadora" value={editTransportadora[p.fornecedorId] ?? ""} onChange={e => setEditTransportadora(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="flex-1 h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900" />
                                             </div>
                                           </div>
                                         ) : (
                                           <div className="space-y-0.5">
+                                            {(p as any).formaPagamento && (
+                                              <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${
+                                                (p as any).formaPagamento === "pix" ? "bg-green-100 text-green-700" :
+                                                (p as any).formaPagamento === "boleto" ? "bg-blue-100 text-blue-700" :
+                                                (p as any).formaPagamento === "transferencia" ? "bg-indigo-100 text-indigo-700" :
+                                                (p as any).formaPagamento === "cheque" ? "bg-amber-100 text-amber-700" :
+                                                (p as any).formaPagamento === "cartao" ? "bg-purple-100 text-purple-700" :
+                                                "bg-gray-100 text-gray-600"
+                                              }`}>
+                                                {(p as any).formaPagamento === "pix" ? "⚡ PIX" :
+                                                 (p as any).formaPagamento === "boleto" ? "📄 Boleto" :
+                                                 (p as any).formaPagamento === "transferencia" ? "🏦 Transf." :
+                                                 (p as any).formaPagamento === "cheque" ? "📝 Cheque" :
+                                                 (p as any).formaPagamento === "cartao" ? "💳 Cartão" :
+                                                 (p as any).formaPagamento === "deposito" ? "💰 Dep." :
+                                                 (p as any).formaPagamento}
+                                              </span>
+                                            )}
                                             <span className="text-xs text-gray-400">{p.prazoEntregaDias ? `${p.prazoEntregaDias}d` : "—"} / {(() => { const info = getTipoPagamentoInfo((p as any).tipoPagamento); return info ? info.label : p.condicaoPagamento || "—"; })()}</span>
                                             {(parseFloat((p as any).valorFrete ?? "0") > 0 || (p as any).transportadora) && (
                                               <div className="text-[10px]">

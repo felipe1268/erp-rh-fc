@@ -5595,4 +5595,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 23:30:00",
   },
+  {
+    version: 825,
+    titulo: "Condições Comerciais — Forma de Pagamento visual + integração IA → Financeiro",
+    descricao: "Forma de pagamento (Boleto/PIX/Transferência/Cheque/Cartão/Depósito) como pills visuais no mapa de cotação por fornecedor, com badge colorido na visualização. IA extrai formaPagamento e tipoPagamento automaticamente da cotação do fornecedor e auto-salva no banco. Overlay IA exibe forma de pagamento extraída com badge visual + parcelamento + prazo. salvarRespostasLote agora persiste formaPagamento. Seleção de vencedor propaga formaPagamento para OC e gera parcelas financeiras com método de pagamento correto.",
+    tipo: "feature",
+    modulos: "Compras, Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 23:45:00",
+  },
 ];
