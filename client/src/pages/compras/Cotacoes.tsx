@@ -1127,89 +1127,56 @@ export default function Cotacoes() {
                 </>
               ) : (condModo[fId] ?? "padrao") === "fechamento" ? (
                 <div className="space-y-4">
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                    <p className="text-xs text-blue-700">O fornecedor agrupa as compras em ciclos e emite a cobrança após o fechamento. Defina o ciclo e o prazo de pagamento após cada fechamento.</p>
-                  </div>
-
-                  <div>
-                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Ciclo de Fechamento</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { v: "7", l: "Semanal", desc: "A cada 7 dias" },
-                        { v: "15", l: "Quinzenal", desc: "A cada 15 dias" },
-                        { v: "30", l: "Mensal", desc: "A cada 30 dias" },
-                        { v: "fixo", l: "Dias fixos", desc: "Ex: dia 1 e 15" },
-                      ].map(c => (
-                        <button key={c.v} type="button" onClick={() => setCondFechCiclo(prev => ({ ...prev, [fId]: prev[fId] === c.v ? "" : c.v }))}
-                          className={`flex flex-col items-start px-3 py-2.5 rounded-xl border-2 transition-all ${condFechCiclo[fId] === c.v ? "bg-blue-100 text-blue-700 border-blue-400 ring-2 ring-blue-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                          <span className="text-sm font-medium">{c.l}</span>
-                          <span className="text-[10px] opacity-70">{c.desc}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {condFechCiclo[fId] === "fixo" && (
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[11px] text-gray-500 mb-1 block">Dias de fechamento no mês (separar por vírgula)</label>
-                      <input type="text" placeholder="Ex: 1, 15" value={condFechDiaFixo[fId] ?? ""}
-                        onChange={e => setCondFechDiaFixo(prev => ({ ...prev, [fId]: e.target.value }))}
-                        className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none" />
+                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Ciclo de Fechamento</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {[{ v: "7", l: "7 dias" }, { v: "15", l: "15 dias" }, { v: "30", l: "30 dias" }, { v: "fixo", l: "Dias fixos" }].map(c => (
+                          <button key={c.v} type="button" onClick={() => setCondFechCiclo(prev => ({ ...prev, [fId]: prev[fId] === c.v ? "" : c.v }))}
+                            className={`px-2 py-1.5 rounded-lg text-xs font-medium border-2 transition-all text-center ${condFechCiclo[fId] === c.v ? "bg-blue-100 text-blue-700 border-blue-400" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                            {c.l}
+                          </button>
+                        ))}
+                      </div>
+                      {condFechCiclo[fId] === "fixo" && (
+                        <input type="text" placeholder="Ex: 1, 15" value={condFechDiaFixo[fId] ?? ""}
+                          onChange={e => setCondFechDiaFixo(prev => ({ ...prev, [fId]: e.target.value }))}
+                          className="w-full h-8 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 mt-1.5 focus:ring-1 focus:ring-blue-300 outline-none" />
+                      )}
                     </div>
-                  )}
-
-                  <div>
-                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Prazo após Fechamento</p>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {["7", "14", "21", "28", "30", "45", "60", "90"].map(d => (
-                        <button key={d} type="button" onClick={() => setCondFechPrazo(prev => ({ ...prev, [fId]: prev[fId] === d ? "" : d }))}
-                          className={`px-2 py-2 rounded-lg text-xs font-medium border-2 transition-all text-center ${condFechPrazo[fId] === d ? "bg-blue-100 text-blue-700 border-blue-400 ring-2 ring-blue-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                          {d} dias
-                        </button>
-                      ))}
+                    <div>
+                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Prazo após Fechamento</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {["7", "14", "21", "28", "30", "60"].map(d => (
+                          <button key={d} type="button" onClick={() => setCondFechPrazo(prev => ({ ...prev, [fId]: prev[fId] === d ? "" : d }))}
+                            className={`px-2 py-1.5 rounded-lg text-xs font-medium border-2 transition-all text-center ${condFechPrazo[fId] === d ? "bg-blue-100 text-blue-700 border-blue-400" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                            {d} dias
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Parcelamento pós-fechamento</p>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="flex items-center gap-1 bg-gray-50 rounded-lg border border-gray-200 px-2 py-1">
-                        <button type="button" onClick={() => {
-                          const curr = parseInt(condFechParc[fId] ?? "1") || 1;
-                          if (curr > 1) setCondFechParc(prev => ({ ...prev, [fId]: String(curr - 1) }));
-                        }} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100 text-lg font-bold">-</button>
-                        <input type="number" min="1" max="60" value={condFechParc[fId] ?? "1"}
-                          onChange={e => { const v = parseInt(e.target.value); if (v > 0 && v <= 60) setCondFechParc(prev => ({ ...prev, [fId]: String(v) })); }}
-                          className="w-12 h-7 text-center text-sm font-bold border border-gray-300 rounded-md bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-300" />
-                        <button type="button" onClick={() => {
-                          const curr = parseInt(condFechParc[fId] ?? "1") || 1;
-                          if (curr < 60) setCondFechParc(prev => ({ ...prev, [fId]: String(curr + 1) }));
-                        }} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100 text-lg font-bold">+</button>
-                        <span className="text-xs text-gray-500 ml-1">parcelas</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <label className="text-[11px] text-gray-500 whitespace-nowrap">1ª parcela:</label>
-                        <input type="date" value={condFechDataIni[fId] ?? ""}
-                          onChange={e => setCondFechDataIni(prev => ({ ...prev, [fId]: e.target.value }))}
-                          className="h-7 text-sm border border-gray-300 rounded-md px-2 bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-300" />
-                      </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mr-1">Parcelas</p>
+                      <button type="button" onClick={() => {
+                        const curr = parseInt(condFechParc[fId] ?? "1") || 1;
+                        if (curr > 1) setCondFechParc(prev => ({ ...prev, [fId]: String(curr - 1) }));
+                      }} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100 font-bold">-</button>
+                      <input type="number" min="1" max="60" value={condFechParc[fId] ?? "1"}
+                        onChange={e => { const v = parseInt(e.target.value); if (v > 0 && v <= 60) setCondFechParc(prev => ({ ...prev, [fId]: String(v) })); }}
+                        className="w-11 h-7 text-center text-sm font-bold border border-gray-300 rounded-md bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-300" />
+                      <button type="button" onClick={() => {
+                        const curr = parseInt(condFechParc[fId] ?? "1") || 1;
+                        if (curr < 60) setCondFechParc(prev => ({ ...prev, [fId]: String(curr + 1) }));
+                      }} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100 font-bold">+</button>
                     </div>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {[
-                        { v: "1", l: "À Vista" },
-                        { v: "2", l: "2x" },
-                        { v: "3", l: "3x" },
-                        { v: "4", l: "4x" },
-                        { v: "5", l: "5x" },
-                        { v: "6", l: "6x" },
-                        { v: "10", l: "10x" },
-                        { v: "12", l: "12x" },
-                      ].map(p => (
-                        <button key={p.v} type="button" onClick={() => setCondFechParc(prev => ({ ...prev, [fId]: prev[fId] === p.v ? "" : p.v }))}
-                          className={`px-2 py-2 rounded-lg text-xs font-medium border-2 transition-all text-center ${condFechParc[fId] === p.v ? "bg-blue-100 text-blue-700 border-blue-400 ring-2 ring-blue-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                          {p.l}
-                        </button>
-                      ))}
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[11px] text-gray-500 whitespace-nowrap">1ª parcela:</label>
+                      <input type="date" value={condFechDataIni[fId] ?? ""}
+                        onChange={e => setCondFechDataIni(prev => ({ ...prev, [fId]: e.target.value }))}
+                        className="h-7 text-sm border border-gray-300 rounded-md px-2 bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-300" />
                     </div>
                   </div>
 
