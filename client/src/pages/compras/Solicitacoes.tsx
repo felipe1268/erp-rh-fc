@@ -581,6 +581,18 @@ export default function Solicitacoes() {
                   <TableCell><StatusBadge status={sc.status} /></TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
+                      {!["cancelado", "aprovado", "cotacao"].includes(sc.status) && (
+                        <button
+                          title="Editar SC"
+                          className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
+                          onClick={(e) => { e.stopPropagation(); setShowDetalhe(sc.id); setTimeout(() => {
+                            setEditForm({ titulo: sc.titulo || "", prioridade: sc.prioridade || "normal", dataNecessidade: sc.dataNecessidade || "", observacoes: sc.observacoes || "" });
+                            setEditMode(true);
+                          }, 300); }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       <button
                         title="Duplicar SC"
                         className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
