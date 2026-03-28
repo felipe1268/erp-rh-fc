@@ -603,6 +603,10 @@ export default function Cotacoes() {
     onSuccess: (data) => { toast.success(`Preços salvos! Total: ${data.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`); setEditingFornId(null); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const salvarCondicoesComerciais = trpc.compras.salvarCondicoesComerciais.useMutation({
+    onSuccess: () => { mapaQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
   const selecionarVencedor = trpc.compras.selecionarVencedorMapa.useMutation({
     onSuccess: () => { toast.success("Fornecedor vencedor selecionado!"); mapaQ.refetch(); detalheQ.refetch(); q.refetch(); },
     onError: (e) => toast.error(e.message),
@@ -1443,51 +1447,119 @@ export default function Cotacoes() {
                     )}
                   </div>
 
-                  {/* Condições de Pagamento Padrão */}
+                  {/* Condições Comerciais - Painel Integrado */}
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Condições de Pagamento Padrão</p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Condições Comerciais</p>
                       <button onClick={() => setShowGerenciarCond(v => !v)} className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1">
                         <Save className="h-3 w-3" /> {showGerenciarCond ? "Fechar" : "Gerenciar"}
                       </button>
                     </div>
-                    {/* Lista de condições */}
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      {condPagOptions.map(c => {
-                        const dbItem = condPagQ.data?.find(d => d.descricao === c);
-                        return (
-                          <span key={c} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full border border-gray-200">
-                            {c}
-                            {showGerenciarCond && dbItem && (
-                              <button onClick={() => deletarCondMut.mutate({ id: dbItem.id })} className="hover:text-red-500 transition-colors ml-0.5">
-                                <X className="h-3 w-3" />
+
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Forma de Pagamento</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { v: "boleto", l: "Boleto", icon: "📄", bgSel: "bg-blue-100 text-blue-700 border-blue-300", bgDef: "bg-white text-gray-500 border-gray-200" },
+                            { v: "pix", l: "PIX", icon: "⚡", bgSel: "bg-green-100 text-green-700 border-green-300", bgDef: "bg-white text-gray-500 border-gray-200" },
+                            { v: "transferencia", l: "Transferência", icon: "🏦", bgSel: "bg-indigo-100 text-indigo-700 border-indigo-300", bgDef: "bg-white text-gray-500 border-gray-200" },
+                            { v: "cheque", l: "Cheque", icon: "📝", bgSel: "bg-amber-100 text-amber-700 border-amber-300", bgDef: "bg-white text-gray-500 border-gray-200" },
+                            { v: "cartao", l: "Cartão", icon: "💳", bgSel: "bg-purple-100 text-purple-700 border-purple-300", bgDef: "bg-white text-gray-500 border-gray-200" },
+                            { v: "deposito", l: "Depósito", icon: "💰", bgSel: "bg-gray-200 text-gray-700 border-gray-400", bgDef: "bg-white text-gray-500 border-gray-200" },
+                          ].map(fp => {
+                            const cotFormaPag = (mapa?.cotacao as any)?.formaPagamento;
+                            const isSelected = cotFormaPag === fp.v;
+                            return (
+                              <button key={fp.v} type="button" onClick={() => {
+                                const newVal = cotFormaPag === fp.v ? null : fp.v;
+                                salvarCondicoesComerciais.mutate({ cotacaoId: showDetalhe!, fornecedorId: 0, companyId, formaPagamento: newVal ?? "" });
+                              }}
+                                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer ${isSelected ? `${fp.bgSel} ring-1 ring-offset-1` : `${fp.bgDef} hover:bg-gray-50`}`}>
+                                {fp.icon} {fp.l}
                               </button>
-                            )}
-                          </span>
-                        );
-                      })}
-                    </div>
-                    {/* Adicionar nova condição */}
-                    {showGerenciarCond && (
-                      <div className="flex gap-2 pt-2 border-t border-gray-100">
-                        <input
-                          type="text"
-                          placeholder="Ex: 30 dias, Medição, 50%+50%..."
-                          value={novaCondicao}
-                          onChange={e => setNovaCondicao(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter" && novaCondicao.trim()) criarCondMut.mutate({ companyId, descricao: novaCondicao }); }}
-                          className="flex-1 h-8 text-sm border border-gray-300 rounded-md px-3 bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <Button size="sm" disabled={!novaCondicao.trim() || criarCondMut.isPending}
-                          onClick={() => criarCondMut.mutate({ companyId, descricao: novaCondicao })}
-                          className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-1 text-xs">
-                          <Plus className="h-3 w-3" /> Adicionar
-                        </Button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    )}
-                    {!showGerenciarCond && (
-                      <p className="text-xs text-gray-400">Clique em "Gerenciar" para adicionar ou remover opções. Essas opções aparecem no campo Cond. pagamento do mapa.</p>
-                    )}
+
+                      <div>
+                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Parcelamento</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {TIPOS_PAGAMENTO.map(t => {
+                            const cotTipoPag = (mapa?.cotacao as any)?.tipoPagamento;
+                            const isSelected = cotTipoPag === t.value;
+                            return (
+                              <button key={t.value} type="button" onClick={() => {
+                                const newVal = cotTipoPag === t.value ? null : t.value;
+                                salvarCondicoesComerciais.mutate({ cotacaoId: showDetalhe!, fornecedorId: 0, companyId, tipoPagamento: newVal ?? "" });
+                              }}
+                                className={`px-2 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${isSelected ? "bg-violet-100 text-violet-700 border-violet-300 ring-1 ring-violet-200 ring-offset-1" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                                {t.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {(mapa?.cotacao as any)?.tipoPagamento && (() => {
+                          const cotTotal = parseFloat((mapa?.cotacao as any)?.total ?? "0") || (mapa?.participantes ?? []).reduce((acc: number, p: any) => Math.max(acc, parseFloat(p.totalOrcado ?? "0")), 0);
+                          const today = new Date().toISOString().split("T")[0];
+                          const parcelas = calcularParcelas((mapa?.cotacao as any).tipoPagamento, cotTotal, today);
+                          return parcelas.length > 0 ? (
+                            <div className="bg-violet-50/70 border border-violet-200 rounded-lg p-3 mt-2">
+                              <div className="text-[10px] font-semibold text-violet-600 mb-1.5">Prévia de parcelas ({parcelas.length}x) — baseado no maior total</div>
+                              <div className="grid grid-cols-3 gap-x-3 gap-y-1">
+                                {parcelas.map((parc, idx) => (
+                                  <React.Fragment key={idx}>
+                                    <span className="text-[11px] text-violet-500">{parc.descricao}</span>
+                                    <span className="text-[11px] text-violet-700 font-semibold text-right">{formatCurrency(parc.valor)}</span>
+                                    <span className="text-[11px] text-violet-400 text-right">{new Date(parc.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR")}</span>
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
+
+                      <div className="border-t border-gray-100 pt-2">
+                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Condições Personalizadas</p>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {condPagOptions.map(c => {
+                            const dbItem = condPagQ.data?.find(d => d.descricao === c);
+                            return (
+                              <span key={c} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full border border-gray-200">
+                                {c}
+                                {showGerenciarCond && dbItem && (
+                                  <button onClick={() => deletarCondMut.mutate({ id: dbItem.id })} className="hover:text-red-500 transition-colors ml-0.5">
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                        {showGerenciarCond && (
+                          <div className="flex gap-2 pt-2 border-t border-gray-100">
+                            <input
+                              type="text"
+                              placeholder="Ex: 30 dias, Medição, 50%+50%..."
+                              value={novaCondicao}
+                              onChange={e => setNovaCondicao(e.target.value)}
+                              onKeyDown={e => { if (e.key === "Enter" && novaCondicao.trim()) criarCondMut.mutate({ companyId, descricao: novaCondicao }); }}
+                              className="flex-1 h-8 text-sm border border-gray-300 rounded-md px-3 bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <Button size="sm" disabled={!novaCondicao.trim() || criarCondMut.isPending}
+                              onClick={() => criarCondMut.mutate({ companyId, descricao: novaCondicao })}
+                              className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-1 text-xs">
+                              <Plus className="h-3 w-3" /> Adicionar
+                            </Button>
+                          </div>
+                        )}
+                        {!showGerenciarCond && condPagOptions.length === 0 && (
+                          <p className="text-xs text-gray-400">Clique em "Gerenciar" para adicionar condições personalizadas.</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Melhor fornecedor banner */}

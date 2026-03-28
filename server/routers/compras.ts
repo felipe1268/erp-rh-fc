@@ -1757,16 +1757,22 @@ Responda APENAS com um objeto JSON no formato:
       const [cot] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot || cot.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Cotação não pertence à empresa" });
       const updateData: any = {};
-      if (input.formaPagamento !== undefined) updateData.formaPagamento = input.formaPagamento;
-      if (input.tipoPagamento !== undefined) updateData.tipoPagamento = input.tipoPagamento;
-      if (input.condicaoPagamento !== undefined) updateData.condicaoPagamento = input.condicaoPagamento;
+      if (input.formaPagamento !== undefined) updateData.formaPagamento = input.formaPagamento || null;
+      if (input.tipoPagamento !== undefined) updateData.tipoPagamento = input.tipoPagamento || null;
+      if (input.condicaoPagamento !== undefined) updateData.condicaoPagamento = input.condicaoPagamento || null;
       if (input.numeroParcelas !== undefined) updateData.numeroParcelas = input.numeroParcelas;
       if (input.prazoEntregaDias !== undefined) updateData.prazoEntregaDias = input.prazoEntregaDias;
       if (input.observacoes !== undefined) updateData.observacoes = input.observacoes;
       if (Object.keys(updateData).length > 0) {
-        await db.update(comprasCotacaoFornecedores)
-          .set(updateData)
-          .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+        if (input.fornecedorId === 0) {
+          await db.update(comprasCotacoes)
+            .set(updateData)
+            .where(eq(comprasCotacoes.id, input.cotacaoId));
+        } else {
+          await db.update(comprasCotacaoFornecedores)
+            .set(updateData)
+            .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+        }
       }
       return { ok: true };
     }),
