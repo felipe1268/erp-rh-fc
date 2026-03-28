@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getCompaniesForUser } from "../db";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
-import { invokeLLM } from "../_core/llm";
+import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { storagePut } from "../storage";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 import {
@@ -1216,20 +1216,13 @@ Responda APENAS com um objeto JSON no formato:
     .input(z.object({ companyId: z.number(), status: z.string().optional(), solicitacaoId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      try {
-        const rows = await db.select().from(comprasCotacoes)
-          .where(and(
-            eq(comprasCotacoes.companyId, input.companyId),
-            input.status ? eq(comprasCotacoes.status, input.status) : undefined,
-            input.solicitacaoId ? eq(comprasCotacoes.solicitacaoId, input.solicitacaoId) : undefined,
-          ))
-          .orderBy(desc(comprasCotacoes.criadoEm));
-        console.log(`[listarCotacoes] companyId=${input.companyId} status=${input.status} => ${rows.length} rows`);
-        return rows;
-      } catch (err: any) {
-        console.error(`[listarCotacoes] ERROR:`, err.message, err.query || "");
-        throw err;
-      }
+      return db.select().from(comprasCotacoes)
+        .where(and(
+          eq(comprasCotacoes.companyId, input.companyId),
+          input.status ? eq(comprasCotacoes.status, input.status) : undefined,
+          input.solicitacaoId ? eq(comprasCotacoes.solicitacaoId, input.solicitacaoId) : undefined,
+        ))
+        .orderBy(desc(comprasCotacoes.criadoEm));
     }),
 
   getCotacao: protectedProcedure
@@ -1649,8 +1642,13 @@ Responda APENAS com um objeto JSON no formato:
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      const validItemIds = new Set(
+        (await db.select({ id: comprasCotacoesItens.id }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId)))
+          .map(r => r.id)
+      );
       let totalForn = 0;
       for (const r of input.respostas) {
+        if (!validItemIds.has(r.itemId)) continue;
         const desc = r.descontoPct ?? 0;
         let qty = r.quantidade ?? 0;
         if (qty <= 0) {
@@ -1714,6 +1712,159 @@ Responda APENAS com um objeto JSON no formato:
         .set({ arquivoUrl: url, arquivoNome: input.fileName })
         .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
       return { ok: true, url };
+    }),
+
+  extrairCotacaoIA: protectedProcedure
+    .input(z.object({
+      cotacaoId: z.number(),
+      fornecedorId: z.number(),
+      companyId: z.number(),
+      fileBase64: z.string().max(15_000_000),
+      fileName: z.string(),
+      mimeType: z.enum(["application/pdf", "image/jpeg", "image/jpg"]),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes)
+        .where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
+      if (!cot) throw new TRPCError({ code: "FORBIDDEN", message: "Cotação não encontrada ou sem permissão" });
+
+      const [forn] = await db.select({ id: comprasCotacaoFornecedores.id }).from(comprasCotacaoFornecedores)
+        .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      if (!forn) throw new TRPCError({ code: "BAD_REQUEST", message: "Fornecedor não é participante desta cotação" });
+
+      const itens = await db.select().from(comprasCotacoesItens)
+        .where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+
+      if (itens.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum item na cotação" });
+
+      const itensRef = itens.map(it => ({
+        id: it.id,
+        descricao: it.descricao,
+        unidade: it.unidade,
+        quantidade: it.quantidade,
+      }));
+
+      const systemPrompt = `Você é um assistente especializado em compras de construção civil. Sua tarefa é extrair itens, quantidades e preços unitários de documentos de cotação/orçamento de fornecedores.
+
+REGRAS:
+- Extraia TODOS os itens do documento com: descrição, quantidade, unidade, preço unitário e preço total
+- Valores devem ser numéricos (sem R$, sem pontos de milhar - use ponto como separador decimal)
+- Se não conseguir identificar um campo, use null
+- Retorne JSON válido, sem texto adicional`;
+
+      const prompt = `Analise este documento de cotação/orçamento de fornecedor e extraia todos os itens.
+
+ITENS DA SOLICITAÇÃO DE COMPRA (para referência de matching):
+${itensRef.map((it, i) => `${i + 1}. [ID:${it.id}] ${it.descricao} | Qtd: ${it.quantidade} ${it.unidade || "un"}`).join("\n")}
+
+INSTRUÇÕES:
+1. Extraia todos os itens do documento do fornecedor
+2. Para cada item extraído, tente fazer o matching com os itens da SC acima
+3. O matching deve ser por semelhança de descrição (mesmo produto, mesmo material)
+4. Extraia também condição de pagamento e prazo de entrega se mencionados
+
+Retorne APENAS um JSON válido neste formato:
+{
+  "itensExtraidos": [
+    {
+      "descricaoFornecedor": "descrição como aparece no documento",
+      "quantidade": 10,
+      "unidade": "un",
+      "precoUnitario": 25.50,
+      "precoTotal": 255.00,
+      "matchItemId": 123 ou null,
+      "matchConfianca": "alta" | "media" | "baixa" | null,
+      "matchDescricaoSC": "descrição do item da SC que deu match" ou null
+    }
+  ],
+  "condicaoPagamento": "30 DDL" ou null,
+  "prazoEntrega": "15 dias" ou null,
+  "observacoes": "informações relevantes extraídas" ou null
+}`;
+
+      let resultText: string;
+      const isPdf = input.mimeType === "application/pdf";
+
+      if (isPdf) {
+        let textoExtraido = "";
+        try {
+          const pdfParse = (await import("pdf-parse")).default;
+          const buffer = Buffer.from(input.fileBase64, "base64");
+          const pdfData = await pdfParse(buffer);
+          textoExtraido = pdfData.text ?? "";
+        } catch { /* ignore pdf parse errors */ }
+
+        if (textoExtraido.trim().length >= 50) {
+          const result = await invokeLLM({
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: `${prompt}\n\nTEXTO DO DOCUMENTO:\n${textoExtraido}` },
+            ],
+            maxTokens: 4096,
+          });
+          resultText = result.choices?.[0]?.message?.content ?? "";
+        } else {
+          resultText = await invokeAnthropicVision({
+            prompt: prompt + "\n\nNOTA: O PDF parece ser escaneado/imagem. Analise a imagem do documento.",
+            base64: input.fileBase64,
+            mimeType: "image/jpeg",
+            systemPrompt,
+            maxTokens: 4096,
+          });
+        }
+      } else {
+        resultText = await invokeAnthropicVision({
+          prompt,
+          base64: input.fileBase64,
+          mimeType: input.mimeType,
+          systemPrompt,
+          maxTokens: 4096,
+        });
+      }
+
+      let jsonStr = resultText.trim();
+      const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) jsonStr = jsonMatch[1].trim();
+      const startIdx = jsonStr.indexOf("{");
+      const endIdx = jsonStr.lastIndexOf("}");
+      if (startIdx >= 0 && endIdx > startIdx) jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        console.error("[extrairCotacaoIA] JSON parse error:", jsonStr.substring(0, 200));
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "A IA não retornou dados estruturados válidos. Tente novamente." });
+      }
+
+      const itensExtraidos = (parsed.itensExtraidos ?? parsed.itens ?? []).map((item: any) => ({
+        descricaoFornecedor: String(item.descricaoFornecedor ?? item.descricao ?? ""),
+        quantidade: parseFloat(item.quantidade) || null,
+        unidade: item.unidade || null,
+        precoUnitario: parseFloat(item.precoUnitario ?? item.preco_unitario) || null,
+        precoTotal: parseFloat(item.precoTotal ?? item.preco_total) || null,
+        matchItemId: item.matchItemId ?? item.match_item_id ?? null,
+        matchConfianca: item.matchConfianca ?? item.match_confianca ?? null,
+        matchDescricaoSC: item.matchDescricaoSC ?? item.match_descricao_sc ?? null,
+      }));
+
+      const matchedIds = new Set(itensExtraidos.filter((i: any) => i.matchItemId).map((i: any) => i.matchItemId));
+      const itensSemMatch = itensRef.filter(it => !matchedIds.has(it.id));
+      const itensExtras = itensExtraidos.filter((i: any) => !i.matchItemId);
+
+      return {
+        itensExtraidos,
+        itensSemMatch,
+        itensExtras,
+        condicaoPagamento: parsed.condicaoPagamento ?? null,
+        prazoEntrega: parsed.prazoEntrega ?? null,
+        observacoes: parsed.observacoes ?? null,
+        totalItensExtraidos: itensExtraidos.length,
+        totalMatches: matchedIds.size,
+        totalSemMatch: itensSemMatch.length,
+        totalExtras: itensExtras.length,
+      };
     }),
 
   getSaldosRealocacaoGeral: protectedProcedure

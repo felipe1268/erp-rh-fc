@@ -477,7 +477,9 @@ export default function Cotacoes() {
   const [showAnexoInput, setShowAnexoInput] = useState<number | null>(null);
   const [showRealocacao, setShowRealocacao] = useState(false);
   const [cobertoPorRisco, setCobertoPorRisco] = useState(false);
-  useEffect(() => { setCobertoPorRisco(false); setShowRealocacao(false); }, [showDetalhe]);
+  const [iaExtracao, setIaExtracao] = useState<{ fornecedorId: number; dados: any } | null>(null);
+  const [iaFileBuffer, setIaFileBuffer] = useState<{ fornecedorId: number; base64: string; fileName: string; mimeType: string } | null>(null);
+  useEffect(() => { setCobertoPorRisco(false); setShowRealocacao(false); setIaExtracao(null); setIaFileBuffer(null); }, [showDetalhe]);
 
   const q = trpc.compras.listarCotacoes.useQuery(
     { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -573,6 +575,13 @@ export default function Cotacoes() {
   const uploadAnexo = trpc.compras.uploadAnexoFornecedor.useMutation({
     onSuccess: () => { toast.success("Arquivo enviado!"); setShowAnexoInput(null); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
+  });
+  const extrairIA = trpc.compras.extrairCotacaoIA.useMutation({
+    onSuccess: (dados, vars) => {
+      setIaExtracao({ fornecedorId: vars.fornecedorId, dados });
+      toast.success(`IA extraiu ${dados.totalItensExtraidos} item(ns), ${dados.totalMatches} match(es)`);
+    },
+    onError: (e) => toast.error("Erro na leitura IA: " + e.message),
   });
   const cancelarAprovacao = trpc.compras.cancelarAprovacaoCotacao.useMutation({
     onSuccess: (d) => {
@@ -1316,6 +1325,7 @@ export default function Cotacoes() {
                                                     const reader = new FileReader();
                                                     reader.onload = ev => {
                                                       const base64 = (ev.target?.result as string).split(',')[1];
+                                                      setIaFileBuffer({ fornecedorId: p.fornecedorId, base64, fileName: file.name, mimeType: file.type });
                                                       uploadAnexo.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: file.name, mimeType: file.type });
                                                     };
                                                     reader.readAsDataURL(file);
@@ -1359,6 +1369,31 @@ export default function Cotacoes() {
                                           <Paperclip className="h-4 w-4" />
                                           {(p as any).arquivoNome ? (p as any).arquivoNome.slice(0, 14) + (((p as any).arquivoNome?.length ?? 0) > 14 ? "…" : "") : "Anexar"}
                                         </button>
+                                        {((p as any).arquivoUrl || (iaFileBuffer && iaFileBuffer.fornecedorId === p.fornecedorId)) && (
+                                          <button
+                                            onClick={() => {
+                                              if (iaFileBuffer && iaFileBuffer.fornecedorId === p.fornecedorId) {
+                                                extrairIA.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: iaFileBuffer.base64, fileName: iaFileBuffer.fileName, mimeType: iaFileBuffer.mimeType });
+                                              } else if ((p as any).arquivoUrl) {
+                                                const url = (p as any).arquivoUrl as string;
+                                                fetch(url).then(r => r.blob()).then(blob => {
+                                                  const reader = new FileReader();
+                                                  reader.onload = ev => {
+                                                    const base64 = (ev.target?.result as string).split(",")[1];
+                                                    const mime = blob.type || (url.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+                                                    extrairIA.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: (p as any).arquivoNome || "arquivo", mimeType: mime });
+                                                  };
+                                                  reader.readAsDataURL(blob);
+                                                }).catch(() => toast.error("Não foi possível baixar o arquivo para leitura IA"));
+                                              }
+                                            }}
+                                            disabled={extrairIA.isPending}
+                                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors disabled:opacity-50"
+                                            title="Ler documento com IA e preencher preços automaticamente">
+                                            <Sparkles className="h-3.5 w-3.5" />
+                                            {extrairIA.isPending && extrairIA.variables?.fornecedorId === p.fornecedorId ? "Lendo..." : "Ler com IA"}
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
                                   </th>
@@ -2100,6 +2135,145 @@ export default function Cotacoes() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Conferência IA ── */}
+      <Dialog open={iaExtracao !== null} onOpenChange={(o) => { if (!o) setIaExtracao(null); }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-violet-700">
+              <Sparkles className="h-5 w-5" /> Conferência — Leitura IA
+            </DialogTitle>
+          </DialogHeader>
+          {iaExtracao && (() => {
+            const d = iaExtracao.dados;
+            const matched = (d.itensExtraidos ?? []).filter((i: any) => i.matchItemId);
+            const extras = d.itensExtras ?? [];
+            const semMatch = d.itensSemMatch ?? [];
+            return (
+              <div className="space-y-4 pt-1">
+                {d.condicaoPagamento && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-sm text-blue-800">
+                    <strong>Condição de Pagamento:</strong> {d.condicaoPagamento}
+                    {d.prazoEntrega && <> | <strong>Prazo Entrega:</strong> {d.prazoEntrega}</>}
+                  </div>
+                )}
+                {d.observacoes && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-xs text-gray-600">{d.observacoes}</div>
+                )}
+
+                {matched.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-emerald-700 flex items-center gap-1.5 mb-2">
+                      <CheckCircle className="h-4 w-4" /> Itens com Match ({matched.length})
+                    </h4>
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-emerald-50">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium text-emerald-700">Item SC</th>
+                            <th className="text-left px-3 py-2 font-medium text-emerald-700">Fornecedor</th>
+                            <th className="text-right px-3 py-2 font-medium text-emerald-700">Qtd</th>
+                            <th className="text-right px-3 py-2 font-medium text-emerald-700">Preço Unit.</th>
+                            <th className="text-right px-3 py-2 font-medium text-emerald-700">Total</th>
+                            <th className="text-center px-3 py-2 font-medium text-emerald-700">Conf.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {matched.map((it: any, idx: number) => (
+                            <tr key={idx} className="border-t border-emerald-100 hover:bg-emerald-50/50">
+                              <td className="px-3 py-2 text-gray-700">{it.matchDescricaoSC || "—"}</td>
+                              <td className="px-3 py-2 text-gray-500">{it.descricaoFornecedor}</td>
+                              <td className="px-3 py-2 text-right font-mono">{it.quantidade ?? "—"}</td>
+                              <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-700">
+                                {it.precoUnitario != null ? `R$ ${Number(it.precoUnitario).toFixed(2)}` : "—"}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono">
+                                {it.precoTotal != null ? `R$ ${Number(it.precoTotal).toFixed(2)}` : "—"}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${it.matchConfianca === "alta" ? "bg-emerald-100 text-emerald-700" : it.matchConfianca === "media" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>
+                                  {it.matchConfianca || "?"}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {semMatch.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-amber-700 flex items-center gap-1.5 mb-2">
+                      <AlertTriangle className="h-4 w-4" /> Itens da SC sem correspondência ({semMatch.length})
+                    </h4>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <ul className="space-y-1 text-xs text-amber-800">
+                        {semMatch.map((it: any) => (
+                          <li key={it.id}>• {it.descricao} (Qtd: {it.quantidade} {it.unidade || "un"})</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {extras.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-orange-700 flex items-center gap-1.5 mb-2">
+                      <Package className="h-4 w-4" /> Itens extras do fornecedor ({extras.length})
+                    </h4>
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                      <ul className="space-y-1 text-xs text-orange-800">
+                        {extras.map((it: any, idx: number) => (
+                          <li key={idx}>• {it.descricaoFornecedor} — Qtd: {it.quantidade ?? "?"} — R$ {it.precoUnitario != null ? Number(it.precoUnitario).toFixed(2) : "?"}</li>
+                        ))}
+                      </ul>
+                      <p className="text-[10px] text-orange-500 mt-2">Estes itens não foram associados a nenhum item da SC. Revise manualmente se necessário.</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2 border-t">
+                  <Button variant="outline" onClick={() => setIaExtracao(null)}>Cancelar</Button>
+                  <Button
+                    disabled={matched.length === 0}
+                    onClick={() => {
+                      const respostas = matched
+                        .filter((it: any) => it.matchItemId && it.precoUnitario != null)
+                        .map((it: any) => ({
+                          itemId: it.matchItemId,
+                          precoUnitario: Number(it.precoUnitario),
+                          quantidade: it.quantidade ? Number(it.quantidade) : undefined,
+                          descontoPct: 0,
+                        }));
+                      if (respostas.length === 0) { toast.error("Nenhum item com preço para salvar"); return; }
+                      const salvarMut = salvarRespostas;
+                      salvarMut.mutate({
+                        cotacaoId: showDetalhe!,
+                        fornecedorId: iaExtracao.fornecedorId,
+                        respostas,
+                        condicaoPagamento: d.condicaoPagamento ?? undefined,
+                      }, {
+                        onSuccess: () => {
+                          toast.success(`${respostas.length} preço(s) salvos com sucesso!`);
+                          setIaExtracao(null);
+                          mapaQ.refetch();
+                        },
+                        onError: (e: any) => toast.error("Erro ao salvar: " + e.message),
+                      });
+                    }}
+                    className="bg-violet-600 hover:bg-violet-500 text-white gap-2"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    Confirmar e Salvar ({matched.filter((i: any) => i.precoUnitario != null).length} itens)
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
