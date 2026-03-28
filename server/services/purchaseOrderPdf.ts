@@ -149,62 +149,69 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  // HEADER — Faixa azul com logo + dados da empresa
+  // HEADER — Faixa azul com logo + nome da empresa + OC
   // ══════════════════════════════════════════════════════════════════════
-  const headerH = 70;
+  const headerH = 85;
   doc.rect(0, 0, pageW, headerH).fill(primary);
 
   const logoSrc = resolveLogoSource(company?.logoUrl);
   let logoRendered = false;
+  const logoW = 55;
+  const logoH = 55;
   if (logoSrc) {
     try {
-      doc.image(logoSrc, mL + 8, 12, { height: 46, fit: [80, 46] });
+      doc.save();
+      const logoX = mL + 10;
+      const logoY = 8;
+      const r = 6;
+      doc.roundedRect(logoX, logoY, logoW, logoH, r).clip();
+      doc.rect(logoX, logoY, logoW, logoH).fill(white);
+      doc.image(logoSrc, logoX + 4, logoY + 4, { fit: [logoW - 8, logoH - 8] });
+      doc.restore();
       logoRendered = true;
     } catch {
       logoRendered = false;
     }
   }
 
-  const nameX = logoRendered ? mL + 100 : mL;
-  const nameW = logoRendered ? cW * 0.45 : cW * 0.55;
+  const nameX = logoRendered ? mL + logoW + 22 : mL + 10;
+  const ocBlockW = 155;
+  const nameW = pageW - nameX - ocBlockW - mR - 15;
 
-  doc.font("Helvetica-Bold").fontSize(14).fillColor(white)
-    .text(company?.razaoSocial || "FC ENGENHARIA", nameX, 14, { width: nameW });
+  doc.font("Helvetica-Bold").fontSize(12).fillColor(white)
+    .text(company?.razaoSocial || "FC ENGENHARIA", nameX, 12, { width: nameW });
 
   if (company?.nomeFantasia && company.nomeFantasia !== company.razaoSocial) {
-    doc.font("Helvetica").fontSize(8).fillColor("#c5d9ed")
-      .text(company.nomeFantasia, nameX, 32, { width: nameW });
+    doc.font("Helvetica").fontSize(7.5).fillColor("#c5d9ed")
+      .text(company.nomeFantasia, nameX, 28, { width: nameW });
   }
 
-  const ocBlockW = 170;
-  const ocBlockX = pageW - mR - ocBlockW;
-  doc.rect(ocBlockX - 5, 10, ocBlockW + 5, 50).lineWidth(1).strokeColor("#ffffff50").stroke();
-  doc.font("Helvetica").fontSize(8).fillColor("#c5d9ed")
-    .text("ORDEM DE COMPRA", ocBlockX, 16, { width: ocBlockW - 5, align: "center" });
-  doc.font("Helvetica-Bold").fontSize(16).fillColor(white)
-    .text(oc.numeroOc || "—", ocBlockX, 30, { width: ocBlockW - 5, align: "center" });
+  const compLineParts: string[] = [];
+  if (company?.cnpj) compLineParts.push(`CNPJ: ${company.cnpj}`);
+  if (company?.telefone) compLineParts.push(`Tel: ${company.telefone}`);
+  if (company?.email) compLineParts.push(company.email);
+  if (compLineParts.length > 0) {
+    doc.font("Helvetica").fontSize(6.5).fillColor("#a0bdd4")
+      .text(compLineParts.join("  |  "), nameX, 40, { width: nameW });
+  }
 
-  // Sub-header com dados da empresa (CNPJ, endereço, contato)
-  let y = headerH + 4;
-  const compParts: string[] = [];
-  if (company?.cnpj) compParts.push(`CNPJ: ${company.cnpj}`);
   if (company?.endereco) {
     let addr = company.endereco;
     if (company.cidade) addr += ` - ${company.cidade}`;
     if (company.estado) addr += `/${company.estado}`;
     if (company.cep) addr += ` - CEP: ${company.cep}`;
-    compParts.push(addr);
-  }
-  if (company?.telefone) compParts.push(`Tel: ${company.telefone}`);
-  if (company?.email) compParts.push(company.email);
-
-  if (compParts.length > 0) {
-    doc.font("Helvetica").fontSize(6.5).fillColor(midGray)
-      .text(compParts.join("  |  "), mL, y, { width: cW, align: "center" });
-    y += 12;
+    doc.font("Helvetica").fontSize(6).fillColor("#a0bdd4")
+      .text(addr, nameX, 50, { width: nameW });
   }
 
-  y += 4;
+  const ocBlockX = pageW - mR - ocBlockW;
+  doc.rect(ocBlockX, 12, ocBlockW, 52).lineWidth(1.5).strokeColor("#ffffff40").stroke();
+  doc.font("Helvetica").fontSize(7.5).fillColor("#c5d9ed")
+    .text("ORDEM DE COMPRA", ocBlockX, 18, { width: ocBlockW, align: "center" });
+  doc.font("Helvetica-Bold").fontSize(15).fillColor(white)
+    .text(oc.numeroOc || "—", ocBlockX, 34, { width: ocBlockW, align: "center" });
+
+  let y = headerH + 8;
 
   // ══════════════════════════════════════════════════════════════════════
   // SEÇÃO 1: DADOS DA ORDEM
