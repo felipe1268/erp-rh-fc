@@ -1850,10 +1850,10 @@ Responda APENAS com um objeto JSON no formato:
   // ══════════════════════════════════════════════════════════════
 
   listarOrdens: protectedProcedure
-    .input(z.object({ companyId: z.number(), status: z.string().optional(), busca: z.string().optional() }))
+    .input(z.object({ companyId: z.number(), status: z.string().optional(), busca: z.string().optional(), apenasAtrasadas: z.boolean().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      const rows = await db.select().from(comprasOrdens)
+      let rows = await db.select().from(comprasOrdens)
         .where(and(
           eq(comprasOrdens.companyId, input.companyId),
           input.status ? eq(comprasOrdens.status, input.status) : undefined,
@@ -1861,9 +1861,63 @@ Responda APENAS com um objeto JSON no formato:
         .orderBy(desc(comprasOrdens.criadoEm));
       if (input.busca) {
         const b = input.busca.toLowerCase();
-        return rows.filter(r => r.numeroOc?.toLowerCase().includes(b) || r.observacoes?.toLowerCase().includes(b));
+        rows = rows.filter(r => r.numeroOc?.toLowerCase().includes(b) || r.observacoes?.toLowerCase().includes(b));
       }
-      return rows;
+
+      const allItemIds = new Set<number>();
+      const ordemIds = rows.map(r => r.id);
+      let itemsByOrdem: Record<number, number[]> = {};
+      if (ordemIds.length > 0) {
+        const allItems = await db.select({ id: comprasOrdensItens.id, ordemId: comprasOrdensItens.ordemId })
+          .from(comprasOrdensItens)
+          .where(inArray(comprasOrdensItens.ordemId, ordemIds));
+        for (const item of allItems) {
+          allItemIds.add(item.id);
+          if (!itemsByOrdem[item.ordemId]) itemsByOrdem[item.ordemId] = [];
+          itemsByOrdem[item.ordemId].push(item.id);
+        }
+      }
+
+      let entregasProgramadasMap: Record<number, { dataEntrega: string; status: string }[]> = {};
+      if (allItemIds.size > 0) {
+        const entregas = await db.select({
+          ordemItemId: comprasEntregasProgramadas.ordemItemId,
+          dataEntrega: comprasEntregasProgramadas.dataEntrega,
+          status: comprasEntregasProgramadas.status,
+        }).from(comprasEntregasProgramadas)
+          .where(inArray(comprasEntregasProgramadas.ordemItemId, Array.from(allItemIds)));
+        for (const e of entregas) {
+          if (!entregasProgramadasMap[e.ordemItemId]) entregasProgramadasMap[e.ordemItemId] = [];
+          entregasProgramadasMap[e.ordemItemId].push({ dataEntrega: e.dataEntrega, status: e.status });
+        }
+      }
+
+      const result = rows.map(r => {
+        const itemIds = itemsByOrdem[r.id] || [];
+        let proximaEntregaProgramada: string | null = null;
+        for (const itemId of itemIds) {
+          const entregas = entregasProgramadasMap[itemId] || [];
+          const pendentes = entregas.filter(e => e.status === "pendente").sort((a, b) => a.dataEntrega.localeCompare(b.dataEntrega));
+          if (pendentes.length > 0) {
+            if (!proximaEntregaProgramada || pendentes[0].dataEntrega < proximaEntregaProgramada) {
+              proximaEntregaProgramada = pendentes[0].dataEntrega;
+            }
+          }
+        }
+        return { ...r, proximaEntregaProgramada };
+      });
+
+      if (input.apenasAtrasadas) {
+        const hoje = new Date().toISOString().slice(0, 10);
+        const closedStatuses = ["entregue", "cancelada", "recebido"];
+        return result.filter(r => {
+          if (closedStatuses.includes(r.status)) return false;
+          const dataRef = r.proximaEntregaProgramada || r.dataEntregaPrevista;
+          return dataRef && dataRef < hoje;
+        });
+      }
+
+      return result;
     }),
 
   getOrdem: protectedProcedure
@@ -1878,7 +1932,20 @@ Responda APENAS com um objeto JSON no formato:
         const [f] = await db.select({ razaoSocial: fornecedores.razaoSocial, cnpj: fornecedores.cnpj, telefone: fornecedores.telefone, email: fornecedores.email }).from(fornecedores).where(eq(fornecedores.id, oc.fornecedorId));
         fornecedor = f ?? null;
       }
-      return { ...oc, itens, fornecedor };
+      let proximaEntregaProgramada: string | null = null;
+      if (itens.length > 0) {
+        const itemIds = itens.map(i => i.id);
+        const entregas = await db.select({
+          dataEntrega: comprasEntregasProgramadas.dataEntrega,
+          status: comprasEntregasProgramadas.status,
+        }).from(comprasEntregasProgramadas)
+          .where(inArray(comprasEntregasProgramadas.ordemItemId, itemIds));
+        const pendentes = entregas.filter(e => e.status === "pendente").sort((a, b) => a.dataEntrega.localeCompare(b.dataEntrega));
+        if (pendentes.length > 0) {
+          proximaEntregaProgramada = pendentes[0].dataEntrega;
+        }
+      }
+      return { ...oc, itens, fornecedor, proximaEntregaProgramada };
     }),
 
   criarOrdemDeCotacao: protectedProcedure
@@ -2320,11 +2387,12 @@ Responda APENAS com um objeto JSON no formato:
         fornecedoresAtivos: forn.length,
       };
 
+      const CLOSED_OC = ["entregue", "cancelada", "recebido"];
       // Alertas: OCs com entrega vencida ou hoje
       const alertasOC = ocs.filter(r =>
         r.dataEntregaPrevista &&
         r.dataEntregaPrevista <= today &&
-        !["entregue", "cancelada"].includes(r.status)
+        !CLOSED_OC.includes(r.status)
       ).map(r => ({
         id: r.id, numeroOc: r.numeroOc, dataEntregaPrevista: r.dataEntregaPrevista,
         status: r.status, fornecedorId: r.fornecedorId, total: r.total,
@@ -2357,7 +2425,60 @@ Responda APENAS com um objeto JSON no formato:
       });
       const gastosMensais = Object.entries(seisM).sort(([a], [b]) => a.localeCompare(b)).slice(-6).map(([mes, valor]) => ({ mes, valor }));
 
-      return { kpis, alertasOC, scsPendentesAprov, cotsPendentes, ocsRecentes, scsRecentes, gastosMensais, fornecedores: forn, obraMap };
+      const hoje = today;
+      const ocsAbertas = ocs.filter(r => !CLOSED_OC.includes(r.status));
+      const ocAbertasIds = ocsAbertas.map(r => r.id);
+      let ocEntregaRefMap: Record<number, string | null> = {};
+      if (ocAbertasIds.length > 0) {
+        const ocItens = await db.select({ id: comprasOrdensItens.id, ordemId: comprasOrdensItens.ordemId })
+          .from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocAbertasIds));
+        const allItemIds = ocItens.map(i => i.id);
+        let entregasMap: Record<number, { dataEntrega: string; status: string }[]> = {};
+        if (allItemIds.length > 0) {
+          const entregas = await db.select({
+            ordemItemId: comprasEntregasProgramadas.ordemItemId,
+            dataEntrega: comprasEntregasProgramadas.dataEntrega,
+            status: comprasEntregasProgramadas.status,
+          }).from(comprasEntregasProgramadas)
+            .where(inArray(comprasEntregasProgramadas.ordemItemId, allItemIds));
+          for (const e of entregas) {
+            if (!entregasMap[e.ordemItemId]) entregasMap[e.ordemItemId] = [];
+            entregasMap[e.ordemItemId].push({ dataEntrega: e.dataEntrega, status: e.status });
+          }
+        }
+        const itemsByOrdem: Record<number, number[]> = {};
+        for (const item of ocItens) {
+          if (!itemsByOrdem[item.ordemId]) itemsByOrdem[item.ordemId] = [];
+          itemsByOrdem[item.ordemId].push(item.id);
+        }
+        for (const oc of ocsAbertas) {
+          const itemIds = itemsByOrdem[oc.id] || [];
+          let proxima: string | null = null;
+          for (const itemId of itemIds) {
+            const entregas = entregasMap[itemId] || [];
+            const pendentes = entregas.filter(e => e.status === "pendente").sort((a, b) => a.dataEntrega.localeCompare(b.dataEntrega));
+            if (pendentes.length > 0 && (!proxima || pendentes[0].dataEntrega < proxima)) {
+              proxima = pendentes[0].dataEntrega;
+            }
+          }
+          ocEntregaRefMap[oc.id] = proxima;
+        }
+      }
+
+      const atrasadasPorObra: Record<number, number> = {};
+      ocsAbertas.filter(r => r.obraId).forEach(r => {
+        const dataRef = ocEntregaRefMap[r.id] || r.dataEntregaPrevista;
+        if (dataRef && dataRef < hoje) {
+          atrasadasPorObra[r.obraId!] = (atrasadasPorObra[r.obraId!] ?? 0) + 1;
+        }
+      });
+      const ocsAtrasadasPorObra = Object.entries(atrasadasPorObra).map(([obraId, count]) => ({
+        obraId: Number(obraId),
+        obraNome: obraMap[Number(obraId)] ?? `Obra #${obraId}`,
+        count,
+      })).sort((a, b) => b.count - a.count);
+
+      return { kpis, alertasOC, scsPendentesAprov, cotsPendentes, ocsRecentes, scsRecentes, gastosMensais, fornecedores: forn, obraMap, ocsAtrasadasPorObra };
     }),
 
   // ══════════════════════════════════════════════════════════════

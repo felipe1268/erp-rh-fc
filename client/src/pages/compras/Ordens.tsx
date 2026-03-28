@@ -10,8 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2 } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot } from "lucide-react";
+import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   pendente:         { label: "Pendente",           cls: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -32,6 +34,7 @@ export default function Ordens() {
 
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [filtroAtrasadas, setFiltroAtrasadas] = useState(false);
   const [showNova, setShowNova] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
 
@@ -42,7 +45,7 @@ export default function Ordens() {
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
 
   const q = trpc.compras.listarOrdens.useQuery(
-    { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus },
+    { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus, apenasAtrasadas: filtroAtrasadas || undefined },
     { enabled: companyId > 0 }
   );
   const detalheQ = trpc.compras.getOrdem.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
@@ -123,6 +126,25 @@ export default function Ordens() {
   const aprov = lista.filter(o => o.status === "aprovada").length;
   const entregue = lista.filter(o => o.status === "entregue").length;
   const totalVal = lista.reduce((s, o) => s + parseFloat(o.total ?? "0"), 0);
+  const atrasadas = lista.filter(o => {
+    const sem = calcularSemaforo(o.dataEntregaPrevista, o.dataEntregaReal, o.status, o.proximaEntregaProgramada);
+    return sem.status === "atrasado";
+  }).length;
+
+  interface KpiCard {
+    label: string;
+    value: string | number;
+    icon: typeof ShoppingBag;
+    cls: string;
+    onClick?: () => void;
+  }
+  const kpiCards: KpiCard[] = [
+    { label: "Pendentes",    value: pend,    icon: ShoppingBag,  cls: "bg-amber-50 border-amber-200 text-amber-700" },
+    { label: "Aprovadas",   value: aprov,   icon: CheckCircle,  cls: "bg-blue-50 border-blue-200 text-blue-700" },
+    { label: "Atrasadas",   value: atrasadas, icon: AlertTriangle, cls: atrasadas > 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-gray-50 border-gray-200 text-gray-500", onClick: () => { setFiltroAtrasadas(!filtroAtrasadas); setFiltroStatus("todos"); } },
+    { label: "Entregues",   value: entregue, icon: PackageCheck, cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+    { label: "Total em OCs", value: totalVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), icon: Truck, cls: "bg-purple-50 border-purple-200 text-purple-700" },
+  ];
 
   return (
     <DashboardLayout>
@@ -144,14 +166,9 @@ export default function Ordens() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "Pendentes",    value: pend,    icon: ShoppingBag,  cls: "bg-amber-50 border-amber-200 text-amber-700" },
-          { label: "Aprovadas",   value: aprov,   icon: CheckCircle,  cls: "bg-blue-50 border-blue-200 text-blue-700" },
-          { label: "Entregues",   value: entregue, icon: PackageCheck, cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-          { label: "Total em OCs", value: totalVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), icon: Truck, cls: "bg-purple-50 border-purple-200 text-purple-700" },
-        ].map((k, i) => (
-          <div key={i} className={`rounded-xl border p-4 ${k.cls}`}>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {kpiCards.map((k, i) => (
+          <div key={i} className={`rounded-xl border p-4 ${k.cls} ${k.onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`} onClick={k.onClick}>
             <div className="flex items-center gap-2 mb-1">
               <k.icon className="h-4 w-4" />
               <span className="text-xs font-medium text-gray-500">{k.label}</span>
@@ -169,19 +186,25 @@ export default function Ordens() {
         </div>
         <div className="flex gap-2 flex-wrap">
           {["todos", "pendente", "aprovada", "entregue_parcial", "entregue", "cancelada"].map(s => (
-            <button key={s} onClick={() => setFiltroStatus(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === s ? "bg-emerald-600 border-emerald-500 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"}`}>
+            <button key={s} onClick={() => { setFiltroStatus(s); setFiltroAtrasadas(false); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === s && !filtroAtrasadas ? "bg-emerald-600 border-emerald-500 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"}`}>
               {s === "todos" ? "Todos" : STATUS_LABELS[s]?.label}
             </button>
           ))}
+          <button onClick={() => { setFiltroAtrasadas(!filtroAtrasadas); setFiltroStatus("todos"); }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1 ${filtroAtrasadas ? "bg-red-600 border-red-500 text-white" : "bg-white border-red-300 text-red-600 hover:border-red-400"}`}>
+            <AlertTriangle className="h-3 w-3" /> Atrasadas
+          </button>
         </div>
       </div>
 
       {/* Tabela */}
+      <TooltipProvider>
       <div className="rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
         <Table>
           <TableHeader>
             <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider w-10"></TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Número OC</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Obra</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Fornecedor</TableHead>
@@ -194,14 +217,29 @@ export default function Ordens() {
           </TableHeader>
           <TableBody>
             {q.isLoading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></TableCell></TableRow>
             ) : filt.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-400">Nenhuma ordem encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-400">Nenhuma ordem encontrada</TableCell></TableRow>
             ) : filt.map(oc => {
               const st = STATUS_LABELS[oc.status] ?? STATUS_LABELS.pendente;
               const forn = fornecedores.find(f => f.id === oc.fornecedorId);
+              const semaforo = calcularSemaforo(oc.dataEntregaPrevista, oc.dataEntregaReal, oc.status, oc.proximaEntregaProgramada);
+              const semCor = semaforoCor(semaforo.status);
+              const semTip = semaforoTooltip(semaforo);
               return (
                 <TableRow key={oc.id} className="border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setShowDetalhe(oc.id)}>
+                  <TableCell className="text-center px-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex justify-center">
+                          <CircleDot className={`h-5 w-5 ${semCor}`} />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="bg-gray-900 text-white text-xs max-w-48 whitespace-pre-line">
+                        {semTip}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TableCell>
                   <TableCell className="text-gray-900 font-mono font-semibold text-sm">{oc.numeroOc}</TableCell>
                   <TableCell>
                     {(oc as any).obraId ? (
@@ -225,6 +263,7 @@ export default function Ordens() {
           </TableBody>
         </Table>
       </div>
+      </TooltipProvider>
 
       {/* Dialog Nova OC Manual */}
       <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) resetForm(); }}>
@@ -366,8 +405,33 @@ export default function Ordens() {
           ) : detalhe ? (() => {
             const st = STATUS_LABELS[detalhe.status] ?? STATUS_LABELS.pendente;
             const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+            const semaforoDetalhe = calcularSemaforo(detalhe.dataEntregaPrevista, detalhe.dataEntregaReal, detalhe.status, detalhe.proximaEntregaProgramada);
             return (
               <div className="space-y-5 pt-2">
+                {semaforoDetalhe.status === "atrasado" && (
+                  <div className="flex items-center gap-3 rounded-lg border border-red-300 bg-red-50 p-3">
+                    <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-800">Entrega atrasada</p>
+                      <p className="text-xs text-red-600">
+                        {semaforoDetalhe.dias} dia{semaforoDetalhe.dias !== 1 ? "s" : ""} de atraso
+                        {semaforoDetalhe.dataReferencia && ` — prevista para ${new Date(semaforoDetalhe.dataReferencia + "T00:00:00").toLocaleDateString("pt-BR")}`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {semaforoDetalhe.status === "proximo" && (
+                  <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                    <Clock className="h-5 w-5 text-amber-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-amber-800">Entrega próxima</p>
+                      <p className="text-xs text-amber-600">
+                        {semaforoDetalhe.dias === 0 ? "Entrega prevista para hoje" : `Faltam ${semaforoDetalhe.dias} dia${semaforoDetalhe.dias !== 1 ? "s" : ""} para a entrega`}
+                        {semaforoDetalhe.dataReferencia && ` — ${new Date(semaforoDetalhe.dataReferencia + "T00:00:00").toLocaleDateString("pt-BR")}`}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3 text-sm bg-gray-50 rounded-lg p-3 border border-gray-200">
                   <div><span className="text-gray-400 text-xs">Obra</span><p className="text-gray-900 font-medium flex items-center gap-1"><Building2 className="h-3 w-3 text-gray-400" />{nomeObra((detalhe as any).obraId) ?? "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Status</span><p><span className={`inline-flex px-2 py-0.5 rounded text-xs border ${st.cls}`}>{st.label}</span></p></div>

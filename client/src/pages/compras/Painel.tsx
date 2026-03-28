@@ -134,6 +134,7 @@ export default function PainelCompras() {
     ocsRecentes = [],
     scsRecentes = [],
     gastosMensais = [],
+    ocsAtrasadasPorObra = [],
   } = data ?? {};
 
   return (
@@ -379,6 +380,27 @@ export default function PainelCompras() {
                 </div>
               )}
             </div>
+
+            {ocsAtrasadasPorObra.length > 0 && (
+              <div className="bg-white rounded-xl border border-red-100 shadow-sm p-4">
+                <SectionHeader icon={AlertTriangle} title="OCs Atrasadas por Obra"
+                  count={ocsAtrasadasPorObra.reduce((s: number, o: any) => s + o.count, 0)} color="text-red-500"
+                  onVerTodos={() => navigate("/compras/ordens")} />
+                <div className="space-y-2">
+                  {ocsAtrasadasPorObra.map((item: any) => (
+                    <div key={item.obraId} className="flex items-center justify-between px-3 py-2 rounded-lg border border-red-100 bg-red-50/50">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Building2 className="h-4 w-4 text-red-400 flex-shrink-0" />
+                        <span className="text-xs text-gray-700 truncate">{item.obraNome}</span>
+                      </div>
+                      <span className="text-xs font-bold text-red-600 flex-shrink-0 ml-2">
+                        {item.count} OC{item.count !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Gastos mensais */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
