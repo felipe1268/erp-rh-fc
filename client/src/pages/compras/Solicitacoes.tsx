@@ -213,21 +213,34 @@ export default function Solicitacoes() {
     const qtdServ = parseFloat(qtdStr) || 0;
     const insumosList = eapInsumos[orcItemId] || [];
 
-    if (qtdServ > 0 && insumosList.length > 0) {
-      const newItems: ItemForm[] = insumosList.map(ins => ({
-        descricao: ins.descricao,
-        unidade: ins.unidade,
-        quantidade: String(Math.ceil((qtdServ * ins.coeficiente) * 1000) / 1000),
-        observacoes: "",
-        orcamentoItemId: orcItemId,
-        eapCodigo: eapItem.eapCodigo,
-        insumoCodigo: ins.insumoCodigo,
-        composicaoCodigo: eapItem.servicoCodigo,
-        precoMeta: ins.precoUnitario,
-        quantidadeServico: qtdServ,
-        coeficiente: ins.coeficiente,
-        origemEap: true,
-      }));
+    if (qtdServ > 0) {
+      let newItems: ItemForm[];
+      if (insumosList.length > 0) {
+        newItems = insumosList.map(ins => ({
+          descricao: ins.descricao,
+          unidade: ins.unidade,
+          quantidade: String(Math.ceil((qtdServ * ins.coeficiente) * 1000) / 1000),
+          observacoes: "",
+          orcamentoItemId: orcItemId,
+          eapCodigo: eapItem.eapCodigo,
+          insumoCodigo: ins.insumoCodigo,
+          composicaoCodigo: eapItem.servicoCodigo,
+          precoMeta: ins.precoUnitario,
+          quantidadeServico: qtdServ,
+          coeficiente: ins.coeficiente,
+          origemEap: true,
+        }));
+      } else {
+        newItems = [{
+          descricao: `[${eapItem.eapCodigo}] ${eapItem.descricao}`,
+          unidade: eapItem.unidade || "vb",
+          quantidade: String(qtdServ),
+          observacoes: "",
+          orcamentoItemId: orcItemId,
+          eapCodigo: eapItem.eapCodigo,
+          origemEap: true,
+        }];
+      }
 
       setItens(prev => {
         const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
