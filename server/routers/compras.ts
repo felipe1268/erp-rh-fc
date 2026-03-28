@@ -2628,6 +2628,13 @@ Retorne APENAS um JSON válido neste formato:
       const transportadoraOC = (fornInfo as any)?.transportadora ?? null;
       const freteParaTotal = freteTipoOC === "fob" ? freteValor : 0;
 
+      const prazoEntregaDias = (fornInfo as any)?.prazoEntregaDias ?? null;
+      let dataEntregaPrevista: Date | null = null;
+      if (prazoEntregaDias && Number(prazoEntregaDias) > 0) {
+        dataEntregaPrevista = new Date();
+        dataEntregaPrevista.setDate(dataEntregaPrevista.getDate() + Number(prazoEntregaDias));
+      }
+
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
       const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
       const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
@@ -2655,8 +2662,7 @@ Retorne APENAS um JSON válido neste formato:
         tipoPagamento: fornInfo?.tipoPagamento ?? cot.tipoPagamento ?? null,
         formaPagamento: (fornInfo as any)?.formaPagamento ?? (cot as any).formaPagamento ?? null,
         numeroParcelas: fornInfo?.numeroParcelas ?? cot.numeroParcelas ?? 1,
-        freteTipo: freteTipoOC,
-        transportadora: transportadoraOC,
+        dataEntregaPrevista: dataEntregaPrevista,
       } as any).returning();
       if (itens.length > 0) {
         await db.insert(comprasOrdensItens).values(
