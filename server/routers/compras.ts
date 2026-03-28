@@ -26,6 +26,7 @@ import {
   almoxarifadoNotificacoes,
   purchaseOrders, purchaseRequests, purchaseQuotations,
 } from "../../drizzle/schema";
+import { PermissionDeniedError } from "@anthropic-ai/sdk";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -2639,8 +2640,8 @@ Retorne APENAS um JSON válido neste formato:
         obraId: cot.obraId ?? null,
         fornecedorId: cot.fornecedorId ?? null,
         fornecedorNome: cot.fornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId!))).map(f => f.nome || f.razao || null)[0] ?? null : null,
-        status: "pendente",
-        aprovacaoStatus: "aguardando",
+        status: "aprovada",
+        aprovacaoStatus: "aprovado",
         subtotal: String(subtotal.toFixed(2)),
         frete: String(freteValor.toFixed(2)),
         freteTipo: freteTipoOC,
@@ -2914,7 +2915,7 @@ Retorne APENAS um JSON válido neste formato:
       }).where(eq(comprasOrdens.id, input.id));
 
       // ── Integração financeira ─────────────────────────────────────────
-      if (input.status === "aprovada" || input.status === "entregue" || input.status === "entregue_parcial") {
+PermissionDeniedError      if (input.status === "aprovada" || input.status === "entregue" || input.status === "entregue_parcial") {
         const [ocFin] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
         if (ocFin) {
           let obraNomeFin: string | null = ocFin.obraId
