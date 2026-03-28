@@ -2914,11 +2914,25 @@ Retorne APENAS um JSON válido neste formato:
             ? (await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, ocFin.obraId)))[0]?.nome ?? null
             : null;
 
+          const codigoConta = (ocFin as any).tipo === "servico" ? "3.2" : (ocFin as any).tipo === "locacao" ? "3.4" : "3.3";
           const contaRows = await db.select({ id: (financialAccounts as any).id })
             .from(financialAccounts as any)
-            .where(and(eq((financialAccounts as any).companyId, ocFin.companyId), eq((financialAccounts as any).codigo, "3.3")))
+            .where(and(eq((financialAccounts as any).companyId, ocFin.companyId), eq((financialAccounts as any).codigo, codigoConta)))
             .limit(1);
-          const contaId = contaRows?.[0]?.id ?? null;
+          let contaId = contaRows?.[0]?.id ?? null;
+          if (!contaId) {
+            const CONTA_NAMES: Record<string, string> = { "3.2": "Despesas com Serviços", "3.3": "Despesas com Materiais", "3.4": "Despesas com Locação" };
+            const [newConta] = await db.insert(financialAccounts as any).values({
+              companyId: ocFin.companyId,
+              codigo: codigoConta,
+              nome: CONTA_NAMES[codigoConta] || `Conta ${codigoConta}`,
+              tipo: "despesa_variavel",
+              natureza: "devedora",
+              nivel: 2,
+              ativo: 1,
+            }).returning({ id: (financialAccounts as any).id });
+            contaId = newConta?.id ?? null;
+          }
 
           const novoStatus = (input.status === "aprovada") ? "previsto" : "a_pagar";
 
