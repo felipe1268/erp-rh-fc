@@ -220,6 +220,35 @@ export default function Solicitacoes() {
   }
 
   const trpcCtx = trpc.useUtils();
+  const [batchSaldo, setBatchSaldo] = useState<Record<number, { qtdSolicitada: number; qtdComprada: number; qtdRecebida: number; saldoDisponivel: number; qtdOrcada: number }>>({});
+
+  function getStatusColor(itemId: number): { dot: string; label: string; bg: string } {
+    const s = batchSaldo[itemId];
+    if (!s) return { dot: "bg-gray-300", label: "Sem info", bg: "" };
+    const orc = Number(s.qtdOrcada) || 0;
+    const sol = Number(s.qtdSolicitada) || 0;
+    const comp = Number(s.qtdComprada) || 0;
+    const rec = Number(s.qtdRecebida) || 0;
+    if (sol > orc) return { dot: "bg-red-500", label: "Estouro", bg: "bg-red-50" };
+    if (rec >= orc && orc > 0) return { dot: "bg-emerald-500", label: "Concluído", bg: "" };
+    if (comp > 0 && rec < comp) return { dot: "bg-orange-500", label: "Comprado parcial", bg: "" };
+    if (sol > 0 && comp === 0) return { dot: "bg-blue-500", label: "Solicitado", bg: "" };
+    if (sol > 0 && comp > 0 && comp < orc) return { dot: "bg-purple-500", label: "Em compra", bg: "" };
+    return { dot: "bg-gray-300", label: "Disponível", bg: "" };
+  }
+
+  useEffect(() => {
+    if (!eapQ.data?.items?.length || !form.obraId) return;
+    const itemIds = eapQ.data.items.filter((it: any) => it.nivel >= 2 && it.tipo !== "grupo").map((it: any) => it.id);
+    if (itemIds.length === 0) return;
+    trpcCtx.compras.getSaldoInsumoPorObra.fetch({ companyId, obraId: parseInt(form.obraId), orcamentoItemIds: itemIds })
+      .then(res => {
+        const map: any = {};
+        for (const r of res) map[r.orcamentoItemId] = r;
+        setBatchSaldo(map);
+      })
+      .catch(() => {});
+  }, [eapQ.data, form.obraId, companyId]);
 
   function resetForm() {
     setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "" });
@@ -682,7 +711,7 @@ export default function Solicitacoes() {
                           setItens([newItem()]);
                           setObraSearch("");
                           setObraOpen(false);
-                          setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({});
+                          setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setBatchSaldo({});
                         }}
                       >
                         {o.codigo ? <span className="text-gray-400 mr-1">[{o.codigo}]</span> : null}{o.nome}
@@ -732,6 +761,16 @@ export default function Solicitacoes() {
                         Esta obra não possui orçamento vinculado. Use o modo Manual.
                       </div>
                     ) : eapQ.data && eapQ.data.items.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-gray-500">
+                          <span className="font-medium text-gray-600 mr-0.5">Legenda:</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-gray-300" />Disponível</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-blue-500" />Solicitado</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-purple-500" />Em compra</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-orange-500" />Comprado parcial</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />Concluído</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-red-500" />Estouro</span>
+                        </div>
                       <div className="border border-gray-200 rounded-lg overflow-hidden">
                         <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
                           <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
@@ -753,13 +792,15 @@ export default function Solicitacoes() {
                               const qtdStr = eapQtdServico[it.id] || "";
                               const qtdVal = parseFloat(qtdStr) || 0;
                               const estouro = saldo && qtdVal > 0 && qtdVal > saldo.saldoDisponivel;
+                              const statusColor = getStatusColor(it.id);
 
                               return (
-                                <div key={it.id} className="group">
+                                <div key={it.id} className={`group ${statusColor.bg}`}>
                                   <div
                                     onClick={() => handleEapExpand(it)}
                                     className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${expanded ? "bg-amber-50 border-l-2 border-l-amber-500" : "hover:bg-gray-50"}`}
                                   >
+                                    <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${statusColor.dot}`} title={statusColor.label} />
                                     <input
                                       type="checkbox"
                                       checked={selectedEapIds.has(it.id) || qtdVal > 0}
@@ -878,6 +919,7 @@ export default function Solicitacoes() {
                             <div className="px-3 py-4 text-xs text-center text-gray-400">Nenhum serviço encontrado na EAP</div>
                           )}
                         </div>
+                      </div>
                       </div>
                     ) : eapQ.isLoading ? (
                       <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-2">
