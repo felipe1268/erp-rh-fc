@@ -1831,15 +1831,16 @@ export default function Cotacoes() {
                         </div>
                       );
                     }
+                    const vFid = vencedor.fornecedorId;
                     const vNome = vencedor.fornecedor?.nomeFantasia || vencedor.fornecedor?.razaoSocial || "Fornecedor";
                     const vTotal = parseFloat(vencedor.totalOrcado ?? "0");
-                    const vFormaPag = (vencedor as any).formaPagamento;
-                    const vCondPag = vencedor.condicaoPagamento;
-                    const vTipoPag = (vencedor as any).tipoPagamento;
-                    const vPrazo = vencedor.prazoEntregaDias;
-                    const vFreteTipo = (vencedor as any).freteTipo ?? "cif";
-                    const vValorFrete = parseFloat((vencedor as any).valorFrete ?? "0");
-                    const vTransportadora = (vencedor as any).transportadora;
+                    const vFormaPag = editFormaPag[vFid] ?? (vencedor as any).formaPagamento;
+                    const vCondPag = editTipoPag[vFid] ?? vencedor.condicaoPagamento;
+                    const vTipoPag = editTipoPag[vFid] ?? (vencedor as any).tipoPagamento;
+                    const vPrazo = editPrazo[vFid] ?? vencedor.prazoEntregaDias;
+                    const vFreteTipo = editFreteTipo[vFid] ?? (vencedor as any).freteTipo ?? "cif";
+                    const vValorFrete = parseFloat(editValorFrete[vFid] ?? (vencedor as any).valorFrete ?? "0");
+                    const vTransportadora = editTransportadora[vFid] ?? (vencedor as any).transportadora;
 
                     const FORMA_MAP: Record<string, { l: string; icon: string; cls: string }> = {
                       boleto: { l: "Boleto", icon: "📄", cls: "bg-blue-100 text-blue-700 border-blue-300" },
