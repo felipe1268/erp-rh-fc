@@ -42,9 +42,9 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
-  // Redirecionar para a tela de login interna, não para o Manus OAuth
-  // Não redirecionar se já estiver na página de login (evita loop de erros)
-  if (window.location.pathname === "/login") return;
+  const path = window.location.pathname;
+  const publicPaths = ["/login", "/portal/cotacao/", "/portal/servico/", "/pesquisa-publica/", "/verificar/"];
+  if (publicPaths.some(p => path.startsWith(p) || path === p)) return;
   window.location.href = "/login";
 };
 
@@ -52,7 +52,9 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 const isAuthErrorOnLoginPage = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return false;
   if (typeof window === "undefined") return false;
-  return error.message === UNAUTHED_ERR_MSG && window.location.pathname === "/login";
+  const path = window.location.pathname;
+  const publicPaths = ["/login", "/portal/cotacao/", "/portal/servico/", "/pesquisa-publica/", "/verificar/"];
+  return error.message === UNAUTHED_ERR_MSG && publicPaths.some(p => path.startsWith(p) || path === p);
 };
 
 queryClient.getQueryCache().subscribe(event => {

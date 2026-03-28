@@ -106,6 +106,7 @@ import { masControleRouter } from "./routers/masControle";
 import { moAlocacaoRouter } from "./routers/moAlocacao";
 import { gestaoDocumentosRouter } from "./routers/gestaodocumentos";
 import { telemetriaRouter } from "./routers/telemetria";
+import { portalServicoRouter } from "./routers/portalServico";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -156,6 +157,7 @@ export const appRouter = router({
   moAlocacao: moAlocacaoRouter,
   gestaoDocumentos: gestaoDocumentosRouter,
   telemetria: telemetriaRouter,
+  portalServico: portalServicoRouter,
   portalExterno: portalExternoRouter,
   payrollEngine: payrollEngineRouter,
   horasExtras: horasExtrasRouter,

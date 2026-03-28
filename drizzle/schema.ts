@@ -5717,6 +5717,14 @@ export const supplierContracts = pgTable("supplier_contracts", {
   observacoes: text(),
   status: text().default("ativo").notNull(),
   alertaEnviado: smallint("alerta_enviado").default(0),
+  tipo: text().default("material"),
+  escopo: text(),
+  obraId: integer("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  valorTotal: numeric("valor_total", { precision: 15, scale: 2 }),
+  condicaoPagamento: varchar("condicao_pagamento", { length: 255 }),
+  contratoConfirmado: smallint("contrato_confirmado").default(0),
+  confirmadoEm: timestamp("confirmado_em", { mode: "string" }),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_sc_company").on(t.companyId)]);
@@ -6358,4 +6366,79 @@ export const gdArts = pgTable("gd_arts", {
   index("idx_gd_art_company").on(t.companyId),
   index("idx_gd_art_obra").on(t.obraId),
   index("idx_gd_art_doc").on(t.documentoId),
+]);
+
+export const serviceContractTokens = pgTable("service_contract_tokens", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  contractId: integer("contract_id").notNull(),
+  supplierId: integer("supplier_id").notNull(),
+  supplierNome: varchar("supplier_nome", { length: 255 }),
+  supplierEmail: varchar("supplier_email", { length: 255 }),
+  token: varchar({ length: 64 }).notNull(),
+  expiresAt: timestamp("expires_at", { mode: "string" }),
+  accessedAt: timestamp("accessed_at", { mode: "string" }),
+  confirmedAt: timestamp("confirmed_at", { mode: "string" }),
+  status: text().default("enviado"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_sct_token").on(t.token),
+  index("idx_sct_contract").on(t.contractId),
+]);
+
+export const serviceContractMeasurements = pgTable("service_contract_measurements", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  contractId: integer("contract_id").notNull(),
+  supplierId: integer("supplier_id").notNull(),
+  mesReferencia: varchar("mes_referencia", { length: 7 }).notNull(),
+  percentualConcluido: numeric("percentual_concluido", { precision: 5, scale: 2 }),
+  valorMedido: numeric("valor_medido", { precision: 15, scale: 2 }),
+  descricao: text(),
+  fotosUrls: json("fotos_urls"),
+  relatorioUrl: text("relatorio_url"),
+  status: text().default("pendente").notNull(),
+  motivoRecusa: text("motivo_recusa"),
+  aprovadorId: integer("aprovador_id"),
+  aprovadorNome: varchar("aprovador_nome", { length: 255 }),
+  aprovadoEm: timestamp("aprovado_em", { mode: "string" }),
+  enviadoEm: timestamp("enviado_em", { mode: "string" }).defaultNow(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_scm_contract").on(t.contractId),
+  index("idx_scm_company").on(t.companyId),
+  index("idx_scm_status").on(t.status),
+]);
+
+export const serviceContractDocuments = pgTable("service_contract_documents", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  contractId: integer("contract_id").notNull(),
+  supplierId: integer("supplier_id").notNull(),
+  tipo: varchar({ length: 100 }).notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  arquivoUrl: text("arquivo_url"),
+  dataValidade: date("data_validade", { mode: "string" }),
+  observacoes: text(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_scd_contract").on(t.contractId),
+  index("idx_scd_company").on(t.companyId),
+]);
+
+export const serviceContractActionLogs = pgTable("service_contract_action_logs", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  contractId: integer("contract_id").notNull(),
+  supplierId: integer("supplier_id"),
+  userId: integer("user_id"),
+  userName: varchar("user_name", { length: 255 }),
+  acao: varchar({ length: 100 }).notNull(),
+  detalhes: text(),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_scal_contract").on(t.contractId),
+  index("idx_scal_company").on(t.companyId),
 ]);
