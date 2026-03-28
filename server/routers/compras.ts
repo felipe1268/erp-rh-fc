@@ -1054,12 +1054,81 @@ Responda APENAS com um objeto JSON no formato:
 
   getSolicitacao: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const [sc] = await db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
       if (!sc) throw new TRPCError({ code: "NOT_FOUND" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.includes(sc.companyId)) throw new TRPCError({ code: "FORBIDDEN" });
       const itens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
-      return { ...sc, itens };
+
+      let solicitanteNome: string | null = null;
+      let aprovadorNome: string | null = null;
+      if (sc.solicitanteId) {
+        const [u] = await db.select({ nome: users.nome }).from(users).where(eq(users.id, sc.solicitanteId));
+        solicitanteNome = u?.nome || null;
+      }
+      if (sc.aprovadorId) {
+        const [u] = await db.select({ nome: users.nome }).from(users).where(eq(users.id, sc.aprovadorId));
+        aprovadorNome = u?.nome || null;
+      }
+
+      const cotacoes = await db.select({
+        id: comprasCotacoes.id,
+        numeroCotacao: comprasCotacoes.numeroCotacao,
+        status: comprasCotacoes.status,
+        criadoEm: comprasCotacoes.criadoEm,
+        total: comprasCotacoes.total,
+      }).from(comprasCotacoes)
+        .where(and(eq(comprasCotacoes.solicitacaoId, input.id), eq(comprasCotacoes.companyId, sc.companyId)))
+        .orderBy(asc(comprasCotacoes.criadoEm));
+
+      const ordens = await db.select({
+        id: comprasOrdens.id,
+        numeroOc: comprasOrdens.numeroOc,
+        status: comprasOrdens.status,
+        fornecedorNome: comprasOrdens.fornecedorNome,
+        total: comprasOrdens.total,
+        criadoEm: comprasOrdens.criadoEm,
+        aprovacaoStatus: comprasOrdens.aprovacaoStatus,
+        aprovadorId: comprasOrdens.aprovadorId,
+      }).from(comprasOrdens)
+        .where(and(eq(comprasOrdens.solicitacaoId, input.id), eq(comprasOrdens.companyId, sc.companyId)))
+        .orderBy(asc(comprasOrdens.criadoEm));
+
+      const ocAprovadorIds = [...new Set(ordens.filter(o => o.aprovadorId).map(o => o.aprovadorId!))];
+      const ocAprovadores: Record<number, string> = {};
+      if (ocAprovadorIds.length > 0) {
+        const aprovUsers = await db.select({ id: users.id, nome: users.nome }).from(users).where(inArray(users.id, ocAprovadorIds));
+        for (const u of aprovUsers) ocAprovadores[u.id] = u.nome || "";
+      }
+
+      const ocIds = ordens.map(o => o.id).filter(Boolean);
+      const recebimentos = ocIds.length > 0 ? await db.select({
+        id: almoxarifadoRecebimentos.id,
+        ordemCompraId: almoxarifadoRecebimentos.ordemCompraId,
+        criadoEm: almoxarifadoRecebimentos.criadoEm,
+        usuarioNome: almoxarifadoRecebimentos.usuarioNome,
+        status: almoxarifadoRecebimentos.status,
+        numeroNf: almoxarifadoRecebimentos.numeroNf,
+      }).from(almoxarifadoRecebimentos)
+        .where(inArray(almoxarifadoRecebimentos.ordemCompraId, ocIds)) : [];
+
+      return {
+        ...sc,
+        itens,
+        solicitanteNome,
+        aprovadorNome,
+        rastreio: {
+          cotacoes: cotacoes.map(c => ({ ...c, total: parseFloat(String(c.total || "0")) })),
+          ordens: ordens.map(o => ({
+            ...o,
+            total: parseFloat(String(o.total || "0")),
+            aprovadorNome: o.aprovadorId ? (ocAprovadores[o.aprovadorId] || null) : null,
+          })),
+          recebimentos,
+        },
+      };
     }),
 
   criarSolicitacao: protectedProcedure

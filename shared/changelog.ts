@@ -5739,4 +5739,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 23:45:00",
   },
+  {
+    version: 842,
+    titulo: "Compras: Rastreabilidade completa no detalhe da SC",
+    descricao: "O detalhe da Solicitacao de Compra agora mostra uma timeline visual com todas as etapas do fluxo: quem solicitou, quem aprovou (e quando), cotacoes vinculadas (numero, status, valor), ordens de compra (fornecedor, valor, quem aprovou), e recebimentos (NF, quem recebeu). Tudo rastreado em uma unica tela com icones coloridos e linha do tempo vertical.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 00:00:00",
+  },
 ];

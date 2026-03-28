@@ -18,6 +18,7 @@ import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
   Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare,
+  UserCircle, ShieldCheck, FileSearch, Truck,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -1598,6 +1599,154 @@ export default function Solicitacoes() {
                   ))}
                 </div>
                 )}
+              </div>
+
+              {/* Rastreabilidade */}
+              <div className="border border-gray-200 rounded-lg p-3">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Rastreabilidade do Pedido</div>
+                <div className="relative">
+                  <div className="absolute left-3 top-4 bottom-4 w-0.5 bg-gray-200" />
+                  <div className="space-y-3">
+                    {/* Solicitação criada */}
+                    <div className="flex items-start gap-3 relative">
+                      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0 z-10 ring-2 ring-white">
+                        <ClipboardList className="h-3 w-3 text-blue-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-gray-900">Solicitação criada</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">
+                          {new Date(detalhe.criadoEm).toLocaleString("pt-BR")}
+                          {detalhe.solicitanteNome && <span className="ml-1.5 text-blue-600 font-medium">por {detalhe.solicitanteNome}</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Aprovação */}
+                    <div className="flex items-start gap-3 relative">
+                      {(() => {
+                        const isAprovada = ["aprovada","aprovado"].includes(detalhe.aprovacaoStatus ?? "");
+                        const isRecusada = ["recusada","recusado"].includes(detalhe.aprovacaoStatus ?? "");
+                        return (
+                          <>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 z-10 ring-2 ring-white ${isAprovada ? "bg-emerald-100" : isRecusada ? "bg-red-100" : "bg-amber-100"}`}>
+                        <ShieldCheck className={`h-3 w-3 ${isAprovada ? "text-emerald-600" : isRecusada ? "text-red-600" : "text-amber-600"}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-gray-900">
+                          {isAprovada ? "Aprovada" : isRecusada ? "Recusada" : "Aguardando aprovação"}
+                        </div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">
+                          {detalhe.aprovadoEm && new Date(detalhe.aprovadoEm).toLocaleString("pt-BR")}
+                          {detalhe.aprovadorNome && <span className="ml-1.5 text-emerald-600 font-medium">por {detalhe.aprovadorNome}</span>}
+                          {!detalhe.aprovadorNome && !detalhe.aprovadoEm && <span className="text-amber-500 italic">Pendente</span>}
+                        </div>
+                      </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Cotações */}
+                    {(detalhe.rastreio?.cotacoes ?? []).length > 0 ? (
+                      (detalhe.rastreio.cotacoes as any[]).map((cot: any) => (
+                        <div key={cot.id} className="flex items-start gap-3 relative">
+                          <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center shrink-0 z-10 ring-2 ring-white">
+                            <FileSearch className="h-3 w-3 text-purple-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-gray-900">
+                              Cotação {cot.numeroCotacao}
+                              <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded border ${cot.status === "finalizada" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : cot.status === "cancelada" ? "bg-red-50 text-red-600 border-red-200" : "bg-purple-50 text-purple-600 border-purple-200"}`}>
+                                {cot.status === "finalizada" ? "Finalizada" : cot.status === "cancelada" ? "Cancelada" : cot.status === "em_andamento" ? "Em andamento" : cot.status}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-gray-500 mt-0.5">
+                              {new Date(cot.criadoEm).toLocaleString("pt-BR")}
+                              {cot.total > 0 && <span className="ml-1.5 font-medium text-gray-700">R$ {cot.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex items-start gap-3 relative">
+                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0 z-10 ring-2 ring-white">
+                          <FileSearch className="h-3 w-3 text-gray-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-400 italic">Nenhuma cotação vinculada</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ordens de Compra */}
+                    {(detalhe.rastreio?.ordens ?? []).length > 0 ? (
+                      (detalhe.rastreio.ordens as any[]).map((oc: any) => (
+                        <div key={oc.id} className="flex items-start gap-3 relative">
+                          <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0 z-10 ring-2 ring-white">
+                            <ShoppingCart className="h-3 w-3 text-amber-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-gray-900">
+                              OC {oc.numeroOc}
+                              <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded border ${oc.status === "entregue" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : oc.status === "cancelada" ? "bg-red-50 text-red-600 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                                {oc.status === "entregue" ? "Entregue" : oc.status === "cancelada" ? "Cancelada" : oc.status === "parcial" ? "Entrega parcial" : oc.status === "aprovada" ? "Aprovada" : oc.status}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-gray-500 mt-0.5">
+                              {new Date(oc.criadoEm).toLocaleString("pt-BR")}
+                              {oc.fornecedorNome && <span className="ml-1.5 text-gray-700">· Fornecedor: <b>{oc.fornecedorNome}</b></span>}
+                            </div>
+                            <div className="text-[10px] text-gray-500">
+                              {oc.total > 0 && <span className="font-medium text-gray-700">R$ {oc.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>}
+                              {oc.aprovadorNome && <span className="ml-1.5 text-emerald-600">· Aprovada por {oc.aprovadorNome}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex items-start gap-3 relative">
+                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0 z-10 ring-2 ring-white">
+                          <ShoppingCart className="h-3 w-3 text-gray-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-400 italic">Nenhuma OC vinculada</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recebimentos */}
+                    {(detalhe.rastreio?.recebimentos ?? []).length > 0 ? (
+                      (detalhe.rastreio.recebimentos as any[]).map((rec: any) => (
+                        <div key={rec.id} className="flex items-start gap-3 relative">
+                          <div className="w-6 h-6 rounded-full bg-teal-100 flex items-center justify-center shrink-0 z-10 ring-2 ring-white">
+                            <Truck className="h-3 w-3 text-teal-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-gray-900">
+                              Recebimento {rec.numeroNf && `· NF ${rec.numeroNf}`}
+                              <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded border ${rec.status === "conferido" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-teal-50 text-teal-700 border-teal-200"}`}>
+                                {rec.status === "conferido" ? "Conferido" : rec.status === "divergencia" ? "Com divergência" : rec.status}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-gray-500 mt-0.5">
+                              {new Date(rec.criadoEm).toLocaleString("pt-BR")}
+                              {rec.usuarioNome && <span className="ml-1.5 text-teal-600 font-medium">por {rec.usuarioNome}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex items-start gap-3 relative">
+                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0 z-10 ring-2 ring-white">
+                          <Truck className="h-3 w-3 text-gray-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-400 italic">Nenhum recebimento registrado</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Itens */}
