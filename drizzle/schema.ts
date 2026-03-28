@@ -5325,35 +5325,35 @@ export const almoxarifadoNotificacoes = pgTable("almoxarifado_notificacoes", {
 // 1. Plano de Contas
 export const financialAccounts = pgTable("financial_accounts", {
   id: serial().notNull(),
-  companyId: integer().notNull(),
+  companyId: integer("company_id").notNull(),
   codigo: varchar({ length: 20 }).notNull(),
   nome: varchar({ length: 255 }).notNull(),
-  tipo: text().notNull(), // receita_bruta | deducao_receita | custo_obra | despesa_fixa | despesa_variavel | despesa_financeira | receita_financeira | imposto_resultado
-  natureza: text().notNull(), // devedora | credora
+  tipo: text().notNull(),
+  natureza: text().notNull(),
   nivel: integer().default(1).notNull(),
   contaPaiId: integer("conta_pai_id"),
   classificacaoDRE: varchar("classificacao_dre", { length: 50 }),
   ativo: smallint().default(1).notNull(),
   ordem: integer().default(0),
-  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_fa_company").on(t.companyId)]);
 
 // 2. Lançamentos (coração do sistema)
 export const financialEntries = pgTable("financial_entries", {
   id: serial().notNull(),
-  companyId: integer().notNull(),
+  companyId: integer("company_id").notNull(),
   obraId: integer("obra_id"),
   obraNome: varchar("obra_nome", { length: 255 }),
   contaId: integer("conta_id"),
   contaNome: varchar("conta_nome", { length: 255 }),
-  tipo: text().notNull(), // receita | despesa | transferencia | imposto | provisao
-  natureza: text().notNull(), // fixo | variavel
+  tipo: text().notNull(),
+  natureza: text().notNull(),
   valorPrevisto: numeric("valor_previsto", { precision: 15, scale: 2 }).notNull(),
   valorRealizado: numeric("valor_realizado", { precision: 15, scale: 2 }),
   dataCompetencia: date("data_competencia", { mode: "string" }).notNull(),
   dataVencimento: date("data_vencimento", { mode: "string" }),
   dataPagamento: date("data_pagamento", { mode: "string" }),
-  status: text().default("previsto").notNull(), // previsto | a_pagar | a_receber | pago | recebido | cancelado | provisionado
+  status: text().default("previsto").notNull(),
   contaBancariaId: integer("conta_bancaria_id"),
   origemModulo: varchar("origem_modulo", { length: 50 }),
   origemId: integer("origem_id"),
@@ -5361,7 +5361,7 @@ export const financialEntries = pgTable("financial_entries", {
   parcelaNumero: integer("parcela_numero"),
   parcelaTotal: integer("parcela_total"),
   parcelaGrupoId: varchar("parcela_grupo_id", { length: 36 }),
-  formaPagamento: text("forma_pagamento"), // pix | ted | boleto | cheque | dinheiro | cartao_credito | cartao_debito | debito_automatico
+  formaPagamento: text("forma_pagamento"),
   comprovanteUrl: text("comprovante_url"),
   codigoBarras: varchar("codigo_barras", { length: 100 }),
   chequeNumero: varchar("cheque_numero", { length: 20 }),
@@ -5371,7 +5371,7 @@ export const financialEntries = pgTable("financial_entries", {
   chequeTitular: varchar("cheque_titular", { length: 255 }),
   chequeDataEmissao: date("cheque_data_emissao", { mode: "string" }),
   chequeDataBomPara: date("cheque_data_bom_para", { mode: "string" }),
-  chequeStatus: text("cheque_status"), // emitido | compensado | devolvido | cancelado
+  chequeStatus: text("cheque_status"),
   chequeUrl: text("cheque_url"),
   conciliado: smallint().default(0),
   dataConciliacao: date("data_conciliacao", { mode: "string" }),
@@ -5383,8 +5383,8 @@ export const financialEntries = pgTable("financial_entries", {
   criadoPorNome: varchar("criado_por_nome", { length: 255 }),
   aprovadoPorId: integer("aprovado_por_id"),
   aprovadoPorNome: varchar("aprovado_por_nome", { length: 255 }),
-  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
-  updatedAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [
   index("idx_fe_company").on(t.companyId),
   index("idx_fe_obra").on(t.obraId),
