@@ -245,6 +245,27 @@ async function startServer() {
         } catch (re: any) { console.warn("[ColFix] Recuperação de fotos:", re?.message); }
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        const { normalizarTexto } = await import("../../shared/textNormalization");
+        const tables = ["compras_solicitacoes_itens", "compras_cotacoes_itens", "compras_ordens_itens"];
+        let total = 0;
+        for (const tbl of tables) {
+          const rows = await db.execute(sql.raw(`SELECT id, descricao FROM ${tbl} WHERE descricao IS NOT NULL`));
+          for (const row of (rows as any).rows || rows) {
+            const norm = normalizarTexto(row.descricao);
+            if (norm !== row.descricao) {
+              await db.execute(sql.raw(`UPDATE ${tbl} SET descricao = '${norm.replace(/'/g, "''")}' WHERE id = ${row.id}`));
+              total++;
+            }
+          }
+        }
+        console.log(`[ColFix] Normalização descrições compras: ${total} registro(s) corrigido(s)`);
+      } catch (e: any) { console.warn("[ColFix] Normalização descrições:", e?.message ?? e); }
+    });
     // Rev.641: criar tabelas do módulo Hora Extra (he_periods + he_period_employees)
     import("../db").then(async ({ getDb }) => {
       try {

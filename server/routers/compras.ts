@@ -4,6 +4,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getCompaniesForUser } from "../db";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
 import { getTipoPagamentoInfo } from "../../shared/paymentConditions";
+import { normalizarTexto } from "../../shared/textNormalization";
 import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { storagePut } from "../storage";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
@@ -1006,7 +1007,7 @@ Responda APENAS com um objeto JSON no formato:
         await db.insert(comprasSolicitacoesItens).values(
           input.itens.map(it => ({
             solicitacaoId: sc.id,
-            descricao: it.descricao,
+            descricao: normalizarTexto(it.descricao),
             unidade: it.unidade,
             quantidade: String(it.quantidade),
             observacoes: it.observacoes,
@@ -1099,7 +1100,7 @@ Responda APENAS com um objeto JSON no formato:
             const numeroCotacao = `COT-${new Date().getFullYear()}-${seq}`;
 
             const itensMapped = scItens.map(it => ({
-              descricao: it.descricao,
+              descricao: normalizarTexto(it.descricao),
               unidade: it.unidade ?? "un",
               quantidade: n(it.quantidade),
               precoUnitario: 0,
@@ -1369,7 +1370,7 @@ Responda APENAS com um objeto JSON no formato:
       const [cot] = await db.insert(comprasCotacoes).values({
         companyId: input.companyId,
         numeroCotacao,
-        descricao: input.descricao,
+        descricao: normalizarTexto(input.descricao),
         prioridade: input.prioridade ?? "normal",
         tipo: input.tipo ?? "material",
         obraId: input.obraId ?? null,
@@ -1389,7 +1390,7 @@ Responda APENAS com um objeto JSON no formato:
           itensMapped.map(it => ({
             cotacaoId: cot.id,
             solicitacaoItemId: it.solicitacaoItemId ?? null,
-            descricao: it.descricao,
+            descricao: normalizarTexto(it.descricao),
             unidade: it.unidade,
             quantidade: String(it.quantidade),
             precoUnitario: String(it.precoUnitario),
@@ -2690,7 +2691,7 @@ Retorne APENAS um JSON válido neste formato:
             return {
               ordemId: oc.id,
               solicitacaoItemId: it.solicitacaoItemId ?? null,
-              descricao: it.descricao,
+              descricao: normalizarTexto(it.descricao),
               unidade: it.unidade,
               quantidade: String(qty),
               precoUnitario: String(pu.toFixed(4)),
@@ -2879,7 +2880,7 @@ Retorne APENAS um JSON válido neste formato:
         await db.insert(comprasOrdensItens).values(
           input.itens.map(it => ({
             ordemId: oc.id,
-            descricao: it.descricao,
+            descricao: normalizarTexto(it.descricao),
             unidade: it.unidade,
             quantidade: String(it.quantidade),
             precoUnitario: String(it.precoUnitario),
@@ -4878,7 +4879,7 @@ Retorne APENAS um JSON válido neste formato:
           await db.insert(comprasSolicitacoesItens).values(
             input.itens.map(it => ({
               solicitacaoId: input.id,
-              descricao: it.descricao,
+              descricao: normalizarTexto(it.descricao),
               unidade: it.unidade,
               quantidade: String(it.quantidade),
               observacoes: it.observacoes,
@@ -4953,7 +4954,7 @@ Retorne APENAS um JSON válido neste formato:
                   scItens.map(it => ({
                     cotacaoId: cot.id,
                     solicitacaoItemId: it.id,
-                    descricao: it.descricao,
+                    descricao: normalizarTexto(it.descricao),
                     unidade: it.unidade ?? "un",
                     quantidade: String(n(it.quantidade)),
                     precoUnitario: "0",
@@ -5014,7 +5015,7 @@ Retorne APENAS um JSON válido neste formato:
         await db.insert(comprasSolicitacoesItens).values(
           scItens.map(it => ({
             solicitacaoId: novaSc.id,
-            descricao: it.descricao,
+            descricao: normalizarTexto(it.descricao),
             unidade: it.unidade,
             quantidade: it.quantidade,
             observacoes: it.observacoes,
