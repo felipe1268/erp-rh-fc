@@ -27,6 +27,7 @@ import {
   purchaseOrders, purchaseRequests, purchaseQuotations,
 } from "../../drizzle/schema";
 import { PermissionDeniedError } from "@anthropic-ai/sdk";
+import { createQueryUtilsProxy } from "node_modules/@trpc/react-query/dist/getQueryKey.d-CruH3ncI.d.mts";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 

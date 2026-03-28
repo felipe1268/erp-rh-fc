@@ -85,32 +85,7 @@ function resolveLogoPath(logoUrl: string | null | undefined): string | null {
     const localPath = path.join(process.cwd(), "server", logoUrl);
     if (fs.existsSync(localPath)) return localPath;
   }
-  if (logoUrl.startsWith("http://") || logoUrl.startsWith("https://")) {
-    return null;
-  }
   return null;
-}
-
-function drawInfoRow(
-  doc: PDFKit.PDFDocument,
-  entries: [string, string][],
-  x: number,
-  y: number,
-  colW: number,
-  colors: { label: string; value: string }
-): number {
-  for (let i = 0; i < entries.length; i += 2) {
-    const [lLabel, lValue] = entries[i];
-    const right = entries[i + 1];
-    doc.font("Helvetica").fontSize(7).fillColor(colors.label).text(lLabel, x, y);
-    doc.font("Helvetica-Bold").fontSize(8.5).fillColor(colors.value).text(lValue, x, y + 10, { width: colW - 10 });
-    if (right) {
-      doc.font("Helvetica").fontSize(7).fillColor(colors.label).text(right[0], x + colW, y);
-      doc.font("Helvetica-Bold").fontSize(8.5).fillColor(colors.value).text(right[1], x + colW, y + 10, { width: colW - 10 });
-    }
-    y += 26;
-  }
-  return y;
 }
 
 export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
@@ -118,104 +93,155 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   const doc = new PDFDocument({ size: "A4", margin: 40 });
 
   const pageW = doc.page.width;
-  const marginL = 40;
-  const marginR = 40;
-  const contentW = pageW - marginL - marginR;
+  const pageH = doc.page.height;
+  const mL = 40;
+  const mR = 40;
+  const cW = pageW - mL - mR;
 
-  const darkColor = "#1a1a2e";
-  const accentColor = "#16537e";
-  const lightGray = "#f5f5f5";
-  const medGray = "#888888";
-  const lineColor = "#cccccc";
-  const colors = { label: medGray, value: darkColor };
+  const primary = "#1B3A5C";
+  const accent = "#2980b9";
+  const dark = "#1a1a2e";
+  const midGray = "#666666";
+  const lightGray = "#f8f9fa";
+  const borderColor = "#dee2e6";
+  const white = "#ffffff";
 
-  function drawLine(y: number, color = lineColor) {
-    doc.strokeColor(color).lineWidth(0.5).moveTo(marginL, y).lineTo(pageW - marginR, y).stroke();
+  function drawHLine(y: number, color = borderColor, width = 0.5) {
+    doc.strokeColor(color).lineWidth(width).moveTo(mL, y).lineTo(pageW - mR, y).stroke();
   }
 
-  doc.rect(marginL, 40, contentW, 60).fill(accentColor);
+  function sectionTitle(title: string, y: number): number {
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(primary).text(title.toUpperCase(), mL, y);
+    y += 13;
+    drawHLine(y, accent, 0.8);
+    y += 6;
+    return y;
+  }
+
+  function infoBlock(label: string, value: string, x: number, y: number, w: number): number {
+    doc.font("Helvetica").fontSize(6.5).fillColor(midGray).text(label, x, y, { width: w });
+    doc.font("Helvetica-Bold").fontSize(8.5).fillColor(dark).text(value || "—", x, y + 9, { width: w });
+    const valH = doc.heightOfString(value || "—", { width: w, fontSize: 8.5 });
+    return 9 + valH + 4;
+  }
+
+  function infoRow(entries: [string, string][], y: number, colW: number): number {
+    let maxH = 0;
+    entries.forEach((e, i) => {
+      const h = infoBlock(e[0], e[1], mL + colW * i, y, colW - 8);
+      if (h > maxH) maxH = h;
+    });
+    return y + Math.max(maxH, 22);
+  }
+
+  function checkPage(needed: number, currentY: number): number {
+    if (currentY + needed > pageH - 60) {
+      doc.addPage();
+      return 40;
+    }
+    return currentY;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // HEADER — Faixa azul com logo + dados da empresa
+  // ══════════════════════════════════════════════════════════════════════
+  const headerH = 70;
+  doc.rect(0, 0, pageW, headerH).fill(primary);
 
   const logoPath = resolveLogoPath(company?.logoUrl);
   let logoRendered = false;
   if (logoPath) {
     try {
-      doc.image(logoPath, marginL + 10, 47, { height: 46, fit: [80, 46] });
+      doc.image(logoPath, mL, 12, { height: 46, fit: [90, 46] });
       logoRendered = true;
     } catch {
       logoRendered = false;
     }
   }
 
-  const textStartX = logoRendered ? marginL + 100 : marginL + 15;
-  const textWidth = logoRendered ? contentW * 0.45 : contentW * 0.6;
+  const nameX = logoRendered ? mL + 100 : mL;
+  const nameW = logoRendered ? cW * 0.45 : cW * 0.55;
 
-  doc.font("Helvetica-Bold").fontSize(18).fillColor("#ffffff")
-    .text(company?.razaoSocial || "FC Engenharia", textStartX, 55, { width: textWidth });
+  doc.font("Helvetica-Bold").fontSize(14).fillColor(white)
+    .text(company?.razaoSocial || "FC ENGENHARIA", nameX, 14, { width: nameW });
 
   if (company?.nomeFantasia && company.nomeFantasia !== company.razaoSocial) {
-    doc.font("Helvetica").fontSize(9).fillColor("#d0e8f5")
-      .text(company.nomeFantasia, textStartX, 78, { width: textWidth });
+    doc.font("Helvetica").fontSize(8).fillColor("#c5d9ed")
+      .text(company.nomeFantasia, nameX, 32, { width: nameW });
   }
 
-  doc.font("Helvetica-Bold").fontSize(14).fillColor("#ffffff")
-    .text("ORDEM DE COMPRA", pageW - marginR - 200, 55, { width: 185, align: "right" });
+  const ocBlockW = 170;
+  const ocBlockX = pageW - mR - ocBlockW;
+  doc.rect(ocBlockX - 5, 10, ocBlockW + 5, 50).lineWidth(1).strokeColor("#ffffff50").stroke();
+  doc.font("Helvetica").fontSize(8).fillColor("#c5d9ed")
+    .text("ORDEM DE COMPRA", ocBlockX, 16, { width: ocBlockW - 5, align: "center" });
+  doc.font("Helvetica-Bold").fontSize(16).fillColor(white)
+    .text(oc.numeroOc || "—", ocBlockX, 30, { width: ocBlockW - 5, align: "center" });
 
-  doc.font("Helvetica-Bold").fontSize(16).fillColor("#ffffff")
-    .text(oc.numeroOc || "—", pageW - marginR - 200, 73, { width: 185, align: "right" });
-
-  let y = 110;
-
-  const companyDetails: string[] = [];
-  if (company?.cnpj) companyDetails.push(`CNPJ: ${company.cnpj}`);
-  if (company?.inscricaoEstadual) companyDetails.push(`IE: ${company.inscricaoEstadual}`);
+  // Sub-header com dados da empresa (CNPJ, endereço, contato)
+  let y = headerH + 4;
+  const compParts: string[] = [];
+  if (company?.cnpj) compParts.push(`CNPJ: ${company.cnpj}`);
   if (company?.endereco) {
     let addr = company.endereco;
     if (company.cidade) addr += ` - ${company.cidade}`;
     if (company.estado) addr += `/${company.estado}`;
     if (company.cep) addr += ` - CEP: ${company.cep}`;
-    companyDetails.push(addr);
+    compParts.push(addr);
   }
-  if (company?.telefone) companyDetails.push(`Tel: ${company.telefone}`);
-  if (company?.email) companyDetails.push(`Email: ${company.email}`);
+  if (company?.telefone) compParts.push(`Tel: ${company.telefone}`);
+  if (company?.email) compParts.push(company.email);
 
-  if (companyDetails.length > 0) {
-    doc.font("Helvetica").fontSize(7.5).fillColor(medGray)
-      .text(companyDetails.join("  |  "), marginL, y, { width: contentW, align: "center" });
-    y += 15;
+  if (compParts.length > 0) {
+    doc.font("Helvetica").fontSize(6.5).fillColor(midGray)
+      .text(compParts.join("  |  "), mL, y, { width: cW, align: "center" });
+    y += 12;
   }
 
-  y += 5;
-  drawLine(y);
-  y += 10;
+  y += 4;
 
-  doc.font("Helvetica-Bold").fontSize(9).fillColor(accentColor).text("DADOS DA ORDEM", marginL, y);
-  y += 14;
+  // ══════════════════════════════════════════════════════════════════════
+  // SEÇÃO 1: DADOS DA ORDEM
+  // ══════════════════════════════════════════════════════════════════════
+  y = sectionTitle("Dados da Ordem", y);
 
-  const colW = contentW / 2;
-  const infoEntries: [string, string][] = [
+  const col3 = cW / 3;
+  y = infoRow([
     ["Data de Emissão", fmtDate(oc.criadoEm)],
     ["Status", (oc.status || "pendente").toUpperCase()],
-    ["Prazo de Entrega", fmtDate(oc.dataEntregaPrevista)],
     ["Forma de Pagamento", oc.formaPagamento ?? "—"],
+  ], y, col3);
+
+  const prazoVal = fmtDate(oc.dataEntregaPrevista) !== "—" ? fmtDate(oc.dataEntregaPrevista) : "—";
+  const row2: [string, string][] = [
+    ["Prazo de Entrega", prazoVal],
+    ["Vencimento", fmtDate(oc.dataVencimento)],
   ];
-  if (oc.dataVencimento) {
-    infoEntries.push(["Vencimento Pagamento", fmtDate(oc.dataVencimento)]);
-  }
-  y = drawInfoRow(doc, infoEntries, marginL, y, colW, colors);
+  if (oc.observacoes) row2.push(["Observações", oc.observacoes]);
+  y = infoRow(row2, y, col3);
 
-  y += 5;
-  drawLine(y);
-  y += 10;
-
-  doc.font("Helvetica-Bold").fontSize(9).fillColor(accentColor).text("FORNECEDOR", marginL, y);
-  y += 14;
+  // ══════════════════════════════════════════════════════════════════════
+  // SEÇÃO 2: FORNECEDOR
+  // ══════════════════════════════════════════════════════════════════════
+  y = sectionTitle("Fornecedor", y);
 
   if (fornecedor) {
-    const fornEntries: [string, string][] = [
+    const col2 = cW / 2;
+    y = infoRow([
       ["Razão Social", fornecedor.razaoSocial || "—"],
       ["CNPJ", fornecedor.cnpj || "—"],
-    ];
-    if (fornecedor.nomeFantasia) fornEntries.push(["Nome Fantasia", fornecedor.nomeFantasia]);
+    ], y, col2);
+
+    const row2F: [string, string][] = [];
+    if (fornecedor.nomeFantasia) row2F.push(["Nome Fantasia", fornecedor.nomeFantasia]);
+    if (fornecedor.telefone || fornecedor.email) {
+      const contactParts: string[] = [];
+      if (fornecedor.telefone) contactParts.push(`Tel: ${fornecedor.telefone}`);
+      if (fornecedor.email) contactParts.push(fornecedor.email);
+      row2F.push(["Contato", contactParts.join(" | ")]);
+    }
+    if (row2F.length > 0) y = infoRow(row2F, y, col2);
+
     if (fornecedor.endereco) {
       let addr = fornecedor.endereco;
       if (fornecedor.numero) addr += `, ${fornecedor.numero}`;
@@ -224,96 +250,103 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
       if (fornecedor.cidade) addr += ` - ${fornecedor.cidade}`;
       if (fornecedor.estado) addr += `/${fornecedor.estado}`;
       if (fornecedor.cep) addr += ` - CEP: ${fornecedor.cep}`;
-      fornEntries.push(["Endereço", addr]);
+      infoBlock("Endereço", addr, mL, y, cW);
+      const addrH = doc.heightOfString(addr, { width: cW, fontSize: 8.5 });
+      y += 9 + addrH + 6;
     }
-    if (fornecedor.telefone) fornEntries.push(["Telefone", fornecedor.telefone]);
-    if (fornecedor.email) fornEntries.push(["Email", fornecedor.email]);
-    if (fornecedor.contatoNome) fornEntries.push(["Contato", fornecedor.contatoNome]);
-    y = drawInfoRow(doc, fornEntries, marginL, y, colW, colors);
   } else if (oc.fornecedorNome) {
-    doc.font("Helvetica").fontSize(8.5).fillColor(darkColor).text(oc.fornecedorNome, marginL, y);
+    doc.font("Helvetica").fontSize(8.5).fillColor(dark).text(oc.fornecedorNome, mL, y);
     y += 16;
   } else {
-    doc.font("Helvetica").fontSize(8.5).fillColor(medGray).text("Não informado", marginL, y);
+    doc.font("Helvetica").fontSize(8.5).fillColor(midGray).text("Não informado", mL, y);
     y += 16;
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // SEÇÃO 3: LOCAL DE ENTREGA (OBRA)
+  // ══════════════════════════════════════════════════════════════════════
   if (obra) {
-    y += 2;
-    drawLine(y);
-    y += 10;
+    y = sectionTitle("Local de Entrega (Obra)", y);
 
-    doc.font("Helvetica-Bold").fontSize(9).fillColor(accentColor).text("LOCAL DE ENTREGA (OBRA)", marginL, y);
-    y += 14;
-
-    doc.font("Helvetica-Bold").fontSize(8.5).fillColor(darkColor).text(obra.nome || "—", marginL, y);
-    y += 12;
-
+    const col2 = cW / 2;
+    const obraRow: [string, string][] = [["Obra", obra.nome || "—"]];
     if (obra.endereco) {
-      let addr = obra.endereco;
-      if (obra.cidade) addr += ` - ${obra.cidade}`;
-      if (obra.estado) addr += `/${obra.estado}`;
-      doc.font("Helvetica").fontSize(8).fillColor(darkColor).text(addr, marginL, y);
-      y += 12;
+      let obraAddr = obra.endereco;
+      if (obra.cidade) obraAddr += ` - ${obra.cidade}`;
+      if (obra.estado) obraAddr += `/${obra.estado}`;
+      obraRow.push(["Endereço", obraAddr]);
     }
+    y = infoRow(obraRow, y, col2);
   }
 
-  y += 8;
-  drawLine(y, accentColor);
-  y += 10;
+  // ══════════════════════════════════════════════════════════════════════
+  // SEÇÃO 4: ITENS
+  // ══════════════════════════════════════════════════════════════════════
+  y = checkPage(60, y);
+  y = sectionTitle("Itens da Ordem de Compra", y);
 
-  doc.font("Helvetica-Bold").fontSize(9).fillColor(accentColor).text("ITENS DA ORDEM DE COMPRA", marginL, y);
-  y += 16;
-
-  const colWidths = [30, contentW - 30 - 50 - 60 - 80 - 80, 50, 60, 80, 80];
+  const colWidths = [28, cW - 28 - 40 - 55 - 85 - 85, 40, 55, 85, 85];
   const headers = ["#", "Descrição", "Un.", "Qtd", "Preço Unit.", "Total"];
 
-  doc.rect(marginL, y, contentW, 18).fill(accentColor);
+  function drawTableHeader(atY: number): number {
+    doc.rect(mL, atY, cW, 16).fill(primary);
+    let xP = mL;
+    headers.forEach((h, i) => {
+      const align: "left" | "right" | "center" = i === 0 ? "center" : i >= 3 ? "right" : "left";
+      doc.font("Helvetica-Bold").fontSize(7).fillColor(white)
+        .text(h, xP + 3, atY + 4, { width: colWidths[i] - 6, align });
+      xP += colWidths[i];
+    });
+    return atY + 16;
+  }
 
-  let xPos = marginL;
-  headers.forEach((h, i) => {
-    const align: "left" | "right" = i >= 3 ? "right" : "left";
-    doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#ffffff")
-      .text(h, xPos + 4, y + 5, { width: colWidths[i] - 8, align });
-    xPos += colWidths[i];
-  });
-  y += 18;
+  y = drawTableHeader(y);
 
   itens.forEach((item, idx) => {
-    if (y > doc.page.height - 120) {
-      doc.addPage();
-      y = 40;
-    }
-
-    const bgColor = idx % 2 === 0 ? "#ffffff" : lightGray;
-    doc.rect(marginL, y, contentW, 18).fill(bgColor);
-
     const qty = parseFloat(item.quantidade || "0");
     const price = parseFloat(item.precoUnitario || "0");
     const total = parseFloat(item.total || "0");
 
-    xPos = marginL;
+    const descText = item.descricao || "—";
+    const descH = doc.heightOfString(descText, { width: colWidths[1] - 10, fontSize: 7 });
+    const rowH = Math.max(16, descH + 8);
+
+    if (y + rowH > pageH - 60) {
+      doc.addPage();
+      y = 40;
+      y = drawTableHeader(y);
+    }
+
+    const bgColor = idx % 2 === 0 ? white : lightGray;
+    doc.rect(mL, y, cW, rowH).fill(bgColor);
+
+    doc.strokeColor(borderColor).lineWidth(0.3)
+      .moveTo(mL, y + rowH).lineTo(pageW - mR, y + rowH).stroke();
+
     const rowData = [
       String(idx + 1),
-      item.descricao || "—",
+      descText,
       item.unidade || "un",
       qty.toLocaleString("pt-BR", { minimumFractionDigits: 0 }),
       fmt(price),
       fmt(total),
     ];
 
+    let xPos = mL;
     rowData.forEach((val, i) => {
-      const align: "left" | "right" = i >= 3 ? "right" : "left";
-      const fontName = i === 1 ? "Helvetica-Bold" : "Helvetica";
-      doc.font(fontName).fontSize(7.5).fillColor(darkColor)
-        .text(val, xPos + 4, y + 5, { width: colWidths[i] - 8, align, lineBreak: false });
+      const align: "left" | "right" | "center" = i === 0 ? "center" : i >= 3 ? "right" : "left";
+      doc.font("Helvetica").fontSize(7).fillColor(dark)
+        .text(val, xPos + 3, y + 4, { width: colWidths[i] - 6, align });
       xPos += colWidths[i];
     });
-    y += 18;
+    y += rowH;
   });
 
-  drawLine(y, accentColor);
-  y += 10;
+  // ══════════════════════════════════════════════════════════════════════
+  // SEÇÃO 5: TOTAIS
+  // ══════════════════════════════════════════════════════════════════════
+  y += 8;
+  y = checkPage(80, y);
 
   const subtotal = parseFloat(oc.subtotal ?? oc.total ?? "0");
   const frete = parseFloat(oc.frete ?? "0");
@@ -322,116 +355,117 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   const desconto = parseFloat(oc.desconto ?? "0");
   const totalOC = parseFloat(oc.total ?? "0");
 
-  const summaryX = pageW - marginR - 200;
-  const summaryW = 200;
+  const summaryW = 220;
+  const summaryX = pageW - mR - summaryW;
+  const labelW = 120;
+  const valW = 90;
 
-  const summaryLines: { label: string; value: string; negative: boolean }[] = [
-    { label: "Subtotal Itens", value: fmt(subtotal), negative: false },
+  const summaryLines: { label: string; value: string; bold?: boolean; color?: string }[] = [
+    { label: "Subtotal Itens", value: fmt(subtotal) },
   ];
-  if (frete > 0) summaryLines.push({ label: "(+) Frete", value: fmt(frete), negative: false });
-  if (outrasDespesas > 0) summaryLines.push({ label: "(+) Outras Despesas", value: fmt(outrasDespesas), negative: false });
-  if (impostos > 0) summaryLines.push({ label: "(+) Impostos", value: fmt(impostos), negative: false });
-  if (desconto > 0) summaryLines.push({ label: "(−) Desconto", value: fmt(desconto), negative: true });
+  if (frete > 0) summaryLines.push({ label: "(+) Frete", value: fmt(frete) });
+  if (outrasDespesas > 0) summaryLines.push({ label: "(+) Outras Despesas", value: fmt(outrasDespesas) });
+  if (impostos > 0) summaryLines.push({ label: "(+) Impostos", value: fmt(impostos) });
+  if (desconto > 0) summaryLines.push({ label: "(−) Desconto", value: fmt(desconto), color: "#cc0000" });
 
   summaryLines.forEach((line) => {
-    doc.font("Helvetica").fontSize(8).fillColor(medGray)
-      .text(line.label, summaryX, y, { width: 100, align: "right" });
-    doc.font("Helvetica-Bold").fontSize(8).fillColor(line.negative ? "#cc0000" : darkColor)
-      .text(line.value, summaryX + 105, y, { width: 90, align: "right" });
+    doc.font("Helvetica").fontSize(8).fillColor(midGray)
+      .text(line.label, summaryX, y, { width: labelW, align: "right" });
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(line.color || dark)
+      .text(line.value, summaryX + labelW + 5, y, { width: valW, align: "right" });
     y += 14;
   });
 
   y += 2;
-  doc.strokeColor(accentColor).lineWidth(1).moveTo(summaryX, y).lineTo(summaryX + summaryW, y).stroke();
-  y += 6;
+  doc.strokeColor(primary).lineWidth(1.2).moveTo(summaryX, y).lineTo(summaryX + summaryW, y).stroke();
+  y += 8;
 
-  doc.font("Helvetica-Bold").fontSize(10).fillColor(accentColor)
-    .text("TOTAL GERAL", summaryX, y, { width: 100, align: "right" });
-  doc.font("Helvetica-Bold").fontSize(11).fillColor(accentColor)
-    .text(fmt(totalOC), summaryX + 105, y, { width: 90, align: "right" });
-  y += 25;
+  doc.rect(summaryX - 5, y - 3, summaryW + 10, 22).fill(primary);
+  doc.font("Helvetica-Bold").fontSize(10).fillColor(white)
+    .text("TOTAL GERAL", summaryX, y, { width: labelW, align: "right" });
+  doc.font("Helvetica-Bold").fontSize(11).fillColor(white)
+    .text(fmt(totalOC), summaryX + labelW + 5, y, { width: valW, align: "right" });
+  y += 30;
 
+  // ══════════════════════════════════════════════════════════════════════
+  // SEÇÃO 6: CONDIÇÕES DE PAGAMENTO (se houver)
+  // ══════════════════════════════════════════════════════════════════════
   if (oc.formaPagamento && oc.dataVencimento) {
-    if (y > doc.page.height - 160) {
-      doc.addPage();
-      y = 40;
-    }
-    drawLine(y);
-    y += 10;
-    doc.font("Helvetica-Bold").fontSize(9).fillColor(accentColor).text("CONDIÇÃO DE PAGAMENTO E PARCELAS", marginL, y);
-    y += 14;
+    y = checkPage(100, y);
+    y = sectionTitle("Condição de Pagamento", y);
 
-    doc.font("Helvetica").fontSize(8).fillColor(darkColor)
-      .text(`Forma: ${oc.formaPagamento}`, marginL, y);
-    y += 12;
+    const col2 = cW / 2;
+    infoBlock("Forma de Pagamento", oc.formaPagamento, mL, y, col2);
+    infoBlock("Vencimento", fmtDate(oc.dataVencimento), mL + col2, y, col2);
+    y += 28;
 
     const numParcelas = 1;
     const valorParcela = totalOC / numParcelas;
     const vencBase = new Date(oc.dataVencimento + "T00:00:00");
 
-    doc.rect(marginL, y, contentW * 0.6, 16).fill(accentColor);
-    doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#ffffff")
-      .text("Parcela", marginL + 4, y + 4, { width: 60 });
-    doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#ffffff")
-      .text("Vencimento", marginL + 70, y + 4, { width: 100 });
-    doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#ffffff")
-      .text("Valor", marginL + 200, y + 4, { width: 100, align: "right" });
+    doc.rect(mL, y, cW * 0.55, 16).fill(primary);
+    doc.font("Helvetica-Bold").fontSize(7).fillColor(white)
+      .text("Parcela", mL + 4, y + 4, { width: 60 });
+    doc.font("Helvetica-Bold").fontSize(7).fillColor(white)
+      .text("Vencimento", mL + 70, y + 4, { width: 100 });
+    doc.font("Helvetica-Bold").fontSize(7).fillColor(white)
+      .text("Valor", mL + 190, y + 4, { width: 90, align: "right" });
     y += 16;
 
     for (let p = 0; p < numParcelas; p++) {
       const venc = new Date(vencBase);
       venc.setMonth(venc.getMonth() + p);
-      const bg = p % 2 === 0 ? "#ffffff" : lightGray;
-      doc.rect(marginL, y, contentW * 0.6, 16).fill(bg);
-      doc.font("Helvetica").fontSize(7.5).fillColor(darkColor)
-        .text(`${p + 1}/${numParcelas}`, marginL + 4, y + 4, { width: 60 });
-      doc.font("Helvetica").fontSize(7.5).fillColor(darkColor)
-        .text(venc.toLocaleDateString("pt-BR"), marginL + 70, y + 4, { width: 100 });
-      doc.font("Helvetica-Bold").fontSize(7.5).fillColor(darkColor)
-        .text(fmt(valorParcela), marginL + 200, y + 4, { width: 100, align: "right" });
+      const bg = p % 2 === 0 ? white : lightGray;
+      doc.rect(mL, y, cW * 0.55, 16).fill(bg);
+      doc.font("Helvetica").fontSize(7.5).fillColor(dark)
+        .text(`${p + 1}/${numParcelas}`, mL + 4, y + 4, { width: 60 });
+      doc.font("Helvetica").fontSize(7.5).fillColor(dark)
+        .text(venc.toLocaleDateString("pt-BR"), mL + 70, y + 4, { width: 100 });
+      doc.font("Helvetica-Bold").fontSize(7.5).fillColor(dark)
+        .text(fmt(valorParcela), mL + 190, y + 4, { width: 90, align: "right" });
       y += 16;
     }
-    y += 6;
+    y += 8;
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // SEÇÃO 7: OBSERVAÇÕES
+  // ══════════════════════════════════════════════════════════════════════
   if (oc.observacoes) {
-    if (y > doc.page.height - 140) {
-      doc.addPage();
-      y = 40;
-    }
-    drawLine(y);
-    y += 10;
-    doc.font("Helvetica-Bold").fontSize(9).fillColor(accentColor).text("OBSERVAÇÕES", marginL, y);
-    y += 14;
-    doc.font("Helvetica").fontSize(8).fillColor(darkColor)
-      .text(oc.observacoes, marginL, y, { width: contentW });
-    y += doc.heightOfString(oc.observacoes, { width: contentW, fontSize: 8 }) + 10;
+    y = checkPage(60, y);
+    y = sectionTitle("Observações", y);
+    doc.font("Helvetica").fontSize(8).fillColor(dark)
+      .text(oc.observacoes, mL, y, { width: cW });
+    y += doc.heightOfString(oc.observacoes, { width: cW, fontSize: 8 }) + 12;
   }
 
-  if (y > doc.page.height - 140) {
-    doc.addPage();
-    y = 40;
-  }
+  // ══════════════════════════════════════════════════════════════════════
+  // ASSINATURAS
+  // ══════════════════════════════════════════════════════════════════════
+  y = checkPage(80, y);
 
-  y = Math.max(y + 20, doc.page.height - 140);
-  drawLine(y);
-  y += 30;
+  const sigTargetY = Math.max(y + 30, pageH - 120);
+  y = sigTargetY;
 
-  const sigW = (contentW - 40) / 2;
+  const sigW = (cW - 60) / 2;
 
-  doc.strokeColor(darkColor).lineWidth(0.5).moveTo(marginL, y + 30).lineTo(marginL + sigW, y + 30).stroke();
-  doc.font("Helvetica").fontSize(8).fillColor(darkColor)
-    .text("Responsável pela Compra", marginL, y + 35, { width: sigW, align: "center" });
+  doc.strokeColor(dark).lineWidth(0.5).moveTo(mL, y).lineTo(mL + sigW, y).stroke();
+  doc.font("Helvetica").fontSize(7.5).fillColor(dark)
+    .text("Responsável pela Compra", mL, y + 5, { width: sigW, align: "center" });
 
-  doc.strokeColor(darkColor).lineWidth(0.5).moveTo(pageW - marginR - sigW, y + 30).lineTo(pageW - marginR, y + 30).stroke();
-  doc.font("Helvetica").fontSize(8).fillColor(darkColor)
-    .text("Aprovação", pageW - marginR - sigW, y + 35, { width: sigW, align: "center" });
+  doc.strokeColor(dark).lineWidth(0.5).moveTo(pageW - mR - sigW, y).lineTo(pageW - mR, y).stroke();
+  doc.font("Helvetica").fontSize(7.5).fillColor(dark)
+    .text("Aprovação", pageW - mR - sigW, y + 5, { width: sigW, align: "center" });
 
-  const footerY = doc.page.height - 25;
-  doc.font("Helvetica").fontSize(6.5).fillColor(medGray)
+  // ══════════════════════════════════════════════════════════════════════
+  // RODAPÉ
+  // ══════════════════════════════════════════════════════════════════════
+  const footerY = pageH - 25;
+  drawHLine(footerY - 5, borderColor, 0.3);
+  doc.font("Helvetica").fontSize(6).fillColor(midGray)
     .text(
       `Documento gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")} — ${company?.razaoSocial || "FC Engenharia"}`,
-      marginL, footerY, { width: contentW, align: "center" }
+      mL, footerY, { width: cW, align: "center" }
     );
 
   return doc;

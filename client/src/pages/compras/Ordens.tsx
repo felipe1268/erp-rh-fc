@@ -669,7 +669,7 @@ export default function Ordens() {
                     size="sm"
                     onClick={async () => {
                       try {
-                        const resp = await fetch(`/api/download/oc/${detalhe.id}`);
+                        const resp = await fetch(`/api/download/oc/${detalhe.id}?regen=1`);
                         if (!resp.ok) {
                           const err = await resp.json().catch(() => ({ error: "Erro ao gerar PDF" }));
                           toast.error(err.error || "Erro ao gerar PDF");
@@ -695,7 +695,7 @@ export default function Ordens() {
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      window.open(`/api/download/oc/${detalhe.id}?mode=view`, "_blank");
+                      window.open(`/api/download/oc/${detalhe.id}?mode=view&regen=1`, "_blank");
                     }}
                     className="border-gray-300 text-gray-700 hover:bg-gray-50 text-xs gap-1.5"
                   >

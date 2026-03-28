@@ -5613,4 +5613,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 00:00:00",
   },
+  {
+    version: 827,
+    titulo: "PDF da Ordem de Compra — Layout profissional redesenhado",
+    descricao: "Redesenho completo do PDF da OC: header com faixa azul escuro e número da OC em destaque, seções organizadas (Dados da Ordem, Fornecedor, Local de Entrega, Itens) com títulos e linhas separadoras, campos de data de entrega e endereço da obra sempre visíveis, tabela de itens com linhas zebradas e quebra automática de página, bloco de total com fundo azul, área de assinaturas e rodapé. Suporte a logo quando cadastrado. Sempre regenera PDF ao exportar/imprimir.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 00:30:00",
+  },
 ];
