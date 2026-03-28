@@ -4253,66 +4253,69 @@ Responda APENAS com um objeto JSON no formato:
     .input(z.object({
       companyId: z.number(),
       obraId: z.number(),
-      orcamentoItemIds: z.array(z.number()),
+      orcamentoItemIds: z.array(z.number()).optional(),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (input.orcamentoItemIds.length === 0) return [];
 
-      const orcItems = await db.select({
-        id: orcamentoItens.id,
-        eapCodigo: orcamentoItens.eapCodigo,
-        quantidade: orcamentoItens.quantidade,
-      }).from(orcamentoItens)
+      const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
         .where(and(
-          inArray(orcamentoItens.id, input.orcamentoItemIds),
-          eq(orcamentoItens.companyId, input.companyId),
-        ));
+          eq(orcamentos.companyId, input.companyId),
+          eq(orcamentos.obraId, input.obraId),
+          isNull(orcamentos.deletedAt),
+        ))
+        .orderBy(desc(orcamentos.createdAt))
+        .limit(1);
+      if (!orc) return [];
 
-      const result = [];
-      for (const orc of orcItems) {
-        const qtdOrcada = n(orc.quantidade);
+      const rawResult = await db.execute(sql`
+        WITH sc_agg AS (
+          SELECT si.orcamento_item_id,
+            SUM(CASE WHEN si.quantidade_servico IS NOT NULL THEN si.quantidade_servico ELSE si.quantidade END) AS qtd_solicitada,
+            SUM(COALESCE(si.quantidade_atendida, 0)) AS qtd_recebida_sc
+          FROM compras_solicitacoes_itens si
+          JOIN compras_solicitacoes s ON si.solicitacao_id = s.id
+          WHERE s.company_id = ${input.companyId} AND s.status != 'cancelado'
+            AND si.orcamento_item_id IN (SELECT id FROM orcamento_itens WHERE "orcamentoId" = ${orc.id})
+          GROUP BY si.orcamento_item_id
+        ),
+        oc_agg AS (
+          SELECT si2.orcamento_item_id,
+            SUM(oci.quantidade) AS qtd_comprada,
+            SUM(COALESCE(oci.quantidade_entregue, 0)) AS qtd_entregue
+          FROM compras_ordens_itens oci
+          JOIN compras_ordens o ON oci.ordem_id = o.id
+          JOIN compras_solicitacoes_itens si2 ON oci.solicitacao_item_id = si2.id
+          WHERE o.company_id = ${input.companyId} AND o.status != 'cancelada'
+            AND si2.orcamento_item_id IN (SELECT id FROM orcamento_itens WHERE "orcamentoId" = ${orc.id})
+          GROUP BY si2.orcamento_item_id
+        )
+        SELECT oi.id AS "orcamentoItemId",
+          oi.quantidade AS "qtdOrcada",
+          COALESCE(sc.qtd_solicitada, 0) AS "qtdSolicitada",
+          COALESCE(oc.qtd_comprada, 0) AS "qtdComprada",
+          GREATEST(COALESCE(sc.qtd_recebida_sc, 0), COALESCE(oc.qtd_entregue, 0)) AS "qtdRecebida"
+        FROM orcamento_itens oi
+        LEFT JOIN sc_agg sc ON sc.orcamento_item_id = oi.id
+        LEFT JOIN oc_agg oc ON oc.orcamento_item_id = oi.id
+        WHERE oi."orcamentoId" = ${orc.id}
+          AND oi."companyId" = ${input.companyId}
+          AND (COALESCE(sc.qtd_solicitada, 0) > 0 OR COALESCE(oc.qtd_comprada, 0) > 0)
+      `);
 
-        const scItens = await db.select({
-          quantidade: comprasSolicitacoesItens.quantidade,
-          quantidadeServico: comprasSolicitacoesItens.quantidadeServico,
-          quantidadeAtendida: comprasSolicitacoesItens.quantidadeAtendida,
-        }).from(comprasSolicitacoesItens)
-          .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
-          .where(and(
-            eq(comprasSolicitacoesItens.orcamentoItemId, orc.id),
-            eq(comprasSolicitacoes.companyId, input.companyId),
-            sql`${comprasSolicitacoes.status} NOT IN ('cancelado')`,
-          ));
-
-        const qtdSolicitada = scItens.reduce((acc, it) => acc + (it.quantidadeServico != null ? n(it.quantidadeServico) : n(it.quantidade)), 0);
-        const qtdRecebida = scItens.reduce((acc, it) => acc + n(it.quantidadeAtendida), 0);
-
-        const ocItens = await db.select({
-          quantidade: comprasOrdensItens.quantidade,
-          quantidadeEntregue: comprasOrdensItens.quantidadeEntregue,
-        }).from(comprasOrdensItens)
-          .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
-          .innerJoin(comprasSolicitacoesItens, eq(comprasOrdensItens.solicitacaoItemId, comprasSolicitacoesItens.id))
-          .where(and(
-            eq(comprasSolicitacoesItens.orcamentoItemId, orc.id),
-            eq(comprasOrdens.companyId, input.companyId),
-            sql`${comprasOrdens.status} NOT IN ('cancelada')`,
-          ));
-
-        const qtdComprada = ocItens.reduce((acc, it) => acc + n(it.quantidade), 0);
-        const qtdEntregue = ocItens.reduce((acc, it) => acc + n(it.quantidadeEntregue), 0);
-
-        result.push({
-          orcamentoItemId: orc.id,
+      const rows = (rawResult as any).rows || rawResult || [];
+      return (rows as any[]).map((r: any) => {
+        const qtdOrcada = n(r.qtdOrcada);
+        const qtdSolicitada = n(r.qtdSolicitada);
+        return {
+          orcamentoItemId: Number(r.orcamentoItemId),
           qtdOrcada,
           qtdSolicitada,
-          qtdComprada,
-          qtdRecebida: Math.max(qtdRecebida, qtdEntregue),
+          qtdComprada: n(r.qtdComprada),
+          qtdRecebida: n(r.qtdRecebida),
           saldoDisponivel: qtdOrcada - qtdSolicitada,
-        });
-      }
-      return result;
+        };
+      });
     }),
 
   editarSolicitacao: protectedProcedure

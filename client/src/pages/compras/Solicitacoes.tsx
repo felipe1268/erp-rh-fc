@@ -237,18 +237,18 @@ export default function Solicitacoes() {
     return { dot: "bg-gray-300", label: "Disponível", bg: "" };
   }
 
+  const batchSaldoQ = trpc.compras.getSaldoInsumoPorObra.useQuery(
+    { companyId, obraId: parseInt(form.obraId || "0") },
+    { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 }
+  );
+
   useEffect(() => {
-    if (!eapQ.data?.items?.length || !form.obraId) return;
-    const itemIds = eapQ.data.items.filter((it: any) => it.nivel >= 2 && it.tipo !== "grupo").map((it: any) => it.id);
-    if (itemIds.length === 0) return;
-    trpcCtx.compras.getSaldoInsumoPorObra.fetch({ companyId, obraId: parseInt(form.obraId), orcamentoItemIds: itemIds })
-      .then(res => {
-        const map: any = {};
-        for (const r of res) map[r.orcamentoItemId] = r;
-        setBatchSaldo(map);
-      })
-      .catch(() => {});
-  }, [eapQ.data, form.obraId, companyId]);
+    if (batchSaldoQ.data) {
+      const map: any = {};
+      for (const r of batchSaldoQ.data) map[r.orcamentoItemId] = r;
+      setBatchSaldo(map);
+    }
+  }, [batchSaldoQ.data]);
 
   function resetForm() {
     setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "" });
