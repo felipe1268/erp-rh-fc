@@ -1180,32 +1180,37 @@ export default function Cotacoes() {
                     </div>
                   </div>
 
-                  {condFechCiclo[fId] && condFechPrazo[fId] && (() => {
-                    const hoje = new Date();
-                    const ciclo = condFechCiclo[fId];
-                    const prazo = parseInt(condFechPrazo[fId]);
+                  {(() => {
                     const numParc = parseInt(condFechParc[fId] ?? "1") || 1;
+                    const dataIni = condFechDataIni[fId];
+                    if (!dataIni && !condFechPrazo[fId]) return null;
 
-                    let proximoFech: Date;
-                    if (ciclo === "fixo") {
-                      const dias = (condFechDiaFixo[fId] ?? "1,15").split(",").map(d => parseInt(d.trim())).filter(d => !isNaN(d) && d >= 1 && d <= 31).sort((a, b) => a - b);
-                      if (dias.length === 0) return null;
-                      const proximo = dias.find(d => d > hoje.getDate());
-                      proximoFech = new Date(hoje.getFullYear(), hoje.getMonth(), proximo ?? dias[0]);
-                      if (!proximo) proximoFech.setMonth(proximoFech.getMonth() + 1);
+                    let primeiroVenc: Date;
+                    if (dataIni) {
+                      primeiroVenc = new Date(dataIni + "T12:00:00");
                     } else {
-                      const cicloDias = parseInt(ciclo);
-                      proximoFech = new Date(hoje);
-                      proximoFech.setDate(proximoFech.getDate() + (cicloDias - (hoje.getDate() % cicloDias)));
+                      const hoje = new Date();
+                      const ciclo = condFechCiclo[fId];
+                      const prazo = parseInt(condFechPrazo[fId] ?? "30");
+                      let proximoFech: Date;
+                      if (ciclo === "fixo") {
+                        const dias = (condFechDiaFixo[fId] ?? "1,15").split(",").map(d => parseInt(d.trim())).filter(d => !isNaN(d) && d >= 1 && d <= 31).sort((a, b) => a - b);
+                        if (dias.length === 0) return null;
+                        const proximo = dias.find(d => d > hoje.getDate());
+                        proximoFech = new Date(hoje.getFullYear(), hoje.getMonth(), proximo ?? dias[0]);
+                        if (!proximo) proximoFech.setMonth(proximoFech.getMonth() + 1);
+                      } else if (ciclo) {
+                        const cicloDias = parseInt(ciclo);
+                        proximoFech = new Date(hoje);
+                        proximoFech.setDate(proximoFech.getDate() + (cicloDias - (hoje.getDate() % cicloDias)));
+                      } else {
+                        proximoFech = new Date(hoje);
+                      }
+                      primeiroVenc = new Date(proximoFech);
+                      primeiroVenc.setDate(primeiroVenc.getDate() + prazo);
                     }
 
-                    const primeiroVencCalc = new Date(proximoFech);
-                    primeiroVencCalc.setDate(primeiroVencCalc.getDate() + prazo);
-                    const primeiroVenc = condFechDataIni[fId] ? new Date(condFechDataIni[fId] + "T12:00:00") : primeiroVencCalc;
-
-                    const cicloLabel = ciclo === "fixo" ? `Dias fixos (${condFechDiaFixo[fId] || "1, 15"})` : ciclo === "7" ? "Semanal" : ciclo === "15" ? "Quinzenal" : "Mensal";
                     const valorParcela = fornTotal / numParc;
-
                     const parcelas = Array.from({ length: numParc }, (_, i) => {
                       const dt = new Date(primeiroVenc);
                       dt.setDate(dt.getDate() + (i * 30));
@@ -1213,48 +1218,19 @@ export default function Cotacoes() {
                     });
 
                     return (
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                        <p className="text-xs font-bold text-blue-700 mb-3">Simulação</p>
-                        <div className="space-y-2">
-                          <div className="flex justify-between bg-white rounded-lg px-3 py-2 border border-blue-100">
-                            <span className="text-xs text-blue-600">Ciclo</span>
-                            <span className="text-xs font-bold text-blue-800">{cicloLabel}</span>
-                          </div>
-                          <div className="flex justify-between bg-white rounded-lg px-3 py-2 border border-blue-100">
-                            <span className="text-xs text-blue-600">Próximo fechamento</span>
-                            <span className="text-xs font-bold text-blue-800">{proximoFech.toLocaleDateString("pt-BR")}</span>
-                          </div>
-                          <div className="flex justify-between bg-white rounded-lg px-3 py-2 border border-blue-100">
-                            <span className="text-xs text-blue-600">Prazo pós-fechamento</span>
-                            <span className="text-xs font-bold text-blue-800">{prazo} dias</span>
-                          </div>
-
-                          {numParc > 1 ? (
-                            <div className="bg-white rounded-lg border border-blue-100 overflow-hidden">
-                              <div className="px-3 py-1.5 bg-blue-100 border-b border-blue-200">
-                                <span className="text-[10px] font-bold text-blue-700 uppercase">Parcelas ({numParc}x de {formatCurrency(valorParcela)})</span>
-                              </div>
-                              <div className="divide-y divide-blue-50">
-                                {parcelas.map(p => (
-                                  <div key={p.num} className="flex justify-between px-3 py-1.5">
-                                    <span className="text-xs text-blue-600">{p.num}ª parcela</span>
-                                    <span className="text-xs font-semibold text-blue-800">{formatCurrency(p.valor)}</span>
-                                    <span className="text-xs text-blue-500">{p.data.toLocaleDateString("pt-BR")}</span>
-                                  </div>
-                                ))}
-                              </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl overflow-hidden">
+                        <div className="px-3 py-2 bg-blue-100 border-b border-blue-200 flex justify-between items-center">
+                          <span className="text-xs font-bold text-blue-700">Total: {formatCurrency(fornTotal)}</span>
+                          <span className="text-[11px] text-blue-600">{numParc}x de {formatCurrency(valorParcela)}</span>
+                        </div>
+                        <div className="divide-y divide-blue-100">
+                          {parcelas.map(p => (
+                            <div key={p.num} className="flex items-center justify-between px-3 py-1.5">
+                              <span className="text-xs text-blue-600 w-16">{p.num}ª parcela</span>
+                              <span className="text-xs font-bold text-blue-800">{formatCurrency(p.valor)}</span>
+                              <span className="text-xs text-blue-500">{p.data.toLocaleDateString("pt-BR")}</span>
                             </div>
-                          ) : (
-                            <div className="flex justify-between bg-white rounded-lg px-3 py-2.5 border-2 border-blue-300 bg-blue-100">
-                              <span className="text-xs font-bold text-blue-700">Vencimento estimado</span>
-                              <span className="text-sm font-bold text-blue-900">{primeiroVenc.toLocaleDateString("pt-BR")}</span>
-                            </div>
-                          )}
-
-                          <div className="flex justify-between bg-white rounded-lg px-3 py-2 border border-blue-100">
-                            <span className="text-xs text-blue-600">Total</span>
-                            <span className="text-sm font-bold text-blue-800">{formatCurrency(fornTotal)}</span>
-                          </div>
+                          ))}
                         </div>
                       </div>
                     );
