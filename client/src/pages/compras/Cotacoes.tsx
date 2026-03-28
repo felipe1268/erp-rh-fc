@@ -558,6 +558,10 @@ export default function Cotacoes() {
     onSuccess: () => { toast.success("Fornecedor vencedor selecionado!"); mapaQ.refetch(); detalheQ.refetch(); q.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const cancelarCotacaoMut = trpc.compras.cancelarCotacao.useMutation({
+    onSuccess: () => { toast.success("Cotação cancelada. A SC voltou para 'Aprovado' e pode gerar nova cotação."); setShowDetalhe(null); q.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
   const cancelarVencedor = trpc.compras.cancelarVencedorMapa.useMutation({
     onSuccess: () => { toast.success("Seleção de vencedor cancelada. Ajuste os preços e selecione novamente."); mapaQ.refetch(); detalheQ.refetch(); q.refetch(); },
     onError: (e) => toast.error(e.message),
@@ -887,6 +891,17 @@ export default function Cotacoes() {
                     <Button variant="outline" onClick={() => { setJustificativaCancelar(""); setCancelarCotacaoId(showDetalhe); setShowCancelarAprovacao(true); }}
                       className="border-orange-200 text-orange-600 hover:bg-orange-50 gap-2">
                       <Undo2 className="h-4 w-4" /> Cancelar Aprovação
+                    </Button>
+                  )}
+                  {!["cancelada", "aprovada"].includes(detalheFullscreen.status ?? "") && (
+                    <Button variant="outline" onClick={() => {
+                      if (confirm("Tem certeza que deseja cancelar esta cotação? A SC voltará para o status 'Aprovado' e poderá gerar nova cotação.")) {
+                        cancelarCotacaoMut.mutate({ cotacaoId: showDetalhe!, companyId });
+                      }
+                    }}
+                      disabled={cancelarCotacaoMut.isPending}
+                      className="border-red-200 text-red-600 hover:bg-red-50 gap-2">
+                      {cancelarCotacaoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Cancelar Cotação
                     </Button>
                   )}
                 </div>

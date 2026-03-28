@@ -2342,6 +2342,50 @@ Responda APENAS com um objeto JSON no formato:
       return { ok: true, ocsRemovidas: ocs.length };
     }),
 
+  cancelarCotacao: protectedProcedure
+    .input(z.object({
+      cotacaoId: z.number(),
+      companyId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(
+        and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId))
+      );
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada." });
+      if (["cancelada"].includes(cot.status ?? "")) throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação já está cancelada." });
+
+      const ocs = await db.select().from(comprasOrdens).where(eq(comprasOrdens.cotacaoId, input.cotacaoId));
+      for (const oc of ocs) {
+        if (["entregue", "recebida", "parcialmente_recebida"].includes(oc.status ?? "")) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: `OC ${oc.numeroOc} já foi ${oc.status} e não pode ser revertida.` });
+        }
+        await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+        await db.delete(comprasOrdens).where(eq(comprasOrdens.id, oc.id));
+      }
+
+      await db.update(comprasCotacoes)
+        .set({ status: "cancelada" })
+        .where(eq(comprasCotacoes.id, input.cotacaoId));
+
+      if (cot.solicitacaoId) {
+        const otherActive = await db.select({ id: comprasCotacoes.id }).from(comprasCotacoes)
+          .where(and(
+            eq(comprasCotacoes.solicitacaoId, cot.solicitacaoId),
+            eq(comprasCotacoes.companyId, input.companyId),
+            sql`${comprasCotacoes.id} != ${input.cotacaoId}`,
+            sql`${comprasCotacoes.status} NOT IN ('cancelada', 'recusada')`,
+          ));
+        if (otherActive.length === 0) {
+          await db.update(comprasSolicitacoes)
+            .set({ status: "aprovado", atualizadoEm: new Date().toISOString() })
+            .where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+        }
+      }
+
+      return { ok: true, ocsRemovidas: ocs.length };
+    }),
+
   criarOrdemManual: protectedProcedure
     .input(z.object({
       companyId: z.number(),
