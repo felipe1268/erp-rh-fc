@@ -5604,4 +5604,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 23:45:00",
   },
+  {
+    version: 826,
+    titulo: "Condições Comerciais — Painel redesenhado com preview de parcelas",
+    descricao: "Redesenho completo do painel de condições comerciais por fornecedor no mapa de cotação. Forma de pagamento agora com pills coloridos por tipo (Boleto=azul, PIX=verde, Transf.=índigo, Cheque=âmbar, Cartão=roxo, Depósito=cinza). Parcelamento substituído de dropdown para pills visuais de seleção rápida com todos os tipos DDL. Preview automático das parcelas calculadas (valor + data de vencimento) ao selecionar parcelamento. Seção de entrega e frete reorganizada. Visualização (modo leitura) agora mostra resumo completo: badge de forma + badge de parcelamento com número de parcelas + tabela de parcelas com valores e datas + prazo de entrega + frete.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 00:00:00",
+  },
 ];

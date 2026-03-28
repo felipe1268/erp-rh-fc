@@ -1793,64 +1793,126 @@ export default function Cotacoes() {
                                     <div className={`border-t border-gray-100 border-r border-gray-200 text-xs text-gray-400 bg-blue-50/20 ${isMelhor ? "bg-emerald-50/20" : ""}`}>
                                       <div className="px-1 py-1 text-center truncate" style={{ minWidth: 0 }}>
                                         {editingFornId === p.fornecedorId ? (
-                                          <div className="space-y-1.5 px-1">
+                                          <div className="space-y-1.5 px-1 text-left">
+                                            <div className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide">Forma de Pagamento</div>
                                             <div className="flex flex-wrap gap-1">
                                               {[
-                                                { v: "boleto", l: "Boleto", icon: "📄" },
-                                                { v: "pix", l: "PIX", icon: "⚡" },
-                                                { v: "transferencia", l: "Transf.", icon: "🏦" },
-                                                { v: "cheque", l: "Cheque", icon: "📝" },
-                                                { v: "cartao", l: "Cartão", icon: "💳" },
-                                                { v: "deposito", l: "Depósito", icon: "💰" },
+                                                { v: "boleto", l: "Boleto", icon: "📄", cls: "bg-blue-50 text-blue-700 border-blue-200 ring-blue-100" },
+                                                { v: "pix", l: "PIX", icon: "⚡", cls: "bg-green-50 text-green-700 border-green-200 ring-green-100" },
+                                                { v: "transferencia", l: "Transf.", icon: "🏦", cls: "bg-indigo-50 text-indigo-700 border-indigo-200 ring-indigo-100" },
+                                                { v: "cheque", l: "Cheque", icon: "📝", cls: "bg-amber-50 text-amber-700 border-amber-200 ring-amber-100" },
+                                                { v: "cartao", l: "Cartão", icon: "💳", cls: "bg-purple-50 text-purple-700 border-purple-200 ring-purple-100" },
+                                                { v: "deposito", l: "Depósito", icon: "💰", cls: "bg-gray-50 text-gray-700 border-gray-200 ring-gray-100" },
                                               ].map(fp => (
                                                 <button key={fp.v} type="button" onClick={() => setEditFormaPag(prev => ({ ...prev, [p.fornecedorId]: prev[p.fornecedorId] === fp.v ? "" : fp.v }))}
-                                                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${editFormaPag[p.fornecedorId] === fp.v ? "bg-violet-100 text-violet-700 border-violet-300 ring-1 ring-violet-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                                                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${editFormaPag[p.fornecedorId] === fp.v ? `${fp.cls} ring-1` : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"}`}>
                                                   {fp.icon} {fp.l}
                                                 </button>
                                               ))}
                                             </div>
-                                            <div className="flex gap-1">
-                                              <input type="number" placeholder="Prazo (dias)" value={editPrazo[p.fornecedorId] ?? ""} onChange={e => setEditPrazo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-20 h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900" />
-                                              <select value={editTipoPag[p.fornecedorId] ?? ""} onChange={e => {
-                                                const val = e.target.value;
-                                                setEditTipoPag(prev => ({ ...prev, [p.fornecedorId]: val }));
-                                                const info = getTipoPagamentoInfo(val);
-                                                if (info) setEditCondPag(prev => ({ ...prev, [p.fornecedorId]: info.label }));
-                                              }} className="flex-1 h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900">
-                                                <option value="">— parcelamento —</option>
-                                                {TIPOS_PAGAMENTO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                              </select>
+                                            <div className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide mt-1">Parcelamento</div>
+                                            <div className="flex flex-wrap gap-1">
+                                              {TIPOS_PAGAMENTO.map(t => (
+                                                <button key={t.value} type="button" onClick={() => {
+                                                  const newVal = editTipoPag[p.fornecedorId] === t.value ? "" : t.value;
+                                                  setEditTipoPag(prev => ({ ...prev, [p.fornecedorId]: newVal }));
+                                                  setEditCondPag(prev => ({ ...prev, [p.fornecedorId]: newVal ? t.label : "" }));
+                                                }}
+                                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-all ${editTipoPag[p.fornecedorId] === t.value ? "bg-violet-100 text-violet-700 border-violet-300 ring-1 ring-violet-200" : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"}`}>
+                                                  {t.label}
+                                                </button>
+                                              ))}
                                             </div>
-                                            <div className="flex gap-1">
-                                              <select value={editFreteTipo[p.fornecedorId] ?? "cif"} onChange={e => setEditFreteTipo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-20 h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900">
+                                            {editTipoPag[p.fornecedorId] && (() => {
+                                              const fornTotal = getFornTotal(p);
+                                              const today = new Date().toISOString().split("T")[0];
+                                              const parcelas = calcularParcelas(editTipoPag[p.fornecedorId], fornTotal, today);
+                                              return parcelas.length > 0 ? (
+                                                <div className="bg-violet-50/60 border border-violet-100 rounded p-1.5 mt-0.5">
+                                                  <div className="text-[9px] font-semibold text-violet-600 mb-1">Prévia das parcelas ({parcelas.length}x)</div>
+                                                  <div className="space-y-0.5">
+                                                    {parcelas.map((parc, idx) => (
+                                                      <div key={idx} className="flex justify-between text-[10px]">
+                                                        <span className="text-violet-500">{parc.descricao}</span>
+                                                        <span className="text-violet-700 font-medium">{formatCurrency(parc.valor)}</span>
+                                                        <span className="text-violet-400">{new Date(parc.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR")}</span>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              ) : null;
+                                            })()}
+                                            <div className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide mt-1">Entrega & Frete</div>
+                                            <div className="flex gap-1 items-center">
+                                              <div className="relative">
+                                                <input type="number" placeholder="Prazo" value={editPrazo[p.fornecedorId] ?? ""} onChange={e => setEditPrazo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-16 h-7 text-[11px] border border-gray-300 rounded px-2 pr-6 bg-white text-gray-900" />
+                                                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-gray-400">dias</span>
+                                              </div>
+                                              <select value={editFreteTipo[p.fornecedorId] ?? "cif"} onChange={e => setEditFreteTipo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-16 h-7 text-[11px] border border-gray-300 rounded px-1 bg-white text-gray-900">
                                                 <option value="cif">CIF</option>
                                                 <option value="fob">FOB</option>
                                               </select>
-                                              <input type="number" step="0.01" min="0" placeholder="Frete R$" value={editValorFrete[p.fornecedorId] ?? "0"} onChange={e => setEditValorFrete(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-24 h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900" />
-                                              <input type="text" placeholder="Transportadora" value={editTransportadora[p.fornecedorId] ?? ""} onChange={e => setEditTransportadora(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="flex-1 h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900" />
+                                              <input type="number" step="0.01" min="0" placeholder="Frete R$" value={editValorFrete[p.fornecedorId] ?? "0"} onChange={e => setEditValorFrete(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-20 h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900" />
                                             </div>
+                                            <input type="text" placeholder="Transportadora" value={editTransportadora[p.fornecedorId] ?? ""} onChange={e => setEditTransportadora(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-full h-7 text-[11px] border border-gray-300 rounded px-2 bg-white text-gray-900" />
                                           </div>
                                         ) : (
                                           <div className="space-y-0.5">
-                                            {(p as any).formaPagamento && (
-                                              <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${
-                                                (p as any).formaPagamento === "pix" ? "bg-green-100 text-green-700" :
-                                                (p as any).formaPagamento === "boleto" ? "bg-blue-100 text-blue-700" :
-                                                (p as any).formaPagamento === "transferencia" ? "bg-indigo-100 text-indigo-700" :
-                                                (p as any).formaPagamento === "cheque" ? "bg-amber-100 text-amber-700" :
-                                                (p as any).formaPagamento === "cartao" ? "bg-purple-100 text-purple-700" :
-                                                "bg-gray-100 text-gray-600"
-                                              }`}>
-                                                {(p as any).formaPagamento === "pix" ? "⚡ PIX" :
-                                                 (p as any).formaPagamento === "boleto" ? "📄 Boleto" :
-                                                 (p as any).formaPagamento === "transferencia" ? "🏦 Transf." :
-                                                 (p as any).formaPagamento === "cheque" ? "📝 Cheque" :
-                                                 (p as any).formaPagamento === "cartao" ? "💳 Cartão" :
-                                                 (p as any).formaPagamento === "deposito" ? "💰 Dep." :
-                                                 (p as any).formaPagamento}
-                                              </span>
+                                            {((p as any).formaPagamento || (p as any).tipoPagamento) ? (
+                                              <div className="space-y-0.5">
+                                                <div className="flex items-center gap-1 flex-wrap justify-center">
+                                                  {(p as any).formaPagamento && (
+                                                    <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${
+                                                      (p as any).formaPagamento === "pix" ? "bg-green-100 text-green-700" :
+                                                      (p as any).formaPagamento === "boleto" ? "bg-blue-100 text-blue-700" :
+                                                      (p as any).formaPagamento === "transferencia" ? "bg-indigo-100 text-indigo-700" :
+                                                      (p as any).formaPagamento === "cheque" ? "bg-amber-100 text-amber-700" :
+                                                      (p as any).formaPagamento === "cartao" ? "bg-purple-100 text-purple-700" :
+                                                      "bg-gray-100 text-gray-600"
+                                                    }`}>
+                                                      {(p as any).formaPagamento === "pix" ? "⚡ PIX" :
+                                                       (p as any).formaPagamento === "boleto" ? "📄 Boleto" :
+                                                       (p as any).formaPagamento === "transferencia" ? "🏦 Transf." :
+                                                       (p as any).formaPagamento === "cheque" ? "📝 Cheque" :
+                                                       (p as any).formaPagamento === "cartao" ? "💳 Cartão" :
+                                                       (p as any).formaPagamento === "deposito" ? "💰 Dep." :
+                                                       (p as any).formaPagamento}
+                                                    </span>
+                                                  )}
+                                                  {(p as any).tipoPagamento && (() => {
+                                                    const info = getTipoPagamentoInfo((p as any).tipoPagamento);
+                                                    return info ? (
+                                                      <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold bg-violet-100 text-violet-700">
+                                                        {info.label} ({info.parcelas}x)
+                                                      </span>
+                                                    ) : null;
+                                                  })()}
+                                                </div>
+                                                {(p as any).tipoPagamento && (() => {
+                                                  const fornTotal = parseFloat(p.totalOrcado ?? "0");
+                                                  const today = new Date().toISOString().split("T")[0];
+                                                  const parcelas = calcularParcelas((p as any).tipoPagamento, fornTotal, today);
+                                                  return parcelas.length > 1 ? (
+                                                    <div className="text-[9px] text-gray-400 space-y-0">
+                                                      {parcelas.map((parc, idx) => (
+                                                        <div key={idx} className="flex justify-between">
+                                                          <span>{parc.numero}ª</span>
+                                                          <span className="font-medium text-gray-500">{formatCurrency(parc.valor)}</span>
+                                                          <span>{new Date(parc.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  ) : null;
+                                                })()}
+                                              </div>
+                                            ) : (
+                                              <span className="text-[10px] text-gray-300 italic">Sem condição</span>
                                             )}
-                                            <span className="text-xs text-gray-400">{p.prazoEntregaDias ? `${p.prazoEntregaDias}d` : "—"} / {(() => { const info = getTipoPagamentoInfo((p as any).tipoPagamento); return info ? info.label : p.condicaoPagamento || "—"; })()}</span>
+                                            {p.prazoEntregaDias && (
+                                              <div className="text-[10px] text-gray-500">
+                                                <span className="font-medium">Entrega:</span> {p.prazoEntregaDias}d
+                                              </div>
+                                            )}
                                             {(parseFloat((p as any).valorFrete ?? "0") > 0 || (p as any).transportadora) && (
                                               <div className="text-[10px]">
                                                 <span className={`font-semibold ${(p as any).freteTipo === "fob" ? "text-orange-600" : "text-blue-600"}`}>
@@ -1858,7 +1920,7 @@ export default function Cotacoes() {
                                                 </span>
                                                 {parseFloat((p as any).valorFrete ?? "0") > 0 && (
                                                   <span className="text-gray-500 ml-1">
-                                                    Frete: {parseFloat((p as any).valorFrete).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                                    {parseFloat((p as any).valorFrete).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                                                   </span>
                                                 )}
                                                 {(p as any).transportadora && (
