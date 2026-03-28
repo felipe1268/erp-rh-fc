@@ -5559,4 +5559,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 10:00:00",
   },
+  {
+    version: 821,
+    titulo: "Cobertura Orçamentária no Mapa de Cotação",
+    descricao: "Nova visualização de cobertura do orçamento na tela de cotações: card de resumo com percentual médio de cobertura, contagem de itens com compra total/parcial/sem cobertura; barra de progresso por item mostrando proporção desta SC vs outras SCs vs saldo restante, com legenda detalhada (Orç/Esta SC/Outras/Falta). Dados calculados em tempo real via consulta de total já solicitado por orcamentoItemId.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 14:00:00",
+  },
 ];

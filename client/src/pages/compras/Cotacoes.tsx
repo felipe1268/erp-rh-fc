@@ -662,6 +662,16 @@ export default function Cotacoes() {
     const saldoTotal = metaGrandTotal > 0 && melhorForn ? metaGrandTotal - winnerGrandTotal : 0;
     const deficit = saldoTotal < 0 ? Math.abs(saldoTotal) : 0;
 
+    const cobertura = (() => {
+      const itensComOrc = allItens.filter((it: any) => (it as any).qtdOrcada > 0);
+      if (itensComOrc.length === 0) return null;
+      const total = itensComOrc.length;
+      const totais = itensComOrc.filter((it: any) => (it as any).qtdTotalSolicitada >= (it as any).qtdOrcada);
+      const parciais = itensComOrc.filter((it: any) => (it as any).qtdTotalSolicitada > 0 && (it as any).qtdTotalSolicitada < (it as any).qtdOrcada);
+      const pctMedio = itensComOrc.reduce((acc: number, it: any) => acc + Math.min(((it as any).qtdTotalSolicitada / (it as any).qtdOrcada) * 100, 100), 0) / total;
+      return { total, totais: totais.length, parciais: parciais.length, semCobertura: total - totais.length - parciais.length, pctMedio };
+    })();
+
     // Remove prefixo de código EAP "[xx.xx.xx.xx] " da descrição para agrupar itens iguais
     const stripEapPrefix = (desc: string) => desc.replace(/^\[[\d.]+\]\s*/, "").trim();
     const agrupados: Record<string, { descricao: string; unidade: string; qtdTotal: number }> = {};
@@ -977,6 +987,33 @@ export default function Cotacoes() {
                     </div>
                   )}
 
+                  {cobertura && (
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Cobertura do Orçamento</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-900">{Math.round(cobertura.pctMedio)}%</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">Cobertura média</div>
+                          <div className="mt-1.5 h-2 bg-gray-100 rounded-full overflow-hidden mx-4">
+                            <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(cobertura.pctMedio, 100)}%` }} />
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-emerald-600">{cobertura.totais}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">Compra total</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-amber-600">{cobertura.parciais}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">Compra parcial</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-400">{cobertura.semCobertura}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">Sem cobertura</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Matriz de preços */}
                   {mapaQ.isLoading ? (
                     <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
@@ -1135,6 +1172,45 @@ export default function Cotacoes() {
                                           eapCodigo={(it as any).eapCodigo}
                                           origemEap={(it as any).origemEap}
                                         />
+                                        {(it as any).qtdOrcada > 0 && (() => {
+                                          const orcada = (it as any).qtdOrcada;
+                                          const estaSC = metaQtd;
+                                          const totalSolic = (it as any).qtdTotalSolicitada;
+                                          const outrasSC = Math.max(0, totalSolic - estaSC);
+                                          const saldoRestante = Math.max(0, orcada - totalSolic);
+                                          const rawPctEsta = (estaSC / orcada) * 100;
+                                          const rawPctOutras = (outrasSC / orcada) * 100;
+                                          const rawTotal = rawPctEsta + rawPctOutras;
+                                          const scale = rawTotal > 100 ? 100 / rawTotal : 1;
+                                          const pctEsta = rawPctEsta * scale;
+                                          const pctOutras = rawPctOutras * scale;
+                                          const isTotal = totalSolic >= orcada;
+                                          return (
+                                            <div className="mt-1.5 space-y-0.5">
+                                              <div className="flex items-center gap-1.5">
+                                                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden flex">
+                                                  {pctOutras > 0 && <div className="h-full bg-blue-300" style={{ width: `${pctOutras}%` }} title={`Outras SCs: ${outrasSC}`} />}
+                                                  <div className="h-full bg-amber-500" style={{ width: `${pctEsta}%` }} title={`Esta SC: ${estaSC}`} />
+                                                </div>
+                                                <span className={`text-[10px] font-bold shrink-0 ${isTotal ? "text-emerald-600" : "text-amber-600"}`}>
+                                                  {Math.round(((totalSolic) / orcada) * 100)}%
+                                                </span>
+                                              </div>
+                                              <div className="flex gap-2 text-[9px] text-gray-400">
+                                                {isTotal ? (
+                                                  <span className="text-emerald-600 font-medium">Compra total do orçamento</span>
+                                                ) : (
+                                                  <>
+                                                    <span>Orç: {orcada}</span>
+                                                    <span className="text-amber-600">Esta SC: {estaSC}</span>
+                                                    {outrasSC > 0 && <span className="text-blue-500">Outras: {outrasSC}</span>}
+                                                    <span className="text-gray-500">Falta: {saldoRestante}</span>
+                                                  </>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
                                       </div>
                                       <HistoricoPrecoPopover companyId={companyId} descricao={it.descricao} />
                                     </div>

@@ -1358,13 +1358,35 @@ Responda APENAS com um objeto JSON no formato:
         }
       }
 
+      // Buscar qtd total já solicitada por orcamentoItemId (todas as SCs da mesma obra)
+      const orcItemToQtdOrcada: Record<number, number> = {};
+      for (const o of orcItensData) orcItemToQtdOrcada[o.id] = n(o.quantidade);
+
+      const orcItemToQtdSolicitada: Record<number, number> = {};
+      if (orcItemIds.length > 0) {
+        const solicitadoRows = await db.execute(sql`
+          SELECT si.orcamento_item_id, COALESCE(SUM(si.quantidade::numeric), 0) as total_solicitado
+          FROM compras_solicitacoes_itens si
+          JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
+          WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
+            AND s.company_id = ${cot.companyId}
+          GROUP BY si.orcamento_item_id
+        `);
+        for (const r of (solicitadoRows as any).rows ?? []) {
+          orcItemToQtdSolicitada[r.orcamento_item_id] = n(r.total_solicitado);
+        }
+      }
+
       const itensComMeta = itens.map(it => {
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
         const metaUnitario = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
         const eapPath = orcId ? (orcItemToPath[orcId] ?? "") : "";
         const trace = it.solicitacaoItemId ? scItemToTraceability[it.solicitacaoItemId] : undefined;
         const scNumero = trace?.solicitacaoId ? (scMap[trace.solicitacaoId] ?? "") : "";
-        return { ...it, metaUnitario, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: trace?.insumoCodigo ?? "" };
+        const qtdOrcada = orcId ? (orcItemToQtdOrcada[orcId] ?? 0) : 0;
+        const qtdTotalSolicitada = orcId ? (orcItemToQtdSolicitada[orcId] ?? 0) : 0;
+        const qtdEstaSC = n(it.quantidade);
+        return { ...it, metaUnitario, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: trace?.insumoCodigo ?? "", qtdOrcada, qtdTotalSolicitada, qtdEstaSC };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};
