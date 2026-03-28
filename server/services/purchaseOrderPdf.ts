@@ -445,8 +445,18 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  // ASSINATURAS (fixas no rodapé da última página de conteúdo)
+  // ASSINATURAS + RODAPÉ (fixos no rodapé da última página de conteúdo)
   // ══════════════════════════════════════════════════════════════════════
+  // Se o conteúdo invade a zona de assinaturas, adiciona página
+  const sigZoneStart = pageH - 80;
+  if (y > sigZoneStart) {
+    doc.addPage();
+  }
+
+  const currentPage = doc.bufferedPageRange();
+  const lastPageIndex = currentPage.start + currentPage.count - 1;
+  doc.switchToPage(lastPageIndex);
+
   const sigY = pageH - 75;
   const sigW = (cW - 60) / 2;
 
@@ -458,12 +468,11 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   doc.font("Helvetica").fontSize(7.5).fillColor(dark)
     .text("Aprovação", pageW - mR - sigW, sigY + 5, { width: sigW, align: "center" });
 
-  const footerY = pageH - 30;
-  drawHLine(footerY - 3, borderColor, 0.3);
+  drawHLine(pageH - 35, borderColor, 0.3);
   doc.font("Helvetica").fontSize(6).fillColor(midGray)
     .text(
       `Documento gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")} — ${company?.razaoSocial || "FC Engenharia"}`,
-      mL, footerY, { width: cW, align: "center" }
+      mL, pageH - 30, { width: cW, align: "center" }
     );
 
   return doc;
