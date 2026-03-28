@@ -441,7 +441,7 @@ export default function Solicitacoes() {
       {/* ── Dialog Nova SC ─────────────────────────────────────────── */}
       <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) resetForm(); }}>
         <DialogContent
-          className="border-gray-200 max-w-2xl flex flex-col max-h-[90vh] p-0 gap-0"
+          className="border-gray-200 w-[96vw] max-w-[96vw] h-[94vh] max-h-[94vh] flex flex-col p-0 gap-0"
           style={{ background: '#ffffff', color: '#111827' }}
         >
           {/* Header fixo */}
