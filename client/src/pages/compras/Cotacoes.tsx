@@ -479,6 +479,7 @@ export default function Cotacoes() {
   const [condFechDiaFixo, setCondFechDiaFixo] = useState<Record<number, string>>({});
   const [condFechPrazo, setCondFechPrazo] = useState<Record<number, string>>({});
   const [condFechParc, setCondFechParc] = useState<Record<number, string>>({});
+  const [condFechDataIni, setCondFechDataIni] = useState<Record<number, string>>({});
   const [editValorFrete, setEditValorFrete] = useState<Record<number, string>>({});
   const [editTransportadora, setEditTransportadora] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
@@ -1186,6 +1187,12 @@ export default function Cotacoes() {
                         }} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100 text-lg font-bold">+</button>
                         <span className="text-xs text-gray-500 ml-1">parcelas</span>
                       </div>
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-[11px] text-gray-500 whitespace-nowrap">1ª parcela:</label>
+                        <input type="date" value={condFechDataIni[fId] ?? ""}
+                          onChange={e => setCondFechDataIni(prev => ({ ...prev, [fId]: e.target.value }))}
+                          className="h-7 text-sm border border-gray-300 rounded-md px-2 bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-300" />
+                      </div>
                     </div>
                     <div className="grid grid-cols-4 gap-1.5">
                       {[
@@ -1225,8 +1232,9 @@ export default function Cotacoes() {
                       proximoFech.setDate(proximoFech.getDate() + (cicloDias - (hoje.getDate() % cicloDias)));
                     }
 
-                    const primeiroVenc = new Date(proximoFech);
-                    primeiroVenc.setDate(primeiroVenc.getDate() + prazo);
+                    const primeiroVencCalc = new Date(proximoFech);
+                    primeiroVencCalc.setDate(primeiroVencCalc.getDate() + prazo);
+                    const primeiroVenc = condFechDataIni[fId] ? new Date(condFechDataIni[fId] + "T12:00:00") : primeiroVencCalc;
 
                     const cicloLabel = ciclo === "fixo" ? `Dias fixos (${condFechDiaFixo[fId] || "1, 15"})` : ciclo === "7" ? "Semanal" : ciclo === "15" ? "Quinzenal" : "Mensal";
                     const valorParcela = fornTotal / numParc;
