@@ -1161,14 +1161,27 @@ Responda APENAS com um objeto JSON no formato:
         .from(comprasCotacoes)
         .where(eq(comprasCotacoes.solicitacaoId, input.id));
       const activeCots = linkedCots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
+
       if (activeCots.length > 0) {
-        const linkedOCs = await db.select({ id: comprasOrdens.id, numeroOc: comprasOrdens.numeroOc })
+        const linkedOCs = await db.select({ id: comprasOrdens.id, numeroOc: comprasOrdens.numeroOc, status: comprasOrdens.status })
           .from(comprasOrdens)
           .where(inArray(comprasOrdens.cotacaoId, activeCots.map(c => c.id)));
-        if (linkedOCs.length > 0) {
-          throw new Error(`Não é possível excluir: esta SC possui Ordem de Compra em andamento (${linkedOCs.map(o => o.numeroOc).join(", ")}).`);
+        const ocsAtivas = linkedOCs.filter(o => !["cancelada", "recebido"].includes(o.status ?? ""));
+        if (ocsAtivas.length > 0) {
+          throw new Error(`Não é possível excluir: esta SC possui Ordem de Compra em andamento (${ocsAtivas.map(o => o.numeroOc).join(", ")}).`);
         }
-        throw new Error(`Não é possível excluir: esta SC possui cotação ativa (${activeCots.map(c => c.numeroCotacao).join(", ")}). Cancele a cotação primeiro.`);
+        for (const cot of activeCots) {
+          await db.update(comprasCotacoes)
+            .set({ status: "cancelada" })
+            .where(eq(comprasCotacoes.id, cot.id));
+        }
+      }
+
+      const allCotIds = linkedCots.map(c => c.id);
+      if (allCotIds.length > 0) {
+        await db.update(comprasCotacoesItens)
+          .set({ solicitacaoItemId: null })
+          .where(inArray(comprasCotacoesItens.cotacaoId, allCotIds));
       }
 
       const cotItemsRef = await db.select({ id: comprasCotacoesItens.id })
