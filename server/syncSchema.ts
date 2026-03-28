@@ -16,6 +16,8 @@ type ColInfo = {
   sqlType: string;
   nullable: boolean;
   defaultExpr: string | null;
+  isPk: boolean;
+  isSerial: boolean;
 };
 
 // ── Mapeamento de tipos Drizzle → DDL PostgreSQL ──────────────────────────────
@@ -78,17 +80,23 @@ function extractSchemaColumns(): ColInfo[] {
       const col = columns[colKey];
       if (!col || !col.name) continue;
 
+      const ct: string = col.columnType ?? "";
+      const isSerial = ct === "PgSerial" || ct === "PgBigSerial" || ct === "PgSmallSerial";
+      const isPk = !!col.primary || !!col.primaryKey;
+
       const sqlType = drizzleTypeToSql(col);
-      if (!sqlType) continue; // serial / tipo desconhecido — pula
+      if (!sqlType && !isSerial) continue;
 
       result.push({
         tableName,
         columnName: col.name,
-        sqlType,
+        sqlType: isSerial ? "SERIAL" : sqlType!,
         nullable: !col.notNull,
         defaultExpr: col.hasDefault && col.default !== undefined && col.default !== null
           ? String(col.default)
           : null,
+        isPk: isPk || isSerial,
+        isSerial,
       });
     }
   }
@@ -112,15 +120,87 @@ async function fetchDbColumns(db: any): Promise<Set<string>> {
   return set;
 }
 
+function extractSchemaTables(): Set<string> {
+  const tables = new Set<string>();
+  for (const key of Object.keys(schema)) {
+    const table = (schema as any)[key];
+    if (!table || typeof table !== "object" || !table["_"]) continue;
+    const name: string | undefined = table["_"].name;
+    if (name) tables.add(name);
+  }
+  return tables;
+}
+
+async function fetchDbTables(db: any): Promise<Set<string>> {
+  const rows = await db.execute(sql`
+    SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'
+  `);
+  const set = new Set<string>();
+  const list = Array.isArray(rows) ? rows : (rows?.rows ?? []);
+  for (const row of list) set.add(row.table_name);
+  return set;
+}
+
+function resolveDefaultSql(col: ColInfo): string {
+  if (!col.defaultExpr) return "";
+  const d = col.defaultExpr;
+  if (d === "now()" || d.includes("now()")) return " DEFAULT NOW()";
+  if (d === "true") return " DEFAULT true";
+  if (d === "false") return " DEFAULT false";
+  if (/^-?\d+(\.\d+)?$/.test(d)) return ` DEFAULT ${d}`;
+  if (d === "gen_random_uuid()") return " DEFAULT gen_random_uuid()";
+  return ` DEFAULT '${d.replace(/'/g, "''")}'`;
+}
+
+function buildCreateTable(tableName: string, cols: ColInfo[]): string {
+  const colDefs: string[] = [];
+  const pkCols: string[] = [];
+
+  for (const c of cols) {
+    if (c.isSerial) {
+      colDefs.push(`"${c.columnName}" SERIAL`);
+      pkCols.push(`"${c.columnName}"`);
+      continue;
+    }
+    const nullClause = c.nullable ? "" : " NOT NULL";
+    const defClause = resolveDefaultSql(c);
+    colDefs.push(`"${c.columnName}" ${c.sqlType}${nullClause}${defClause}`);
+    if (c.isPk) pkCols.push(`"${c.columnName}"`);
+  }
+
+  if (pkCols.length > 0) {
+    colDefs.push(`PRIMARY KEY (${pkCols.join(", ")})`);
+  }
+
+  return `CREATE TABLE IF NOT EXISTS "${tableName}" (${colDefs.join(", ")})`;
+}
+
 // ── Ponto de entrada ──────────────────────────────────────────────────────────
 export async function syncSchema(): Promise<void> {
   try {
     const db = await getDb();
     const schemaColumns = extractSchemaColumns();
-    const dbColumns    = await fetchDbColumns(db);
+    const schemaTables  = extractSchemaTables();
+    const dbTables      = await fetchDbTables(db);
 
+    const missingTables = [...schemaTables].filter(t => !dbTables.has(t));
+    if (missingTables.length > 0) {
+      console.log(`[SyncSchema] ${missingTables.length} tabela(s) faltando. Criando...`);
+      for (const tbl of missingTables) {
+        const tblCols = schemaColumns.filter(c => c.tableName === tbl);
+        const stmt = buildCreateTable(tbl, tblCols);
+        try {
+          await db.execute(sql.raw(stmt));
+          console.log(`  [SyncSchema] ✔ Tabela criada: ${tbl}`);
+        } catch (err: any) {
+          console.warn(`  [SyncSchema] ✗ Erro criando ${tbl}: ${err?.message ?? err}`);
+        }
+      }
+    }
+
+    const dbColumns = await fetchDbColumns(db);
     const missing = schemaColumns.filter(
-      c => !dbColumns.has(`${c.tableName}.${c.columnName}`)
+      c => !c.isSerial && !dbColumns.has(`${c.tableName}.${c.columnName}`)
     );
 
     if (missing.length === 0) {
@@ -135,16 +215,15 @@ export async function syncSchema(): Promise<void> {
 
     for (const col of missing) {
       const nullClause = col.nullable ? "" : " NOT NULL";
-      const stmt = `ALTER TABLE "${col.tableName}" ADD COLUMN IF NOT EXISTS "${col.columnName}" ${col.sqlType}${nullClause}`;
+      const defClause = resolveDefaultSql(col);
+      const stmt = `ALTER TABLE "${col.tableName}" ADD COLUMN IF NOT EXISTS "${col.columnName}" ${col.sqlType}${nullClause}${defClause}`;
       try {
         await db.execute(sql.raw(stmt));
         console.log(`  [SyncSchema] ✔ ${col.tableName}.${col.columnName} (${col.sqlType})`);
         adicionadas++;
       } catch (err: any) {
         const msg = err?.message ?? String(err);
-        // Ignora se tabela não existe ainda (será criada em outro momento)
         if (msg.includes("does not exist") && msg.toLowerCase().includes("relation")) {
-          // Tabela não existe — pula silenciosamente
         } else {
           erros.push(`${col.tableName}.${col.columnName}: ${msg}`);
           console.warn(`  [SyncSchema] ✗ ${col.tableName}.${col.columnName}: ${msg}`);

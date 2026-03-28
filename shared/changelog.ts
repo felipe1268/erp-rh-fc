@@ -5622,4 +5622,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 00:30:00",
   },
+  {
+    version: 829,
+    titulo: "Correção Recebimento Parcial + SyncSchema cria tabelas faltantes",
+    descricao: "Corrigido bug de recebimento parcial no Almoxarifado (erro '<!DOCTYPE' em vez de JSON) causado por tabelas faltantes no banco de dados (almoxarifado_recebimentos, almoxarifado_recebimento_itens, almoxarifado_notificacoes e outras). SyncSchema agora detecta e cria automaticamente tabelas definidas no schema Drizzle que não existam no banco Neon, além de continuar adicionando colunas faltantes.",
+    tipo: "correção",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 18:00:00",
+  },
 ];
