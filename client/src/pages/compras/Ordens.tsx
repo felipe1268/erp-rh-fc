@@ -303,7 +303,7 @@ export default function Ordens() {
               const semCor = semaforoCor(semaforo.status);
               const semTip = semaforoTooltip(semaforo);
               return (
-                <TableRow key={oc.id} className="border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setShowDetalhe(oc.id)}>
+                <TableRow key={oc.id} className={`border-gray-100 cursor-pointer ${oc.status === "entregue" ? "bg-emerald-50/40 hover:bg-emerald-50/70" : oc.status === "cancelada" ? "bg-gray-50/60 hover:bg-gray-100/60 opacity-60" : "hover:bg-gray-50"}`} onClick={() => setShowDetalhe(oc.id)}>
                   <TableCell className="text-center px-2">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -316,7 +316,10 @@ export default function Ordens() {
                       </TooltipContent>
                     </Tooltip>
                   </TableCell>
-                  <TableCell className="text-gray-900 font-mono font-semibold text-sm">{oc.numeroOc}</TableCell>
+                  <TableCell className={`font-mono font-semibold text-sm ${oc.status === "entregue" ? "text-emerald-700" : oc.status === "cancelada" ? "text-gray-400 line-through" : "text-gray-900"}`}>
+                    {oc.numeroOc}
+                    {oc.status === "entregue" && <span className="block text-[10px] font-sans font-normal text-emerald-500">OC concluída</span>}
+                  </TableCell>
                   <TableCell>
                     {(oc as any).obraId ? (
                       <div className="flex items-center gap-1 text-xs text-gray-600">
