@@ -3811,7 +3811,7 @@ Retorne APENAS um JSON válido neste formato:
       const consolidado: Record<string, {
         insumoCodigo: string; descricao: string; unidade: string;
         qtdTotalOrcada: number; precoMedio: number; composicoes: string[];
-        eapItens: { orcamentoItemId: number; eapCodigo: string; servicoCodigo: string; qtdServico: number; coeficiente: number; qtdInsumo: number }[];
+        eapItens: { orcamentoItemId: number; eapCodigo: string; servicoCodigo: string; servicoDescricao: string; qtdServico: number; coeficiente: number; qtdInsumo: number }[];
       }> = {};
 
       for (const ins of materiaisOnly) {
@@ -3836,7 +3836,7 @@ Retorne APENAS um JSON válido neste formato:
           const qtdServico = n(svc.quantidade);
           const qtdInsumo = qtdServico * coef;
           entry.qtdTotalOrcada += qtdInsumo;
-          entry.eapItens.push({ orcamentoItemId: svc.id, eapCodigo: svc.eapCodigo, servicoCodigo: svc.servicoCodigo!, qtdServico, coeficiente: coef, qtdInsumo });
+          entry.eapItens.push({ orcamentoItemId: svc.id, eapCodigo: svc.eapCodigo, servicoCodigo: svc.servicoCodigo!, servicoDescricao: svc.descricao || svc.servicoCodigo!, qtdServico, coeficiente: coef, qtdInsumo });
         }
         if (pu > 0) entry.precoMedio = pu;
       }

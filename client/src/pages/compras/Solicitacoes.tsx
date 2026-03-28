@@ -151,6 +151,7 @@ export default function Solicitacoes() {
   const [modoSC, setModoSC] = useState<"eap" | "manual" | "insumo">("eap");
   const [insumoBusca, setInsumoBusca] = useState("");
   const [insumoQtds, setInsumoQtds] = useState<Record<string, string>>({});
+  const [insumoExpanded, setInsumoExpanded] = useState<string | null>(null);
   const [eapExpanded, setEapExpanded] = useState<number | null>(null);
   const [eapQtdServico, setEapQtdServico] = useState<Record<number, string>>({});
   const [eapInsumos, setEapInsumos] = useState<Record<number, any[]>>({});
@@ -312,7 +313,7 @@ export default function Solicitacoes() {
     setSelectedEapIds(new Set());
     setEapSearch(""); setModoSC("eap");
     setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({});
-    setInsumoBusca(""); setInsumoQtds({});
+    setInsumoBusca(""); setInsumoQtds({}); setInsumoExpanded(null);
     setImagemPreview(null); setImagemBase64(null); setImagemNome("");
   }
 
@@ -1120,37 +1121,64 @@ export default function Solicitacoes() {
                           <span className="col-span-1 text-center">Qtd</span>
                           <span className="col-span-2 text-center">Conversão</span>
                         </div>
-                        <div className="max-h-52 overflow-y-auto divide-y divide-gray-100">
+                        <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
                           {(insumosConsolidadosQ.data ?? []).map((ins: any) => {
                             const qtdStr = insumoQtds[ins.insumoCodigo] || "";
                             const qtdVal = parseFloat(qtdStr) || 0;
                             const conv = getConversao(ins.descricao, ins.unidade, qtdVal > 0 ? qtdVal : ins.qtdTotalOrcada);
                             const saldoNeg = ins.saldoDisponivel < 0;
+                            const isExpanded = insumoExpanded === ins.insumoCodigo;
                             return (
-                              <div key={ins.insumoCodigo} className="grid grid-cols-12 gap-1 px-3 py-2 text-xs items-center hover:bg-gray-50">
-                                <div className="col-span-4 min-w-0">
-                                  <div className="text-gray-900 truncate font-medium">{ins.descricao}</div>
-                                  <div className="text-[9px] text-gray-400">{ins.insumoCodigo} · {ins.composicoes.length} composiç{ins.composicoes.length > 1 ? "ões" : "ão"}</div>
+                              <div key={ins.insumoCodigo}>
+                                <div className="grid grid-cols-12 gap-1 px-3 py-2 text-xs items-center hover:bg-gray-50">
+                                  <div className="col-span-4 min-w-0 cursor-pointer" onClick={() => setInsumoExpanded(isExpanded ? null : ins.insumoCodigo)}>
+                                    <div className="flex items-center gap-1">
+                                      <ChevronDown className={`h-3 w-3 text-gray-400 shrink-0 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />
+                                      <div className="min-w-0">
+                                        <div className="text-gray-900 truncate font-medium">{ins.descricao}</div>
+                                        <div className="text-[9px] text-gray-400 ml-4">{ins.insumoCodigo} · {ins.composicoes.length} composiç{ins.composicoes.length > 1 ? "ões" : "ão"} · <span className="text-purple-500 underline">ver onde é usado</span></div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="col-span-1 text-center">
+                                    <span className="text-[9px] font-bold text-gray-600 bg-gray-100 rounded px-1 py-0.5">{ins.unidade}</span>
+                                  </div>
+                                  <div className="col-span-1 text-right font-semibold text-gray-700">{ins.qtdTotalOrcada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                  <div className="col-span-1 text-right text-blue-600">{ins.qtdJaSolicitada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                  <div className={`col-span-1 text-right font-bold ${saldoNeg ? "text-red-600" : "text-emerald-600"}`}>{ins.saldoDisponivel.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                  <div className="col-span-1 text-right text-purple-600">{ins.qtdComprada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                  <div className="col-span-1">
+                                    <input
+                                      type="number" min="0" step="0.01"
+                                      className="w-full h-6 px-1 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 text-center"
+                                      placeholder="0"
+                                      value={qtdStr}
+                                      onChange={e => setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: e.target.value }))}
+                                    />
+                                  </div>
+                                  <div className="col-span-2 text-center">
+                                    {conv && <span className="text-[9px] text-purple-600 bg-purple-50 rounded px-1 py-0.5 font-medium">{conv}</span>}
+                                  </div>
                                 </div>
-                                <div className="col-span-1 text-center">
-                                  <span className="text-[9px] font-bold text-gray-600 bg-gray-100 rounded px-1 py-0.5">{ins.unidade}</span>
-                                </div>
-                                <div className="col-span-1 text-right font-semibold text-gray-700">{ins.qtdTotalOrcada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
-                                <div className="col-span-1 text-right text-blue-600">{ins.qtdJaSolicitada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
-                                <div className={`col-span-1 text-right font-bold ${saldoNeg ? "text-red-600" : "text-emerald-600"}`}>{ins.saldoDisponivel.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
-                                <div className="col-span-1 text-right text-purple-600">{ins.qtdComprada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
-                                <div className="col-span-1">
-                                  <input
-                                    type="number" min="0" step="0.01"
-                                    className="w-full h-6 px-1 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 text-center"
-                                    placeholder="0"
-                                    value={qtdStr}
-                                    onChange={e => setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: e.target.value }))}
-                                  />
-                                </div>
-                                <div className="col-span-2 text-center">
-                                  {conv && <span className="text-[9px] text-purple-600 bg-purple-50 rounded px-1 py-0.5 font-medium">{conv}</span>}
-                                </div>
+                                {isExpanded && (ins.eapItens ?? []).length > 0 && (
+                                  <div className="bg-purple-50/50 border-t border-purple-100 px-4 py-2">
+                                    <div className="text-[10px] font-semibold text-purple-700 mb-1.5 flex items-center gap-1">
+                                      <ListTree className="h-3 w-3" />
+                                      Onde este insumo é utilizado:
+                                    </div>
+                                    <div className="space-y-1">
+                                      {(ins.eapItens as any[]).map((eap: any, idx: number) => (
+                                        <div key={idx} className="flex items-center gap-2 text-[10px] bg-white rounded px-2 py-1 border border-purple-100">
+                                          <span className="font-mono text-purple-600 font-semibold shrink-0">{eap.eapCodigo}</span>
+                                          <span className="text-gray-700 truncate flex-1">{eap.servicoDescricao}</span>
+                                          <span className="text-gray-500 shrink-0">Qtd serviço: <b className="text-gray-800">{eap.qtdServico.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b></span>
+                                          <span className="text-gray-500 shrink-0">× {eap.coeficiente.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}</span>
+                                          <span className="text-purple-700 font-bold shrink-0">= {eap.qtdInsumo.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} {ins.unidade}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
