@@ -334,7 +334,9 @@ function RastreabilidadeTag({ scNumero, eapCodigo, origemEap }: { scNumero?: str
         </span>
       )}
       {origemEap && (
-        <span className="inline-flex items-center gap-0.5 text-[9px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full border border-green-200">
+        <span
+          className="inline-flex items-center gap-0.5 text-[9px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full border border-green-200 cursor-help"
+          title="Explosão: Este item foi gerado automaticamente a partir da EAP (Estrutura Analítica do Projeto). O sistema desmembrou o item do orçamento em vários itens separados — um para cada local/pavimento de aplicação na obra.">
           <RefreshCw className="h-2 w-2" />Explosão
         </span>
       )}
