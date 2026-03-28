@@ -346,7 +346,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "compras-aprovacoes",     label: "Aprovações",          route: "/compras/aprovacoes",     icon: "CheckCircle" },
       { key: "compras-recebimentos",   label: "Recebimentos",        route: "/compras/recebimentos",   icon: "PackageCheck" },
       { key: "compras-emergencial",    label: "Emergencial",         route: "/compras/emergencial",    icon: "Zap" },
-      { key: "compras-financeiro",     label: "Financeiro Compras",  route: "/compras/financeiro",     icon: "DollarSign" },
+
       { key: "compras-realocacao",     label: "Realocação",          route: "/compras/realocacao",     icon: "ArrowLeftRight" },
       { key: "compras-comissoes",      label: "Comissões",           route: "/compras/comissoes",      icon: "Percent" },
       { key: "compras-configuracoes",  label: "Configurações",       route: "/compras/configuracoes",  icon: "Settings2" },

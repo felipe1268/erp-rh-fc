@@ -2184,7 +2184,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Fluxo", label: "Recebimentos", path: "/compras/recebimentos" },
     { section: "Prioridade", label: "Compras Emergenciais", path: "/compras/emergencial" },
     { section: "Prioridade", label: "Aprovações Pendentes", path: "/compras/aprovacoes" },
-    { section: "Financeiro", label: "Contas a Pagar", path: "/compras/financeiro" },
+
     { section: "Financeiro", label: "Realocação de Verba", path: "/compras/realocacao" },
     { section: "Financeiro", label: "Comissões", path: "/compras/comissoes" },
     { section: "Cadastros", label: "Fornecedores", path: "/compras/fornecedores" },

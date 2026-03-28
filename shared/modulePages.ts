@@ -383,7 +383,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/compras/aprovacoes":    "aprovacoes",
     "/compras/recebimentos":  "recebimentos",
     "/compras/emergencial":   "emergencial",
-    "/compras/financeiro":    "financeiro",
+
     "/compras/realocacao":    "realocacao",
     "/compras/fornecedores":  "fornecedores",
   },

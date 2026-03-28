@@ -107,7 +107,7 @@ const ALL_ROUTES = [
     { path: "/compras/fornecedores", label: "Fornecedores", icon: "Store" },
     { path: "/compras/aprovacoes", label: "Aprovações", icon: "CheckCircle" },
     { path: "/compras/emergencial", label: "Compra Emergencial", icon: "AlertTriangle" },
-    { path: "/compras/financeiro", label: "Financeiro de Compras", icon: "Wallet" },
+
     { path: "/compras/realocacao", label: "Realocação de Itens", icon: "ArrowLeftRight" },
   ]},
   { section: "Almoxarifado", color: "orange", routes: [

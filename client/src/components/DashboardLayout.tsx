@@ -321,7 +321,7 @@ const menuSectionsCompras: MenuSection[] = [
   {
     title: "Financeiro",
     items: [
-      { icon: DollarSign,      label: "Contas a Pagar",       path: "/compras/financeiro"       },
+
       { icon: ArrowLeftRight,  label: "Realocação de Verba",  path: "/compras/realocacao"       },
       { icon: Calculator,      label: "Comissões",            path: "/compras/comissoes"        },
     ],

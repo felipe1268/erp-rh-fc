@@ -179,7 +179,7 @@ const Ordens = lazy(() => import("./pages/compras/Ordens"));
 const ComprasEmergencial = lazy(() => import("./pages/compras/Emergencial"));
 const ComprasAprovacoes = lazy(() => import("./pages/compras/Aprovacoes"));
 const ComprasRecebimentos = lazy(() => import("./pages/compras/Recebimentos"));
-const ComprasFinanceiro = lazy(() => import("./pages/compras/Financeiro"));
+
 const ComprasRealocacao = lazy(() => import("./pages/compras/Realocacao"));
 const ComprasComissoes = lazy(() => import("./pages/compras/Comissoes"));
 const ComprasConfiguracoes = lazy(() => import("./pages/compras/Configuracoes"));
@@ -371,7 +371,7 @@ function Router() {
         <Route path="/compras/emergencial"       component={ComprasEmergencial} />
         <Route path="/compras/aprovacoes"        component={ComprasAprovacoes} />
         <Route path="/compras/recebimentos"      component={ComprasRecebimentos} />
-        <Route path="/compras/financeiro"        component={ComprasFinanceiro} />
+
         <Route path="/compras/realocacao"        component={ComprasRealocacao} />
         <Route path="/compras/comissoes"         component={ComprasComissoes} />
         <Route path="/compras/configuracoes"     component={ComprasConfiguracoes} />
