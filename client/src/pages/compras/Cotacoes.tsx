@@ -1171,6 +1171,22 @@ export default function Cotacoes() {
 
                   <div>
                     <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Parcelamento pós-fechamento</p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-1 bg-gray-50 rounded-lg border border-gray-200 px-2 py-1">
+                        <button type="button" onClick={() => {
+                          const curr = parseInt(condFechParc[fId] ?? "1") || 1;
+                          if (curr > 1) setCondFechParc(prev => ({ ...prev, [fId]: String(curr - 1) }));
+                        }} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100 text-lg font-bold">-</button>
+                        <input type="number" min="1" max="60" value={condFechParc[fId] ?? "1"}
+                          onChange={e => { const v = parseInt(e.target.value); if (v > 0 && v <= 60) setCondFechParc(prev => ({ ...prev, [fId]: String(v) })); }}
+                          className="w-12 h-7 text-center text-sm font-bold border border-gray-300 rounded-md bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-300" />
+                        <button type="button" onClick={() => {
+                          const curr = parseInt(condFechParc[fId] ?? "1") || 1;
+                          if (curr < 60) setCondFechParc(prev => ({ ...prev, [fId]: String(curr + 1) }));
+                        }} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100 text-lg font-bold">+</button>
+                        <span className="text-xs text-gray-500 ml-1">parcelas</span>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-4 gap-1.5">
                       {[
                         { v: "1", l: "À Vista" },
