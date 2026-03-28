@@ -2915,7 +2915,7 @@ Retorne APENAS um JSON válido neste formato:
       }).where(eq(comprasOrdens.id, input.id));
 
       // ── Integração financeira ─────────────────────────────────────────
-PermissionDeniedError      if (input.status === "aprovada" || input.status === "entregue" || input.status === "entregue_parcial") {
+      if (input.status === "aprovada" || input.status === "entregue" || input.status === "entregue_parcial") {
         const [ocFin] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
         if (ocFin) {
           let obraNomeFin: string | null = ocFin.obraId
