@@ -147,6 +147,12 @@ export default function AlmoxarifadoPage() {
     { companyId }, { enabled: !!companyId }
   );
 
+  const [agruparIguais, setAgruparIguais] = useState(true);
+  const [expandedGroupId, setExpandedGroupId] = useState<number | null>(null);
+
+  const normNomeItem = (nome: string) =>
+    nome.replace(/^\[[\d.]+\]\s*/, "").trim().toLowerCase().replace(/\s+/g, " ");
+
   const lista = useMemo(() => {
     let r = itens;
     if (busca) {
@@ -155,8 +161,44 @@ export default function AlmoxarifadoPage() {
     }
     if (filtroCateg !== "todas") r = r.filter(i => i.categoria === filtroCateg);
     if (apenasAbaixo) r = r.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima));
-    return r;
-  }, [itens, busca, filtroCateg, apenasAbaixo]);
+
+    if (!agruparIguais) return r;
+
+    const groups = new Map<string, any[]>();
+    for (const item of r) {
+      const key = normNomeItem(item.nome) + "|" + (item.unidade || "un");
+      const arr = groups.get(key) || [];
+      arr.push(item);
+      groups.set(key, arr);
+    }
+
+    const merged: any[] = [];
+    for (const [, arr] of groups) {
+      if (arr.length === 1) {
+        merged.push(arr[0]);
+      } else {
+        const first = arr[0];
+        const qtdTotal = arr.reduce((s: number, i: any) => s + n(i.quantidadeAtual), 0);
+        const minTotal = arr.reduce((s: number, i: any) => s + n(i.quantidadeMinima), 0);
+        const valUnit = arr.find((i: any) => n(i.valorUnitario) > 0);
+        const foto = arr.find((i: any) => i.fotoUrl);
+        merged.push({
+          ...first,
+          id: first.id,
+          quantidadeAtual: String(qtdTotal),
+          quantidadeMinima: String(minTotal),
+          valorUnitario: valUnit ? valUnit.valorUnitario : first.valorUnitario,
+          fotoUrl: foto ? foto.fotoUrl : first.fotoUrl,
+          _grouped: true,
+          _subItems: arr,
+          _groupCount: arr.length,
+          nome: first.nome.replace(/^\[[\d.]+\]\s*/, "").trim(),
+          codigoInterno: arr.map((i: any) => i.codigoInterno).filter(Boolean).join(", ") || first.codigoInterno,
+        });
+      }
+    }
+    return merged;
+  }, [itens, busca, filtroCateg, apenasAbaixo, agruparIguais]);
 
   const totalCriticos = useMemo(() =>
     itens.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima)).length,
@@ -837,7 +879,14 @@ export default function AlmoxarifadoPage() {
               <input type="checkbox" checked={apenasAbaixo} onChange={e => setApenasAbaixo(e.target.checked)} className="rounded border-gray-300" />
               Apenas abaixo do mínimo
             </label>
-            <span className="text-xs text-gray-400">{lista.length} resultado{lista.length !== 1 ? "s" : ""}</span>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+              <input type="checkbox" checked={agruparIguais} onChange={e => setAgruparIguais(e.target.checked)} className="rounded border-gray-300 text-emerald-500" />
+              Agrupar iguais
+            </label>
+            <span className="text-xs text-gray-400">
+              {lista.length} resultado{lista.length !== 1 ? "s" : ""}
+              {agruparIguais && lista.some((i: any) => i._grouped) && ` (${itens.length} itens no total)`}
+            </span>
           </div>
 
           {/* Content */}
@@ -862,7 +911,7 @@ export default function AlmoxarifadoPage() {
                     <div
                       className="relative bg-gray-50 flex items-center justify-center cursor-pointer group"
                       style={{ height: 140 }}
-                      onClick={() => abrirEditar(item)}
+                      onClick={() => (item as any)._grouped ? setExpandedGroupId(expandedGroupId === item.id ? null : item.id) : abrirEditar(item)}
                     >
                       {(item as any).fotoUrl ? (
                         <>
@@ -882,6 +931,11 @@ export default function AlmoxarifadoPage() {
                       )}
                       {(item as any).origem === "alugado" && (
                         <div className="absolute top-1.5 left-1.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">LOCADO</div>
+                      )}
+                      {(item as any)._grouped && (
+                        <div className="absolute top-1.5 left-1.5 bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                          <Boxes className="w-3 h-3" />{(item as any)._groupCount}x
+                        </div>
                       )}
                     </div>
 
@@ -913,28 +967,67 @@ export default function AlmoxarifadoPage() {
                         );
                       })()}
                       {/* Actions */}
-                      <div className="flex gap-1 pt-1 border-t border-gray-50">
-                        <button onClick={() => abrirMovimento(item, "entrada")} title="Entrada" className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] text-emerald-700 hover:bg-emerald-50 rounded transition">
-                          <ArrowDownCircle className="h-3.5 w-3.5" />In
-                        </button>
-                        <button onClick={() => abrirMovimento(item, "saida")} title="Saída" className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] text-orange-700 hover:bg-orange-50 rounded transition">
-                          <ArrowUpCircle className="h-3.5 w-3.5" />Out
-                        </button>
-                        <button onClick={() => abrirEditar(item)} title="Editar item" className="px-1.5 py-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition">
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        {(item as any).origem === "alugado" && (
-                          <button onClick={() => abrirDevolverLocacao(item)} title="Devolver ao fornecedor" className="px-1.5 py-1 text-amber-500 hover:text-amber-700 hover:bg-amber-50 rounded transition">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
+                      {(item as any)._grouped ? (
+                        <div className="flex gap-1 pt-1 border-t border-gray-50">
+                          <button
+                            onClick={() => setExpandedGroupId(expandedGroupId === item.id ? null : item.id)}
+                            className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] text-emerald-700 hover:bg-emerald-50 rounded transition font-medium"
+                          >
+                            {expandedGroupId === item.id ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            {expandedGroupId === item.id ? "Fechar" : `Ver ${(item as any)._groupCount} itens`}
                           </button>
-                        )}
-                        <button onClick={() => { setHistItem(item); setModalHist(true); }} title="Histórico" className="px-1.5 py-1 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded transition">
-                          <History className="h-3.5 w-3.5" />
-                        </button>
-                        <button onClick={() => { if (confirm(`Remover "${item.nome}"?`)) excluirMut.mutate({ id: item.id }); }} title="Remover" className="px-1.5 py-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-1 pt-1 border-t border-gray-50">
+                          <button onClick={() => abrirMovimento(item, "entrada")} title="Entrada" className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] text-emerald-700 hover:bg-emerald-50 rounded transition">
+                            <ArrowDownCircle className="h-3.5 w-3.5" />In
+                          </button>
+                          <button onClick={() => abrirMovimento(item, "saida")} title="Saída" className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] text-orange-700 hover:bg-orange-50 rounded transition">
+                            <ArrowUpCircle className="h-3.5 w-3.5" />Out
+                          </button>
+                          <button onClick={() => abrirEditar(item)} title="Editar item" className="px-1.5 py-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          {(item as any).origem === "alugado" && (
+                            <button onClick={() => abrirDevolverLocacao(item)} title="Devolver ao fornecedor" className="px-1.5 py-1 text-amber-500 hover:text-amber-700 hover:bg-amber-50 rounded transition">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <button onClick={() => { setHistItem(item); setModalHist(true); }} title="Histórico" className="px-1.5 py-1 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded transition">
+                            <History className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => { if (confirm(`Remover "${item.nome}"?`)) excluirMut.mutate({ id: item.id }); }} title="Remover" className="px-1.5 py-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Sub-items panel for grouped items */}
+                      {(item as any)._grouped && expandedGroupId === item.id && (
+                        <div className="border-t border-emerald-100 bg-emerald-50/30 px-2 py-2 space-y-1.5">
+                          <p className="text-[10px] text-emerald-600 font-semibold uppercase tracking-wide px-1">Itens agrupados</p>
+                          {(item as any)._subItems.map((sub: any) => (
+                            <div key={sub.id} className="bg-white rounded-lg border border-gray-100 p-2 flex items-center gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-gray-800 truncate">{sub.nome}</p>
+                                {sub.codigoInterno && <p className="text-[10px] font-mono text-gray-400">{sub.codigoInterno}</p>}
+                                <p className="text-xs font-bold text-gray-700 mt-0.5">{n(sub.quantidadeAtual)} {sub.unidade}</p>
+                              </div>
+                              <div className="flex gap-0.5 shrink-0">
+                                <button onClick={() => abrirMovimento(sub, "entrada")} title="Entrada" className="p-1 text-emerald-600 hover:bg-emerald-50 rounded">
+                                  <ArrowDownCircle className="h-3.5 w-3.5" />
+                                </button>
+                                <button onClick={() => abrirMovimento(sub, "saida")} title="Saída" className="p-1 text-orange-600 hover:bg-orange-50 rounded">
+                                  <ArrowUpCircle className="h-3.5 w-3.5" />
+                                </button>
+                                <button onClick={() => abrirEditar(sub)} title="Editar" className="p-1 text-blue-400 hover:bg-blue-50 rounded">
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -959,23 +1052,33 @@ export default function AlmoxarifadoPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {lista.map(item => {
+                  {lista.flatMap(item => {
                     const atual = n(item.quantidadeAtual);
                     const minimo = n(item.quantidadeMinima);
                     const abaixo = minimo > 0 && atual < minimo;
-                    return (
-                      <tr key={item.id} className={`border-b border-gray-50 hover:bg-gray-50/70 ${abaixo ? "bg-red-50/20" : ""}`}>
+                    const isGrouped = (item as any)._grouped;
+                    const isExpanded = isGrouped && expandedGroupId === item.id;
+                    const rows = [];
+                    rows.push(
+                      <tr key={item.id} className={`border-b border-gray-50 hover:bg-gray-50/70 ${abaixo ? "bg-red-50/20" : ""} ${isGrouped ? "cursor-pointer" : ""}`}
+                        onClick={isGrouped ? () => setExpandedGroupId(isExpanded ? null : item.id) : undefined}>
                         <td className="px-3 py-2">
-                          <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center relative">
                             {(item as any).fotoUrl
                               ? <img src={(item as any).fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
                               : <ImageOff className="h-4 w-4 text-gray-300" />
                             }
+                            {isGrouped && <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{(item as any)._groupCount}</span>}
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="font-medium text-gray-800">{item.nome}</p>
-                          <p className="text-xs text-gray-400">{item.unidade}</p>
+                          <div className="flex items-center gap-1.5">
+                            {isGrouped && (isExpanded ? <ChevronLeft className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-emerald-500 shrink-0" />)}
+                            <div>
+                              <p className="font-medium text-gray-800">{item.nome}</p>
+                              <p className="text-xs text-gray-400">{item.unidade}{isGrouped ? ` (${(item as any)._groupCount} registros)` : ""}</p>
+                            </div>
+                          </div>
                         </td>
                         <td className="px-3 py-3">
                           {item.categoria ? <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{item.categoria}</span> : <span className="text-gray-300">—</span>}
@@ -1000,27 +1103,72 @@ export default function AlmoxarifadoPage() {
                         <td className="px-3 py-3 text-center">
                           <StatusBadge atual={atual} minimo={minimo} />
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => abrirMovimento(item, "entrada")} className="flex items-center gap-1 h-7 px-2 text-xs text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-50 transition">
-                              <ArrowDownCircle className="h-3.5 w-3.5" />Entrada
-                            </button>
-                            <button onClick={() => abrirMovimento(item, "saida")} className="flex items-center gap-1 h-7 px-2 text-xs text-orange-700 border border-orange-200 rounded hover:bg-orange-50 transition">
-                              <ArrowUpCircle className="h-3.5 w-3.5" />Saída
-                            </button>
-                            <button onClick={() => { setHistItem(item); setModalHist(true); }} className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition" title="Histórico">
-                              <History className="h-3.5 w-3.5" />
-                            </button>
-                            <button onClick={() => abrirEditar(item)} className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition" title="Editar">
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button onClick={() => { if (confirm(`Remover "${item.nome}"?`)) excluirMut.mutate({ id: item.id }); }} className="h-7 w-7 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition" title="Remover">
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
+                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                          {isGrouped ? (
+                            <div className="flex items-center justify-center">
+                              <button onClick={() => setExpandedGroupId(isExpanded ? null : item.id)} className="flex items-center gap-1 h-7 px-3 text-xs text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-50 transition font-medium">
+                                {isExpanded ? "Fechar" : `${(item as any)._groupCount} itens`}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => abrirMovimento(item, "entrada")} className="flex items-center gap-1 h-7 px-2 text-xs text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-50 transition">
+                                <ArrowDownCircle className="h-3.5 w-3.5" />Entrada
+                              </button>
+                              <button onClick={() => abrirMovimento(item, "saida")} className="flex items-center gap-1 h-7 px-2 text-xs text-orange-700 border border-orange-200 rounded hover:bg-orange-50 transition">
+                                <ArrowUpCircle className="h-3.5 w-3.5" />Saída
+                              </button>
+                              <button onClick={() => { setHistItem(item); setModalHist(true); }} className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition" title="Histórico">
+                                <History className="h-3.5 w-3.5" />
+                              </button>
+                              <button onClick={() => abrirEditar(item)} className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition" title="Editar">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button onClick={() => { if (confirm(`Remover "${item.nome}"?`)) excluirMut.mutate({ id: item.id }); }} className="h-7 w-7 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition" title="Remover">
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
+                    if (isExpanded) {
+                      for (const sub of (item as any)._subItems) {
+                        const subAtual = n(sub.quantidadeAtual);
+                        const subMin = n(sub.quantidadeMinima);
+                        rows.push(
+                          <tr key={`sub-${sub.id}`} className="bg-emerald-50/30 border-b border-emerald-100/50">
+                            <td className="px-3 py-1.5">
+                              <div className="w-8 h-8 rounded overflow-hidden border border-emerald-100 bg-white flex items-center justify-center ml-2">
+                                {sub.fotoUrl ? <img src={sub.fotoUrl} alt={sub.nome} className="w-full h-full object-cover" /> : <ImageOff className="h-3 w-3 text-gray-300" />}
+                              </div>
+                            </td>
+                            <td className="px-4 py-1.5">
+                              <p className="text-xs font-medium text-gray-700 pl-4">{sub.nome}</p>
+                            </td>
+                            <td className="px-3 py-1.5 text-xs text-gray-500">{sub.categoria || "—"}</td>
+                            <td className="px-3 py-1.5 font-mono text-[11px] text-gray-400">{sub.codigoInterno || "—"}</td>
+                            <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-600">{subAtual} {sub.unidade}</td>
+                            <td className="px-3 py-1.5 text-right text-xs text-gray-400">{subMin > 0 ? `${subMin} ${sub.unidade}` : "—"}</td>
+                            <td className="px-3 py-1.5 text-right text-xs text-gray-500">
+                              {sub.valorUnitario && parseFloat(sub.valorUnitario) > 0 ? `R$ ${parseFloat(sub.valorUnitario).toFixed(2)}` : "—"}
+                            </td>
+                            <td className="px-3 py-1.5 text-right text-xs text-gray-500">
+                              {sub.valorUnitario && parseFloat(sub.valorUnitario) > 0 ? `R$ ${(subAtual * parseFloat(sub.valorUnitario)).toFixed(2)}` : "—"}
+                            </td>
+                            <td className="px-3 py-1.5 text-center"><StatusBadge atual={subAtual} minimo={subMin} /></td>
+                            <td className="px-4 py-1.5">
+                              <div className="flex items-center justify-center gap-1">
+                                <button onClick={() => abrirMovimento(sub, "entrada")} className="h-6 px-1.5 text-[11px] text-emerald-600 hover:bg-emerald-100 rounded"><ArrowDownCircle className="h-3 w-3" /></button>
+                                <button onClick={() => abrirMovimento(sub, "saida")} className="h-6 px-1.5 text-[11px] text-orange-600 hover:bg-orange-100 rounded"><ArrowUpCircle className="h-3 w-3" /></button>
+                                <button onClick={() => abrirEditar(sub)} className="h-6 px-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"><Pencil className="h-3 w-3" /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+                    }
+                    return rows;
                   })}
                 </tbody>
               </table>
