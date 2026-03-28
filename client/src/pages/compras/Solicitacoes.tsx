@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
-  Camera, ImageIcon, X, Briefcase,
+  Camera, ImageIcon, X, Briefcase, History, ShoppingBag,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -49,6 +49,40 @@ interface ItemForm {
   quantidadeServico?: number; coeficiente?: number; origemEap?: boolean;
 }
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", observacoes: "" });
+
+function UltimaCompraCard({ companyId, descricao, insumoCodigo }: { companyId: number; descricao: string; insumoCodigo?: string }) {
+  const trimmed = descricao.replace(/^\[[\d.]+\]\s*/, "").trim();
+  const hasInput = trimmed.length >= 3 || (insumoCodigo && insumoCodigo.length > 0);
+  const histQ = trpc.compras.getHistoricoRecompra.useQuery(
+    { companyId, descricao: trimmed || undefined, insumoCodigo: insumoCodigo || undefined },
+    { enabled: companyId > 0 && !!hasInput }
+  );
+
+  if (!histQ.data || !hasInput) return null;
+
+  const h = histQ.data;
+  return (
+    <div className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-blue-50 border border-blue-200 text-xs animate-in fade-in slide-in-from-top-1 duration-200">
+      <ShoppingBag className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-blue-700 flex items-center gap-1">
+          <History className="h-3 w-3" /> Última compra
+        </div>
+        <div className="text-blue-600 mt-0.5">
+          <span className="font-medium">{h.fornecedorNome || "Fornecedor não identificado"}</span>
+          <span className="mx-1">·</span>
+          <span className="font-bold">{h.precoUnitario.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+          <span className="text-blue-400 mx-1">/{h.unidade || "un"}</span>
+        </div>
+        <div className="text-blue-400 text-[10px] mt-0.5">
+          {h.dataOc ? new Date(h.dataOc).toLocaleDateString("pt-BR") : "—"}
+          <span className="mx-1">·</span>
+          OC {h.numeroOc}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function StatusBadge({ status }: { status: string }) {
   const c = STATUS_CFG[status] ?? STATUS_CFG.pendente;
@@ -842,7 +876,7 @@ export default function Solicitacoes() {
               {modoSC === "eap" && itens.filter(i => i.origemEap).length > 0 ? (
                 <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                   {(() => {
-                    const consolidados = new Map<string, { descricao: string; unidade: string; qtdTotal: number; precoMeta: number; origens: string[] }>();
+                    const consolidados = new Map<string, { descricao: string; unidade: string; qtdTotal: number; precoMeta: number; origens: string[]; insumoCodigo?: string }>();
                     for (const it of itens.filter(i => i.origemEap)) {
                       const key = it.insumoCodigo || it.descricao;
                       if (consolidados.has(key)) {
@@ -856,22 +890,26 @@ export default function Solicitacoes() {
                           qtdTotal: parseFloat(it.quantidade) || 0,
                           precoMeta: it.precoMeta || 0,
                           origens: it.eapCodigo ? [it.eapCodigo] : [],
+                          insumoCodigo: it.insumoCodigo,
                         });
                       }
                     }
                     return Array.from(consolidados.entries()).map(([key, c]) => (
-                      <div key={key} className="flex items-center gap-2 p-2 rounded-lg bg-amber-50/50 border border-amber-200/50 text-xs">
-                        <Zap className="h-3 w-3 text-amber-500 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-gray-900 truncate">{c.descricao}</div>
-                          {c.origens.length > 1 && (
-                            <div className="text-[10px] text-amber-600">Consolidado de {c.origens.length} serviços: {c.origens.join(", ")}</div>
-                          )}
+                      <div key={key} className="space-y-1">
+                        <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-50/50 border border-amber-200/50 text-xs">
+                          <Zap className="h-3 w-3 text-amber-500 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-gray-900 truncate">{c.descricao}</div>
+                            {c.origens.length > 1 && (
+                              <div className="text-[10px] text-amber-600">Consolidado de {c.origens.length} serviços: {c.origens.join(", ")}</div>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="font-semibold text-gray-700">{c.qtdTotal.toLocaleString("pt-BR")} {c.unidade}</div>
+                            {c.precoMeta > 0 && <div className="text-[10px] text-gray-400">Meta: R$ {(c.qtdTotal * c.precoMeta).toFixed(2)}</div>}
+                          </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <div className="font-semibold text-gray-700">{c.qtdTotal.toLocaleString("pt-BR")} {c.unidade}</div>
-                          {c.precoMeta > 0 && <div className="text-[10px] text-gray-400">Meta: R$ {(c.qtdTotal * c.precoMeta).toFixed(2)}</div>}
-                        </div>
+                        <UltimaCompraCard companyId={companyId} descricao={c.descricao} insumoCodigo={c.insumoCodigo} />
                       </div>
                     ));
                   })()}
@@ -881,31 +919,36 @@ export default function Solicitacoes() {
                   Selecione um serviço acima e informe a quantidade para gerar os itens automaticamente.
                 </div>
               ) : (
-                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {itens.map((it, idx) => (
-                    <div key={idx} className="flex gap-2 items-center p-2 rounded-lg bg-gray-50 border border-gray-200">
-                      <input
-                        className="flex-1 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
-                        placeholder="Descrição do item *"
-                        value={it.descricao}
-                        onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
-                      />
-                      <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
-                        <SelectTrigger className="w-16 h-7 text-xs border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-white border-gray-200">
-                          {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <input
-                        className="w-20 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-400"
-                        type="number" min="0.001" step="0.001" placeholder="Qtd"
-                        value={it.quantidade}
-                        onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
-                      />
-                      {itens.length > 1 && (
-                        <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                    <div key={idx} className="space-y-1">
+                      <div className="flex gap-2 items-center p-2 rounded-lg bg-gray-50 border border-gray-200">
+                        <input
+                          className="flex-1 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
+                          placeholder="Descrição do item *"
+                          value={it.descricao}
+                          onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
+                        />
+                        <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
+                          <SelectTrigger className="w-16 h-7 text-xs border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-white border-gray-200">
+                            {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <input
+                          className="w-20 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-400"
+                          type="number" min="0.001" step="0.001" placeholder="Qtd"
+                          value={it.quantidade}
+                          onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
+                        />
+                        {itens.length > 1 && (
+                          <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {it.descricao.trim().length >= 3 && (
+                        <UltimaCompraCard companyId={companyId} descricao={it.descricao} />
                       )}
                     </div>
                   ))}

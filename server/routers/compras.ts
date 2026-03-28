@@ -3167,4 +3167,182 @@ Responda APENAS com um objeto JSON no formato:
 
       return { etapas, etapaAtual };
     }),
+
+  getHistoricoRecompra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      descricao: z.string().optional(),
+      insumoCodigo: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!input.descricao && !input.insumoCodigo) return null;
+
+      const stripEapPrefix = (desc: string) => desc.replace(/^\[[\d.]+\]\s*/, "").trim();
+      const descNorm = input.descricao ? stripEapPrefix(input.descricao) : null;
+
+      if (!descNorm && !input.insumoCodigo) return null;
+
+      const ocStatusAprovados = ["aprovada", "recebida", "parcialmente_recebida"];
+
+      if (input.insumoCodigo) {
+        const codeRows = await db.select({
+          descricao: comprasOrdensItens.descricao,
+          unidade: comprasOrdensItens.unidade,
+          precoUnitario: comprasOrdensItens.precoUnitario,
+          quantidade: comprasOrdensItens.quantidade,
+          fornecedorNome: comprasOrdens.fornecedorNome,
+          fornecedorId: comprasOrdens.fornecedorId,
+          dataOc: comprasOrdens.criadoEm,
+          numeroOc: comprasOrdens.numeroOc,
+        }).from(comprasOrdensItens)
+          .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+          .leftJoin(comprasSolicitacoesItens, eq(comprasOrdensItens.solicitacaoItemId, comprasSolicitacoesItens.id))
+          .where(and(
+            eq(comprasOrdens.companyId, input.companyId),
+            inArray(comprasOrdens.status, ocStatusAprovados),
+            eq(comprasSolicitacoesItens.insumoCodigo, input.insumoCodigo),
+          ))
+          .orderBy(desc(comprasOrdens.criadoEm))
+          .limit(1);
+
+        if (codeRows.length > 0) {
+          const best = codeRows[0];
+          return {
+            fornecedorNome: best.fornecedorNome,
+            fornecedorId: best.fornecedorId,
+            precoUnitario: n(best.precoUnitario),
+            quantidade: n(best.quantidade),
+            unidade: best.unidade,
+            dataOc: best.dataOc,
+            numeroOc: best.numeroOc,
+            descricao: best.descricao,
+          };
+        }
+      }
+
+      if (descNorm) {
+        const descRows = await db.select({
+          descricao: comprasOrdensItens.descricao,
+          unidade: comprasOrdensItens.unidade,
+          precoUnitario: comprasOrdensItens.precoUnitario,
+          quantidade: comprasOrdensItens.quantidade,
+          fornecedorNome: comprasOrdens.fornecedorNome,
+          fornecedorId: comprasOrdens.fornecedorId,
+          dataOc: comprasOrdens.criadoEm,
+          numeroOc: comprasOrdens.numeroOc,
+        }).from(comprasOrdensItens)
+          .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+          .where(and(
+            eq(comprasOrdens.companyId, input.companyId),
+            inArray(comprasOrdens.status, ocStatusAprovados),
+            ilike(comprasOrdensItens.descricao, `%${descNorm}%`),
+          ))
+          .orderBy(desc(comprasOrdens.criadoEm))
+          .limit(1);
+
+        if (descRows.length > 0) {
+          const best = descRows[0];
+          return {
+            fornecedorNome: best.fornecedorNome,
+            fornecedorId: best.fornecedorId,
+            precoUnitario: n(best.precoUnitario),
+            quantidade: n(best.quantidade),
+            unidade: best.unidade,
+            dataOc: best.dataOc,
+            numeroOc: best.numeroOc,
+            descricao: best.descricao,
+          };
+        }
+      }
+
+      return null;
+    }),
+
+  getSugestoesFornecedoresRecompra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      descricoes: z.array(z.string()),
+      insumoCodigos: z.array(z.string()).optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (input.descricoes.length === 0 && (!input.insumoCodigos || input.insumoCodigos.length === 0)) return [];
+
+      const stripEapPrefix = (desc: string) => desc.replace(/^\[[\d.]+\]\s*/, "").trim();
+      const descNormalizadas = input.descricoes.map(d => stripEapPrefix(d)).filter(d => d.length > 0);
+      const insumoCodigosValidos = (input.insumoCodigos ?? []).filter(c => c.length > 0);
+
+      if (descNormalizadas.length === 0 && insumoCodigosValidos.length === 0) return [];
+
+      const ocStatusAprovados = ["aprovada", "recebida", "parcialmente_recebida"];
+      const descConditions = descNormalizadas.map(d => ilike(comprasOrdensItens.descricao, `%${d}%`));
+
+      const descRows = descConditions.length > 0 ? await db.select({
+        fornecedorId: comprasOrdens.fornecedorId,
+        fornecedorNome: comprasOrdens.fornecedorNome,
+        descricao: comprasOrdensItens.descricao,
+        precoUnitario: comprasOrdensItens.precoUnitario,
+        dataOc: comprasOrdens.criadoEm,
+        numeroOc: comprasOrdens.numeroOc,
+      }).from(comprasOrdensItens)
+        .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          inArray(comprasOrdens.status, ocStatusAprovados),
+          or(...descConditions),
+        ))
+        .orderBy(desc(comprasOrdens.criadoEm))
+        .limit(50) : [];
+
+      const codeRows = insumoCodigosValidos.length > 0 ? await db.select({
+        fornecedorId: comprasOrdens.fornecedorId,
+        fornecedorNome: comprasOrdens.fornecedorNome,
+        descricao: comprasOrdensItens.descricao,
+        insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+        dataOc: comprasOrdens.criadoEm,
+        numeroOc: comprasOrdens.numeroOc,
+      }).from(comprasOrdensItens)
+        .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+        .innerJoin(comprasSolicitacoesItens, eq(comprasOrdensItens.solicitacaoItemId, comprasSolicitacoesItens.id))
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          inArray(comprasOrdens.status, ocStatusAprovados),
+          inArray(comprasSolicitacoesItens.insumoCodigo, insumoCodigosValidos),
+        ))
+        .orderBy(desc(comprasOrdens.criadoEm))
+        .limit(50) : [];
+
+      const rows = [...codeRows.map(r => ({ ...r, descricao: r.descricao })), ...descRows];
+
+      const fornMap = new Map<number, { fornecedorId: number; fornecedorNome: string | null; itensAtendidos: number; ultimaData: string | null; ultimaOc: string | null; descVistas: Set<string> }>();
+      for (const r of rows) {
+        if (!r.fornecedorId) continue;
+        if (!fornMap.has(r.fornecedorId)) {
+          fornMap.set(r.fornecedorId, {
+            fornecedorId: r.fornecedorId,
+            fornecedorNome: r.fornecedorNome,
+            itensAtendidos: 0,
+            ultimaData: r.dataOc,
+            ultimaOc: r.numeroOc,
+            descVistas: new Set(),
+          });
+        }
+        const entry = fornMap.get(r.fornecedorId)!;
+        if (r.dataOc && (!entry.ultimaData || r.dataOc > entry.ultimaData)) {
+          entry.ultimaData = r.dataOc;
+          entry.ultimaOc = r.numeroOc;
+        }
+        const descNorm = stripEapPrefix(r.descricao).toLowerCase();
+        if (!entry.descVistas.has(descNorm)) {
+          entry.descVistas.add(descNorm);
+          entry.itensAtendidos++;
+        }
+      }
+
+      return Array.from(fornMap.values())
+        .map(({ descVistas, ...rest }) => rest)
+        .sort((a, b) => b.itensAtendidos - a.itensAtendidos)
+        .slice(0, 5);
+    }),
 });

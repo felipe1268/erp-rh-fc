@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -477,6 +477,18 @@ export default function Cotacoes() {
   );
   const detalheQ = trpc.compras.getCotacao.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
   const mapaQ = trpc.compras.getMapaCotacao.useQuery({ cotacaoId: showDetalhe! }, { enabled: showDetalhe !== null && abaAtiva === "mapa" });
+  const mapaItens = mapaQ.data?.itens ?? [];
+  const mapaDescricoes = mapaItens.map((it: any) => it.descricao as string).filter(Boolean);
+  const mapaInsumoCodigos = mapaItens.map((it: any) => it.insumoCodigo as string).filter(Boolean);
+  const sugestoesRecompraQ = trpc.compras.getSugestoesFornecedoresRecompra.useQuery(
+    { companyId, descricoes: mapaDescricoes, insumoCodigos: mapaInsumoCodigos.length > 0 ? mapaInsumoCodigos : undefined },
+    { enabled: companyId > 0 && (mapaDescricoes.length > 0 || mapaInsumoCodigos.length > 0) && showDetalhe !== null && abaAtiva === "mapa" }
+  );
+  const novaDescricoes = itens.map(i => i.descricao).filter(d => d.trim().length >= 3);
+  const novaSugestoesQ = trpc.compras.getSugestoesFornecedoresRecompra.useQuery(
+    { companyId, descricoes: novaDescricoes },
+    { enabled: companyId > 0 && novaDescricoes.length > 0 && showNova }
+  );
   const scsQ = trpc.compras.listarSolicitacoes.useQuery({ companyId }, { enabled: companyId > 0 });
   const fornQ = trpc.compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: companyId > 0 });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
@@ -672,6 +684,8 @@ export default function Cotacoes() {
 
     const fornIdsNoMapa = new Set((mapa?.participantes ?? []).map((p: any) => p.fornecedorId));
     const fornDisponiveis = fornecedores.filter(f => !fornIdsNoMapa.has(f.id));
+
+    const sugestoesFiltradas = (sugestoesRecompraQ.data ?? []).filter(s => s.fornecedorId && !fornIdsNoMapa.has(s.fornecedorId));
 
     function getMelhorPrecoItem(itemId: number): number | null {
       if (!mapa || mapa.participantes.length === 0) return null;
@@ -995,6 +1009,43 @@ export default function Cotacoes() {
                         <UserPlus className="h-4 w-4" /> Adicionar
                       </Button>
                     </div>
+
+                    {sugestoesFiltradas.length > 0 && detalheFullscreen?.status === "pendente" && (
+                      <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 space-y-2">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Sugestões de recompra — fornecedores que já atenderam itens semelhantes
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {sugestoesFiltradas.map(s => {
+                            const fornCadastrado = fornecedores.find(f => f.id === s.fornecedorId);
+                            const nome = fornCadastrado?.nomeFantasia || fornCadastrado?.razaoSocial || s.fornecedorNome || `#${s.fornecedorId}`;
+                            return (
+                              <button
+                                key={s.fornecedorId}
+                                onClick={() => {
+                                  if (showDetalhe && s.fornecedorId) {
+                                    adicionarForn.mutate({ cotacaoId: showDetalhe, fornecedorId: s.fornecedorId });
+                                  }
+                                }}
+                                disabled={adicionarForn.isPending}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 bg-white text-xs font-medium text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400 transition-all"
+                              >
+                                <UserPlus className="h-3 w-3" />
+                                {nome}
+                                <span className="text-emerald-500 text-[10px] font-normal">
+                                  ({s.itensAtendidos} {s.itensAtendidos === 1 ? "item" : "itens"})
+                                </span>
+                                {s.ultimaOc && (
+                                  <span className="text-emerald-400 text-[10px] font-normal">· {s.ultimaOc}</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {(mapa?.participantes ?? []).length === 0 ? (
                       <p className="text-gray-400 text-sm text-center py-3">Nenhum fornecedor adicionado ao mapa ainda.</p>
                     ) : (
@@ -1688,6 +1739,24 @@ export default function Cotacoes() {
                     ))}
                   </SelectContent>
                 </Select>
+                {(novaSugestoesQ.data ?? []).length > 0 && (!form.fornecedorId || form.fornecedorId === "none") && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-0.5">
+                      <Sparkles className="h-2.5 w-2.5" /> Sugeridos:
+                    </span>
+                    {(novaSugestoesQ.data ?? []).slice(0, 3).map(s => {
+                      const f = fornecedores.find(f => f.id === s.fornecedorId);
+                      const nome = f?.nomeFantasia || f?.razaoSocial || s.fornecedorNome || "";
+                      return nome ? (
+                        <button key={s.fornecedorId} type="button"
+                          onClick={() => setForm(p => ({ ...p, fornecedorId: String(s.fornecedorId) }))}
+                          className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition">
+                          {nome}
+                        </button>
+                      ) : null;
+                    })}
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-gray-700 text-sm font-medium">Validade da Cotação</Label>
