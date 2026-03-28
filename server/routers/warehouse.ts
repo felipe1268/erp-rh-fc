@@ -1317,7 +1317,24 @@ REGRAS:
         .where(and(...conditions))
         .orderBy(desc(comprasOrdens.criadoEm));
 
-      return ocs;
+      const result = await Promise.all(ocs.map(async (oc) => {
+        const ocItens = await db.select().from(comprasOrdensItens)
+          .where(eq(comprasOrdensItens.ordemId, oc.id));
+        const totalItens = ocItens.length;
+        let itensEntregues = 0;
+        let itensPendentes = 0;
+        for (const it of ocItens) {
+          const qty = parseFloat(String(it.quantidade) || "0");
+          const entregue = parseFloat(String(it.quantidadeEntregue) || "0");
+          if (entregue >= qty) itensEntregues++;
+          else if (entregue > 0) itensPendentes++;
+          else itensPendentes++;
+        }
+        const pendentesReal = totalItens - itensEntregues;
+        return { ...oc, totalItens, itensEntregues, itensPendentes: pendentesReal };
+      }));
+
+      return result.filter(oc => oc.itensPendentes > 0);
     }),
 
   getOCItemsForReceiving: protectedProcedure

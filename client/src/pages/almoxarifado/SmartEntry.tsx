@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Camera, FileText, Package, X, Loader2, CheckCircle2,
@@ -70,17 +71,18 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
   const [manualQtd, setManualQtd] = useState("");
   const [manualMotivo, setManualMotivo] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   const analyzeNF = trpc.warehouse.analyzeNFPhoto.useMutation();
   const matchNFtoOC = trpc.warehouse.matchNFtoOC.useMutation();
   const registerSmartEntry = trpc.warehouse.registerSmartEntry.useMutation();
   const pendingOCs = trpc.warehouse.listPendingOCs.useQuery(
     { companyId, obraId },
-    { enabled: mode === "ordem_compra" }
+    { enabled: mode === "ordem_compra", staleTime: 0 }
   );
   const ocItems = trpc.warehouse.getOCItemsForReceiving.useQuery(
     { companyId, ordemCompraId: selectedOcId! },
-    { enabled: !!selectedOcId }
+    { enabled: !!selectedOcId, staleTime: 0 }
   );
 
   const handlePhotoCapture = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -285,6 +287,8 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
       setResultData(result);
       setStep("success");
       toast.success("Recebimento registrado!");
+      queryClient.invalidateQueries({ queryKey: [["warehouse", "listPendingOCs"]] });
+      queryClient.invalidateQueries({ queryKey: [["warehouse", "getOCItemsForReceiving"]] });
     } catch (err: any) {
       toast.error("Erro: " + (err?.message || "Tente novamente"));
     }
@@ -479,8 +483,26 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
                         <p className="font-bold text-gray-900">{oc.numeroOc}</p>
                         <p className="text-sm text-gray-600">{oc.fornecedorNome}</p>
                       </div>
-                      <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold">{oc.status}</span>
+                      <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                        oc.status === "parcial" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
+                      }`}>
+                        {oc.status === "parcial" ? "PARCIAL" : oc.status}
+                      </span>
                     </div>
+                    {oc.status === "parcial" && oc.totalItens > 0 && (
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2 text-xs text-amber-700">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>{oc.itensEntregues} de {oc.totalItens} itens entregues — faltam {oc.itensPendentes}</span>
+                        </div>
+                        <div className="mt-1 w-full bg-gray-200 rounded-full h-1.5">
+                          <div
+                            className="bg-amber-500 h-1.5 rounded-full"
+                            style={{ width: `${Math.round((oc.itensEntregues / oc.totalItens) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                     {oc.dataEntregaPrevista && (
                       <p className="text-xs text-gray-400 mt-1">Entrega prevista: {oc.dataEntregaPrevista}</p>
                     )}

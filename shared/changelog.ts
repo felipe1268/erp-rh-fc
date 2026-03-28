@@ -5667,4 +5667,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 19:15:00",
   },
+  {
+    version: 834,
+    titulo: "Recebimento parcial: controle de saldo pendente",
+    descricao: "Quando uma OC tem entrega parcial, o sistema agora mostra corretamente apenas os itens que ainda faltam receber, com as quantidades pendentes reais (descontando o que já foi entregue). A lista de OCs pendentes mostra badge 'PARCIAL' com barra de progresso indicando quantos itens já foram entregues. OCs com todos os itens entregues não aparecem mais na lista. Cache de dados é invalidado após cada recebimento para garantir dados atualizados.",
+    tipo: "melhoria",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 19:35:00",
+  },
 ];
