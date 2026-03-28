@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getCompaniesForUser } from "../db";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 import {
   fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
-  almoxarifadoCategorias, almoxarifadoUnidades,
+  almoxarifadoCategorias, almoxarifadoUnidades, almoxarifadoRecebimentos,
   comprasSolicitacoes, comprasSolicitacoesItens,
   comprasCotacoes, comprasCotacoesItens,
   comprasCotacaoFornecedores, comprasCotacaoRespostas,
@@ -27,6 +27,161 @@ import {
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
+
+async function calcScoreFornecedor(db: any, fornecedorId: number, companyId: number) {
+  const ocsRows = await db.select().from(comprasOrdens)
+    .where(and(
+      eq(comprasOrdens.companyId, companyId),
+      eq(comprasOrdens.fornecedorId, fornecedorId),
+    ));
+
+  const totalOCs = ocsRows.length;
+  let ocsPontuais = 0;
+  let ocsComData = 0;
+  let totalValorOCs = 0;
+
+  for (const oc of ocsRows) {
+    totalValorOCs += n(oc.total);
+    if (oc.dataEntregaPrevista && oc.dataEntregaReal) {
+      ocsComData++;
+      if (new Date(oc.dataEntregaReal) <= new Date(oc.dataEntregaPrevista)) ocsPontuais++;
+    } else if (oc.dataEntregaPrevista && !oc.dataEntregaReal && oc.status === "entregue") {
+      ocsComData++;
+      ocsPontuais++;
+    }
+  }
+  const taxaPontualidade = ocsComData > 0 ? ocsPontuais / ocsComData : 1;
+
+  const companyCotIds = await db.select({ id: comprasCotacoes.id })
+    .from(comprasCotacoes).where(eq(comprasCotacoes.companyId, companyId));
+  const cotIdSet = new Set(companyCotIds.map((c: any) => c.id));
+
+  const cotacoesParticipadas = cotIdSet.size > 0
+    ? await db.select({
+        cotacaoId: comprasCotacaoFornecedores.cotacaoId,
+        totalOrcado: comprasCotacaoFornecedores.totalOrcado,
+        selecionado: comprasCotacaoFornecedores.selecionado,
+        prazoEntregaDias: comprasCotacaoFornecedores.prazoEntregaDias,
+      }).from(comprasCotacaoFornecedores)
+        .where(and(
+          eq(comprasCotacaoFornecedores.fornecedorId, fornecedorId),
+          inArray(comprasCotacaoFornecedores.cotacaoId, [...cotIdSet]),
+        ))
+    : [];
+
+  let cotacoesVencidas = 0;
+  let cotacoesComPreco = 0;
+  let melhorPrecoCount = 0;
+  let cotacoesComPrazo = 0;
+  let melhorPrazoCount = 0;
+
+  if (cotacoesParticipadas.length > 0) {
+    const participatedCotIds = [...new Set(cotacoesParticipadas.map((cp: any) => cp.cotacaoId))];
+    const allPartRows = await db.select({
+      cotacaoId: comprasCotacaoFornecedores.cotacaoId,
+      fornecedorId: comprasCotacaoFornecedores.fornecedorId,
+      totalOrcado: comprasCotacaoFornecedores.totalOrcado,
+      prazoEntregaDias: comprasCotacaoFornecedores.prazoEntregaDias,
+    }).from(comprasCotacaoFornecedores)
+      .where(inArray(comprasCotacaoFornecedores.cotacaoId, participatedCotIds));
+
+    const minPriceByCot: Record<number, number> = {};
+    const minPrazoByCot: Record<number, number> = {};
+    for (const row of allPartRows) {
+      const v = n(row.totalOrcado);
+      if (v > 0 && (!(row.cotacaoId in minPriceByCot) || v < minPriceByCot[row.cotacaoId])) {
+        minPriceByCot[row.cotacaoId] = v;
+      }
+      const prazo = row.prazoEntregaDias ?? 0;
+      if (prazo > 0 && (!(row.cotacaoId in minPrazoByCot) || prazo < minPrazoByCot[row.cotacaoId])) {
+        minPrazoByCot[row.cotacaoId] = prazo;
+      }
+    }
+
+    for (const cp of cotacoesParticipadas) {
+      const totalForn = n(cp.totalOrcado);
+      if (totalForn > 0) {
+        cotacoesComPreco++;
+        if (cp.selecionado) cotacoesVencidas++;
+        if (totalForn <= (minPriceByCot[cp.cotacaoId] ?? Infinity)) melhorPrecoCount++;
+      }
+      const prazo = cp.prazoEntregaDias ?? 0;
+      if (prazo > 0) {
+        cotacoesComPrazo++;
+        if (prazo <= (minPrazoByCot[cp.cotacaoId] ?? Infinity)) melhorPrazoCount++;
+      }
+    }
+  }
+  const taxaCompetitividade = cotacoesComPreco > 0 ? melhorPrecoCount / cotacoesComPreco : 0;
+  const taxaPrazoEntrega = cotacoesComPrazo > 0 ? melhorPrazoCount / cotacoesComPrazo : 0;
+
+  const avaliacoesRows = await db.select({
+      nota: avaliacoesFornecedor.nota,
+      comentario: avaliacoesFornecedor.comentario,
+      criadoEm: avaliacoesFornecedor.criadoEm,
+    })
+    .from(avaliacoesFornecedor)
+    .where(and(
+      eq(avaliacoesFornecedor.fornecedorId, fornecedorId),
+      eq(avaliacoesFornecedor.companyId, companyId),
+    ))
+    .orderBy(desc(avaliacoesFornecedor.criadoEm));
+  const mediaAvaliacoes = avaliacoesRows.length > 0
+    ? avaliacoesRows.reduce((s: number, r: any) => s + r.nota, 0) / avaliacoesRows.length
+    : 0;
+  const totalAvaliacoes = avaliacoesRows.length;
+  const ultimasAvaliacoes = avaliacoesRows.slice(0, 5).map((a: any) => ({
+    nota: a.nota,
+    comentario: a.comentario,
+    criadoEm: a.criadoEm,
+  }));
+
+  const ocIds = ocsRows.map((oc: any) => oc.id);
+  let totalRecebimentos = 0;
+  let totalDivergencias = 0;
+  if (ocIds.length > 0) {
+    const recebimentosRows = await db.select({
+      temDivergencia: almoxarifadoRecebimentos.temDivergencia,
+    }).from(almoxarifadoRecebimentos)
+      .where(and(
+        eq(almoxarifadoRecebimentos.companyId, companyId),
+        inArray(almoxarifadoRecebimentos.ordemCompraId, ocIds),
+      ));
+    totalRecebimentos = recebimentosRows.length;
+    totalDivergencias = recebimentosRows.filter((r: any) => r.temDivergencia).length;
+  }
+  const taxaSemDivergencia = totalRecebimentos > 0
+    ? (totalRecebimentos - totalDivergencias) / totalRecebimentos
+    : 1;
+
+  let score = 0;
+  score += taxaPontualidade * 5 * 0.25;
+  score += taxaCompetitividade * 5 * 0.20;
+  score += taxaSemDivergencia * 5 * 0.15;
+  score += taxaPrazoEntrega * 5 * 0.15;
+  score += (totalAvaliacoes > 0 ? mediaAvaliacoes : 3) * 0.15;
+  score += Math.min(totalOCs / 10, 1) * 5 * 0.10;
+  score = Math.round(Math.min(score, 5) * 10) / 10;
+
+  return {
+    score,
+    totalOCs,
+    totalValorOCs,
+    taxaPontualidade: Math.round(taxaPontualidade * 100),
+    ocsComData,
+    ocsPontuais,
+    cotacoesParticipadas: cotacoesParticipadas.length,
+    cotacoesVencidas,
+    taxaCompetitividade: Math.round(taxaCompetitividade * 100),
+    taxaPrazoEntrega: Math.round(taxaPrazoEntrega * 100),
+    mediaAvaliacoes: totalAvaliacoes > 0 ? Math.round(mediaAvaliacoes * 10) / 10 : null,
+    totalAvaliacoes,
+    totalDivergencias,
+    totalRecebimentos,
+    taxaSemDivergencia: Math.round(taxaSemDivergencia * 100),
+    ultimasAvaliacoes,
+  };
+}
 
 export const comprasRouter = router({
 
@@ -3674,5 +3829,148 @@ Responda APENAS com um objeto JSON no formato:
         .map(({ descVistas, ...rest }) => rest)
         .sort((a, b) => b.itensAtendidos - a.itensAtendidos)
         .slice(0, 5);
+    }),
+
+  scoreFornecedor: protectedProcedure
+    .input(z.object({ fornecedorId: z.number(), companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowed.some((c: any) => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      }
+      const db = await getDb();
+      const scoreData = await calcScoreFornecedor(db, input.fornecedorId, input.companyId);
+      return scoreData;
+    }),
+
+  scoresFornecedoresLote: protectedProcedure
+    .input(z.object({ fornecedorIds: z.array(z.number()), companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowed.some((c: any) => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      }
+      if (input.fornecedorIds.length === 0) return {};
+      const db = await getDb();
+      const { companyId } = input;
+
+      const allOcs = await db.select().from(comprasOrdens)
+        .where(and(
+          eq(comprasOrdens.companyId, companyId),
+          inArray(comprasOrdens.fornecedorId, input.fornecedorIds),
+        ));
+
+      const companyCotIds = await db.select({ id: comprasCotacoes.id })
+        .from(comprasCotacoes).where(eq(comprasCotacoes.companyId, companyId));
+      const cotIdSet = new Set(companyCotIds.map(c => c.id));
+
+      const allCotPart = cotIdSet.size > 0
+        ? await db.select({
+            cotacaoId: comprasCotacaoFornecedores.cotacaoId,
+            fornecedorId: comprasCotacaoFornecedores.fornecedorId,
+            totalOrcado: comprasCotacaoFornecedores.totalOrcado,
+            selecionado: comprasCotacaoFornecedores.selecionado,
+            prazoEntregaDias: comprasCotacaoFornecedores.prazoEntregaDias,
+          }).from(comprasCotacaoFornecedores)
+            .where(inArray(comprasCotacaoFornecedores.cotacaoId, [...cotIdSet]))
+        : [];
+
+      const minPriceByCot: Record<number, number> = {};
+      const minPrazoByCot: Record<number, number> = {};
+      for (const cp of allCotPart) {
+        const v = n(cp.totalOrcado);
+        if (v > 0 && (!(cp.cotacaoId in minPriceByCot) || v < minPriceByCot[cp.cotacaoId])) {
+          minPriceByCot[cp.cotacaoId] = v;
+        }
+        const prazo = cp.prazoEntregaDias ?? 0;
+        if (prazo > 0 && (!(cp.cotacaoId in minPrazoByCot) || prazo < minPrazoByCot[cp.cotacaoId])) {
+          minPrazoByCot[cp.cotacaoId] = prazo;
+        }
+      }
+
+      const allAvals = await db.select({ fornecedorId: avaliacoesFornecedor.fornecedorId, nota: avaliacoesFornecedor.nota })
+        .from(avaliacoesFornecedor)
+        .where(and(
+          eq(avaliacoesFornecedor.companyId, companyId),
+          inArray(avaliacoesFornecedor.fornecedorId, input.fornecedorIds),
+        ));
+
+      const allOcIds = allOcs.map(oc => oc.id);
+      const allRecebimentos = allOcIds.length > 0
+        ? await db.select({
+            ordemCompraId: almoxarifadoRecebimentos.ordemCompraId,
+            temDivergencia: almoxarifadoRecebimentos.temDivergencia,
+          }).from(almoxarifadoRecebimentos)
+            .where(and(
+              eq(almoxarifadoRecebimentos.companyId, companyId),
+              inArray(almoxarifadoRecebimentos.ordemCompraId, allOcIds),
+            ))
+        : [];
+
+      const result: Record<number, { score: number; totalOCs: number; taxaPontualidade: number; taxaCompetitividade: number; totalAvaliacoes: number; mediaAvaliacoes: number | null }> = {};
+
+      for (const fornecedorId of input.fornecedorIds) {
+        const ocs = allOcs.filter(o => o.fornecedorId === fornecedorId);
+        const totalOCs = ocs.length;
+        let ocsPontuais = 0, ocsComData = 0;
+        for (const oc of ocs) {
+          if (oc.dataEntregaPrevista && oc.dataEntregaReal) {
+            ocsComData++;
+            if (new Date(oc.dataEntregaReal) <= new Date(oc.dataEntregaPrevista)) ocsPontuais++;
+          } else if (oc.dataEntregaPrevista && !oc.dataEntregaReal && oc.status === "entregue") {
+            ocsComData++;
+            ocsPontuais++;
+          }
+        }
+        const taxaPontualidade = ocsComData > 0 ? ocsPontuais / ocsComData : 1;
+
+        const cotPart = allCotPart.filter(cp => cp.fornecedorId === fornecedorId);
+        let cotacoesComPreco = 0, melhorPrecoCount = 0;
+        let cotacoesComPrazo = 0, melhorPrazoCount = 0;
+        for (const cp of cotPart) {
+          const v = n(cp.totalOrcado);
+          if (v > 0) {
+            cotacoesComPreco++;
+            if (v <= (minPriceByCot[cp.cotacaoId] ?? Infinity)) melhorPrecoCount++;
+          }
+          const prazo = cp.prazoEntregaDias ?? 0;
+          if (prazo > 0) {
+            cotacoesComPrazo++;
+            if (prazo <= (minPrazoByCot[cp.cotacaoId] ?? Infinity)) melhorPrazoCount++;
+          }
+        }
+        const taxaCompetitividade = cotacoesComPreco > 0 ? melhorPrecoCount / cotacoesComPreco : 0;
+        const taxaPrazoEntrega = cotacoesComPrazo > 0 ? melhorPrazoCount / cotacoesComPrazo : 0;
+
+        const avals = allAvals.filter(a => a.fornecedorId === fornecedorId);
+        const mediaAvaliacoes = avals.length > 0 ? avals.reduce((s, r) => s + r.nota, 0) / avals.length : 0;
+        const totalAvaliacoes = avals.length;
+
+        const ocIdsForSupplier = ocs.map(oc => oc.id);
+        const recebForSupplier = allRecebimentos.filter(r => ocIdsForSupplier.includes(r.ordemCompraId));
+        const totalRecebimentos = recebForSupplier.length;
+        const totalDivergencias = recebForSupplier.filter(r => r.temDivergencia).length;
+        const taxaSemDiv = totalRecebimentos > 0 ? (totalRecebimentos - totalDivergencias) / totalRecebimentos : 1;
+
+        let score = 0;
+        score += taxaPontualidade * 5 * 0.25;
+        score += taxaCompetitividade * 5 * 0.20;
+        score += taxaSemDiv * 5 * 0.15;
+        score += taxaPrazoEntrega * 5 * 0.15;
+        score += (totalAvaliacoes > 0 ? mediaAvaliacoes : 3) * 0.15;
+        score += Math.min(totalOCs / 10, 1) * 5 * 0.10;
+        score = Math.round(Math.min(score, 5) * 10) / 10;
+
+        result[fornecedorId] = {
+          score,
+          totalOCs,
+          taxaPontualidade: Math.round(taxaPontualidade * 100),
+          taxaCompetitividade: Math.round(taxaCompetitividade * 100),
+          totalAvaliacoes,
+          mediaAvaliacoes: totalAvaliacoes > 0 ? Math.round(mediaAvaliacoes * 10) / 10 : null,
+        };
+      }
+
+      return result;
     }),
 });

@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import {
   Search, Plus, Pencil, Building2, Phone, Mail, MapPin,
   CheckCircle2, XCircle, AlertTriangle, Loader2, X, ChevronDown, ChevronUp, Users,
-  Star, Trophy, Medal,
+  Star, Trophy, Medal, ShieldCheck, ShieldAlert, TrendingUp, Package, Clock, BarChart3, Truck,
 } from "lucide-react";
 
 function StarRating({ value, onChange, size = 18 }: { value: number; onChange?: (v: number) => void; size?: number }) {
@@ -34,6 +34,153 @@ function StarRating({ value, onChange, size = 18 }: { value: number; onChange?: 
           onClick={() => onChange && onChange(i)}
         />
       ))}
+    </div>
+  );
+}
+
+function ScoreStars({ score, size = 14 }: { score: number; size?: number }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => {
+        const filled = score >= i;
+        const half = !filled && score >= i - 0.5;
+        return (
+          <Star
+            key={i}
+            style={{ width: size, height: size }}
+            className={`${filled ? 'text-amber-400 fill-amber-400' : half ? 'text-amber-400 fill-amber-200' : 'text-slate-200 fill-slate-200'}`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function DesempenhoFornecedor({ fornecedorId, companyId }: { fornecedorId: number; companyId: number }) {
+  const { data: score, isLoading } = trpc.compras.scoreFornecedor.useQuery(
+    { fornecedorId, companyId },
+    { enabled: fornecedorId > 0 && companyId > 0 }
+  );
+
+  if (isLoading) return <div className="flex items-center gap-2 py-3"><Loader2 className="h-4 w-4 animate-spin text-blue-400" /><span className="text-xs text-slate-400">Calculando desempenho...</span></div>;
+  if (!score) return <p className="text-xs text-slate-400 py-2">Sem dados de desempenho</p>;
+
+  const isRecomendado = score.score >= 4.0 && score.totalOCs >= 1;
+  const isAtencao = score.score > 0 && score.score < 2.5 && score.totalOCs >= 1;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <ScoreStars score={score.score} size={16} />
+          <span className="text-sm font-bold text-slate-800">{score.score}/5</span>
+        </div>
+        {isRecomendado && (
+          <span className="flex items-center gap-1 text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+            <ShieldCheck className="h-3 w-3" />Recomendado
+          </span>
+        )}
+        {isAtencao && (
+          <span className="flex items-center gap-1 text-[10px] font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full border border-red-200">
+            <ShieldAlert className="h-3 w-3" />Atenção
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="bg-slate-50 rounded-lg p-2.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Package className="h-3 w-3 text-blue-500" />
+            <span className="text-[10px] text-slate-400 uppercase font-medium">OCs Atendidas</span>
+          </div>
+          <p className="text-lg font-bold text-slate-800">{score.totalOCs}</p>
+          <p className="text-[10px] text-slate-400">
+            {score.totalValorOCs > 0 && `Total: ${score.totalValorOCs.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+          </p>
+        </div>
+
+        <div className="bg-slate-50 rounded-lg p-2.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Clock className="h-3 w-3 text-emerald-500" />
+            <span className="text-[10px] text-slate-400 uppercase font-medium">Pontualidade</span>
+          </div>
+          <p className={`text-lg font-bold ${score.taxaPontualidade >= 80 ? "text-emerald-600" : score.taxaPontualidade >= 50 ? "text-amber-600" : "text-red-600"}`}>
+            {score.taxaPontualidade}%
+          </p>
+          <p className="text-[10px] text-slate-400">
+            {score.ocsPontuais}/{score.ocsComData} no prazo
+          </p>
+        </div>
+
+        <div className="bg-slate-50 rounded-lg p-2.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <TrendingUp className="h-3 w-3 text-purple-500" />
+            <span className="text-[10px] text-slate-400 uppercase font-medium">Competitividade</span>
+          </div>
+          <p className={`text-lg font-bold ${score.taxaCompetitividade >= 50 ? "text-emerald-600" : "text-amber-600"}`}>
+            {score.taxaCompetitividade}%
+          </p>
+          <p className="text-[10px] text-slate-400">
+            {score.cotacoesParticipadas} cotações · {score.cotacoesVencidas} vencida{score.cotacoesVencidas !== 1 ? "s" : ""}
+          </p>
+        </div>
+
+        <div className="bg-slate-50 rounded-lg p-2.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Truck className="h-3 w-3 text-cyan-500" />
+            <span className="text-[10px] text-slate-400 uppercase font-medium">Prazo Entrega</span>
+          </div>
+          <p className={`text-lg font-bold ${score.taxaPrazoEntrega >= 50 ? "text-emerald-600" : "text-amber-600"}`}>
+            {score.taxaPrazoEntrega}%
+          </p>
+          <p className="text-[10px] text-slate-400">
+            melhor prazo oferecido
+          </p>
+        </div>
+
+        <div className="bg-slate-50 rounded-lg p-2.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Star className="h-3 w-3 text-amber-500" />
+            <span className="text-[10px] text-slate-400 uppercase font-medium">Avaliações</span>
+          </div>
+          <p className="text-lg font-bold text-slate-800">
+            {score.mediaAvaliacoes !== null ? score.mediaAvaliacoes : "—"}
+          </p>
+          <p className="text-[10px] text-slate-400">
+            {score.totalAvaliacoes} avaliação{score.totalAvaliacoes !== 1 ? "ões" : ""}
+          </p>
+        </div>
+      </div>
+
+      {score.totalDivergencias > 0 && (
+        <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          {score.totalDivergencias} recebimento{score.totalDivergencias !== 1 ? "s" : ""} com divergência · {score.taxaSemDivergencia}% sem problemas ({score.totalRecebimentos} recebimento{score.totalRecebimentos !== 1 ? "s" : ""})
+        </div>
+      )}
+
+      {score.ultimasAvaliacoes && score.ultimasAvaliacoes.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[10px] text-slate-400 uppercase font-medium tracking-wide">Últimas Avaliações</p>
+          <div className="space-y-1.5">
+            {score.ultimasAvaliacoes.map((av: { nota: number; comentario: string | null; criadoEm: string }, idx: number) => (
+              <div key={idx} className="flex items-start gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Star key={i} className={`h-3 w-3 ${i <= av.nota ? "text-amber-400 fill-amber-400" : "text-slate-200"}`} />
+                  ))}
+                </div>
+                <div className="flex-1 min-w-0">
+                  {av.comentario && <p className="text-xs text-slate-600 leading-relaxed">{av.comentario}</p>}
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    {new Date(av.criadoEm).toLocaleDateString("pt-BR")}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -436,28 +583,38 @@ export default function Fornecedores() {
 
                 {/* Detalhe expandido */}
                 {detalheId === f.id && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                  <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
                     <div>
-                      <p className="text-slate-400 font-medium uppercase tracking-wide mb-1">Contato Comercial</p>
-                      <p className="text-slate-700">{f.contatoNome || "—"}</p>
-                      <p className="text-slate-500">{f.contatoCelular || ""}</p>
-                      <p className="text-slate-500">{f.contatoEmail || ""}</p>
+                      <div className="flex items-center gap-2 mb-3">
+                        <BarChart3 className="h-4 w-4 text-blue-500" />
+                        <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Desempenho</p>
+                      </div>
+                      <DesempenhoFornecedor fornecedorId={f.id} companyId={companyId} />
                     </div>
-                    <div>
-                      <p className="text-slate-400 font-medium uppercase tracking-wide mb-1">Endereço</p>
-                      <p className="text-slate-700">{[f.endereco, f.numero, f.complemento].filter(Boolean).join(", ") || "—"}</p>
-                      <p className="text-slate-500">{f.bairro || ""}</p>
-                      <p className="text-slate-500">{f.cep ? `CEP ${f.cep}` : ""}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400 font-medium uppercase tracking-wide mb-1">Dados Bancários</p>
-                      <p className="text-slate-700">{f.banco || "—"}</p>
-                      {f.agencia && <p className="text-slate-500">Ag. {f.agencia} / C. {f.conta}</p>}
-                      {f.pix && <p className="text-slate-500">PIX: {f.pix}</p>}
-                    </div>
-                    <div>
-                      <p className="text-slate-400 font-medium uppercase tracking-wide mb-1">Observações</p>
-                      <p className="text-slate-700">{f.observacoes || "—"}</p>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs pt-3 border-t border-slate-100">
+                      <div>
+                        <p className="text-slate-400 font-medium uppercase tracking-wide mb-1">Contato Comercial</p>
+                        <p className="text-slate-700">{f.contatoNome || "—"}</p>
+                        <p className="text-slate-500">{f.contatoCelular || ""}</p>
+                        <p className="text-slate-500">{f.contatoEmail || ""}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 font-medium uppercase tracking-wide mb-1">Endereço</p>
+                        <p className="text-slate-700">{[f.endereco, f.numero, f.complemento].filter(Boolean).join(", ") || "—"}</p>
+                        <p className="text-slate-500">{f.bairro || ""}</p>
+                        <p className="text-slate-500">{f.cep ? `CEP ${f.cep}` : ""}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 font-medium uppercase tracking-wide mb-1">Dados Bancários</p>
+                        <p className="text-slate-700">{f.banco || "—"}</p>
+                        {f.agencia && <p className="text-slate-500">Ag. {f.agencia} / C. {f.conta}</p>}
+                        {f.pix && <p className="text-slate-500">PIX: {f.pix}</p>}
+                      </div>
+                      <div>
+                        <p className="text-slate-400 font-medium uppercase tracking-wide mb-1">Observações</p>
+                        <p className="text-slate-700">{f.observacoes || "—"}</p>
+                      </div>
                     </div>
                   </div>
                 )}

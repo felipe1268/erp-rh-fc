@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -501,6 +501,11 @@ export default function Cotacoes() {
   const novaSugestoesQ = trpc.compras.getSugestoesFornecedoresRecompra.useQuery(
     { companyId, descricoes: novaDescricoes },
     { enabled: companyId > 0 && novaDescricoes.length > 0 && showNova }
+  );
+  const mapaFornIds = (mapaQ.data?.participantes ?? []).map((p: any) => p.fornecedorId);
+  const scoresQ = trpc.compras.scoresFornecedoresLote.useQuery(
+    { fornecedorIds: mapaFornIds, companyId },
+    { enabled: mapaFornIds.length > 0 && abaAtiva === "mapa" }
   );
   const scsQ = trpc.compras.listarSolicitacoes.useQuery({ companyId }, { enabled: companyId > 0 });
   const fornQ = trpc.compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: companyId > 0 });
@@ -1069,11 +1074,31 @@ export default function Cotacoes() {
                         {(mapa?.participantes ?? []).map((p: any) => {
                           const nome = p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`;
                           const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
+                          const sc = scoresQ.data?.[p.fornecedorId];
+                          const scoreVal = sc?.score ?? 0;
+                          const isRecomendado = scoreVal >= 4.0 && sc && sc.totalOCs >= 1;
+                          const isAtencao = scoreVal > 0 && scoreVal < 2.5 && sc && sc.totalOCs >= 1;
                           return (
                             <div key={p.fornecedorId} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium ${isMelhor ? "bg-emerald-50 border-emerald-300 text-emerald-700" : p.selecionado ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-gray-100 border-gray-300 text-gray-700"}`}>
                               {isMelhor && <Trophy className="h-3 w-3" />}
                               {nome}
                               <FornecedorContatoPopover fornecedor={p.fornecedor} />
+                              {sc && scoreVal > 0 && (
+                                <span className="flex items-center gap-0.5 text-[10px] font-semibold" title={`Score: ${scoreVal}/5`}>
+                                  <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                                  {scoreVal}
+                                </span>
+                              )}
+                              {isRecomendado && (
+                                <span className="flex items-center gap-0.5 text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full border border-emerald-200">
+                                  <ShieldCheck className="h-2.5 w-2.5" />Recomendado
+                                </span>
+                              )}
+                              {isAtencao && (
+                                <span className="flex items-center gap-0.5 text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full border border-red-200">
+                                  <ShieldAlert className="h-2.5 w-2.5" />Atenção
+                                </span>
+                              )}
                               {parseFloat(p.totalOrcado ?? "0") > 0 && <span className="font-normal text-xs opacity-70">· {parseFloat(p.totalOrcado).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
                               <button onClick={() => removerForn.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId })} className="ml-1 hover:text-red-500 transition-colors"><X className="h-3 w-3" /></button>
                             </div>
@@ -1201,6 +1226,10 @@ export default function Cotacoes() {
                               {(mapa?.participantes ?? []).map((p: any) => {
                                 const nome = p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`;
                                 const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
+                                const sc = scoresQ.data?.[p.fornecedorId];
+                                const scoreVal = sc?.score ?? 0;
+                                const isRecomendado = scoreVal >= 4.0 && sc && sc.totalOCs >= 1;
+                                const isAtencao = scoreVal > 0 && scoreVal < 2.5 && sc && sc.totalOCs >= 1;
                                 return (
                                   <th key={p.fornecedorId} colSpan={3} className={`text-center text-xs font-semibold uppercase px-2 py-2 border-r border-gray-200 ${isMelhor ? "text-emerald-700 bg-emerald-50/60" : "text-gray-500"}`}>
                                     <div className="flex flex-col items-center gap-1">
@@ -1209,6 +1238,24 @@ export default function Cotacoes() {
                                         <FornecedorContatoPopover fornecedor={p.fornecedor}>
                                           <button type="button" className="hover:underline hover:text-blue-600 transition-colors cursor-pointer">{nome}</button>
                                         </FornecedorContatoPopover>
+                                        {sc && scoreVal > 0 && (
+                                          <span className="flex items-center gap-0.5 text-[10px] font-bold normal-case" title={`Score: ${scoreVal}/5 · OCs: ${sc.totalOCs} · Pontualidade: ${sc.taxaPontualidade}%`}>
+                                            <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                                            {scoreVal}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {isRecomendado && (
+                                        <span className="flex items-center gap-0.5 text-[9px] normal-case font-semibold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full border border-emerald-200">
+                                          <ShieldCheck className="h-2.5 w-2.5" />Recomendado
+                                        </span>
+                                      )}
+                                      {isAtencao && (
+                                        <span className="flex items-center gap-0.5 text-[9px] normal-case font-semibold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full border border-red-200">
+                                          <ShieldAlert className="h-2.5 w-2.5" />Atenção
+                                        </span>
+                                      )}
+                                      <div className="flex items-center gap-1">
                                         {(p as any).arquivoUrl ? (
                                           <a href={(p as any).arquivoUrl} target="_blank" rel="noreferrer" className="ml-1 text-blue-500 hover:text-blue-700" title="Ver cotação anexada">
                                             <ExternalLink className="h-3 w-3" />
