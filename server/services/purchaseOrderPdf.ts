@@ -445,26 +445,25 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  // ASSINATURAS + RODAPÉ (na MESMA página do conteúdo, sem página extra)
+  // ASSINATURAS (fixas no rodapé da última página de conteúdo)
   // ══════════════════════════════════════════════════════════════════════
-  y += 20;
+  const sigY = pageH - 75;
   const sigW = (cW - 60) / 2;
 
-  doc.strokeColor(dark).lineWidth(0.5).moveTo(mL, y).lineTo(mL + sigW, y).stroke();
+  doc.strokeColor(dark).lineWidth(0.5).moveTo(mL, sigY).lineTo(mL + sigW, sigY).stroke();
   doc.font("Helvetica").fontSize(7.5).fillColor(dark)
-    .text("Responsável pela Compra", mL, y + 5, { width: sigW, align: "center" });
+    .text("Responsável pela Compra", mL, sigY + 5, { width: sigW, align: "center" });
 
-  doc.strokeColor(dark).lineWidth(0.5).moveTo(pageW - mR - sigW, y).lineTo(pageW - mR, y).stroke();
+  doc.strokeColor(dark).lineWidth(0.5).moveTo(pageW - mR - sigW, sigY).lineTo(pageW - mR, sigY).stroke();
   doc.font("Helvetica").fontSize(7.5).fillColor(dark)
-    .text("Aprovação", pageW - mR - sigW, y + 5, { width: sigW, align: "center" });
+    .text("Aprovação", pageW - mR - sigW, sigY + 5, { width: sigW, align: "center" });
 
-  y += 20;
-  drawHLine(y, borderColor, 0.3);
-  y += 5;
+  const footerY = pageH - 30;
+  drawHLine(footerY - 3, borderColor, 0.3);
   doc.font("Helvetica").fontSize(6).fillColor(midGray)
     .text(
       `Documento gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")} — ${company?.razaoSocial || "FC Engenharia"}`,
-      mL, y, { width: cW, align: "center" }
+      mL, footerY, { width: cW, align: "center" }
     );
 
   return doc;
