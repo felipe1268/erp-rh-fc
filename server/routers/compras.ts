@@ -23,8 +23,8 @@ import {
   financialEntries, financialAccounts,
   purchaseAccountsPayable,
   almoxarifadoNotificacoes,
+  purchaseOrders, purchaseRequests, purchaseQuotations,
 } from "../../drizzle/schema";
-import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -4017,5 +4017,198 @@ Responda APENAS com um objeto JSON no formato:
       }
 
       return result;
+    }),
+
+  dashboardPorObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      periodoInicio: z.string().optional(),
+      periodoFim: z.string().optional(),
+      statusFiltro: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+
+      const obrasAtivas = await db.select().from(obras)
+        .where(and(
+          eq(obras.companyId, input.companyId),
+          eq(obras.isActive, 1),
+        ))
+        .orderBy(asc(obras.nome));
+
+      const result = await Promise.all(obrasAtivas.map(async (obra) => {
+        const orcs = await db.select().from(orcamentos)
+          .where(and(
+            eq(orcamentos.companyId, input.companyId),
+            eq(orcamentos.obraId, obra.id),
+          ));
+        const totalOrcado = orcs.reduce((s, o) => s + n(o.totalMeta), 0);
+
+        const ocConditions: any[] = [
+          eq(comprasOrdens.companyId, input.companyId),
+          eq(comprasOrdens.obraId, obra.id),
+        ];
+        if (input.periodoInicio) ocConditions.push(gte(comprasOrdens.criadoEm, input.periodoInicio));
+        if (input.periodoFim) ocConditions.push(lte(comprasOrdens.criadoEm, input.periodoFim));
+
+        const ocsLegacy = await db.select().from(comprasOrdens)
+          .where(and(...ocConditions));
+
+        const poConditions: any[] = [
+          eq(purchaseOrders.companyId, input.companyId),
+          eq(purchaseOrders.obraId, obra.id),
+        ];
+        if (input.periodoInicio) poConditions.push(gte(purchaseOrders.createdAt, input.periodoInicio));
+        if (input.periodoFim) poConditions.push(lte(purchaseOrders.createdAt, input.periodoFim));
+
+        const ocsV2 = await db.select().from(purchaseOrders)
+          .where(and(...poConditions));
+
+        const allOCs = [
+          ...ocsLegacy.map((o: any) => ({
+            id: o.id,
+            numero: o.numeroOc || `OC-${o.id}`,
+            status: o.status,
+            valor: n(o.total),
+            fornecedor: o.fornecedorNome,
+            data: o.criadoEm,
+            source: "legacy" as const,
+          })),
+          ...ocsV2.map((o: any) => ({
+            id: o.id,
+            numero: o.numero || `OC-${o.id}`,
+            status: o.status,
+            valor: n(o.valorTotal),
+            fornecedor: o.supplierNome,
+            data: o.createdAt,
+            source: "v2" as const,
+          })),
+        ];
+
+        const statusAprovadas = ["aprovada", "emitida", "em_entrega", "recebido", "entregue", "parcial"];
+        const statusCancelada = ["cancelada"];
+
+        let totalComprado = 0;
+        let totalOCsAtivas = 0;
+        allOCs.forEach(oc => {
+          if (statusAprovadas.includes(oc.status)) {
+            totalComprado += oc.valor;
+            totalOCsAtivas++;
+          }
+        });
+
+        const scConditions: any[] = [
+          eq(purchaseRequests.companyId, input.companyId),
+          eq(purchaseRequests.obraId, obra.id),
+        ];
+        if (input.periodoInicio) scConditions.push(gte(purchaseRequests.createdAt, input.periodoInicio));
+        if (input.periodoFim) scConditions.push(lte(purchaseRequests.createdAt, input.periodoFim));
+        const scs = await db.select().from(purchaseRequests)
+          .where(and(...scConditions));
+
+        const scIds = scs.map(sc => sc.id);
+
+        let cotacoesPendentes: any[] = [];
+        let totalEmCotacao = 0;
+        if (scIds.length > 0) {
+          const cotConditions: any[] = [
+            eq(purchaseQuotations.companyId, input.companyId),
+            inArray(purchaseQuotations.solicitacaoId, scIds),
+          ];
+          if (input.periodoInicio) cotConditions.push(gte(purchaseQuotations.createdAt, input.periodoInicio));
+          if (input.periodoFim) cotConditions.push(lte(purchaseQuotations.createdAt, input.periodoFim));
+          cotacoesPendentes = await db.select().from(purchaseQuotations)
+            .where(and(...cotConditions));
+
+          const cotacoesAbertas = cotacoesPendentes.filter((c: any) => c.status === "aberta" || c.status === "pendente");
+          const scIdsContados = new Set<number>();
+          for (const cot of cotacoesAbertas) {
+            if (cot.solicitacaoId && !scIdsContados.has(cot.solicitacaoId)) {
+              const sc = scs.find(s => s.id === cot.solicitacaoId);
+              if (sc) {
+                totalEmCotacao += n(sc.valorEstimadoTotal);
+                scIdsContados.add(cot.solicitacaoId);
+              }
+            }
+          }
+        }
+
+        const legacyCotConditions: any[] = [
+          eq(comprasCotacoes.companyId, input.companyId),
+          eq(comprasCotacoes.obraId, obra.id),
+        ];
+        if (input.periodoInicio) legacyCotConditions.push(gte(comprasCotacoes.criadoEm, input.periodoInicio));
+        if (input.periodoFim) legacyCotConditions.push(lte(comprasCotacoes.criadoEm, input.periodoFim));
+        const legacyCots = await db.select().from(comprasCotacoes)
+          .where(and(...legacyCotConditions));
+        const legacyCotsPendentes = legacyCots.filter((c: any) =>
+          c.status === "aberta" || c.status === "em_andamento" || c.status === "pendente"
+        );
+        for (const c of legacyCotsPendentes) {
+          totalEmCotacao += n(c.total);
+        }
+
+        const saldoDisponivel = totalOrcado - totalComprado;
+        const percentualExecucao = totalOrcado > 0 ? (totalComprado / totalOrcado) * 100 : 0;
+        const alertaSaldo = totalOrcado > 0 && (saldoDisponivel / totalOrcado) < 0.10;
+
+        return {
+          obra: {
+            id: obra.id,
+            nome: obra.nome,
+            codigo: obra.codigo,
+            status: obra.status,
+            cliente: obra.cliente,
+          },
+          totalOrcado,
+          totalComprado,
+          totalEmCotacao,
+          saldoDisponivel,
+          percentualExecucao: Math.min(percentualExecucao, 100),
+          alertaSaldo,
+          totalOCs: allOCs.length,
+          totalOCsAtivas,
+          totalSCs: scs.length,
+          totalCotacoes: cotacoesPendentes.length + legacyCots.length,
+          ocs: allOCs,
+          scs: scs.map((sc: any) => ({
+            id: sc.id,
+            status: sc.status,
+            tipo: sc.tipo,
+            valorEstimado: n(sc.valorEstimadoTotal),
+            solicitante: sc.solicitanteNome,
+            data: sc.createdAt,
+            emergencial: sc.emergencial === 1,
+          })),
+          cotacoes: [
+            ...cotacoesPendentes.map((c: any) => ({
+              id: c.id,
+              status: c.status,
+              comprador: c.compradorNome,
+              validadeAte: c.validadeAte,
+              data: c.createdAt,
+              source: "v2" as const,
+            })),
+            ...legacyCots.map((c: any) => ({
+              id: c.id,
+              status: c.status,
+              comprador: null,
+              validadeAte: c.dataValidade || null,
+              data: c.criadoEm,
+              source: "legacy" as const,
+            })),
+          ],
+        };
+      }));
+
+      const filtered = input.statusFiltro && input.statusFiltro !== "todos"
+        ? result.filter(r => {
+            if (input.statusFiltro === "alerta") return r.alertaSaldo;
+            if (input.statusFiltro === "sem_orcamento") return r.totalOrcado === 0;
+            return true;
+          })
+        : result;
+
+      return filtered;
     }),
 });

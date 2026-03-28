@@ -299,6 +299,7 @@ const menuSectionsCompras: MenuSection[] = [
     title: "Painel",
     items: [
       { icon: LayoutDashboard, label: "Painel de Controle",   path: "/compras/painel"           },
+      { icon: BarChart3,       label: "Dashboard por Obra",   path: "/compras/dashboard-obra"   },
     ],
   },
   {
