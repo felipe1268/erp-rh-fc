@@ -488,20 +488,20 @@ export default function Cotacoes() {
     if (iaProgressRef.current) clearInterval(iaProgressRef.current);
     const etapas = [
       { at: 0, label: "Enviando documento..." },
-      { at: 10, label: "Analisando documento..." },
-      { at: 25, label: "Identificando itens..." },
-      { at: 45, label: "Extraindo preços..." },
-      { at: 65, label: "Comparando com a SC..." },
+      { at: 8, label: "Analisando documento..." },
+      { at: 20, label: "Identificando itens..." },
+      { at: 40, label: "Extraindo preços..." },
+      { at: 60, label: "Comparando com a SC..." },
       { at: 80, label: "Finalizando análise..." },
     ];
     let current = 0;
     setIaProgress({ fornecedorId, percent: 0, etapa: etapas[0].label });
     iaProgressRef.current = setInterval(() => {
-      current += 1;
-      if (current >= 90) { current = 90; }
+      current += 0.5;
+      if (current >= 92) { current = 92; }
       const etapa = [...etapas].reverse().find(e => current >= e.at)?.label || etapas[0].label;
-      setIaProgress({ fornecedorId, percent: current, etapa });
-    }, 600);
+      setIaProgress({ fornecedorId, percent: Math.round(current), etapa });
+    }, 500);
   }, []);
 
   const stopIaProgress = useCallback((success?: boolean) => {
