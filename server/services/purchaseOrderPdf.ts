@@ -156,10 +156,10 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
 
   const logoSrc = resolveLogoSource(company?.logoUrl);
   let logoRendered = false;
-  const logoSize = 50;
+  const logoSize = 65;
   if (logoSrc) {
     try {
-      doc.image(logoSrc, mL, 18, { fit: [logoSize, logoSize] });
+      doc.image(logoSrc, mL, 10, { fit: [logoSize, logoSize] });
       logoRendered = true;
     } catch {
       logoRendered = false;
