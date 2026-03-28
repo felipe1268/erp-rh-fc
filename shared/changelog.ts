@@ -5658,4 +5658,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 18:45:00",
   },
+  {
+    version: 833,
+    titulo: "Auto-foto automática na entrada de itens",
+    descricao: "O sistema agora busca automaticamente a foto do produto quando um item é recebido sem foto cadastrada. A busca usa imagens reais de lojas brasileiras (Leroy Merlin, Mercado Livre, etc.) em vez de bancos de imagens genéricos. O botão 'Auto-foto' foi removido pois o processo é automático. Fotos incorretas do sistema anterior foram limpas.",
+    tipo: "melhoria",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 19:15:00",
+  },
 ];

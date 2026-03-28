@@ -1652,6 +1652,40 @@ REGRAS:
         } as any);
       }
 
+      const itemIdsParaFoto: { id: number; nome: string }[] = [];
+      const seen = new Set<number>();
+      let createdIdx = 0;
+      for (const item of input.itens) {
+        let iid = item.itemId;
+        if (!iid && item.itemNovo && createdIdx < createdItems.length) {
+          iid = createdItems[createdIdx++];
+        }
+        if (iid && item.recebido && !seen.has(iid)) {
+          seen.add(iid);
+          const [existing] = await db.select({ id: almoxarifadoItens.id, nome: almoxarifadoItens.nome, fotoUrl: almoxarifadoItens.fotoUrl })
+            .from(almoxarifadoItens)
+            .where(and(eq(almoxarifadoItens.id, iid), eq(almoxarifadoItens.companyId, input.companyId)));
+          if (existing && !existing.fotoUrl) {
+            itemIdsParaFoto.push({ id: existing.id, nome: existing.nome });
+          }
+        }
+      }
+      if (itemIdsParaFoto.length > 0) {
+        (async () => {
+          for (const { id, nome } of itemIdsParaFoto) {
+            try {
+              const url = await buscarFotoParaItem(nome);
+              if (url) {
+                await db.execute(sql`UPDATE almoxarifado_itens SET foto_url = ${url} WHERE id = ${id}`);
+                console.log(`[autoFoto] Entrada: ${nome} → foto atualizada`);
+              }
+            } catch (e) {
+              console.warn(`[autoFoto] Erro background para item ${id}:`, e);
+            }
+          }
+        })();
+      }
+
       return {
         success: true,
         recebimentoId: recebimento.id,

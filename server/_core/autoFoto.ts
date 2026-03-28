@@ -1,89 +1,114 @@
 /**
- * Busca automática de fotos para itens usando:
- * 1. Gemini para gerar os melhores termos de busca em inglês
- * 2. API Openverse (gratuita, 600M+ imagens) para encontrar URLs reais
- * 3. Verificação de URL via HEAD request
+ * Busca automática de fotos para itens de almoxarifado.
+ * 
+ * Estratégia:
+ * 1. Busca de imagens via DuckDuckGo (nome do produto em PT-BR)
+ * 2. Preferência para sites de e-commerce (Leroy Merlin, ML, etc.)
+ * 3. Validação de URL retornando imagem real
+ * 
+ * Executa em background após entrada de itens sem foto.
  */
 
 import { invokeLLM } from "./llm";
 
-async function traduzirParaBuscaIngles(nomeItem: string): Promise<string[]> {
-  try {
-    const prompt = `Você é um especialista em busca de imagens de produtos de construção civil e EPIs brasileiros.
-
-Item: "${nomeItem}"
-
-Gere 3 termos de busca em INGLÊS (específicos e objetivos) para encontrar uma foto de produto deste item em bancos de imagens internacionais.
-Foque no tipo do produto, não na marca.
-
-Retorne APENAS JSON válido no formato:
-{"termos": ["termo1", "termo2", "termo3"]}
-
-Exemplos:
-- "Disco de Corte 4.5 pol" → {"termos": ["cutting disc grinder", "angle grinder cutting wheel", "metal cutting disk"]}
-- "Capacete de Segurança Amarelo" → {"termos": ["yellow hard hat construction", "safety helmet worker", "construction hard hat"]}
-- "Luva de Raspa" → {"termos": ["leather work gloves", "safety work gloves construction", "protective gloves worker"]}
-- "Cimento CP-II" → {"termos": ["cement bag concrete", "portland cement sack", "construction cement bag"]}
-- "Prego 17x27" → {"termos": ["nails construction wood", "common wire nail", "building nails fasteners"]}
-- "Rolo de Pintura" → {"termos": ["paint roller construction", "painting roller brush", "wall paint roller"]}`;
-
-    const response = await invokeLLM({
-      messages: [{ role: "user", content: prompt }],
-      generationConfig: { thinkingBudget: 0, maxOutputTokens: 300 },
-    });
-    const text = response?.candidates?.[0]?.content?.parts?.[0]?.text || response?.text || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return parsed.termos || [];
-    }
-  } catch (e) {
-    console.warn("[autoFoto] Erro ao traduzir:", e);
-  }
-  // Fallback: usar o próprio nome
-  return [nomeItem, nomeItem.split(" ").slice(0, 3).join(" ")];
+function limparNomeProduto(nome: string): string {
+  return nome
+    .replace(/\[[\d.]+\]/g, "")
+    .replace(/\s*-\s*P\.\d[\d.]+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
-async function buscarImagemOpenverse(query: string): Promise<string | null> {
+async function obterVQDToken(query: string): Promise<string | null> {
   try {
-    const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&page_size=5&mature=false&license_type=commercial,modification`;
-    const resp = await fetch(url, {
-      headers: { "User-Agent": "FC-ERP-System/1.0" },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json() as any;
-    const results = data.results || [];
-    // Prefere imagens do Wikimedia (mais confiáveis) e depois Flickr
-    const sorted = results.sort((a: any, b: any) => {
-      const aIsWiki = a.url?.includes("wikimedia.org") ? 0 : 1;
-      const bIsWiki = b.url?.includes("wikimedia.org") ? 0 : 1;
-      return aIsWiki - bIsWiki;
-    });
-    for (const item of sorted.slice(0, 5)) {
-      const imageUrl = item.url;
-      if (!imageUrl) continue;
-      // Verifica se a URL retorna uma imagem válida
-      try {
-        const check = await fetch(imageUrl, {
-          method: "HEAD",
-          signal: AbortSignal.timeout(5000),
-        });
-        if (check.ok) {
-          const ct = check.headers.get("content-type") || "";
-          if (ct.startsWith("image/")) {
-            return imageUrl;
-          }
-        }
-      } catch {
-        continue;
+    const resp = await fetch(
+      "https://duckduckgo.com/?q=" + encodeURIComponent(query) + "&iax=images&ia=images",
+      {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36" },
+        signal: AbortSignal.timeout(10000),
       }
-    }
-    return null;
-  } catch (e) {
-    console.warn("[autoFoto] Erro Openverse:", query, e);
+    );
+    if (!resp.ok) return null;
+    const html = await resp.text();
+    const match = html.match(/vqd=['"]([^'"]+)/);
+    return match ? match[1] : null;
+  } catch {
     return null;
   }
+}
+
+async function buscarImagensDDG(query: string): Promise<string[]> {
+  try {
+    const vqd = await obterVQDToken(query);
+    if (!vqd) return [];
+
+    const url = "https://duckduckgo.com/i.js?l=br-pt&o=json&q=" +
+      encodeURIComponent(query) + "&vqd=" + vqd + "&f=,,,,,&p=1";
+
+    const resp = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+        "Referer": "https://duckduckgo.com/",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json() as any;
+    return (data.results || [])
+      .map((r: any) => r.image)
+      .filter((u: any) => typeof u === "string" && u.startsWith("http"));
+  } catch (e) {
+    console.warn("[autoFoto] Erro DDG:", e);
+    return [];
+  }
+}
+
+const PREFERRED_DOMAINS = [
+  "leroymerlin", "telhanorte", "cec.com", "obramax",
+  "mlstatic.com", "mercadolivre", "magazineluiza", "magalu",
+  "casasbahia", "americanas", "shopee", "amazon.com.br",
+  "tcdn.com.br", "vteximg", "vtexassets",
+];
+
+async function validarImagem(url: string): Promise<boolean> {
+  try {
+    const check = await fetch(url, {
+      method: "HEAD",
+      signal: AbortSignal.timeout(5000),
+      headers: { "User-Agent": "Mozilla/5.0 Chrome/120.0.0.0" },
+    });
+    if (!check.ok) return false;
+    const ct = check.headers.get("content-type") || "";
+    const cl = parseInt(check.headers.get("content-length") || "0");
+    return ct.startsWith("image/") && (cl === 0 || cl > 3000);
+  } catch {
+    return false;
+  }
+}
+
+async function gerarTermosIA(nome: string): Promise<string[]> {
+  try {
+    const limpo = limparNomeProduto(nome);
+    const response = await invokeLLM({
+      messages: [{
+        role: "user",
+        content: `Dado o item de construção civil: "${limpo}"
+
+Gere 2 termos de busca curtos em PORTUGUÊS para encontrar a foto deste produto em lojas online brasileiras.
+Foque no tipo+marca. Sem códigos.
+
+Retorne APENAS JSON: {"termos": ["termo1", "termo2"]}`
+      }],
+      maxTokens: 150,
+    });
+    const text = response?.choices?.[0]?.message?.content || response?.content || response?.text || "";
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      return parsed.termos || [];
+    }
+  } catch {}
+  return [];
 }
 
 /**
@@ -91,14 +116,35 @@ async function buscarImagemOpenverse(query: string): Promise<string | null> {
  * Retorna a URL da imagem ou null se não encontrar.
  */
 export async function buscarFotoParaItem(nomeItem: string): Promise<string | null> {
-  const termos = await traduzirParaBuscaIngles(nomeItem);
+  const limpo = limparNomeProduto(nomeItem);
+
+  const termos = [limpo];
+  const termosIA = await gerarTermosIA(nomeItem);
+  termos.push(...termosIA);
+
   for (const termo of termos) {
-    const url = await buscarImagemOpenverse(termo);
-    if (url) {
-      console.log(`[autoFoto] ✓ ${nomeItem} → ${url.substring(0, 60)}`);
-      return url;
+    const urls = await buscarImagensDDG(termo);
+    if (urls.length === 0) continue;
+
+    const preferred = urls.filter(u => PREFERRED_DOMAINS.some(d => u.includes(d)));
+    const candidates = preferred.length > 0 ? preferred : urls;
+
+    for (const url of candidates.slice(0, 6)) {
+      if (await validarImagem(url)) {
+        console.log(`[autoFoto] ✓ ${nomeItem} → ${url.substring(0, 100)}`);
+        return url;
+      }
+    }
+
+    for (const url of urls.slice(0, 10)) {
+      if (candidates.includes(url)) continue;
+      if (await validarImagem(url)) {
+        console.log(`[autoFoto] ✓ ${nomeItem} → ${url.substring(0, 100)}`);
+        return url;
+      }
     }
   }
+
   console.log(`[autoFoto] ✗ Sem resultado para: ${nomeItem}`);
   return null;
 }
