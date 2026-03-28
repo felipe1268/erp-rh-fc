@@ -1804,6 +1804,8 @@ Retorne APENAS um JSON válido neste formato:
         });
       }
 
+      console.log("[extrairCotacaoIA] Resultado bruto da IA (primeiros 500 chars):", resultText.substring(0, 500));
+
       let jsonStr = resultText.trim();
       const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (jsonMatch) jsonStr = jsonMatch[1].trim();
@@ -1815,9 +1817,11 @@ Retorne APENAS um JSON válido neste formato:
       try {
         parsed = JSON.parse(jsonStr);
       } catch {
-        console.error("[extrairCotacaoIA] JSON parse error:", jsonStr.substring(0, 200));
+        console.error("[extrairCotacaoIA] JSON parse error:", jsonStr.substring(0, 500));
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "A IA não retornou dados estruturados válidos. Tente novamente." });
       }
+
+      console.log("[extrairCotacaoIA] Parsed OK. itens:", (parsed.itensExtraidos ?? parsed.itens ?? []).length, "matches:", (parsed.itensExtraidos ?? parsed.itens ?? []).filter((i: any) => i.matchItemId).length);
 
       const itensExtraidos = (parsed.itensExtraidos ?? parsed.itens ?? []).map((item: any) => ({
         descricaoFornecedor: String(item.descricaoFornecedor ?? item.descricao ?? ""),

@@ -614,11 +614,19 @@ export default function Cotacoes() {
   const extrairIA = trpc.compras.extrairCotacaoIA.useMutation({
     onMutate: (vars) => { startIaProgress(vars.fornecedorId); },
     onSuccess: (dados, vars) => {
+      console.log("[IA] onSuccess chamado, dados:", JSON.stringify(dados).substring(0, 300));
       stopIaProgress(true);
       setIaExtracao({ fornecedorId: vars.fornecedorId, dados });
       toast.success(`IA extraiu ${dados.totalItensExtraidos} item(ns), ${dados.totalMatches} match(es)`);
     },
-    onError: (e) => { stopIaProgress(false); toast.error("Erro na leitura IA: " + e.message); },
+    onError: (e) => {
+      console.error("[IA] onError chamado:", e.message);
+      stopIaProgress(false);
+      toast.error("Erro na leitura IA: " + e.message);
+    },
+    onSettled: () => {
+      console.log("[IA] onSettled chamado");
+    },
   });
   const cancelarAprovacao = trpc.compras.cancelarAprovacaoCotacao.useMutation({
     onSuccess: (d) => {
