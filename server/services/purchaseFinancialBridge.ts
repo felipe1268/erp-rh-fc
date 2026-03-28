@@ -3,10 +3,13 @@ import {
   purchaseOrders, purchaseRequests, purchaseAccountsPayable,
   financialEntries, financialAccounts,
   fornecedores, buyerCommissions, purchaseCancellations,
+  purchaseOrderItems, notificationLogs, almoxarifadoNotificacoes,
+  comprasEntregasProgramadas,
 } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { createAuditLog } from "../db";
 import { calcularParcelas, getTipoPagamentoInfo } from "../../shared/paymentConditions";
+import { sendEmail } from "./smtpService";
 import crypto from "crypto";
 
 async function getContaId(db: any, companyId: number, codigo: string) {
@@ -163,6 +166,219 @@ export async function onOCEmitida(ocId: number, userId: number, userName: string
       accountsPayableId: apIds[0] || null,
     } as any).where(eq(purchaseOrders.id, ocId));
   }
+
+  try {
+    await alertaFinanceiroOCEmitida(db, oc, userId, userName);
+  } catch (e) {
+    console.error("[AlertaFinanceiro] Erro ao criar alerta financeiro:", e);
+  }
+
+  try {
+    await alertaAlmoxarifadoOCEmitida(db, oc, userId, userName);
+  } catch (e) {
+    console.error("[AlertaAlmoxarifado] Erro ao criar alerta almoxarifado:", e);
+  }
+}
+
+async function alertaFinanceiroOCEmitida(db: any, oc: any, userId: number, userName: string) {
+  const ocLabel = oc.numero || String(oc.id);
+  const valorTotal = parseFloat(String(oc.valorTotal || "0"));
+  const dataBase = oc.prazoEntrega || new Date().toISOString().split("T")[0];
+
+  const parcelas = (oc as any).tipoPagamento
+    ? calcularParcelas((oc as any).tipoPagamento, valorTotal, dataBase)
+    : [{ numero: 1, valor: valorTotal, dataVencimento: dataBase, descricao: "Pagamento único" }];
+
+  const parcelasTexto = parcelas.map(p =>
+    `  • Parcela ${p.numero}/${parcelas.length}: R$ ${p.valor.toFixed(2)} — Vencimento: ${p.dataVencimento}`
+  ).join("\n");
+
+  const titulo = `OC #${ocLabel} emitida — Previsão de pagamento`;
+  const corpo = [
+    `Ordem de Compra #${ocLabel} foi emitida.`,
+    ``,
+    `Fornecedor: ${oc.supplierNome || "N/A"}`,
+    `Obra: ${oc.obraNome || "N/A"}`,
+    `Valor Total: R$ ${valorTotal.toFixed(2)}`,
+    `Forma de Pagamento: ${oc.formaPagamento || "N/A"}`,
+    ``,
+    `Parcelas:`,
+    parcelasTexto,
+  ].join("\n");
+
+  const trackingId = crypto.randomUUID();
+
+  await db.insert(notificationLogs).values({
+    companyId: oc.companyId,
+    employeeName: oc.supplierNome || "Fornecedor",
+    tipoMovimentacao: "oc_emitida_financeiro",
+    recipientName: "Setor Financeiro",
+    recipientEmail: "financeiro@sistema.local",
+    titulo,
+    corpo,
+    statusEnvio: "enviado",
+    trackingId,
+    disparadoPor: userName,
+    disparadoPorId: userId,
+  });
+
+  const corpoHtml = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:20px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+<tr><td style="background:#1a365d;padding:20px 30px;text-align:center;">
+<h1 style="color:#fff;margin:0;font-size:20px;">ALERTA FINANCEIRO — COMPRAS</h1>
+<p style="color:#a0c4ff;margin:5px 0 0;font-size:12px;">Sistema de Gestão Integrada</p>
+</td></tr>
+<tr><td style="padding:30px;">
+<h2 style="color:#1a365d;margin:0 0 20px;font-size:16px;border-bottom:2px solid #e2e8f0;padding-bottom:10px;">${titulo}</h2>
+<div style="color:#2d3748;font-size:14px;line-height:1.6;">
+<p><strong>Fornecedor:</strong> ${oc.supplierNome || "N/A"}</p>
+<p><strong>Obra:</strong> ${oc.obraNome || "N/A"}</p>
+<p><strong>Valor Total:</strong> R$ ${valorTotal.toFixed(2)}</p>
+<p><strong>Forma de Pagamento:</strong> ${oc.formaPagamento || "N/A"}</p>
+<h3 style="color:#1a365d;margin:20px 0 10px;">Parcelas</h3>
+<table style="width:100%;border-collapse:collapse;">
+<tr style="background:#f7fafc;"><th style="border:1px solid #e2e8f0;padding:8px;text-align:left;">Parcela</th><th style="border:1px solid #e2e8f0;padding:8px;text-align:right;">Valor</th><th style="border:1px solid #e2e8f0;padding:8px;text-align:center;">Vencimento</th></tr>
+${parcelas.map(p => `<tr><td style="border:1px solid #e2e8f0;padding:8px;">${p.numero}/${parcelas.length}</td><td style="border:1px solid #e2e8f0;padding:8px;text-align:right;">R$ ${p.valor.toFixed(2)}</td><td style="border:1px solid #e2e8f0;padding:8px;text-align:center;">${p.dataVencimento}</td></tr>`).join("")}
+</table>
+</div></td></tr>
+<tr><td style="background:#f7fafc;padding:15px 30px;text-align:center;border-top:1px solid #e2e8f0;">
+<p style="color:#718096;font-size:11px;margin:0;">E-mail automático — ERP Gestão Integrada</p>
+</td></tr></table></td></tr></table></body></html>`;
+
+  try {
+    await sendEmail({
+      to: "financeiro@sistema.local",
+      subject: titulo,
+      html: corpoHtml,
+      text: corpo,
+    });
+  } catch (e) {
+    console.warn("[AlertaFinanceiro] SMTP não configurado ou erro no envio:", (e as any)?.message);
+  }
+
+  console.log(`[AlertaFinanceiro] Alerta financeiro criado para OC #${ocLabel}`);
+}
+
+async function alertaAlmoxarifadoOCEmitida(db: any, oc: any, userId: number, userName: string) {
+  const ocLabel = oc.numero || String(oc.id);
+  const supplier = oc.supplierId ? await getSupplierFields(db, oc.supplierId) : null;
+
+  const itens = await db.select().from(purchaseOrderItems)
+    .where(eq(purchaseOrderItems.ordemId, oc.id));
+
+  const itensTexto = itens.map((item: any) =>
+    `• ${item.insumoNome} — ${parseFloat(String(item.quantidadePedida || "0"))} ${item.unidade}`
+  ).join("\n");
+
+  const contatoTexto = supplier ? [
+    supplier.contatoNome ? `Contato: ${supplier.contatoNome}` : null,
+    supplier.telefone ? `Tel: ${supplier.telefone}` : null,
+    supplier.contatoCelular ? `Cel: ${supplier.contatoCelular}` : null,
+    supplier.email ? `Email: ${supplier.email}` : null,
+    supplier.contatoEmail ? `Email Contato: ${supplier.contatoEmail}` : null,
+  ].filter(Boolean).join("\n") : "Sem dados de contato";
+
+  const titulo = `OC #${ocLabel} — Materiais aguardados`;
+  const mensagem = [
+    `Ordem de Compra #${ocLabel} emitida.`,
+    `Fornecedor: ${oc.supplierNome || "N/A"}`,
+    `Obra: ${oc.obraNome || "N/A"}`,
+    `Data prevista de entrega: ${oc.prazoEntrega || "N/A"}`,
+    ``,
+    `Itens aguardados:`,
+    itensTexto,
+    ``,
+    `Dados de contato do fornecedor:`,
+    contatoTexto,
+  ].join("\n");
+
+  await db.insert(almoxarifadoNotificacoes).values({
+    companyId: oc.companyId,
+    tipo: "oc_emitida",
+    destinoModulo: "almoxarifado",
+    titulo,
+    mensagem,
+  } as any);
+
+  if (itens.length > 0) {
+    const itemIds = itens.map((i: any) => i.id);
+    const entregas = await db.select().from(comprasEntregasProgramadas)
+      .where(inArray(comprasEntregasProgramadas.ordemItemId, itemIds));
+
+    const entregasMap: Record<number, any[]> = {};
+    for (const e of entregas) {
+      if (!entregasMap[e.ordemItemId]) entregasMap[e.ordemItemId] = [];
+      entregasMap[e.ordemItemId].push(e);
+    }
+
+    for (const item of itens) {
+      const itemEntregas = entregasMap[item.id] || [];
+      for (const entrega of itemEntregas) {
+        const tituloEntrega = `Entrega programada — OC #${ocLabel} — ${entrega.dataEntrega}`;
+        const msgEntrega = [
+          `Entrega programada para ${entrega.dataEntrega}`,
+          `Item: ${item.insumoNome}`,
+          `Quantidade: ${parseFloat(String(entrega.quantidade || "0"))} ${item.unidade}`,
+          `Fornecedor: ${oc.supplierNome || "N/A"}`,
+          `Obra: ${oc.obraNome || "N/A"}`,
+          ``,
+          `Dados de contato:`,
+          contatoTexto,
+        ].join("\n");
+
+        await db.insert(almoxarifadoNotificacoes).values({
+          companyId: oc.companyId,
+          tipo: "entrega_programada",
+          destinoModulo: "almoxarifado",
+          titulo: tituloEntrega,
+          mensagem: msgEntrega,
+        } as any);
+      }
+    }
+  }
+
+  const corpoHtml = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:20px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+<tr><td style="background:#2d7d46;padding:20px 30px;text-align:center;">
+<h1 style="color:#fff;margin:0;font-size:20px;">ALERTA ALMOXARIFADO</h1>
+<p style="color:#a0ffa0;margin:5px 0 0;font-size:12px;">Sistema de Gestão Integrada</p>
+</td></tr>
+<tr><td style="padding:30px;">
+<h2 style="color:#2d7d46;margin:0 0 20px;font-size:16px;border-bottom:2px solid #e2e8f0;padding-bottom:10px;">${titulo}</h2>
+<div style="color:#2d3748;font-size:14px;line-height:1.6;">
+<p><strong>Fornecedor:</strong> ${oc.supplierNome || "N/A"}</p>
+<p><strong>Obra:</strong> ${oc.obraNome || "N/A"}</p>
+<p><strong>Data prevista:</strong> ${oc.prazoEntrega || "N/A"}</p>
+<h3 style="color:#2d7d46;margin:20px 0 10px;">Itens Aguardados</h3>
+<table style="width:100%;border-collapse:collapse;">
+<tr style="background:#f0fff4;"><th style="border:1px solid #c6f6d5;padding:8px;text-align:left;">Item</th><th style="border:1px solid #c6f6d5;padding:8px;text-align:right;">Qtd</th><th style="border:1px solid #c6f6d5;padding:8px;">Unid</th></tr>
+${itens.map((item: any) => `<tr><td style="border:1px solid #c6f6d5;padding:8px;">${item.insumoNome}</td><td style="border:1px solid #c6f6d5;padding:8px;text-align:right;">${parseFloat(String(item.quantidadePedida || "0"))}</td><td style="border:1px solid #c6f6d5;padding:8px;">${item.unidade}</td></tr>`).join("")}
+</table>
+<h3 style="color:#2d7d46;margin:20px 0 10px;">Contato do Fornecedor</h3>
+<p>${contatoTexto.replace(/\n/g, "<br>")}</p>
+</div></td></tr>
+<tr><td style="background:#f7fafc;padding:15px 30px;text-align:center;border-top:1px solid #e2e8f0;">
+<p style="color:#718096;font-size:11px;margin:0;">E-mail automático — ERP Gestão Integrada</p>
+</td></tr></table></td></tr></table></body></html>`;
+
+  try {
+    await sendEmail({
+      to: "almoxarifado@sistema.local",
+      subject: titulo,
+      html: corpoHtml,
+      text: mensagem,
+    });
+  } catch (e) {
+    console.warn("[AlertaAlmoxarifado] SMTP não configurado ou erro no envio:", (e as any)?.message);
+  }
+
+  console.log(`[AlertaAlmoxarifado] Alerta almoxarifado criado para OC #${ocLabel} (${itens.length} itens)`);
 }
 
 export async function onRecebimentoConfirmado(

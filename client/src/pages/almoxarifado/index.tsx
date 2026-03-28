@@ -12,6 +12,7 @@ import {
   Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight,
 } from "lucide-react";
 import SmartEntry from "./SmartEntry";
+import AlertasAlmoxarifado from "./AlertasAlmoxarifado";
 import { inferirCategoria, CATEGORIA_KEYWORDS } from "./categoriaUtils";
 
 
@@ -534,6 +535,7 @@ export default function AlmoxarifadoPage() {
               <p className="text-sm text-gray-500 mt-0.5">{itens.length} ite{itens.length !== 1 ? "ns" : "m"} cadastrado{itens.length !== 1 ? "s" : ""}</p>
             </div>
             <div className="flex items-center gap-3">
+              <AlertasAlmoxarifado companyId={companyId} />
               {itensLocadosVencendo.length > 0 && (
                 <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-lg px-3 py-1.5" title={itensLocadosVencendo.map((i: any) => `${i.nome} — vence em ${i.diasParaVencimento <= 0 ? "VENCIDO" : `${i.diasParaVencimento}d`}`).join("\n")}>
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
