@@ -1508,6 +1508,7 @@ Responda APENAS com um objeto JSON no formato:
           composicaoCodigo: comprasSolicitacoesItens.composicaoCodigo,
           origemEap: comprasSolicitacoesItens.origemEap,
           solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
+          precoMeta: comprasSolicitacoesItens.precoMeta,
         }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
       }
       const orcItemIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
@@ -1559,9 +1560,12 @@ Responda APENAS com um objeto JSON no formato:
       for (const a of ancestorItens) ancestorMap[`${a.orcamentoId}:${a.eapCodigo}`] = a.descricao;
 
       const scItemToOrcItem: Record<number, number> = {};
+      const scItemToPrecoMeta: Record<number, number> = {};
       const scItemToTraceability: Record<number, { eapCodigo?: string; insumoCodigo?: string; composicaoCodigo?: string; origemEap?: boolean; solicitacaoId?: number }> = {};
       for (const s of scItens) {
         if (s.orcamentoItemId) scItemToOrcItem[s.id] = s.orcamentoItemId;
+        const pm = n(s.precoMeta);
+        if (pm > 0) scItemToPrecoMeta[s.id] = pm;
         scItemToTraceability[s.id] = { eapCodigo: s.eapCodigo, insumoCodigo: s.insumoCodigo, composicaoCodigo: s.composicaoCodigo, origemEap: s.origemEap, solicitacaoId: s.solicitacaoId };
       }
 
@@ -1617,7 +1621,9 @@ Responda APENAS com um objeto JSON no formato:
 
       const itensComMeta = itens.map(it => {
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
-        const metaUnitario = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
+        const metaFromOrc = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
+        const metaFromSC = it.solicitacaoItemId ? (scItemToPrecoMeta[it.solicitacaoItemId] ?? 0) : 0;
+        const metaUnitario = metaFromOrc > 0 ? metaFromOrc : metaFromSC;
         const eapPath = orcId ? (orcItemToPath[orcId] ?? "") : "";
         const trace = it.solicitacaoItemId ? scItemToTraceability[it.solicitacaoItemId] : undefined;
         const scNumero = trace?.solicitacaoId ? (scMap[trace.solicitacaoId] ?? "") : "";
