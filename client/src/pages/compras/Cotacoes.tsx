@@ -1470,10 +1470,22 @@ export default function Cotacoes() {
     function getItemSaldo(it: any): { saldo: number; hasMeta: boolean } {
       const metaUnit = parseFloat(it.metaUnitario ?? "0");
       if (metaUnit === 0) return { saldo: 0, hasMeta: false };
-      const metaTot = metaUnit * parseFloat(it.quantidade ?? "0");
+      const qtdItem = parseFloat(it.quantidade ?? "0");
+      const qtdOrcada = parseFloat((it as any).qtdOrcada ?? "0");
+      const qtdTotalSolicitada = parseFloat((it as any).qtdTotalSolicitada ?? "0");
       if (!melhorForn) return { saldo: 0, hasMeta: true };
       const wKey = `${it.id}_${melhorForn.fornecedorId}`;
-      const wTotal = parseFloat(mapa?.respostaMap?.[wKey]?.total ?? "0");
+      const wResp = mapa?.respostaMap?.[wKey];
+      const precoForn = parseFloat(wResp?.precoUnitario ?? "0");
+      if (qtdOrcada > 0 && qtdTotalSolicitada > qtdOrcada) {
+        const qtdExcedente = qtdTotalSolicitada - qtdOrcada;
+        const qtdCoberta = Math.max(0, qtdItem - qtdExcedente);
+        const verbaCoberta = metaUnit * qtdCoberta;
+        const custoTotal = precoForn * qtdItem;
+        return { saldo: verbaCoberta - custoTotal, hasMeta: true };
+      }
+      const metaTot = metaUnit * qtdItem;
+      const wTotal = parseFloat(wResp?.total ?? "0");
       return { saldo: metaTot - wTotal, hasMeta: true };
     }
 
@@ -1487,7 +1499,10 @@ export default function Cotacoes() {
       : null;
     const qtdUnidade = unidadesUnicas.length === 1 ? unidadesUnicas[0] : null;
     const winnerGrandTotal = melhorForn ? parseFloat(melhorForn.totalOrcado ?? "0") : 0;
-    const saldoTotal = metaGrandTotal > 0 && melhorForn ? metaGrandTotal - winnerGrandTotal : 0;
+    const saldoTotal = melhorForn ? allItens.reduce((acc: number, it: any) => {
+      const { saldo, hasMeta } = getItemSaldo(it);
+      return acc + (hasMeta ? saldo : 0);
+    }, 0) : 0;
     const deficit = saldoTotal < 0 ? Math.abs(saldoTotal) : 0;
 
     const cobertura = (() => {
