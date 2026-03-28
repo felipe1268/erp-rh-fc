@@ -266,6 +266,19 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
 };
 
 const COND_PAG_PADRAO = ["À Vista", "7 dias", "14 dias", "21 dias", "28 dias", "30 dias", "45 dias", "60 dias", "90 dias", "Medição", "Parcelado"];
+
+const TIPOS_PAGAMENTO = [
+  { value: "a_vista", label: "À Vista" },
+  { value: "30ddl", label: "30 DDL" },
+  { value: "30_60", label: "30/60 DDL" },
+  { value: "30_60_90", label: "30/60/90 DDL" },
+  { value: "entrada_parcelas", label: "Entrada + Parcelas" },
+  { value: "personalizado", label: "Personalizado" },
+] as const;
+
+function getTipoPagamentoLabel(value: string): string {
+  return TIPOS_PAGAMENTO.find(t => t.value === value)?.label ?? value;
+}
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "vb"];
 
 function HistoricoPrecoPopover({ companyId, descricao }: { companyId: number; descricao: string }) {
@@ -450,7 +463,7 @@ export default function Cotacoes() {
 
   const [form, setForm] = useState({
     descricao: "", obraId: "", solicitacaoId: "", fornecedorId: "",
-    dataValidade: "", condicaoPagamento: "", prazoEntregaDias: "", observacoes: "",
+    dataValidade: "", condicaoPagamento: "", tipoPagamento: "", numeroParcelas: "", prazoEntregaDias: "", observacoes: "",
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
 
@@ -619,7 +632,7 @@ export default function Cotacoes() {
   }, [mapaQ.data, abaAtiva]);
 
   function resetForm() {
-    setForm({ descricao: "", obraId: "", solicitacaoId: "", fornecedorId: "", dataValidade: "", condicaoPagamento: "", prazoEntregaDias: "", observacoes: "" });
+    setForm({ descricao: "", obraId: "", solicitacaoId: "", fornecedorId: "", dataValidade: "", condicaoPagamento: "", tipoPagamento: "", numeroParcelas: "", prazoEntregaDias: "", observacoes: "" });
     setItens([newItem()]);
   }
 
@@ -643,7 +656,9 @@ export default function Cotacoes() {
       solicitacaoId: form.solicitacaoId && form.solicitacaoId !== "none" ? parseInt(form.solicitacaoId) : undefined,
       fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
       dataValidade: form.dataValidade || undefined,
-      condicaoPagamento: form.condicaoPagamento || undefined,
+      condicaoPagamento: form.tipoPagamento ? getTipoPagamentoLabel(form.tipoPagamento) : (form.condicaoPagamento || undefined),
+      tipoPagamento: form.tipoPagamento || undefined,
+      numeroParcelas: form.numeroParcelas ? parseInt(form.numeroParcelas) : undefined,
       prazoEntregaDias: form.prazoEntregaDias ? parseInt(form.prazoEntregaDias) : undefined,
       observacoes: form.observacoes || undefined,
       itens: validos.map(i => ({
@@ -724,6 +739,7 @@ export default function Cotacoes() {
           quantidade: qty,
         };
       });
+      const tipoPag = editCondPag[fornecedorId] || undefined;
       salvarRespostas.mutate({
         cotacaoId: showDetalhe,
         fornecedorId,
@@ -823,7 +839,7 @@ export default function Cotacoes() {
                   {st && <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium border ${st.cls}`}>{st.label}</span>}
                   {detalheFullscreen.status === "pendente" && (
                     <>
-                      <Button onClick={() => gerarOC.mutate({ companyId, cotacaoId: detalheFullscreen.id })} disabled={gerarOC.isPending}
+                      <Button onClick={() => gerarOC.mutate({ companyId, cotacaoId: detalheFullscreen.id, userId: user?.id, userName: user?.name })} disabled={gerarOC.isPending}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2">
                         {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Aprovar e Gerar OC
                       </Button>
@@ -924,7 +940,7 @@ export default function Cotacoes() {
                   <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-200">
                     {detalheFullscreen.status === "pendente" && (
                       <>
-                        <Button onClick={() => gerarOC.mutate({ companyId, cotacaoId: detalheFullscreen.id })} disabled={gerarOC.isPending}
+                        <Button onClick={() => gerarOC.mutate({ companyId, cotacaoId: detalheFullscreen.id, userId: user?.id, userName: user?.name })} disabled={gerarOC.isPending}
                           className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2">
                           {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Aprovar e Gerar OC
                         </Button>
@@ -1764,15 +1780,22 @@ export default function Cotacoes() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-gray-700 text-sm font-medium">Condição de Pagamento</Label>
-                <Select value={form.condicaoPagamento} onValueChange={v => setForm(p => ({ ...p, condicaoPagamento: v }))}>
+                <Select value={form.tipoPagamento} onValueChange={v => setForm(p => ({ ...p, tipoPagamento: v, condicaoPagamento: getTipoPagamentoLabel(v) }))}>
                   <SelectTrigger className="bg-white border-gray-300 text-gray-900">
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-gray-200">
-                    {condPagOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {TIPOS_PAGAMENTO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
+              {form.tipoPagamento === "entrada_parcelas" && (
+                <div className="space-y-1.5">
+                  <Label className="text-gray-700 text-sm font-medium">Nº de Parcelas</Label>
+                  <Input type="number" min="2" max="36" className="bg-white border-gray-300 text-gray-900" placeholder="Ex: 3"
+                    value={form.numeroParcelas} onChange={e => setForm(p => ({ ...p, numeroParcelas: e.target.value }))} />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label className="text-gray-700 text-sm font-medium">Prazo Entrega (dias)</Label>
                 <Input type="number" min="0" className="bg-white border-gray-300 text-gray-900" value={form.prazoEntregaDias} onChange={e => setForm(p => ({ ...p, prazoEntregaDias: e.target.value }))} />
@@ -1886,7 +1909,7 @@ export default function Cotacoes() {
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
                   {detalhe.status === "pendente" && (
                     <>
-                      <Button size="sm" onClick={() => gerarOC.mutate({ companyId, cotacaoId: detalhe.id })} disabled={gerarOC.isPending}
+                      <Button size="sm" onClick={() => gerarOC.mutate({ companyId, cotacaoId: detalhe.id, userId: user?.id, userName: user?.name })} disabled={gerarOC.isPending}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1">
                         <CheckCircle className="h-3 w-3" /> Aprovar e Gerar OC
                       </Button>

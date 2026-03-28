@@ -367,6 +367,16 @@ export const purchaseRouter = router({
       return { ok: true };
     }),
 
+  listarParcelasOC: protectedProcedure
+    .input(z.object({ ordemId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const parcelas = await db.select().from(purchaseAccountsPayable)
+        .where(and(eq(purchaseAccountsPayable.ordemId, input.ordemId), eq(purchaseAccountsPayable.companyId, input.companyId)))
+        .orderBy(asc(purchaseAccountsPayable.id));
+      return parcelas;
+    }),
+
   // ══════════════════════════════════════════════════════════════
   // RECEBIMENTOS
   // ══════════════════════════════════════════════════════════════
@@ -592,7 +602,7 @@ export const purchaseRouter = router({
       token: z.string(), valorUnitario: z.number(), valorFrete: z.number().default(0),
       freteTipo: z.string().default("cif"), prazoEntregaDias: z.number().optional(),
       condicaoPagamento: z.string().optional(), tipoPagamento: z.string().optional(),
-      observacoes: z.string().optional(),
+      numeroParcelas: z.number().optional(), observacoes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -604,9 +614,10 @@ export const purchaseRouter = router({
         status: "respondido", valorUnitario: String(input.valorUnitario),
         valorFrete: String(input.valorFrete), freteTipo: input.freteTipo,
         valorTotalComFrete: String(total.toFixed(2)), prazoEntregaDias: input.prazoEntregaDias,
-        condicaoPagamento: input.condicaoPagamento, observacoes: input.observacoes,
-        respondidoEm: new Date().toISOString(),
-      } as any).where(eq(purchaseQuotationSuppliers.id, tok.quotationSupplierId));
+        condicaoPagamento: input.condicaoPagamento, tipoPagamento: input.tipoPagamento,
+        numeroParcelas: input.numeroParcelas ?? null,
+        observacoes: input.observacoes, respondidoEm: new Date().toISOString(),
+      }).where(eq(purchaseQuotationSuppliers.id, tok.quotationSupplierId));
       await db.update(purchaseQuotationTokens).set({ status: "respondido", respondedAt: new Date().toISOString() } as any).where(eq(purchaseQuotationTokens.token, input.token));
       return { ok: true };
     }),

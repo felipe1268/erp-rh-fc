@@ -8,9 +8,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Package, CheckCircle2, Loader2, Send, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { TIPOS_PAGAMENTO } from "../../../shared/paymentConditions";
+
+const TIPOS_PAGAMENTO = [
+  { value: "a_vista", label: "À Vista" },
+  { value: "30ddl", label: "30 DDL" },
+  { value: "30_60", label: "30/60 DDL" },
+  { value: "30_60_90", label: "30/60/90 DDL" },
+  { value: "entrada_parcelas", label: "Entrada + Parcelas" },
+  { value: "personalizado", label: "Personalizado" },
+] as const;
 
 export default function PortalCotacao() {
   const params = useParams<{ token: string }>();
@@ -21,6 +31,7 @@ export default function PortalCotacao() {
   const [prazo, setPrazo] = useState("");
   const [condicao, setCondicao] = useState("");
   const [tipoPag, setTipoPag] = useState("");
+  const [numParcelas, setNumParcelas] = useState("");
   const [obs, setObs] = useState("");
   const [enviado, setEnviado] = useState(false);
 
@@ -175,6 +186,13 @@ export default function PortalCotacao() {
                   {TIPOS_PAGAMENTO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
+              {condicao === "entrada_parcelas" && (
+                <div>
+                  <Label>Nº de Parcelas</Label>
+                  <Input type="number" min="2" max="36" placeholder="Ex: 3"
+                    value={numParcelas} onChange={e => setNumParcelas(e.target.value)} />
+                </div>
+              )}
             </div>
             <div>
               <Label>Observações</Label>
@@ -197,6 +215,7 @@ export default function PortalCotacao() {
                 token, valorUnitario: Number(valorUnit), valorFrete: Number(valorFrete),
                 prazoEntregaDias: prazo ? parseInt(prazo) : undefined,
                 condicaoPagamento: condicao, tipoPagamento: tipoPag || undefined,
+                numeroParcelas: numParcelas ? parseInt(numParcelas) : undefined,
                 observacoes: obs,
               })}>
               {submeterMut.isPending ? (

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
+import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
@@ -23,6 +24,7 @@ import {
   purchaseAccountsPayable,
   almoxarifadoNotificacoes,
 } from "../../drizzle/schema";
+import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -1110,6 +1112,8 @@ Responda APENAS com um objeto JSON no formato:
       fornecedorId: z.number().nullable().optional(),
       dataValidade: z.string().optional(),
       condicaoPagamento: z.string().optional(),
+      tipoPagamento: z.string().optional(),
+      numeroParcelas: z.number().optional(),
       prazoEntregaDias: z.number().nullable().optional(),
       observacoes: z.string().optional(),
       itens: z.array(z.object({
@@ -1173,6 +1177,8 @@ Responda APENAS com um objeto JSON no formato:
         fornecedorId: input.fornecedorId ?? null,
         dataValidade: input.dataValidade,
         condicaoPagamento: input.condicaoPagamento,
+        tipoPagamento: input.tipoPagamento ?? null,
+        numeroParcelas: input.numeroParcelas ?? 1,
         prazoEntregaDias: input.prazoEntregaDias ?? null,
         observacoes: input.observacoes,
         total: String(totalGeral.toFixed(2)),
@@ -1446,6 +1452,7 @@ Responda APENAS com um objeto JSON no formato:
       prazoEntregaDias: z.number().nullable().optional(),
       condicaoPagamento: z.string().optional(),
       tipoPagamento: z.string().optional(),
+      numeroParcelas: z.number().optional(),
       respostas: z.array(z.object({
         itemId: z.number(),
         precoUnitario: z.number(),
@@ -1477,8 +1484,8 @@ Responda APENAS com um objeto JSON no formato:
         prazoEntregaDias: input.prazoEntregaDias ?? null,
         condicaoPagamento: input.condicaoPagamento ?? null,
         tipoPagamento: input.tipoPagamento ?? null,
-      } as any)
-        .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+        numeroParcelas: input.numeroParcelas ?? null,
+      }).where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
       return { ok: true, total: totalForn };
     }),
 
@@ -1842,6 +1849,8 @@ Responda APENAS com um objeto JSON no formato:
         total: p.totalOrcado ?? "0",
         prazoEntregaDias: p.prazoEntregaDias ?? null,
         condicaoPagamento: p.condicaoPagamento ?? null,
+        tipoPagamento: p.tipoPagamento ?? null,
+        numeroParcelas: p.numeroParcelas ?? null,
       }).where(eq(comprasCotacoes.id, input.cotacaoId));
       return { ok: true };
     }),
@@ -1974,7 +1983,7 @@ Responda APENAS com um objeto JSON no formato:
     }),
 
   criarOrdemDeCotacao: protectedProcedure
-    .input(z.object({ companyId: z.number(), cotacaoId: z.number() }))
+    .input(z.object({ companyId: z.number(), cotacaoId: z.number(), userId: z.number().optional(), userName: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
@@ -2015,8 +2024,9 @@ Responda APENAS com um objeto JSON no formato:
         desconto: "0",
         total: String(subtotal.toFixed(2)),
         condicaoPagamento: fornInfo?.condicaoPagamento ?? cot.condicaoPagamento ?? null,
-        tipoPagamento: (fornInfo as any)?.tipoPagamento ?? null,
-      } as any).returning();
+        tipoPagamento: fornInfo?.tipoPagamento ?? cot.tipoPagamento ?? null,
+        numeroParcelas: fornInfo?.numeroParcelas ?? cot.numeroParcelas ?? 1,
+      }).returning();
       if (itens.length > 0) {
         await db.insert(comprasOrdensItens).values(
           itens.map(it => {
@@ -2036,10 +2046,55 @@ Responda APENAS com um objeto JSON no formato:
           })
         );
       }
+      if (cot.fornecedorId) {
+        const forn = await db.select().from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId));
+        const { entryIds, apIds } = await criarParcelasFinanceiras({
+          ocId: oc.id,
+          companyId: input.companyId,
+          obraId: oc.obraId ?? undefined,
+          supplierId: oc.fornecedorId,
+          supplierNome: forn?.[0]?.razaoSocial || null,
+          valorTotal: n(oc.total),
+          tipoPagamento: oc.tipoPagamento,
+          numeroParcelas: oc.numeroParcelas ?? 1,
+          dataBase: oc.dataEntregaPrevista || null,
+          numero: oc.numeroOc,
+        }, input.userId ?? 0, input.userName ?? "Sistema");
+
+        if (entryIds.length > 0) {
+          await db.update(comprasOrdens).set({
+            financialEntryId: entryIds[0],
+          }).where(eq(comprasOrdens.id, oc.id));
+        }
+      }
+
       await db.update(comprasCotacoes).set({ status: "aprovada" }).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (cot.solicitacaoId) {
         await db.update(comprasSolicitacoes).set({ status: "aprovado", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
       }
+
+      if (oc.fornecedorId) {
+        const [forn] = await db.select({ razaoSocial: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, oc.fornecedorId));
+        const { entryIds, apIds } = await criarParcelasFinanceiras({
+          ocId: oc.id,
+          companyId: input.companyId,
+          obraId: oc.obraId ?? undefined,
+          supplierId: oc.fornecedorId,
+          supplierNome: forn?.razaoSocial || null,
+          valorTotal: n(oc.total),
+          tipoPagamento: oc.tipoPagamento,
+          numeroParcelas: oc.numeroParcelas ?? 1,
+          dataBase: oc.dataEntregaPrevista || null,
+          numero: oc.numeroOc,
+        }, input.userId ?? 0, input.userName ?? "Sistema");
+
+        if (entryIds.length > 0) {
+          await db.update(comprasOrdens).set({
+            financialEntryId: entryIds[0],
+          }).where(eq(comprasOrdens.id, oc.id));
+        }
+      }
+
       return oc;
     }),
 

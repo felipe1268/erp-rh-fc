@@ -114,6 +114,10 @@ export default function Ordens() {
     { enabled: companyId > 0 }
   );
   const detalheQ = trpc.compras.getOrdem.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
+  const parcelasQ = trpc.purchase.listarParcelasOC.useQuery(
+    { ordemId: showDetalhe!, companyId },
+    { enabled: showDetalhe !== null && companyId > 0 }
+  );
   const fornQ = trpc.compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: companyId > 0 });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
 
@@ -595,6 +599,34 @@ export default function Ordens() {
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
                   <PurchaseTimeline companyId={companyId} ordemId={detalhe.id} />
                 </div>
+
+                {(parcelasQ.data ?? []).length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Parcelas</p>
+                    <div className="rounded-lg border border-gray-200 overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
+                            <TableHead className="text-gray-500 text-xs w-16">#</TableHead>
+                            <TableHead className="text-gray-500 text-xs">Valor</TableHead>
+                            <TableHead className="text-gray-500 text-xs">Vencimento</TableHead>
+                            <TableHead className="text-gray-500 text-xs">Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(parcelasQ.data ?? []).map((p: any) => (
+                            <TableRow key={p.id} className="border-gray-100">
+                              <TableCell className="text-gray-500 text-sm">{p.parcelaNumero ?? 1}/{p.parcelaTotal ?? 1}</TableCell>
+                              <TableCell className="text-emerald-700 text-sm font-medium">{parseFloat(p.valorTotal || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</TableCell>
+                              <TableCell className="text-gray-700 text-sm">{p.dataVencimento ? new Date(p.dataVencimento + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</TableCell>
+                              <TableCell className="text-sm"><span className={`inline-flex px-2 py-0.5 rounded text-xs border ${p.status === "pago" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : p.status === "liberado" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{p.status}</span></TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
 
                 {!["entregue", "cancelada"].includes(detalhe.status) && (
                   <div className="space-y-3 border-t border-gray-200 pt-4">
