@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -479,7 +479,40 @@ export default function Cotacoes() {
   const [cobertoPorRisco, setCobertoPorRisco] = useState(false);
   const [iaExtracao, setIaExtracao] = useState<{ fornecedorId: number; dados: any } | null>(null);
   const [iaFileBuffer, setIaFileBuffer] = useState<{ fornecedorId: number; base64: string; fileName: string; mimeType: string } | null>(null);
-  useEffect(() => { setCobertoPorRisco(false); setShowRealocacao(false); setIaExtracao(null); setIaFileBuffer(null); }, [showDetalhe]);
+  const [iaProgress, setIaProgress] = useState<{ fornecedorId: number; percent: number; etapa: string } | null>(null);
+  const iaProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startIaProgress = useCallback((fornecedorId: number) => {
+    if (iaProgressRef.current) clearInterval(iaProgressRef.current);
+    const etapas = [
+      { at: 0, label: "Enviando documento..." },
+      { at: 10, label: "Analisando documento..." },
+      { at: 25, label: "Identificando itens..." },
+      { at: 45, label: "Extraindo preços..." },
+      { at: 65, label: "Comparando com a SC..." },
+      { at: 80, label: "Finalizando análise..." },
+    ];
+    let current = 0;
+    setIaProgress({ fornecedorId, percent: 0, etapa: etapas[0].label });
+    iaProgressRef.current = setInterval(() => {
+      current += 1;
+      if (current >= 90) { current = 90; }
+      const etapa = [...etapas].reverse().find(e => current >= e.at)?.label || etapas[0].label;
+      setIaProgress({ fornecedorId, percent: current, etapa });
+    }, 600);
+  }, []);
+
+  const stopIaProgress = useCallback((success?: boolean) => {
+    if (iaProgressRef.current) { clearInterval(iaProgressRef.current); iaProgressRef.current = null; }
+    if (success) {
+      setIaProgress(prev => prev ? { ...prev, percent: 100, etapa: "Concluído!" } : null);
+      setTimeout(() => setIaProgress(null), 1200);
+    } else {
+      setIaProgress(null);
+    }
+  }, []);
+
+  useEffect(() => { setCobertoPorRisco(false); setShowRealocacao(false); setIaExtracao(null); setIaFileBuffer(null); setIaProgress(null); }, [showDetalhe]);
 
   const q = trpc.compras.listarCotacoes.useQuery(
     { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -577,11 +610,13 @@ export default function Cotacoes() {
     onError: (e) => toast.error(e.message),
   });
   const extrairIA = trpc.compras.extrairCotacaoIA.useMutation({
+    onMutate: (vars) => { startIaProgress(vars.fornecedorId); },
     onSuccess: (dados, vars) => {
+      stopIaProgress(true);
       setIaExtracao({ fornecedorId: vars.fornecedorId, dados });
       toast.success(`IA extraiu ${dados.totalItensExtraidos} item(ns), ${dados.totalMatches} match(es)`);
     },
-    onError: (e) => toast.error("Erro na leitura IA: " + e.message),
+    onError: (e) => { stopIaProgress(false); toast.error("Erro na leitura IA: " + e.message); },
   });
   const cancelarAprovacao = trpc.compras.cancelarAprovacaoCotacao.useMutation({
     onSuccess: (d) => {
@@ -1370,6 +1405,26 @@ export default function Cotacoes() {
                                           {(p as any).arquivoNome ? (p as any).arquivoNome.slice(0, 14) + (((p as any).arquivoNome?.length ?? 0) > 14 ? "…" : "") : "Anexar"}
                                         </button>
                                         {((p as any).arquivoUrl || (iaFileBuffer && iaFileBuffer.fornecedorId === p.fornecedorId)) && (
+                                          iaProgress && iaProgress.fornecedorId === p.fornecedorId ? (
+                                            <div className="flex flex-col gap-1 min-w-[140px]">
+                                              <div className="flex items-center gap-1.5">
+                                                <Sparkles className="h-3.5 w-3.5 text-violet-500 animate-pulse" />
+                                                <span className="text-[10px] font-medium text-violet-700 truncate">{iaProgress.etapa}</span>
+                                              </div>
+                                              <div className="w-full bg-violet-100 rounded-full h-2 overflow-hidden">
+                                                <div
+                                                  className="h-full rounded-full transition-all duration-500 ease-out"
+                                                  style={{
+                                                    width: `${iaProgress.percent}%`,
+                                                    background: iaProgress.percent >= 100
+                                                      ? "linear-gradient(90deg, #22c55e, #16a34a)"
+                                                      : "linear-gradient(90deg, #8b5cf6, #a78bfa)",
+                                                  }}
+                                                />
+                                              </div>
+                                              <span className="text-[9px] text-violet-400 text-right">{iaProgress.percent}%</span>
+                                            </div>
+                                          ) : (
                                           <button
                                             onClick={() => {
                                               if (iaFileBuffer && iaFileBuffer.fornecedorId === p.fornecedorId) {
@@ -1381,7 +1436,7 @@ export default function Cotacoes() {
                                                   reader.onload = ev => {
                                                     const base64 = (ev.target?.result as string).split(",")[1];
                                                     const nome = ((p as any).arquivoNome || url).toLowerCase();
-                                                const mime = blob.type || (nome.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+                                                    const mime = blob.type || (nome.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
                                                     extrairIA.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: (p as any).arquivoNome || "arquivo", mimeType: mime });
                                                   };
                                                   reader.readAsDataURL(blob);
@@ -1392,8 +1447,9 @@ export default function Cotacoes() {
                                             className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors disabled:opacity-50"
                                             title="Ler documento com IA e preencher preços automaticamente">
                                             <Sparkles className="h-3.5 w-3.5" />
-                                            {extrairIA.isPending && extrairIA.variables?.fornecedorId === p.fornecedorId ? "Lendo..." : "Ler com IA"}
+                                            Ler com IA
                                           </button>
+                                          )
                                         )}
                                       </div>
                                     </div>
