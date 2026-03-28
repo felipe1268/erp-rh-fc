@@ -260,6 +260,50 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
   );
 }
 
+function CoberturaRealocacaoInfo({ companyId, obraId, cotacaoId, deficit }: {
+  companyId: number; obraId?: number; cotacaoId?: number; deficit: number;
+}) {
+  const q = trpc.compras.buscarSaldosRealocacao.useQuery(
+    { companyId, obraId, cotacaoId, deficit },
+    { enabled: companyId > 0 && deficit > 0 }
+  );
+  const debitos = q.data?.debitosEstaCotacao ?? [];
+  const totalDebitado = q.data?.totalDebitadoEstaCotacao ?? 0;
+
+  return (
+    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2">
+      <div className="flex items-center gap-2">
+        <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+        <div>
+          <p className="text-sm text-emerald-800 font-semibold">Déficit coberto — compra autorizada</p>
+          <p className="text-xs text-emerald-600">
+            Déficit de {deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} coberto por realocação de verba.
+          </p>
+        </div>
+      </div>
+      {debitos.length > 0 && (
+        <div className="ml-7 space-y-1">
+          <p className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Origem da realocação</p>
+          {debitos.map((d: any) => (
+            <div key={d.id} className="flex items-center gap-2 bg-emerald-100/60 rounded px-2.5 py-1.5 text-xs">
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+              <span className="font-bold text-emerald-800">{Number(d.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+              <span className="text-emerald-700">Reserva de Risco — BDI (DI-08)</span>
+              {d.observacao && <span className="text-emerald-600 text-[10px] italic truncate max-w-xs">({d.observacao})</span>}
+              {d.criadoEm && <span className="text-emerald-500 text-[10px] ml-auto">{new Date(d.criadoEm).toLocaleDateString("pt-BR")}</span>}
+            </div>
+          ))}
+          <div className="flex justify-end pt-0.5">
+            <span className="text-[10px] text-emerald-700 font-semibold">
+              Total realocado: {totalDebitado.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   pendente:  { label: "Pendente",  cls: "bg-amber-50 text-amber-700 border-amber-200" },
   aprovada:  { label: "Aprovada",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -2572,12 +2616,9 @@ export default function Cotacoes() {
                       )}
 
                       {/* Agrupamento final por material */}
-                      {/* Verde: déficit coberto por risco */}
+                      {/* Verde: déficit coberto por risco — mostra detalhes de onde veio */}
                       {metaGrandTotal > 0 && melhorForn && deficit > 0 && cobertoPorRisco && (
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-emerald-600 flex-shrink-0" />
-                          <p className="text-sm text-emerald-800 font-medium">Déficit coberto pela Reserva de Risco — compra autorizada</p>
-                        </div>
+                        <CoberturaRealocacaoInfo companyId={companyId} obraId={(mapa?.cotacao as any)?.obraId} cotacaoId={showDetalhe ?? undefined} deficit={deficit} />
                       )}
 
                       {gruposAgrupados.length > 0 && (
