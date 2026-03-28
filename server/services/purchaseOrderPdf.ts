@@ -447,7 +447,7 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   // ══════════════════════════════════════════════════════════════════════
   // ASSINATURAS + RODAPÉ (tudo junto, sem posição absoluta)
   // ══════════════════════════════════════════════════════════════════════
-  y += 120;
+  y += 240;
   const sigW = (cW - 60) / 2;
   doc.strokeColor(dark).lineWidth(0.5).moveTo(mL, y).lineTo(mL + sigW, y).stroke();
   doc.font("Helvetica").fontSize(7.5).fillColor(dark)
