@@ -72,50 +72,78 @@ export default function ComprasComissoes() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="border-green-200 bg-green-50">
-            <CardContent className="pt-5 pb-4">
-              <div className="flex items-center gap-3">
-                <ShoppingCart className="h-7 w-7 text-green-600 shrink-0" />
-                <div>
-                  <p className="text-lg font-bold text-green-700">{fmt(totalCompradoOCs)}</p>
-                  <p className="text-xs text-green-600">Total Comprado ({ocs.length} OCs)</p>
+          <div className="group relative">
+            <Card className="border-green-200 bg-green-50 cursor-help">
+              <CardContent className="pt-5 pb-4">
+                <div className="flex items-center gap-3">
+                  <ShoppingCart className="h-7 w-7 text-green-600 shrink-0" />
+                  <div>
+                    <p className="text-lg font-bold text-green-700">{fmt(totalCompradoOCs)}</p>
+                    <p className="text-xs text-green-600">Total Comprado ({ocs.length} OCs)</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-emerald-200 bg-emerald-50">
-            <CardContent className="pt-5 pb-4">
-              <div className="flex items-center gap-3">
-                <TrendingDown className="h-7 w-7 text-emerald-600 shrink-0" />
-                <div>
-                  <p className="text-lg font-bold text-emerald-700">{fmt(economiaOCs)}</p>
-                  <p className="text-xs text-emerald-600">Economia Identificada</p>
+              </CardContent>
+            </Card>
+            <div className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-2 w-64 bg-gray-900 text-white text-[11px] rounded-lg px-3 py-2.5 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-gray-900" />
+              <div className="font-semibold mb-1">Total Comprado</div>
+              <div>Soma do valor total de todas as Ordens de Compra (OCs) emitidas para esta obra. Inclui apenas OCs com status ativo (exclui canceladas).</div>
+            </div>
+          </div>
+          <div className="group relative">
+            <Card className="border-emerald-200 bg-emerald-50 cursor-help">
+              <CardContent className="pt-5 pb-4">
+                <div className="flex items-center gap-3">
+                  <TrendingDown className="h-7 w-7 text-emerald-600 shrink-0" />
+                  <div>
+                    <p className="text-lg font-bold text-emerald-700">{fmt(economiaOCs)}</p>
+                    <p className="text-xs text-emerald-600">Economia Identificada</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-yellow-200 bg-yellow-50">
-            <CardContent className="pt-5 pb-4">
-              <div className="flex items-center gap-3">
-                <DollarSign className="h-7 w-7 text-yellow-600 shrink-0" />
-                <div>
-                  <p className="text-lg font-bold text-yellow-700">{fmt(comissaoPotencial)}</p>
-                  <p className="text-xs text-yellow-600">Comissao Potencial ({pctConfig}%)</p>
+              </CardContent>
+            </Card>
+            <div className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-2 w-64 bg-gray-900 text-white text-[11px] rounded-lg px-3 py-2.5 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-gray-900" />
+              <div className="font-semibold mb-1">Economia Identificada</div>
+              <div>Diferenca entre o Preco Meta (orcamento) e o preco efetivamente comprado na OC. Quando o comprador negocia abaixo do meta, a economia aparece aqui. Quanto maior, melhor a performance de compras.</div>
+            </div>
+          </div>
+          <div className="group relative">
+            <Card className="border-yellow-200 bg-yellow-50 cursor-help">
+              <CardContent className="pt-5 pb-4">
+                <div className="flex items-center gap-3">
+                  <DollarSign className="h-7 w-7 text-yellow-600 shrink-0" />
+                  <div>
+                    <p className="text-lg font-bold text-yellow-700">{fmt(comissaoPotencial)}</p>
+                    <p className="text-xs text-yellow-600">Comissao Potencial ({pctConfig}%)</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-orange-200 bg-orange-50">
-            <CardContent className="pt-5 pb-4">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="h-7 w-7 text-orange-500 shrink-0" />
-                <div>
-                  <p className="text-lg font-bold text-orange-700">{ocsSemlMeta.length}</p>
-                  <p className="text-xs text-orange-600">OCs sem Preco Meta</p>
+              </CardContent>
+            </Card>
+            <div className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-2 w-64 bg-gray-900 text-white text-[11px] rounded-lg px-3 py-2.5 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-gray-900" />
+              <div className="font-semibold mb-1">Comissao Potencial</div>
+              <div>Percentual ({pctConfig}%) aplicado sobre a economia identificada. Representa o valor que pode ser pago como bonificacao ao comprador pela negociacao abaixo do preco meta do orcamento.</div>
+            </div>
+          </div>
+          <div className="group relative">
+            <Card className="border-orange-200 bg-orange-50 cursor-help">
+              <CardContent className="pt-5 pb-4">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="h-7 w-7 text-orange-500 shrink-0" />
+                  <div>
+                    <p className="text-lg font-bold text-orange-700">{ocsSemlMeta.length}</p>
+                    <p className="text-xs text-orange-600">OCs sem Preco Meta</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+            <div className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-2 w-64 bg-gray-900 text-white text-[11px] rounded-lg px-3 py-2.5 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-gray-900" />
+              <div className="font-semibold mb-1">OCs sem Preco Meta</div>
+              <div>Ordens de Compra cujos itens nao possuem preco meta do orcamento vinculado. Sem preco meta, nao e possivel calcular economia nem comissao. Ideal: zero — todas as OCs devem ter referencia de preco meta.</div>
+            </div>
+          </div>
         </div>
 
         <Card>
