@@ -1269,7 +1269,7 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                 <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin opacity-40" />
                 <p className="text-sm">Carregando composições...</p>
               </div>
-            ) : composicoesCatalogo.length === 0 ? (
+            ) : composicoesCatalogo.length === 0 && leafItems.length === 0 ? (
               <div className="text-center py-16 text-muted-foreground space-y-3">
                 <Wrench className="h-10 w-10 mx-auto text-muted-foreground/30" />
                 <p className="text-sm font-medium">Nenhuma composição vinculada a este orçamento.</p>
@@ -1279,32 +1279,57 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                 </p>
               </div>
             ) : (() => {
-              const totalComps = composicoesCatalogo.length;
-              const totalIns = composicoesCatalogo.reduce((acc: number, c: any) => acc + (c.insumos?.length ?? 0), 0);
+              const usesCatalog = composicoesCatalogo.length > 0;
+              const displayItems = usesCatalog
+                ? composicoesCatalogo
+                : [...leafItems].sort((a, b) => {
+                    const aEap = a.eapCodigo ?? '';
+                    const bEap = b.eapCodigo ?? '';
+                    return aEap.localeCompare(bEap, undefined, { numeric: true });
+                  }).map((item: any) => ({
+                    eapCodigo: item.eapCodigo,
+                    servicoCodigo: item.servicoCodigo,
+                    descricao: item.descricao,
+                    unidade: item.unidade,
+                    quantidade: item.quantidade,
+                    custoTotal: item.custoTotal,
+                    custoTotalMat: item.custoTotalMat,
+                    custoTotalMdo: item.custoTotalMdo,
+                    insumos: [],
+                  }));
+              const totalComps = displayItems.length;
+              const totalIns = displayItems.reduce((acc: number, c: any) => acc + (c.insumos?.length ?? 0), 0);
               return (
                 <Card>
                   <div className="flex items-center justify-between px-4 py-2 bg-slate-700 border-b">
                     <span className="text-xs font-bold text-white uppercase tracking-wider">
-                      TABELA GERAL DE SERVIÇOS — {totalComps} composições, {totalIns} insumos
+                      {usesCatalog
+                        ? `TABELA GERAL DE SERVIÇOS — ${totalComps} composições, ${totalIns} insumos`
+                        : `COMPOSIÇÕES / SERVIÇOS — ${totalComps} itens`}
                     </span>
+                    {!usesCatalog && (
+                      <span className="text-[10px] text-slate-300">
+                        Use "Vincular Composições" para importar CPUs e insumos
+                      </span>
+                    )}
                   </div>
                   <CardContent className="py-0 px-0 overflow-x-auto max-h-[70vh] overflow-y-auto">
                     <table className="w-full text-xs min-w-[1100px]">
                       <thead className="sticky top-0 z-10">
                         <tr className="bg-slate-600 text-white text-[11px] uppercase">
-                          <th className="text-left pl-3 py-2 w-24 border-r border-slate-500">Cód. Serviço</th>
-                          <th className="text-left px-2 py-2 w-20 border-r border-slate-500">Cód. Insumo</th>
+                          <th className="text-left pl-3 py-2 w-28 border-r border-slate-500">EAP</th>
+                          {usesCatalog && <th className="text-left px-2 py-2 w-20 border-r border-slate-500">Cód. Insumo</th>}
                           <th className="text-left px-3 py-2 border-r border-slate-500">Descrição</th>
                           <th className="text-center px-2 py-2 w-12 border-r border-slate-500">Un</th>
-                          <th className="text-right px-2 py-2 w-16 border-r border-slate-500">Qtd</th>
-                          <th className="text-right px-2 py-2 w-24 border-r border-slate-500">PU Insumo</th>
-                          <th className="text-right px-2 py-2 w-24 border-r border-slate-500 text-blue-200">Alocação MAT</th>
-                          <th className="text-right px-2 py-2 w-24 border-r border-slate-500 text-orange-200">Alocação MO</th>
+                          <th className="text-right px-2 py-2 w-20 border-r border-slate-500">Qtd</th>
+                          {usesCatalog && <th className="text-right px-2 py-2 w-24 border-r border-slate-500">PU Insumo</th>}
+                          <th className="text-right px-2 py-2 w-28 border-r border-slate-500 text-blue-200">Mat Total</th>
+                          <th className="text-right px-2 py-2 w-28 border-r border-slate-500 text-orange-200">MO Total</th>
                           <th className="text-right pr-3 py-2 w-28">Custo Total</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {composicoesCatalogo.map((comp: any, compIdx: number) => {
+                        {displayItems.map((comp: any, compIdx: number) => {
                           const isExpanded = expandedComps.has(comp.eapCodigo ?? comp.servicoCodigo ?? '');
                           const hasInsumos = (comp.insumos ?? []).length > 0;
                           const compKey = comp.eapCodigo ?? comp.servicoCodigo ?? compIdx;
@@ -1327,19 +1352,21 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                                     {hasInsumos && (
                                       <span className="text-slate-400 text-[10px]">{isExpanded ? "▾" : "▸"}</span>
                                     )}
-                                    <span>{comp.servicoCodigo || comp.eapCodigo}</span>
+                                    <span>{comp.eapCodigo}</span>
                                   </div>
                                 </td>
-                                <td className="px-2 py-2 border-r border-slate-200"></td>
+                                {usesCatalog && <td className="px-2 py-2 border-r border-slate-200"></td>}
                                 <td className="px-3 py-2 font-semibold text-slate-800 border-r border-slate-200">
                                   <span className="line-clamp-2">{comp.descricao}</span>
-                                  {comp.eapCodigo && comp.servicoCodigo && (
-                                    <span className="block text-[10px] text-slate-400 font-normal font-mono mt-0.5">EAP: {comp.eapCodigo}</span>
+                                  {comp.servicoCodigo && (
+                                    <span className="block text-[10px] text-blue-500 font-normal font-mono mt-0.5">{comp.servicoCodigo}</span>
                                   )}
                                 </td>
                                 <td className="px-2 py-2 text-center font-semibold text-slate-700 border-r border-slate-200">{comp.unidade}</td>
-                                <td className="px-2 py-2 text-right border-r border-slate-200"></td>
-                                <td className="px-2 py-2 text-right border-r border-slate-200"></td>
+                                <td className="px-2 py-2 text-right font-mono text-slate-700 border-r border-slate-200 whitespace-nowrap">
+                                  {n(comp.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                {usesCatalog && <td className="px-2 py-2 text-right border-r border-slate-200"></td>}
                                 <td className="px-2 py-2 text-right font-mono font-semibold text-blue-700 border-r border-slate-200 whitespace-nowrap">
                                   {n(comp.custoTotalMat) > 0 ? formatBRL(n(comp.custoTotalMat)) : ""}
                                 </td>
@@ -1353,9 +1380,11 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                               {isExpanded && (comp.insumos ?? []).map((ins: any, idx: number) => (
                                 <tr key={idx} className="border-b border-slate-100 bg-white hover:bg-blue-50/30 transition-colors">
                                   <td className="pl-3 py-1.5 border-r border-slate-100"></td>
-                                  <td className="px-2 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">
-                                    {ins.insumoCodigo}
-                                  </td>
+                                  {usesCatalog && (
+                                    <td className="px-2 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">
+                                      {ins.insumoCodigo}
+                                    </td>
+                                  )}
                                   <td className="px-3 py-1.5 text-slate-600 border-r border-slate-100">
                                     <span className="line-clamp-2">{ins.insumoDescricao}</span>
                                   </td>
@@ -1363,9 +1392,11 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                                   <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100 whitespace-nowrap">
                                     {n(ins.quantidade) > 0 ? n(ins.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : ""}
                                   </td>
-                                  <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100 whitespace-nowrap">
-                                    {n(ins.precoUnitario) > 0 ? formatBRL(n(ins.precoUnitario)) : ""}
-                                  </td>
+                                  {usesCatalog && (
+                                    <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100 whitespace-nowrap">
+                                      {n(ins.precoUnitario) > 0 ? formatBRL(n(ins.precoUnitario)) : ""}
+                                    </td>
+                                  )}
                                   <td className="px-2 py-1.5 text-right font-mono text-blue-600 border-r border-slate-100 whitespace-nowrap">
                                     {n(ins.alocacaoMat) > 0 ? formatBRL(n(ins.alocacaoMat)) : "—"}
                                   </td>
