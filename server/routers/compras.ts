@@ -3188,7 +3188,7 @@ Responda APENAS com um objeto JSON no formato:
           sql`${comprasSolicitacoes.status} NOT IN ('cancelado')`,
         ));
 
-      const qtdJaSolicitada = scItens.reduce((acc, it) => acc + n(it.quantidadeServico), 0);
+      const qtdJaSolicitada = scItens.reduce((acc, it) => acc + (n(it.quantidadeServico) || n(it.quantidade)), 0);
       const qtdRecebidaSc = scItens.reduce((acc, it) => acc + n(it.quantidadeAtendida), 0);
       const saldoDisponivel = qtdOrcada - qtdJaSolicitada;
 
@@ -4285,7 +4285,7 @@ Responda APENAS com um objeto JSON no formato:
             sql`${comprasSolicitacoes.status} NOT IN ('cancelado')`,
           ));
 
-        const qtdSolicitada = scItens.reduce((acc, it) => acc + n(it.quantidadeServico), 0);
+        const qtdSolicitada = scItens.reduce((acc, it) => acc + (n(it.quantidadeServico) || n(it.quantidade)), 0);
         const qtdRecebida = scItens.reduce((acc, it) => acc + n(it.quantidadeAtendida), 0);
 
         const ocItens = await db.select({
