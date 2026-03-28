@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { toast } from "sonner";
 import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot } from "lucide-react";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
+import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   pendente:         { label: "Pendente",           cls: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -500,7 +501,10 @@ export default function Ordens() {
                   </Table>
                 </div>
 
-                {/* Alterar Status */}
+                <div className="rounded-lg border border-gray-200 bg-white p-4">
+                  <PurchaseTimeline companyId={companyId} ordemId={detalhe.id} />
+                </div>
+
                 {!["entregue", "cancelada"].includes(detalhe.status) && (
                   <div className="space-y-3 border-t border-gray-200 pt-4">
                     <Label className="text-gray-700 text-sm font-semibold">Atualizar Status</Label>

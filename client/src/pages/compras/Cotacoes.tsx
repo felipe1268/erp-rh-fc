@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
+import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -1519,7 +1520,12 @@ export default function Cotacoes() {
                     {parseFloat(cot.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                   </TableCell>
                   <TableCell className="text-gray-500 text-sm">{cot.dataValidade ? new Date(cot.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</TableCell>
-                  <TableCell><span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium border ${st.cls}`}>{st.label}</span></TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium border ${st.cls}`}>{st.label}</span>
+                      <TimelineBadge companyId={companyId} cotacaoId={cot.id} />
+                    </div>
+                  </TableCell>
                   <TableCell><ChevronRight className="h-4 w-4 text-gray-400" /></TableCell>
                 </TableRow>
               );
@@ -1708,6 +1714,10 @@ export default function Cotacoes() {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 bg-white p-4">
+                  <PurchaseTimeline companyId={companyId} cotacaoId={detalhe.id} />
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">

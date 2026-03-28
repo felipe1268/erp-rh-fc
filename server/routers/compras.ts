@@ -2854,4 +2854,294 @@ Responda APENAS com um objeto JSON no formato:
         .where(eq(comprasEntregasProgramadas.id, input.id));
       return { ok: true, novoStatus };
     }),
+
+  getTimelineCompra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      cotacaoId: z.number().optional(),
+      ordemId: z.number().optional(),
+    }).refine(d => d.cotacaoId || d.ordemId, { message: "cotacaoId ou ordemId é obrigatório" }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const { companyId } = input;
+
+      let sc: typeof comprasSolicitacoes.$inferSelect | null = null;
+      let cot: typeof comprasCotacoes.$inferSelect | null = null;
+      let oc: typeof comprasOrdens.$inferSelect | null = null;
+
+      if (input.cotacaoId) {
+        const [c] = await db.select().from(comprasCotacoes).where(
+          and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, companyId))
+        );
+        cot = c ?? null;
+        if (!cot) return { etapas: [], etapaAtual: null };
+        if (cot.solicitacaoId) {
+          const [s] = await db.select().from(comprasSolicitacoes).where(
+            and(eq(comprasSolicitacoes.id, cot.solicitacaoId), eq(comprasSolicitacoes.companyId, companyId))
+          );
+          sc = s ?? null;
+        }
+        const ordens = await db.select().from(comprasOrdens)
+          .where(and(eq(comprasOrdens.cotacaoId, input.cotacaoId), eq(comprasOrdens.companyId, companyId)))
+          .orderBy(desc(comprasOrdens.criadoEm));
+        const nonCancelled = ordens.filter(o => o.status !== "cancelada");
+        oc = nonCancelled.length > 0 ? nonCancelled[0] : (ordens.length > 0 ? ordens[0] : null);
+      } else if (input.ordemId) {
+        const [o] = await db.select().from(comprasOrdens).where(
+          and(eq(comprasOrdens.id, input.ordemId), eq(comprasOrdens.companyId, companyId))
+        );
+        oc = o ?? null;
+        if (!oc) return { etapas: [], etapaAtual: null };
+        if (oc.cotacaoId) {
+          const [c] = await db.select().from(comprasCotacoes).where(
+            and(eq(comprasCotacoes.id, oc.cotacaoId), eq(comprasCotacoes.companyId, companyId))
+          );
+          cot = c ?? null;
+        }
+        const solId = cot?.solicitacaoId ?? null;
+        if (solId) {
+          const [s] = await db.select().from(comprasSolicitacoes).where(
+            and(eq(comprasSolicitacoes.id, solId), eq(comprasSolicitacoes.companyId, companyId))
+          );
+          sc = s ?? null;
+        }
+      }
+
+      let financialEntry: { status: string; dataPagamento: string | null; dataVencimento: string | null } | null = null;
+      if (oc?.financialEntryId) {
+        const feRows = await db.select({
+          status: financialEntries.status,
+          dataPagamento: financialEntries.dataPagamento,
+          dataVencimento: financialEntries.dataVencimento,
+          feCompanyId: financialEntries.companyId,
+        }).from(financialEntries)
+          .where(and(
+            eq(financialEntries.id, oc.financialEntryId),
+            eq(financialEntries.companyId, companyId),
+          ));
+        if (feRows[0]) {
+          financialEntry = {
+            status: feRows[0].status,
+            dataPagamento: feRows[0].dataPagamento ?? null,
+            dataVencimento: feRows[0].dataVencimento ?? null,
+          };
+        }
+      }
+
+      const daysBetween = (d1: string | null | undefined, d2: string | null | undefined): number | null => {
+        if (!d1 || !d2) return null;
+        try {
+          const a = new Date(d1.includes("T") ? d1 : d1 + "T00:00:00");
+          const b = new Date(d2.includes("T") ? d2 : d2 + "T00:00:00");
+          return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+        } catch { return null; }
+      };
+
+      interface TimelineEtapa {
+        key: string;
+        label: string;
+        status: "concluida" | "atual" | "pendente" | "atrasada";
+        data: string | null;
+        tempoDesdeAnterior: number | null;
+        detalhe: string | null;
+      }
+
+      const today = new Date().toISOString().split("T")[0];
+      const etapas: TimelineEtapa[] = [];
+      let prevDate: string | null = null;
+
+      if (sc) {
+        etapas.push({
+          key: "sc_criada",
+          label: "SC Criada",
+          status: "concluida",
+          data: sc.criadoEm,
+          tempoDesdeAnterior: null,
+          detalhe: sc.numeroSc ? `#${sc.numeroSc}` : null,
+        });
+        prevDate = sc.criadoEm;
+
+        if (sc.aprovacaoStatus === "aprovada" && sc.aprovadoEm) {
+          const dias = daysBetween(prevDate, sc.aprovadoEm);
+          etapas.push({
+            key: "sc_aprovada",
+            label: "SC Aprovada",
+            status: "concluida",
+            data: sc.aprovadoEm,
+            tempoDesdeAnterior: dias,
+            detalhe: null,
+          });
+          prevDate = sc.aprovadoEm;
+        } else if (!cot) {
+          etapas.push({
+            key: "sc_aprovada",
+            label: "SC Aprovação",
+            status: sc.aprovacaoStatus === "aguardando" ? "atual" : "pendente",
+            data: null,
+            tempoDesdeAnterior: null,
+            detalhe: null,
+          });
+        }
+      }
+
+      if (cot) {
+        const dias = daysBetween(prevDate, cot.criadoEm);
+        etapas.push({
+          key: "cotacao_aberta",
+          label: "Cotação Aberta",
+          status: "concluida",
+          data: cot.criadoEm,
+          tempoDesdeAnterior: dias,
+          detalhe: cot.numeroCotacao ? `#${cot.numeroCotacao}` : null,
+        });
+        prevDate = cot.criadoEm;
+
+        if (oc) {
+          const approvalDate = oc.criadoEm;
+          const diasAprov = daysBetween(prevDate, approvalDate);
+          etapas.push({
+            key: "cotacao_aprovada",
+            label: "Cotação Aprovada",
+            status: "concluida",
+            data: approvalDate,
+            tempoDesdeAnterior: diasAprov,
+            detalhe: cot.fornecedorId ? "Fornecedor selecionado" : null,
+          });
+          prevDate = approvalDate;
+        } else if (cot.status === "aprovada" || cot.status === "encerrada") {
+          etapas.push({
+            key: "cotacao_aprovada",
+            label: "Cotação Aprovada",
+            status: "concluida",
+            data: null,
+            tempoDesdeAnterior: null,
+            detalhe: cot.fornecedorId ? "Fornecedor selecionado" : "Aguardando emissão de OC",
+          });
+        } else if (cot.status === "recusada" || cot.status === "cancelada") {
+          etapas.push({
+            key: "cotacao_aprovada",
+            label: cot.status === "recusada" ? "Cotação Recusada" : "Cotação Cancelada",
+            status: "concluida",
+            data: null,
+            tempoDesdeAnterior: null,
+            detalhe: "Processo encerrado",
+          });
+
+          const resolvedAtual2 = etapas.find(e => e.status === "atual");
+          const etapaAtual2 = resolvedAtual2?.label ?? "Processo encerrado";
+          return { etapas, etapaAtual: etapaAtual2 };
+        } else {
+          etapas.push({
+            key: "cotacao_aprovada",
+            label: "Aguardando Aprovação",
+            status: "atual",
+            data: null,
+            tempoDesdeAnterior: null,
+            detalhe: null,
+          });
+        }
+      }
+
+      if (oc) {
+        const dias = daysBetween(prevDate, oc.criadoEm);
+        etapas.push({
+          key: "oc_emitida",
+          label: "OC Emitida",
+          status: "concluida",
+          data: oc.criadoEm,
+          tempoDesdeAnterior: dias,
+          detalhe: oc.numeroOc ? `#${oc.numeroOc}` : null,
+        });
+        prevDate = oc.criadoEm;
+
+        if (oc.dataEntregaPrevista) {
+          const isDelivered = ["entregue", "entregue_parcial"].includes(oc.status);
+          const isOverdue = !isDelivered && oc.dataEntregaPrevista < today;
+          const diasEntrega = daysBetween(prevDate, oc.dataEntregaPrevista);
+          const diasAtraso = isOverdue ? daysBetween(oc.dataEntregaPrevista, today) : null;
+          etapas.push({
+            key: "entrega_prevista",
+            label: isOverdue ? "Entrega Atrasada" : (isDelivered ? "Entrega Prevista" : "Aguardando Entrega"),
+            status: isDelivered ? "concluida" : (isOverdue ? "atrasada" : "atual"),
+            data: oc.dataEntregaPrevista,
+            tempoDesdeAnterior: isOverdue ? diasAtraso : diasEntrega,
+            detalhe: isOverdue ? "Prazo excedido" : null,
+          });
+        }
+
+        if (oc.status === "entregue" || oc.status === "entregue_parcial") {
+          const diasReceb = daysBetween(oc.dataEntregaPrevista || prevDate, oc.dataEntregaReal || oc.atualizadoEm);
+          etapas.push({
+            key: "material_recebido",
+            label: oc.status === "entregue_parcial" ? "Recebimento Parcial" : "Material Recebido",
+            status: "concluida",
+            data: oc.dataEntregaReal || oc.atualizadoEm,
+            tempoDesdeAnterior: diasReceb,
+            detalhe: null,
+          });
+          prevDate = oc.dataEntregaReal || oc.atualizadoEm;
+        } else if (!oc.dataEntregaPrevista) {
+          etapas.push({
+            key: "material_recebido",
+            label: "Aguardando Recebimento",
+            status: "atual",
+            data: null,
+            tempoDesdeAnterior: null,
+            detalhe: null,
+          });
+        } else {
+          etapas.push({
+            key: "material_recebido",
+            label: "Recebimento",
+            status: "pendente",
+            data: null,
+            tempoDesdeAnterior: null,
+            detalhe: null,
+          });
+        }
+
+        if (financialEntry) {
+          const isPaid = financialEntry.status === "pago" || financialEntry.status === "confirmado";
+          const diasPag = isPaid && financialEntry.dataPagamento
+            ? daysBetween(prevDate, financialEntry.dataPagamento) : null;
+          etapas.push({
+            key: "pagamento",
+            label: isPaid ? "Pagamento Realizado" : "Pagamento Pendente",
+            status: isPaid ? "concluida" : (oc.status === "entregue" ? "atual" : "pendente"),
+            data: isPaid ? financialEntry.dataPagamento : financialEntry.dataVencimento,
+            tempoDesdeAnterior: diasPag,
+            detalhe: isPaid ? null : (financialEntry.dataVencimento ? `Venc. ${financialEntry.dataVencimento}` : null),
+          });
+        } else {
+          etapas.push({
+            key: "pagamento",
+            label: "Pagamento",
+            status: "pendente",
+            data: null,
+            tempoDesdeAnterior: null,
+            detalhe: null,
+          });
+        }
+      } else {
+        if (cot) {
+          etapas.push({ key: "oc_emitida", label: "Emissão OC", status: "pendente", data: null, tempoDesdeAnterior: null, detalhe: null });
+          etapas.push({ key: "material_recebido", label: "Recebimento", status: "pendente", data: null, tempoDesdeAnterior: null, detalhe: null });
+          etapas.push({ key: "pagamento", label: "Pagamento", status: "pendente", data: null, tempoDesdeAnterior: null, detalhe: null });
+        }
+      }
+
+      const atrasada = etapas.find(e => e.status === "atrasada");
+      const atual = etapas.find(e => e.status === "atual");
+      if (!atrasada && !atual) {
+        const firstPending = etapas.find(e => e.status === "pendente");
+        if (firstPending) {
+          firstPending.status = "atual";
+        }
+      }
+      const resolvedAtual = etapas.find(e => e.status === "atual");
+      const resolvedAtrasada = etapas.find(e => e.status === "atrasada");
+      const etapaAtual = resolvedAtrasada?.label ?? resolvedAtual?.label ?? (etapas.length > 0 && etapas.every(e => e.status === "concluida") ? "Concluído" : null);
+
+      return { etapas, etapaAtual };
+    }),
 });
