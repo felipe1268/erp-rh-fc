@@ -480,6 +480,7 @@ export default function Cotacoes() {
   const [condFechPrazo, setCondFechPrazo] = useState<Record<number, string>>({});
   const [condFechParc, setCondFechParc] = useState<Record<number, string>>({});
   const [condFechDataIni, setCondFechDataIni] = useState<Record<number, string>>({});
+  const [editDataEntrega, setEditDataEntrega] = useState<Record<number, string>>({});
   const [editValorFrete, setEditValorFrete] = useState<Record<number, string>>({});
   const [editTransportadora, setEditTransportadora] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
@@ -1334,6 +1335,11 @@ export default function Cotacoes() {
                   </div>
                 </div>
                 <div>
+                  <label className="text-[11px] text-gray-500 mb-1 block">Data Prevista Entrega</label>
+                  <input type="date" value={editDataEntrega[fId] ?? ""} onChange={e => setEditDataEntrega(prev => ({ ...prev, [fId]: e.target.value }))}
+                    className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
+                </div>
+                <div>
                   <label className="text-[11px] text-gray-500 mb-1 block">Tipo de Frete</label>
                   <select value={editFreteTipo[fId] ?? "cif"} onChange={e => setEditFreteTipo(prev => ({ ...prev, [fId]: e.target.value }))}
                     className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none">
@@ -1341,17 +1347,21 @@ export default function Cotacoes() {
                     <option value="fob">FOB (por conta)</option>
                   </select>
                 </div>
-                <div>
-                  <label className="text-[11px] text-gray-500 mb-1 block">Valor do Frete</label>
-                  <input type="number" step="0.01" min="0" placeholder="R$ 0,00" value={editValorFrete[fId] ?? "0"} onChange={e => setEditValorFrete(prev => ({ ...prev, [fId]: e.target.value }))}
-                    className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
-                </div>
-                <div>
+                {(editFreteTipo[fId] ?? "cif") === "fob" && (
+                  <div>
+                    <label className="text-[11px] text-gray-500 mb-1 block">Valor do Frete</label>
+                    <input type="number" step="0.01" min="0" placeholder="R$ 0,00" value={editValorFrete[fId] ?? "0"} onChange={e => setEditValorFrete(prev => ({ ...prev, [fId]: e.target.value }))}
+                      className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
+                  </div>
+                )}
+              </div>
+              {(editFreteTipo[fId] ?? "cif") === "fob" && (
+                <div className="mt-3">
                   <label className="text-[11px] text-gray-500 mb-1 block">Transportadora</label>
                   <input type="text" placeholder="Nome da transportadora" value={editTransportadora[fId] ?? ""} onChange={e => setEditTransportadora(prev => ({ ...prev, [fId]: e.target.value }))}
                     className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
