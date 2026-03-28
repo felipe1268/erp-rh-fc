@@ -656,16 +656,16 @@ export default function AlmoxarifadoPage() {
               onClick={() => setModalSmartEntry(true)}
               className="flex flex-col items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
             >
-              <ArrowDownCircle className="w-8 h-8" />
-              📥 ENTRADA
+              <ArrowUpCircle className="w-8 h-8" />
+              ENTRADA
             </button>
-            {/* SAÍDA (antigo INSUMO) */}
+            {/* SAÍDA */}
             <button
               onClick={() => { resetInsumo(); setModalInsumo(true); }}
-              className="flex flex-col items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
+              className="flex flex-col items-center justify-center gap-2 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
             >
-              <ShoppingCart className="w-8 h-8" />
-              📤 SAÍDA
+              <ArrowDownCircle className="w-8 h-8" />
+              SAÍDA
             </button>
             {/* FERRAMENTAS (empréstimo) */}
             <button
