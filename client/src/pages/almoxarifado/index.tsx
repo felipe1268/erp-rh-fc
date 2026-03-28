@@ -681,6 +681,14 @@ export default function AlmoxarifadoPage() {
               <ArrowDownCircle className="w-8 h-8" />
               📥 ENTRADA
             </button>
+            {/* SAÍDA (antigo INSUMO) */}
+            <button
+              onClick={() => { resetInsumo(); setModalInsumo(true); }}
+              className="flex flex-col items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
+            >
+              <ShoppingCart className="w-8 h-8" />
+              📤 SAÍDA
+            </button>
             {/* FERRAMENTAS (empréstimo) */}
             <button
               onClick={() => { resetEmprestimo(); setModalEmprestimo(true); }}
@@ -688,14 +696,6 @@ export default function AlmoxarifadoPage() {
             >
               <Wrench className="w-8 h-8" />
               🔧 FERRAMENTAS
-            </button>
-            {/* DAR INSUMO */}
-            <button
-              onClick={() => { resetInsumo(); setModalInsumo(true); }}
-              className="flex flex-col items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
-            >
-              <ShoppingCart className="w-8 h-8" />
-              🛒 INSUMO
             </button>
             {/* TRANSFERIR */}
             <button
