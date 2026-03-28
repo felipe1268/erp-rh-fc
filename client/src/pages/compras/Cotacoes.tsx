@@ -703,7 +703,12 @@ export default function Cotacoes() {
               {/* Cabeçalho */}
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900 font-mono">{detalheFullscreen.numeroCotacao}</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-bold text-gray-900 font-mono">{detalheFullscreen.numeroCotacao}</h1>
+                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(detalheFullscreen as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                      {(detalheFullscreen as any).tipo === "servico" ? "Mão de Obra" : "Material"}
+                    </span>
+                  </div>
                   {(detalheFullscreen as any).descricao && <p className="text-gray-500 mt-0.5">{(detalheFullscreen as any).descricao}</p>}
                 </div>
                 <div className="flex items-center gap-3 flex-wrap justify-end">
@@ -720,7 +725,7 @@ export default function Cotacoes() {
                       </Button>
                     </>
                   )}
-                  {detalheFullscreen.status === "aprovada" && !(detalheFullscreen as any).contratoTerceiroId && (
+                  {detalheFullscreen.status === "aprovada" && (detalheFullscreen as any).tipo === "servico" && !(detalheFullscreen as any).contratoTerceiroId && (
                     <Button onClick={() => gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId })} disabled={gerarContrato.isPending}
                       className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
                       {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Gerar Contrato de Serviço
@@ -817,7 +822,7 @@ export default function Cotacoes() {
                         </Button>
                       </>
                     )}
-                    {detalheFullscreen.status === "aprovada" && !(detalheFullscreen as any).contratoTerceiroId && (
+                    {detalheFullscreen.status === "aprovada" && (detalheFullscreen as any).tipo === "servico" && !(detalheFullscreen as any).contratoTerceiroId && (
                       <Button onClick={() => gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId })} disabled={gerarContrato.isPending}
                         className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
                         {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Gerar Contrato de Serviço
@@ -1482,7 +1487,12 @@ export default function Cotacoes() {
                 <TableRow key={cot.id} className="border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setShowDetalhe(cot.id)}>
                   <TableCell className="text-gray-900 font-mono font-semibold text-xs">{cot.numeroCotacao}</TableCell>
                   <TableCell>
-                    <div className="text-gray-900 text-sm">{(cot as any).descricao || "—"}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-gray-900 text-sm">{(cot as any).descricao || "—"}</span>
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${(cot as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                        {(cot as any).tipo === "servico" ? "Serviço" : "Material"}
+                      </span>
+                    </div>
                     {cot.solicitacaoId && <div className="text-gray-400 text-xs">SC #{cot.solicitacaoId}</div>}
                   </TableCell>
                   <TableCell>
@@ -1702,7 +1712,7 @@ export default function Cotacoes() {
                       </Button>
                     </>
                   )}
-                  {detalhe.status === "aprovada" && !(detalhe as any).contratoTerceiroId && (
+                  {detalhe.status === "aprovada" && (detalhe as any).tipo === "servico" && !(detalhe as any).contratoTerceiroId && (
                     <Button size="sm" onClick={() => gerarContrato.mutate({ cotacaoId: detalhe.id, companyId })}
                       disabled={gerarContrato.isPending}
                       className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1">

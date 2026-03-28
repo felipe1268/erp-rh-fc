@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
-  Camera, ImageIcon, X,
+  Camera, ImageIcon, X, Briefcase,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -143,7 +143,7 @@ export default function Solicitacoes() {
     onError: (e) => toast.error(e.message),
   });
 
-  function handleEnviarParaCotacao() {
+  function handleEnviarParaCotacao(tipo: "material" | "servico") {
     if (!detalhe) return;
     const itens = (detalhe.itens as any[]).map((it: any) => ({
       solicitacaoItemId: it.id,
@@ -156,6 +156,7 @@ export default function Solicitacoes() {
       companyId,
       descricao: detalhe.titulo || detalhe.numeroSc,
       prioridade: detalhe.prioridade || "normal",
+      tipo,
       obraId: detalhe.obraId ?? null,
       solicitacaoId: detalhe.id,
       itens,
@@ -1071,14 +1072,24 @@ export default function Solicitacoes() {
               )}
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
                 {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && detalhe.aprovacaoStatus === "aprovada" && (
-                  <Button size="sm"
-                    onClick={handleEnviarParaCotacao}
-                    disabled={criarCotacao.isPending || (detalhe.itens as any[]).length === 0}
-                    className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1.5">
-                    {criarCotacao.isPending
-                      ? <><Loader2 className="h-3 w-3 animate-spin" /> Criando cotação...</>
-                      : <><ShoppingCart className="h-3 w-3" /> Enviar para Cotação</>}
-                  </Button>
+                  <>
+                    <Button size="sm"
+                      onClick={() => handleEnviarParaCotacao("material")}
+                      disabled={criarCotacao.isPending || (detalhe.itens as any[]).length === 0}
+                      className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1.5">
+                      {criarCotacao.isPending
+                        ? <><Loader2 className="h-3 w-3 animate-spin" /> Criando cotação...</>
+                        : <><ShoppingCart className="h-3 w-3" /> Cotação de Material</>}
+                    </Button>
+                    <Button size="sm"
+                      onClick={() => handleEnviarParaCotacao("servico")}
+                      disabled={criarCotacao.isPending || (detalhe.itens as any[]).length === 0}
+                      className="bg-purple-600 hover:bg-purple-500 text-white text-xs gap-1.5">
+                      {criarCotacao.isPending
+                        ? <><Loader2 className="h-3 w-3 animate-spin" /> Criando cotação...</>
+                        : <><Briefcase className="h-3 w-3" /> Cotação de Mão de Obra</>}
+                    </Button>
+                  </>
                 )}
                 {!["cancelado", "aprovado"].includes(detalhe.status) && (
                   <Button size="sm" variant="outline"

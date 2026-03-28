@@ -4961,6 +4961,7 @@ export const comprasCotacoes = pgTable("compras_cotacoes", {
   status:           varchar({ length: 30 }).notNull().default("pendente"),
   observacoes:      text(),
   total:            numeric({ precision: 14, scale: 2 }).default("0"),
+  tipo:             varchar({ length: 30 }).default("material"),
   contratoTerceiroId: integer("contrato_terceiro_id"),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
