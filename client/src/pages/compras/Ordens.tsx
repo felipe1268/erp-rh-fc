@@ -141,6 +141,12 @@ export default function Ordens() {
     onSuccess: () => { toast.success("OC excluída!"); q.refetch(); setShowDetalhe(null); },
     onError: (e) => toast.error(e.message),
   });
+  const atualizarEntregaMut = trpc.compras.atualizarDadosEntregaOC.useMutation({
+    onSuccess: () => { toast.success("Dados de entrega atualizados!"); detalheQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [editTransp, setEditTransp] = useState("");
+  const [editRastreio, setEditRastreio] = useState("");
 
   function resetForm() {
     setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "" });
@@ -532,6 +538,35 @@ export default function Ordens() {
                   <div><span className="text-gray-400 text-xs">Entrega real</span><p className="text-gray-900 font-medium">{detalhe.dataEntregaReal ? new Date(detalhe.dataEntregaReal + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Origem</span><p className="text-gray-900 font-medium">{detalhe.cotacaoId ? `Cotação #${detalhe.cotacaoId}` : "Manual"}</p></div>
                   <div><span className="text-gray-400 text-xs">Criado em</span><p className="text-gray-900 font-medium">{new Date(detalhe.criadoEm).toLocaleDateString("pt-BR")}</p></div>
+                  {((detalhe as any).freteTipo || (detalhe as any).transportadora || (detalhe as any).codigoRastreamento) && (
+                    <>
+                      <div>
+                        <span className="text-gray-400 text-xs">Tipo de Frete</span>
+                        <p className="text-gray-900 font-medium">
+                          <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold border ${(detalhe as any).freteTipo === "fob" ? "bg-orange-50 text-orange-700 border-orange-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                            {((detalhe as any).freteTipo ?? "cif").toUpperCase()}
+                          </span>
+                          {parseFloat((detalhe as any).frete ?? "0") > 0 && (
+                            <span className="ml-2 text-sm text-gray-600">
+                              {parseFloat((detalhe as any).frete).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      {(detalhe as any).transportadora && (
+                        <div>
+                          <span className="text-gray-400 text-xs">Transportadora</span>
+                          <p className="text-gray-900 font-medium flex items-center gap-1"><Truck className="h-3 w-3 text-gray-400" />{(detalhe as any).transportadora}</p>
+                        </div>
+                      )}
+                      {(detalhe as any).codigoRastreamento && (
+                        <div>
+                          <span className="text-gray-400 text-xs">Rastreamento</span>
+                          <p className="text-gray-900 font-medium font-mono text-sm">{(detalhe as any).codigoRastreamento}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 {(detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor && (
@@ -685,6 +720,44 @@ export default function Ordens() {
                           <a.icon className="h-3 w-3" /> {a.label}
                         </Button>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {!["cancelada"].includes(detalhe.status) && (
+                  <div className="space-y-3 border-t border-gray-200 pt-4">
+                    <Label className="text-gray-700 text-sm font-semibold flex items-center gap-1">
+                      <Truck className="h-3.5 w-3.5 text-gray-400" /> Dados de Entrega / Rastreamento
+                    </Label>
+                    <div className="flex gap-3 items-end flex-wrap">
+                      <div className="space-y-1 flex-1 min-w-[180px]">
+                        <Label className="text-gray-500 text-xs">Transportadora</Label>
+                        <Input className="bg-white border-gray-300 text-gray-900 h-8 text-sm"
+                          placeholder="Nome da transportadora"
+                          value={editTransp || (detalhe as any).transportadora || ""}
+                          onChange={e => setEditTransp(e.target.value)} />
+                      </div>
+                      <div className="space-y-1 flex-1 min-w-[180px]">
+                        <Label className="text-gray-500 text-xs">Código de Rastreamento</Label>
+                        <Input className="bg-white border-gray-300 text-gray-900 h-8 text-sm font-mono"
+                          placeholder="Código de rastreio"
+                          value={editRastreio || (detalhe as any).codigoRastreamento || ""}
+                          onChange={e => setEditRastreio(e.target.value)} />
+                      </div>
+                      <Button size="sm"
+                        disabled={atualizarEntregaMut.isPending || (!editTransp && !editRastreio)}
+                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1 h-8"
+                        onClick={() => {
+                          atualizarEntregaMut.mutate({
+                            id: detalhe.id, companyId,
+                            transportadora: editTransp || (detalhe as any).transportadora || undefined,
+                            codigoRastreamento: editRastreio || (detalhe as any).codigoRastreamento || undefined,
+                          });
+                          setEditTransp(""); setEditRastreio("");
+                        }}>
+                        {atualizarEntregaMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                        Salvar
+                      </Button>
                     </div>
                   </div>
                 )}

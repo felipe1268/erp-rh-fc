@@ -36,6 +36,7 @@ export interface OCParcelasInput {
   formaPagamento?: string | null;
   numero?: string | null;
   tipo?: string | null;
+  freteSufixo?: string;
 }
 
 export async function criarParcelasFinanceiras(
@@ -66,6 +67,7 @@ export async function criarParcelasFinanceiras(
   await db.transaction(async (tx: any) => {
     for (const parcela of parcelas) {
       const sufixo = totalParcelas > 1 ? ` (${parcela.descricao})` : "";
+      const frete = input.freteSufixo || "";
       const entryResult = await tx.insert(financialEntries).values({
         companyId: input.companyId,
         obraId: input.obraId || null,
@@ -79,7 +81,7 @@ export async function criarParcelasFinanceiras(
         status: "previsto",
         origemModulo: "compras",
         origemId: input.ocId,
-        origemDescricao: `OC #${ocLabel} — ${input.supplierNome || "Fornecedor"}${sufixo}`,
+        origemDescricao: `OC #${ocLabel} — ${input.supplierNome || "Fornecedor"}${frete}${sufixo}`,
         parcelaNumero: parcela.numero,
         parcelaTotal: totalParcelas,
         parcelaGrupoId: grupoId,
@@ -152,6 +154,7 @@ export async function onOCEmitida(ocId: number, userId: number, userName: string
     formaPagamento: oc.formaPagamento || null,
     numero: oc.numero,
     tipo: oc.tipo,
+    freteSufixo: (oc as any).freteTipo === "fob" && parseFloat((oc as any).valorFrete || "0") > 0 ? ` (FOB frete: R$${parseFloat((oc as any).valorFrete).toFixed(2)})` : "",
   }, userId, userName);
 
   if (entryIds.length > 0 || apIds.length > 0) {

@@ -237,15 +237,18 @@ export const purchaseRouter = router({
     .input(z.object({
       cotacaoId: z.number(), quotationSupplierId: z.number(),
       valorUnitario: z.number(), valorFrete: z.number().default(0),
-      freteTipo: z.string().default("cif"), prazoEntregaDias: z.number().optional(),
+      freteTipo: z.string().default("cif"), transportadora: z.string().optional(),
+      prazoEntregaDias: z.number().optional(),
       condicaoPagamento: z.string().optional(), observacoes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const total = input.valorUnitario + input.valorFrete;
+      const freteParaTotal = input.freteTipo === "fob" ? input.valorFrete : 0;
+      const total = input.valorUnitario + freteParaTotal;
       await db.update(purchaseQuotationSuppliers).set({
         status: "respondido", valorUnitario: String(input.valorUnitario),
         valorFrete: String(input.valorFrete), freteTipo: input.freteTipo,
+        transportadora: input.transportadora ?? null,
         valorTotalComFrete: String(total.toFixed(2)),
         prazoEntregaDias: input.prazoEntregaDias, condicaoPagamento: input.condicaoPagamento,
         observacoes: input.observacoes, respondidoEm: new Date().toISOString(),
@@ -311,6 +314,7 @@ export const purchaseRouter = router({
       tipoPagamento: z.string().optional(),
       numeroParcelas: z.number().default(1), prazoEntrega: z.string().optional(),
       valorFrete: z.number().default(0), freteTipo: z.string().default("cif"),
+      transportadora: z.string().optional(),
       enderecoEntrega: z.string().optional(), cidadeEntrega: z.string().optional(),
       estadoEntrega: z.string().optional(), cepEntrega: z.string().optional(),
       retencaoINSS: z.number().default(0), retencaoIR: z.number().default(0), retencaoISS: z.number().default(0),
@@ -326,14 +330,17 @@ export const purchaseRouter = router({
       const db = await getDb();
       const numero = await gerarNumeroOC(db, input.companyId);
       const valorItens = input.itens.reduce((s, i) => s + i.quantidadePedida * i.valorUnitario, 0);
-      const valorTotal = valorItens + input.valorFrete - input.retencaoINSS - input.retencaoIR - input.retencaoISS;
+      const freteParaTotal = input.freteTipo === "fob" ? input.valorFrete : 0;
+      const valorTotal = valorItens + freteParaTotal - input.retencaoINSS - input.retencaoIR - input.retencaoISS;
       const [oc] = await db.insert(purchaseOrders).values({
         companyId: input.companyId, numero, solicitacaoId: input.solicitacaoId,
         cotacaoId: input.cotacaoId, supplierId: input.supplierId, supplierNome: input.supplierNome,
         obraId: input.obraId, obraNome: input.obraNome, compradorId: input.compradorId,
         compradorNome: input.compradorNome, tipo: input.tipo, status: "emitida",
         valorItens: String(valorItens.toFixed(2)), valorFrete: String(input.valorFrete),
-        freteTipo: input.freteTipo, valorTotal: String(valorTotal.toFixed(2)),
+        freteTipo: input.freteTipo, transportadora: input.transportadora ?? null,
+        valorTotal: String(valorTotal.toFixed(2)),
+        portalToken: crypto.randomBytes(32).toString("hex"),
         formaPagamento: input.formaPagamento, tipoPagamento: input.tipoPagamento,
         numeroParcelas: input.numeroParcelas,
         prazoEntrega: input.prazoEntrega, enderecoEntrega: input.enderecoEntrega,
@@ -388,7 +395,25 @@ export const purchaseRouter = router({
       const conditions: any[] = [eq(purchaseReceipts.companyId, input.companyId)];
       if (input.ordemId) conditions.push(eq(purchaseReceipts.ordemId, input.ordemId));
       if (input.status) conditions.push(eq(purchaseReceipts.status, input.status));
-      return db.select().from(purchaseReceipts).where(and(...conditions)).orderBy(desc(purchaseReceipts.createdAt));
+      const rows = await db.select().from(purchaseReceipts).where(and(...conditions)).orderBy(desc(purchaseReceipts.createdAt));
+      const ordemIds = [...new Set(rows.map(r => r.ordemId))];
+      const ocMap = new Map<number, any>();
+      if (ordemIds.length > 0) {
+        for (const oid of ordemIds) {
+          const [oc] = await db.select({
+            transportadora: (purchaseOrders as any).transportadora,
+            codigoRastreamento: (purchaseOrders as any).codigoRastreamento,
+            freteTipo: (purchaseOrders as any).freteTipo,
+          }).from(purchaseOrders).where(eq(purchaseOrders.id, oid)).limit(1);
+          if (oc) ocMap.set(oid, oc);
+        }
+      }
+      return rows.map(r => ({
+        ...r,
+        transportadora: ocMap.get(r.ordemId)?.transportadora ?? null,
+        codigoRastreamento: ocMap.get(r.ordemId)?.codigoRastreamento ?? null,
+        freteTipo: ocMap.get(r.ordemId)?.freteTipo ?? null,
+      }));
     }),
 
   criarRecebimento: protectedProcedure
@@ -600,7 +625,8 @@ export const purchaseRouter = router({
   submeterPropostaPortal: protectedProcedure
     .input(z.object({
       token: z.string(), valorUnitario: z.number(), valorFrete: z.number().default(0),
-      freteTipo: z.string().default("cif"), prazoEntregaDias: z.number().optional(),
+      freteTipo: z.string().default("cif"), transportadora: z.string().optional(),
+      prazoEntregaDias: z.number().optional(),
       condicaoPagamento: z.string().optional(), tipoPagamento: z.string().optional(),
       numeroParcelas: z.number().optional(), observacoes: z.string().optional(),
     }))
@@ -609,16 +635,75 @@ export const purchaseRouter = router({
       const rows = await db.select().from(purchaseQuotationTokens).where(eq(purchaseQuotationTokens.token, input.token)).limit(1);
       const tok = rows?.[0];
       if (!tok) throw new TRPCError({ code: "NOT_FOUND", message: "Token inválido" });
-      const total = input.valorUnitario + input.valorFrete;
+      const freteParaTotal = input.freteTipo === "fob" ? input.valorFrete : 0;
+      const total = input.valorUnitario + freteParaTotal;
       await db.update(purchaseQuotationSuppliers).set({
         status: "respondido", valorUnitario: String(input.valorUnitario),
         valorFrete: String(input.valorFrete), freteTipo: input.freteTipo,
+        transportadora: input.transportadora ?? null,
         valorTotalComFrete: String(total.toFixed(2)), prazoEntregaDias: input.prazoEntregaDias,
         condicaoPagamento: input.condicaoPagamento, tipoPagamento: input.tipoPagamento,
         numeroParcelas: input.numeroParcelas ?? null,
         observacoes: input.observacoes, respondidoEm: new Date().toISOString(),
       }).where(eq(purchaseQuotationSuppliers.id, tok.quotationSupplierId));
       await db.update(purchaseQuotationTokens).set({ status: "respondido", respondedAt: new Date().toISOString() } as any).where(eq(purchaseQuotationTokens.token, input.token));
+      return { ok: true };
+    }),
+
+  atualizarDadosEntregaOC: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ordemId: z.number(),
+      transportadora: z.string().optional(),
+      codigoRastreamento: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [oc] = await db.select({ id: purchaseOrders.id, companyId: purchaseOrders.companyId })
+        .from(purchaseOrders)
+        .where(and(eq(purchaseOrders.id, input.ordemId), eq(purchaseOrders.companyId, input.companyId)))
+        .limit(1);
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "Ordem não encontrada" });
+      const updates: any = { updatedAt: new Date().toISOString() };
+      if (input.transportadora !== undefined) updates.transportadora = input.transportadora || null;
+      if (input.codigoRastreamento !== undefined) updates.codigoRastreamento = input.codigoRastreamento || null;
+      await db.update(purchaseOrders).set(updates).where(eq(purchaseOrders.id, input.ordemId));
+      return { ok: true };
+    }),
+
+  verificarTokenOCPortal: protectedProcedure
+    .input(z.object({ token: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db.select().from(purchaseOrders)
+        .where(eq((purchaseOrders as any).portalToken, input.token)).limit(1);
+      const oc = rows?.[0];
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "Token inválido ou OC não encontrada" });
+      return {
+        id: oc.id, numero: oc.numero, supplierNome: oc.supplierNome,
+        obraNome: oc.obraNome, status: oc.status,
+        freteTipo: (oc as any).freteTipo, valorFrete: (oc as any).valorFrete,
+        transportadora: (oc as any).transportadora, codigoRastreamento: (oc as any).codigoRastreamento,
+        valorTotal: oc.valorTotal, prazoEntrega: oc.prazoEntrega,
+      };
+    }),
+
+  atualizarEntregaPortalOC: protectedProcedure
+    .input(z.object({
+      token: z.string(),
+      transportadora: z.string().optional(),
+      codigoRastreamento: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db.select({ id: purchaseOrders.id }).from(purchaseOrders)
+        .where(eq((purchaseOrders as any).portalToken, input.token)).limit(1);
+      const oc = rows?.[0];
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "Token inválido" });
+      const updates: any = { updatedAt: new Date().toISOString() };
+      if (input.transportadora !== undefined) updates.transportadora = input.transportadora || null;
+      if (input.codigoRastreamento !== undefined) updates.codigoRastreamento = input.codigoRastreamento || null;
+      await db.update(purchaseOrders).set(updates).where(eq(purchaseOrders.id, oc.id));
       return { ok: true };
     }),
 

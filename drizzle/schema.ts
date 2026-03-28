@@ -4993,6 +4993,9 @@ export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores"
   selecionado:      boolean().default(false),
   arquivoUrl:       varchar("arquivo_url", { length: 500 }),
   arquivoNome:      varchar("arquivo_nome", { length: 255 }),
+  freteTipo:        varchar("frete_tipo", { length: 10 }).default("cif"),
+  valorFrete:       numeric("valor_frete", { precision: 14, scale: 2 }).default("0"),
+  transportadora:   varchar("transportadora", { length: 255 }),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 
@@ -5037,6 +5040,9 @@ export const comprasOrdens = pgTable("compras_ordens", {
   aprovadorId:        integer("aprovador_id"),
   subtotal:           numeric({ precision: 14, scale: 2 }).default("0"),
   frete:              numeric({ precision: 14, scale: 2 }).default("0"),
+  freteTipo:          varchar("frete_tipo", { length: 10 }).default("cif"),
+  transportadora:     varchar({ length: 200 }),
+  codigoRastreamento: varchar("codigo_rastreamento", { length: 200 }),
   outrasDespesas:     numeric("outras_despesas", { precision: 14, scale: 2 }).default("0"),
   impostos:           numeric({ precision: 14, scale: 2 }).default("0"),
   desconto:           numeric({ precision: 14, scale: 2 }).default("0"),
@@ -5849,6 +5855,7 @@ export const purchaseQuotationSuppliers = pgTable("purchase_quotation_suppliers"
   valorFrete: numeric("valor_frete", { precision: 10, scale: 2 }).default("0"),
   freteTipo: text("frete_tipo").default("cif"),
   valorTotalComFrete: numeric("valor_total_com_frete", { precision: 10, scale: 2 }),
+  transportadora: varchar("transportadora", { length: 255 }),
   prazoEntregaDias: integer("prazo_entrega_dias"),
   condicaoPagamento: varchar("condicao_pagamento", { length: 255 }),
   tipoPagamento: varchar("tipo_pagamento", { length: 50 }),
@@ -5905,6 +5912,8 @@ export const purchaseOrders = pgTable("purchase_orders", {
   valorItens: numeric("valor_itens", { precision: 15, scale: 2 }),
   valorFrete: numeric("valor_frete", { precision: 15, scale: 2 }).default("0"),
   freteTipo: text("frete_tipo").default("cif"),
+  transportadora: varchar("transportadora", { length: 255 }),
+  codigoRastreamento: varchar("codigo_rastreamento", { length: 100 }),
   valorTotal: numeric("valor_total", { precision: 15, scale: 2 }),
   formaPagamento: varchar("forma_pagamento", { length: 255 }),
   tipoPagamento: varchar("tipo_pagamento", { length: 50 }),
@@ -5926,6 +5935,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   retencaoISS: numeric("retencao_iss", { precision: 10, scale: 2 }).default("0"),
   observacoes: text(),
   pdfUrl: text("pdf_url"),
+  portalToken: varchar("portal_token", { length: 64 }),
   emitidaEm: timestamp("emitida_em", { mode: "string" }),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
@@ -5933,6 +5943,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   index("idx_po_company").on(t.companyId),
   index("idx_po_obra").on(t.obraId),
   index("idx_po_status").on(t.status),
+  index("idx_po_portal_token").on(t.portalToken),
 ]);
 
 export const purchaseOrderItems = pgTable("purchase_order_items", {

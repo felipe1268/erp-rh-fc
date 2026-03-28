@@ -186,6 +186,7 @@ const ComprasConfiguracoes = lazy(() => import("./pages/compras/Configuracoes"))
 const PortalCotacaoPage = lazy(() => import("./pages/PortalCotacao"));
 const PortalServicoPage = lazy(() => import("./pages/PortalServico"));
 const MedicoesServicoPage = lazy(() => import("./pages/compras/MedicoesServico"));
+const PortalOCEntregaPage = lazy(() => import("./pages/PortalOCEntrega"));
 
 // Integrações
 const MasControle = lazy(() => import("./pages/integracoes/MasControle"));
@@ -376,6 +377,7 @@ function Router() {
         <Route path="/portal/cotacao/:token"     component={PortalCotacaoPage} />
         <Route path="/portal/servico/:token"    component={PortalServicoPage} />
         <Route path="/compras/medicoes-servico" component={MedicoesServicoPage} />
+        <Route path="/portal/oc-entrega/:token"  component={PortalOCEntregaPage} />
         {/* Integrações */}
         <Route path="/integracoes/mas-controle"  component={MasControle} />
         {/* Sprint 6 - IA */}

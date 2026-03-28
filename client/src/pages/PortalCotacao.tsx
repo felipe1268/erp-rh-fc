@@ -28,6 +28,8 @@ export default function PortalCotacao() {
 
   const [valorUnit, setValorUnit] = useState("");
   const [valorFrete, setValorFrete] = useState("0");
+  const [freteTipo, setFreteTipo] = useState("cif");
+  const [transportadora, setTransportadora] = useState("");
   const [prazo, setPrazo] = useState("");
   const [condicao, setCondicao] = useState("");
   const [tipoPag, setTipoPag] = useState("");
@@ -163,9 +165,22 @@ export default function PortalCotacao() {
                   value={valorUnit} onChange={e => setValorUnit(e.target.value)} />
               </div>
               <div>
+                <Label>Tipo de Frete</Label>
+                <select value={freteTipo} onChange={e => setFreteTipo(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <option value="cif">CIF (frete incluso)</option>
+                  <option value="fob">FOB (frete por conta do comprador)</option>
+                </select>
+              </div>
+              <div>
                 <Label>Valor do Frete (R$)</Label>
                 <Input type="number" step="0.01" min="0" placeholder="0,00"
                   value={valorFrete} onChange={e => setValorFrete(e.target.value)} />
+              </div>
+              <div>
+                <Label>Transportadora</Label>
+                <Input placeholder="Nome da transportadora"
+                  value={transportadora} onChange={e => setTransportadora(e.target.value)} />
               </div>
               <div>
                 <Label>Prazo de Entrega (dias)</Label>
@@ -202,10 +217,15 @@ export default function PortalCotacao() {
 
             {valorUnit && (
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="text-sm text-blue-600">Total com frete:</p>
-                <p className="text-2xl font-bold text-blue-800">
-                  R$ {(Number(valorUnit) + Number(valorFrete)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                <p className="text-sm text-blue-600">
+                  {freteTipo === "fob" ? "Total (itens + frete FOB):" : "Total (frete CIF incluso no preço):"}
                 </p>
+                <p className="text-2xl font-bold text-blue-800">
+                  R$ {(Number(valorUnit) + (freteTipo === "fob" ? Number(valorFrete) : 0)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+                {freteTipo === "cif" && Number(valorFrete) > 0 && (
+                  <p className="text-xs text-blue-500 mt-1">Frete informado: R$ {Number(valorFrete).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (já incluso no preço)</p>
+                )}
               </div>
             )}
 
@@ -213,6 +233,7 @@ export default function PortalCotacao() {
               disabled={!valorUnit || submeterMut.isPending}
               onClick={() => submeterMut.mutate({
                 token, valorUnitario: Number(valorUnit), valorFrete: Number(valorFrete),
+                freteTipo, transportadora: transportadora || undefined,
                 prazoEntregaDias: prazo ? parseInt(prazo) : undefined,
                 condicaoPagamento: condicao, tipoPagamento: tipoPag || undefined,
                 numeroParcelas: numParcelas ? parseInt(numParcelas) : undefined,

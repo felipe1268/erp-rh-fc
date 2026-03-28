@@ -1575,10 +1575,13 @@ Responda APENAS com um objeto JSON no formato:
       };
       const totaisPorFornecedor: Record<number, number> = {};
       for (const p of participantes) {
-        totaisPorFornecedor[p.fornecedorId] = itensComMeta.reduce((acc, it) => {
+        const totalItens = itensComMeta.reduce((acc, it) => {
           const r = respostaMap[`${it.id}_${p.fornecedorId}`];
           return acc + n(r?.total ?? 0);
         }, 0);
+        const pFreteTipo = (p as any).freteTipo ?? "cif";
+        const pValorFrete = pFreteTipo === "fob" ? n((p as any).valorFrete) : 0;
+        totaisPorFornecedor[p.fornecedorId] = totalItens + pValorFrete;
       }
       return { cotacao: cot, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor };
     }),
@@ -1608,6 +1611,9 @@ Responda APENAS com um objeto JSON no formato:
       condicaoPagamento: z.string().optional(),
       tipoPagamento: z.string().optional(),
       numeroParcelas: z.number().optional(),
+      freteTipo: z.string().optional(),
+      valorFrete: z.number().optional(),
+      transportadora: z.string().optional(),
       respostas: z.array(z.object({
         itemId: z.number(),
         precoUnitario: z.number(),
@@ -1634,14 +1640,22 @@ Responda APENAS com um objeto JSON no formato:
           quantidade: String(qty), precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
         }});
       }
+      const valorFrete = n(input.valorFrete);
+      const isFob = (input.freteTipo ?? "cif") === "fob";
+      const totalComFrete = totalForn + (isFob ? valorFrete : 0);
+
       await db.update(comprasCotacaoFornecedores).set({
-        totalOrcado: String(totalForn.toFixed(2)),
+        totalOrcado: String(totalComFrete.toFixed(2)),
         prazoEntregaDias: input.prazoEntregaDias ?? null,
         condicaoPagamento: input.condicaoPagamento ?? null,
         tipoPagamento: input.tipoPagamento ?? null,
         numeroParcelas: input.numeroParcelas ?? null,
-      }).where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
-      return { ok: true, total: totalForn };
+        freteTipo: input.freteTipo ?? "cif",
+        valorFrete: String(valorFrete.toFixed(2)),
+        transportadora: input.transportadora ?? null,
+      } as any)
+        .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      return { ok: true, total: totalComFrete };
     }),
 
   salvarAnexoFornecedor: protectedProcedure
@@ -2159,29 +2173,40 @@ Responda APENAS com um objeto JSON no formato:
           )
         : [];
       const fornInfo = fornPart[0] ?? null;
+      const freteValor = n((fornInfo as any)?.valorFrete);
+      const freteTipoOC = (fornInfo as any)?.freteTipo ?? "cif";
+      const transportadoraOC = (fornInfo as any)?.transportadora ?? null;
+      const freteParaTotal = freteTipoOC === "fob" ? freteValor : 0;
 
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
       const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
       const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
-      const subtotal = n(cot.total);
+      const subtotalItens = n(cot.total) - freteParaTotal;
+      const subtotal = Math.max(subtotalItens, 0);
+      const totalOC = subtotal + freteParaTotal;
       const [oc] = await db.insert(comprasOrdens).values({
         companyId: input.companyId,
         numeroOc,
         cotacaoId: input.cotacaoId,
         obraId: cot.obraId ?? null,
         fornecedorId: cot.fornecedorId ?? null,
+        fornecedorNome: cot.fornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId!))).map(f => f.nome || f.razao || null)[0] ?? null : null,
         status: "pendente",
         aprovacaoStatus: "aguardando",
         subtotal: String(subtotal.toFixed(2)),
-        frete: "0",
+        frete: String(freteValor.toFixed(2)),
+        freteTipo: freteTipoOC,
+        transportadora: transportadoraOC,
         outrasDespesas: "0",
         impostos: "0",
         desconto: "0",
-        total: String(subtotal.toFixed(2)),
+        total: String(totalOC.toFixed(2)),
         condicaoPagamento: fornInfo?.condicaoPagamento ?? cot.condicaoPagamento ?? null,
         tipoPagamento: fornInfo?.tipoPagamento ?? cot.tipoPagamento ?? null,
         numeroParcelas: fornInfo?.numeroParcelas ?? cot.numeroParcelas ?? 1,
-      }).returning();
+        freteTipo: freteTipoOC,
+        transportadora: transportadoraOC,
+      } as any).returning();
       if (itens.length > 0) {
         await db.insert(comprasOrdensItens).values(
           itens.map(it => {
@@ -2561,6 +2586,26 @@ Responda APENAS com um objeto JSON no formato:
       }
 
       return { ok: true, almoxarifado: false };
+    }),
+
+  atualizarDadosEntregaOC: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      transportadora: z.string().optional(),
+      codigoRastreamento: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [oc] = await db.select({ id: comprasOrdens.id }).from(comprasOrdens)
+        .where(and(eq(comprasOrdens.id, input.id), eq(comprasOrdens.companyId, input.companyId)))
+        .limit(1);
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "Ordem não encontrada" });
+      const updates: any = { atualizadoEm: new Date().toISOString() };
+      if (input.transportadora !== undefined) updates.transportadora = input.transportadora || null;
+      if (input.codigoRastreamento !== undefined) updates.codigoRastreamento = input.codigoRastreamento || null;
+      await db.update(comprasOrdens).set(updates).where(eq(comprasOrdens.id, input.id));
+      return { ok: true };
     }),
 
   excluirOrdem: protectedProcedure
