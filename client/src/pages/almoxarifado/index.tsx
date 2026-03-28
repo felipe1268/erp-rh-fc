@@ -31,6 +31,7 @@ const EMPTY_MOV = {
 };
 
 function n(v: any) { return parseFloat(v ?? "0") || 0; }
+function norm(s: string) { return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.\-\/\[\]]/g, "").toLowerCase().trim(); }
 
 function compressImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -463,6 +464,8 @@ export default function AlmoxarifadoPage() {
   const [insSelecionado, setInsSelecionado] = useState<any>(null);
   const [insShowSug, setInsShowSug] = useState(false);
   const [insItemId, setInsItemId] = useState<number>(0);
+  const [insItemSearch, setInsItemSearch] = useState("");
+  const [insItemFocused, setInsItemFocused] = useState(false);
   const [insQtd, setInsQtd] = useState("1");
   const [insObraId, setInsObraId] = useState<number>(0);
   const [insMotivo, setInsMotivo] = useState("");
@@ -478,7 +481,7 @@ export default function AlmoxarifadoPage() {
   });
   function resetInsumo() {
     setInsCodigo(""); setInsSearch(""); setInsSelecionado(null); setInsShowSug(false);
-    setInsItemId(0); setInsQtd("1");
+    setInsItemId(0); setInsItemSearch(""); setInsItemFocused(false); setInsQtd("1");
     setInsObraId(typeof obraContexto === "number" ? obraContexto : 0);
     setInsMotivo(""); setInsOk(null); setInsErr(null);
   }
@@ -1792,12 +1795,42 @@ export default function AlmoxarifadoPage() {
                     {insSearch.length >= 2 && !insSelecionado && insSugestoes.length === 0 && <p className="text-xs text-red-500 mt-1">Nenhum funcionário encontrado</p>}
                   </div>
                   {/* Item */}
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 block mb-1">Selecionar Insumo *</label>
-                    <select className="w-full border-2 rounded-xl p-3 text-base" value={insItemId} onChange={e => setInsItemId(Number(e.target.value))}>
-                      <option value={0}>— escolha o item —</option>
-                      {itens.map((i: any) => <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(i.quantidadeAtual)} {i.unidade || "un"}</option>)}
-                    </select>
+                  <div className="relative">
+                    <label className="text-sm font-semibold text-gray-700 block mb-1">Selecionar Item *</label>
+                    {insItemId ? (
+                      <div className="w-full border-2 border-amber-300 bg-amber-50 rounded-xl p-3 text-base flex items-center justify-between">
+                        <span className="truncate">{(() => { const it = itens.find((i: any) => i.id === insItemId); return it ? `${it.nome} — Estoque: ${n(it.quantidadeAtual)} ${it.unidade || "un"}` : ""; })()}</span>
+                        <button type="button" onClick={() => { setInsItemId(0); setInsItemSearch(""); }} className="ml-2 text-gray-400 hover:text-red-500 flex-shrink-0"><X className="w-4 h-4" /></button>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        className="w-full border-2 rounded-xl p-3 text-base"
+                        placeholder="Digite para filtrar..."
+                        value={insItemSearch}
+                        autoComplete="off"
+                        onChange={e => { setInsItemSearch(e.target.value); setInsItemFocused(true); }}
+                        onFocus={() => setInsItemFocused(true)}
+                        onBlur={() => setTimeout(() => setInsItemFocused(false), 180)}
+                      />
+                    )}
+                    {insItemFocused && !insItemId && (() => {
+                      const q = norm(insItemSearch);
+                      const filtered = itens.filter((i: any) => !q || norm(`${i.nome} ${i.unidade || ""}`).includes(q));
+                      return filtered.length > 0 ? (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                          {filtered.slice(0, 50).map((i: any) => (
+                            <button key={i.id} type="button" className="w-full text-left px-3 py-2 hover:bg-amber-50 text-sm transition truncate" onMouseDown={() => { setInsItemId(i.id); setInsItemSearch(i.nome); setInsItemFocused(false); }}>
+                              {i.nome} — Estoque: {n(i.quantidadeAtual)} {i.unidade || "un"}
+                            </button>
+                          ))}
+                        </div>
+                      ) : insItemSearch.length >= 2 ? (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-3">
+                          <p className="text-xs text-red-500">Nenhum item encontrado</p>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                   {/* Quantidade */}
                   <div>
