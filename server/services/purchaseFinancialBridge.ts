@@ -17,7 +17,24 @@ async function getContaId(db: any, companyId: number, codigo: string) {
     .from(financialAccounts)
     .where(and(eq(financialAccounts.companyId, companyId), eq((financialAccounts as any).codigo, codigo)))
     .limit(1);
-  return res?.[0]?.id || null;
+  if (res?.[0]?.id) return res[0].id;
+
+  const CONTA_DEFAULTS: Record<string, string> = {
+    "3.2": "Despesas com Serviços",
+    "3.3": "Despesas com Materiais",
+    "3.4": "Despesas com Locação",
+  };
+  const nome = CONTA_DEFAULTS[codigo] || `Conta ${codigo}`;
+  const inserted = await db.insert(financialAccounts).values({
+    companyId,
+    codigo,
+    nome,
+    tipo: "despesa_variavel",
+    natureza: "devedora",
+    nivel: 2,
+    ativo: 1,
+  }).returning({ id: financialAccounts.id });
+  return inserted?.[0]?.id || null;
 }
 
 async function getSupplierFields(db: any, supplierId: number) {
