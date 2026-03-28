@@ -43,16 +43,17 @@ function readAsArrayBuffer(file: File, onProgress: (p: number) => void): Promise
 type Step = "obra" | "custo" | "mapping" | "bdi" | "done";
 
 const KEY_FIELDS: { key: string; label: string; required: boolean }[] = [
-  { key: "item",       label: "Código / Item (EAP)",      required: true  },
-  { key: "descricao",  label: "Descrição",                 required: true  },
-  { key: "unidade",    label: "Unidade (Un)",              required: false },
-  { key: "quantidade", label: "Quantidade",                required: false },
-  { key: "cuUnitMat",  label: "Preço Unit. Material",      required: false },
-  { key: "cuUnitMdo",  label: "Preço Unit. MO",            required: false },
-  { key: "cuTotalMat", label: "Total Material",            required: false },
-  { key: "cuTotalMdo", label: "Total Mão de Obra",         required: false },
-  { key: "custoTotal", label: "Custo Total",               required: true  },
-  { key: "abc",        label: "Curva ABC",                 required: false },
+  { key: "item",          label: "Código / Item (EAP)",      required: true  },
+  { key: "descricao",     label: "Descrição",                 required: true  },
+  { key: "servicoCodigo", label: "Cód. Serviço (Composição)", required: false },
+  { key: "unidade",       label: "Unidade (Un)",              required: false },
+  { key: "quantidade",    label: "Quantidade",                required: false },
+  { key: "cuUnitMat",     label: "Preço Unit. Material",      required: false },
+  { key: "cuUnitMdo",     label: "Preço Unit. MO",            required: false },
+  { key: "cuTotalMat",    label: "Total Material",            required: false },
+  { key: "cuTotalMdo",    label: "Total Mão de Obra",         required: false },
+  { key: "custoTotal",    label: "Custo Total",               required: true  },
+  { key: "abc",           label: "Curva ABC",                 required: false },
 ];
 
 /**
@@ -63,15 +64,18 @@ const KEY_FIELDS: { key: string; label: string; required: boolean }[] = [
  * e a tela de mapeamento é pulada.
  */
 const FC_PRESET: Record<string, number> = {
-  item:       10, // K
-  descricao:  15, // P
-  unidade:    16, // Q
-  quantidade: 17, // R
-  cuUnitMat:  19, // T
-  cuUnitMdo:  21, // V
-  cuTotalMat: 22, // W
-  cuTotalMdo: 23, // X
-  custoTotal: 24, // Y
+  item:          10, // K
+  composicaoTipo:11, // L (CPU / INF)
+  servicoCodigo: 13, // N (Cód. Serviço — vincula à composição CPUs)
+  tipo:          14, // O (TIPO)
+  descricao:     15, // P
+  unidade:       16, // Q
+  quantidade:    17, // R
+  cuUnitMat:     19, // T
+  cuUnitMdo:     21, // V
+  cuTotalMat:    22, // W
+  cuTotalMdo:    23, // X
+  custoTotal:    24, // Y
 };
 
 /** Verifica se as colunas disponíveis contêm todos os índices do preset FC. */

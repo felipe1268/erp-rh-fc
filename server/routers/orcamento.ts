@@ -436,13 +436,13 @@ function normCol(s: string): string {
 // A função detectarColunas só atribui cada alias à 1ª coluna ainda não mapeada para aquele campo.
 // Aliases com ≤ 5 chars (custo, total, ct…) só casam por igualdade EXATA — nunca por prefixo.
 const COL_ALIASES: Record<string, string[]> = {
-  item:           ['item', 'codigoeap', 'eap', 'codigoitem', 'codigoservico'],
+  item:           ['item', 'codigoeap', 'eap', 'codigoitem'],
   descricao:      ['descricao', 'descricaodoservico', 'denominacao', 'especificacao', 'descricaoservico'],
   unidade:        ['unidade', 'und', 'unid', 'un'],
   quantidade:     ['quantidade', 'quant', 'qtd', 'qde', 'qt'],
   nivel:          ['nivel', 'hierarquia', 'niv'],
   composicaoTipo: ['composicaotipo', 'tipocomposicao', 'composicao', 'comp'],
-  servicoCodigo:  ['codigoservico', 'codservico', 'cods'],
+  servicoCodigo:  ['codigoservico', 'codservico', 'codservicoo', 'cods', 'codigodacomposicao'],
   tipo:           ['tipo'],
   // Custo unitário — "Preço Unit. Material" / "Preço Unit. MO" (FC Engenharia)
   // NÃO incluir "custopreco*" — planilha FC tem colunas separadas "Custo Preço Unit." que NÃO devem ser importadas
@@ -2099,6 +2099,105 @@ export const orcamentoRouter = router({
         totalCusto,
         totalVenda,
         bdiPercentual: bdiFinal,
+      };
+    }),
+
+  atualizarComposicoes: protectedProcedure
+    .input(z.object({
+      orcamentoId: z.number(),
+      companyId:   z.number(),
+      fileBase64:  z.string().min(10),
+      fileName:    z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+
+      const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.orcamentoId));
+      if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      if (Number(orc.companyId) !== Number(input.companyId)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão.' });
+
+      const XLSX = await import('xlsx');
+      const buffer = Buffer.from(input.fileBase64, 'base64');
+      const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
+
+      const orcTab = wb.SheetNames.find((n: string) =>
+        n.toLowerCase().replace(/[^a-z]/g, '').startsWith('or') ||
+        n.toLowerCase().includes('orcamento') ||
+        n.toLowerCase().includes('orçamento')
+      );
+      if (!orcTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba "Orçamento" não encontrada na planilha.' });
+
+      const dataOrc = XLSX.utils.sheet_to_json(wb.Sheets[orcTab], { header: 1, defval: '' }) as any[][];
+      const { itens } = parsearAbaCorcamento(dataOrc, 0, 0);
+
+      const cpusTab = wb.SheetNames.find((n: string) => n === 'CPUs' || n === 'Cpus' || n.toLowerCase() === 'cpus');
+      const cpusParsed = cpusTab
+        ? parsearAbaCPUs(XLSX.utils.sheet_to_json(wb.Sheets[cpusTab], { header: 1, defval: '' }) as any[][], input.companyId)
+        : { composicoes: [], linhasInsumos: [] };
+
+      const newCodigoMap = new Map<string, string>();
+      const newTipoMap = new Map<string, string>();
+      for (const it of itens) {
+        if (it.servicoCodigo) newCodigoMap.set(it.eapCodigo, it.servicoCodigo);
+        if (it.composicaoTipo) newTipoMap.set(it.eapCodigo, it.composicaoTipo);
+      }
+
+      const existingItems = await db.select({
+        id: orcamentoItens.id,
+        eapCodigo: orcamentoItens.eapCodigo,
+        servicoCodigo: (orcamentoItens as any).servicoCodigo,
+      }).from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+
+      let updated = 0;
+      for (const item of existingItems) {
+        const newCodigo = newCodigoMap.get(item.eapCodigo);
+        const newTipo = newTipoMap.get(item.eapCodigo);
+        const codigoChanged = newCodigo && newCodigo !== (item.servicoCodigo || '');
+        const tipoChanged = newTipo && newTipo !== ((item as any).composicaoTipo || '');
+        if (codigoChanged || tipoChanged) {
+          const setObj: any = {};
+          if (newCodigo) setObj.servicoCodigo = newCodigo;
+          if (newTipo) setObj.composicaoTipo = newTipo;
+          await db.update(orcamentoItens).set(setObj)
+            .where(eq(orcamentoItens.id, item.id));
+          updated++;
+        }
+      }
+
+      const BATCH = 200;
+      let composicoesCount = 0;
+      let insumosCount = 0;
+      if (cpusParsed.composicoes.length > 0) {
+        await db.delete(composicoesCatalogo).where(eq(composicoesCatalogo.companyId, input.companyId));
+        await db.delete(composicaoInsumos).where(eq(composicaoInsumos.companyId, input.companyId));
+        for (let i = 0; i < cpusParsed.composicoes.length; i += BATCH) {
+          await db.insert(composicoesCatalogo).values(
+            cpusParsed.composicoes.slice(i, i + BATCH).map(c => ({
+              ...c,
+              totalOrcamentos: 1,
+              ultimaAtualizacao: new Date().toISOString(),
+              criadoEm: new Date().toISOString(),
+            }))
+          );
+        }
+        composicoesCount = cpusParsed.composicoes.length;
+        for (let i = 0; i < cpusParsed.linhasInsumos.length; i += BATCH) {
+          await db.insert(composicaoInsumos).values(
+            cpusParsed.linhasInsumos.slice(i, i + BATCH)
+          );
+        }
+        insumosCount = cpusParsed.linhasInsumos.length;
+      }
+
+      return {
+        success: true,
+        itensAtualizados: updated,
+        itensTotal: existingItems.length,
+        itensPlanilha: itens.filter(i => !!i.servicoCodigo).length,
+        composicoesCount,
+        insumosCount,
       };
     }),
 

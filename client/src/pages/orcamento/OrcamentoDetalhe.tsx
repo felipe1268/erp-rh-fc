@@ -203,6 +203,40 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
     reader.readAsDataURL(reuploadFile);
   };
 
+  const [compOpen, setCompOpen] = useState(false);
+  const [compFile, setCompFile] = useState<File | null>(null);
+  const [compLoading, setCompLoading] = useState(false);
+
+  const atualizarCompMut = trpc.orcamento.atualizarComposicoes.useMutation({
+    onSuccess: (res) => {
+      toast.success(`Composições atualizadas! ${res.itensAtualizados} itens vinculados, ${res.composicoesCount} composições e ${res.insumosCount} insumos carregados.`);
+      setCompOpen(false);
+      setCompFile(null);
+      setCompLoading(false);
+      refetch();
+    },
+    onError: e => {
+      toast.error(e.message || "Erro ao atualizar composições");
+      setCompLoading(false);
+    },
+  });
+
+  const confirmarAtualizarComp = async () => {
+    if (!compFile) return;
+    setCompLoading(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const b64 = (e.target?.result as string).split(",")[1];
+      atualizarCompMut.mutate({
+        orcamentoId: id,
+        companyId: Number(orc?.companyId ?? 0),
+        fileBase64: b64,
+        fileName: compFile.name,
+      });
+    };
+    reader.readAsDataURL(compFile);
+  };
+
   // ── Biblioteca: enviar composições/insumos do orçamento ao catálogo central ──
   const [bibOpen, setBibOpen]       = useState(false);
   const [bibLoaded, setBibLoaded]   = useState(false);   // dispara query só ao abrir
@@ -524,6 +558,11 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
             <Button size="sm" variant="outline" className="gap-2"
               onClick={() => { setReuploadOpen(true); setReuploadFile(null); setReuploadAnalise(null); }}>
               <RefreshCw className="h-4 w-4" /> Atualizar Planilha
+            </Button>
+            <Button size="sm" variant="outline" className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+              onClick={() => { setCompOpen(true); setCompFile(null); }}
+              title="Atualiza apenas os codigos de composicao (servicoCodigo) e carrega CPUs/insumos, sem alterar valores">
+              <Package className="h-4 w-4" /> Vincular Composicoes
             </Button>
             <Button size="sm" variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"
               onClick={() => { setBibOpen(true); setBibLoaded(true); }}
@@ -1774,6 +1813,86 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
               {reimportarMutation.isPending
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Atualizando...</>
                 : <><RefreshCw className="h-4 w-4" /> Confirmar Atualização</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog Vincular Composições ── */}
+      <Dialog open={compOpen} onOpenChange={open => { if (!atualizarCompMut.isPending) setCompOpen(open); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-blue-600" />
+              Vincular Composicoes (CPUs)
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-2 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Envie a planilha de custo para vincular os <strong>codigos de composicao</strong> (coluna N - Cod. Servico)
+              aos itens da EAP existentes e carregar as <strong>CPUs e insumos</strong>. Valores, quantidades e SCs existentes
+              <strong className="text-green-700"> nao serao alterados</strong>.
+            </p>
+
+            <div
+              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                compFile ? "border-green-400 bg-green-50" : "border-border hover:border-primary hover:bg-muted/30"
+              }`}
+              onClick={() => {
+                const inp = document.createElement("input");
+                inp.type = "file";
+                inp.accept = ".xlsx,.xls,.xlsm,.xlsb,.xltx,.xltm";
+                inp.onchange = () => { if (inp.files?.[0]) setCompFile(inp.files[0]); };
+                inp.click();
+              }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setCompFile(f); }}
+            >
+              {compFile ? (
+                <div className="flex flex-col items-center gap-2">
+                  <FileSpreadsheet className="h-8 w-8 text-green-600" />
+                  <p className="text-sm font-semibold text-green-700">{compFile.name}</p>
+                  <Button size="sm" variant="ghost" className="text-xs text-muted-foreground mt-1"
+                    onClick={e => { e.stopPropagation(); setCompFile(null); }}>
+                    <X className="h-3 w-3 mr-1" /> Trocar arquivo
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <UploadCloud className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm font-medium">Clique ou arraste a planilha aqui</p>
+                  <p className="text-xs text-muted-foreground">.xlsx, .xls ou .xlsm com abas "Orcamento" e "CPUs"</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 p-3">
+              <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-blue-800 space-y-1">
+                <p><strong>O que sera atualizado:</strong></p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>Codigo de composicao (servicoCodigo) vinculado a cada item da EAP</li>
+                  <li>Catalogo de composicoes (CPUs) e seus insumos</li>
+                </ul>
+                <p className="mt-1"><strong>O que NAO muda:</strong> valores, quantidades, SCs, cotacoes, OCs, contratos</p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompOpen(false)}
+              disabled={atualizarCompMut.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!compFile || atualizarCompMut.isPending}
+              onClick={confirmarAtualizarComp}
+              className="gap-2"
+            >
+              {atualizarCompMut.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Vinculando...</>
+                : <><Package className="h-4 w-4" /> Vincular Composicoes</>}
             </Button>
           </DialogFooter>
         </DialogContent>

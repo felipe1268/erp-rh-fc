@@ -5685,4 +5685,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 20:00:00",
   },
+  {
+    version: 836,
+    titulo: "Orcamento: importacao de composicoes (servicoCodigo) e vinculacao CPUs",
+    descricao: "Importacao de orcamento agora captura coluna N (Cod. Servico) vinculando cada item da EAP ao codigo de composicao. Novo botao 'Vincular Composicoes' no detalhe do orcamento permite atualizar apenas os codigos de composicao e CPUs/insumos sem alterar valores, quantidades ou SCs existentes. Tela de Solicitacoes exibe alerta quando item nao possui composicao vinculada.",
+    tipo: "feature",
+    modulos: "Orcamento, Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 21:00:00",
+  },
 ];
