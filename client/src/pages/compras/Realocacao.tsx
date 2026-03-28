@@ -37,7 +37,7 @@ export default function ComprasRealocacao() {
 
   // modal desfazer débito
   const [desfazerModal, setDesfazerModal] = useState<{ id: number; valor: number; numeroCotacao: string | null } | null>(null);
-  const [justificativa, setJustificativa] = useState("");
+  const [senhaMaster, setSenhaMaster] = useState("");
 
   // ── Queries — todas usam o mesmo obraIdNum ──────────────────────────
   const { data: obras } = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
@@ -86,7 +86,7 @@ export default function ComprasRealocacao() {
     onSuccess: (d) => {
       toast.success(`Débito revertido! ${fmt(d.valorRestituido)} devolvidos à reserva.`);
       setDesfazerModal(null);
-      setJustificativa("");
+      setSenhaMaster("");
       refetchDebitos();
     },
     onError: (e) => toast.error(e.message),
@@ -459,7 +459,7 @@ export default function ComprasRealocacao() {
         </Dialog>
 
         {/* ── Modal Desfazer Débito de Risco ────────────────────────── */}
-        <Dialog open={!!desfazerModal} onOpenChange={(o) => { if (!o) { setDesfazerModal(null); setJustificativa(""); } }}>
+        <Dialog open={!!desfazerModal} onOpenChange={(o) => { if (!o) { setDesfazerModal(null); setSenhaMaster(""); } }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-red-700">
@@ -471,24 +471,26 @@ export default function ComprasRealocacao() {
                 <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-800">
                   <p>Você está prestes a reverter o débito de <strong>{fmt(desfazerModal.valor)}</strong>
                   {desfazerModal.numeroCotacao ? ` da cotação #${desfazerModal.numeroCotacao}` : ""}.</p>
-                  <p className="mt-1">O valor será restituído à Reserva de Risco (DI-08). Esta ação é irreversível pelo sistema.</p>
+                  <p className="mt-1">O valor será restituído à Reserva de Risco (DI-08).</p>
+                  <p className="mt-1 font-bold text-red-900">Esta operação requer a senha do Administrador Master.</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">Justificativa <span className="text-red-600">*</span></Label>
-                  <Textarea
+                  <Label className="text-sm font-medium">Senha do ADM Master <span className="text-red-600">*</span></Label>
+                  <Input
+                    type="password"
                     className="mt-1"
-                    placeholder="Descreva o motivo da reversão..."
-                    value={justificativa}
-                    onChange={e => setJustificativa(e.target.value)}
-                    rows={4}
+                    placeholder="Digite sua senha para confirmar..."
+                    value={senhaMaster}
+                    onChange={e => setSenhaMaster(e.target.value)}
+                    autoComplete="off"
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => { setDesfazerModal(null); setJustificativa(""); }}>Cancelar</Button>
+                  <Button variant="outline" onClick={() => { setDesfazerModal(null); setSenhaMaster(""); }}>Cancelar</Button>
                   <Button
                     variant="destructive"
-                    disabled={!justificativa.trim() || reverterMut.isPending}
-                    onClick={() => reverterMut.mutate({ id: desfazerModal.id, companyId, justificativa: justificativa.trim() })}
+                    disabled={!senhaMaster.trim() || reverterMut.isPending}
+                    onClick={() => reverterMut.mutate({ id: desfazerModal.id, companyId, senhaMaster: senhaMaster.trim() })}
                   >
                     {reverterMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Undo2 className="h-4 w-4 mr-1" />}
                     Confirmar Reversão

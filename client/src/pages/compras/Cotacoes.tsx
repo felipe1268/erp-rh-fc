@@ -41,6 +41,8 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
   const reverterDebito = trpc.compras.reverterDebitoRisco.useMutation({
     onSuccess: (d) => {
       toast.success(`Débito revertido! ${fmt(d.valorRestituido)} devolvidos à reserva.`);
+      setDesfazerTarget(null);
+      setSenhaMasterCot("");
       q.refetch();
       onAcao?.();
     },
@@ -56,6 +58,8 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
 
   const [valorDebito, setValorDebito] = useState("");
   const [sobrasSel, setSobrasSel] = useState<Set<number>>(new Set());
+  const [desfazerTarget, setDesfazerTarget] = useState<{ id: number; valor: number } | null>(null);
+  const [senhaMasterCot, setSenhaMasterCot] = useState("");
 
   useEffect(() => {
     if (q.data?.cobertoPorRisco) onCoberto?.();
@@ -129,8 +133,7 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
                   {d.observacao && <span className="text-orange-600 ml-2 truncate max-w-xs">{d.observacao}</span>}
                 </div>
                 <Button size="sm" variant="ghost"
-                  disabled={reverterDebito.isPending}
-                  onClick={() => { if (confirm(`Reverter débito de ${fmt(Number(d.valor))}?`)) reverterDebito.mutate({ id: d.id, companyId }); }}
+                  onClick={() => { setDesfazerTarget({ id: d.id, valor: Number(d.valor) }); setSenhaMasterCot(""); }}
                   className="h-5 text-[10px] text-red-600 hover:bg-red-100 hover:text-red-700 px-1.5 gap-0.5">
                   <Undo2 className="h-3 w-3" /> Desfazer
                 </Button>
@@ -235,6 +238,37 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
           </>
         )}
       </div>
+
+      {/* ── Modal Desfazer Débito — requer senha Master ──────────── */}
+      {desfazerTarget && (
+        <div className="rounded-lg border-2 border-red-300 bg-red-50 p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-red-600 flex-shrink-0" />
+            <p className="text-xs font-bold text-red-800">Desfazer débito de {fmt(desfazerTarget.valor)}</p>
+          </div>
+          <p className="text-[11px] text-red-700">Esta operação requer a senha do Administrador Master.</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="password"
+              placeholder="Senha do ADM Master"
+              value={senhaMasterCot}
+              onChange={e => setSenhaMasterCot(e.target.value)}
+              autoComplete="off"
+              className="flex-1 h-8 text-sm border border-red-300 rounded-lg px-3 bg-white text-gray-900 outline-none focus:ring-1 focus:ring-red-400"
+            />
+            <Button size="sm" variant="destructive"
+              disabled={!senhaMasterCot.trim() || reverterDebito.isPending}
+              onClick={() => reverterDebito.mutate({ id: desfazerTarget.id, companyId, senhaMaster: senhaMasterCot.trim() })}
+              className="h-8 text-xs gap-1 whitespace-nowrap">
+              {reverterDebito.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+              Confirmar
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setDesfazerTarget(null); setSenhaMasterCot(""); }} className="h-8 text-xs text-gray-500">
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* ── CAMADA 3: SEM COBERTURA → AUTORIZAÇÃO MASTER ─────────── */}
       {semCobertura && (

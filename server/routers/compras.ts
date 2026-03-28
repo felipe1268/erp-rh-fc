@@ -17,6 +17,7 @@ import {
   comprasCotacaoPropostas, comprasCondicoesPagamento,
   comprasOrdens, comprasOrdensItens, comprasEntregasProgramadas,
   comprasRiscoDebitos,
+  users,
   obras,
   orcamentos, orcamentoItens,
   composicaoInsumos, composicoesCatalogo, insumosCatalogo,
@@ -2405,12 +2406,17 @@ Retorne APENAS um JSON válido neste formato:
     }),
 
   reverterDebitoRisco: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number(), justificativa: z.string().min(1, "Justificativa obrigatória") }))
+    .input(z.object({ id: z.number(), companyId: z.number(), senhaMaster: z.string().min(1, "Senha do ADM Master obrigatória") }))
     .mutation(async ({ input, ctx }) => {
       if ((ctx.user as any)?.role !== "admin_master") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Administrador Master pode desfazer um débito da Reserva de Risco." });
       }
       const db = await getDb();
+      const [masterUser] = await db.select({ password: users.password }).from(users).where(eq(users.id, (ctx.user as any).id));
+      if (!masterUser?.password) throw new TRPCError({ code: "FORBIDDEN", message: "Usuário master não encontrado." });
+      const bcrypt = await import("bcryptjs");
+      const senhaValida = bcrypt.compareSync(input.senhaMaster, masterUser.password);
+      if (!senhaValida) throw new TRPCError({ code: "FORBIDDEN", message: "Senha incorreta. Operação negada." });
       const [row] = await db.select().from(comprasRiscoDebitos).where(and(eq(comprasRiscoDebitos.id, input.id), eq(comprasRiscoDebitos.companyId, input.companyId)));
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Débito não encontrado." });
       await db.delete(comprasRiscoDebitos).where(eq(comprasRiscoDebitos.id, input.id));
