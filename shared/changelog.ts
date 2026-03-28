@@ -5640,4 +5640,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 18:15:00",
   },
+  {
+    version: 831,
+    titulo: "Compras Recebimentos: sincronização automática com Almoxarifado",
+    descricao: "A tela de Recebimentos no módulo de Compras agora exibe automaticamente os recebimentos registrados pelo Almoxarifado (SmartEntry) vinculados a Ordens de Compra. Recebimentos totais e parciais do canteiro aparecem automaticamente no histórico, com indicação 'via Almoxarifado'. Contadores de Totais/Parciais/Pendentes refletem ambas as fontes.",
+    tipo: "melhoria",
+    modulos: "Compras, Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 18:30:00",
+  },
 ];

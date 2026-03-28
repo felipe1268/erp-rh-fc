@@ -29,6 +29,8 @@ import {
   emergencyMetrics,
   purchaseCancellations,
   obras,
+  almoxarifadoRecebimentos,
+  almoxarifadoRecebimentoItens,
 } from "../../drizzle/schema";
 import { onOCEmitida, onOCCancelada, onRecebimentoConfirmado, onComissaoAprovada } from "../services/purchaseFinancialBridge";
 import crypto from "crypto";
@@ -392,11 +394,54 @@ export const purchaseRouter = router({
     .input(z.object({ companyId: z.number(), ordemId: z.number().optional(), status: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
+
       const conditions: any[] = [eq(purchaseReceipts.companyId, input.companyId)];
       if (input.ordemId) conditions.push(eq(purchaseReceipts.ordemId, input.ordemId));
       if (input.status) conditions.push(eq(purchaseReceipts.status, input.status));
       const rows = await db.select().from(purchaseReceipts).where(and(...conditions)).orderBy(desc(purchaseReceipts.createdAt));
-      const ordemIds = [...new Set(rows.map(r => r.ordemId))];
+
+      const almoxConditions: any[] = [
+        eq(almoxarifadoRecebimentos.companyId, input.companyId),
+        sql`${almoxarifadoRecebimentos.ordemCompraId} IS NOT NULL`,
+      ];
+      if (input.ordemId) almoxConditions.push(eq(almoxarifadoRecebimentos.ordemCompraId, input.ordemId));
+      const almoxRows = await db.select().from(almoxarifadoRecebimentos)
+        .where(and(...almoxConditions))
+        .orderBy(desc(almoxarifadoRecebimentos.criadoEm));
+
+      const almoxMapped = almoxRows
+        .filter(ar => {
+          if (!input.status) return true;
+          const mapped = ar.temDivergencia ? "parcial" : (ar.totalItensRecebidos ?? 0) > 0 ? "total" : "pendente";
+          return mapped === input.status;
+        })
+        .map(ar => {
+          const st = ar.temDivergencia ? "parcial" : (ar.totalItensRecebidos ?? 0) > 0 ? "total" : "pendente";
+          return {
+            id: ar.id,
+            ordemId: ar.ordemCompraId!,
+            companyId: ar.companyId,
+            obraId: ar.obraId,
+            recebedorId: ar.usuarioId,
+            recebedorNome: ar.usuarioNome || "Almoxarifado",
+            status: st,
+            notaFiscalNumero: ar.numeroNf || null,
+            notaFiscalUrl: ar.fotoNfUrl || null,
+            fotoMaterialUrl: ar.fotoMaterialUrl || null,
+            observacoes: ar.observacoes,
+            valorLiberado: null as string | null,
+            recebidoEm: ar.criadoEm,
+            createdAt: ar.criadoEm,
+            _source: "almoxarifado" as const,
+          };
+        });
+
+      const allRows = [
+        ...rows.map(r => ({ ...r, _source: "compras" as const })),
+        ...almoxMapped.filter(am => !rows.some(r => r.ordemId === am.ordemId && r.recebidoEm === am.recebidoEm)),
+      ].sort((a, b) => new Date(b.recebidoEm || b.createdAt).getTime() - new Date(a.recebidoEm || a.createdAt).getTime());
+
+      const ordemIds = [...new Set(allRows.map(r => r.ordemId).filter(Boolean))];
       const ocMap = new Map<number, any>();
       if (ordemIds.length > 0) {
         for (const oid of ordemIds) {
@@ -404,15 +449,19 @@ export const purchaseRouter = router({
             transportadora: (purchaseOrders as any).transportadora,
             codigoRastreamento: (purchaseOrders as any).codigoRastreamento,
             freteTipo: (purchaseOrders as any).freteTipo,
+            fornecedorNome: (purchaseOrders as any).fornecedorNome,
+            numeroOc: (purchaseOrders as any).numeroOc,
           }).from(purchaseOrders).where(eq(purchaseOrders.id, oid)).limit(1);
           if (oc) ocMap.set(oid, oc);
         }
       }
-      return rows.map(r => ({
+      return allRows.map(r => ({
         ...r,
         transportadora: ocMap.get(r.ordemId)?.transportadora ?? null,
         codigoRastreamento: ocMap.get(r.ordemId)?.codigoRastreamento ?? null,
         freteTipo: ocMap.get(r.ordemId)?.freteTipo ?? null,
+        fornecedorNome: ocMap.get(r.ordemId)?.fornecedorNome ?? null,
+        numeroOc: ocMap.get(r.ordemId)?.numeroOc ?? null,
       }));
     }),
 

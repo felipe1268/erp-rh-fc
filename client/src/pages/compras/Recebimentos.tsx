@@ -117,10 +117,16 @@ export default function ComprasRecebimentos() {
                 </TableHeader>
                 <TableBody>
                   {recebimentos.map((r: any) => (
-                    <TableRow key={r.id}>
+                    <TableRow key={`${r._source || "c"}-${r.id}`}>
                       <TableCell className="font-mono">#{r.id}</TableCell>
-                      <TableCell className="font-mono">OC #{r.ordemId}</TableCell>
-                      <TableCell>{r.recebedorNome || "—"}</TableCell>
+                      <TableCell>
+                        <span className="font-mono">{r.numeroOc ? r.numeroOc : `OC #${r.ordemId}`}</span>
+                        {r.fornecedorNome && <p className="text-xs text-gray-400 mt-0.5">{r.fornecedorNome}</p>}
+                      </TableCell>
+                      <TableCell>
+                        {r.recebedorNome || "—"}
+                        {r._source === "almoxarifado" && <span className="block text-[10px] text-blue-500 font-medium">via Almoxarifado</span>}
+                      </TableCell>
                       <TableCell>{r.notaFiscalNumero || "—"}</TableCell>
                       <TableCell>
                         {(r as any).transportadora ? (
