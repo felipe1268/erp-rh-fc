@@ -1039,7 +1039,7 @@ export default function Cotacoes() {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center" onClick={() => setCondModalFornId(null)}>
         <div className="absolute inset-0 bg-black/40" />
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 rounded-t-2xl flex items-center justify-between">
             <div>
               <h3 className="text-base font-bold text-gray-900">Condições de Pagamento</h3>
