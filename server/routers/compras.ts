@@ -12,7 +12,7 @@ import {
   comprasSolicitacoes, comprasSolicitacoesItens,
   comprasCotacoes, comprasCotacoesItens,
   comprasCotacaoFornecedores, comprasCotacaoRespostas,
-  comprasCondicoesPagamento,
+  comprasCotacaoPropostas, comprasCondicoesPagamento,
   comprasOrdens, comprasOrdensItens, comprasEntregasProgramadas,
   comprasRiscoDebitos,
   obras,
@@ -1634,6 +1634,7 @@ Responda APENAS com um objeto JSON no formato:
     .input(z.object({
       cotacaoId: z.number(),
       fornecedorId: z.number(),
+      propostaId: z.number().optional(),
       prazoEntregaDias: z.number().nullable().optional(),
       condicaoPagamento: z.string().optional(),
       tipoPagamento: z.string().optional(),
@@ -1667,9 +1668,11 @@ Responda APENAS com um objeto JSON no formato:
         totalForn += total;
         await db.insert(comprasCotacaoRespostas).values({
           cotacaoId: input.cotacaoId, fornecedorId: input.fornecedorId, itemId: r.itemId,
+          propostaId: input.propostaId ?? null,
           quantidade: String(qty), precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
         }).onConflictDoUpdate({ target: [comprasCotacaoRespostas.cotacaoId, comprasCotacaoRespostas.fornecedorId, comprasCotacaoRespostas.itemId], set: {
           quantidade: String(qty), precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
+          propostaId: input.propostaId ?? null,
         }});
       }
       const valorFrete = n(input.valorFrete);
@@ -1688,6 +1691,50 @@ Responda APENAS com um objeto JSON no formato:
       } as any)
         .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
       return { ok: true, total: totalComFrete };
+    }),
+
+  listarPropostasFornecedor: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const propostas = await db.select().from(comprasCotacaoPropostas)
+        .where(and(
+          eq(comprasCotacaoPropostas.cotacaoId, input.cotacaoId),
+          eq(comprasCotacaoPropostas.fornecedorId, input.fornecedorId),
+          eq(comprasCotacaoPropostas.companyId, input.companyId),
+        ))
+        .orderBy(desc(comprasCotacaoPropostas.criadoEm));
+      return propostas;
+    }),
+
+  excluirProposta: protectedProcedure
+    .input(z.object({ propostaId: z.number(), cotacaoId: z.number(), fornecedorId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [proposta] = await db.select().from(comprasCotacaoPropostas)
+        .where(and(
+          eq(comprasCotacaoPropostas.id, input.propostaId),
+          eq(comprasCotacaoPropostas.cotacaoId, input.cotacaoId),
+          eq(comprasCotacaoPropostas.fornecedorId, input.fornecedorId),
+          eq(comprasCotacaoPropostas.companyId, input.companyId),
+        ));
+      if (!proposta) throw new Error("Proposta não encontrada ou acesso negado");
+      await db.delete(comprasCotacaoRespostas)
+        .where(and(
+          eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId),
+          eq(comprasCotacaoRespostas.fornecedorId, input.fornecedorId),
+          eq(comprasCotacaoRespostas.propostaId, input.propostaId),
+        ));
+      await db.update(comprasCotacaoPropostas)
+        .set({ status: "excluida" } as any)
+        .where(eq(comprasCotacaoPropostas.id, input.propostaId));
+      const remaining = await db.select({ total: comprasCotacaoRespostas.total }).from(comprasCotacaoRespostas)
+        .where(and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, input.fornecedorId)));
+      const newTotal = remaining.reduce((acc, r) => acc + n(r.total), 0);
+      await db.update(comprasCotacaoFornecedores)
+        .set({ totalOrcado: String(newTotal.toFixed(2)) } as any)
+        .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
+      return { ok: true };
     }),
 
   salvarAnexoFornecedor: protectedProcedure
@@ -1730,6 +1777,7 @@ Responda APENAS com um objeto JSON no formato:
       fileBase64: z.string().max(15_000_000),
       fileName: z.string(),
       mimeType: z.enum(["application/pdf", "image/jpeg", "image/jpg"]),
+      tipoProposta: z.enum(["complemento", "revisao"]).default("complemento"),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1746,13 +1794,20 @@ Responda APENAS com um objeto JSON no formato:
 
       if (itens.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum item na cotação" });
 
+      const existingRespostas = await db.select().from(comprasCotacaoRespostas)
+        .where(and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, input.fornecedorId)));
+
       const jobId = `ia-${input.cotacaoId}-${input.fornecedorId}-${Date.now()}`;
-      const itensRef = itens.map(it => ({
-        id: it.id,
-        descricao: it.descricao,
-        unidade: it.unidade,
-        quantidade: it.quantidade,
-      }));
+      const itensRef = itens.map(it => {
+        const existing = existingRespostas.find(r => r.itemId === it.id);
+        return {
+          id: it.id,
+          descricao: it.descricao,
+          unidade: it.unidade,
+          quantidade: it.quantidade,
+          jaPreenchido: existing ? { precoUnitario: n(existing.precoUnitario), quantidade: n(existing.quantidade) } : null,
+        };
+      });
 
       iaExtractionJobs.set(jobId, { status: "processing", startedAt: Date.now() });
 
@@ -1760,22 +1815,35 @@ Responda APENAS com um objeto JSON no formato:
         try {
           const systemPrompt = `Você é um assistente especializado em compras de construção civil. Sua tarefa é extrair itens, quantidades e preços unitários de documentos de cotação/orçamento de fornecedores.
 
-REGRAS:
+REGRAS CRÍTICAS:
 - Extraia TODOS os itens do documento com: descrição, quantidade, unidade, preço unitário e preço total
 - Valores devem ser numéricos (sem R$, sem pontos de milhar - use ponto como separador decimal)
 - Se não conseguir identificar um campo, use null
-- Retorne JSON válido, sem texto adicional`;
+- Retorne JSON válido, sem texto adicional
+
+INTELIGÊNCIA DE MATCHING:
+- Vários itens da SC podem ser o MESMO produto, divididos por atividade/EAP (ex: mesmo material aparece 3x com quantidades diferentes)
+- Um item do fornecedor pode corresponder a MÚLTIPLOS itens da SC se forem o mesmo produto
+- Se o fornecedor cota "Bacia acoplada" e a SC tem 3 linhas de "Bacia acoplada" com quantidades diferentes, faça match com TODOS eles
+- Use matchItemIds (array) quando um item do fornecedor cobre múltiplos itens da SC`;
+
+          const jaPreenchidosInfo = itensRef.filter(it => it.jaPreenchido).length > 0
+            ? `\n\nITENS JÁ PREENCHIDOS POR PROPOSTAS ANTERIORES (para contexto):\n${itensRef.filter(it => it.jaPreenchido).map(it => `- [ID:${it.id}] ${it.descricao}: R$ ${it.jaPreenchido!.precoUnitario.toFixed(2)} x ${it.jaPreenchido!.quantidade}`).join("\n")}`
+            : "";
 
           const prompt = `Analise este documento de cotação/orçamento de fornecedor e extraia todos os itens.
 
 ITENS DA SOLICITAÇÃO DE COMPRA (para referência de matching):
-${itensRef.map((it, i) => `${i + 1}. [ID:${it.id}] ${it.descricao} | Qtd: ${it.quantidade} ${it.unidade || "un"}`).join("\n")}
+${itensRef.map((it, i) => `${i + 1}. [ID:${it.id}] ${it.descricao} | Qtd solicitada: ${it.quantidade} ${it.unidade || "un"}${it.jaPreenchido ? " (JÁ PREENCHIDO)" : ""}`).join("\n")}
+${jaPreenchidosInfo}
 
 INSTRUÇÕES:
-1. Extraia todos os itens do documento do fornecedor
-2. Para cada item extraído, tente fazer o matching com os itens da SC acima
-3. O matching deve ser por semelhança de descrição (mesmo produto, mesmo material)
-4. Extraia também condição de pagamento e prazo de entrega se mencionados
+1. Extraia TODOS os itens do documento do fornecedor
+2. Para cada item extraído, faça matching com os itens da SC por semelhança de descrição
+3. IMPORTANTE: Se um item do fornecedor corresponde a vários itens da SC (mesmo produto em linhas diferentes), use matchItemIds (array com todos os IDs)
+4. Se o item do fornecedor corresponde a apenas um item da SC, use matchItemId (singular)
+5. Compare a quantidade cotada pelo fornecedor com a quantidade total solicitada na SC
+6. Extraia condição de pagamento e prazo de entrega se mencionados
 
 Retorne APENAS um JSON válido neste formato:
 {
@@ -1786,9 +1854,10 @@ Retorne APENAS um JSON válido neste formato:
       "unidade": "un",
       "precoUnitario": 25.50,
       "precoTotal": 255.00,
-      "matchItemId": 123 ou null,
-      "matchConfianca": "alta" | "media" | "baixa" | null,
-      "matchDescricaoSC": "descrição do item da SC que deu match" ou null
+      "matchItemId": 123,
+      "matchItemIds": [123, 456, 789],
+      "matchConfianca": "alta",
+      "matchDescricaoSC": "descrição do item da SC que deu match"
     }
   ],
   "condicaoPagamento": "30 DDL" ou null,
@@ -1808,8 +1877,8 @@ Retorne APENAS um JSON válido neste formato:
           console.log("[extrairCotacaoIA] Resultado bruto (500 chars):", resultText.substring(0, 500));
 
           let jsonStr = resultText.trim();
-          const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-          if (jsonMatch) jsonStr = jsonMatch[1].trim();
+          const jsonMatch2 = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (jsonMatch2) jsonStr = jsonMatch2[1].trim();
           const startIdx = jsonStr.indexOf("{");
           const endIdx = jsonStr.lastIndexOf("}");
           if (startIdx >= 0 && endIdx > startIdx) jsonStr = jsonStr.substring(startIdx, endIdx + 1);
@@ -1817,28 +1886,151 @@ Retorne APENAS um JSON válido neste formato:
           const parsed = JSON.parse(jsonStr);
           console.log("[extrairCotacaoIA] Parsed OK. itens:", (parsed.itensExtraidos ?? parsed.itens ?? []).length);
 
-          const itensExtraidos = (parsed.itensExtraidos ?? parsed.itens ?? []).map((item: any) => ({
-            descricaoFornecedor: String(item.descricaoFornecedor ?? item.descricao ?? ""),
-            quantidade: parseFloat(item.quantidade) || null,
-            unidade: item.unidade || null,
-            precoUnitario: parseFloat(item.precoUnitario ?? item.preco_unitario) || null,
-            precoTotal: parseFloat(item.precoTotal ?? item.preco_total) || null,
-            matchItemId: item.matchItemId ?? item.match_item_id ?? null,
-            matchConfianca: item.matchConfianca ?? item.match_confianca ?? null,
-            matchDescricaoSC: item.matchDescricaoSC ?? item.match_descricao_sc ?? null,
-          }));
+          const rawItens = (parsed.itensExtraidos ?? parsed.itens ?? []);
+          const itensExtraidos: any[] = [];
+
+          for (const item of rawItens) {
+            const descForn = String(item.descricaoFornecedor ?? item.descricao ?? "");
+            const qtdForn = parseFloat(item.quantidade) || null;
+            const unidade = item.unidade || null;
+            const precoUnit = parseFloat(item.precoUnitario ?? item.preco_unitario) || null;
+            const precoTotal = parseFloat(item.precoTotal ?? item.preco_total) || null;
+            const confianca = item.matchConfianca ?? item.match_confianca ?? null;
+            const descSC = item.matchDescricaoSC ?? item.match_descricao_sc ?? null;
+
+            const multiIds: number[] = item.matchItemIds ?? item.match_item_ids ?? [];
+            const singleId = item.matchItemId ?? item.match_item_id ?? null;
+            const allMatchIds = multiIds.length > 0 ? multiIds : (singleId ? [singleId] : []);
+
+            if (allMatchIds.length > 1 && precoUnit != null) {
+              const totalQtdSC = allMatchIds.reduce((acc: number, id: number) => {
+                const ref = itensRef.find(r => r.id === id);
+                return acc + n(ref?.quantidade);
+              }, 0);
+
+              for (const matchId of allMatchIds) {
+                const ref = itensRef.find(r => r.id === matchId);
+                const qtdItem = n(ref?.quantidade);
+                const proporcao = totalQtdSC > 0 ? qtdItem / totalQtdSC : 1 / allMatchIds.length;
+                const qtdDistribuida = qtdForn ? Math.round(qtdForn * proporcao * 100) / 100 : qtdItem;
+
+                itensExtraidos.push({
+                  descricaoFornecedor: descForn,
+                  quantidade: qtdDistribuida,
+                  quantidadeSC: qtdItem,
+                  unidade,
+                  precoUnitario: precoUnit,
+                  precoTotal: precoUnit * qtdDistribuida,
+                  matchItemId: matchId,
+                  matchConfianca: confianca,
+                  matchDescricaoSC: ref?.descricao ?? descSC,
+                  distribuido: true,
+                  grupoDistribuicao: allMatchIds,
+                  quantidadeFornecedorOriginal: qtdForn,
+                });
+              }
+            } else {
+              const matchId = allMatchIds[0] ?? null;
+              const ref = matchId ? itensRef.find(r => r.id === matchId) : null;
+              const qtdSC = ref ? n(ref.quantidade) : null;
+
+              itensExtraidos.push({
+                descricaoFornecedor: descForn,
+                quantidade: qtdForn,
+                quantidadeSC: qtdSC,
+                unidade,
+                precoUnitario: precoUnit,
+                precoTotal,
+                matchItemId: matchId,
+                matchConfianca: confianca,
+                matchDescricaoSC: ref?.descricao ?? descSC,
+                distribuido: false,
+                grupoDistribuicao: null,
+                quantidadeFornecedorOriginal: qtdForn,
+              });
+            }
+          }
 
           const matchedIds = new Set(itensExtraidos.filter((i: any) => i.matchItemId).map((i: any) => i.matchItemId));
           const itensSemMatch = itensRef.filter(it => !matchedIds.has(it.id));
           const itensExtras = itensExtraidos.filter((i: any) => !i.matchItemId);
 
+          const alertas: any[] = [];
+          for (const item of itensExtraidos) {
+            if (!item.matchItemId || item.quantidadeSC == null || item.quantidade == null) continue;
+            const diff = item.quantidade - item.quantidadeSC;
+            if (Math.abs(diff) > 0.01) {
+              const pctCobertura = (item.quantidade / item.quantidadeSC) * 100;
+              alertas.push({
+                matchItemId: item.matchItemId,
+                descricao: item.matchDescricaoSC || item.descricaoFornecedor,
+                tipo: diff < 0 ? "parcial" : "excedente",
+                qtdCotada: item.quantidade,
+                qtdSolicitada: item.quantidadeSC,
+                diferenca: Math.abs(diff),
+                pctCobertura: Math.round(pctCobertura * 10) / 10,
+              });
+            }
+          }
+
+          if (itensSemMatch.length > 0) {
+            for (const it of itensSemMatch) {
+              alertas.push({
+                matchItemId: it.id,
+                descricao: it.descricao,
+                tipo: "sem_cotacao",
+                qtdCotada: 0,
+                qtdSolicitada: n(it.quantidade),
+                diferenca: n(it.quantidade),
+                pctCobertura: 0,
+              });
+            }
+          }
+
+          const [proposta] = await db.insert(comprasCotacaoPropostas).values({
+            cotacaoId: input.cotacaoId,
+            fornecedorId: input.fornecedorId,
+            companyId: input.companyId,
+            fileName: input.fileName,
+            tipo: input.tipoProposta,
+            status: "ativa",
+            itensExtraidos: itensExtraidos.length,
+            itensComMatch: matchedIds.size,
+            condicaoPagamento: parsed.condicaoPagamento ?? null,
+            prazoEntrega: parsed.prazoEntrega ?? null,
+            observacoesIa: parsed.observacoes ?? null,
+          }).returning({ id: comprasCotacaoPropostas.id });
+
+          if (input.tipoProposta === "revisao") {
+            const antigas = await db.select().from(comprasCotacaoPropostas)
+              .where(and(
+                eq(comprasCotacaoPropostas.cotacaoId, input.cotacaoId),
+                eq(comprasCotacaoPropostas.fornecedorId, input.fornecedorId),
+                eq(comprasCotacaoPropostas.status, "ativa"),
+              ));
+            for (const ant of antigas) {
+              if (ant.id === proposta.id) continue;
+              await db.update(comprasCotacaoPropostas)
+                .set({ status: "substituida", substituiPropostaId: proposta.id } as any)
+                .where(eq(comprasCotacaoPropostas.id, ant.id));
+              await db.delete(comprasCotacaoRespostas)
+                .where(and(
+                  eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId),
+                  eq(comprasCotacaoRespostas.fornecedorId, input.fornecedorId),
+                  eq(comprasCotacaoRespostas.propostaId, ant.id),
+                ));
+            }
+          }
+
           iaExtractionJobs.set(jobId, {
             status: "done",
             startedAt: Date.now(),
             result: {
+              propostaId: proposta.id,
               itensExtraidos,
               itensSemMatch,
               itensExtras,
+              alertas,
               condicaoPagamento: parsed.condicaoPagamento ?? null,
               prazoEntrega: parsed.prazoEntrega ?? null,
               observacoes: parsed.observacoes ?? null,
@@ -1846,9 +2038,12 @@ Retorne APENAS um JSON válido neste formato:
               totalMatches: matchedIds.size,
               totalSemMatch: itensSemMatch.length,
               totalExtras: itensExtras.length,
+              totalAlertas: alertas.length,
+              tipoProposta: input.tipoProposta,
+              fileName: input.fileName,
             },
           });
-          console.log("[extrairCotacaoIA] Job", jobId, "concluído com sucesso");
+          console.log("[extrairCotacaoIA] Job", jobId, "concluído. Proposta", proposta.id, "tipo:", input.tipoProposta, "matches:", matchedIds.size, "alertas:", alertas.length);
         } catch (err: any) {
           console.error("[extrairCotacaoIA] Erro no job:", err.message);
           iaExtractionJobs.set(jobId, { status: "error", startedAt: Date.now(), error: err.message || "Erro desconhecido" });

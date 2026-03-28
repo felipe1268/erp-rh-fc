@@ -5004,11 +5004,29 @@ export const comprasCotacaoRespostas = pgTable("compras_cotacao_respostas", {
   cotacaoId:     integer("cotacao_id").notNull(),
   fornecedorId:  integer("fornecedor_id").notNull(),
   itemId:        integer("item_id").notNull(),
+  propostaId:    integer("proposta_id"),
   quantidade:    numeric("quantidade", { precision: 14, scale: 4 }).default("0"),
   precoUnitario: numeric("preco_unitario", { precision: 14, scale: 4 }).default("0"),
   descontoPct:   numeric("desconto_pct", { precision: 5, scale: 2 }).default("0"),
   total:         numeric({ precision: 14, scale: 2 }).default("0"),
   observacoes:   text(),
+});
+
+export const comprasCotacaoPropostas = pgTable("compras_cotacao_propostas", {
+  id:            serial().primaryKey(),
+  cotacaoId:     integer("cotacao_id").notNull(),
+  fornecedorId:  integer("fornecedor_id").notNull(),
+  companyId:     integer("company_id").notNull(),
+  fileName:      varchar("file_name", { length: 500 }),
+  tipo:          varchar("tipo", { length: 20 }).default("complemento"),
+  status:        varchar("status", { length: 20 }).default("ativa"),
+  substituiPropostaId: integer("substitui_proposta_id"),
+  itensExtraidos: integer("itens_extraidos").default(0),
+  itensComMatch:  integer("itens_com_match").default(0),
+  condicaoPagamento: varchar("condicao_pagamento", { length: 200 }),
+  prazoEntrega:    varchar("prazo_entrega", { length: 200 }),
+  observacoesIa:   text("observacoes_ia"),
+  criadoEm:      timestamp("criado_em").defaultNow(),
 });
 
 export const comprasCondicoesPagamento = pgTable("compras_condicoes_pagamento", {

@@ -482,10 +482,12 @@ export default function Cotacoes() {
   const [cobertoPorRisco, setCobertoPorRisco] = useState(false);
   const [iaExtracao, setIaExtracao] = useState<{ fornecedorId: number; dados: any } | null>(null);
   const [iaFileBuffer, setIaFileBuffer] = useState<{ fornecedorId: number; base64: string; fileName: string; mimeType: string } | null>(null);
+  const [iaTipoProposta, setIaTipoProposta] = useState<"complemento" | "revisao">("complemento");
   const [iaProgress, setIaProgress] = useState<{ fornecedorId: number; percent: number; etapa: string } | null>(null);
   const iaProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [iaJobId, setIaJobId] = useState<string | null>(null);
   const [iaPollingFornId, setIaPollingFornId] = useState<number | null>(null);
+  const [showPropostas, setShowPropostas] = useState<number | null>(null);
 
   const startIaProgress = useCallback((fornecedorId: number) => {
     if (iaProgressRef.current) clearInterval(iaProgressRef.current);
@@ -521,7 +523,7 @@ export default function Cotacoes() {
   useEffect(() => {
     if (prevShowDetalhe.current !== showDetalhe) {
       prevShowDetalhe.current = showDetalhe;
-      setCobertoPorRisco(false); setShowRealocacao(false); setIaExtracao(null); setIaFileBuffer(null); setIaProgress(null); setIaJobId(null); setIaPollingFornId(null);
+      setCobertoPorRisco(false); setShowRealocacao(false); setIaExtracao(null); setIaFileBuffer(null); setIaProgress(null); setIaJobId(null); setIaPollingFornId(null); setShowPropostas(null); setIaTipoProposta("complemento");
     }
   }, [showDetalhe]);
 
@@ -610,6 +612,14 @@ export default function Cotacoes() {
   });
   const cancelarVencedor = trpc.compras.cancelarVencedorMapa.useMutation({
     onSuccess: () => { toast.success("Seleção de vencedor cancelada. Ajuste os preços e selecione novamente."); mapaQ.refetch(); detalheQ.refetch(); q.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const propostasQ = trpc.compras.listarPropostasFornecedor.useQuery(
+    { cotacaoId: showDetalhe!, fornecedorId: showPropostas!, companyId },
+    { enabled: showDetalhe != null && showPropostas != null && !!companyId }
+  );
+  const excluirProposta = trpc.compras.excluirProposta.useMutation({
+    onSuccess: () => { toast.success("Proposta excluída!"); propostasQ.refetch(); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
   const salvarAnexo = trpc.compras.salvarAnexoFornecedor.useMutation({
@@ -797,15 +807,27 @@ export default function Cotacoes() {
     const matched = (d.itensExtraidos ?? []).filter((i: any) => i.matchItemId);
     const extras = d.itensExtras ?? [];
     const semMatch = d.itensSemMatch ?? [];
+    const alertas = d.alertas ?? [];
+    const alertasParcial = alertas.filter((a: any) => a.tipo === "parcial");
+    const alertasExcedente = alertas.filter((a: any) => a.tipo === "excedente");
+    const alertasSemCotacao = alertas.filter((a: any) => a.tipo === "sem_cotacao");
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
         <div className="absolute inset-0 bg-black/50" onClick={() => setIaExtracao(null)} />
-        <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200 max-w-3xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 space-y-4">
+        <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200 max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-semibold text-violet-700">
               <Sparkles className="h-5 w-5" /> Conferência — Leitura IA
             </h3>
-            <button onClick={() => setIaExtracao(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            <div className="flex items-center gap-3">
+              {d.tipoProposta && (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${d.tipoProposta === "revisao" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+                  {d.tipoProposta === "revisao" ? "Revisão" : "Complemento"}
+                </span>
+              )}
+              {d.fileName && <span className="text-[10px] text-gray-400 truncate max-w-[150px]">{d.fileName}</span>}
+              <button onClick={() => setIaExtracao(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            </div>
           </div>
 
           {d.condicaoPagamento && (
@@ -818,6 +840,23 @@ export default function Cotacoes() {
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-xs text-gray-600">{d.observacoes}</div>
           )}
 
+          {alertas.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              <div className={`rounded-lg p-2.5 text-center ${alertasParcial.length > 0 ? "bg-amber-50 border border-amber-200" : "bg-green-50 border border-green-200"}`}>
+                <div className="text-lg font-bold">{alertasParcial.length}</div>
+                <div className="text-[10px] font-medium text-amber-700">Qtd Parcial</div>
+              </div>
+              <div className={`rounded-lg p-2.5 text-center ${alertasExcedente.length > 0 ? "bg-blue-50 border border-blue-200" : "bg-green-50 border border-green-200"}`}>
+                <div className="text-lg font-bold">{alertasExcedente.length}</div>
+                <div className="text-[10px] font-medium text-blue-700">Qtd Excedente</div>
+              </div>
+              <div className={`rounded-lg p-2.5 text-center ${alertasSemCotacao.length > 0 ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
+                <div className="text-lg font-bold">{alertasSemCotacao.length}</div>
+                <div className="text-[10px] font-medium text-red-700">Sem Cotação</div>
+              </div>
+            </div>
+          )}
+
           {matched.length > 0 && (
             <div>
               <h4 className="text-sm font-semibold text-emerald-700 flex items-center gap-1.5 mb-2">
@@ -827,33 +866,46 @@ export default function Cotacoes() {
                 <table className="w-full text-xs">
                   <thead className="bg-emerald-50">
                     <tr>
-                      <th className="text-left px-3 py-2 font-medium text-emerald-700">Item SC</th>
-                      <th className="text-left px-3 py-2 font-medium text-emerald-700">Fornecedor</th>
-                      <th className="text-right px-3 py-2 font-medium text-emerald-700">Qtd</th>
-                      <th className="text-right px-3 py-2 font-medium text-emerald-700">Preço Unit.</th>
-                      <th className="text-right px-3 py-2 font-medium text-emerald-700">Total</th>
-                      <th className="text-center px-3 py-2 font-medium text-emerald-700">Conf.</th>
+                      <th className="text-left px-2 py-2 font-medium text-emerald-700">Item SC</th>
+                      <th className="text-left px-2 py-2 font-medium text-emerald-700">Fornecedor</th>
+                      <th className="text-right px-2 py-2 font-medium text-emerald-700">Qtd Cotada</th>
+                      <th className="text-right px-2 py-2 font-medium text-emerald-700">Qtd SC</th>
+                      <th className="text-right px-2 py-2 font-medium text-emerald-700">Preço Unit.</th>
+                      <th className="text-right px-2 py-2 font-medium text-emerald-700">Total</th>
+                      <th className="text-center px-2 py-2 font-medium text-emerald-700">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {matched.map((it: any, idx: number) => (
-                      <tr key={idx} className="border-t border-emerald-100 hover:bg-emerald-50/50">
-                        <td className="px-3 py-2 text-gray-700">{it.matchDescricaoSC || "—"}</td>
-                        <td className="px-3 py-2 text-gray-500">{it.descricaoFornecedor}</td>
-                        <td className="px-3 py-2 text-right font-mono">{it.quantidade ?? "—"}</td>
-                        <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-700">
-                          {it.precoUnitario != null ? `R$ ${Number(it.precoUnitario).toFixed(2)}` : "—"}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono">
-                          {it.precoTotal != null ? `R$ ${Number(it.precoTotal).toFixed(2)}` : "—"}
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${it.matchConfianca === "alta" ? "bg-emerald-100 text-emerald-700" : it.matchConfianca === "media" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>
-                            {it.matchConfianca || "?"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {matched.map((it: any, idx: number) => {
+                      const qtdCot = it.quantidade ?? 0;
+                      const qtdSC = it.quantidadeSC ?? 0;
+                      const diff = qtdCot - qtdSC;
+                      const statusQtd = Math.abs(diff) < 0.01 ? "ok" : diff < 0 ? "parcial" : "excedente";
+                      return (
+                        <tr key={idx} className="border-t border-emerald-100 hover:bg-emerald-50/50">
+                          <td className="px-2 py-2 text-gray-700 max-w-[150px] truncate" title={it.matchDescricaoSC || ""}>{it.matchDescricaoSC || "—"}</td>
+                          <td className="px-2 py-2 text-gray-500 max-w-[120px] truncate" title={it.descricaoFornecedor}>{it.descricaoFornecedor}</td>
+                          <td className="px-2 py-2 text-right font-mono">{it.quantidade ?? "—"}</td>
+                          <td className={`px-2 py-2 text-right font-mono ${statusQtd !== "ok" ? "font-semibold" : ""} ${statusQtd === "parcial" ? "text-amber-600" : statusQtd === "excedente" ? "text-blue-600" : "text-gray-500"}`}>
+                            {qtdSC || "—"}
+                            {statusQtd === "parcial" && <span className="text-[9px] ml-0.5">(-{Math.abs(diff).toFixed(0)})</span>}
+                            {statusQtd === "excedente" && <span className="text-[9px] ml-0.5">(+{diff.toFixed(0)})</span>}
+                          </td>
+                          <td className="px-2 py-2 text-right font-mono font-semibold text-emerald-700">
+                            {it.precoUnitario != null ? `R$ ${Number(it.precoUnitario).toFixed(2)}` : "—"}
+                          </td>
+                          <td className="px-2 py-2 text-right font-mono">
+                            {it.precoTotal != null ? `R$ ${Number(it.precoTotal).toFixed(2)}` : "—"}
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${statusQtd === "ok" ? "bg-emerald-100 text-emerald-700" : statusQtd === "parcial" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                              {statusQtd === "ok" ? "OK" : statusQtd === "parcial" ? "Parcial" : "Excedente"}
+                            </span>
+                            {it.distribuido && <span className="block text-[9px] text-violet-500 mt-0.5">distrib.</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -908,6 +960,7 @@ export default function Cotacoes() {
                 salvarRespostas.mutate({
                   cotacaoId: showDetalhe!,
                   fornecedorId: iaExtracao.fornecedorId,
+                  propostaId: d.propostaId ?? undefined,
                   respostas,
                   condicaoPagamento: d.condicaoPagamento ?? undefined,
                 }, {
@@ -915,6 +968,7 @@ export default function Cotacoes() {
                     toast.success(`${respostas.length} preço(s) salvos com sucesso!`);
                     setIaExtracao(null);
                     mapaQ.refetch();
+                    propostasQ.refetch();
                   },
                   onError: (e: any) => toast.error("Erro ao salvar: " + e.message),
                 });
@@ -1588,6 +1642,17 @@ export default function Cotacoes() {
                                           {(p as any).arquivoNome ? (p as any).arquivoNome.slice(0, 14) + (((p as any).arquivoNome?.length ?? 0) > 14 ? "…" : "") : "Anexar"}
                                         </button>
                                         {((p as any).arquivoUrl || (iaFileBuffer && iaFileBuffer.fornecedorId === p.fornecedorId)) && (
+                                          <select
+                                            value={iaTipoProposta}
+                                            onChange={e => setIaTipoProposta(e.target.value as "complemento" | "revisao")}
+                                            className="h-7 text-[10px] border border-gray-200 rounded-lg px-1 bg-white text-gray-700"
+                                            title="Tipo: Complemento acumula preços, Revisão substitui propostas anteriores"
+                                          >
+                                            <option value="complemento">Complemento</option>
+                                            <option value="revisao">Revisão</option>
+                                          </select>
+                                        )}
+                                        {((p as any).arquivoUrl || (iaFileBuffer && iaFileBuffer.fornecedorId === p.fornecedorId)) && (
                                           iaProgress && iaProgress.fornecedorId === p.fornecedorId ? (
                                             <div className="flex flex-col gap-1 min-w-[140px]">
                                               <div className="flex items-center gap-1.5">
@@ -1611,7 +1676,7 @@ export default function Cotacoes() {
                                           <button
                                             onClick={() => {
                                               if (iaFileBuffer && iaFileBuffer.fornecedorId === p.fornecedorId) {
-                                                extrairIA.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: iaFileBuffer.base64, fileName: iaFileBuffer.fileName, mimeType: iaFileBuffer.mimeType });
+                                                extrairIA.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: iaFileBuffer.base64, fileName: iaFileBuffer.fileName, mimeType: iaFileBuffer.mimeType, tipoProposta: iaTipoProposta });
                                               } else if ((p as any).arquivoUrl) {
                                                 const url = (p as any).arquivoUrl as string;
                                                 fetch(url).then(r => r.blob()).then(blob => {
@@ -1620,7 +1685,7 @@ export default function Cotacoes() {
                                                     const base64 = (ev.target?.result as string).split(",")[1];
                                                     const nome = ((p as any).arquivoNome || url).toLowerCase();
                                                     const mime = blob.type || (nome.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
-                                                    extrairIA.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: (p as any).arquivoNome || "arquivo", mimeType: mime });
+                                                    extrairIA.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: (p as any).arquivoNome || "arquivo", mimeType: mime, tipoProposta: iaTipoProposta });
                                                   };
                                                   reader.readAsDataURL(blob);
                                                 }).catch(() => toast.error("Não foi possível baixar o arquivo para leitura IA"));
@@ -1634,7 +1699,52 @@ export default function Cotacoes() {
                                           </button>
                                           )
                                         )}
+                                        <button
+                                          onClick={() => setShowPropostas(showPropostas === p.fornecedorId ? null : p.fornecedorId)}
+                                          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${showPropostas === p.fornecedorId ? "bg-indigo-100 text-indigo-700 border border-indigo-300" : "bg-gray-50 text-gray-500 border border-gray-200 hover:bg-indigo-50 hover:text-indigo-600"}`}
+                                          title="Ver propostas enviadas por este fornecedor"
+                                        >
+                                          <FileText className="h-3.5 w-3.5" />
+                                          Propostas
+                                        </button>
                                       </div>
+                                      {showPropostas === p.fornecedorId && (
+                                        <div className="mt-2 bg-indigo-50/50 border border-indigo-100 rounded-lg p-2.5 space-y-1.5">
+                                          <div className="flex items-center justify-between mb-1">
+                                            <span className="text-[10px] font-semibold text-indigo-700 uppercase tracking-wide">Propostas enviadas</span>
+                                          </div>
+                                          {propostasQ.isLoading && <p className="text-[10px] text-gray-400">Carregando...</p>}
+                                          {propostasQ.data && propostasQ.data.length === 0 && (
+                                            <p className="text-[10px] text-gray-400 italic">Nenhuma proposta registrada</p>
+                                          )}
+                                          {(propostasQ.data ?? []).map((prop: any) => (
+                                            <div key={prop.id} className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-[11px] ${prop.status === "ativa" ? "bg-white border border-indigo-200" : prop.status === "substituida" ? "bg-gray-100 border border-gray-200 opacity-60" : "bg-red-50 border border-red-200 opacity-50"}`}>
+                                              <div className="flex items-center gap-2 min-w-0">
+                                                <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${prop.status === "ativa" ? "bg-emerald-500" : prop.status === "substituida" ? "bg-gray-400" : "bg-red-400"}`} />
+                                                <span className="truncate font-medium text-gray-700">{prop.fileName || "Proposta"}</span>
+                                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${prop.tipo === "revisao" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+                                                  {prop.tipo === "revisao" ? "Rev" : "Comp"}
+                                                </span>
+                                                <span className="text-[9px] text-gray-400">{prop.itensComMatch ?? 0} itens</span>
+                                              </div>
+                                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${prop.status === "ativa" ? "bg-emerald-100 text-emerald-700" : prop.status === "substituida" ? "bg-gray-200 text-gray-600" : "bg-red-100 text-red-600"}`}>
+                                                  {prop.status === "ativa" ? "Ativa" : prop.status === "substituida" ? "Substituída" : "Excluída"}
+                                                </span>
+                                                {prop.status === "ativa" && (
+                                                  <button
+                                                    onClick={() => { if (confirm("Excluir proposta e remover preços vinculados?")) excluirProposta.mutate({ propostaId: prop.id, cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId }); }}
+                                                    className="text-red-400 hover:text-red-600 p-0.5"
+                                                    title="Excluir proposta"
+                                                  >
+                                                    <Trash2 className="h-3 w-3" />
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
                                   </th>
                                 );

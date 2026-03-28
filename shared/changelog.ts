@@ -5586,4 +5586,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 23:00:00",
   },
+  {
+    version: 824,
+    titulo: "Compras Inteligentes — Múltiplas propostas, alertas de quantidade e revisões",
+    descricao: "Frontend atualizado: seletor de tipo (Complemento/Revisão) antes da leitura IA, overlay de conferência com comparação de quantidades (Qtd Cotada vs Qtd SC), alertas visuais de quantidade parcial/excedente/sem cotação com indicadores coloridos, botão 'Propostas' por fornecedor mostrando lista de propostas enviadas com status (ativa/substituída/excluída), tipo (Comp/Rev), e opção de exclusão. Suporte a propostaId no salvamento de respostas.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 23:30:00",
+  },
 ];
