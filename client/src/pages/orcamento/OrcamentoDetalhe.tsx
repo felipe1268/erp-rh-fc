@@ -206,26 +206,60 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
   const [compOpen, setCompOpen] = useState(false);
   const [compFile, setCompFile] = useState<File | null>(null);
   const [compLoading, setCompLoading] = useState(false);
+  const [compJobId, setCompJobId] = useState<string | null>(null);
+  const [compProgress, setCompProgress] = useState<{ progresso: number; mensagem: string; etapa: string } | null>(null);
 
   const atualizarCompMut = trpc.orcamento.atualizarComposicoes.useMutation({
     onSuccess: (res) => {
-      toast.success(`Composições atualizadas! ${res.itensAtualizados} itens vinculados, ${res.composicoesCount} composições e ${res.insumosCount} insumos carregados.`);
-      setCompOpen(false);
-      setCompFile(null);
-      setCompLoading(false);
-      refetch();
+      setCompJobId(res.jobId);
     },
     onError: e => {
-      toast.error(e.message || "Erro ao atualizar composições");
+      toast.error(e.message || "Erro ao iniciar vinculação");
       setCompLoading(false);
+      setCompProgress(null);
     },
   });
+
+  const progressQuery = trpc.orcamento.atualizarComposicoesProgresso.useQuery(
+    { jobId: compJobId ?? '' },
+    {
+      enabled: !!compJobId,
+      refetchInterval: compJobId ? 500 : false,
+    }
+  );
+
+  useEffect(() => {
+    if (!progressQuery.data || !compJobId) return;
+    const d = progressQuery.data;
+    setCompProgress({ progresso: d.progresso ?? 0, mensagem: d.mensagem ?? '', etapa: d.etapa ?? '' });
+    if (d.status === 'done') {
+      const r = d.resultado;
+      toast.success(`Composições atualizadas! ${r?.itensAtualizados ?? 0} itens vinculados, ${r?.composicoesCount ?? 0} composições e ${r?.insumosCount ?? 0} insumos.`);
+      setCompJobId(null);
+      setCompLoading(false);
+      setTimeout(() => { setCompOpen(false); setCompFile(null); setCompProgress(null); }, 1500);
+      refetch();
+    } else if (d.status === 'error') {
+      toast.error(d.mensagem || 'Erro ao processar composições');
+      setCompJobId(null);
+      setCompLoading(false);
+      setCompProgress(null);
+    }
+  }, [progressQuery.data]);
 
   const confirmarAtualizarComp = async () => {
     if (!compFile) return;
     setCompLoading(true);
+    setCompProgress({ progresso: 0, mensagem: 'Preparando arquivo...', etapa: 'upload' });
     const reader = new FileReader();
+    reader.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        setCompProgress({ progresso: Math.min(pct, 95), mensagem: `Lendo arquivo... ${pct}%`, etapa: 'upload' });
+      }
+    };
     reader.onload = (e) => {
+      setCompProgress({ progresso: 2, mensagem: 'Enviando para o servidor...', etapa: 'enviando' });
       const b64 = (e.target?.result as string).split(",")[1];
       atualizarCompMut.mutate({
         orcamentoId: id,
@@ -1828,73 +1862,128 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="py-2 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Envie a planilha de custo para vincular os <strong>codigos de composicao</strong> (coluna N - Cod. Servico)
-              aos itens da EAP existentes e carregar as <strong>CPUs e insumos</strong>. Valores, quantidades e SCs existentes
-              <strong className="text-green-700"> nao serao alterados</strong>.
-            </p>
-
-            <div
-              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
-                compFile ? "border-green-400 bg-green-50" : "border-border hover:border-primary hover:bg-muted/30"
-              }`}
-              onClick={() => {
-                const inp = document.createElement("input");
-                inp.type = "file";
-                inp.accept = ".xlsx,.xls,.xlsm,.xlsb,.xltx,.xltm";
-                inp.onchange = () => { if (inp.files?.[0]) setCompFile(inp.files[0]); };
-                inp.click();
-              }}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setCompFile(f); }}
-            >
-              {compFile ? (
-                <div className="flex flex-col items-center gap-2">
-                  <FileSpreadsheet className="h-8 w-8 text-green-600" />
-                  <p className="text-sm font-semibold text-green-700">{compFile.name}</p>
-                  <Button size="sm" variant="ghost" className="text-xs text-muted-foreground mt-1"
-                    onClick={e => { e.stopPropagation(); setCompFile(null); }}>
-                    <X className="h-3 w-3 mr-1" /> Trocar arquivo
-                  </Button>
+          {compLoading && compProgress ? (
+            <div className="py-4 space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-gray-700">{compProgress.mensagem}</span>
+                  <span className="font-semibold text-blue-600">{compProgress.progresso}%</span>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <UploadCloud className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm font-medium">Clique ou arraste a planilha aqui</p>
-                  <p className="text-xs text-muted-foreground">.xlsx, .xls ou .xlsm com abas "Orcamento" e "CPUs"</p>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ease-out ${
+                      compProgress.progresso >= 100 ? "bg-green-500" : "bg-blue-500"
+                    }`}
+                    style={{ width: `${compProgress.progresso}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-5 gap-1">
+                {[
+                  { key: 'lendo', label: 'Leitura', icon: '1' },
+                  { key: 'parseando', label: 'Análise', icon: '2' },
+                  { key: 'vinculando', label: 'Vínculos', icon: '3' },
+                  { key: 'cpus', label: 'CPUs', icon: '4' },
+                  { key: 'insumos', label: 'Insumos', icon: '5' },
+                ].map((step) => {
+                  const etapas = ['upload', 'enviando', 'lendo', 'parseando', 'vinculando', 'cpus', 'insumos', 'concluido'];
+                  const currentIdx = etapas.indexOf(compProgress.etapa);
+                  const stepIdx = etapas.indexOf(step.key);
+                  const isDone = currentIdx > stepIdx || compProgress.progresso >= 100;
+                  const isActive = compProgress.etapa === step.key;
+                  return (
+                    <div key={step.key} className="flex flex-col items-center gap-1">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                        isDone ? "bg-green-500 text-white" :
+                        isActive ? "bg-blue-500 text-white animate-pulse" :
+                        "bg-gray-200 text-gray-400"
+                      }`}>
+                        {isDone ? <CheckCircle2 className="h-4 w-4" /> : step.icon}
+                      </div>
+                      <span className={`text-[10px] font-medium ${
+                        isDone ? "text-green-600" : isActive ? "text-blue-600" : "text-gray-400"
+                      }`}>{step.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {compProgress.progresso >= 100 && (
+                <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">
+                  <CheckCircle2 className="h-5 w-5 shrink-0" />
+                  <span className="font-medium">{compProgress.mensagem}</span>
                 </div>
               )}
             </div>
+          ) : (
+            <div className="py-2 space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Envie a planilha de custo para vincular os <strong>codigos de composicao</strong> (coluna N - Cod. Servico)
+                aos itens da EAP existentes e carregar as <strong>CPUs e insumos</strong>. Valores, quantidades e SCs existentes
+                <strong className="text-green-700"> nao serao alterados</strong>.
+              </p>
 
-            <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 p-3">
-              <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-              <div className="text-xs text-blue-800 space-y-1">
-                <p><strong>O que sera atualizado:</strong></p>
-                <ul className="list-disc pl-4 space-y-0.5">
-                  <li>Codigo de composicao (servicoCodigo) vinculado a cada item da EAP</li>
-                  <li>Catalogo de composicoes (CPUs) e seus insumos</li>
-                </ul>
-                <p className="mt-1"><strong>O que NAO muda:</strong> valores, quantidades, SCs, cotacoes, OCs, contratos</p>
+              <div
+                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                  compFile ? "border-green-400 bg-green-50" : "border-border hover:border-primary hover:bg-muted/30"
+                }`}
+                onClick={() => {
+                  const inp = document.createElement("input");
+                  inp.type = "file";
+                  inp.accept = ".xlsx,.xls,.xlsm,.xlsb,.xltx,.xltm";
+                  inp.onchange = () => { if (inp.files?.[0]) setCompFile(inp.files[0]); };
+                  inp.click();
+                }}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setCompFile(f); }}
+              >
+                {compFile ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <FileSpreadsheet className="h-8 w-8 text-green-600" />
+                    <p className="text-sm font-semibold text-green-700">{compFile.name}</p>
+                    <Button size="sm" variant="ghost" className="text-xs text-muted-foreground mt-1"
+                      onClick={e => { e.stopPropagation(); setCompFile(null); }}>
+                      <X className="h-3 w-3 mr-1" /> Trocar arquivo
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2">
+                    <UploadCloud className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm font-medium">Clique ou arraste a planilha aqui</p>
+                    <p className="text-xs text-muted-foreground">.xlsx, .xls ou .xlsm com abas "Orcamento" e "CPUs"</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 p-3">
+                <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-blue-800 space-y-1">
+                  <p><strong>O que sera atualizado:</strong></p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    <li>Codigo de composicao (servicoCodigo) vinculado a cada item da EAP</li>
+                    <li>Catalogo de composicoes (CPUs) e seus insumos</li>
+                  </ul>
+                  <p className="mt-1"><strong>O que NAO muda:</strong> valores, quantidades, SCs, cotacoes, OCs, contratos</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCompOpen(false)}
-              disabled={atualizarCompMut.isPending}>
-              Cancelar
-            </Button>
-            <Button
-              disabled={!compFile || atualizarCompMut.isPending}
-              onClick={confirmarAtualizarComp}
-              className="gap-2"
-            >
-              {atualizarCompMut.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Vinculando...</>
-                : <><Package className="h-4 w-4" /> Vincular Composicoes</>}
-            </Button>
-          </DialogFooter>
+          {!compLoading && (
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCompOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                disabled={!compFile}
+                onClick={confirmarAtualizarComp}
+                className="gap-2"
+              >
+                <Package className="h-4 w-4" /> Vincular Composicoes
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
 

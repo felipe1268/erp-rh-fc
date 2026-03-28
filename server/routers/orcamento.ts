@@ -1205,6 +1205,26 @@ function parsearAbaCPUs(rows: any[][], companyId: number) {
 }
 
 // ============================================================
+// IN-MEMORY JOB STORE — Composições (vinculação CPUs)
+// ============================================================
+interface CompJob {
+  status: 'running' | 'done' | 'error';
+  etapa: string;
+  progresso: number;
+  total: number;
+  mensagem: string;
+  createdAt: number;
+  resultado?: { itensAtualizados: number; itensTotal: number; composicoesCount: number; insumosCount: number };
+}
+const compJobStore = new Map<string, CompJob>();
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  for (const [id, job] of compJobStore) {
+    if (job.createdAt < cutoff) compJobStore.delete(id);
+  }
+}, 5 * 60 * 1000);
+
+// ============================================================
 // IN-MEMORY JOB STORE (importação de insumos em background)
 // ============================================================
 interface ImportJob {
@@ -2117,87 +2137,145 @@ export const orcamentoRouter = router({
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
       if (Number(orc.companyId) !== Number(input.companyId)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão.' });
 
-      const XLSX = await import('xlsx');
-      const buffer = Buffer.from(input.fileBase64, 'base64');
-      const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
+      const jobId = `comp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      compJobStore.set(jobId, {
+        status: 'running', etapa: 'lendo', progresso: 0, total: 100,
+        mensagem: 'Lendo planilha...', createdAt: Date.now(),
+      });
 
-      const orcTab = wb.SheetNames.find((n: string) =>
-        n.toLowerCase().replace(/[^a-z]/g, '').startsWith('or') ||
-        n.toLowerCase().includes('orcamento') ||
-        n.toLowerCase().includes('orçamento')
-      );
-      if (!orcTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba "Orçamento" não encontrada na planilha.' });
+      (async () => {
+        const job = compJobStore.get(jobId)!;
+        try {
+          job.etapa = 'lendo'; job.progresso = 5; job.mensagem = 'Lendo planilha...';
 
-      const dataOrc = XLSX.utils.sheet_to_json(wb.Sheets[orcTab], { header: 1, defval: '' }) as any[][];
-      const { itens } = parsearAbaCorcamento(dataOrc, 0, 0);
+          const XLSX = await import('xlsx');
+          const buffer = Buffer.from(input.fileBase64, 'base64');
+          const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: false, cellNF: false, cellStyles: false, cellHTML: false, sheetStubs: false });
 
-      const cpusTab = wb.SheetNames.find((n: string) => n === 'CPUs' || n === 'Cpus' || n.toLowerCase() === 'cpus');
-      const cpusParsed = cpusTab
-        ? parsearAbaCPUs(XLSX.utils.sheet_to_json(wb.Sheets[cpusTab], { header: 1, defval: '' }) as any[][], input.companyId)
-        : { composicoes: [], linhasInsumos: [] };
+          job.progresso = 15; job.mensagem = 'Identificando abas...';
 
-      const newCodigoMap = new Map<string, string>();
-      const newTipoMap = new Map<string, string>();
-      for (const it of itens) {
-        if (it.servicoCodigo) newCodigoMap.set(it.eapCodigo, it.servicoCodigo);
-        if (it.composicaoTipo) newTipoMap.set(it.eapCodigo, it.composicaoTipo);
-      }
-
-      const existingItems = await db.select({
-        id: orcamentoItens.id,
-        eapCodigo: orcamentoItens.eapCodigo,
-        servicoCodigo: (orcamentoItens as any).servicoCodigo,
-      }).from(orcamentoItens)
-        .where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
-
-      let updated = 0;
-      for (const item of existingItems) {
-        const newCodigo = newCodigoMap.get(item.eapCodigo);
-        const newTipo = newTipoMap.get(item.eapCodigo);
-        const codigoChanged = newCodigo && newCodigo !== (item.servicoCodigo || '');
-        const tipoChanged = newTipo && newTipo !== ((item as any).composicaoTipo || '');
-        if (codigoChanged || tipoChanged) {
-          const setObj: any = {};
-          if (newCodigo) setObj.servicoCodigo = newCodigo;
-          if (newTipo) setObj.composicaoTipo = newTipo;
-          await db.update(orcamentoItens).set(setObj)
-            .where(eq(orcamentoItens.id, item.id));
-          updated++;
-        }
-      }
-
-      const BATCH = 200;
-      let composicoesCount = 0;
-      let insumosCount = 0;
-      if (cpusParsed.composicoes.length > 0) {
-        await db.delete(composicoesCatalogo).where(eq(composicoesCatalogo.companyId, input.companyId));
-        await db.delete(composicaoInsumos).where(eq(composicaoInsumos.companyId, input.companyId));
-        for (let i = 0; i < cpusParsed.composicoes.length; i += BATCH) {
-          await db.insert(composicoesCatalogo).values(
-            cpusParsed.composicoes.slice(i, i + BATCH).map(c => ({
-              ...c,
-              totalOrcamentos: 1,
-              ultimaAtualizacao: new Date().toISOString(),
-              criadoEm: new Date().toISOString(),
-            }))
+          const orcTab = wb.SheetNames.find((n: string) =>
+            n.toLowerCase().replace(/[^a-z]/g, '').startsWith('or') ||
+            n.toLowerCase().includes('orcamento') ||
+            n.toLowerCase().includes('orçamento')
           );
-        }
-        composicoesCount = cpusParsed.composicoes.length;
-        for (let i = 0; i < cpusParsed.linhasInsumos.length; i += BATCH) {
-          await db.insert(composicaoInsumos).values(
-            cpusParsed.linhasInsumos.slice(i, i + BATCH)
-          );
-        }
-        insumosCount = cpusParsed.linhasInsumos.length;
-      }
+          if (!orcTab) { job.status = 'error'; job.mensagem = 'Aba "Orçamento" não encontrada.'; return; }
 
+          job.etapa = 'parseando'; job.progresso = 20; job.mensagem = 'Parseando aba Orçamento...';
+
+          const dataOrc = XLSX.utils.sheet_to_json(wb.Sheets[orcTab], { header: 1, defval: '' }) as any[][];
+          const { itens } = parsearAbaCorcamento(dataOrc, 0, 0);
+
+          job.progresso = 30; job.mensagem = 'Parseando aba CPUs...';
+
+          const cpusTab = wb.SheetNames.find((n: string) => n === 'CPUs' || n === 'Cpus' || n.toLowerCase() === 'cpus');
+          const cpusParsed = cpusTab
+            ? parsearAbaCPUs(XLSX.utils.sheet_to_json(wb.Sheets[cpusTab], { header: 1, defval: '' }) as any[][], input.companyId)
+            : { composicoes: [], linhasInsumos: [] };
+
+          job.progresso = 40; job.mensagem = `${itens.filter(i => !!i.servicoCodigo).length} códigos encontrados na planilha...`;
+
+          const newCodigoMap = new Map<string, string>();
+          const newTipoMap = new Map<string, string>();
+          for (const it of itens) {
+            if (it.servicoCodigo) newCodigoMap.set(it.eapCodigo, it.servicoCodigo);
+            if (it.composicaoTipo) newTipoMap.set(it.eapCodigo, it.composicaoTipo);
+          }
+
+          job.etapa = 'vinculando'; job.progresso = 45; job.mensagem = 'Carregando itens existentes...';
+
+          const existingItems = await db.select({
+            id: orcamentoItens.id,
+            eapCodigo: orcamentoItens.eapCodigo,
+            servicoCodigo: (orcamentoItens as any).servicoCodigo,
+          }).from(orcamentoItens)
+            .where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+
+          const totalToProcess = existingItems.length;
+          let updated = 0;
+          let processed = 0;
+
+          for (const item of existingItems) {
+            const newCodigo = newCodigoMap.get(item.eapCodigo);
+            const newTipo = newTipoMap.get(item.eapCodigo);
+            const codigoChanged = newCodigo && newCodigo !== (item.servicoCodigo || '');
+            const tipoChanged = newTipo && newTipo !== ((item as any).composicaoTipo || '');
+            if (codigoChanged || tipoChanged) {
+              const setObj: any = {};
+              if (newCodigo) setObj.servicoCodigo = newCodigo;
+              if (newTipo) setObj.composicaoTipo = newTipo;
+              await db.update(orcamentoItens).set(setObj)
+                .where(eq(orcamentoItens.id, item.id));
+              updated++;
+            }
+            processed++;
+            if (processed % 20 === 0 || processed === totalToProcess) {
+              const pct = 45 + Math.round((processed / totalToProcess) * 25);
+              job.progresso = pct;
+              job.mensagem = `Vinculando itens... ${processed}/${totalToProcess} (${updated} atualizados)`;
+            }
+          }
+
+          const BATCH = 200;
+          let composicoesCount = 0;
+          let insumosCount = 0;
+          if (cpusParsed.composicoes.length > 0) {
+            job.etapa = 'cpus'; job.progresso = 72; job.mensagem = 'Atualizando catálogo de composições...';
+            await db.delete(composicoesCatalogo).where(eq(composicoesCatalogo.companyId, input.companyId));
+            await db.delete(composicaoInsumos).where(eq(composicaoInsumos.companyId, input.companyId));
+            const totalComp = cpusParsed.composicoes.length;
+            for (let i = 0; i < totalComp; i += BATCH) {
+              await db.insert(composicoesCatalogo).values(
+                cpusParsed.composicoes.slice(i, i + BATCH).map(c => ({
+                  ...c,
+                  totalOrcamentos: 1,
+                  ultimaAtualizacao: new Date().toISOString(),
+                  criadoEm: new Date().toISOString(),
+                }))
+              );
+              const pct = 72 + Math.round(((i + BATCH) / totalComp) * 8);
+              job.progresso = Math.min(pct, 80);
+              job.mensagem = `Composições: ${Math.min(i + BATCH, totalComp)}/${totalComp}`;
+            }
+            composicoesCount = totalComp;
+
+            job.etapa = 'insumos'; job.progresso = 82; job.mensagem = 'Carregando insumos...';
+            const totalIns = cpusParsed.linhasInsumos.length;
+            for (let i = 0; i < totalIns; i += BATCH) {
+              await db.insert(composicaoInsumos).values(
+                cpusParsed.linhasInsumos.slice(i, i + BATCH)
+              );
+              const pct = 82 + Math.round(((i + BATCH) / totalIns) * 15);
+              job.progresso = Math.min(pct, 97);
+              job.mensagem = `Insumos: ${Math.min(i + BATCH, totalIns)}/${totalIns}`;
+            }
+            insumosCount = totalIns;
+          }
+
+          job.status = 'done'; job.etapa = 'concluido'; job.progresso = 100;
+          job.mensagem = `Concluído! ${updated} itens vinculados, ${composicoesCount} composições, ${insumosCount} insumos.`;
+          job.resultado = { itensAtualizados: updated, itensTotal: totalToProcess, composicoesCount, insumosCount };
+        } catch (err: any) {
+          job.status = 'error';
+          job.mensagem = err.message || 'Erro ao processar composições';
+        }
+      })();
+
+      return { jobId };
+    }),
+
+  atualizarComposicoesProgresso: protectedProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(({ input }) => {
+      const job = compJobStore.get(input.jobId);
+      if (!job) return { status: 'not_found' as const, etapa: '', progresso: 0, total: 100, mensagem: 'Job não encontrado' };
       return {
-        success: true,
-        itensAtualizados: updated,
-        itensTotal: existingItems.length,
-        itensPlanilha: itens.filter(i => !!i.servicoCodigo).length,
-        composicoesCount,
-        insumosCount,
+        status: job.status,
+        etapa: job.etapa,
+        progresso: job.progresso,
+        total: job.total,
+        mensagem: job.mensagem,
+        resultado: job.resultado,
       };
     }),
 
