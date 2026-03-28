@@ -478,6 +478,7 @@ export default function Cotacoes() {
   const [condFechCiclo, setCondFechCiclo] = useState<Record<number, string>>({});
   const [condFechDiaFixo, setCondFechDiaFixo] = useState<Record<number, string>>({});
   const [condFechPrazo, setCondFechPrazo] = useState<Record<number, string>>({});
+  const [condFechParc, setCondFechParc] = useState<Record<number, string>>({});
   const [editValorFrete, setEditValorFrete] = useState<Record<number, string>>({});
   const [editTransportadora, setEditTransportadora] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
@@ -1168,10 +1169,32 @@ export default function Cotacoes() {
                     </div>
                   </div>
 
+                  <div>
+                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Parcelamento pós-fechamento</p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[
+                        { v: "1", l: "À Vista" },
+                        { v: "2", l: "2x" },
+                        { v: "3", l: "3x" },
+                        { v: "4", l: "4x" },
+                        { v: "5", l: "5x" },
+                        { v: "6", l: "6x" },
+                        { v: "10", l: "10x" },
+                        { v: "12", l: "12x" },
+                      ].map(p => (
+                        <button key={p.v} type="button" onClick={() => setCondFechParc(prev => ({ ...prev, [fId]: prev[fId] === p.v ? "" : p.v }))}
+                          className={`px-2 py-2 rounded-lg text-xs font-medium border-2 transition-all text-center ${condFechParc[fId] === p.v ? "bg-blue-100 text-blue-700 border-blue-400 ring-2 ring-blue-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                          {p.l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {condFechCiclo[fId] && condFechPrazo[fId] && (() => {
                     const hoje = new Date();
                     const ciclo = condFechCiclo[fId];
                     const prazo = parseInt(condFechPrazo[fId]);
+                    const numParc = parseInt(condFechParc[fId] ?? "1") || 1;
 
                     let proximoFech: Date;
                     if (ciclo === "fixo") {
@@ -1186,10 +1209,17 @@ export default function Cotacoes() {
                       proximoFech.setDate(proximoFech.getDate() + (cicloDias - (hoje.getDate() % cicloDias)));
                     }
 
-                    const vencimento = new Date(proximoFech);
-                    vencimento.setDate(vencimento.getDate() + prazo);
+                    const primeiroVenc = new Date(proximoFech);
+                    primeiroVenc.setDate(primeiroVenc.getDate() + prazo);
 
                     const cicloLabel = ciclo === "fixo" ? `Dias fixos (${condFechDiaFixo[fId] || "1, 15"})` : ciclo === "7" ? "Semanal" : ciclo === "15" ? "Quinzenal" : "Mensal";
+                    const valorParcela = fornTotal / numParc;
+
+                    const parcelas = Array.from({ length: numParc }, (_, i) => {
+                      const dt = new Date(primeiroVenc);
+                      dt.setDate(dt.getDate() + (i * 30));
+                      return { num: i + 1, valor: valorParcela, data: dt };
+                    });
 
                     return (
                       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
@@ -1207,12 +1237,31 @@ export default function Cotacoes() {
                             <span className="text-xs text-blue-600">Prazo pós-fechamento</span>
                             <span className="text-xs font-bold text-blue-800">{prazo} dias</span>
                           </div>
-                          <div className="flex justify-between bg-white rounded-lg px-3 py-2.5 border-2 border-blue-300 bg-blue-100">
-                            <span className="text-xs font-bold text-blue-700">Vencimento estimado</span>
-                            <span className="text-sm font-bold text-blue-900">{vencimento.toLocaleDateString("pt-BR")}</span>
-                          </div>
+
+                          {numParc > 1 ? (
+                            <div className="bg-white rounded-lg border border-blue-100 overflow-hidden">
+                              <div className="px-3 py-1.5 bg-blue-100 border-b border-blue-200">
+                                <span className="text-[10px] font-bold text-blue-700 uppercase">Parcelas ({numParc}x de {formatCurrency(valorParcela)})</span>
+                              </div>
+                              <div className="divide-y divide-blue-50">
+                                {parcelas.map(p => (
+                                  <div key={p.num} className="flex justify-between px-3 py-1.5">
+                                    <span className="text-xs text-blue-600">{p.num}ª parcela</span>
+                                    <span className="text-xs font-semibold text-blue-800">{formatCurrency(p.valor)}</span>
+                                    <span className="text-xs text-blue-500">{p.data.toLocaleDateString("pt-BR")}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex justify-between bg-white rounded-lg px-3 py-2.5 border-2 border-blue-300 bg-blue-100">
+                              <span className="text-xs font-bold text-blue-700">Vencimento estimado</span>
+                              <span className="text-sm font-bold text-blue-900">{primeiroVenc.toLocaleDateString("pt-BR")}</span>
+                            </div>
+                          )}
+
                           <div className="flex justify-between bg-white rounded-lg px-3 py-2 border border-blue-100">
-                            <span className="text-xs text-blue-600">Valor</span>
+                            <span className="text-xs text-blue-600">Total</span>
                             <span className="text-sm font-bold text-blue-800">{formatCurrency(fornTotal)}</span>
                           </div>
                         </div>
