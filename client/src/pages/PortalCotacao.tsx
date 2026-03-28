@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Building2, Package, CheckCircle2, Loader2, Send, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { TIPOS_PAGAMENTO } from "../../../shared/paymentConditions";
 
 export default function PortalCotacao() {
   const params = useParams<{ token: string }>();
@@ -19,6 +20,7 @@ export default function PortalCotacao() {
   const [valorFrete, setValorFrete] = useState("0");
   const [prazo, setPrazo] = useState("");
   const [condicao, setCondicao] = useState("");
+  const [tipoPag, setTipoPag] = useState("");
   const [obs, setObs] = useState("");
   const [enviado, setEnviado] = useState(false);
 
@@ -161,8 +163,17 @@ export default function PortalCotacao() {
               </div>
               <div>
                 <Label>Condição de Pagamento</Label>
-                <Input placeholder="Ex: 30 dias, À vista..."
-                  value={condicao} onChange={e => setCondicao(e.target.value)} />
+                <select value={tipoPag} onChange={e => {
+                  const val = e.target.value;
+                  setTipoPag(val);
+                  const info = TIPOS_PAGAMENTO.find(t => t.value === val);
+                  if (info) setCondicao(info.label);
+                  else setCondicao("");
+                }}
+                  className="w-full h-10 border border-gray-300 rounded-md px-3 bg-white text-gray-900">
+                  <option value="">Selecione...</option>
+                  {TIPOS_PAGAMENTO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
               </div>
             </div>
             <div>
@@ -185,7 +196,8 @@ export default function PortalCotacao() {
               onClick={() => submeterMut.mutate({
                 token, valorUnitario: Number(valorUnit), valorFrete: Number(valorFrete),
                 prazoEntregaDias: prazo ? parseInt(prazo) : undefined,
-                condicaoPagamento: condicao, observacoes: obs,
+                condicaoPagamento: condicao, tipoPagamento: tipoPag || undefined,
+                observacoes: obs,
               })}>
               {submeterMut.isPending ? (
                 <><Loader2 className="h-5 w-5 animate-spin mr-2" />Enviando...</>

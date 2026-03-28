@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw } from "lucide-react";
+import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -372,6 +373,7 @@ export default function Cotacoes() {
   const [editQtds, setEditQtds] = useState<Record<string, string>>({});
   const [editPrazo, setEditPrazo] = useState<Record<number, string>>({});
   const [editCondPag, setEditCondPag] = useState<Record<number, string>>({});
+  const [editTipoPag, setEditTipoPag] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
   const [showGerenciarCond, setShowGerenciarCond] = useState(false);
   const [novaCondicao, setNovaCondicao] = useState("");
@@ -500,15 +502,18 @@ export default function Cotacoes() {
         }
       }
 
+      const tipoPagInicial: Record<number, string> = {};
       for (const p of mapaQ.data.participantes) {
         prazoInicial[p.fornecedorId] = p.prazoEntregaDias ? String(p.prazoEntregaDias) : "";
         condInicial[p.fornecedorId] = p.condicaoPagamento ?? "";
+        tipoPagInicial[p.fornecedorId] = (p as any).tipoPagamento ?? "";
         if ((p as any).arquivoUrl) anexoInicial[p.fornecedorId] = (p as any).arquivoUrl;
       }
       setEditPrecos(inicialPrecos);
       setEditQtds(inicialQtds);
       setEditPrazo(prazoInicial);
       setEditCondPag(condInicial);
+      setEditTipoPag(tipoPagInicial);
       setAnexoUrl(anexoInicial);
     }
   }, [mapaQ.data, abaAtiva]);
@@ -622,6 +627,7 @@ export default function Cotacoes() {
         fornecedorId,
         prazoEntregaDias: editPrazo[fornecedorId] ? parseInt(editPrazo[fornecedorId]) : undefined,
         condicaoPagamento: editCondPag[fornecedorId] || undefined,
+        tipoPagamento: editTipoPag[fornecedorId] || undefined,
         respostas,
       });
     }
@@ -763,7 +769,7 @@ export default function Cotacoes() {
                     {[
                       { label: "Obra", value: nomeObra((detalheFullscreen as any).obraId) ?? "—" },
                       { label: "Fornecedor Vencedor", value: forn?.nomeFantasia || forn?.razaoSocial || "—" },
-                      { label: "Cond. Pagamento", value: detalheFullscreen.condicaoPagamento || "—" },
+                      { label: "Cond. Pagamento", value: (() => { const info = getTipoPagamentoInfo((detalheFullscreen as any).tipoPagamento); return info ? info.label : detalheFullscreen.condicaoPagamento || "—"; })() },
                       { label: "Prazo Entrega", value: detalheFullscreen.prazoEntregaDias ? `${detalheFullscreen.prazoEntregaDias} dias` : "—" },
                       { label: "Validade", value: detalheFullscreen.dataValidade ? new Date(detalheFullscreen.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—" },
                       { label: "SC Vinculada", value: detalheFullscreen.solicitacaoId ? `SC #${detalheFullscreen.solicitacaoId}` : "—" },
@@ -1141,13 +1147,18 @@ export default function Cotacoes() {
                                         {editingFornId === p.fornecedorId ? (
                                           <div className="flex gap-1 px-1">
                                             <input type="number" placeholder="Prazo" value={editPrazo[p.fornecedorId] ?? ""} onChange={e => setEditPrazo(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="w-20 h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900" />
-                                            <select value={editCondPag[p.fornecedorId] ?? ""} onChange={e => setEditCondPag(prev => ({ ...prev, [p.fornecedorId]: e.target.value }))} className="flex-1 h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900">
+                                            <select value={editTipoPag[p.fornecedorId] ?? ""} onChange={e => {
+                                              const val = e.target.value;
+                                              setEditTipoPag(prev => ({ ...prev, [p.fornecedorId]: val }));
+                                              const info = getTipoPagamentoInfo(val);
+                                              if (info) setEditCondPag(prev => ({ ...prev, [p.fornecedorId]: info.label }));
+                                            }} className="flex-1 h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900">
                                               <option value="">— cond. —</option>
-                                              {condPagOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                                              {TIPOS_PAGAMENTO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                             </select>
                                           </div>
                                         ) : (
-                                          <span className="text-xs text-gray-400">{p.prazoEntregaDias ? `${p.prazoEntregaDias}d` : "—"} / {p.condicaoPagamento || "—"}</span>
+                                          <span className="text-xs text-gray-400">{p.prazoEntregaDias ? `${p.prazoEntregaDias}d` : "—"} / {(() => { const info = getTipoPagamentoInfo((p as any).tipoPagamento); return info ? info.label : p.condicaoPagamento || "—"; })()}</span>
                                         )}
                                       </div>
                                     </div>
@@ -1672,7 +1683,7 @@ export default function Cotacoes() {
                   <div><span className="text-gray-400 text-xs">Obra</span><p className="text-gray-900 font-medium flex items-center gap-1"><Building2 className="h-3 w-3 text-gray-400" />{nomeObra((detalhe as any).obraId) ?? "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Status</span><p><span className={`inline-flex px-2 py-0.5 rounded text-xs border ${st.cls}`}>{st.label}</span></p></div>
                   <div><span className="text-gray-400 text-xs">Fornecedor</span><p className="text-gray-900 font-medium">{forn?.nomeFantasia || forn?.razaoSocial || "—"}</p></div>
-                  <div><span className="text-gray-400 text-xs">Cond. Pagamento</span><p className="text-gray-900 font-medium">{detalhe.condicaoPagamento || "—"}</p></div>
+                  <div><span className="text-gray-400 text-xs">Cond. Pagamento</span><p className="text-gray-900 font-medium">{(() => { const info = getTipoPagamentoInfo((detalhe as any).tipoPagamento); return info ? info.label : detalhe.condicaoPagamento || "—"; })()}</p></div>
                   <div><span className="text-gray-400 text-xs">Prazo Entrega</span><p className="text-gray-900 font-medium">{detalhe.prazoEntregaDias ? `${detalhe.prazoEntregaDias} dias` : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Validade</span><p className="text-gray-900 font-medium">{detalhe.dataValidade ? new Date(detalhe.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Total</span><p className="text-emerald-700 font-bold">{parseFloat(detalhe.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p></div>

@@ -1429,6 +1429,7 @@ Responda APENAS com um objeto JSON no formato:
       fornecedorId: z.number(),
       prazoEntregaDias: z.number().nullable().optional(),
       condicaoPagamento: z.string().optional(),
+      tipoPagamento: z.string().optional(),
       respostas: z.array(z.object({
         itemId: z.number(),
         precoUnitario: z.number(),
@@ -1455,7 +1456,12 @@ Responda APENAS com um objeto JSON no formato:
           quantidade: String(qty), precoUnitario: String(r.precoUnitario), descontoPct: String(desc), total: String(total.toFixed(2)),
         }});
       }
-      await db.update(comprasCotacaoFornecedores).set({ totalOrcado: String(totalForn.toFixed(2)), prazoEntregaDias: input.prazoEntregaDias ?? null, condicaoPagamento: input.condicaoPagamento ?? null })
+      await db.update(comprasCotacaoFornecedores).set({
+        totalOrcado: String(totalForn.toFixed(2)),
+        prazoEntregaDias: input.prazoEntregaDias ?? null,
+        condicaoPagamento: input.condicaoPagamento ?? null,
+        tipoPagamento: input.tipoPagamento ?? null,
+      } as any)
         .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
       return { ok: true, total: totalForn };
     }),
@@ -1891,6 +1897,13 @@ Responda APENAS com um objeto JSON no formato:
         : [];
       const precoMap = new Map(respostasForn.map(r => [r.itemId, r]));
 
+      const fornPart = cot.fornecedorId
+        ? await db.select().from(comprasCotacaoFornecedores).where(
+            and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, cot.fornecedorId))
+          )
+        : [];
+      const fornInfo = fornPart[0] ?? null;
+
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
       const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
       const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
@@ -1909,7 +1922,9 @@ Responda APENAS com um objeto JSON no formato:
         impostos: "0",
         desconto: "0",
         total: String(subtotal.toFixed(2)),
-      }).returning();
+        condicaoPagamento: fornInfo?.condicaoPagamento ?? cot.condicaoPagamento ?? null,
+        tipoPagamento: (fornInfo as any)?.tipoPagamento ?? null,
+      } as any).returning();
       if (itens.length > 0) {
         await db.insert(comprasOrdensItens).values(
           itens.map(it => {

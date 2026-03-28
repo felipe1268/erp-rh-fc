@@ -308,6 +308,7 @@ export const purchaseRouter = router({
       obraId: z.number().optional(), obraNome: z.string().optional(),
       compradorId: z.number().optional(), compradorNome: z.string().optional(),
       tipo: z.string().default("compra"), formaPagamento: z.string().optional(),
+      tipoPagamento: z.string().optional(),
       numeroParcelas: z.number().default(1), prazoEntrega: z.string().optional(),
       valorFrete: z.number().default(0), freteTipo: z.string().default("cif"),
       enderecoEntrega: z.string().optional(), cidadeEntrega: z.string().optional(),
@@ -333,7 +334,8 @@ export const purchaseRouter = router({
         compradorNome: input.compradorNome, tipo: input.tipo, status: "emitida",
         valorItens: String(valorItens.toFixed(2)), valorFrete: String(input.valorFrete),
         freteTipo: input.freteTipo, valorTotal: String(valorTotal.toFixed(2)),
-        formaPagamento: input.formaPagamento, numeroParcelas: input.numeroParcelas,
+        formaPagamento: input.formaPagamento, tipoPagamento: input.tipoPagamento,
+        numeroParcelas: input.numeroParcelas,
         prazoEntrega: input.prazoEntrega, enderecoEntrega: input.enderecoEntrega,
         cidadeEntrega: input.cidadeEntrega, estadoEntrega: input.estadoEntrega,
         cepEntrega: input.cepEntrega,
@@ -589,7 +591,8 @@ export const purchaseRouter = router({
     .input(z.object({
       token: z.string(), valorUnitario: z.number(), valorFrete: z.number().default(0),
       freteTipo: z.string().default("cif"), prazoEntregaDias: z.number().optional(),
-      condicaoPagamento: z.string().optional(), observacoes: z.string().optional(),
+      condicaoPagamento: z.string().optional(), tipoPagamento: z.string().optional(),
+      observacoes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

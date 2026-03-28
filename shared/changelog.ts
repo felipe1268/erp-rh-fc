@@ -5568,4 +5568,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 14:00:00",
   },
+  {
+    version: 822,
+    titulo: "Condição de Pagamento Estruturada + Parcelas Automáticas",
+    descricao: "Substituição do campo texto livre de condição de pagamento por seletor estruturado com opções padronizadas (À Vista, 7/14/21/28/30 DDL, 30/60, 30/60/90, Entrada+30, Entrada+30/60, Medição). Ao gerar OC via purchaseRouter (criarOrdemV2), o bridge financeiro agora calcula automaticamente N parcelas com datas de vencimento e cria N registros separados em financial_entries e purchase_accounts_payable — cada parcela com seu próprio valor e data. O recebimento e cancelamento da OC agora operam sobre todas as parcelas vinculadas. O seletor está disponível no mapa de cotação (edição de fornecedor) e no portal do fornecedor. Condição de pagamento é preservada desde a resposta do fornecedor até a OC e o financeiro.",
+    tipo: "feature",
+    modulos: "Compras, Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 22:00:00",
+  },
 ];
