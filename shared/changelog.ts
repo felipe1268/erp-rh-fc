@@ -5631,4 +5631,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 18:00:00",
   },
+  {
+    version: 830,
+    titulo: "Almoxarifado: unificação silenciosa de itens iguais + botão excluir",
+    descricao: "Itens com mesmo nome são unificados automaticamente sem exibir detalhes de agrupamento (sem badge, sem painel expandido, sem toggle). Removido checkbox 'Agrupar iguais'. Botão excluir agora aparece em todos os cards e na tabela. Ao excluir item unificado, todos os registros subjacentes são removidos.",
+    tipo: "melhoria",
+    modulos: "Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 18:15:00",
+  },
 ];
