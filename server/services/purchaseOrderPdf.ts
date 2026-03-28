@@ -445,18 +445,9 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  // ASSINATURAS + RODAPÉ (tudo na mesma página, sem forçar página extra)
+  // ASSINATURAS + RODAPÉ (na MESMA página do conteúdo, sem página extra)
   // ══════════════════════════════════════════════════════════════════════
-  const sigNeeded = 60;
-  const footerNeeded = 25;
-  const totalBottomNeeded = sigNeeded + footerNeeded;
-
-  if (y + totalBottomNeeded > pageH - 30) {
-    doc.addPage();
-    y = 40;
-  }
-
-  y += 25;
+  y += 20;
   const sigW = (cW - 60) / 2;
 
   doc.strokeColor(dark).lineWidth(0.5).moveTo(mL, y).lineTo(mL + sigW, y).stroke();
@@ -467,12 +458,13 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   doc.font("Helvetica").fontSize(7.5).fillColor(dark)
     .text("Aprovação", pageW - mR - sigW, y + 5, { width: sigW, align: "center" });
 
-  const footerY = pageH - 25;
-  drawHLine(footerY - 5, borderColor, 0.3);
+  y += 20;
+  drawHLine(y, borderColor, 0.3);
+  y += 5;
   doc.font("Helvetica").fontSize(6).fillColor(midGray)
     .text(
       `Documento gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")} — ${company?.razaoSocial || "FC Engenharia"}`,
-      mL, footerY, { width: cW, align: "center" }
+      mL, y, { width: cW, align: "center" }
     );
 
   return doc;
