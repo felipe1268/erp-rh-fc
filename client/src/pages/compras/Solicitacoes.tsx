@@ -514,7 +514,23 @@ export default function Solicitacoes() {
                   </TableCell>
                   <TableCell><AprovBadge status={sc.aprovacaoStatus} /></TableCell>
                   <TableCell><StatusBadge status={sc.status} /></TableCell>
-                  <TableCell><ChevronRight className="h-4 w-4 text-gray-400" /></TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <button
+                        title="Excluir SC"
+                        className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`Excluir ${sc.numeroSc}? Cotações vinculadas sem OC ativa serão canceladas automaticamente.`)) {
+                            excluir.mutate({ id: sc.id });
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                    </div>
+                  </TableCell>
                 </TableRow>
               );
             })}
