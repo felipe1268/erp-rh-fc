@@ -5577,4 +5577,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-28 22:00:00",
   },
+  {
+    version: 823,
+    titulo: "Alertas Automáticos + Dashboard de Compras por Obra",
+    descricao: "Novo painel com 3 abas: Visão Geral (painel existente), Alertas e Por Obra. Aba Alertas: pagamentos vencidos e próximos (7 dias), entregas atrasadas, SCs sem cobertura orçamentária, divergências de recebimento não lidas (integração com almoxarifado_notificacoes), pagamentos bloqueados aguardando recebimento — tudo com cards coloridos e contadores. Aba Por Obra: breakdown completo por obra com total gasto, OCs/SCs, financeiro (pago vs a pagar), gastos mensais com barras, top fornecedores. Auto-refresh a cada 60s.",
+    tipo: "feature",
+    modulos: "Compras, Financeiro, Almoxarifado",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-28 23:00:00",
+  },
 ];

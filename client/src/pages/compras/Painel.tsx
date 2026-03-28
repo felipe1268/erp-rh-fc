@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useLocation } from "wouter";
@@ -6,6 +6,8 @@ import DashboardLayout from "@/components/DashboardLayout";
 import {
   ClipboardList, FileText, ShoppingCart, AlertTriangle,
   CheckCircle, Clock, TrendingUp, ArrowRight, RefreshCw, Building2,
+  Bell, CreditCard, Truck, ShieldAlert, ChevronDown, ChevronUp,
+  DollarSign, Package, Users, BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -100,10 +102,31 @@ export default function PainelCompras() {
   const companyIds = getCompanyIds();
   const [, navigate] = useLocation();
 
+  const [abaAtiva, setAbaAtiva] = useState<"visao_geral" | "alertas" | "por_obra">("visao_geral");
+  const [alertasExpanded, setAlertasExpanded] = useState<Record<string, boolean>>({});
+
   const { data, isLoading, refetch, isFetching } = trpc.compras.getDashboardCompras.useQuery(
     { companyIds },
     { enabled: companyIds.length > 0, refetchInterval: 60_000 }
   );
+
+  const { data: alertasData } = trpc.compras.getAlertasCompras.useQuery(
+    { companyIds },
+    { enabled: companyIds.length > 0, refetchInterval: 60_000 }
+  );
+
+  const { data: obraData } = trpc.compras.getDashboardPorObra.useQuery(
+    { companyIds },
+    { enabled: companyIds.length > 0, refetchInterval: 60_000 }
+  );
+
+  const totalAlertas = useMemo(() => {
+    if (!alertasData) return 0;
+    return (alertasData.pagamentos.vencidas.length) +
+      (alertasData.entregas.atrasadas) +
+      (alertasData.cobertura.totalSemCobertura) +
+      (alertasData.divergencias.total);
+  }, [alertasData]);
 
   const fornMap = useMemo(() => {
     const m: Record<number, string> = {};
@@ -141,7 +164,7 @@ export default function PainelCompras() {
     <DashboardLayout>
       <div className="p-5 space-y-5 min-h-screen bg-gray-50">
 
-        {/* Header */}
+        {/* Header + Tabs */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Painel de Compras</h1>
@@ -153,7 +176,33 @@ export default function PainelCompras() {
           </Button>
         </div>
 
-        {/* KPI Cards — todos clicáveis */}
+        <div className="flex gap-1 bg-white rounded-lg border border-gray-200 p-1 shadow-sm">
+          <button
+            onClick={() => setAbaAtiva("visao_geral")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${abaAtiva === "visao_geral" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" /> Visão Geral
+          </button>
+          <button
+            onClick={() => setAbaAtiva("alertas")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${abaAtiva === "alertas" ? "bg-red-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            <Bell className="w-3.5 h-3.5" /> Alertas
+            {totalAlertas > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${abaAtiva === "alertas" ? "bg-white/20 text-white" : "bg-red-100 text-red-700"}`}>
+                {totalAlertas}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setAbaAtiva("por_obra")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${abaAtiva === "por_obra" ? "bg-indigo-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            <Building2 className="w-3.5 h-3.5" /> Por Obra
+          </button>
+        </div>
+
+        {/* KPI Cards — sempre visíveis */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           <KpiCard
             icon={ClipboardList} label="SCs Pendentes" value={kpis.scPendentes ?? 0}
@@ -177,6 +226,7 @@ export default function PainelCompras() {
           />
         </div>
 
+        {abaAtiva === "visao_geral" && (<>
         {/* Atalhos de navegação rápida */}
         <div className="grid grid-cols-3 gap-3">
           <button onClick={() => navigate("/compras/solicitacoes")}
@@ -469,6 +519,273 @@ export default function PainelCompras() {
 
           </div>
         </div>
+        </>)}
+
+        {abaAtiva === "alertas" && alertasData && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className={`rounded-xl border p-4 ${alertasData.pagamentos.vencidas.length > 0 ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <CreditCard className={`w-4 h-4 ${alertasData.pagamentos.vencidas.length > 0 ? "text-red-500" : "text-gray-400"}`} />
+                  <span className="text-xs font-medium text-gray-600">Pagamentos Vencidos</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{alertasData.pagamentos.vencidas.length}</p>
+                <p className="text-xs text-gray-500">{BRL(alertasData.pagamentos.totalVencido)}</p>
+              </div>
+              <div className={`rounded-xl border p-4 ${alertasData.pagamentos.proximas.length > 0 ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white"}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Clock className={`w-4 h-4 ${alertasData.pagamentos.proximas.length > 0 ? "text-amber-500" : "text-gray-400"}`} />
+                  <span className="text-xs font-medium text-gray-600">Vencem em 7 dias</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{alertasData.pagamentos.proximas.length}</p>
+                <p className="text-xs text-gray-500">{BRL(alertasData.pagamentos.totalProximo)}</p>
+              </div>
+              <div className={`rounded-xl border p-4 ${alertasData.entregas.atrasadas > 0 ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Truck className={`w-4 h-4 ${alertasData.entregas.atrasadas > 0 ? "text-red-500" : "text-gray-400"}`} />
+                  <span className="text-xs font-medium text-gray-600">Entregas Atrasadas</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{alertasData.entregas.atrasadas}</p>
+                <p className="text-xs text-gray-500">{alertasData.entregas.proximas} nos próx. 7 dias</p>
+              </div>
+              <div className={`rounded-xl border p-4 ${alertasData.divergencias.total > 0 ? "border-orange-200 bg-orange-50" : "border-gray-200 bg-white"}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <ShieldAlert className={`w-4 h-4 ${alertasData.divergencias.total > 0 ? "text-orange-500" : "text-gray-400"}`} />
+                  <span className="text-xs font-medium text-gray-600">Divergências</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{alertasData.divergencias.total}</p>
+                <p className="text-xs text-gray-500">não lidas</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {alertasData.pagamentos.vencidas.length > 0 && (
+                <div className="bg-white rounded-xl border border-red-200 shadow-sm p-4">
+                  <button className="flex items-center justify-between w-full mb-2"
+                    onClick={() => setAlertasExpanded(p => ({ ...p, pagVencidas: !p.pagVencidas }))}>
+                    <SectionHeader icon={CreditCard} title="Pagamentos Vencidos" count={alertasData.pagamentos.vencidas.length} color="text-red-500" />
+                    {alertasExpanded.pagVencidas ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                  </button>
+                  {(alertasExpanded.pagVencidas !== false) && (
+                    <div className="space-y-1.5 max-h-[200px] overflow-auto">
+                      {alertasData.pagamentos.vencidas.map((p: any) => (
+                        <div key={p.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-red-50 border border-red-100 text-xs">
+                          <div>
+                            <span className="font-medium text-gray-800">{p.supplierNome || "—"}</span>
+                            {p.parcelaTotal > 1 && <span className="text-gray-500 ml-1">({p.parcelaNumero}/{p.parcelaTotal})</span>}
+                          </div>
+                          <div className="text-right">
+                            <span className="font-bold text-red-700">{BRL(p.valorTotal)}</span>
+                            <span className="text-gray-500 ml-2">{fmtDate(p.dataVencimento)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {alertasData.pagamentos.proximas.length > 0 && (
+                <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
+                  <button className="flex items-center justify-between w-full mb-2"
+                    onClick={() => setAlertasExpanded(p => ({ ...p, pagProx: !p.pagProx }))}>
+                    <SectionHeader icon={Clock} title="Vencem em 7 Dias" count={alertasData.pagamentos.proximas.length} color="text-amber-500" />
+                    {alertasExpanded.pagProx ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                  </button>
+                  {(alertasExpanded.pagProx !== false) && (
+                    <div className="space-y-1.5 max-h-[200px] overflow-auto">
+                      {alertasData.pagamentos.proximas.map((p: any) => (
+                        <div key={p.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-amber-50 border border-amber-100 text-xs">
+                          <div>
+                            <span className="font-medium text-gray-800">{p.supplierNome || "—"}</span>
+                            {p.parcelaTotal > 1 && <span className="text-gray-500 ml-1">({p.parcelaNumero}/{p.parcelaTotal})</span>}
+                          </div>
+                          <div className="text-right">
+                            <span className="font-bold text-amber-700">{BRL(p.valorTotal)}</span>
+                            <span className="text-gray-500 ml-2">{fmtDate(p.dataVencimento)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {alertasData.cobertura.scsSemCobertura.length > 0 && (
+                <div className="bg-white rounded-xl border border-yellow-200 shadow-sm p-4">
+                  <SectionHeader icon={AlertTriangle} title="SCs sem Cobertura Orçamentária"
+                    count={alertasData.cobertura.totalSemCobertura} color="text-yellow-600"
+                    onVerTodos={() => navigate("/compras/solicitacoes")} />
+                  <div className="space-y-1.5 max-h-[200px] overflow-auto">
+                    {alertasData.cobertura.scsSemCobertura.map((sc: any) => (
+                      <button key={sc.scId} onClick={() => navigate("/compras/solicitacoes")}
+                        className="flex items-center justify-between px-3 py-2 rounded-lg bg-yellow-50 border border-yellow-100 text-xs w-full hover:bg-yellow-100 transition-colors">
+                        <div className="text-left">
+                          <span className="font-mono font-medium text-gray-700">{sc.numero}</span>
+                          <span className="text-gray-500 ml-2 truncate">{sc.titulo}</span>
+                        </div>
+                        <span className="text-yellow-700 font-bold flex-shrink-0">{sc.itensCount} {sc.itensCount === 1 ? "item" : "itens"}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {alertasData.divergencias.total > 0 && (
+                <div className="bg-white rounded-xl border border-orange-200 shadow-sm p-4">
+                  <SectionHeader icon={ShieldAlert} title="Divergências Não Lidas"
+                    count={alertasData.divergencias.total} color="text-orange-500" />
+                  <div className="space-y-1.5 max-h-[200px] overflow-auto">
+                    {[...alertasData.divergencias.compras, ...alertasData.divergencias.financeiro].map((notif: any) => (
+                      <div key={notif.id} className="px-3 py-2 rounded-lg bg-orange-50 border border-orange-100 text-xs">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-medium text-gray-800">{notif.titulo}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${notif.destinoModulo === "compras" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                            {notif.destinoModulo === "compras" ? "Compras" : "Financeiro"}
+                          </span>
+                        </div>
+                        <p className="text-gray-500 line-clamp-2">{notif.mensagem}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {alertasData.pagamentos.bloqueadas.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                <SectionHeader icon={Package} title="Pagamentos Bloqueados (Aguardando Recebimento)"
+                  count={alertasData.pagamentos.bloqueadas.length} color="text-gray-500" />
+                <p className="text-xs text-gray-500 mb-2">
+                  Total bloqueado: <span className="font-bold text-gray-700">{BRL(alertasData.pagamentos.totalBloqueado)}</span>
+                </p>
+                <div className="grid grid-cols-2 xl:grid-cols-3 gap-2 max-h-[200px] overflow-auto">
+                  {alertasData.pagamentos.bloqueadas.slice(0, 12).map((p: any) => (
+                    <div key={p.id} className="px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-xs">
+                      <span className="font-medium text-gray-800">{p.supplierNome || "—"}</span>
+                      <span className="text-gray-700 font-bold ml-2">{BRL(p.valorTotal)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {totalAlertas === 0 && (
+              <div className="bg-white rounded-xl border border-green-200 shadow-sm p-8 text-center">
+                <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-2" />
+                <p className="text-sm font-medium text-gray-600">Nenhum alerta ativo</p>
+                <p className="text-xs text-gray-400">Todos os pagamentos, entregas e divergências estão em dia.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {abaAtiva === "por_obra" && obraData && (
+          <div className="space-y-4">
+            {obraData.obras.length === 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
+                <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm font-medium text-gray-600">Nenhuma obra com movimentação de compras</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {obraData.obras.map((obra: any) => {
+                  const maxMes = Math.max(...(obra.gastosMensais?.map((g: any) => g.valor) ?? [1]), 1);
+                  return (
+                    <div key={obra.obraId} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                      <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-white">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-5 h-5 text-indigo-600" />
+                            <h3 className="font-semibold text-gray-800 text-sm">{obra.obraNome}</h3>
+                          </div>
+                          {obra.ocsAtrasadas > 0 && (
+                            <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                              {obra.ocsAtrasadas} OC{obra.ocsAtrasadas > 1 ? "s" : ""} atrasada{obra.ocsAtrasadas > 1 ? "s" : ""}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="p-4">
+                        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+                          <div className="text-center p-3 rounded-lg bg-gray-50">
+                            <DollarSign className="w-4 h-4 text-emerald-500 mx-auto mb-1" />
+                            <p className="text-lg font-bold text-gray-900">{BRL(obra.totalGasto)}</p>
+                            <p className="text-[10px] text-gray-500 uppercase">Total Gasto</p>
+                          </div>
+                          <div className="text-center p-3 rounded-lg bg-gray-50">
+                            <ShoppingCart className="w-4 h-4 text-indigo-500 mx-auto mb-1" />
+                            <p className="text-lg font-bold text-gray-900">{obra.totalOCs}</p>
+                            <p className="text-[10px] text-gray-500 uppercase">{obra.ocsPendentes} OCs abertas</p>
+                          </div>
+                          <div className="text-center p-3 rounded-lg bg-gray-50">
+                            <ClipboardList className="w-4 h-4 text-yellow-500 mx-auto mb-1" />
+                            <p className="text-lg font-bold text-gray-900">{obra.totalSCs}</p>
+                            <p className="text-[10px] text-gray-500 uppercase">{obra.scsPendentes} SCs pendentes</p>
+                          </div>
+                          <div className="text-center p-3 rounded-lg bg-gray-50">
+                            <Users className="w-4 h-4 text-teal-500 mx-auto mb-1" />
+                            <p className="text-lg font-bold text-gray-900">{obra.fornecedoresCount}</p>
+                            <p className="text-[10px] text-gray-500 uppercase">Fornecedores</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                          {obra.gastosMensais.length > 0 && (
+                            <div>
+                              <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
+                                <TrendingUp className="w-3.5 h-3.5 text-emerald-500" /> Gastos Mensais
+                              </p>
+                              <div className="space-y-1.5">
+                                {obra.gastosMensais.map((g: any) => (
+                                  <div key={g.mes}>
+                                    <div className="flex items-center justify-between text-xs mb-0.5">
+                                      <span className="text-gray-600">{fmtMes(g.mes)}</span>
+                                      <span className="text-gray-800 font-semibold">{BRL(g.valor)}</span>
+                                    </div>
+                                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                      <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.max((g.valor / maxMes) * 100, 4)}%` }} />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div>
+                            <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1">
+                              <CreditCard className="w-3.5 h-3.5 text-blue-500" /> Financeiro
+                            </p>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-green-50 border border-green-100 text-xs">
+                                <span className="text-gray-600">Total Pago</span>
+                                <span className="font-bold text-green-700">{BRL(obra.totalPago)}</span>
+                              </div>
+                              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 border border-blue-100 text-xs">
+                                <span className="text-gray-600">A Pagar</span>
+                                <span className="font-bold text-blue-700">{BRL(obra.totalAPagar)}</span>
+                              </div>
+                            </div>
+                            {obra.topFornecedores.length > 0 && (
+                              <div className="mt-3">
+                                <p className="text-[10px] text-gray-500 uppercase font-medium mb-1">Principais Fornecedores</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {obra.topFornecedores.map((f: any) => (
+                                    <span key={f.id} className="bg-gray-100 text-gray-700 text-[10px] px-2 py-0.5 rounded-full">{f.nome}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

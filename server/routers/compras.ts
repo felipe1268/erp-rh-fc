@@ -20,6 +20,8 @@ import {
   bdiIndiretos, orcamentoBdi,
   planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades,
   financialEntries, financialAccounts,
+  purchaseAccountsPayable,
+  almoxarifadoNotificacoes,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
@@ -2502,6 +2504,279 @@ Responda APENAS com um objeto JSON no formato:
       })).sort((a, b) => b.count - a.count);
 
       return { kpis, alertasOC, scsPendentesAprov, cotsPendentes, ocsRecentes, scsRecentes, gastosMensais, fornecedores: forn, obraMap, ocsAtrasadasPorObra };
+    }),
+
+  getAlertasCompras: protectedProcedure
+    .input(z.object({ companyIds: z.array(z.number()).min(1) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const ids = input.companyIds;
+      const hoje = new Date().toISOString().slice(0, 10);
+      const em7dias = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+
+      const [pagRows, notifRows, ocsRows, scsRows, scItensRows] = await Promise.all([
+        db.select({
+          id: purchaseAccountsPayable.id,
+          ordemId: purchaseAccountsPayable.ordemId,
+          supplierNome: purchaseAccountsPayable.supplierNome,
+          valorTotal: purchaseAccountsPayable.valorTotal,
+          status: purchaseAccountsPayable.status,
+          dataVencimento: purchaseAccountsPayable.dataVencimento,
+          parcelaNumero: purchaseAccountsPayable.parcelaNumero,
+          parcelaTotal: purchaseAccountsPayable.parcelaTotal,
+          obraId: purchaseAccountsPayable.obraId,
+        }).from(purchaseAccountsPayable)
+          .where(and(
+            inArray(purchaseAccountsPayable.companyId, ids),
+            or(eq(purchaseAccountsPayable.status, "liberado"), eq(purchaseAccountsPayable.status, "bloqueado")),
+          )),
+
+        db.select().from(almoxarifadoNotificacoes)
+          .where(and(
+            inArray(almoxarifadoNotificacoes.companyId, ids),
+            eq(almoxarifadoNotificacoes.lida, false),
+          ))
+          .orderBy(desc(almoxarifadoNotificacoes.criadoEm))
+          .limit(20),
+
+        db.select({
+          id: comprasOrdens.id,
+          numeroOc: comprasOrdens.numeroOc,
+          status: comprasOrdens.status,
+          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
+          fornecedorId: comprasOrdens.fornecedorId,
+          obraId: comprasOrdens.obraId,
+          total: comprasOrdens.total,
+        }).from(comprasOrdens)
+          .where(and(
+            inArray(comprasOrdens.companyId, ids),
+            or(
+              eq(comprasOrdens.status, "pendente"),
+              eq(comprasOrdens.status, "aprovada"),
+              eq(comprasOrdens.status, "enviada"),
+              eq(comprasOrdens.status, "parcial"),
+            ),
+          )),
+
+        db.select({
+          id: comprasSolicitacoes.id,
+          numero: comprasSolicitacoes.numero,
+          titulo: comprasSolicitacoes.titulo,
+          obraId: comprasSolicitacoes.obraId,
+        }).from(comprasSolicitacoes)
+          .where(and(
+            inArray(comprasSolicitacoes.companyId, ids),
+            or(eq(comprasSolicitacoes.status, "pendente"), eq(comprasSolicitacoes.status, "em_cotacao")),
+          )),
+
+        db.select({
+          id: comprasSolicitacoesItens.id,
+          solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
+          orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+          descricao: comprasSolicitacoesItens.descricao,
+        }).from(comprasSolicitacoesItens)
+          .where(inArray(comprasSolicitacoesItens.companyId, ids)),
+      ]);
+
+      const pagVencidas = pagRows.filter(p =>
+        p.status === "liberado" && p.dataVencimento && p.dataVencimento < hoje
+      ).map(p => ({
+        ...p, valorTotal: n(p.valorTotal), tipo: "vencida" as const,
+      }));
+
+      const pagProximas = pagRows.filter(p =>
+        p.status === "liberado" && p.dataVencimento && p.dataVencimento >= hoje && p.dataVencimento <= em7dias
+      ).map(p => ({
+        ...p, valorTotal: n(p.valorTotal), tipo: "proxima" as const,
+      }));
+
+      const pagBloqueadas = pagRows.filter(p => p.status === "bloqueado").map(p => ({
+        ...p, valorTotal: n(p.valorTotal), tipo: "bloqueada" as const,
+      }));
+
+      const CLOSED_OC = ["entregue", "cancelada", "recebido"];
+      const ocsAtrasadas = ocsRows.filter(oc =>
+        oc.dataEntregaPrevista && oc.dataEntregaPrevista < hoje && !CLOSED_OC.includes(oc.status)
+      );
+      const ocsProximas = ocsRows.filter(oc =>
+        oc.dataEntregaPrevista && oc.dataEntregaPrevista >= hoje && oc.dataEntregaPrevista <= em7dias && !CLOSED_OC.includes(oc.status)
+      );
+
+      const scsSemCobertura: { scId: number; numero: string; titulo: string; itensCount: number }[] = [];
+      const scIds = scsRows.map(s => s.id);
+      const itensAtivos = scItensRows.filter(i => scIds.includes(i.solicitacaoId));
+      const scsSemOrcMap: Record<number, number> = {};
+      for (const item of itensAtivos) {
+        if (!item.orcamentoItemId) {
+          scsSemOrcMap[item.solicitacaoId] = (scsSemOrcMap[item.solicitacaoId] ?? 0) + 1;
+        }
+      }
+      for (const [scIdStr, count] of Object.entries(scsSemOrcMap)) {
+        const scId = Number(scIdStr);
+        const sc = scsRows.find(s => s.id === scId);
+        if (sc) {
+          scsSemCobertura.push({
+            scId, numero: sc.numero ?? `SC-${scId}`, titulo: sc.titulo ?? "", itensCount: count,
+          });
+        }
+      }
+
+      const notifCompras = notifRows.filter(n => n.destinoModulo === "compras");
+      const notifFinanceiro = notifRows.filter(n => n.destinoModulo === "financeiro");
+
+      return {
+        pagamentos: {
+          vencidas: pagVencidas,
+          proximas: pagProximas,
+          bloqueadas: pagBloqueadas,
+          totalVencido: pagVencidas.reduce((s, p) => s + p.valorTotal, 0),
+          totalProximo: pagProximas.reduce((s, p) => s + p.valorTotal, 0),
+          totalBloqueado: pagBloqueadas.reduce((s, p) => s + p.valorTotal, 0),
+        },
+        entregas: {
+          atrasadas: ocsAtrasadas.length,
+          proximas: ocsProximas.length,
+          listaAtrasadas: ocsAtrasadas.slice(0, 10),
+          listaProximas: ocsProximas.slice(0, 10),
+        },
+        cobertura: {
+          scsSemCobertura: scsSemCobertura.slice(0, 10),
+          totalSemCobertura: scsSemCobertura.length,
+        },
+        divergencias: {
+          compras: notifCompras,
+          financeiro: notifFinanceiro,
+          total: notifRows.length,
+        },
+      };
+    }),
+
+  getDashboardPorObra: protectedProcedure
+    .input(z.object({ companyIds: z.array(z.number()).min(1) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const ids = input.companyIds;
+      const hoje = new Date().toISOString().slice(0, 10);
+
+      const [ocsRows, scsRows, obrasRows, fornRows, pagRows] = await Promise.all([
+        db.select({
+          id: comprasOrdens.id,
+          status: comprasOrdens.status,
+          total: comprasOrdens.total,
+          obraId: comprasOrdens.obraId,
+          fornecedorId: comprasOrdens.fornecedorId,
+          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
+          criadoEm: comprasOrdens.criadoEm,
+        }).from(comprasOrdens)
+          .where(inArray(comprasOrdens.companyId, ids)),
+
+        db.select({
+          id: comprasSolicitacoes.id,
+          status: comprasSolicitacoes.status,
+          obraId: comprasSolicitacoes.obraId,
+        }).from(comprasSolicitacoes)
+          .where(inArray(comprasSolicitacoes.companyId, ids)),
+
+        db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo })
+          .from(obras).where(inArray(obras.companyId, ids)),
+
+        db.select({ id: fornecedores.id, nomeFantasia: fornecedores.nomeFantasia, razaoSocial: fornecedores.razaoSocial })
+          .from(fornecedores).where(and(inArray(fornecedores.companyId, ids), eq(fornecedores.ativo, true))),
+
+        db.select({
+          obraId: purchaseAccountsPayable.obraId,
+          valorTotal: purchaseAccountsPayable.valorTotal,
+          valorPago: purchaseAccountsPayable.valorPago,
+          status: purchaseAccountsPayable.status,
+        }).from(purchaseAccountsPayable)
+          .where(inArray(purchaseAccountsPayable.companyId, ids)),
+      ]);
+
+      const obraMap: Record<number, { nome: string; codigo: string | null }> = {};
+      obrasRows.forEach(o => { obraMap[o.id] = { nome: o.nome, codigo: o.codigo }; });
+
+      const fornMap: Record<number, string> = {};
+      fornRows.forEach(f => { fornMap[f.id] = f.nomeFantasia || f.razaoSocial; });
+
+      const CLOSED_OC = ["entregue", "cancelada", "recebido"];
+
+      const obraStats: Record<number, {
+        obraId: number; obraNome: string; obraCodigo: string | null;
+        totalGasto: number; totalOCs: number; ocsPendentes: number; ocsAtrasadas: number;
+        totalSCs: number; scsPendentes: number;
+        totalPago: number; totalAPagar: number;
+        fornecedoresUsados: Set<number>;
+        gastosMensais: Record<string, number>;
+      }> = {};
+
+      const getObraStats = (obraId: number) => {
+        if (!obraStats[obraId]) {
+          const info = obraMap[obraId] || { nome: `Obra #${obraId}`, codigo: null };
+          obraStats[obraId] = {
+            obraId, obraNome: info.nome, obraCodigo: info.codigo,
+            totalGasto: 0, totalOCs: 0, ocsPendentes: 0, ocsAtrasadas: 0,
+            totalSCs: 0, scsPendentes: 0,
+            totalPago: 0, totalAPagar: 0,
+            fornecedoresUsados: new Set(),
+            gastosMensais: {},
+          };
+        }
+        return obraStats[obraId];
+      };
+
+      for (const oc of ocsRows) {
+        if (!oc.obraId) continue;
+        const stats = getObraStats(oc.obraId);
+        const val = n(oc.total);
+        if (oc.status !== "cancelada") {
+          stats.totalGasto += val;
+          stats.totalOCs++;
+          const mes = oc.criadoEm.slice(0, 7);
+          stats.gastosMensais[mes] = (stats.gastosMensais[mes] ?? 0) + val;
+        }
+        if (!CLOSED_OC.includes(oc.status)) stats.ocsPendentes++;
+        if (oc.dataEntregaPrevista && oc.dataEntregaPrevista < hoje && !CLOSED_OC.includes(oc.status)) stats.ocsAtrasadas++;
+        if (oc.fornecedorId) stats.fornecedoresUsados.add(oc.fornecedorId);
+      }
+
+      for (const sc of scsRows) {
+        if (!sc.obraId) continue;
+        const stats = getObraStats(sc.obraId);
+        stats.totalSCs++;
+        if (sc.status === "pendente" || sc.status === "em_cotacao") stats.scsPendentes++;
+      }
+
+      for (const pag of pagRows) {
+        if (!pag.obraId) continue;
+        const stats = getObraStats(pag.obraId);
+        stats.totalPago += n(pag.valorPago);
+        if (pag.status !== "pago" && pag.status !== "cancelado") {
+          stats.totalAPagar += n(pag.valorTotal) - n(pag.valorPago);
+        }
+      }
+
+      const result = Object.values(obraStats).map(s => ({
+        obraId: s.obraId,
+        obraNome: s.obraCodigo ? `${s.obraCodigo} – ${s.obraNome}` : s.obraNome,
+        totalGasto: s.totalGasto,
+        totalOCs: s.totalOCs,
+        ocsPendentes: s.ocsPendentes,
+        ocsAtrasadas: s.ocsAtrasadas,
+        totalSCs: s.totalSCs,
+        scsPendentes: s.scsPendentes,
+        totalPago: s.totalPago,
+        totalAPagar: s.totalAPagar,
+        fornecedoresCount: s.fornecedoresUsados.size,
+        topFornecedores: [...s.fornecedoresUsados].slice(0, 5).map(id => ({
+          id, nome: fornMap[id] ?? `#${id}`,
+        })),
+        gastosMensais: Object.entries(s.gastosMensais)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .slice(-6)
+          .map(([mes, valor]) => ({ mes, valor })),
+      })).sort((a, b) => b.totalGasto - a.totalGasto);
+
+      return { obras: result };
     }),
 
   // ══════════════════════════════════════════════════════════════
