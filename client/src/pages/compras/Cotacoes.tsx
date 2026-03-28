@@ -814,7 +814,7 @@ export default function Cotacoes() {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
         <div className="absolute inset-0 bg-black/50" onClick={() => setIaExtracao(null)} />
-        <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200 max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 space-y-4">
+        <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200 max-w-6xl w-[98vw] max-h-[92vh] overflow-y-auto p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-lg font-semibold text-violet-700">
               <Sparkles className="h-5 w-5" /> Conferência — Leitura IA
