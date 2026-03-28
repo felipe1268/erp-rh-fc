@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -2223,8 +2224,8 @@ export default function Cotacoes() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Conferência IA (overlay nativo — funciona mesmo com Dialog aberto) ── */}
-      {iaExtracao && (() => {
+      {/* ── Conferência IA (portal — renderiza no body, fora de qualquer container) ── */}
+      {iaExtracao && createPortal((() => {
         const d = iaExtracao.dados;
         const matched = (d.itensExtraidos ?? []).filter((i: any) => i.matchItemId);
         const extras = d.itensExtras ?? [];
@@ -2360,7 +2361,7 @@ export default function Cotacoes() {
             </div>
           </div>
         );
-      })()}
+      })(), document.body)}
 
     </div>
     </DashboardLayout>
