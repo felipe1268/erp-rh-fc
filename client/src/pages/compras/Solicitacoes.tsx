@@ -1826,12 +1826,15 @@ export default function Solicitacoes() {
                 ) : (
                 <div className="flex gap-2">
                   {[
-                    ...(detalhe.aprovacaoStatus !== "aguardando" ? [{ key: "aguardando", label: "Voltar p/ Aguardando", cls: "border-amber-300 text-amber-700 hover:bg-amber-50" }] : []),
-                    ...(detalhe.aprovacaoStatus !== "aprovada" ? [{ key: "aprovada", label: "Aprovar", cls: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" }] : []),
-                    ...(detalhe.aprovacaoStatus !== "recusada" ? [{ key: "recusada", label: "Recusar", cls: "border-red-300 text-red-700 hover:bg-red-50" }] : []),
+                    ...(detalhe.aprovacaoStatus !== "aguardando" ? [{ key: "aguardando", label: "Voltar p/ Aguardando", cls: "border-amber-300 text-amber-700 hover:bg-amber-50", msg: "Deseja realmente voltar esta SC para 'Aguardando'?" }] : []),
+                    ...(detalhe.aprovacaoStatus !== "aprovada" ? [{ key: "aprovada", label: "Aprovar", cls: "border-emerald-300 text-emerald-700 hover:bg-emerald-50", msg: `Confirma a APROVAÇÃO da ${detalhe.numeroSc}?\n\nItens:\n${(detalhe.itens as any[]).map((it: any) => `• ${it.descricao} — ${parseFloat(it.quantidade).toLocaleString("pt-BR")} ${it.unidade || "un"}`).join("\n")}\n\nAo aprovar, a SC poderá seguir para cotação.` }] : []),
+                    ...(detalhe.aprovacaoStatus !== "recusada" ? [{ key: "recusada", label: "Recusar", cls: "border-red-300 text-red-700 hover:bg-red-50", msg: `Confirma a RECUSA da ${detalhe.numeroSc}?\n\nEsta ação impedirá o prosseguimento da solicitação.` }] : []),
                   ].map(a => (
                     <Button key={a.key} size="sm" variant="outline"
-                      onClick={() => aprovar.mutate({ id: detalhe.id, aprovacaoStatus: a.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined })}
+                      onClick={() => {
+                        if (!confirm(a.msg)) return;
+                        aprovar.mutate({ id: detalhe.id, aprovacaoStatus: a.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined });
+                      }}
                       disabled={aprovar.isPending}
                       className={`text-xs ${a.cls}`}>
                       {a.label}

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 865,
+    titulo: "Confirmação de Aprovação/Recusa na SC",
+    descricao: "Adicionado alerta de confirmação antes de Aprovar ou Recusar uma Solicitação de Compra. O diálogo mostra o número da SC, lista de itens com quantidades, e a consequência da ação. Evita cliques acidentais e garante que o usuário confirme a decisão conscientemente.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 00:05:00",
+  },
+  {
     version: 864,
     titulo: "Controle Orçamentário no Mapa de Cotação",
     descricao: "Adicionadas 3 novas colunas no Mapa de Cotação: Orçado (qtd total no orçamento), Comprado (qtd já comprada via OC) e Saldo (diferença). Quando o saldo é negativo (estouro), mostra badge vermelho com ícone de alerta. Backend busca quantidade comprada via OC para cada item vinculado ao orçamento. Grupo de colunas 'Controle Orçamentário' com destaque laranja no header e totais no rodapé.",
