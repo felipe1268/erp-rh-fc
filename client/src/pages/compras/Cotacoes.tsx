@@ -2195,7 +2195,7 @@ export default function Cotacoes() {
                               <th rowSpan={2} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3 min-w-56 border-r border-gray-200">Item</th>
                               <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-3 py-3 w-14 border-r border-gray-200">Un.</th>
                               <th colSpan={3} className="text-center text-xs font-semibold text-blue-600 uppercase px-2 py-2 border-r border-blue-100 bg-blue-50/60">Meta (Orçamento)</th>
-                              <th colSpan={3} className="text-center text-xs font-semibold text-orange-600 uppercase px-2 py-2 border-r border-orange-100 bg-orange-50/60">Controle Orçamentário</th>
+                              <th rowSpan={2} className="text-center text-xs font-semibold text-orange-600 uppercase px-2 py-2 border-r border-orange-100 bg-orange-50/60 w-24">Saldo<br/>Orç.</th>
                               {(mapa?.participantes ?? []).map((p: any) => {
                                 const nome = p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`;
                                 const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
@@ -2430,9 +2430,6 @@ export default function Cotacoes() {
                               <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28">Preço Unit.</th>
                               <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-20">QTD</th>
                               <th className="text-right text-xs font-medium text-blue-500 px-3 py-2 bg-blue-50/60 w-28 border-r border-blue-100">Total Meta</th>
-                              <th className="text-center text-xs font-medium text-orange-500 px-2 py-2 bg-orange-50/60 w-20">Orçado</th>
-                              <th className="text-center text-xs font-medium text-orange-500 px-2 py-2 bg-orange-50/60 w-24">Comprado</th>
-                              <th className="text-center text-xs font-medium text-orange-500 px-2 py-2 bg-orange-50/60 w-20 border-r border-orange-100">Saldo</th>
                               {(mapa?.participantes ?? []).map((p: any) => {
                                 const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
                                 const baseCls = isMelhor ? "text-emerald-600 bg-emerald-50/40" : "text-gray-500";
@@ -2575,7 +2572,7 @@ export default function Cotacoes() {
                                   <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold border-r border-blue-100">
                                     {metaTot > 0 ? metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
                                   </td>
-                                  {/* Controle Orçamentário: Orçado / Comprado / Saldo */}
+                                  {/* Saldo Orçamentário — coluna única condensada */}
                                   {(() => {
                                     const orcada = (it as any).qtdOrcada ?? 0;
                                     const comprada = (it as any).qtdComprada ?? 0;
@@ -2583,24 +2580,22 @@ export default function Cotacoes() {
                                     const fonte = (it as any).fonteVinculo;
                                     const semVinculo = !fonte;
                                     const isEstouro = saldoQtd < 0;
+                                    const tooltipText = semVinculo
+                                      ? `SEM VÍNCULO ORÇAMENTÁRIO\nNecessita realocação de verba`
+                                      : `Orçado: ${orcada.toLocaleString("pt-BR")}\nComprado: ${comprada.toLocaleString("pt-BR")}\nSaldo: ${saldoQtd.toLocaleString("pt-BR")}`;
                                     return (
-                                      <>
-                                        <td className={`px-2 py-2 text-center text-xs font-medium ${semVinculo ? "bg-red-50/40 text-red-400" : "bg-orange-50/30 text-gray-700"}`}>
-                                          {orcada > 0 ? orcada.toLocaleString("pt-BR") : <span className={semVinculo ? "text-red-400 font-bold" : "text-gray-300"}>0</span>}
-                                        </td>
-                                        <td className={`px-2 py-2 text-center text-xs font-medium ${semVinculo ? "bg-red-50/40 text-red-400" : "bg-orange-50/30 text-gray-700"}`}>
-                                          {comprada > 0 ? comprada.toLocaleString("pt-BR") : <span className={semVinculo ? "text-red-400" : "text-gray-300"}>0</span>}
-                                        </td>
-                                        <td className={`px-2 py-2 text-center text-xs font-bold border-r border-orange-100 ${isEstouro || semVinculo ? "bg-red-50 text-red-700" : "bg-emerald-50/50 text-emerald-700"}`}>
-                                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${isEstouro || semVinculo ? "bg-red-100 text-red-700 border border-red-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
-                                            {(isEstouro || semVinculo) && <AlertTriangle className="h-2.5 w-2.5" />}
-                                            {saldoQtd.toLocaleString("pt-BR")}
-                                          </span>
-                                          {semVinculo && (
-                                            <div className="text-[8px] text-red-500 font-bold mt-0.5 uppercase">REALOCAR VERBA</div>
-                                          )}
-                                        </td>
-                                      </>
+                                      <td
+                                        title={tooltipText}
+                                        className={`px-2 py-2 text-center text-xs font-bold border-r border-orange-100 ${isEstouro || semVinculo ? "bg-red-50 text-red-700" : "bg-emerald-50/50 text-emerald-700"}`}
+                                      >
+                                        <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${isEstouro || semVinculo ? "bg-red-100 text-red-700 border border-red-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
+                                          {(isEstouro || semVinculo) && <AlertTriangle className="h-2.5 w-2.5" />}
+                                          {saldoQtd.toLocaleString("pt-BR")}
+                                        </span>
+                                        {semVinculo && (
+                                          <div className="text-[8px] text-red-500 font-bold mt-0.5 uppercase">S/ VERBA</div>
+                                        )}
+                                      </td>
                                     );
                                   })()}
                                   {/* Colunas por fornecedor */}
@@ -2678,19 +2673,16 @@ export default function Cotacoes() {
                               <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40 border-r border-blue-100 font-bold">
                                 {metaGrandTotal > 0 ? metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}
                               </td>
-                              <td colSpan={3} className="px-2 py-3 text-center text-xs text-orange-600 bg-orange-50/40 border-r border-orange-100 font-bold">
+                              <td className="px-2 py-3 text-center text-xs text-orange-600 bg-orange-50/40 border-r border-orange-100 font-bold">
                                 {(() => {
                                   const allItensArr = mapa?.itens ?? [];
-                                  const totalOrc = allItensArr.reduce((s: number, i: any) => s + ((i as any).qtdOrcada ?? 0), 0);
-                                  const totalComp = allItensArr.reduce((s: number, i: any) => s + ((i as any).qtdComprada ?? 0), 0);
                                   const totalSaldo = allItensArr.reduce((s: number, i: any) => s + ((i as any).qtdSaldo ?? 0), 0);
                                   const temSemVinculo = allItensArr.some((i: any) => !(i as any).fonteVinculo);
+                                  const totalOrc = allItensArr.reduce((s: number, i: any) => s + ((i as any).qtdOrcada ?? 0), 0);
                                   if (totalOrc === 0 && !temSemVinculo) return "—";
                                   return (
-                                    <span className="flex items-center justify-center gap-3">
-                                      <span title="Orçado">{totalOrc.toLocaleString("pt-BR")}</span>
-                                      <span title="Comprado" className="text-gray-500">{totalComp.toLocaleString("pt-BR")}</span>
-                                      <span title="Saldo" className={totalSaldo < 0 ? "text-red-700 font-bold" : "text-emerald-700"}>{totalSaldo.toLocaleString("pt-BR")}</span>
+                                    <span className={`font-bold ${totalSaldo < 0 ? "text-red-700" : "text-emerald-700"}`}>
+                                      {totalSaldo.toLocaleString("pt-BR")}
                                     </span>
                                   );
                                 })()}
@@ -2728,7 +2720,7 @@ export default function Cotacoes() {
                             </tr>
                             {/* Botões de edição */}
                             <tr className="bg-white border-t border-gray-100">
-                              <td colSpan={8} className="px-4 py-2"></td>
+                              <td colSpan={6} className="px-4 py-2"></td>
                               {(mapa?.participantes ?? []).map((p: any) => (
                                 <>
                                   <td key={`bqty_${p.fornecedorId}`}></td>
