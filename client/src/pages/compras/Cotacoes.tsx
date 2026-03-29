@@ -1618,8 +1618,16 @@ export default function Cotacoes() {
 
     function getItemSaldo(it: any): { saldo: number; hasMeta: boolean } {
       const metaUnit = parseFloat(it.metaUnitario ?? "0");
-      if (metaUnit === 0) return { saldo: 0, hasMeta: false };
       const qtdItem = parseFloat(it.quantidade ?? "0");
+      const fonteV = (it as any).fonteVinculo;
+      if (!fonteV && metaUnit === 0) {
+        if (!fornParaSaldo) return { saldo: 0, hasMeta: false };
+        const wKey = `${it.id}_${fornParaSaldo.fornecedorId}`;
+        const wResp = mapa?.respostaMap?.[wKey];
+        const precoForn = parseFloat(wResp?.precoUnitario ?? "0");
+        return { saldo: -(precoForn * qtdItem), hasMeta: true };
+      }
+      if (metaUnit === 0) return { saldo: 0, hasMeta: false };
       if (!fornParaSaldo) return { saldo: 0, hasMeta: true };
       const wKey = `${it.id}_${fornParaSaldo.fornecedorId}`;
       const wResp = mapa?.respostaMap?.[wKey];
@@ -2572,22 +2580,25 @@ export default function Cotacoes() {
                                     const orcada = (it as any).qtdOrcada ?? 0;
                                     const comprada = (it as any).qtdComprada ?? 0;
                                     const saldoQtd = (it as any).qtdSaldo ?? 0;
+                                    const fonte = (it as any).fonteVinculo;
+                                    const semVinculo = !fonte;
                                     const isEstouro = saldoQtd < 0;
                                     return (
                                       <>
-                                        <td className="px-2 py-2 text-center text-xs bg-orange-50/30 font-medium text-gray-700">
-                                          {orcada > 0 ? orcada.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
+                                        <td className={`px-2 py-2 text-center text-xs font-medium ${semVinculo ? "bg-red-50/40 text-red-400" : "bg-orange-50/30 text-gray-700"}`}>
+                                          {orcada > 0 ? orcada.toLocaleString("pt-BR") : <span className={semVinculo ? "text-red-400 font-bold" : "text-gray-300"}>0</span>}
                                         </td>
-                                        <td className="px-2 py-2 text-center text-xs bg-orange-50/30 font-medium text-gray-700">
-                                          {comprada > 0 ? comprada.toLocaleString("pt-BR") : <span className="text-gray-300">0</span>}
+                                        <td className={`px-2 py-2 text-center text-xs font-medium ${semVinculo ? "bg-red-50/40 text-red-400" : "bg-orange-50/30 text-gray-700"}`}>
+                                          {comprada > 0 ? comprada.toLocaleString("pt-BR") : <span className={semVinculo ? "text-red-400" : "text-gray-300"}>0</span>}
                                         </td>
-                                        <td className={`px-2 py-2 text-center text-xs font-bold border-r border-orange-100 ${isEstouro ? "bg-red-50 text-red-700" : orcada > 0 ? "bg-emerald-50/50 text-emerald-700" : "bg-orange-50/30 text-gray-400"}`}>
-                                          {orcada > 0 ? (
-                                            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${isEstouro ? "bg-red-100 text-red-700 border border-red-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
-                                              {isEstouro && <AlertTriangle className="h-2.5 w-2.5" />}
-                                              {saldoQtd.toLocaleString("pt-BR")}
-                                            </span>
-                                          ) : <span className="text-gray-300">—</span>}
+                                        <td className={`px-2 py-2 text-center text-xs font-bold border-r border-orange-100 ${isEstouro || semVinculo ? "bg-red-50 text-red-700" : "bg-emerald-50/50 text-emerald-700"}`}>
+                                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${isEstouro || semVinculo ? "bg-red-100 text-red-700 border border-red-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
+                                            {(isEstouro || semVinculo) && <AlertTriangle className="h-2.5 w-2.5" />}
+                                            {saldoQtd.toLocaleString("pt-BR")}
+                                          </span>
+                                          {semVinculo && (
+                                            <div className="text-[8px] text-red-500 font-bold mt-0.5 uppercase">REALOCAR VERBA</div>
+                                          )}
                                         </td>
                                       </>
                                     );
@@ -2673,7 +2684,8 @@ export default function Cotacoes() {
                                   const totalOrc = allItensArr.reduce((s: number, i: any) => s + ((i as any).qtdOrcada ?? 0), 0);
                                   const totalComp = allItensArr.reduce((s: number, i: any) => s + ((i as any).qtdComprada ?? 0), 0);
                                   const totalSaldo = allItensArr.reduce((s: number, i: any) => s + ((i as any).qtdSaldo ?? 0), 0);
-                                  if (totalOrc === 0) return "—";
+                                  const temSemVinculo = allItensArr.some((i: any) => !(i as any).fonteVinculo);
+                                  if (totalOrc === 0 && !temSemVinculo) return "—";
                                   return (
                                     <span className="flex items-center justify-center gap-3">
                                       <span title="Orçado">{totalOrc.toLocaleString("pt-BR")}</span>

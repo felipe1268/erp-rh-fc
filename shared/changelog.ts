@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 869,
+    titulo: "Lógica de saldo corrigida — sem vínculo = negativo + realocação de verba",
+    descricao: "Correção definitiva da lógica orçamentária: 1) Itens sem vínculo ao orçamento (sem orcamento_item_id nem insumo_codigo no orçamento) agora mostram saldo NEGATIVO (= -quantidade solicitada) e badge 'REALOCAR VERBA'. 2) Cotações (Mapa) agora também busca dados orçamentários via insumo_codigo quando orcamento_item_id é null, mostrando Orçado/Comprado/Saldo corretos para insumos como Cimento. 3) Saldo em R$ na Cotação também calcula prejuízo para itens sem verba. 4) Total footer e cobertura do Mapa corrigidos para refletir itens sem vínculo.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 00:45:00",
+  },
+  {
     version: 868,
     titulo: "Dialog de aprovação SC redesenhado — tela grande com tabela",
     descricao: "Dialog de confirmação de aprovação/recusa da SC agora ocupa 95% da tela (max 5xl) com layout em tabela profissional: colunas separadas para Item, UN, Esta SC, Orçado, Solicitado, Comprado, Saldo e barras de progresso de consumo. Footer com contagem de alertas e resumo visual. Legendas coloridas de status. Muito mais prático e legível.",

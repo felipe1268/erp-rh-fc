@@ -149,9 +149,9 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
 
     if (item.situacao === "sem_vinculo") {
       return {
-        texto: `Este item não está vinculado a nenhum item ou insumo do orçamento. O controle de saldo não pôde ser calculado automaticamente.`,
-        cor: "gray",
-        badge: null,
+        texto: `Item não encontrado no orçamento da obra. Saldo negativo (${fmt(-item.qtdEstaSC)} ${u}). Necessária realocação de verba antes de prosseguir.`,
+        cor: "red",
+        badge: "REALOCAR VERBA",
       };
     }
 
