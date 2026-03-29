@@ -108,6 +108,19 @@ function AprovBadge({ status }: { status: string | null }) {
   return <span className={`inline-flex items-center gap-1 text-xs font-medium ${c.cls}`}>{c.icon}{c.label}</span>;
 }
 
+function DocLinks({ docs, prefix, route, navigate }: { docs: { id: number; numero: string }[]; prefix: string; route: string; navigate: (path: string) => void }) {
+  if (!docs || docs.length === 0) return null;
+  return (
+    <>
+      {docs.map((d, i) => (
+        <button key={d.id} type="button" onClick={(e) => { e.stopPropagation(); navigate(`${route}?destaque=${d.id}`); }} className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline bg-indigo-50 hover:bg-indigo-100 rounded px-1 py-0.5 transition-colors cursor-pointer">
+          {d.numero || `${prefix}-${d.id}`}{i < docs.length - 1 ? "" : ""}
+        </button>
+      ))}
+    </>
+  );
+}
+
 export default function Solicitacoes() {
   const { user } = useAuth();
   const { selectedCompanyId } = useCompany();
@@ -118,6 +131,17 @@ export default function Solicitacoes() {
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [showNova, setShowNova] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
+  const [destaqueId, setDestaqueId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const d = params.get("destaque");
+    if (d) {
+      const id = parseInt(d);
+      if (!isNaN(id)) { setShowDetalhe(id); setDestaqueId(id); setTimeout(() => setDestaqueId(null), 3000); }
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const [form, setForm] = useState({
     titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: ""
@@ -1150,7 +1174,7 @@ export default function Solicitacoes() {
                                                 <div key={idx} className={`flex items-center gap-2 px-2.5 py-1.5 text-xs ${insRowBg}`}>
                                                   <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${insStatusDotColor[insStatus] || "bg-emerald-500"}`} title={insStatusLabel[insStatus] || "Disponível"} />
                                                   <div className="flex-1 min-w-0">
-                                                    <div className="text-gray-900 truncate">{ins.descricao} {insStatus !== "disponivel" && <span className={`ml-1 text-[8px] px-1 rounded font-bold ${insStatus === "estouro" ? "bg-red-100 text-red-700" : insStatus === "comprado" ? "bg-purple-100 text-purple-700" : insStatus === "recebido" ? "bg-rose-100 text-rose-700" : insStatus === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{insStatusLabel[insStatus]}</span>}</div>
+                                                    <div className="text-gray-900 truncate flex items-center gap-1 flex-wrap">{ins.descricao} {insStatus !== "disponivel" && <span className={`text-[8px] px-1 rounded font-bold ${insStatus === "estouro" ? "bg-red-100 text-red-700" : insStatus === "comprado" ? "bg-purple-100 text-purple-700" : insStatus === "recebido" ? "bg-rose-100 text-rose-700" : insStatus === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{insStatusLabel[insStatus]}</span>}{insConsolidado?.scDocs?.length > 0 && <DocLinks docs={insConsolidado.scDocs} prefix="SC" route="/compras/solicitacoes" navigate={navigate} />}{insConsolidado?.cotDocs?.length > 0 && <DocLinks docs={insConsolidado.cotDocs} prefix="COT" route="/compras/cotacoes" navigate={navigate} />}{insConsolidado?.ocDocs?.length > 0 && <DocLinks docs={insConsolidado.ocDocs} prefix="OC" route="/compras/ordens" navigate={navigate} />}</div>
                                                     <div className="text-[10px] text-gray-400">Coef: {ins.coeficiente} | Meta: R$ {parseFloat(ins.precoUnitario || "0").toFixed(2)}{insConsolidado ? ` | Orçado: ${insConsolidado.qtdTotalOrcada.toLocaleString("pt-BR")} | Comprado: ${insConsolidado.qtdComprada.toLocaleString("pt-BR")}` : ""}</div>
                                                   </div>
                                                   <div className="text-right shrink-0">
@@ -1297,7 +1321,7 @@ export default function Solicitacoes() {
                                       <span className={`shrink-0 w-2 h-2 rounded-full ${sc.cor}`} title={sc.label} />
                                       <div className="min-w-0">
                                         <div className="text-gray-900 truncate font-medium">{ins.descricao}</div>
-                                        <div className="text-[9px] text-gray-400 ml-4">{ins.insumoCodigo} · {ins.composicoes.length} composiç{ins.composicoes.length > 1 ? "ões" : "ão"} · <span className="text-purple-500 underline">ver onde é usado</span>{statusInsumo !== "disponivel" && <span className={`ml-1 px-1 rounded text-[8px] font-bold ${statusInsumo === "estouro" ? "bg-red-100 text-red-700" : statusInsumo === "comprado" ? "bg-purple-100 text-purple-700" : statusInsumo === "recebido" ? "bg-rose-100 text-rose-700" : statusInsumo === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{sc.label}</span>}</div>
+                                        <div className="text-[9px] text-gray-400 ml-4 flex items-center gap-1 flex-wrap">{ins.insumoCodigo} · {ins.composicoes.length} composiç{ins.composicoes.length > 1 ? "ões" : "ão"} · <span className="text-purple-500 underline cursor-pointer">ver onde é usado</span>{statusInsumo !== "disponivel" && <span className={`px-1 rounded text-[8px] font-bold ${statusInsumo === "estouro" ? "bg-red-100 text-red-700" : statusInsumo === "comprado" ? "bg-purple-100 text-purple-700" : statusInsumo === "recebido" ? "bg-rose-100 text-rose-700" : statusInsumo === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{sc.label}</span>}{ins.scDocs?.length > 0 && <DocLinks docs={ins.scDocs} prefix="SC" route="/compras/solicitacoes" navigate={navigate} />}{ins.cotDocs?.length > 0 && <DocLinks docs={ins.cotDocs} prefix="COT" route="/compras/cotacoes" navigate={navigate} />}{ins.ocDocs?.length > 0 && <DocLinks docs={ins.ocDocs} prefix="OC" route="/compras/ordens" navigate={navigate} />}</div>
                                       </div>
                                     </div>
                                   </div>
@@ -1581,7 +1605,7 @@ export default function Solicitacoes() {
                           <span className={`shrink-0 w-2 h-2 rounded-full ${statusDotColors[stIns] || "bg-emerald-500"}`} title={statusDotLabels[stIns] || "Disponível"} />
                           <Zap className="h-3 w-3 text-amber-500 shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <div className="text-gray-900 truncate">{c.descricao} {stIns !== "disponivel" && <span className={`ml-1 text-[8px] px-1 rounded font-bold ${stIns === "estouro" ? "bg-red-100 text-red-700" : stIns === "comprado" ? "bg-purple-100 text-purple-700" : stIns === "recebido" ? "bg-rose-100 text-rose-700" : stIns === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{statusDotLabels[stIns]}</span>}</div>
+                            <div className="text-gray-900 truncate flex items-center gap-1 flex-wrap">{c.descricao} {stIns !== "disponivel" && <span className={`text-[8px] px-1 rounded font-bold ${stIns === "estouro" ? "bg-red-100 text-red-700" : stIns === "comprado" ? "bg-purple-100 text-purple-700" : stIns === "recebido" ? "bg-rose-100 text-rose-700" : stIns === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{statusDotLabels[stIns]}</span>}{insData?.scDocs?.length > 0 && <DocLinks docs={insData.scDocs} prefix="SC" route="/compras/solicitacoes" navigate={navigate} />}{insData?.cotDocs?.length > 0 && <DocLinks docs={insData.cotDocs} prefix="COT" route="/compras/cotacoes" navigate={navigate} />}{insData?.ocDocs?.length > 0 && <DocLinks docs={insData.ocDocs} prefix="OC" route="/compras/ordens" navigate={navigate} />}</div>
                             {c.origens.length > 1 && (
                               <div className="text-[10px] text-amber-600">Consolidado de {c.origens.length} serviços: {c.origens.join(", ")}</div>
                             )}

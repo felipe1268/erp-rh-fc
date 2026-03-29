@@ -535,6 +535,16 @@ export default function Cotacoes() {
   const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<"detalhes" | "mapa">("detalhes");
   const [showCancelarAprovacao, setShowCancelarAprovacao] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const d = params.get("destaque");
+    if (d) {
+      const id = parseInt(d);
+      if (!isNaN(id)) setShowDetalhe(id);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
   const [cancelarCotacaoId, setCancelarCotacaoId] = useState<number | null>(null);
   const [justificativaCancelar, setJustificativaCancelar] = useState("");
 

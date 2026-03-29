@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 848,
+    titulo: "Links clicáveis nos status de insumos (SC, Cotação, OC)",
+    descricao: "Insumos com status Solicitado, Em cotação, Comprado ou Recebido agora exibem o número do documento (SC, COT, OC) como link clicável ao lado do badge de status — nos três contextos: EAP expandida, Compra Consolidada e resumo de itens. Clicar navega diretamente para a página do documento correspondente. Backend enriquecido para retornar scDocs, cotDocs e ocDocs em getInsumosConsolidados.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "sistema",
+    dataPublicacao: "2026-03-29 15:00:00",
+  },
+  {
     version: 426,
     titulo: "Bugfix: preços unitários zerados na OC gerada pela aprovação da cotação",
     descricao: "Ao gerar OC a partir da aprovação da cotação, os preços eram copiados dos itens da cotação (sem preço) em vez das respostas do mapa de cotação do fornecedor vencedor. Corrigido: endpoint criarOrdemDeCotacao agora busca preços, quantidades e totais em compras_cotacao_respostas para o fornecedor selecionado. OC existente (OC-2026-0001) também teve os 9 itens corrigidos diretamente no banco.",

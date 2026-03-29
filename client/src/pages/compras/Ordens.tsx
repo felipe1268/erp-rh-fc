@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -107,6 +107,16 @@ export default function Ordens() {
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const d = params.get("destaque");
+    if (d) {
+      const id = parseInt(d);
+      if (!isNaN(id)) setShowDetalhe(id);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const [form, setForm] = useState({
     obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "",

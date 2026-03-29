@@ -4248,42 +4248,59 @@ Retorne APENAS um JSON válido neste formato:
         orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
         insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
         quantidade: comprasSolicitacoesItens.quantidade,
+        solicitacaoId: comprasSolicitacoes.id,
+        scNumero: comprasSolicitacoes.numeroSc,
       }).from(comprasSolicitacoesItens)
         .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
         .where(and(eq(comprasSolicitacoes.companyId, input.companyId), eq(comprasSolicitacoes.obraId, input.obraId), sql`${comprasSolicitacoes.status} NOT IN ('cancelado')`));
       const scMap: Record<string, number> = {};
+      const scDocsMap: Record<string, { id: number; numero: string }[]> = {};
       for (const sc of scRows) {
         const key = sc.insumoCodigo || "";
         scMap[key] = (scMap[key] || 0) + n(sc.quantidade);
+        if (!scDocsMap[key]) scDocsMap[key] = [];
+        const num = sc.scNumero || `SC-${sc.solicitacaoId}`;
+        if (!scDocsMap[key].some(d => d.id === sc.solicitacaoId)) scDocsMap[key].push({ id: sc.solicitacaoId, numero: num });
       }
 
       const ocRows = await db.select({
         insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
         quantidade: comprasOrdensItens.quantidade,
         quantidadeEntregue: comprasOrdensItens.quantidadeEntregue,
+        ordemId: comprasOrdens.id,
+        ocNumero: comprasOrdens.numeroOc,
       }).from(comprasOrdensItens)
         .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
         .innerJoin(comprasSolicitacoesItens, eq(comprasOrdensItens.solicitacaoItemId, comprasSolicitacoesItens.id))
         .where(and(eq(comprasOrdens.companyId, input.companyId), eq(comprasOrdens.obraId, input.obraId), sql`${comprasOrdens.status} NOT IN ('cancelada')`));
       const ocMapComprado: Record<string, number> = {};
       const ocMapRecebido: Record<string, number> = {};
+      const ocDocsMap: Record<string, { id: number; numero: string }[]> = {};
       for (const oc of ocRows) {
         const key = oc.insumoCodigo || "";
         ocMapComprado[key] = (ocMapComprado[key] || 0) + n(oc.quantidade);
         ocMapRecebido[key] = (ocMapRecebido[key] || 0) + n(oc.quantidadeEntregue);
+        if (!ocDocsMap[key]) ocDocsMap[key] = [];
+        if (!ocDocsMap[key].some(d => d.id === oc.ordemId)) ocDocsMap[key].push({ id: oc.ordemId, numero: oc.ocNumero });
       }
 
       const cotRows = await db.select({
         insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
         quantidade: comprasSolicitacoesItens.quantidade,
+        cotacaoId: comprasCotacoes.id,
+        cotNumero: comprasCotacoes.numeroCotacao,
       }).from(comprasCotacoesItens)
         .innerJoin(comprasSolicitacoesItens, eq(comprasCotacoesItens.solicitacaoItemId, comprasSolicitacoesItens.id))
         .innerJoin(comprasCotacoes, eq(comprasCotacoesItens.cotacaoId, comprasCotacoes.id))
         .where(and(eq(comprasCotacoes.companyId, input.companyId), eq(comprasCotacoes.obraId, input.obraId), sql`${comprasCotacoes.status} NOT IN ('cancelada','concluida')`));
       const cotMap: Record<string, number> = {};
+      const cotDocsMap: Record<string, { id: number; numero: string }[]> = {};
       for (const ct of cotRows) {
         const key = ct.insumoCodigo || "";
         cotMap[key] = (cotMap[key] || 0) + n(ct.quantidade);
+        if (!cotDocsMap[key]) cotDocsMap[key] = [];
+        const num = ct.cotNumero || `COT-${ct.cotacaoId}`;
+        if (!cotDocsMap[key].some(d => d.id === ct.cotacaoId)) cotDocsMap[key].push({ id: ct.cotacaoId, numero: num });
       }
 
       return result.map(c => {
@@ -4298,7 +4315,12 @@ Retorne APENAS um JSON válido neste formato:
         else if (qtdComprada >= c.qtdTotalOrcada) statusInsumo = "comprado";
         else if (qtdEmCotacao > 0) statusInsumo = "em_cotacao";
         else if (qtdJaSolicitada > 0) statusInsumo = "solicitado";
-        return { ...c, qtdJaSolicitada, qtdEmCotacao, qtdComprada, qtdRecebida, saldoDisponivel, statusInsumo };
+        return {
+          ...c, qtdJaSolicitada, qtdEmCotacao, qtdComprada, qtdRecebida, saldoDisponivel, statusInsumo,
+          scDocs: scDocsMap[c.insumoCodigo] || [],
+          cotDocs: cotDocsMap[c.insumoCodigo] || [],
+          ocDocs: ocDocsMap[c.insumoCodigo] || [],
+        };
       }).sort((a, b) => a.descricao.localeCompare(b.descricao));
     }),
 
