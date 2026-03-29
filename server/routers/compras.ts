@@ -1062,11 +1062,12 @@ Responda APENAS com um objeto JSON no formato:
   getSolicitacao: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input, ctx }) => {
+      try {
       const db = await getDb();
       const [sc] = await db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
       if (!sc) throw new TRPCError({ code: "NOT_FOUND" });
       const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
-      const allowedIds = allowedCompanies.map((c: any) => c.id);
+      const allowedIds = (allowedCompanies || []).map((c: any) => c.id);
       if (!allowedIds.includes(sc.companyId)) throw new TRPCError({ code: "FORBIDDEN" });
       const itens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
 
@@ -1128,15 +1129,20 @@ Responda APENAS com um objeto JSON no formato:
         solicitanteNome,
         aprovadorNome,
         rastreio: {
-          cotacoes: cotacoes.map(c => ({ ...c, total: parseFloat(String(c.total || "0")) })),
-          ordens: ordens.map(o => ({
+          cotacoes: (cotacoes || []).map(c => ({ ...c, total: parseFloat(String(c.total || "0")) })),
+          ordens: (ordens || []).map(o => ({
             ...o,
             total: parseFloat(String(o.total || "0")),
             aprovadorNome: o.aprovadorId ? (ocAprovadores[o.aprovadorId] || null) : null,
           })),
-          recebimentos,
+          recebimentos: recebimentos || [],
         },
       };
+      } catch (err: any) {
+        console.error("[getSolicitacao] Error for SC id=" + input.id + ":", err?.message || err);
+        if (err instanceof TRPCError) throw err;
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err?.message || "Erro interno ao carregar solicitação" });
+      }
     }),
 
   criarSolicitacao: protectedProcedure
