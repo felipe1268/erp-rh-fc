@@ -1246,15 +1246,16 @@ export default function Solicitacoes() {
                       </div>
                     ) : (
                       <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 px-3 py-1.5 text-[10px] text-gray-500 font-medium uppercase tracking-wide border-b border-gray-200 grid grid-cols-12 gap-1">
-                          <span className="col-span-4">Insumo</span>
-                          <span className="col-span-1 text-center">Un</span>
-                          <span className="col-span-1 text-right">Orçado</span>
-                          <span className="col-span-1 text-right">Solic.</span>
-                          <span className="col-span-1 text-right">Saldo</span>
-                          <span className="col-span-1 text-right">Comp.</span>
-                          <span className="col-span-1 text-center">Qtd</span>
-                          <span className="col-span-2 text-center flex items-center justify-center gap-1">Conversão {conversaoQ.isLoading && <span className="inline-block w-2.5 h-2.5 border border-purple-400 border-t-transparent rounded-full animate-spin" />}</span>
+                        <div className="bg-gray-50 px-3 py-1.5 text-[10px] text-gray-500 font-medium uppercase tracking-wide border-b border-gray-200 grid grid-cols-[3fr_0.6fr_1fr_1fr_1fr_1fr_0.8fr_1fr_1.5fr] gap-1">
+                          <span>Insumo</span>
+                          <span className="text-center">Un</span>
+                          <span className="text-right">Orçado</span>
+                          <span className="text-right">Solic.</span>
+                          <span className="text-right">Saldo</span>
+                          <span className="text-right">Comp.</span>
+                          <span className="text-center">Qtd</span>
+                          <span className="text-right">Valor Total</span>
+                          <span className="text-center flex items-center justify-center gap-1">Conversão {conversaoQ.isLoading && <span className="inline-block w-2.5 h-2.5 border border-purple-400 border-t-transparent rounded-full animate-spin" />}</span>
                         </div>
                         <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
                           {(insumosConsolidadosQ.data ?? []).map((ins: any) => {
@@ -1265,8 +1266,8 @@ export default function Solicitacoes() {
                             const isExpanded = insumoExpanded === ins.insumoCodigo;
                             return (
                               <div key={ins.insumoCodigo}>
-                                <div className="grid grid-cols-12 gap-1 px-3 py-2 text-xs items-center hover:bg-gray-50">
-                                  <div className="col-span-4 min-w-0 cursor-pointer" onClick={() => setInsumoExpanded(isExpanded ? null : ins.insumoCodigo)}>
+                                <div className="grid grid-cols-[3fr_0.6fr_1fr_1fr_1fr_1fr_0.8fr_1fr_1.5fr] gap-1 px-3 py-2 text-xs items-center hover:bg-gray-50">
+                                  <div className="min-w-0 cursor-pointer" onClick={() => setInsumoExpanded(isExpanded ? null : ins.insumoCodigo)}>
                                     <div className="flex items-center gap-1">
                                       <ChevronDown className={`h-3 w-3 text-gray-400 shrink-0 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />
                                       <div className="min-w-0">
@@ -1275,14 +1276,14 @@ export default function Solicitacoes() {
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="col-span-1 text-center">
+                                  <div className="text-center">
                                     <span className="text-[9px] font-bold text-gray-600 bg-gray-100 rounded px-1 py-0.5">{ins.unidade}</span>
                                   </div>
-                                  <div className="col-span-1 text-right font-semibold text-gray-700">{ins.qtdTotalOrcada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
-                                  <div className="col-span-1 text-right text-blue-600">{ins.qtdJaSolicitada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
-                                  <div className={`col-span-1 text-right font-bold ${saldoNeg ? "text-red-600" : "text-emerald-600"}`}>{ins.saldoDisponivel.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
-                                  <div className="col-span-1 text-right text-purple-600">{ins.qtdComprada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
-                                  <div className="col-span-1">
+                                  <div className="text-right font-semibold text-gray-700">{ins.qtdTotalOrcada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                  <div className="text-right text-blue-600">{ins.qtdJaSolicitada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                  <div className={`text-right font-bold ${saldoNeg ? "text-red-600" : "text-emerald-600"}`}>{ins.saldoDisponivel.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                  <div className="text-right text-purple-600">{ins.qtdComprada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                  <div>
                                     <input
                                       type="number" min="0" step="0.01"
                                       className="w-full h-6 px-1 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 text-center"
@@ -1291,7 +1292,20 @@ export default function Solicitacoes() {
                                       onChange={e => setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: e.target.value }))}
                                     />
                                   </div>
-                                  <div className="col-span-2 text-center">
+                                  <div className="text-right">
+                                    {qtdVal > 0 && ins.precoMedio > 0 ? (
+                                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 rounded px-1.5 py-0.5">
+                                        R$ {(qtdVal * ins.precoMedio).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    ) : ins.precoMedio > 0 ? (
+                                      <span className="text-[9px] text-gray-400">
+                                        R$ {ins.precoMedio.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/un
+                                      </span>
+                                    ) : (
+                                      <span className="text-[9px] text-gray-300">—</span>
+                                    )}
+                                  </div>
+                                  <div className="text-center">
                                     {conv && <span className="text-[9px] text-purple-600 bg-purple-50 rounded px-1 py-0.5 font-medium">{conv}</span>}
                                   </div>
                                 </div>
