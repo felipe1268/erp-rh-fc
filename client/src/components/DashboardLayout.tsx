@@ -1220,22 +1220,17 @@ function DashboardLayoutContent({
             <div className="px-3 pb-2">
               <Select value={activeModule} onValueChange={(v) => { const mod = v as ModuleId; setActiveModule(mod); setLocation(MODULE_HOME_ROUTES[mod] || "/painel"); }}>
                 <SelectTrigger className="w-full h-10 bg-sidebar-accent/50 border-sidebar-border text-sm font-semibold">
-                  <div className="flex items-center gap-2">
-                    <div className={`h-6 w-6 rounded-md ${currentTheme.bg} flex items-center justify-center`}>
-                      <ModIcon className={`h-3.5 w-3.5 ${currentTheme.color}`} />
-                    </div>
-                    <SelectValue />
-                  </div>
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {sortedModuleDefs.map(m => (
                     <SelectItem key={m.id} value={m.id}>
-                      <div className="flex items-center gap-2">
-                        <div className={`h-5 w-5 rounded ${m.bg} flex items-center justify-center`}>
+                      <span className="flex items-center gap-2">
+                        <span className={`inline-flex h-5 w-5 rounded ${m.bg} items-center justify-center shrink-0`}>
                           <m.icon className={`h-3 w-3 ${m.color}`} />
-                        </div>
+                        </span>
                         {m.label}
-                      </div>
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
