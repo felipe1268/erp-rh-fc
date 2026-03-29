@@ -6649,7 +6649,7 @@ Retorne APENAS um JSON válido neste formato:
       }).from(users).where(eq(users.email, input.adminEmail)).limit(1);
 
       if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Usuário admin não encontrado" });
-      if (admin.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem aprovar compras extra-orçamento" });
+      if (admin.role !== "admin" && admin.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem aprovar compras extra-orçamento" });
 
       const bcrypt = await import("bcryptjs");
       const senhaValida = await bcrypt.compare(input.adminSenha, admin.password);
