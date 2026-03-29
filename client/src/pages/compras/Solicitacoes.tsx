@@ -1362,7 +1362,8 @@ export default function Solicitacoes() {
                             const qtdStr = insumoQtds[ins.insumoCodigo] || "";
                             const qtdVal = parseFloat(qtdStr) || 0;
                             const conv = getConversao(ins.descricao, ins.unidade, qtdVal > 0 ? qtdVal : ins.qtdTotalOrcada);
-                            const saldoNeg = ins.saldoDisponivel < 0;
+                            const saldoVal = Object.is(ins.saldoDisponivel, -0) ? 0 : ins.saldoDisponivel;
+                            const saldoNeg = saldoVal < 0;
                             const isExpanded = insumoExpanded === ins.insumoCodigo;
                             const statusInsumo = ins.statusInsumo || "disponivel";
                             const statusConfig: Record<string, { cor: string; label: string; bg: string }> = {
@@ -1400,7 +1401,7 @@ export default function Solicitacoes() {
                                   </div>
                                   <div className="text-right font-semibold text-gray-700">{ins.qtdTotalOrcada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
                                   <div className="text-right text-blue-600">{ins.qtdJaSolicitada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
-                                  <div className={`text-right font-bold ${saldoNeg ? "text-red-600" : "text-emerald-600"}`}>{ins.saldoDisponivel.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                  <div className={`text-right font-bold ${saldoNeg ? "text-red-600" : "text-emerald-600"}`}>{saldoVal.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
                                   <div className="text-right text-purple-600">{ins.qtdComprada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
                                   <div className="flex items-center gap-0.5">
                                     <input
