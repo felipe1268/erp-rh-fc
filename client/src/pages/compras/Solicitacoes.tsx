@@ -200,14 +200,18 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
     return { texto: "", cor: null, badge: null };
   }
 
+  const fmt = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+  const itensOk = itens.filter(i => i.situacao === "ok");
+  const itensAlerta = itens.filter(i => i.situacao !== "ok");
+
   return (
     <Dialog open={confirmAprov !== null} onOpenChange={v => !v && setConfirmAprov(null)}>
-      <DialogContent className="border-gray-200 max-w-xl" style={{ background: '#ffffff', color: '#111827' }}>
+      <DialogContent className="border-gray-200 max-w-5xl w-[95vw]" style={{ background: '#ffffff', color: '#111827' }}>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-gray-900">
-            {confirmAprov?.icone === "aprovar" && <CheckCircle2 className="h-5 w-5 text-emerald-600" />}
-            {confirmAprov?.icone === "recusar" && <XCircle className="h-5 w-5 text-red-600" />}
-            {confirmAprov?.icone === "voltar" && <Clock className="h-5 w-5 text-amber-600" />}
+          <DialogTitle className="flex items-center gap-3 text-lg text-gray-900">
+            {confirmAprov?.icone === "aprovar" && <CheckCircle2 className="h-6 w-6 text-emerald-600" />}
+            {confirmAprov?.icone === "recusar" && <XCircle className="h-6 w-6 text-red-600" />}
+            {confirmAprov?.icone === "voltar" && <Clock className="h-6 w-6 text-amber-600" />}
             {confirmAprov?.titulo}
           </DialogTitle>
         </DialogHeader>
@@ -220,7 +224,6 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
 
           {(() => {
             const problemasGraves = itens.filter(i => i.situacao !== "ok" && i.situacao !== "sem_vinculo");
-            const semVinculoSimples = itens.filter(i => i.situacao === "sem_vinculo");
             if (problemasGraves.length > 0) {
               const msgs: string[] = [];
               if (problemasGraves.some(i => i.situacao === "verba_esgotada_compras" || i.situacao === "verba_esgotada_solicitacoes"))
@@ -239,86 +242,167 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
                 </div>
               );
             }
-            if (semVinculoSimples.length > 0) {
-              return (
-                <div className="rounded-lg border border-gray-300 bg-gray-50 p-3">
-                  <p className="text-xs text-gray-500">{semVinculoSimples.length === 1 ? "1 item" : `${semVinculoSimples.length} itens`} sem vínculo direto com o orçamento — o controle de saldo não pôde ser verificado automaticamente.</p>
-                </div>
-              );
-            }
             return null;
           })()}
 
-          <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Itens da Solicitação</p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Controle Orçamentário dos Itens</p>
+              <div className="flex items-center gap-3 text-[10px]">
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> OK</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block" /> Parcial</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block" /> Problema</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gray-400 inline-block" /> Sem vínculo</span>
+              </div>
+            </div>
             {saldoQ.isLoading ? (
-              <div className="flex items-center gap-2 py-4 justify-center text-gray-400"><Loader2 className="h-4 w-4 animate-spin" /> Carregando dados orçamentários...</div>
+              <div className="flex items-center gap-2 py-8 justify-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin" /> Carregando dados orçamentários...</div>
             ) : saldoQ.isError ? (
-              <div className="flex items-center gap-2 py-4 justify-center text-red-400"><AlertTriangle className="h-4 w-4" /> Erro ao carregar dados orçamentários</div>
+              <div className="flex items-center gap-2 py-8 justify-center text-red-400"><AlertTriangle className="h-5 w-5" /> Erro ao carregar dados orçamentários</div>
             ) : (
-              <div className="bg-gray-50 rounded-lg border border-gray-200 p-2.5 max-h-56 overflow-y-auto space-y-2">
-                {itens.map((item) => {
-                  const info = gerarTextoSituacao(item);
-                  const isRed = info.cor === "red";
-                  const isOrange = info.cor === "orange";
-                  const isGray = info.cor === "gray";
-                  return (
-                    <div key={item.id} className={`rounded-md p-2.5 ${isRed ? "bg-red-50 border-2 border-red-300" : isOrange ? "bg-orange-50 border border-orange-200" : isGray ? "bg-gray-50 border border-gray-300 border-dashed" : "bg-white border border-gray-200"}`}>
-                      <div className="flex items-start gap-2">
-                        <Package className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${isRed ? "text-red-500" : "text-gray-400"}`} />
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className={`text-sm font-medium ${isRed ? "text-red-800" : "text-gray-700"}`}>
-                              {item.descricao} — {item.qtdEstaSC.toLocaleString("pt-BR")} {item.unidade}
-                            </p>
-                            {info.badge && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white uppercase tracking-wide">{info.badge}</span>
-                            )}
-                          </div>
-                          {item.situacao !== "sem_vinculo" && (
-                            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-                              <span className="text-gray-500">Orçado: <strong className="text-gray-700">{item.qtdOrcada.toLocaleString("pt-BR")} {item.unidade}</strong></span>
-                              <span className="text-gray-500">Solicitado: <strong className="text-gray-700">{item.qtdSolicitada.toLocaleString("pt-BR")}</strong></span>
-                              {item.qtdComprada > 0 && (
-                                <span className="text-orange-600">Comprado: <strong>{item.qtdComprada.toLocaleString("pt-BR")}</strong>{item.ocsVinculadas.length > 0 && ` (${item.ocsVinculadas.join(", ")})`}</span>
+              <div className="rounded-lg border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto max-h-[50vh]">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-gray-100 border-b border-gray-200">
+                        <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-600 w-[1%]">#</th>
+                        <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-600">Item</th>
+                        <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-600 whitespace-nowrap">UN</th>
+                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-blue-700 whitespace-nowrap bg-blue-50/50">Esta SC</th>
+                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-600 whitespace-nowrap">Orçado</th>
+                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-600 whitespace-nowrap">Solicitado</th>
+                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-600 whitespace-nowrap">Comprado</th>
+                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-600 whitespace-nowrap">Saldo</th>
+                        <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-600 w-[180px]">Consumo</th>
+                        <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-600 w-[1%]">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itens.map((item, idx) => {
+                        const info = gerarTextoSituacao(item);
+                        const isRed = info.cor === "red";
+                        const isOrange = info.cor === "orange";
+                        const isGray = info.cor === "gray";
+                        const linked = item.situacao !== "sem_vinculo" && item.situacao !== "sem_vinculo_sem_verba";
+                        const consumoPct = linked && item.qtdOrcada > 0 ? Math.min(((item.qtdSolicitada) / item.qtdOrcada) * 100, 100) : 0;
+                        const compradoPct = linked && item.qtdOrcada > 0 ? Math.min((item.qtdComprada / item.qtdOrcada) * 100, 100) : 0;
+                        const rowBg = isRed ? "bg-red-50/60" : isOrange ? "bg-orange-50/50" : isGray ? "bg-gray-50/50" : "";
+                        return (
+                          <tr key={item.id} className={`border-b border-gray-100 hover:bg-gray-50/80 transition-colors ${rowBg}`}>
+                            <td className="px-3 py-2.5 text-xs text-gray-400 font-mono">{idx + 1}</td>
+                            <td className="px-3 py-2.5">
+                              <p className={`text-sm font-medium truncate max-w-[280px] ${isRed ? "text-red-800" : "text-gray-800"}`} title={item.descricao}>
+                                {item.descricao}
+                              </p>
+                              {info.texto && (
+                                <p className={`text-[10px] mt-0.5 truncate max-w-[280px] ${isRed ? "text-red-500" : isGray ? "text-gray-400" : "text-orange-500"}`} title={info.texto}>
+                                  {info.texto}
+                                </p>
                               )}
-                              <span className={item.saldo < 0 ? "text-red-600 font-bold" : item.saldo === 0 ? "text-amber-600 font-semibold" : "text-emerald-600"}>
-                                Saldo: <strong>{item.saldo.toLocaleString("pt-BR")} {item.unidade}</strong>
-                              </span>
-                            </div>
-                          )}
-                          {info.texto && (
-                            <p className={`text-xs flex items-start gap-1 ${isRed ? "font-bold text-red-600" : isGray ? "text-gray-500" : "font-semibold text-orange-600"}`}>
-                              {isGray ? <FileSearch className="h-3 w-3 mt-0.5 shrink-0" /> : <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />}
-                              <span>{info.texto}</span>
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                            </td>
+                            <td className="px-3 py-2.5 text-center text-xs text-gray-500">{item.unidade}</td>
+                            <td className="px-3 py-2.5 text-right font-semibold text-blue-700 bg-blue-50/30 tabular-nums">{fmt(item.qtdEstaSC)}</td>
+                            <td className="px-3 py-2.5 text-right tabular-nums">{linked ? <span className="text-gray-700 font-medium">{fmt(item.qtdOrcada)}</span> : <span className="text-gray-300">—</span>}</td>
+                            <td className="px-3 py-2.5 text-right tabular-nums">{linked ? <span className="text-gray-600">{fmt(item.qtdSolicitada)}</span> : <span className="text-gray-300">—</span>}</td>
+                            <td className="px-3 py-2.5 text-right tabular-nums">
+                              {linked && item.qtdComprada > 0 ? (
+                                <span className="text-orange-600 font-medium" title={item.ocsVinculadas.length > 0 ? item.ocsVinculadas.join(", ") : ""}>
+                                  {fmt(item.qtdComprada)}
+                                  {item.ocsVinculadas.length > 0 && <span className="text-[9px] text-orange-400 ml-1">({item.ocsVinculadas.join(", ")})</span>}
+                                </span>
+                              ) : linked ? <span className="text-gray-300">0</span> : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-3 py-2.5 text-right tabular-nums">
+                              {linked ? (
+                                <span className={`font-bold ${item.saldo < 0 ? "text-red-600" : item.saldo === 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                                  {fmt(item.saldo)}
+                                </span>
+                              ) : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              {linked && item.qtdOrcada > 0 ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden relative">
+                                    {compradoPct > 0 && (
+                                      <div className="absolute inset-y-0 left-0 bg-orange-400 rounded-l-full" style={{ width: `${compradoPct}%` }} />
+                                    )}
+                                    <div
+                                      className={`absolute inset-y-0 left-0 rounded-full ${consumoPct > 100 ? "bg-red-500" : consumoPct > 85 ? "bg-amber-400" : "bg-emerald-400"}`}
+                                      style={{ width: `${Math.min(consumoPct, 100)}%`, opacity: 0.6 }}
+                                    />
+                                  </div>
+                                  <span className={`text-[10px] font-bold min-w-[32px] text-right ${consumoPct > 100 ? "text-red-600" : consumoPct > 85 ? "text-amber-600" : "text-emerald-600"}`}>
+                                    {Math.round(consumoPct)}%
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-300 text-xs text-center block">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-center">
+                              {info.badge ? (
+                                <span className="text-[9px] font-bold px-1.5 py-1 rounded bg-red-600 text-white uppercase tracking-wide whitespace-nowrap">{info.badge}</span>
+                              ) : isGray ? (
+                                <span className="text-[9px] font-medium px-1.5 py-1 rounded bg-gray-200 text-gray-500 uppercase whitespace-nowrap">N/A</span>
+                              ) : isOrange ? (
+                                <span className="text-[9px] font-medium px-1.5 py-1 rounded bg-amber-100 text-amber-700 uppercase whitespace-nowrap">PARCIAL</span>
+                              ) : (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" />
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    {itens.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-gray-50 border-t-2 border-gray-200">
+                          <td colSpan={3} className="px-3 py-2 text-xs font-semibold text-gray-500">{itens.length} {itens.length === 1 ? "item" : "itens"}</td>
+                          <td className="px-3 py-2 text-right text-xs font-bold text-blue-700 bg-blue-50/30">{fmt(itens.reduce((s, i) => s + i.qtdEstaSC, 0))}</td>
+                          <td colSpan={4} />
+                          <td className="px-3 py-2 text-center">
+                            {itensAlerta.length > 0 ? (
+                              <span className="text-[10px] font-bold text-red-600">{itensAlerta.length} alerta{itensAlerta.length > 1 ? "s" : ""}</span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-emerald-600">Tudo OK</span>
+                            )}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
               </div>
             )}
           </div>
 
-          <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-            <Button variant="outline" onClick={() => setConfirmAprov(null)} className="text-gray-600">
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                if (!confirmAprov) return;
-                aprovar.mutate({ id: confirmAprov.id, aprovacaoStatus: confirmAprov.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined });
-                setConfirmAprov(null);
-              }}
-              disabled={aprovar.isPending}
-              className={`gap-1.5 ${confirmAprov?.cor === "emerald" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : confirmAprov?.cor === "red" ? "bg-red-600 hover:bg-red-500 text-white" : "bg-amber-600 hover:bg-amber-500 text-white"}`}>
-              {confirmAprov?.icone === "aprovar" && <CheckCircle2 className="h-4 w-4" />}
-              {confirmAprov?.icone === "recusar" && <XCircle className="h-4 w-4" />}
-              {confirmAprov?.icone === "voltar" && <Clock className="h-4 w-4" />}
-              {confirmAprov?.icone === "aprovar" ? "Sim, Aprovar" : confirmAprov?.icone === "recusar" ? "Sim, Recusar" : "Sim, Voltar"}
-            </Button>
+          <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+            <div className="flex items-center gap-4 text-xs text-gray-400">
+              {itens.length > 0 && (
+                <>
+                  <span>{itensOk.length} OK</span>
+                  {itensAlerta.length > 0 && <span className="text-red-500 font-semibold">{itensAlerta.length} com alerta</span>}
+                </>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setConfirmAprov(null)} className="text-gray-600 px-6">
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!confirmAprov) return;
+                  aprovar.mutate({ id: confirmAprov.id, aprovacaoStatus: confirmAprov.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined });
+                  setConfirmAprov(null);
+                }}
+                disabled={aprovar.isPending}
+                className={`gap-1.5 px-6 ${confirmAprov?.cor === "emerald" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : confirmAprov?.cor === "red" ? "bg-red-600 hover:bg-red-500 text-white" : "bg-amber-600 hover:bg-amber-500 text-white"}`}>
+                {confirmAprov?.icone === "aprovar" && <CheckCircle2 className="h-4 w-4" />}
+                {confirmAprov?.icone === "recusar" && <XCircle className="h-4 w-4" />}
+                {confirmAprov?.icone === "voltar" && <Clock className="h-4 w-4" />}
+                {confirmAprov?.icone === "aprovar" ? "Sim, Aprovar" : confirmAprov?.icone === "recusar" ? "Sim, Recusar" : "Sim, Voltar"}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

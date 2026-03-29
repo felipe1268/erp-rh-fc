@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 868,
+    titulo: "Dialog de aprovação SC redesenhado — tela grande com tabela",
+    descricao: "Dialog de confirmação de aprovação/recusa da SC agora ocupa 95% da tela (max 5xl) com layout em tabela profissional: colunas separadas para Item, UN, Esta SC, Orçado, Solicitado, Comprado, Saldo e barras de progresso de consumo. Footer com contagem de alertas e resumo visual. Legendas coloridas de status. Muito mais prático e legível.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 00:15:00",
+  },
+  {
     version: 867,
     titulo: "Vínculo orçamentário via insumo_codigo na aprovação de SC",
     descricao: "Itens de SC sem vínculo direto (orcamento_item_id null) mas com insumo_codigo agora são corretamente vinculados à tabela orcamento_insumos. O sistema cruza o código do insumo com o orçamento da obra para encontrar a verba orçada, e calcula o saldo real considerando todas as SCs e OCs que usam o mesmo insumo. Resolve o falso-positivo onde itens como Cimento (código 20.05.08) apareciam como 'sem vínculo' mesmo existindo no orçamento.",
