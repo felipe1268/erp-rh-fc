@@ -5757,4 +5757,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 00:30:00",
   },
+  {
+    version: 844,
+    titulo: "Performance: Otimização do ERP — boot mais rápido, queries em lote, código limpo",
+    descricao: "Remoção de ~200 linhas de migrations já completadas que rodavam a cada boot (BUG-001/002, AvisoPrévio, normalização de textos, recuperação de fotos EPI, limpeza de empresas teste, purga de orfanatos). N+1 corrigido em analiseComissoesOCs: antes fazia 1 query por OC + 1 por item (centenas de queries), agora faz 3 queries em lote. Comissões recalculadas por saldo global da obra. Arquivo backup removido. Imports não utilizados limpos.",
+    tipo: "performance",
+    modulos: "Sistema, Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 01:00:00",
+  },
 ];

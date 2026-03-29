@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { eq, and, desc, asc, ilike, or, sql, gte, lte, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, or, sql, lte, inArray } from "drizzle-orm";
 import {
   fornecedores,
   purchaseCatalogItems,
@@ -22,7 +22,6 @@ import {
   purchaseOrderItems,
   purchaseReceipts,
   purchaseReceiptItems,
-  purchaseReturns,
   purchaseAccountsPayable,
   budgetReallocations,
   buyerCommissions,
@@ -641,16 +640,32 @@ export const purchaseRouter = router({
       const ocs = await db.select().from(comprasOrdens)
         .where(eq(comprasOrdens.companyId, input.companyId))
         .orderBy(desc(comprasOrdens.criadoEm));
-      const result: any[] = [];
-      for (const oc of ocs) {
-        const itens = await db.select().from(comprasOrdensItens)
-          .where(eq(comprasOrdensItens.ordemId, oc.id));
+      if (ocs.length === 0) return [];
+
+      const ocIds = ocs.map(oc => oc.id);
+      const allItens = await db.select().from(comprasOrdensItens)
+        .where(inArray(comprasOrdensItens.ordemId, ocIds));
+
+      const scItemIds = [...new Set(allItens.map(i => i.solicitacaoItemId).filter((id): id is number => !!id))];
+      const allScItens = scItemIds.length > 0
+        ? await db.select().from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds))
+        : [];
+      const scItemMap = new Map(allScItens.map(si => [si.id, si]));
+
+      const itensByOrdem = new Map<number, typeof allItens>();
+      for (const item of allItens) {
+        const arr = itensByOrdem.get(item.ordemId!) || [];
+        arr.push(item);
+        itensByOrdem.set(item.ordemId!, arr);
+      }
+
+      return ocs.map(oc => {
+        const itens = itensByOrdem.get(oc.id) || [];
         let valorMeta = 0;
         let temMeta = false;
         for (const item of itens) {
           if (item.solicitacaoItemId) {
-            const [scItem] = await db.select().from(comprasSolicitacoesItens)
-              .where(eq(comprasSolicitacoesItens.id, item.solicitacaoItemId)).limit(1);
+            const scItem = scItemMap.get(item.solicitacaoItemId);
             if (scItem && n((scItem as any).precoMeta) > 0) {
               valorMeta += n((scItem as any).precoMeta) * n(item.quantidade);
               temMeta = true;
@@ -659,7 +674,7 @@ export const purchaseRouter = router({
         }
         const valorComprado = n(oc.total);
         const economia = temMeta ? (valorMeta - valorComprado) : 0;
-        result.push({
+        return {
           id: oc.id,
           numeroOc: oc.numeroOc,
           fornecedorNome: oc.fornecedorNome,
@@ -671,9 +686,8 @@ export const purchaseRouter = router({
           temMeta,
           totalItens: itens.length,
           criadoEm: oc.criadoEm,
-        });
-      }
-      return result;
+        };
+      });
     }),
 
   calcularComissoes: protectedProcedure
