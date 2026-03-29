@@ -28,7 +28,7 @@ import {
   almoxarifadoNotificacoes,
   purchaseOrders, purchaseRequests, purchaseQuotations,
   budgetReallocations,
-  ocNumberConfig, pjContracts, pjDocumentos,
+  ocNumberConfig, pjContracts, pjDocumentos, bdiFd, fdAjustes,
 } from "../../drizzle/schema";
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -6957,5 +6957,172 @@ Retorne APENAS um JSON válido neste formato:
         docsPendentes: docsPendentes.length > 0 ? docsPendentes : undefined,
         contratoGerado: contratoGerado ? { id: contratoGerado.id, tipo: contratoGerado.tipo || "novo" } : undefined,
       };
+    }),
+
+  getSaldoFd: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const obraRes = await db.execute(sql`SELECT orcamento_id FROM obras WHERE id = ${input.obraId} AND company_id = ${input.companyId} LIMIT 1`);
+      const orcamentoId = (obraRes as any).rows?.[0]?.orcamento_id;
+      if (!orcamentoId) return { totalFdOrcado: 0, totalFdComprometido: 0, saldoFd: 0, itensFd: [] };
+
+      const itensFd = await db.select().from(bdiFd).where(and(eq(bdiFd.orcamentoId, orcamentoId), eq(bdiFd.companyId, input.companyId)));
+      const totalFdOrcado = itensFd.reduce((s, i) => s + n(i.total), 0);
+
+      const ocsComFd = await db.select({ fdValor: comprasOrdens.fdValor, fdStatus: comprasOrdens.fdStatus })
+        .from(comprasOrdens)
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          eq(comprasOrdens.obraId, input.obraId),
+          sql`${comprasOrdens.modalidadeFd} = 'fd_cliente'`,
+          sql`${comprasOrdens.status} != 'cancelada'`,
+        ));
+      const totalFdComprometido = ocsComFd.reduce((s, oc) => s + n(oc.fdValor), 0);
+
+      return {
+        totalFdOrcado,
+        totalFdComprometido,
+        saldoFd: totalFdOrcado - totalFdComprometido,
+        itensFd: itensFd.map(i => ({
+          id: i.id,
+          codigoInsumo: i.codigoInsumo,
+          descricao: i.descricao,
+          unidade: i.unidade,
+          qtdOrcada: n(i.qtdOrcada),
+          precoUnit: n(i.precoUnit),
+          total: n(i.total),
+        })),
+      };
+    }),
+
+  marcarOcComoFd: protectedProcedure
+    .input(z.object({
+      ocId: z.number(),
+      companyId: z.number(),
+      modalidade: z.enum(["fd_cliente", "fd_terceiro"]),
+      valor: z.number(),
+      bdiItemId: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [oc] = await db.select().from(comprasOrdens)
+        .where(and(eq(comprasOrdens.id, input.ocId), eq(comprasOrdens.companyId, input.companyId)));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "OC não encontrada" });
+
+      const ocTipo = (oc as any).tipo;
+      if (ocTipo === "servico" || ocTipo === "pacote") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Faturamento Direto não é permitido para Ordens de Serviço (MDO). FD é exclusivo para materiais." });
+      }
+
+      if (input.modalidade === "fd_terceiro") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "FD Terceiro deve ser marcado via o contrato PJ (use marcarOcFdTerceiro)." });
+      }
+
+      if (input.modalidade === "fd_cliente") {
+        const obraRes = await db.execute(sql`SELECT orcamento_id FROM obras WHERE id = ${oc.obraId} AND company_id = ${input.companyId} LIMIT 1`);
+        const orcamentoId = (obraRes as any).rows?.[0]?.orcamento_id;
+        if (orcamentoId) {
+          const itensFd = await db.select().from(bdiFd).where(and(eq(bdiFd.orcamentoId, orcamentoId), eq(bdiFd.companyId, input.companyId)));
+          const totalFdOrcado = itensFd.reduce((s, i) => s + n(i.total), 0);
+
+          const ocsComFd = await db.select({ fdValor: comprasOrdens.fdValor })
+            .from(comprasOrdens)
+            .where(and(
+              eq(comprasOrdens.companyId, input.companyId),
+              eq(comprasOrdens.obraId, oc.obraId!),
+              sql`${comprasOrdens.modalidadeFd} = 'fd_cliente'`,
+              sql`${comprasOrdens.status} != 'cancelada'`,
+              sql`${comprasOrdens.id} != ${input.ocId}`,
+            ));
+          const totalFdComprometido = ocsComFd.reduce((s, o) => s + n(o.fdValor), 0);
+          const saldoFd = totalFdOrcado - totalFdComprometido;
+
+          if (input.valor > saldoFd) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Saldo de FD insuficiente. Disponível: R$ ${saldoFd.toFixed(2)}. Valor desta OC: R$ ${input.valor.toFixed(2)}. Não é possível ultrapassar o teto de FD.`,
+            });
+          }
+        }
+      }
+
+      await db.update(comprasOrdens).set({
+        modalidadeFd: input.modalidade,
+        fdValor: String(input.valor.toFixed(2)),
+        fdStatus: "pendente_aprovacao",
+        fdBdiItemId: input.bdiItemId ?? null,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(comprasOrdens.id, input.ocId));
+
+      return { success: true };
+    }),
+
+  aprovarFdCliente: protectedProcedure
+    .input(z.object({ ocId: z.number(), companyId: z.number(), aprovadoPor: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const userRole = (ctx.user as any)?.role;
+      if (!["admin", "admin_master"].includes(userRole)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem aprovar FD." });
+      }
+      const result = await db.update(comprasOrdens).set({
+        fdStatus: "aprovado",
+        fdAprovadoEm: new Date().toISOString(),
+        fdAprovadoPor: ctx.user.name || input.aprovadoPor,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(and(eq(comprasOrdens.id, input.ocId), eq(comprasOrdens.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  ajustarFd: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      orcamentoId: z.number(),
+      bdiFdId: z.number(),
+      novoValor: z.number(),
+      justificativa: z.string().min(5, "Justificativa obrigatória (mín. 5 caracteres)"),
+      adminEmail: z.string(),
+      adminSenha: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      const [admin] = await db.select({ id: users.id, name: users.name, role: users.role, password: users.password })
+        .from(users).where(eq(users.email, input.adminEmail)).limit(1);
+      if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Admin não encontrado" });
+      if (admin.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Somente Admin Master pode ajustar o FD" });
+
+      const bcrypt = await import("bcryptjs");
+      if (!(await bcrypt.compare(input.adminSenha, admin.password))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
+
+      const [item] = await db.select().from(bdiFd).where(and(eq(bdiFd.id, input.bdiFdId), eq(bdiFd.companyId, input.companyId)));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item FD não encontrado" });
+
+      const valorAnterior = n(item.total);
+      await db.update(bdiFd).set({ total: String(input.novoValor.toFixed(2)) } as any).where(eq(bdiFd.id, input.bdiFdId));
+
+      await db.insert(fdAjustes).values({
+        companyId: input.companyId,
+        orcamentoId: input.orcamentoId,
+        tipo: "ajuste_valor",
+        descricao: `Item: ${item.descricao} (${item.codigoInsumo})`,
+        valorAnterior: String(valorAnterior.toFixed(2)),
+        valorNovo: String(input.novoValor.toFixed(2)),
+        justificativa: input.justificativa,
+        adminId: admin.id,
+        adminNome: admin.name,
+      } as any);
+
+      return { success: true, adminNome: admin.name };
+    }),
+
+  getHistoricoFdAjustes: protectedProcedure
+    .input(z.object({ companyId: z.number(), orcamentoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return db.select().from(fdAjustes)
+        .where(and(eq(fdAjustes.companyId, input.companyId), eq(fdAjustes.orcamentoId, input.orcamentoId)))
+        .orderBy(desc(fdAjustes.createdAt));
     }),
 });

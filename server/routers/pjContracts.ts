@@ -1,7 +1,7 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { pjContracts, pjPayments, pjDocumentos, pjContractRevisoes, employees, companies } from "../../drizzle/schema";
+import { pjContracts, pjPayments, pjDocumentos, pjContractRevisoes, employees, companies, comprasOrdens } from "../../drizzle/schema";
 import { eq, and, sql, isNull, desc, asc, lte, gte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -938,4 +938,78 @@ export const pjContractsRouter = router({
         return { ok: true };
       }),
   }),
+
+  definirLimiteFd: protectedProcedure
+    .input(z.object({ contractId: z.number(), companyId: z.number(), limiteFd: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await db.update(pjContracts).set({
+        limiteFd: String(input.limiteFd.toFixed(2)),
+        updatedAt: new Date().toISOString(),
+      } as any).where(and(eq(pjContracts.id, input.contractId), eq(pjContracts.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  getSaldoFdTerceiro: protectedProcedure
+    .input(z.object({ contractId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [contrato] = await db.select().from(pjContracts)
+        .where(and(eq(pjContracts.id, input.contractId), eq(pjContracts.companyId, input.companyId)));
+      if (!contrato) return { limiteFd: 0, fdConsumido: 0, saldoFd: 0 };
+      const limiteFd = parseFloat(String((contrato as any).limiteFd ?? "0")) || 0;
+      const fdConsumido = parseFloat(String((contrato as any).fdConsumido ?? "0")) || 0;
+      return { limiteFd, fdConsumido, saldoFd: limiteFd - fdConsumido };
+    }),
+
+  marcarOcFdTerceiro: protectedProcedure
+    .input(z.object({ ocId: z.number(), companyId: z.number(), contractId: z.number(), valor: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const [contrato] = await db.select().from(pjContracts)
+        .where(and(eq(pjContracts.id, input.contractId), eq(pjContracts.companyId, input.companyId)));
+      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
+
+      const limiteFd = parseFloat(String((contrato as any).limiteFd ?? "0")) || 0;
+      const fdConsumido = parseFloat(String((contrato as any).fdConsumido ?? "0")) || 0;
+
+      if (limiteFd <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Este contrato não possui limite de FD definido." });
+
+      const ocsJaMarcadas = await db.select({ fdValor: comprasOrdens.fdValor })
+        .from(comprasOrdens)
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          sql`${comprasOrdens.modalidadeFd} = 'fd_terceiro'`,
+          sql`${comprasOrdens.status} != 'cancelada'`,
+          sql`${comprasOrdens.contratoId} = ${input.contractId}`,
+          sql`${comprasOrdens.id} != ${input.ocId}`,
+        ));
+      const totalComprometido = ocsJaMarcadas.reduce((s, o) => s + (parseFloat(String(o.fdValor ?? "0")) || 0), 0);
+      const saldoFd = limiteFd - totalComprometido;
+
+      if (input.valor > saldoFd) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Saldo de FD Terceiro insuficiente. Disponível: R$ ${saldoFd.toFixed(2)}. Valor: R$ ${input.valor.toFixed(2)}. Não é possível ultrapassar o teto de FD.`,
+        });
+      }
+
+      const [oc] = await db.select().from(comprasOrdens)
+        .where(and(eq(comprasOrdens.id, input.ocId), eq(comprasOrdens.companyId, input.companyId)));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "OC não encontrada" });
+
+      const ocTipo = (oc as any).tipo;
+      if (ocTipo === "servico" || ocTipo === "pacote") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Faturamento Direto não é permitido para MDO." });
+      }
+
+      await db.update(comprasOrdens).set({
+        modalidadeFd: "fd_terceiro",
+        fdValor: String(input.valor.toFixed(2)),
+        fdStatus: "pendente_aprovacao",
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(comprasOrdens.id, input.ocId));
+
+      return { success: true };
+    }),
 });

@@ -184,6 +184,7 @@ const ComprasRealocacao = lazy(() => import("./pages/compras/Realocacao"));
 const ComprasComissoes = lazy(() => import("./pages/compras/Comissoes"));
 const ComprasConfiguracoes = lazy(() => import("./pages/compras/Configuracoes"));
 const DashboardObra = lazy(() => import("./pages/compras/DashboardObra"));
+const PainelFd = lazy(() => import("./pages/compras/PainelFd"));
 const PortalCotacaoPage = lazy(() => import("./pages/PortalCotacao"));
 const PortalServicoPage = lazy(() => import("./pages/PortalServico"));
 const MedicoesServicoPage = lazy(() => import("./pages/compras/MedicoesServico"));
@@ -376,6 +377,7 @@ function Router() {
         <Route path="/compras/comissoes"         component={ComprasComissoes} />
         <Route path="/compras/configuracoes"     component={ComprasConfiguracoes} />
         <Route path="/compras/dashboard-obra"    component={DashboardObra} />
+        <Route path="/compras/painel-fd"         component={PainelFd} />
         <Route path="/portal/cotacao/:token"     component={PortalCotacaoPage} />
         <Route path="/portal/servico/:token"    component={PortalServicoPage} />
         <Route path="/compras/medicoes-servico" component={MedicoesServicoPage} />

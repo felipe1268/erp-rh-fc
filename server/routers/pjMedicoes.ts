@@ -1,10 +1,11 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { pjMedicoes, pjContracts, employees } from "../../drizzle/schema";
+import { pjMedicoes, pjContracts, employees, comprasOrdens } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
+const n = (v: any) => parseFloat(v ?? "0") || 0;
 
 export const pjMedicoesRouter = router({
   // Listar medições
@@ -76,7 +77,7 @@ export const pjMedicoesRouter = router({
         throw new TRPCError({ code: 'CONFLICT', message: 'Já existe medição para este contrato neste mês' });
       }
 
-      const [contrato] = await db.select().from(pjContracts).where(eq(pjContracts.id, input.contractId));
+      const [contrato] = await db.select().from(pjContracts).where(and(eq(pjContracts.id, input.contractId), eq(pjContracts.companyId, input.companyId)));
       let valorRetencao = 0;
       let valorLiquidoFinal = parseFloat(input.valorLiquido) || 0;
 
@@ -96,6 +97,31 @@ export const pjMedicoesRouter = router({
         }
       }
 
+      let fdDesconto = 0;
+      let fdDetalhe = "";
+      if (contrato) {
+        const fdConsumido = n((contrato as any).fdConsumido);
+        const limiteFd = n((contrato as any).limiteFd);
+        if (limiteFd > 0) {
+          const ocsfd = await db.select({ id: comprasOrdens.id, fdValor: comprasOrdens.fdValor, descricao: comprasOrdens.descricao })
+            .from(comprasOrdens)
+            .where(and(
+              eq(comprasOrdens.companyId, input.companyId),
+              sql`${comprasOrdens.modalidadeFd} = 'fd_terceiro'`,
+              sql`${comprasOrdens.fdStatus} = 'aprovado'`,
+              sql`${comprasOrdens.status} != 'cancelada'`,
+              sql`${comprasOrdens.contratoId} = ${input.contractId}`,
+            ));
+          const totalFdAprovado = ocsfd.reduce((s, o) => s + n(o.fdValor), 0);
+          const fdPendente = totalFdAprovado - fdConsumido;
+          if (fdPendente > 0) {
+            fdDesconto = Math.min(fdPendente, valorLiquidoFinal);
+            fdDetalhe = `Desconto FD Terceiro: R$ ${fdDesconto.toFixed(2)} (OCs: ${ocsfd.map(o => `#${o.id}`).join(", ")})`;
+            valorLiquidoFinal -= fdDesconto;
+          }
+        }
+      }
+
       await db.insert(pjMedicoes).values({
         ...input,
         valorLiquido: String(valorLiquidoFinal.toFixed(2)),
@@ -103,20 +129,26 @@ export const pjMedicoesRouter = router({
         observacoes: input.observacoes ? `${input.observacoes}${valorRetencao > 0 ? `\nRetenção técnica: R$ ${valorRetencao.toFixed(2)}` : ""}` : (valorRetencao > 0 ? `Retenção técnica: R$ ${valorRetencao.toFixed(2)}` : null),
         descricaoDescontos: input.descricaoDescontos || null,
         descricaoAcrescimos: input.descricaoAcrescimos || null,
+        fdDesconto: String(fdDesconto.toFixed(2)),
+        fdDetalhe: fdDetalhe || null,
         criadoPor: ctx.user.name ?? 'Sistema',
-      });
+      } as any);
 
       if (contrato) {
         const newMedido = parseFloat(String((contrato as any).valorMedido ?? "0")) + parseFloat(input.valorBruto);
         const newRetido = parseFloat(String((contrato as any).valorRetido ?? "0")) + valorRetencao;
-        await db.update(pjContracts).set({
+        const updateData: any = {
           valorMedido: String(newMedido.toFixed(2)),
           valorRetido: String(newRetido.toFixed(2)),
           updatedAt: new Date().toISOString(),
-        } as any).where(eq(pjContracts.id, input.contractId));
+        };
+        if (fdDesconto > 0) {
+          updateData.fdConsumido = String((n((contrato as any).fdConsumido) + fdDesconto).toFixed(2));
+        }
+        await db.update(pjContracts).set(updateData).where(and(eq(pjContracts.id, input.contractId), eq(pjContracts.companyId, input.companyId)));
       }
 
-      return { success: true, retencaoAplicada: valorRetencao };
+      return { success: true, retencaoAplicada: valorRetencao, fdDescontado: fdDesconto };
     }),
 
   atualizar: protectedProcedure

@@ -2196,6 +2196,8 @@ export const pjContracts = pgTable("pj_contracts", {
         valorTotalContrato: numeric("valor_total_contrato", { precision: 14, scale: 2 }),
         valorMedido: numeric("valor_medido", { precision: 14, scale: 2 }).default("0"),
         valorRetido: numeric("valor_retido", { precision: 14, scale: 2 }).default("0"),
+        limiteFd: numeric("limite_fd", { precision: 14, scale: 2 }),
+        fdConsumido: numeric("fd_consumido", { precision: 14, scale: 2 }).default("0"),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         deletedAt: timestamp({ mode: 'string' }),
@@ -2251,6 +2253,8 @@ export const pjMedicoes = pgTable("pj_medicoes", {
         comprovanteUrl: text(),
         observacoes: text(),
         criadoPor: varchar({ length: 255 }),
+        fdDesconto: numeric("fd_desconto", { precision: 14, scale: 2 }).default("0"),
+        fdDetalhe: text("fd_detalhe"),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
@@ -4324,6 +4328,20 @@ export const bdiFd = pgTable("bdi_fd", {
   createdAt:     timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_bdifd_orc").on(t.orcamentoId)]);
 
+export const fdAjustes = pgTable("fd_ajustes", {
+  id:            serial("id").primaryKey(),
+  companyId:     integer("company_id").notNull(),
+  orcamentoId:   integer("orcamento_id").notNull(),
+  tipo:          varchar("tipo", { length: 20 }).notNull(),
+  descricao:     text(),
+  valorAnterior: numeric("valor_anterior", { precision: 14, scale: 2 }),
+  valorNovo:     numeric("valor_novo", { precision: 14, scale: 2 }),
+  justificativa: text().notNull(),
+  adminId:       integer("admin_id").notNull(),
+  adminNome:     varchar("admin_nome", { length: 255 }).notNull(),
+  createdAt:     timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_fdajustes_orc").on(t.orcamentoId)]);
+
 export const bdiAdmCentral = pgTable("bdi_adm_central", {
   id:          serial("id").primaryKey(),
   orcamentoId: integer("orcamento_id").notNull(),
@@ -5097,6 +5115,12 @@ export const comprasOrdens = pgTable("compras_ordens", {
   aprovacaoExtraMotivo: text("aprovacao_extra_motivo"),
   tipo:               varchar({ length: 20 }).default("compra"),
   contratoId:         integer("contrato_id"),
+  modalidadeFd:       varchar("modalidade_fd", { length: 20 }).default("normal"),
+  fdValor:            numeric("fd_valor", { precision: 14, scale: 2 }),
+  fdStatus:           varchar("fd_status", { length: 30 }),
+  fdAprovadoEm:       timestamp("fd_aprovado_em", { mode: "string" }),
+  fdAprovadoPor:      varchar("fd_aprovado_por", { length: 255 }),
+  fdBdiItemId:        integer("fd_bdi_item_id"),
   criadoEm:           timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:       timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });

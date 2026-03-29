@@ -1374,7 +1374,7 @@ export default function Solicitacoes() {
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
                         <ListTree className="h-3.5 w-3.5 text-amber-600" />
-                        Serviços da EAP — clique para explodir insumos
+                        {form.tipo === "servico" ? "Serviços da EAP — clique para explodir mão de obra" : form.tipo === "pacote" ? "Serviços da EAP — clique para explodir insumos e mão de obra" : "Serviços da EAP — clique para explodir insumos"}
                       </label>
                       {selectedEapIds.size > 0 && (
                         <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
@@ -1539,7 +1539,7 @@ export default function Solicitacoes() {
                                       ) : insLista && insLista.length > 0 ? (
                                         <div className="space-y-1">
                                           <div className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide flex items-center gap-1">
-                                            <Package className="h-3 w-3" /> Insumos da composição ({insLista.length})
+                                            <Package className="h-3 w-3" /> {form.tipo === "servico" ? "Mão de obra" : form.tipo === "pacote" ? "Insumos + Mão de obra" : "Insumos"} da composição ({insLista.length})
                                           </div>
                                           <div className="bg-white rounded border border-gray-200 divide-y divide-gray-100 max-h-48 overflow-y-auto">
                                             {insLista.map((ins: any, idx: number) => {

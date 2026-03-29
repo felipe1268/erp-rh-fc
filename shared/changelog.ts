@@ -6119,4 +6119,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 22:00:00",
   },
+  {
+    version: 883,
+    titulo: "Faturamento Direto (FD) — FD Cliente + FD Terceiro + Painel de Saldo",
+    descricao: "Sistema completo de Faturamento Direto implementado. " +
+      "FD Cliente: marca OC de material como FD, valida saldo contra BDI FD do orçamento, bloqueia se excede teto (hard cap). " +
+      "FD Terceiro: define limite de FD no contrato PJ, rastreia consumo, bloqueia se excede saldo. " +
+      "Regra de negócio: FD NUNCA permitido para Ordens de Serviço (MDO) — exclusivo para materiais. " +
+      "Ajuste de FD: somente Admin Master pode alterar valores, com justificativa obrigatória e log de auditoria completo. " +
+      "Medição com dedução FD automática: ao criar medição PJ, sistema calcula e desconta FD Terceiro pendente do valor líquido. " +
+      "Painel de Saldo FD: visão consolidada por obra — orçado, comprometido, saldo, barra de utilização, alerta 90%, itens do BDI FD, histórico de ajustes. " +
+      "Badges visuais de FD CLIENTE/TERCEIRO nas OCs com status de aprovação. " +
+      "PDF e fluxo de aprovação do cliente integrados ao status da OC.",
+    tipo: "feature",
+    modulos: "Compras, Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 23:30:00",
+  },
 ];

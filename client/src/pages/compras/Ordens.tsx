@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign } from "lucide-react";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
 
@@ -107,6 +107,8 @@ export default function Ordens() {
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
+  const [showFdDialog, setShowFdDialog] = useState<any>(null);
+  const [fdForm, setFdForm] = useState({ modalidade: "fd_cliente" as "fd_cliente" | "fd_terceiro", valor: "", bdiItemId: 0, contractId: 0 });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -163,6 +165,14 @@ export default function Ordens() {
   });
   const atualizarEntregaMut = trpc.compras.atualizarDadosEntregaOC.useMutation({
     onSuccess: () => { toast.success("Dados de entrega atualizados!"); detalheQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const marcarFd = trpc.compras.marcarOcComoFd.useMutation({
+    onSuccess: () => { toast.success("OC marcada como Faturamento Direto!"); q.refetch(); detalheQ.refetch(); setShowFdDialog(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const aprovarFd = trpc.compras.aprovarFdCliente.useMutation({
+    onSuccess: () => { toast.success("FD aprovado pelo cliente!"); q.refetch(); detalheQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
   const aprovarExtra = trpc.compras.aprovarOcExtra.useMutation({
@@ -388,6 +398,11 @@ export default function Ordens() {
                         </span>
                       )}
                     </div>
+                    {(oc as any).modalidadeFd && (oc as any).modalidadeFd !== "normal" && (
+                      <span className={`px-1.5 py-0.5 text-[9px] font-sans font-semibold rounded ${(oc as any).fdStatus === "aprovado" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                        FD {(oc as any).modalidadeFd === "fd_cliente" ? "CLIENTE" : "TERCEIRO"}
+                      </span>
+                    )}
                     {oc.status === "entregue" && <span className="block text-[10px] font-sans font-normal text-emerald-500">OC concluída</span>}
                     {((oc as any).tipo === "servico" || (oc as any).tipo === "pacote") && (oc as any).contratoId && (
                       <span className="block text-[10px] font-sans font-normal text-blue-500">Contrato PJ vinculado</span>
@@ -891,6 +906,35 @@ export default function Ordens() {
                   </div>
                 )}
 
+                {/* FD Section */}
+                {(detalhe as any).modalidadeFd && (detalhe as any).modalidadeFd !== "normal" ? (
+                  <div className="space-y-2 border-t border-gray-200 pt-4">
+                    <Label className="text-gray-700 text-sm font-semibold flex items-center gap-1">
+                      <Receipt className="h-3.5 w-3.5 text-gray-400" /> Faturamento Direto
+                    </Label>
+                    <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 space-y-1 text-sm">
+                      <div className="flex justify-between"><span className="text-gray-500">Modalidade</span><span className="font-medium">{(detalhe as any).modalidadeFd === "fd_cliente" ? "FD Cliente" : "FD Terceiro"}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Valor FD</span><span className="font-medium">{parseFloat((detalhe as any).fdValor ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Status FD</span><span className={`font-medium ${(detalhe as any).fdStatus === "aprovado" ? "text-emerald-600" : "text-amber-600"}`}>{(detalhe as any).fdStatus === "aprovado" ? "Aprovado" : "Pendente aprovação"}</span></div>
+                      {(detalhe as any).fdAprovadoPor && <div className="flex justify-between"><span className="text-gray-500">Aprovado por</span><span className="font-medium">{(detalhe as any).fdAprovadoPor}</span></div>}
+                    </div>
+                    {(detalhe as any).fdStatus === "pendente_aprovacao" && (
+                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1"
+                        onClick={() => aprovarFd.mutate({ ocId: detalhe.id, companyId, aprovadoPor: "Cliente" })}
+                        disabled={aprovarFd.isPending}>
+                        <CheckCircle className="h-3 w-3" /> Registrar Aprovação FD
+                      </Button>
+                    )}
+                  </div>
+                ) : !["cancelada", "entregue"].includes(detalhe.status) && (detalhe as any).tipo !== "servico" && (detalhe as any).tipo !== "pacote" && (
+                  <div className="border-t border-gray-200 pt-4">
+                    <Button size="sm" variant="outline" className="text-xs gap-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                      onClick={() => { setShowFdDialog(detalhe); setFdForm({ modalidade: "fd_cliente", valor: "", bdiItemId: 0, contractId: 0 }); }}>
+                      <Receipt className="h-3 w-3" /> Marcar como Faturamento Direto
+                    </Button>
+                  </div>
+                )}
+
                 {!["cancelada"].includes(detalhe.status) && (
                   <div className="space-y-3 border-t border-gray-200 pt-4">
                     <Label className="text-gray-700 text-sm font-semibold flex items-center gap-1">
@@ -989,6 +1033,51 @@ export default function Ordens() {
               }}>
                 {aprovarExtra.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
                 Aprovar OC
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* FD Dialog */}
+      <Dialog open={!!showFdDialog} onOpenChange={v => { if (!v) setShowFdDialog(null); }}>
+        <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="text-indigo-700 flex items-center gap-2"><Receipt className="h-5 w-5" /> Marcar Faturamento Direto</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <p className="text-sm text-gray-600">Defina a modalidade e o valor do faturamento direto para esta OC.</p>
+            <div className="space-y-2">
+              <div>
+                <Label className="text-xs text-gray-700">Modalidade *</Label>
+                <Select value={fdForm.modalidade} onValueChange={v => setFdForm(p => ({ ...p, modalidade: v as any }))}>
+                  <SelectTrigger className="h-8 text-sm bg-white text-gray-900 border-gray-300"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fd_cliente">FD Cliente</SelectItem>
+                    <SelectItem value="fd_terceiro">FD Terceiro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-gray-700">Valor FD (R$) *</Label>
+                <Input className="h-8 text-sm bg-white text-gray-900 border-gray-300" type="number" step="0.01" placeholder="0.00" value={fdForm.valor} onChange={e => setFdForm(p => ({ ...p, valor: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => setShowFdDialog(null)}>Cancelar</Button>
+              <Button size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5"
+                disabled={marcarFd.isPending || !fdForm.valor || parseFloat(fdForm.valor) <= 0}
+                onClick={() => {
+                  if (!showFdDialog) return;
+                  marcarFd.mutate({
+                    ocId: showFdDialog.id,
+                    companyId,
+                    modalidade: fdForm.modalidade,
+                    valor: parseFloat(fdForm.valor),
+                    bdiItemId: fdForm.bdiItemId || undefined,
+                  });
+                }}>
+                {marcarFd.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DollarSign className="h-3.5 w-3.5" />}
+                Confirmar FD
               </Button>
             </div>
           </div>
