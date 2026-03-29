@@ -2945,7 +2945,8 @@ Retorne APENAS um JSON válido neste formato:
         and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId))
       );
       if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada." });
-      if (cot.status !== "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação não está aprovada." });
+      console.log(`[CancelarAprovacao] status real='${cot.status}' (tipo=${typeof cot.status})`);
+      if (!["aprovada", "encerrada"].includes(cot.status ?? "")) throw new TRPCError({ code: "BAD_REQUEST", message: `Cotação não está aprovada (status atual: ${cot.status}).` });
 
       // Busca OCs vinculadas
       const ocs = await db.select().from(comprasOrdens).where(eq(comprasOrdens.cotacaoId, input.cotacaoId));
