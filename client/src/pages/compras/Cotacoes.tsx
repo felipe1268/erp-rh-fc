@@ -1704,6 +1704,7 @@ export default function Cotacoes() {
                   {(detalheFullscreen as any).descricao && <p className="text-gray-500 mt-0.5">{(detalheFullscreen as any).descricao}</p>}
                 </div>
                 <div className="flex items-center gap-3 flex-wrap justify-end">
+
                   {st && <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium border ${st.cls}`}>{st.label}</span>}
                   {detalheFullscreen.status === "pendente" && (
                     <>
@@ -1748,6 +1749,16 @@ export default function Cotacoes() {
                   )}
                 </div>
               </div>
+
+              {(detalheFullscreen as any)?.itens?.some((it: any) => it.semVerba) && (
+                <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
+                  <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold text-red-800">⚠ PREJUÍZO — Itens Acima do Orçado ou Sem Verba</p>
+                    <p className="text-xs text-red-600">Esta cotação contém {(detalheFullscreen as any).itens.filter((it: any) => it.semVerba).length} item(ns) sem verba disponível no orçamento. Os itens sinalizados geram prejuízo para a obra.</p>
+                  </div>
+                </div>
+              )}
 
               {/* Tabs */}
               <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit shadow-sm">
@@ -1803,8 +1814,11 @@ export default function Cotacoes() {
                       </TableHeader>
                       <TableBody>
                         {(detalheFullscreen.itens as any[]).map((it: any) => (
-                          <TableRow key={it.id} className="border-gray-100 hover:bg-gray-50">
-                            <TableCell className="text-gray-900 text-sm py-3">{it.descricao}</TableCell>
+                          <TableRow key={it.id} className={`border-gray-100 hover:bg-gray-50 ${it.semVerba ? "bg-red-50 print:bg-red-50" : ""}`}>
+                            <TableCell className="text-gray-900 text-sm py-3">
+                              {it.descricao}
+                              {it.semVerba && <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>}
+                            </TableCell>
                             <TableCell className="text-gray-500 text-sm">{it.unidade || "un"}</TableCell>
                             <TableCell className="text-gray-700 text-sm text-right">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</TableCell>
                             <TableCell className="text-gray-700 text-sm text-right">{parseFloat(it.precoUnitario || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</TableCell>
@@ -3110,6 +3124,15 @@ export default function Cotacoes() {
             const st = STATUS_LABELS[detalhe.status] ?? STATUS_LABELS.pendente;
             return (
               <div className="space-y-5 pt-2">
+                {(detalhe as any)?.itens?.some((it: any) => it.semVerba) && (
+                  <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
+                    <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-red-800">⚠ PREJUÍZO — Itens Acima do Orçado ou Sem Verba</p>
+                      <p className="text-xs text-red-600">Esta cotação contém itens sem verba disponível no orçamento.</p>
+                    </div>
+                  </div>
+                )}
                 {(detalhe as any).descricao && (
                   <div className="text-gray-700 text-sm bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">{(detalhe as any).descricao}</div>
                 )}
@@ -3134,8 +3157,11 @@ export default function Cotacoes() {
                     </TableHeader>
                     <TableBody>
                       {(detalhe.itens as any[]).map((it: any) => (
-                        <TableRow key={it.id} className="border-gray-100">
-                          <TableCell className="text-gray-900 text-sm">{it.descricao}</TableCell>
+                        <TableRow key={it.id} className={`border-gray-100 ${it.semVerba ? "bg-red-50 print:bg-red-50" : ""}`}>
+                          <TableCell className="text-gray-900 text-sm">
+                            {it.descricao}
+                            {it.semVerba && <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>}
+                          </TableCell>
                           <TableCell className="text-gray-500 text-sm">{it.unidade || "un"}</TableCell>
                           <TableCell className="text-gray-500 text-sm text-right">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</TableCell>
                         </TableRow>

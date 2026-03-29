@@ -640,11 +640,11 @@ export default function Ordens() {
                   </div>
                 )}
                 {(detalhe as any).pendenteCoberturaOrcamentaria && (
-                  <div className="flex items-center gap-3 rounded-lg border border-red-300 bg-red-50 p-3">
-                    <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                  <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
+                    <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold text-red-800">Pendente de Cobertura Orçamentária</p>
-                      <p className="text-xs text-red-600">Esta OC contém itens sem verba disponível no orçamento. É necessário realizar uma realocação de verba para cobrir o custo.</p>
+                      <p className="text-sm font-bold text-red-800">⚠ PREJUÍZO — Itens Acima do Orçado ou Sem Verba</p>
+                      <p className="text-xs text-red-600">Esta OC contém itens sem verba disponível no orçamento. Os itens sinalizados geram prejuízo para a obra. É necessário realizar uma realocação de verba para cobrir o custo.</p>
                     </div>
                   </div>
                 )}
@@ -757,8 +757,11 @@ export default function Ordens() {
                     </TableHeader>
                     <TableBody>
                       {(detalhe.itens as any[]).map((it: any) => (
-                        <TableRow key={it.id} className="border-gray-100">
-                          <TableCell className="text-gray-900 text-sm">{it.descricao}</TableCell>
+                        <TableRow key={it.id} className={`border-gray-100 ${it.semVerba ? "bg-red-50 print:bg-red-50" : ""}`}>
+                          <TableCell className="text-gray-900 text-sm">
+                            {it.descricao}
+                            {it.semVerba && <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>}
+                          </TableCell>
                           <TableCell className="text-gray-500 text-sm">{it.unidade || "un"}</TableCell>
                           <TableCell className="text-gray-500 text-sm">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</TableCell>
                           <TableCell className="text-gray-500 text-sm">{parseFloat(it.quantidadeEntregue || "0").toLocaleString("pt-BR")}</TableCell>

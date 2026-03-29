@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 863,
+    titulo: "Alertas de Prejuízo em Cotações e Ordens de Compra",
+    descricao: "Implementados alertas visuais proeminentes de PREJUÍZO em Cotações e Ordens de Compra. Banner vermelho com ícone de alerta aparece no topo do detalhe quando há itens sem verba. Cada item sem verba recebe badge 'PREJUÍZO' e fundo vermelho na tabela. Alerta da OC existente (Pendente de Cobertura Orçamentária) reformulado com texto mais forte. Suporte completo a impressão (print:border-red-500).",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:55:00",
+  },
+  {
     version: 862,
     titulo: "Layout de cadastro de Membros CIPA redesenhado",
     descricao: "Tela de Adicionar Membro CIPA completamente redesenhada com layout clean e funcional. Busca de colaboradores com filtro por nome/CPF, avatar com inicial, exibição de cargo, card de seleção com destaque, grid responsivo 3 colunas (Colaborador + Cargo + Representação + botão na mesma linha), e lista inline dos membros já adicionados com cards compactos.",
