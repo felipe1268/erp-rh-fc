@@ -1906,6 +1906,22 @@ Responda APENAS com um objeto JSON no formato:
         }
       }
 
+      const orcItemToQtdComprada: Record<number, number> = {};
+      if (orcItemIds.length > 0) {
+        const compradoRows = await db.execute(sql`
+          SELECT si.orcamento_item_id,
+                 COALESCE(SUM(oi2.quantidade::numeric), 0) as total_comprado
+          FROM compras_solicitacoes_itens si
+          JOIN compras_ordens_itens oi2 ON oi2.solicitacao_item_id = si.id
+          JOIN compras_ordens o ON o.id = oi2.ordem_id AND o.status NOT IN ('cancelada')
+          WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
+          GROUP BY si.orcamento_item_id
+        `);
+        for (const r of (compradoRows as any).rows ?? []) {
+          orcItemToQtdComprada[r.orcamento_item_id] = n(r.total_comprado);
+        }
+      }
+
       const itensComMeta = itens.map(it => {
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
         const metaFromOrc = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
@@ -1916,8 +1932,10 @@ Responda APENAS com um objeto JSON no formato:
         const scNumero = trace?.solicitacaoId ? (scMap[trace.solicitacaoId] ?? "") : "";
         const qtdOrcada = orcId ? (orcItemToQtdOrcada[orcId] ?? 0) : 0;
         const qtdTotalSolicitada = orcId ? (orcItemToQtdSolicitada[orcId] ?? 0) : 0;
+        const qtdComprada = orcId ? (orcItemToQtdComprada[orcId] ?? 0) : 0;
         const qtdEstaSC = n(it.quantidade);
-        return { ...it, metaUnitario, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: trace?.insumoCodigo ?? "", qtdOrcada, qtdTotalSolicitada, qtdEstaSC };
+        const qtdSaldo = qtdOrcada - Math.max(qtdTotalSolicitada, qtdComprada);
+        return { ...it, metaUnitario, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: trace?.insumoCodigo ?? "", qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};

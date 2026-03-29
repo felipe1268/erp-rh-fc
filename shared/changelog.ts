@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 864,
+    titulo: "Controle Orçamentário no Mapa de Cotação",
+    descricao: "Adicionadas 3 novas colunas no Mapa de Cotação: Orçado (qtd total no orçamento), Comprado (qtd já comprada via OC) e Saldo (diferença). Quando o saldo é negativo (estouro), mostra badge vermelho com ícone de alerta. Backend busca quantidade comprada via OC para cada item vinculado ao orçamento. Grupo de colunas 'Controle Orçamentário' com destaque laranja no header e totais no rodapé.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:59:00",
+  },
+  {
     version: 863,
     titulo: "Alertas de Prejuízo em Cotações e Ordens de Compra",
     descricao: "Implementados alertas visuais proeminentes de PREJUÍZO em Cotações e Ordens de Compra. Banner vermelho com ícone de alerta aparece no topo do detalhe quando há itens sem verba. Cada item sem verba recebe badge 'PREJUÍZO' e fundo vermelho na tabela. Alerta da OC existente (Pendente de Cobertura Orçamentária) reformulado com texto mais forte. Suporte completo a impressão (print:border-red-500).",
