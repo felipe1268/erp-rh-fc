@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 852,
+    titulo: "Correção permissão reativar revisão para admin_master",
+    descricao: "Admin master não conseguia reativar revisão cancelada por causa da validação de tenant (companyId). Corrigido: admin_master ignora a checagem de tenant pois tem acesso irrestrito. Também adicionada conversão de tipo na comparação de companyId para evitar falsos negativos.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:45:00",
+  },
+  {
     version: 851,
     titulo: "Reativar revisão cancelada do cronograma",
     descricao: "Administradores agora podem reverter o cancelamento de uma revisão do cronograma usando o botão 'Reativar' (verde) que aparece ao lado do badge 'cancelada'. A revisão volta ao status 'aprovada' e é considerada novamente no cronograma. Backend com validação de tenant (companyId) e registro automático do aprovador.",

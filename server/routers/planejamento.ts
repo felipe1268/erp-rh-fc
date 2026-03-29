@@ -378,10 +378,10 @@ export const planejamentoRouter = router({
         .where(eq(planejamentoRevisoes.id, input.id));
       if (!rev) throw new Error("Revisão não encontrada.");
       if (rev.status !== "cancelada") throw new Error("Somente revisões canceladas podem ser reativadas.");
-      if (rev.projetoId) {
+      if (rev.projetoId && ctx.user.role !== "admin_master") {
         const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
           .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, rev.projetoId));
-        if (proj && proj.companyId !== ctx.user.companyId) throw new Error("Sem permissão para esta revisão.");
+        if (proj && String(proj.companyId) !== String(ctx.user.companyId)) throw new Error("Sem permissão para esta revisão.");
       }
       await db.update(planejamentoRevisoes)
         .set({ status: "aprovada", aprovadoPor: input.aprovadoPor ?? ctx.user.name ?? null })
