@@ -3599,6 +3599,8 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
   });
+  const [seriesVisiveis, setSeriesVisiveis] = useState<Record<string, boolean>>({ baseline: true, planejada: true, realizada: true, tendencia: true });
+  const toggleSerie = (key: string) => setSeriesVisiveis(prev => ({ ...prev, [key]: !prev[key] }));
 
   const merged = useMemo(() => {
     if (!curvaData) return [];
@@ -3692,13 +3694,22 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
           { key: "planejada", show: hasPlanejada, color: "#ef4444", dash: false, width: 4, label: "Revisão Atual" },
           { key: "realizada", show: hasRealizada,   color: "#22c55e", dash: false, width: 3, label: "Realizado" },
           { key: "tendencia", show: hasTendencia, color: "#16a34a", dash: true,  width: 2, label: "Tendência (projeção)" },
-        ].filter(l => l.show).map((l, i) => (
-          <div key={i} className="flex items-center gap-1.5">
-            <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5"
-              stroke={l.color} strokeWidth={l.width} strokeDasharray={l.dash ? "4 2" : "0"} /></svg>
-            <span className="text-slate-600">{l.label}</span>
-          </div>
-        ))}
+        ].filter(l => l.show).map((l, i) => {
+          const ativo = seriesVisiveis[l.key] !== false;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => toggleSerie(l.key)}
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border transition-all cursor-pointer select-none ${ativo ? "border-transparent" : "border-slate-200 bg-slate-50 opacity-40"}`}
+              title={ativo ? `Ocultar ${l.label}` : `Mostrar ${l.label}`}
+            >
+              <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5"
+                stroke={ativo ? l.color : "#94a3b8"} strokeWidth={l.width} strokeDasharray={l.dash ? "4 2" : "0"} /></svg>
+              <span className={ativo ? "text-slate-600" : "text-slate-400 line-through"}>{l.label}</span>
+            </button>
+          );
+        })}
         {/* Separador + toggles de revisões anteriores */}
         {revisoesAnteriores.length > 0 && (
           <>
@@ -3802,11 +3813,10 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
             {semanas.includes(hoje) && (
               <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
             )}
-            {/* Linhas fixas */}
-            <Line type="monotone" dataKey="baseline"  name="Baseline"       stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls />
-            <Line type="monotone" dataKey="planejada" name="Revisão Atual"  stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls />
-            <Line type="monotone" dataKey="realizada" name="Realizado"      stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} connectNulls />
-            <Line type="monotone" dataKey="tendencia" name="Tendência"      stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />
+            {seriesVisiveis.baseline !== false && <Line type="monotone" dataKey="baseline"  name="Baseline"       stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls />}
+            {seriesVisiveis.planejada !== false && <Line type="monotone" dataKey="planejada" name="Revisão Atual"  stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls />}
+            {seriesVisiveis.realizada !== false && <Line type="monotone" dataKey="realizada" name="Realizado"      stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} connectNulls />}
+            {seriesVisiveis.tendencia !== false && <Line type="monotone" dataKey="tendencia" name="Tendência"      stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />}
             {/* Linhas de revisões anteriores (quando ativas) */}
             {revisoesAnteriores.map((r: any, idx: number) =>
               revsVisiveis.has(r.revisaoId) ? (

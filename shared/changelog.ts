@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 853,
+    titulo: "Filtro interativo na legenda da Curva S",
+    descricao: "Os 4 indicadores da Curva S de Trabalho (Baseline, Revisão Atual, Realizado, Tendência) agora podem ser ativados/desativados clicando na legenda. Itens desativados ficam esmaecidos com texto riscado e a linha correspondente é removida do gráfico, permitindo melhor análise isolada de cada série.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 00:00:00",
+  },
+  {
     version: 852,
     titulo: "Correção permissão reativar revisão para admin_master",
     descricao: "Admin master não conseguia reativar revisão cancelada por causa da validação de tenant (companyId). Corrigido: admin_master ignora a checagem de tenant pois tem acesso irrestrito. Também adicionada conversão de tipo na comparação de companyId para evitar falsos negativos.",
