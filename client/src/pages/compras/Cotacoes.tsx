@@ -2578,18 +2578,21 @@ export default function Cotacoes() {
                                     const comprada = (it as any).qtdComprada ?? 0;
                                     const saldoQtd = (it as any).qtdSaldo ?? 0;
                                     const fonte = (it as any).fonteVinculo;
-                                    const semVinculo = !fonte;
+                                    const semVinculo = fonte !== "item";
                                     const isEstouro = saldoQtd < 0;
-                                    const tooltipText = semVinculo
-                                      ? `SEM VÍNCULO ORÇAMENTÁRIO\nNecessita realocação de verba`
-                                      : `Orçado: ${orcada.toLocaleString("pt-BR")}\nSolicitado total: ${((it as any).qtdTotalSolicitada ?? 0).toLocaleString("pt-BR")}\nComprado: ${comprada.toLocaleString("pt-BR")}\nSaldo: ${saldoQtd.toLocaleString("pt-BR")}`;
+                                    const isNegativo = isEstouro || semVinculo;
+                                    const tooltipText = fonte === "item"
+                                      ? `Orçado: ${orcada.toLocaleString("pt-BR")}\nSolicitado total: ${((it as any).qtdTotalSolicitada ?? 0).toLocaleString("pt-BR")}\nComprado: ${comprada.toLocaleString("pt-BR")}\nSaldo: ${saldoQtd.toLocaleString("pt-BR")}`
+                                      : fonte === "insumo"
+                                        ? `SEM VÍNCULO DIRETO AO ORÇAMENTO\nNecessita realocação de verba\n\nRef. orçamento (insumo ${(it as any).insumoCodigo ?? ""}):\n  Orçado: ${orcada.toLocaleString("pt-BR")}\n  Solicitado: ${((it as any).qtdTotalSolicitada ?? 0).toLocaleString("pt-BR")}\n  Saldo ref.: ${(orcada - Math.max((it as any).qtdTotalSolicitada ?? 0, comprada)).toLocaleString("pt-BR")}`
+                                        : `SEM VÍNCULO ORÇAMENTÁRIO\nNecessita realocação de verba`;
                                     return (
                                       <td
                                         title={tooltipText}
-                                        className={`px-2 py-2 text-center text-xs font-bold border-r border-orange-100 ${isEstouro || semVinculo ? "bg-red-50 text-red-700" : "bg-emerald-50/50 text-emerald-700"}`}
+                                        className={`px-2 py-2 text-center text-xs font-bold border-r border-orange-100 ${isNegativo ? "bg-red-50 text-red-700" : "bg-emerald-50/50 text-emerald-700"}`}
                                       >
-                                        <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${isEstouro || semVinculo ? "bg-red-100 text-red-700 border border-red-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
-                                          {(isEstouro || semVinculo) && <AlertTriangle className="h-2.5 w-2.5" />}
+                                        <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${isNegativo ? "bg-red-100 text-red-700 border border-red-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
+                                          {isNegativo && <AlertTriangle className="h-2.5 w-2.5" />}
                                           {saldoQtd.toLocaleString("pt-BR")}
                                         </span>
                                         {semVinculo && (

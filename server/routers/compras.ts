@@ -2002,7 +2002,7 @@ Responda APENAS com um objeto JSON no formato:
           qtdComprada = insumoCompMap[insCode] ?? 0;
         }
 
-        const vinculado = fonteVinculo !== null;
+        const vinculado = fonteVinculo === "item";
         const consumido = Math.max(qtdTotalSolicitada, qtdComprada);
         const qtdSaldo = vinculado ? qtdOrcada - consumido : -qtdEstaSC;
         return { ...it, metaUnitario, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false };
@@ -4354,7 +4354,6 @@ Retorne APENAS um JSON válido neste formato:
           qtdComprada = comp?.qtd ?? 0;
           ocsVinculadas = comp?.ocs ?? [];
         } else if (insCode && insumoOrcData[insCode]) {
-          vinculado = true;
           fonteVinculo = "insumo";
           qtdOrcada = insumoOrcData[insCode].quantidadeTotal;
           qtdSolicitada = insumoSolicitadoMap[insCode] ?? 0;

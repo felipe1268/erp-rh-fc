@@ -35,9 +35,9 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 872,
-    titulo: "Tooltip Saldo Orç. na Cotação agora mostra total solicitado",
-    descricao: "Tooltip da coluna Saldo Orç. no Mapa de Cotação agora inclui campo 'Solicitado total' além de Orçado, Comprado e Saldo, permitindo entender melhor a composição do saldo remanescente.",
-    tipo: "melhoria",
+    titulo: "Saldo Orçamentário negativo para itens sem vínculo direto ao orçamento",
+    descricao: "Itens de SC/Cotação sem orcamento_item_id agora mostram saldo negativo (-qtd) em vermelho com badge 'S/ VERBA', mesmo que exista um insumo com o mesmo código no orçamento. Apenas itens com vínculo direto (orcamento_item_id preenchido) calculam saldo como orçado - consumido. Tooltip de itens com insumo correspondente mostra dados de referência do orçamento. Corrigido em getMapaCotacao e getSaldoItensSC.",
+    tipo: "bugfix",
     modulos: "Compras",
     criadoPor: "System",
     dataPublicacao: "2026-03-30 03:00:00",
