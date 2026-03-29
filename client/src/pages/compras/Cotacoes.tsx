@@ -587,6 +587,7 @@ export default function Cotacoes() {
   const [semVerbaAdminSenha, setSemVerbaAdminSenha] = useState("");
   const [semVerbaJustificativa, setSemVerbaJustificativa] = useState("");
   const [semVerbaAutorizado, setSemVerbaAutorizado] = useState<{ adminId: number; adminNome: string; justificativa: string } | null>(null);
+  const [semVerbaAba, setSemVerbaAba] = useState<"realocacao" | "autorizacao">("realocacao");
   const [iaExtracao, setIaExtracao] = useState<{ fornecedorId: number; dados: any } | null>(null);
   const [iaFileBuffer, setIaFileBuffer] = useState<{ fornecedorId: number; base64: string; fileName: string; mimeType: string } | null>(null);
   const [iaTipoProposta, setIaTipoProposta] = useState<"complemento" | "revisao">("complemento");
@@ -631,7 +632,7 @@ export default function Cotacoes() {
     if (prevShowDetalhe.current !== showDetalhe) {
       prevShowDetalhe.current = showDetalhe;
       setCobertoPorRisco(false); setShowRealocacao(false); setIaExtracao(null); setIaFileBuffer(null); setIaProgress(null); setIaJobId(null); setIaPollingFornId(null); setShowPropostas(null); setIaTipoProposta("complemento");
-      setSemVerbaAutorizado(null); setShowSemVerbaDialog(false); setSemVerbaAdminEmail(""); setSemVerbaAdminSenha(""); setSemVerbaJustificativa("");
+      setSemVerbaAutorizado(null); setShowSemVerbaDialog(false); setSemVerbaAdminEmail(""); setSemVerbaAdminSenha(""); setSemVerbaJustificativa(""); setSemVerbaAba("realocacao");
     }
   }, [showDetalhe]);
 
@@ -2867,105 +2868,150 @@ export default function Cotacoes() {
         {condModalPortal}
 
         <Dialog open={showSemVerbaDialog} onOpenChange={(o) => { if (!o) setShowSemVerbaDialog(false); }}>
-          <DialogContent className="max-w-lg" style={{ backgroundColor: "white" }}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" style={{ backgroundColor: "white" }}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-red-700">
                 <ShieldAlert className="h-5 w-5" />
                 Itens sem Verba Orçamentária
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-xs text-red-700 font-semibold mb-2">
-                  {itensSemVerba.length} item(ns) não possuem vínculo direto com o orçamento:
-                </p>
-                <div className="space-y-1">
-                  {itensSemVerba.map((it: any, idx: number) => {
-                    const key = `${it.id}_${fornParaSaldo?.fornecedorId}`;
-                    const precoUnit = parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
-                    const qtd = parseFloat(it.quantidade ?? "0");
-                    return (
-                      <div key={idx} className="flex items-center justify-between text-xs bg-white border border-red-100 rounded px-2 py-1.5">
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium text-gray-800 truncate block">{it.descricao}</span>
-                          <span className="text-gray-500">{qtd.toLocaleString("pt-BR")} {it.unidade}</span>
-                        </div>
-                        <span className="text-red-700 font-bold ml-2 whitespace-nowrap">
-                          {(precoUnit * qtd).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-2 pt-2 border-t border-red-200 flex justify-between text-xs font-bold text-red-800">
-                  <span>Total sem verba:</span>
-                  <span>
-                    {itensSemVerba.reduce((s: number, it: any) => {
-                      const key = `${it.id}_${fornParaSaldo?.fornecedorId}`;
-                      const p = parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
-                      return s + p * parseFloat(it.quantidade ?? "0");
-                    }, 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                  </span>
-                </div>
-              </div>
-
-              {semVerbaAutorizado ? (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
-                  <CheckCircle className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
-                  <p className="text-sm font-semibold text-emerald-800">Autorizado por {semVerbaAutorizado.adminNome}</p>
-                  <p className="text-xs text-emerald-600 mt-1">Clique em "Aprovar e Gerar OC" para continuar</p>
-                </div>
-              ) : (
-                <>
-                  <div className="border border-gray-200 rounded-lg p-3 space-y-3">
-                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-1">
-                      <ShieldCheck className="h-3.5 w-3.5" /> Autorização do Administrador
+            {(() => {
+              const totalSemVerba = itensSemVerba.reduce((s: number, it: any) => {
+                const key = `${it.id}_${fornParaSaldo?.fornecedorId}`;
+                const p = parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
+                return s + p * parseFloat(it.quantidade ?? "0");
+              }, 0);
+              const obraIdDialog = (mapa?.cotacao as any)?.obraId;
+              return (
+                <div className="space-y-4">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-xs text-red-700 font-semibold mb-2">
+                      {itensSemVerba.length} item(ns) não possuem vínculo direto com o orçamento:
                     </p>
-                    <p className="text-xs text-gray-500">
-                      Para prosseguir com a compra, é necessário autorização de um administrador.
-                    </p>
-                    <div>
-                      <label className="text-xs font-medium text-gray-600">E-mail do Admin</label>
-                      <input
-                        type="email"
-                        value={semVerbaAdminEmail}
-                        onChange={(e) => setSemVerbaAdminEmail(e.target.value)}
-                        className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="admin@empresa.com"
-                      />
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {itensSemVerba.map((it: any, idx: number) => {
+                        const key = `${it.id}_${fornParaSaldo?.fornecedorId}`;
+                        const precoUnit = parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
+                        const qtd = parseFloat(it.quantidade ?? "0");
+                        return (
+                          <div key={idx} className="flex items-center justify-between text-xs bg-white border border-red-100 rounded px-2 py-1.5">
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium text-gray-800 truncate block">{it.descricao}</span>
+                              <span className="text-gray-500">{qtd.toLocaleString("pt-BR")} {it.unidade}</span>
+                            </div>
+                            <span className="text-red-700 font-bold ml-2 whitespace-nowrap">
+                              {(precoUnit * qtd).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-600">Senha do Admin</label>
-                      <input
-                        type="password"
-                        value={semVerbaAdminSenha}
-                        onChange={(e) => setSemVerbaAdminSenha(e.target.value)}
-                        className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Digite a senha"
-                      />
+                    <div className="mt-2 pt-2 border-t border-red-200 flex justify-between text-xs font-bold text-red-800">
+                      <span>Total sem verba:</span>
+                      <span>{totalSemVerba.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
                     </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-600">Justificativa da compra</label>
-                      <textarea
-                        value={semVerbaJustificativa}
-                        onChange={(e) => setSemVerbaJustificativa(e.target.value)}
-                        className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                        rows={3}
-                        placeholder="Explique por que esta compra é necessária mesmo sem verba orçamentária..."
-                      />
-                    </div>
-                    <Button
-                      onClick={handleAutorizarSemVerba}
-                      disabled={!semVerbaAdminEmail || !semVerbaAdminSenha || semVerbaJustificativa.length < 5 || autorizarSemVerba.isPending}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white"
-                    >
-                      {autorizarSemVerba.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldAlert className="h-4 w-4 mr-2" />}
-                      Autorizar Compra sem Verba
-                    </Button>
                   </div>
-                </>
-              )}
-            </div>
+
+                  {semVerbaAutorizado ? (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                      <CheckCircle className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
+                      <p className="text-sm font-semibold text-emerald-800">Autorizado por {semVerbaAutorizado.adminNome}</p>
+                      <p className="text-xs text-emerald-600 mt-1">Feche este dialog e clique em "Aprovar e Gerar OC" para continuar</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex gap-1 border-b border-gray-200">
+                        <button
+                          onClick={() => setSemVerbaAba("realocacao")}
+                          className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${semVerbaAba === "realocacao" ? "border-orange-500 text-orange-700 bg-orange-50/50" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5 inline mr-1.5" />
+                          Realocação de Verba
+                        </button>
+                        <button
+                          onClick={() => setSemVerbaAba("autorizacao")}
+                          className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${semVerbaAba === "autorizacao" ? "border-red-500 text-red-700 bg-red-50/50" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5 inline mr-1.5" />
+                          Autorização Admin
+                        </button>
+                      </div>
+
+                      {semVerbaAba === "realocacao" && obraIdDialog ? (
+                        <div className="space-y-3">
+                          <p className="text-xs text-gray-600">
+                            Use a reserva de risco (DI-08) ou sobras de compras anteriores para cobrir o déficit de{" "}
+                            <span className="font-bold text-red-700">{totalSemVerba.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>.
+                          </p>
+                          <SaldosRealocacaoPanel
+                            companyId={companyId}
+                            obraId={obraIdDialog}
+                            cotacaoId={showDetalhe ?? undefined}
+                            deficit={totalSemVerba}
+                            showContent={true}
+                            onAcao={() => mapaQ.refetch()}
+                            onCoberto={() => {
+                              setSemVerbaAutorizado({ adminId: 0, adminNome: "Reserva de Risco (DI-08)", justificativa: "Déficit coberto via reserva de risco" });
+                            }}
+                          />
+                        </div>
+                      ) : semVerbaAba === "realocacao" && !obraIdDialog ? (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                          <p className="text-xs text-yellow-700">Esta cotação não está vinculada a uma obra. A realocação de verba só é possível com obra definida.</p>
+                          <p className="text-xs text-yellow-600 mt-1">Use a aba "Autorização Admin" para prosseguir.</p>
+                        </div>
+                      ) : null}
+
+                      {semVerbaAba === "autorizacao" && (
+                        <div className="border border-gray-200 rounded-lg p-3 space-y-3">
+                          <p className="text-xs text-gray-500">
+                            Se não há verba disponível para realocação, um administrador pode autorizar a compra diretamente.
+                          </p>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">E-mail do Admin</label>
+                            <input
+                              type="email"
+                              value={semVerbaAdminEmail}
+                              onChange={(e) => setSemVerbaAdminEmail(e.target.value)}
+                              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="admin@empresa.com"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">Senha do Admin</label>
+                            <input
+                              type="password"
+                              value={semVerbaAdminSenha}
+                              onChange={(e) => setSemVerbaAdminSenha(e.target.value)}
+                              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Digite a senha"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">Justificativa da compra</label>
+                            <textarea
+                              value={semVerbaJustificativa}
+                              onChange={(e) => setSemVerbaJustificativa(e.target.value)}
+                              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                              rows={3}
+                              placeholder="Explique por que esta compra é necessária mesmo sem verba orçamentária..."
+                            />
+                          </div>
+                          <Button
+                            onClick={handleAutorizarSemVerba}
+                            disabled={!semVerbaAdminEmail || !semVerbaAdminSenha || semVerbaJustificativa.length < 5 || autorizarSemVerba.isPending}
+                            className="w-full bg-red-600 hover:bg-red-700 text-white"
+                          >
+                            {autorizarSemVerba.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldAlert className="h-4 w-4 mr-2" />}
+                            Autorizar Compra sem Verba
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </DialogContent>
         </Dialog>
 

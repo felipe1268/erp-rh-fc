@@ -6027,4 +6027,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 15:00:00",
   },
+  {
+    version: 874,
+    titulo: "Realocação de Verba integrada ao Dialog de Sem Verba — Cotações",
+    descricao: "O dialog de 'Itens sem Verba Orçamentária' agora tem duas abas: (1) Realocação de Verba — mostra reserva de risco DI-08 e sobras de OCs anteriores, permite debitar do risco para cobrir o déficit dos itens sem verba; (2) Autorização Admin — email + senha + justificativa como fallback quando não há verba disponível. A aba de realocação abre por padrão, incentivando primeiro buscar verba antes de pedir autorização. Quando o déficit é coberto pelo risco, a autorização é concedida automaticamente.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 16:00:00",
+  },
 ];
