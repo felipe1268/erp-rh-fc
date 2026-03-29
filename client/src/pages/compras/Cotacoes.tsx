@@ -2153,6 +2153,20 @@ export default function Cotacoes() {
                                           <ShieldAlert className="h-2.5 w-2.5" />Atenção
                                         </span>
                                       )}
+                                      {p.selecionado ? (
+                                        <span className="flex items-center gap-1 text-[10px] normal-case font-semibold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full border border-emerald-300">
+                                          <CheckCircle className="h-3 w-3" /> Vencedor
+                                        </span>
+                                      ) : detalheFullscreen?.status !== "aprovada" && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); selecionarVencedor.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId }); }}
+                                          disabled={selecionarVencedor.isPending}
+                                          className="flex items-center gap-1 text-[10px] normal-case font-medium bg-blue-50 text-blue-600 px-2 py-1 rounded-full border border-blue-200 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                                          title="Selecionar este fornecedor como vencedor"
+                                        >
+                                          <Trophy className="h-3 w-3" /> Selecionar Vencedor
+                                        </button>
+                                      )}
                                       <div className="flex items-center gap-1">
                                         {(p as any).arquivoUrl ? (
                                           <a href={(p as any).arquivoUrl} target="_blank" rel="noreferrer" className="ml-1 text-blue-500 hover:text-blue-700" title="Ver cotação anexada">
