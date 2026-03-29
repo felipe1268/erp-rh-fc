@@ -1700,6 +1700,36 @@ Responda APENAS com um objeto JSON no formato:
       return { ok: true };
     }),
 
+  excluirCotacoesEmLote: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = allowedCompanies.map((c: any) => c.id);
+      if (!allowedIds.includes(input.companyId)) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
+      const owned = await db.select({ id: comprasCotacoes.id, solicitacaoId: comprasCotacoes.solicitacaoId }).from(comprasCotacoes).where(and(inArray(comprasCotacoes.id, input.ids), eq(comprasCotacoes.companyId, input.companyId)));
+      const ownedIds = owned.map(o => o.id);
+      if (ownedIds.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Nenhuma cotação encontrada" });
+
+      const ocs = await db.select({ id: comprasOrdens.id }).from(comprasOrdens).where(inArray(comprasOrdens.cotacaoId, ownedIds));
+      if (ocs.length > 0) {
+        const ocIds = ocs.map(o => o.id);
+        await db.delete(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocIds));
+        await db.delete(comprasOrdens).where(inArray(comprasOrdens.id, ocIds));
+      }
+
+      const scIds = [...new Set(owned.filter(o => o.solicitacaoId).map(o => o.solicitacaoId!))];
+      if (scIds.length > 0) {
+        await db.update(comprasSolicitacoes).set({ status: "pendente" }).where(inArray(comprasSolicitacoes.id, scIds));
+      }
+
+      await db.delete(comprasCotacaoRespostas).where(inArray(comprasCotacaoRespostas.cotacaoId, ownedIds));
+      await db.delete(comprasCotacaoFornecedores).where(inArray(comprasCotacaoFornecedores.cotacaoId, ownedIds));
+      await db.delete(comprasCotacoesItens).where(inArray(comprasCotacoesItens.cotacaoId, ownedIds));
+      await db.delete(comprasCotacoes).where(inArray(comprasCotacoes.id, ownedIds));
+      return { ok: true, count: ownedIds.length };
+    }),
+
   // ══════════════════════════════════════════════════════════════
   // MAPA DE COTAÇÃO (comparativo multi-fornecedor)
   // ══════════════════════════════════════════════════════════════

@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
@@ -530,6 +531,8 @@ export default function Cotacoes() {
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [showNova, setShowNova] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<"detalhes" | "mapa">("detalhes");
   const [showCancelarAprovacao, setShowCancelarAprovacao] = useState(false);
   const [cancelarCotacaoId, setCancelarCotacaoId] = useState<number | null>(null);
@@ -669,6 +672,10 @@ export default function Cotacoes() {
   });
   const excluir = trpc.compras.excluirCotacao.useMutation({
     onSuccess: () => { toast.success("Cotação excluída!"); q.refetch(); setShowDetalhe(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirLote = trpc.compras.excluirCotacoesEmLote.useMutation({
+    onSuccess: (res) => { toast.success(`${res.count} cotação(ões) excluída(s)!`); q.refetch(); setSelectedIds(new Set()); setConfirmExcluirLote(false); },
     onError: (e) => toast.error(e.message),
   });
   const gerarContrato = trpc.terceiroContratos.gerarContratoFromCotacao.useMutation({
@@ -888,6 +895,16 @@ export default function Cotacoes() {
 
   const lista = q.data ?? [];
   const filt = lista.filter(c => !busca || c.numeroCotacao?.toLowerCase().includes(busca.toLowerCase()));
+
+  const allFilteredIds = filt.map(c => c.id);
+  const allSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selectedIds.has(id));
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
+  function toggleSelectAll() {
+    if (allSelected) { setSelectedIds(new Set()); } else { setSelectedIds(new Set(allFilteredIds)); }
+  }
+
   const fornecedores = fornQ.data ?? [];
   const obras = obrasQ.data ?? [];
   const detalhe = detalheQ.data;
@@ -2804,11 +2821,24 @@ export default function Cotacoes() {
         </div>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-red-50 border border-red-200">
+          <span className="text-sm font-medium text-red-700">{selectedIds.size} cotação(ões) selecionada(s)</span>
+          <Button size="sm" variant="destructive" className="gap-1.5 ml-auto" onClick={() => setConfirmExcluirLote(true)} disabled={excluirLote.isPending}>
+            <Trash2 className="h-3.5 w-3.5" /> Excluir Selecionadas
+          </Button>
+          <Button size="sm" variant="outline" className="text-gray-600" onClick={() => setSelectedIds(new Set())}>Cancelar</Button>
+        </div>
+      )}
+
       {/* Tabela */}
       <div className="rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
         <Table>
           <TableHeader>
             <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
+              <TableHead className="w-10 px-2">
+                <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} aria-label="Selecionar todas" />
+              </TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Número</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Descrição / SC</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Obra</TableHead>
@@ -2821,14 +2851,17 @@ export default function Cotacoes() {
           </TableHeader>
           <TableBody>
             {q.isLoading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></TableCell></TableRow>
             ) : filt.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-400">Nenhuma cotação encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-400">Nenhuma cotação encontrada</TableCell></TableRow>
             ) : filt.map(cot => {
               const st = STATUS_LABELS[cot.status] ?? STATUS_LABELS.pendente;
               const forn = fornecedores.find(f => f.id === cot.fornecedorId);
               return (
-                <TableRow key={cot.id} className="border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setShowDetalhe(cot.id)}>
+                <TableRow key={cot.id} className={`border-gray-100 cursor-pointer ${selectedIds.has(cot.id) ? "bg-blue-50/60" : "hover:bg-gray-50"}`} onClick={() => setShowDetalhe(cot.id)}>
+                  <TableCell className="px-2" onClick={e => e.stopPropagation()}>
+                    <Checkbox checked={selectedIds.has(cot.id)} onCheckedChange={() => toggleSelect(cot.id)} aria-label={`Selecionar ${cot.numeroCotacao}`} />
+                  </TableCell>
                   <TableCell className="text-gray-900 font-mono font-semibold text-xs">{cot.numeroCotacao}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
@@ -3189,6 +3222,24 @@ export default function Cotacoes() {
 
       {iaOverlayPortal}
       {condModalPortal}
+
+      <Dialog open={confirmExcluirLote} onOpenChange={setConfirmExcluirLote}>
+        <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="text-gray-900">Confirmar Exclusão</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 py-2">
+            Tem certeza que deseja excluir <strong>{selectedIds.size}</strong> cotação(ões)? As OCs vinculadas também serão excluídas e as SCs voltarão ao status pendente. Esta ação não pode ser desfeita.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setConfirmExcluirLote(false)}>Cancelar</Button>
+            <Button variant="destructive" className="gap-1.5" disabled={excluirLote.isPending} onClick={() => excluirLote.mutate({ ids: [...selectedIds], companyId })}>
+              {excluirLote.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Excluir {selectedIds.size} cotação(ões)
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
     </DashboardLayout>
