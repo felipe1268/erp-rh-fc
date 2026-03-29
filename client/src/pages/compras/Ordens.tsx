@@ -107,6 +107,7 @@ export default function Ordens() {
   const [form, setForm] = useState({
     obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "",
     frete: "", outrasDespesas: "", impostos: "", desconto: "",
+    condicaoPagamento: "", prazoEntregaDias: "",
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
 
@@ -150,18 +151,22 @@ export default function Ordens() {
   const [editRastreio, setEditRastreio] = useState("");
 
   function resetForm() {
-    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "" });
+    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "" });
     setItens([newItem()]);
   }
 
   function handleSalvar() {
     if (!form.obraId || form.obraId === "none") return toast.error("Selecione a Obra (centro de custo) para esta ordem de compra.");
+    if (!form.condicaoPagamento.trim()) return toast.error("Informe a Condição de Pagamento para gerar a OC.");
+    if (!(form as any).prazoEntregaDias && !form.dataEntregaPrevista) return toast.error("Informe o Prazo de Entrega para gerar a OC.");
     const validos = itens.filter(i => i.descricao.trim());
     if (validos.length === 0) return toast.error("Adicione pelo menos um item.");
     criarManual.mutate({
       companyId,
       obraId: parseInt(form.obraId),
       fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
+      condicaoPagamento: form.condicaoPagamento,
+      prazoEntregaDias: parseInt((form as any).prazoEntregaDias) || undefined,
       dataEntregaPrevista: form.dataEntregaPrevista || undefined,
       dataVencimento: form.dataVencimento || undefined,
       observacoes: form.observacoes || undefined,
@@ -417,10 +422,19 @@ export default function Ordens() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-gray-700 text-sm font-medium">
+                Condição de Pagamento *
+              </Label>
+              <Input className="bg-white border-gray-300 text-gray-900" placeholder="Ex: 30/60/90 dias, à vista, boleto 28 dias..."
+                value={form.condicaoPagamento} onChange={e => setForm(p => ({ ...p, condicaoPagamento: e.target.value }))} />
+              <p className="text-xs text-gray-400">Obrigatório — informe a forma/condição de pagamento negociada.</p>
+            </div>
+
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-gray-700 text-sm font-medium">Prazo Entrega (dias)</Label>
-                <Input type="number" min="0" className="bg-white border-gray-300 text-gray-900" value={(form as any).prazoEntregaDias ?? ""} onChange={e => {
+                <Label className="text-gray-700 text-sm font-medium">Prazo Entrega (dias) *</Label>
+                <Input type="number" min="1" className="bg-white border-gray-300 text-gray-900" value={(form as any).prazoEntregaDias ?? ""} onChange={e => {
                   const dias = e.target.value;
                   setForm(p => {
                     const upd: any = { ...p, prazoEntregaDias: dias };

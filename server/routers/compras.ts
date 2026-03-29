@@ -2811,6 +2811,17 @@ Retorne APENAS um JSON válido neste formato:
         .limit(1);
       if (existingOC.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe uma OC ativa para esta cotação." });
 
+      const fornParts = cot.fornecedorId
+        ? await db.select().from(comprasCotacaoFornecedores).where(
+            and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, cot.fornecedorId))
+          )
+        : [];
+      const fornInfoCheck = fornParts[0] ?? null;
+      const condPag = (fornInfoCheck as any)?.condicaoPagamento ?? cot.condicaoPagamento;
+      const prazoEntrega = (fornInfoCheck as any)?.prazoEntregaDias;
+      if (!condPag) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina a Condição de Pagamento antes de gerar a OC. Edite as condições do vencedor na cotação." });
+      if (!prazoEntrega || Number(prazoEntrega) <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina o Prazo de Entrega antes de gerar a OC. Edite as condições do vencedor na cotação." });
+
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
 
       // Busca preços do fornecedor vencedor no mapa de cotação
@@ -2821,12 +2832,7 @@ Retorne APENAS um JSON válido neste formato:
         : [];
       const precoMap = new Map(respostasForn.map(r => [r.itemId, r]));
 
-      const fornPart = cot.fornecedorId
-        ? await db.select().from(comprasCotacaoFornecedores).where(
-            and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, cot.fornecedorId))
-          )
-        : [];
-      const fornInfo = fornPart[0] ?? null;
+      const fornInfo = fornInfoCheck;
       const freteValor = n((fornInfo as any)?.valorFrete);
       const freteTipoOC = (fornInfo as any)?.freteTipo ?? "cif";
       const transportadoraOC = (fornInfo as any)?.transportadora ?? null;
@@ -3013,6 +3019,8 @@ Retorne APENAS um JSON válido neste formato:
       companyId: z.number(),
       obraId: z.number().nullable().optional(),
       fornecedorId: z.number().nullable().optional(),
+      condicaoPagamento: z.string().min(1, "Condição de pagamento é obrigatória"),
+      prazoEntregaDias: z.number().optional(),
       dataEntregaPrevista: z.string().optional(),
       dataVencimento: z.string().optional(),
       observacoes: z.string().optional(),
@@ -3028,6 +3036,8 @@ Retorne APENAS um JSON válido neste formato:
       })),
     }))
     .mutation(async ({ input }) => {
+      if (!input.condicaoPagamento?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Condição de pagamento é obrigatória para gerar OC." });
+      if (!input.prazoEntregaDias && !input.dataEntregaPrevista) throw new TRPCError({ code: "BAD_REQUEST", message: "Prazo de entrega é obrigatório para gerar OC." });
       const db = await getDb();
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
       const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
@@ -3055,6 +3065,7 @@ Retorne APENAS um JSON válido neste formato:
         dataEntregaPrevista: input.dataEntregaPrevista,
         dataVencimento: input.dataVencimento ?? null,
         observacoes: input.observacoes,
+        condicaoPagamento: input.condicaoPagamento,
         status: "pendente",
         aprovacaoStatus: "aguardando",
         subtotal: String(subtotal.toFixed(2)),

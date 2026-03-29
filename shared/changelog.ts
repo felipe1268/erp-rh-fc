@@ -5748,4 +5748,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 00:00:00",
   },
+  {
+    version: 843,
+    titulo: "Compras: Validação obrigatória de Condição de Pagamento e Prazo de Entrega na OC",
+    descricao: "Agora não é possível gerar uma Ordem de Compra (OC) sem informar a Condição de Pagamento e o Prazo de Entrega. Validação aplicada tanto na criação manual (novo campo obrigatório no formulário) quanto na geração automática a partir de cotação (verifica condições do fornecedor vencedor). Backend rejeita a criação com mensagem clara caso faltem informações.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 00:30:00",
+  },
 ];
