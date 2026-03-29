@@ -1512,6 +1512,31 @@ export default function Cotacoes() {
     }
 
     const melhorForn = getMelhorFornecedor();
+    const vencedorSelecionado = (mapa?.participantes ?? []).find((p: any) => p.selecionado) ?? null;
+    const fornParaSaldo = vencedorSelecionado || melhorForn;
+
+    function handleAprovarGerarOC(cotacaoId: number) {
+      if (!fornParaSaldo) {
+        toast.error("Selecione um fornecedor vencedor antes de aprovar.");
+        return;
+      }
+      const fornTotal = parseFloat(fornParaSaldo.totalOrcado ?? "0");
+      const metaTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
+        acc + (parseFloat(it.metaUnitario ?? "0") * parseFloat(it.quantidade ?? "0")), 0);
+      if (metaTotal > 0 && fornTotal > metaTotal && !cobertoPorRisco) {
+        const defVal = (fornTotal - metaTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const fornNome = fornParaSaldo.fornecedor?.nomeFantasia || fornParaSaldo.fornecedor?.razaoSocial || "Fornecedor";
+        const ok = confirm(
+          `⚠️ ATENÇÃO: O valor do fornecedor ${fornNome} (${fornTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) ` +
+          `está acima da meta orçamentária (${metaTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).\n\n` +
+          `Déficit: ${defVal}\n\n` +
+          `Recomendamos utilizar o painel de Realocação de Verba antes de aprovar.\n\n` +
+          `Deseja continuar mesmo assim?`
+        );
+        if (!ok) return;
+      }
+      gerarOC.mutate({ companyId, cotacaoId, userId: user?.id, userName: user?.name });
+    }
 
     function handleSalvarPrecos(fornecedorId: number) {
       if (!mapa || !showDetalhe) return;
@@ -1568,8 +1593,8 @@ export default function Cotacoes() {
       const metaUnit = parseFloat(it.metaUnitario ?? "0");
       if (metaUnit === 0) return { saldo: 0, hasMeta: false };
       const qtdItem = parseFloat(it.quantidade ?? "0");
-      if (!melhorForn) return { saldo: 0, hasMeta: true };
-      const wKey = `${it.id}_${melhorForn.fornecedorId}`;
+      if (!fornParaSaldo) return { saldo: 0, hasMeta: true };
+      const wKey = `${it.id}_${fornParaSaldo.fornecedorId}`;
       const wResp = mapa?.respostaMap?.[wKey];
       const precoForn = parseFloat(wResp?.precoUnitario ?? "0");
       const custoCompra = precoForn * qtdItem;
@@ -1595,8 +1620,8 @@ export default function Cotacoes() {
       ? allItens.reduce((acc: number, it: any) => acc + parseFloat(it.quantidade ?? "0"), 0)
       : null;
     const qtdUnidade = unidadesUnicas.length === 1 ? unidadesUnicas[0] : null;
-    const winnerGrandTotal = melhorForn ? parseFloat(melhorForn.totalOrcado ?? "0") : 0;
-    const saldoTotal = melhorForn ? allItens.reduce((acc: number, it: any) => {
+    const winnerGrandTotal = fornParaSaldo ? parseFloat(fornParaSaldo.totalOrcado ?? "0") : 0;
+    const saldoTotal = fornParaSaldo ? allItens.reduce((acc: number, it: any) => {
       const { saldo, hasMeta } = getItemSaldo(it);
       return acc + (hasMeta ? saldo : 0);
     }, 0) : 0;
@@ -1655,7 +1680,7 @@ export default function Cotacoes() {
                   {st && <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium border ${st.cls}`}>{st.label}</span>}
                   {detalheFullscreen.status === "pendente" && (
                     <>
-                      <Button onClick={() => gerarOC.mutate({ companyId, cotacaoId: detalheFullscreen.id, userId: user?.id, userName: user?.name })} disabled={gerarOC.isPending}
+                      <Button onClick={() => handleAprovarGerarOC(detalheFullscreen.id)} disabled={gerarOC.isPending}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2">
                         {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Aprovar e Gerar OC
                       </Button>
@@ -1767,7 +1792,7 @@ export default function Cotacoes() {
                   <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-200">
                     {detalheFullscreen.status === "pendente" && (
                       <>
-                        <Button onClick={() => gerarOC.mutate({ companyId, cotacaoId: detalheFullscreen.id, userId: user?.id, userName: user?.name })} disabled={gerarOC.isPending}
+                        <Button onClick={() => handleAprovarGerarOC(detalheFullscreen.id)} disabled={gerarOC.isPending}
                           className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2">
                           {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Aprovar e Gerar OC
                         </Button>
@@ -2637,7 +2662,7 @@ export default function Cotacoes() {
                       </div>
 
                       {/* Alerta de saldo negativo + Realocação */}
-                      {metaGrandTotal > 0 && melhorForn && deficit > 0 && !cobertoPorRisco && (
+                      {metaGrandTotal > 0 && fornParaSaldo && deficit > 0 && !cobertoPorRisco && (
                         <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-2">
@@ -2665,7 +2690,7 @@ export default function Cotacoes() {
 
                       {/* Agrupamento final por material */}
                       {/* Verde: déficit coberto por risco — mostra detalhes de onde veio */}
-                      {metaGrandTotal > 0 && melhorForn && deficit > 0 && cobertoPorRisco && (
+                      {metaGrandTotal > 0 && fornParaSaldo && deficit > 0 && cobertoPorRisco && (
                         <CoberturaRealocacaoInfo companyId={companyId} obraId={(mapa?.cotacao as any)?.obraId} cotacaoId={showDetalhe ?? undefined} deficit={deficit} />
                       )}
 
