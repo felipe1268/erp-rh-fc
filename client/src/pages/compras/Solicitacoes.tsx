@@ -135,22 +135,30 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
   const itens = saldoQ.data ?? [];
   const temProblema = itens.some(i => i.situacao !== "ok");
 
-  function gerarTextoSituacao(item: typeof itens[number]): { texto: string; cor: "red" | "orange" | null; badge: string | null } {
+  function gerarTextoSituacao(item: typeof itens[number]): { texto: string; cor: "red" | "orange" | "gray" | null; badge: string | null } {
     const fmt = (v: number) => v.toLocaleString("pt-BR");
     const u = item.unidade;
 
+    if (item.situacao === "sem_vinculo_sem_verba") {
+      return {
+        texto: `Este item não possui verba suficiente no orçamento. Na criação da SC, o sistema já havia detectado que a quantidade solicitada (${fmt(item.qtdEstaSC)} ${u}) excede o disponível.`,
+        cor: "red",
+        badge: "SEM VERBA",
+      };
+    }
+
     if (item.situacao === "sem_vinculo") {
       return {
-        texto: `Este item não está vinculado a nenhum item do orçamento da obra. Não existe verba prevista para esta compra.`,
-        cor: "red",
-        badge: "SEM VÍNCULO",
+        texto: `Este item não está vinculado diretamente a um item do orçamento. O controle de saldo não pôde ser calculado automaticamente.`,
+        cor: "gray",
+        badge: null,
       };
     }
 
     if (item.situacao === "verba_esgotada_compras") {
       const ocsTexto = item.ocsVinculadas.length > 0 ? ` (${item.ocsVinculadas.join(", ")})` : "";
       return {
-        texto: `A verba deste item já foi totalmente consumida por compras anteriores. Foram compradas ${fmt(item.qtdComprada)} ${u}${ocsTexto} de um total orçado de ${fmt(item.qtdOrcada)} ${u}. Saldo atual: ${fmt(item.saldo)} ${u}.`,
+        texto: `Toda a verba deste item já foi consumida em compras anteriores. Foram compradas ${fmt(item.qtdComprada)} ${u}${ocsTexto} de um total orçado de ${fmt(item.qtdOrcada)} ${u}. Não há saldo restante.`,
         cor: "red",
         badge: "VERBA ESGOTADA",
       };
@@ -158,18 +166,23 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
 
     if (item.situacao === "verba_esgotada_solicitacoes") {
       return {
-        texto: `A verba deste item já foi comprometida por outras solicitações. Já foram solicitadas ${fmt(item.qtdSolicitada)} ${u} de um total orçado de ${fmt(item.qtdOrcada)} ${u}. Saldo atual: ${fmt(item.saldo)} ${u}.`,
+        texto: `Toda a verba deste item já foi comprometida em outras solicitações. Já solicitadas ${fmt(item.qtdSolicitada)} ${u} de um total orçado de ${fmt(item.qtdOrcada)} ${u}. Saldo: ${fmt(item.saldo)} ${u}.`,
         cor: "red",
         badge: "VERBA ESGOTADA",
       };
     }
 
     if (item.situacao === "saldo_insuficiente") {
-      const motivo = item.qtdComprada > 0
-        ? `Já foram compradas ${fmt(item.qtdComprada)} ${u}${item.ocsVinculadas.length > 0 ? ` (${item.ocsVinculadas.join(", ")})` : ""} e solicitadas ${fmt(item.qtdSolicitada)} ${u}.`
-        : `Já foram solicitadas ${fmt(item.qtdSolicitada)} ${u} em outras SCs.`;
+      const partes: string[] = [];
+      if (item.qtdComprada > 0) {
+        partes.push(`já compradas ${fmt(item.qtdComprada)} ${u}${item.ocsVinculadas.length > 0 ? ` via ${item.ocsVinculadas.join(", ")}` : ""}`);
+      }
+      if (item.qtdSolicitada > 0 && item.qtdSolicitada !== item.qtdComprada) {
+        partes.push(`já solicitadas ${fmt(item.qtdSolicitada)} ${u} em outras SCs`);
+      }
+      const motivo = partes.length > 0 ? partes.join(" e ") + "." : "";
       return {
-        texto: `O saldo disponível (${fmt(item.saldo)} ${u}) é insuficiente para esta solicitação de ${fmt(item.qtdEstaSC)} ${u}. ${motivo} Orçado: ${fmt(item.qtdOrcada)} ${u}.`,
+        texto: `O saldo disponível é de apenas ${fmt(Math.max(0, item.saldo))} ${u}, mas esta SC solicita ${fmt(item.qtdEstaSC)} ${u}. Orçado: ${fmt(item.qtdOrcada)} ${u}. ${motivo}`,
         cor: "red",
         badge: "SALDO INSUFICIENTE",
       };
@@ -178,7 +191,7 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
     if (item.qtdComprada > 0) {
       const ocsTexto = item.ocsVinculadas.length > 0 ? item.ocsVinculadas.join(", ") : "OC";
       return {
-        texto: `Já foram compradas ${fmt(item.qtdComprada)} ${u} via ${ocsTexto}. Saldo restante: ${fmt(item.saldo)} ${u}.`,
+        texto: `Parte já comprada: ${fmt(item.qtdComprada)} ${u} via ${ocsTexto}. Saldo restante: ${fmt(item.saldo)} ${u}.`,
         cor: "orange",
         badge: null,
       };
@@ -205,21 +218,36 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
             </p>
           </div>
 
-          {temProblema && (
-            <div className="rounded-lg border-2 border-red-400 bg-red-50 p-3 space-y-1">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
-                <p className="text-sm font-bold text-red-700">ATENÇÃO — Restrição orçamentária detectada</p>
-              </div>
-              <p className="text-xs text-red-600">
-                {itens.filter(i => i.situacao === "sem_vinculo").length > 0 && itens.filter(i => i.situacao !== "ok" && i.situacao !== "sem_vinculo").length > 0
-                  ? "Há itens sem vínculo orçamentário e itens com verba insuficiente. Revise os detalhes abaixo."
-                  : itens.some(i => i.situacao === "sem_vinculo")
-                    ? "Um ou mais itens não estão vinculados ao orçamento da obra."
-                    : "Um ou mais itens não possuem verba suficiente — o orçamento já foi consumido por outras solicitações ou compras. Veja os detalhes abaixo."}
-              </p>
-            </div>
-          )}
+          {(() => {
+            const problemasGraves = itens.filter(i => i.situacao !== "ok" && i.situacao !== "sem_vinculo");
+            const semVinculoSimples = itens.filter(i => i.situacao === "sem_vinculo");
+            if (problemasGraves.length > 0) {
+              const msgs: string[] = [];
+              if (problemasGraves.some(i => i.situacao === "verba_esgotada_compras" || i.situacao === "verba_esgotada_solicitacoes"))
+                msgs.push("itens com verba totalmente esgotada");
+              if (problemasGraves.some(i => i.situacao === "saldo_insuficiente"))
+                msgs.push("itens com saldo insuficiente");
+              if (problemasGraves.some(i => i.situacao === "sem_vinculo_sem_verba"))
+                msgs.push("itens sem verba prevista");
+              return (
+                <div className="rounded-lg border-2 border-red-400 bg-red-50 p-3 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                    <p className="text-sm font-bold text-red-700">ATENÇÃO — Problemas orçamentários detectados</p>
+                  </div>
+                  <p className="text-xs text-red-600">Esta SC possui {msgs.join(" e ")}. O fluxo não será bloqueado, mas revise cuidadosamente antes de prosseguir.</p>
+                </div>
+              );
+            }
+            if (semVinculoSimples.length > 0) {
+              return (
+                <div className="rounded-lg border border-gray-300 bg-gray-50 p-3">
+                  <p className="text-xs text-gray-500">{semVinculoSimples.length === 1 ? "1 item" : `${semVinculoSimples.length} itens`} sem vínculo direto com o orçamento — o controle de saldo não pôde ser verificado automaticamente.</p>
+                </div>
+              );
+            }
+            return null;
+          })()}
 
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Itens da Solicitação</p>
@@ -233,8 +261,9 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
                   const info = gerarTextoSituacao(item);
                   const isRed = info.cor === "red";
                   const isOrange = info.cor === "orange";
+                  const isGray = info.cor === "gray";
                   return (
-                    <div key={item.id} className={`rounded-md p-2.5 ${isRed ? "bg-red-50 border-2 border-red-300" : isOrange ? "bg-orange-50 border border-orange-200" : "bg-white border border-gray-200"}`}>
+                    <div key={item.id} className={`rounded-md p-2.5 ${isRed ? "bg-red-50 border-2 border-red-300" : isOrange ? "bg-orange-50 border border-orange-200" : isGray ? "bg-gray-50 border border-gray-300 border-dashed" : "bg-white border border-gray-200"}`}>
                       <div className="flex items-start gap-2">
                         <Package className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${isRed ? "text-red-500" : "text-gray-400"}`} />
                         <div className="flex-1 min-w-0 space-y-1">
@@ -259,8 +288,8 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
                             </div>
                           )}
                           {info.texto && (
-                            <p className={`text-xs flex items-start gap-1 ${isRed ? "font-bold text-red-600" : "font-semibold text-orange-600"}`}>
-                              <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                            <p className={`text-xs flex items-start gap-1 ${isRed ? "font-bold text-red-600" : isGray ? "text-gray-500" : "font-semibold text-orange-600"}`}>
+                              {isGray ? <FileSearch className="h-3 w-3 mt-0.5 shrink-0" /> : <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />}
                               <span>{info.texto}</span>
                             </p>
                           )}

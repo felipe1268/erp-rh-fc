@@ -4209,9 +4209,10 @@ Retorne APENAS um JSON válido neste formato:
         const consumido = Math.max(qtdSolicitada, qtdComprada);
         const saldo = qtdOrcada - consumido;
 
-        let situacao: "ok" | "sem_vinculo" | "verba_esgotada_compras" | "verba_esgotada_solicitacoes" | "saldo_insuficiente" = "ok";
+        const semVerbaFlag = item.semVerba ?? false;
+        let situacao: "ok" | "sem_vinculo" | "sem_vinculo_sem_verba" | "verba_esgotada_compras" | "verba_esgotada_solicitacoes" | "saldo_insuficiente" = "ok";
         if (!vinculadoAoOrcamento) {
-          situacao = "sem_vinculo";
+          situacao = semVerbaFlag ? "sem_vinculo_sem_verba" : "sem_vinculo";
         } else if (saldo < 0) {
           if (qtdComprada >= qtdOrcada) {
             situacao = "verba_esgotada_compras";
