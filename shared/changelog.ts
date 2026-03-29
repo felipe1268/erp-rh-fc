@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 856,
+    titulo: "Transferência de flags (indireta/marco/disabled) entre revisões",
+    descricao: "Ao criar uma nova revisão do cronograma, os flags de atividades indiretas, marcos e desabilitadas da revisão anterior são automaticamente transferidos para a nova revisão via código EAP. Colunas is_indireta, is_marco e disabled criadas no banco. Garante que marcações manuais não sejam perdidas ao reimportar o MS Project.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 01:30:00",
+  },
+  {
     version: 855,
     titulo: "Correção transferência de avanços entre revisões + inserção em lotes",
     descricao: "Corrigido problema onde avanços da revisão anterior não eram transferidos ao criar nova revisão (falha silenciosa). O insert agora é feito em lotes de 200 para evitar timeout. Se a transferência falhar, o usuário recebe um aviso visual (toast vermelho) em vez de silêncio. Dados históricos das revisões anteriores são sempre preservados.",

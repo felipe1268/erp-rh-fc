@@ -490,6 +490,43 @@ export const planejamentoRouter = router({
           .where(eq(planejamentoRevisoes.id, input.novaRevisaoId));
       }
 
+      // ── Transferência de flags (isIndireta, isMarco, disabled) ───────────
+      if (atvsAnterior.length > 0) {
+        const mapAntFlags = new Map<string, { isIndireta: boolean; isMarco: boolean; disabled: boolean }>();
+        for (const a of atvsAnterior) {
+          if (a.eapCodigo && (a.isIndireta || a.isMarco || a.disabled)) {
+            mapAntFlags.set(a.eapCodigo, {
+              isIndireta: !!a.isIndireta,
+              isMarco:    !!a.isMarco,
+              disabled:   !!a.disabled,
+            });
+          }
+        }
+        if (mapAntFlags.size > 0) {
+          const updates: { id: number; flags: { isIndireta?: boolean; isMarco?: boolean; disabled?: boolean } }[] = [];
+          for (const nova of atvsNova) {
+            if (nova.eapCodigo && mapAntFlags.has(nova.eapCodigo)) {
+              const flags = mapAntFlags.get(nova.eapCodigo)!;
+              const needsUpdate = (flags.isIndireta && !nova.isIndireta) ||
+                                  (flags.isMarco && !nova.isMarco) ||
+                                  (flags.disabled && !nova.disabled);
+              if (needsUpdate) {
+                updates.push({ id: nova.id, flags });
+              }
+            }
+          }
+          for (const upd of updates) {
+            const setObj: Record<string, boolean> = {};
+            if (upd.flags.isIndireta) setObj.isIndireta = true;
+            if (upd.flags.isMarco)    setObj.isMarco = true;
+            if (upd.flags.disabled)   setObj.disabled = true;
+            await db.update(planejamentoAtividades)
+              .set(setObj as any)
+              .where(eq(planejamentoAtividades.id, upd.id));
+          }
+        }
+      }
+
       // ── Transferência de avanços ──────────────────────────────────────────
       if (!anteriores.length) return { transferidas: 0 };
       const revisaoAnterior = anteriores[0];
