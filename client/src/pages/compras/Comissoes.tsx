@@ -57,8 +57,23 @@ export default function ComprasComissoes() {
 
   const totalCompradoOCs = ocs.reduce((s: number, oc: any) => s + (oc.valorComprado || 0), 0);
   const ocsSemlMeta = ocs.filter((oc: any) => !oc.temMeta);
-  const economiaOCs = ocs.reduce((s: number, oc: any) => s + (oc.economia || 0), 0);
-  const comissaoPotencial = economiaOCs * (pctConfig / 100);
+
+  const obraSaldoMap: Record<string, { totalMeta: number; totalComprado: number; saldo: number }> = {};
+  for (const oc of ocsAll) {
+    if (!oc.temMeta) continue;
+    const key = String(oc.obraId);
+    if (!obraSaldoMap[key]) obraSaldoMap[key] = { totalMeta: 0, totalComprado: 0, saldo: 0 };
+    obraSaldoMap[key].totalMeta += oc.valorMeta || 0;
+    obraSaldoMap[key].totalComprado += oc.valorComprado || 0;
+  }
+  for (const key of Object.keys(obraSaldoMap)) {
+    const o = obraSaldoMap[key];
+    o.saldo = o.totalMeta - o.totalComprado;
+  }
+
+  const obrasFiltradasKeys = obraFiltro === "todas" ? Object.keys(obraSaldoMap) : [obraFiltro];
+  const economiaObras = obrasFiltradasKeys.reduce((s, key) => s + Math.max(0, obraSaldoMap[key]?.saldo ?? 0), 0);
+  const comissaoPotencial = economiaObras * (pctConfig / 100);
 
   const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -136,16 +151,16 @@ export default function ComprasComissoes() {
                 <div className="flex items-center gap-3">
                   <TrendingDown className="h-7 w-7 text-emerald-600 shrink-0" />
                   <div>
-                    <p className="text-lg font-bold text-emerald-700">{fmt(economiaOCs)}</p>
-                    <p className="text-xs text-emerald-600">Economia Identificada</p>
+                    <p className="text-lg font-bold text-emerald-700">{fmt(economiaObras)}</p>
+                    <p className="text-xs text-emerald-600">Saldo Positivo (por Obra)</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
             <div className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-2 w-64 bg-gray-900 text-white text-[11px] rounded-lg px-3 py-2.5 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
               <div className="absolute left-1/2 -translate-x-1/2 bottom-full w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-gray-900" />
-              <div className="font-semibold mb-1">Economia Identificada</div>
-              <div>Diferenca entre o Preco Meta (orcamento) e o preco efetivamente comprado na OC. Quando o comprador negocia abaixo do meta, a economia aparece aqui. Quanto maior, melhor a performance de compras.</div>
+              <div className="font-semibold mb-1">Saldo Positivo por Obra</div>
+              <div>Calculado por obra: Meta Total da Obra - Total Comprado na Obra. Se uma OC economizou mas outra estourou, o estouro reduz o saldo. Somente obras com saldo positivo geram comissao. Economias isoladas por OC nao contam se a obra estourar no total.</div>
             </div>
           </div>
           <div className="group relative">
@@ -198,9 +213,9 @@ export default function ComprasComissoes() {
               <div className="space-y-2">
                 {obrasComOC.map(obraId => {
                   const ocsObra = ocsAll.filter((oc: any) => String(oc.obraId) === obraId);
-                  const totalObra = ocsObra.reduce((s: number, oc: any) => s + (oc.valorComprado || 0), 0);
-                  const econObra = ocsObra.reduce((s: number, oc: any) => s + (oc.economia || 0), 0);
-                  const comObra = econObra * (pctConfig / 100);
+                  const infoObra = obraSaldoMap[obraId];
+                  const saldoObra = infoObra?.saldo ?? 0;
+                  const comObra = Math.max(0, saldoObra) * (pctConfig / 100);
                   const semMetaObra = ocsObra.filter((oc: any) => !oc.temMeta).length;
                   return (
                     <div
@@ -214,10 +229,15 @@ export default function ComprasComissoes() {
                         <div className="text-[10px] text-gray-400">{ocsObra.length} OC(s){semMetaObra > 0 ? ` · ${semMetaObra} sem meta` : ""}</div>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-xs text-gray-600">Comprado: <span className="font-semibold">{fmt(totalObra)}</span></div>
+                        <div className="text-xs text-gray-600">Meta: <span className="font-semibold">{fmt(infoObra?.totalMeta ?? 0)}</span></div>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-xs text-emerald-600">Economia: <span className="font-semibold">{fmt(econObra)}</span></div>
+                        <div className="text-xs text-gray-600">Comprado: <span className="font-semibold">{fmt(infoObra?.totalComprado ?? 0)}</span></div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className={`text-xs ${saldoObra >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          Saldo: <span className="font-semibold">{fmt(saldoObra)}</span>
+                        </div>
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-xs text-yellow-700">Comissao: <span className="font-bold">{fmt(comObra)}</span></div>
@@ -257,20 +277,23 @@ export default function ComprasComissoes() {
                     <TableHead>Obra</TableHead>
                     <TableHead className="text-right">Valor Meta</TableHead>
                     <TableHead className="text-right">Valor Comprado</TableHead>
-                    <TableHead className="text-right">Economia</TableHead>
+                    <TableHead className="text-right">Dif. Item</TableHead>
+                    <TableHead className="text-right">Saldo Obra</TableHead>
                     <TableHead className="text-right">Comissao ({pctConfig}%)</TableHead>
                     <TableHead className="text-center">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {ocs.map((oc: any) => {
-                    const comissaoOC = oc.economia * (pctConfig / 100);
                     const st = OC_STATUS[oc.status] || { label: oc.status, cls: "bg-gray-100 text-gray-600" };
+                    const obraKey = String(oc.obraId);
+                    const saldoObra = obraSaldoMap[obraKey]?.saldo ?? 0;
+                    const obraPositiva = saldoObra > 0;
                     return (
                       <TableRow key={oc.id}>
                         <TableCell className="font-mono text-xs font-medium">{oc.numeroOc}</TableCell>
                         <TableCell>{oc.fornecedorNome || "—"}</TableCell>
-                        <TableCell>{obraMap[String(oc.obraId)] || "Obra " + oc.obraId}</TableCell>
+                        <TableCell>{obraMap[obraKey] || "Obra " + oc.obraId}</TableCell>
                         <TableCell className="text-right">
                           {oc.temMeta ? (
                             <span className="font-medium">{fmt(oc.valorMeta)}</span>
@@ -281,7 +304,7 @@ export default function ComprasComissoes() {
                         <TableCell className="text-right">{fmt(oc.valorComprado)}</TableCell>
                         <TableCell className="text-right">
                           {oc.temMeta ? (
-                            <span className={`font-medium ${oc.economia > 0 ? "text-green-700" : "text-gray-500"}`}>
+                            <span className={`font-medium ${oc.economia > 0 ? "text-green-700" : oc.economia < 0 ? "text-red-600" : "text-gray-500"}`}>
                               {fmt(oc.economia)}
                             </span>
                           ) : (
@@ -289,10 +312,21 @@ export default function ComprasComissoes() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          {oc.temMeta && oc.economia > 0 ? (
-                            <span className="font-bold text-yellow-700">{fmt(comissaoOC)}</span>
+                          {oc.temMeta ? (
+                            <span className={`text-xs font-medium ${saldoObra > 0 ? "text-emerald-600" : saldoObra < 0 ? "text-red-600" : "text-gray-500"}`}>
+                              {fmt(saldoObra)}
+                            </span>
                           ) : (
                             <span className="text-gray-400">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {!oc.temMeta ? (
+                            <span className="text-gray-400">—</span>
+                          ) : !obraPositiva ? (
+                            <span className="text-red-400 text-xs">Obra c/ deficit</span>
+                          ) : (
+                            <span className="text-yellow-600 text-xs">Ver saldo obra</span>
                           )}
                         </TableCell>
                         <TableCell className="text-center">
@@ -357,7 +391,7 @@ export default function ComprasComissoes() {
 
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-xs text-yellow-700">
-            <span className="font-bold">Como funciona:</span> A comissao e calculada sobre a economia real — a diferenca entre o preco meta (orcamento da solicitacao) e o valor efetivamente negociado na OC. Para que a economia seja calculada, os itens da solicitacao de compra precisam ter o <span className="font-bold">Preco Meta</span> preenchido. OCs marcadas como "Sem meta" nao entram no calculo ate que o preco meta seja definido. O percentual de {pctConfig}% e configuravel em Configuracoes Gerais, secao Compras.
+            <span className="font-bold">Como funciona:</span> A comissao e calculada sobre o <span className="font-bold">saldo global da obra</span> (Meta Total - Total Comprado). Se um item economizou mas a obra estourou no geral, a comissao e reduzida ou zerada. Somente obras com saldo positivo geram comissao. O percentual de {pctConfig}% e configuravel em Configuracoes Gerais, secao Compras. OCs "Sem meta" nao entram no calculo ate que o preco meta seja definido.
           </p>
         </div>
       </div>

@@ -658,7 +658,7 @@ export const purchaseRouter = router({
           }
         }
         const valorComprado = n(oc.total);
-        const economia = temMeta ? Math.max(0, valorMeta - valorComprado) : 0;
+        const economia = temMeta ? (valorMeta - valorComprado) : 0;
         result.push({
           id: oc.id,
           numeroOc: oc.numeroOc,
