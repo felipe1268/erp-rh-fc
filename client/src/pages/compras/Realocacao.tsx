@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock, Wallet, CheckCircle, PackageSearch, HardHat } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -156,47 +157,77 @@ export default function ComprasRealocacao() {
             {loadingSaldos && <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />}
           </div>
 
+          <TooltipProvider delayDuration={200}>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {/* DI-08 Orçado */}
-            <div className="bg-white rounded-xl border border-blue-100 p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-1">
-                <ShieldAlert className="h-4 w-4 text-blue-500" />
-                <p className="text-xs text-gray-500 font-medium">DI-08 — Orçado</p>
-              </div>
-              <p className="text-base font-bold text-blue-700">{fmt(saldos?.di08Total ?? 0)}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">Taxa de risco, Imprevistos e Pós Obra</p>
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-white rounded-xl border border-blue-100 p-4 shadow-sm cursor-help">
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldAlert className="h-4 w-4 text-blue-500" />
+                    <p className="text-xs text-gray-500 font-medium">DI-08 — Orçado</p>
+                  </div>
+                  <p className="text-base font-bold text-blue-700">{fmt(saldos?.di08Total ?? 0)}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Taxa de risco, Imprevistos e Pós Obra</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                <p className="font-semibold mb-1">Reserva de Risco (DI-08)</p>
+                <p>Valor total orçado na composição DI-08 do BDI para cobrir riscos, imprevistos e custos pós-obra. É o "colchão" financeiro do projeto.</p>
+              </TooltipContent>
+            </Tooltip>
 
-            {/* DI-08 Utilizado */}
-            <div className="bg-white rounded-xl border border-orange-100 p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-1">
-                <TrendingDown className="h-4 w-4 text-orange-500" />
-                <p className="text-xs text-gray-500 font-medium">DI-08 — Utilizado</p>
-              </div>
-              <p className="text-base font-bold text-orange-600">{fmt(saldos?.di08Usado ?? 0)}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">Débitos realizados da reserva</p>
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-white rounded-xl border border-orange-100 p-4 shadow-sm cursor-help">
+                  <div className="flex items-center gap-2 mb-1">
+                    <TrendingDown className="h-4 w-4 text-orange-500" />
+                    <p className="text-xs text-gray-500 font-medium">DI-08 — Utilizado</p>
+                  </div>
+                  <p className="text-base font-bold text-orange-600">{fmt(saldos?.di08Usado ?? 0)}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Débitos realizados da reserva</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                <p className="font-semibold mb-1">Valor já consumido do DI-08</p>
+                <p>Soma de todos os débitos feitos na reserva de risco para cobrir estouros de orçamento em cotações. Cada débito fica registrado no histórico abaixo.</p>
+              </TooltipContent>
+            </Tooltip>
 
-            {/* Economia em Compras */}
-            <div className="bg-white rounded-xl border border-teal-100 p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-1">
-                <PackageSearch className="h-4 w-4 text-teal-500" />
-                <p className="text-xs text-gray-500 font-medium">Economia em Compras</p>
-              </div>
-              <p className="text-base font-bold text-teal-700">{fmt(saldos?.totalSobras ?? 0)}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">OCs aprovadas abaixo da meta</p>
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-white rounded-xl border border-teal-100 p-4 shadow-sm cursor-help">
+                  <div className="flex items-center gap-2 mb-1">
+                    <PackageSearch className="h-4 w-4 text-teal-500" />
+                    <p className="text-xs text-gray-500 font-medium">Economia em Compras</p>
+                  </div>
+                  <p className="text-base font-bold text-teal-700">{fmt(saldos?.totalSobras ?? 0)}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">OCs aprovadas abaixo da meta</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                <p className="font-semibold mb-1">Economia gerada nas compras</p>
+                <p>Quando uma Ordem de Compra é aprovada com preço menor que a meta orçamentária, a diferença vira "sobra". Esse valor pode ser realocado para cobrir estouros em outras cotações.</p>
+              </TooltipContent>
+            </Tooltip>
 
-            {/* Total Disponível */}
-            <div className="bg-emerald-600 rounded-xl p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-1">
-                <CheckCircle className="h-4 w-4 text-emerald-100" />
-                <p className="text-xs text-emerald-100 font-medium">Total Disponível</p>
-              </div>
-              <p className="text-xl font-extrabold text-white">{fmt(saldos?.totalDisponivel ?? 0)}</p>
-              <p className="text-[10px] text-emerald-200 mt-0.5">DI-08 disponível + economias</p>
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-emerald-600 rounded-xl p-4 shadow-sm cursor-help">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle className="h-4 w-4 text-emerald-100" />
+                    <p className="text-xs text-emerald-100 font-medium">Total Disponível</p>
+                  </div>
+                  <p className="text-xl font-extrabold text-white">{fmt(saldos?.totalDisponivel ?? 0)}</p>
+                  <p className="text-[10px] text-emerald-200 mt-0.5">DI-08 disponível + economias</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                <p className="font-semibold mb-1">Saldo total disponível</p>
+                <p>Soma do saldo restante do DI-08 (Orçado − Utilizado) com as economias de compras. Esse é o valor que você pode usar para cobrir déficits em cotações com estouro.</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
+          </TooltipProvider>
 
           {/* Barra de progresso DI-08 */}
           {(saldos?.di08Total ?? 0) > 0 && (
