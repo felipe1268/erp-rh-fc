@@ -18,7 +18,7 @@ import {
   AlertTriangle, CheckCircle2, Clock, CalendarDays, UserCheck,
   FileText, RefreshCw, Vote,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -119,6 +119,18 @@ export default function CipaCompleta() {
   });
 
   const selectedEleicao = (eleicoes as any[]).find((e: any) => e.id === selectedEleicaoId);
+
+  useEffect(() => {
+    if (!selectedEleicaoId && (eleicoes as any[]).length > 0) {
+      const hoje = new Date();
+      const ativo = (eleicoes as any[]).find((e: any) => {
+        const inicio = new Date(e.mandatoInicio);
+        const fim = new Date(e.mandatoFim);
+        return hoje >= inicio && hoje <= fim;
+      });
+      setSelectedEleicaoId(ativo ? ativo.id : (eleicoes as any[])[0].id);
+    }
+  }, [eleicoes, selectedEleicaoId]);
 
   return (
     <DashboardLayout>
