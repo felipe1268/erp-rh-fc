@@ -368,6 +368,27 @@ export const planejamentoRouter = router({
       return { success: true };
     }),
 
+  reativarRevisao: protectedProcedure
+    .input(z.object({ id: z.number(), aprovadoPor: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin) throw new Error("Apenas administradores podem reativar revisões.");
+      const db = await getDb();
+      const [rev] = await db.select().from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.id, input.id));
+      if (!rev) throw new Error("Revisão não encontrada.");
+      if (rev.status !== "cancelada") throw new Error("Somente revisões canceladas podem ser reativadas.");
+      if (rev.projetoId) {
+        const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, rev.projetoId));
+        if (proj && proj.companyId !== ctx.user.companyId) throw new Error("Sem permissão para esta revisão.");
+      }
+      await db.update(planejamentoRevisoes)
+        .set({ status: "aprovada", aprovadoPor: input.aprovadoPor ?? ctx.user.name ?? null })
+        .where(eq(planejamentoRevisoes.id, input.id));
+      return { success: true };
+    }),
+
   excluirRevisao: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {

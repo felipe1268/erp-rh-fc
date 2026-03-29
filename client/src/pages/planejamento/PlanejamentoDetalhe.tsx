@@ -8213,6 +8213,16 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
     onError: (e) => alert(e.message),
   });
 
+  const reativarMutation = trpc.planejamento.reativarRevisao.useMutation({
+    onSuccess: () => {
+      utils.planejamento.getProjetoById.invalidate({ id: projetoId });
+      utils.planejamento.getCurvaS.invalidate();
+      utils.planejamento.getCurvasTodasRevisoes.invalidate();
+      utils.planejamento.listarAtividades.invalidate();
+    },
+    onError: (e) => alert(e.message),
+  });
+
   const excluirMutation = trpc.planejamento.excluirRevisao.useMutation({
     onSuccess: () => { utils.planejamento.getProjetoById.invalidate({ id: projetoId }); setConfirmExcluirId(null); },
     onError: (e) => { alert(e.message); setConfirmExcluirId(null); },
@@ -8346,7 +8356,6 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
                 }`}>
                   {r.status}
                 </span>
-                {/* Cancelar: qualquer não-Baseline que não esteja já cancelada — só admin */}
                 {isAdminMaster && !r.isBaseline && r.status !== "cancelada" && (
                   <Button
                     size="sm" variant="ghost"
@@ -8358,6 +8367,19 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
                     }}
                   >
                     <XCircle className="h-3 w-3" /> Cancelar
+                  </Button>
+                )}
+                {isAdminMaster && !r.isBaseline && r.status === "cancelada" && (
+                  <Button
+                    size="sm" variant="ghost"
+                    className="text-xs h-6 px-2 gap-1 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                    disabled={reativarMutation.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Reativar a Rev. ${String(r.numero).padStart(2,"0")}? Esta revisão será aprovada novamente e voltará a ser considerada no cronograma.`))
+                        reativarMutation.mutate({ id: r.id });
+                    }}
+                  >
+                    {reativarMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />} Reativar
                   </Button>
                 )}
                 {/* Excluir: apenas a revisão mais recente (não-Baseline) — só admin */}
