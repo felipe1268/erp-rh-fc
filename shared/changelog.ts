@@ -6036,4 +6036,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 16:00:00",
   },
+  {
+    version: 875,
+    titulo: "Correção: Insumos do orçamento agora tratados como vinculados",
+    descricao: "Itens de SC/Cotação que possuem correspondência pelo código do insumo no orçamento (fonteVinculo='insumo') agora são corretamente tratados como vinculados ao orçamento, com saldo calculado como orçado-consumido. Antes, apenas itens com orcamento_item_id direto (fonteVinculo='item') eram considerados vinculados, causando falsos alertas de 'S/ VÍNCULO' e 'REALOCAR VERBA' para insumos que existiam no orçamento. Corrigido em getSaldoItensSC e getMapaCotacao no servidor, e nos displays do Mapa de Cotação no cliente.",
+    tipo: "fix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 17:00:00",
+  },
 ];

@@ -1557,7 +1557,7 @@ export default function Cotacoes() {
     const vencedorSelecionado = (mapa?.participantes ?? []).find((p: any) => p.selecionado) ?? null;
     const fornParaSaldo = vencedorSelecionado || melhorForn;
 
-    const itensSemVerba = (mapa?.itens ?? []).filter((it: any) => (it as any).fonteVinculo !== "item");
+    const itensSemVerba = (mapa?.itens ?? []).filter((it: any) => (it as any).fonteVinculo !== "item" && (it as any).fonteVinculo !== "insumo");
     const temItensSemVerba = itensSemVerba.length > 0;
 
     function handleAprovarGerarOC(cotacaoId: number) {
@@ -2631,13 +2631,13 @@ export default function Cotacoes() {
                                     const comprada = (it as any).qtdComprada ?? 0;
                                     const saldoQtd = (it as any).qtdSaldo ?? 0;
                                     const fonte = (it as any).fonteVinculo;
-                                    const semVinculo = fonte !== "item";
+                                    const semVinculo = fonte !== "item" && fonte !== "insumo";
                                     const isEstouro = saldoQtd < 0;
                                     const isNegativo = isEstouro || semVinculo;
                                     const tooltipText = fonte === "item"
                                       ? `Orçado: ${orcada.toLocaleString("pt-BR")}\nSolicitado total: ${((it as any).qtdTotalSolicitada ?? 0).toLocaleString("pt-BR")}\nComprado: ${comprada.toLocaleString("pt-BR")}\nSaldo: ${saldoQtd.toLocaleString("pt-BR")}`
                                       : fonte === "insumo"
-                                        ? `SEM VÍNCULO DIRETO AO ORÇAMENTO\nNecessita realocação de verba\n\nRef. orçamento (insumo ${(it as any).insumoCodigo ?? ""}):\n  Orçado: ${orcada.toLocaleString("pt-BR")}\n  Solicitado: ${((it as any).qtdTotalSolicitada ?? 0).toLocaleString("pt-BR")}\n  Saldo ref.: ${(orcada - Math.max((it as any).qtdTotalSolicitada ?? 0, comprada)).toLocaleString("pt-BR")}`
+                                        ? `Vinculado via insumo (${(it as any).insumoCodigo ?? ""})\nOrçado: ${orcada.toLocaleString("pt-BR")}\nSolicitado: ${((it as any).qtdTotalSolicitada ?? 0).toLocaleString("pt-BR")}\nComprado: ${comprada.toLocaleString("pt-BR")}\nSaldo: ${saldoQtd.toLocaleString("pt-BR")}`
                                         : `SEM VÍNCULO ORÇAMENTÁRIO\nNecessita realocação de verba`;
                                     return (
                                       <td
