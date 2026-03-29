@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 862,
+    titulo: "Layout de cadastro de Membros CIPA redesenhado",
+    descricao: "Tela de Adicionar Membro CIPA completamente redesenhada com layout clean e funcional. Busca de colaboradores com filtro por nome/CPF, avatar com inicial, exibição de cargo, card de seleção com destaque, grid responsivo 3 colunas (Colaborador + Cargo + Representação + botão na mesma linha), e lista inline dos membros já adicionados com cards compactos.",
+    tipo: "melhoria",
+    modulos: "SST",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:45:00",
+  },
+  {
     version: 861,
     titulo: "SPI calculado em tempo real (não mais do REFIS)",
     descricao: "O SPI (Schedule Performance Index) no card da Visão Geral agora é calculado em tempo real usando os mesmos valores de Previsto e Realizado da barra de progresso acima, em vez de usar valores estáticos do último REFIS emitido. Garante consistência entre todos os indicadores exibidos na tela.",

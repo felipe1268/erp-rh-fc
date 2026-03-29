@@ -518,23 +518,23 @@ export default function CipaCompleta() {
         </FullScreenDialog>
 
         {/* Dialog: Novo Membro */}
-        <FullScreenDialog open={showMembroDialog} onClose={() => { setShowMembroDialog(false); setMembroForm({}); }} title="Adicionar Membro CIPA" icon={<UserCheck className="h-5 w-5 text-white" />}>
-          <div className="w-full max-w-2xl mx-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Colaborador *</label>
+        <FullScreenDialog open={showMembroDialog} onClose={() => { setShowMembroDialog(false); setMembroForm({}); setEmpSearch(""); setEmpDropdownOpen(false); }} title="Adicionar Membro CIPA" icon={<UserCheck className="h-5 w-5 text-white" />}>
+          <div className="w-full max-w-3xl mx-auto space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-3">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Colaborador *</label>
                 <div className="relative" style={{ zIndex: 60 }}>
-                  <div className="flex items-center border rounded-md px-3 py-2 bg-background cursor-pointer hover:bg-muted/30 relative" style={{ zIndex: 61 }} onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}>
-                    <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
+                  <div className="flex items-center border rounded-lg px-3 py-2.5 bg-white hover:border-blue-400 transition-colors cursor-pointer" style={{ zIndex: 61 }} onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}>
+                    <Search className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
                     {empDropdownOpen ? (
-                      <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Digite nome ou CPF..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }} onClick={e => e.stopPropagation()} />
+                      <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Buscar por nome ou CPF..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }} onClick={e => e.stopPropagation()} />
                     ) : (
-                      <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
-                        {selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Selecione..."}
+                      <span className={`flex-1 text-sm ${selectedEmp ? "text-slate-900 font-medium" : "text-slate-400"}`}>
+                        {selectedEmp ? selectedEmp.nomeCompleto : "Buscar colaborador..."}
                       </span>
                     )}
                     {membroForm.employeeId && (
-                      <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); setMembroForm({ ...membroForm, employeeId: undefined }); setEmpSearch(""); setEmpDropdownOpen(false); }}>
+                      <button type="button" className="ml-2 text-slate-400 hover:text-slate-600 transition-colors" onClick={e => { e.stopPropagation(); setMembroForm({ ...membroForm, employeeId: undefined }); setEmpSearch(""); setEmpDropdownOpen(false); }}>
                         <X className="h-4 w-4" />
                       </button>
                     )}
@@ -542,13 +542,26 @@ export default function CipaCompleta() {
                   {empDropdownOpen && (
                     <>
                       <div className="fixed inset-0" style={{ zIndex: 55 }} onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-64 overflow-y-auto" style={{ zIndex: 62 }}>
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-72 overflow-y-auto" style={{ zIndex: 62 }}>
+                        <div className="sticky top-0 bg-slate-50 px-3 py-2 border-b text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                          {filteredEmps.length} colaborador{filteredEmps.length !== 1 ? "es" : ""} encontrado{filteredEmps.length !== 1 ? "s" : ""}
+                        </div>
                         {filteredEmps.length === 0 ? (
-                          <div className="p-3 text-sm text-muted-foreground text-center">Nenhum resultado para "{empSearch}"</div>
-                        ) : filteredEmps.slice(0, 20).map((e: any) => (
-                          <div key={e.id} className="px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm flex justify-between" onClick={() => { setMembroForm({ ...membroForm, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); }}>
-                            <span className="font-medium">{e.nomeCompleto}</span>
-                            <span className="text-muted-foreground">{formatCPF(e.cpf)}</span>
+                          <div className="p-6 text-center">
+                            <Users className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                            <p className="text-sm text-slate-500">Nenhum colaborador encontrado</p>
+                            <p className="text-xs text-slate-400 mt-1">Tente outro nome ou CPF</p>
+                          </div>
+                        ) : filteredEmps.slice(0, 30).map((e: any) => (
+                          <div key={e.id} className={`px-3 py-2.5 hover:bg-blue-50 cursor-pointer text-sm flex items-center gap-3 border-b border-slate-50 last:border-0 transition-colors ${membroForm.employeeId === e.id ? "bg-blue-50" : ""}`} onClick={() => { setMembroForm({ ...membroForm, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); }}>
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                              <span className="text-xs font-bold text-slate-500">{(e.nomeCompleto || "?")[0]}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-slate-800 truncate">{e.nomeCompleto}</p>
+                              <p className="text-[11px] text-slate-400">{e.cargo || "Sem cargo"} · {formatCPF(e.cpf)}</p>
+                            </div>
+                            {membroForm.employeeId === e.id && <CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" />}
                           </div>
                         ))}
                       </div>
@@ -556,10 +569,26 @@ export default function CipaCompleta() {
                   )}
                 </div>
               </div>
+
+              {selectedEmp && (
+                <div className="md:col-span-3 bg-slate-50 rounded-lg p-3 flex items-center gap-3 border border-slate-200">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                    <span className="text-sm font-bold text-blue-600">{(selectedEmp.nomeCompleto || "?")[0]}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">{selectedEmp.nomeCompleto}</p>
+                    <p className="text-xs text-slate-500">{selectedEmp.cargo || "Sem cargo"} · CPF: {formatCPF(selectedEmp.cpf)}</p>
+                  </div>
+                  <button type="button" className="text-slate-400 hover:text-red-500 transition-colors p-1" onClick={() => { setMembroForm({ ...membroForm, employeeId: undefined }); }}>
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
               <div>
-                <label className="text-sm font-medium">Cargo na CIPA *</label>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Cargo na CIPA *</label>
                 <Select value={membroForm.cargoCipa || ""} onValueChange={v => setMembroForm({ ...membroForm, cargoCipa: v })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Selecione o cargo" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Presidente">Presidente</SelectItem>
                     <SelectItem value="Vice_Presidente">Vice-Presidente</SelectItem>
@@ -570,30 +599,61 @@ export default function CipaCompleta() {
                 </Select>
               </div>
               <div>
-                <label className="text-sm font-medium">Representação *</label>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Representação *</label>
                 <Select value={membroForm.representacao || ""} onValueChange={v => setMembroForm({ ...membroForm, representacao: v })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Empregador">Empregador</SelectItem>
                     <SelectItem value="Empregados">Empregados</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex items-end">
+                <Button className="w-full h-10" onClick={() => {
+                  if (!membroForm.employeeId || !membroForm.cargoCipa || !membroForm.representacao) { toast.error("Preencha todos os campos obrigatórios"); return; }
+                  createMembro.mutate({ companyId, companyIds, electionId: selectedEleicaoId!, ...membroForm });
+                }} disabled={createMembro.isPending || !membroForm.employeeId}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  {createMembro.isPending ? "Salvando..." : "Adicionar Membro"}
+                </Button>
+              </div>
             </div>
+
             {membroForm.representacao === "Empregados" && (
-              <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
-                <strong>Estabilidade automática:</strong> Representantes dos empregados terão estabilidade calculada automaticamente (desde o registro da candidatura até 1 ano após o mandato).
+              <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-800">
+                <Shield className="h-4 w-4 mt-0.5 shrink-0 text-emerald-600" />
+                <div>
+                  <strong>Estabilidade automática:</strong> Representantes dos empregados terão estabilidade calculada automaticamente (desde o registro da candidatura até 1 ano após o mandato).
+                </div>
               </div>
             )}
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-              <Button variant="outline" onClick={() => { setShowMembroDialog(false); setMembroForm({}); }}>Cancelar</Button>
-              <Button onClick={() => {
-                if (!membroForm.employeeId || !membroForm.cargoCipa || !membroForm.representacao) { toast.error("Preencha todos os campos"); return; }
-                createMembro.mutate({ companyId, companyIds, electionId: selectedEleicaoId!, ...membroForm });
-              }} disabled={createMembro.isPending}>
-                {createMembro.isPending ? "Salvando..." : "Adicionar Membro"}
-              </Button>
-            </div>
+
+            {(membros as any[]).length > 0 && (
+              <div>
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Membros já adicionados ({(membros as any[]).length})</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(membros as any[]).map((m: any) => (
+                    <div key={m.id} className="flex items-center gap-3 bg-white rounded-lg border border-slate-100 p-3 hover:shadow-sm transition-shadow">
+                      <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-blue-600">{(m.employeeName || "?")[0]}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 truncate">{m.employeeName}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{CARGO_CIPA[m.cargoCipa] || m.cargoCipa}</Badge>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${m.representacao === "Empregados" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
+                            {m.representacao}
+                          </span>
+                        </div>
+                      </div>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-slate-400 hover:text-red-500" title="Remover" onClick={() => { if (confirm("Remover membro?")) deleteMembro.mutate({ id: m.id }); }}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </FullScreenDialog>
 
