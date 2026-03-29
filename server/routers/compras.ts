@@ -27,6 +27,7 @@ import {
   purchaseAccountsPayable,
   almoxarifadoNotificacoes,
   purchaseOrders, purchaseRequests, purchaseQuotations,
+  budgetReallocations,
 } from "../../drizzle/schema";
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
