@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 849,
+    titulo: "Controle de saldo por insumo (global, consolidado da obra)",
+    descricao: "O controle de saldo na criação de SC pelo modo EAP agora opera no nível do INSUMO e não mais do serviço. O saldo disponível de cada insumo é calculado globalmente somando todas as composições da obra onde ele aparece (qtd orçada total − qtd já solicitada). Insumos com saldo esgotado ficam BLOQUEADOS (zerados), com saldo parcial ficam LIMITADOS à quantidade disponível — ambos com badge visual e botão 'Extra-orçamento' para desbloquear manualmente. A validação ao salvar também passou a verificar o saldo global por insumo. Resumo de insumos com/sem/parcial saldo exibido no cabeçalho expandido da composição.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 22:00:00",
+  },
+  {
     version: 848,
     titulo: "Links clicáveis nos status de insumos (SC, Cotação, OC)",
     descricao: "Insumos com status Solicitado, Em cotação, Comprado ou Recebido agora exibem o número do documento (SC, COT, OC) como link clicável ao lado do badge de status — nos três contextos: EAP expandida, Compra Consolidada e resumo de itens. Clicar navega diretamente para a página do documento correspondente. Backend enriquecido para retornar scDocs, cotDocs e ocDocs em getInsumosConsolidados.",

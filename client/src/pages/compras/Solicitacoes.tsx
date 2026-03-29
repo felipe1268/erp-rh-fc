@@ -160,6 +160,7 @@ export default function Solicitacoes() {
   const [eapExpanded, setEapExpanded] = useState<number | null>(null);
   const [eapQtdServico, setEapQtdServico] = useState<Record<number, string>>({});
   const [eapInsumos, setEapInsumos] = useState<Record<number, any[]>>({});
+  const [eapExtraDesbloqueado, setEapExtraDesbloqueado] = useState<Record<string, boolean>>({});
   const [loadingInsumos, setLoadingInsumos] = useState<number | null>(null);
   const [saldoData, setSaldoData] = useState<Record<number, any>>({});
   const [imagemPreview, setImagemPreview] = useState<string | null>(null);
@@ -394,7 +395,7 @@ export default function Solicitacoes() {
     setItens([newItem()]);
     setSelectedEapIds(new Set());
     setEapSearch(""); setModoSC("eap");
-    setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({});
+    setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setEapExtraDesbloqueado({});
     setInsumoBusca(""); setInsumoQtds({}); setInsumoExpanded(null);
     setImagemPreview(null); setImagemBase64(null); setImagemNome("");
   }
@@ -433,6 +434,13 @@ export default function Solicitacoes() {
     }
   }
 
+  function getInsumoSaldoGlobal(insumoCodigo: string): { saldoDisponivel: number; qtdTotalOrcada: number; qtdJaSolicitada: number; qtdComprada: number; qtdRecebida: number } | null {
+    const consolidados = insumosConsolidadosQ.data ?? [];
+    const found = consolidados.find((c: any) => c.insumoCodigo === insumoCodigo);
+    if (!found) return null;
+    return { saldoDisponivel: found.saldoDisponivel, qtdTotalOrcada: found.qtdTotalOrcada, qtdJaSolicitada: found.qtdJaSolicitada, qtdComprada: found.qtdComprada, qtdRecebida: found.qtdRecebida };
+  }
+
   function handleEapQtdChange(orcItemId: number, qtdStr: string, eapItem: any) {
     setEapQtdServico(prev => ({ ...prev, [orcItemId]: qtdStr }));
     const qtdServ = parseFloat(qtdStr) || 0;
@@ -441,20 +449,35 @@ export default function Solicitacoes() {
     if (qtdServ > 0) {
       let newItems: ItemForm[];
       if (insumosList.length > 0) {
-        newItems = insumosList.map(ins => ({
-          descricao: ins.descricao,
-          unidade: ins.unidade,
-          quantidade: String(Math.ceil((qtdServ * ins.coeficiente) * 1000) / 1000),
-          observacoes: "",
-          orcamentoItemId: orcItemId,
-          eapCodigo: eapItem.eapCodigo,
-          insumoCodigo: ins.insumoCodigo,
-          composicaoCodigo: eapItem.servicoCodigo,
-          precoMeta: ins.precoUnitario,
-          quantidadeServico: qtdServ,
-          coeficiente: ins.coeficiente,
-          origemEap: true,
-        }));
+        const extraDesbloqueados = eapExtraDesbloqueado;
+        newItems = insumosList.map(ins => {
+          const qtdCalculada = Math.ceil((qtdServ * ins.coeficiente) * 1000) / 1000;
+          const saldoGlobal = getInsumoSaldoGlobal(ins.insumoCodigo);
+          let qtdFinal = qtdCalculada;
+          if (saldoGlobal) {
+            const saldoReal = Math.max(0, saldoGlobal.saldoDisponivel);
+            if (saldoReal <= 0 && !extraDesbloqueados[ins.insumoCodigo]) {
+              qtdFinal = 0;
+            } else if (saldoReal < qtdCalculada && !extraDesbloqueados[ins.insumoCodigo]) {
+              qtdFinal = saldoReal;
+            }
+          }
+          return {
+            descricao: ins.descricao,
+            unidade: ins.unidade,
+            quantidade: String(qtdFinal),
+            observacoes: qtdFinal < qtdCalculada && qtdFinal > 0 ? `Qtd calculada: ${qtdCalculada} (limitada ao saldo disponível)` : qtdFinal === 0 && qtdCalculada > 0 ? `Bloqueado — saldo global esgotado (calculado: ${qtdCalculada})` : "",
+            orcamentoItemId: orcItemId,
+            eapCodigo: eapItem.eapCodigo,
+            insumoCodigo: ins.insumoCodigo,
+            composicaoCodigo: eapItem.servicoCodigo,
+            precoMeta: ins.precoUnitario,
+            quantidadeServico: qtdServ,
+            coeficiente: ins.coeficiente,
+            origemEap: true,
+            qtdCalculadaOriginal: qtdCalculada,
+          };
+        }).filter(x => x.quantidade !== "0");
       } else {
         newItems = [{
           descricao: `[${eapItem.eapCodigo}] ${eapItem.descricao}`,
@@ -478,6 +501,27 @@ export default function Solicitacoes() {
       setSelectedEapIds(prev => { const n = new Set(prev); n.delete(orcItemId); return n; });
     }
   }
+
+  const prevExtraRef = React.useRef(eapExtraDesbloqueado);
+  React.useEffect(() => {
+    const prevExtra = prevExtraRef.current;
+    prevExtraRef.current = eapExtraDesbloqueado;
+    const newKeys = Object.keys(eapExtraDesbloqueado).filter(k => eapExtraDesbloqueado[k] && !prevExtra[k]);
+    if (newKeys.length === 0) return;
+    const eapItems = eapQ.data?.items;
+    if (!eapItems) return;
+    for (const orcIdStr of Object.keys(eapQtdServico)) {
+      const orcId = parseInt(orcIdStr);
+      const qtdStr = eapQtdServico[orcId];
+      if (!qtdStr || parseFloat(qtdStr) <= 0) continue;
+      const insList = eapInsumos[orcId] || [];
+      const affected = insList.some(ins => newKeys.includes(ins.insumoCodigo));
+      if (affected) {
+        const eapItem = eapItems.find(x => x.id === orcId);
+        if (eapItem) handleEapQtdChange(orcId, qtdStr, eapItem);
+      }
+    }
+  }, [eapExtraDesbloqueado]);
 
   function toggleEapItem(it: any) {
     setSelectedEapIds(prev => {
@@ -544,15 +588,39 @@ export default function Solicitacoes() {
 
     const saldoProblems: string[] = [];
     const itensSemVerba = new Set<string>();
-    for (const [orcId, saldo] of Object.entries(saldoData)) {
-      const qtdServ = parseFloat(eapQtdServico[parseInt(orcId)] || "0");
-      if (qtdServ > 0 && saldo.saldoDisponivel <= 0) {
-        saldoProblems.push(`${saldo.descricao}: SEM VERBA DISPONÍVEL (100%+ consumido)`);
-        itensSemVerba.add(orcId);
-      } else if (qtdServ > 0 && saldo.saldoDisponivel < qtdServ) {
-        const excesso = ((qtdServ - saldo.saldoDisponivel) / saldo.qtdOrcada * 100).toFixed(0);
-        saldoProblems.push(`${saldo.descricao}: excede saldo em ${excesso}%`);
-        itensSemVerba.add(orcId);
+    if (modoSC === "eap") {
+      const consolidadosData = insumosConsolidadosQ.data ?? [];
+      const qtdPorInsumo: Record<string, number> = {};
+      for (const [, item] of consolidados) {
+        if (item.insumoCodigo) {
+          qtdPorInsumo[item.insumoCodigo] = (qtdPorInsumo[item.insumoCodigo] || 0) + parseFloat(item.quantidade);
+        }
+      }
+      for (const [codigo, qtdSolicitando] of Object.entries(qtdPorInsumo)) {
+        const insGlobal = consolidadosData.find((c: any) => c.insumoCodigo === codigo);
+        if (insGlobal && qtdSolicitando > 0) {
+          const saldoDisp = insGlobal.saldoDisponivel;
+          if (saldoDisp <= 0 && !eapExtraDesbloqueado[codigo]) {
+            saldoProblems.push(`${insGlobal.descricao}: SEM SALDO GLOBAL (100%+ solicitado)`);
+            itensSemVerba.add(codigo);
+          } else if (qtdSolicitando > saldoDisp && saldoDisp > 0 && !eapExtraDesbloqueado[codigo]) {
+            const excesso = (((qtdSolicitando - saldoDisp) / insGlobal.qtdTotalOrcada) * 100).toFixed(0);
+            saldoProblems.push(`${insGlobal.descricao}: excede saldo global em ${excesso}%`);
+            itensSemVerba.add(codigo);
+          }
+        }
+      }
+    } else {
+      for (const [orcId, saldo] of Object.entries(saldoData)) {
+        const qtdServ = parseFloat(eapQtdServico[parseInt(orcId)] || "0");
+        if (qtdServ > 0 && saldo.saldoDisponivel <= 0) {
+          saldoProblems.push(`${saldo.descricao}: SEM VERBA DISPONÍVEL (100%+ consumido)`);
+          itensSemVerba.add(orcId);
+        } else if (qtdServ > 0 && saldo.saldoDisponivel < qtdServ) {
+          const excesso = ((qtdServ - saldo.saldoDisponivel) / saldo.qtdOrcada * 100).toFixed(0);
+          saldoProblems.push(`${saldo.descricao}: excede saldo em ${excesso}%`);
+          itensSemVerba.add(orcId);
+        }
       }
     }
 
@@ -563,7 +631,10 @@ export default function Solicitacoes() {
       const motivoMap: Record<string, string> = { "1": "quebra_dano", "2": "furto", "3": "erro_orcamento", "4": "qtd_insuficiente", "5": "retrabalho", "6": "outro" };
       const motivoVal = motivoMap[motivo.trim()] ?? "outro";
       for (const [, item] of consolidados) {
-        if (item.orcamentoItemId && itensSemVerba.has(String(item.orcamentoItemId))) {
+        const matched = modoSC === "eap"
+          ? (item.insumoCodigo && itensSemVerba.has(item.insumoCodigo))
+          : (item.orcamentoItemId && itensSemVerba.has(String(item.orcamentoItemId)));
+        if (matched) {
           item.semVerba = true;
           item.motivoSemVerba = motivoVal;
         }
@@ -925,7 +996,7 @@ export default function Solicitacoes() {
                           setItens([newItem()]);
                           setObraSearch("");
                           setObraOpen(false);
-                          setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setBatchSaldo({});
+                          setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setBatchSaldo({}); setEapExtraDesbloqueado({});
                         }}
                       >
                         {o.codigo ? <span className="text-gray-400 mr-1">[{o.codigo}]</span> : null}{o.nome}
@@ -1012,8 +1083,6 @@ export default function Solicitacoes() {
                               const saldo = saldoData[it.id];
                               const qtdStr = eapQtdServico[it.id] || "";
                               const qtdVal = parseFloat(qtdStr) || 0;
-                              const estouro = saldo && qtdVal > 0 && qtdVal > saldo.saldoDisponivel;
-                              const saldoJaNegativo = saldo && saldo.saldoDisponivel < 0;
                               const statusColor = getStatusColor(it.id);
                               const cob = coberturaMap[it.id];
                               const cobPct = cob && cob.totalInsumos > 0 ? Math.round((cob.insumosCobertos / cob.totalInsumos) * 100) : null;
@@ -1076,81 +1145,56 @@ export default function Solicitacoes() {
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0 text-xs text-gray-400">
                                       <span>{parseFloat(String(it.quantidade ?? "0")).toLocaleString("pt-BR")} {it.unidade || "vb"}</span>
-                                      {saldoJaNegativo && <span className="text-[9px] font-bold text-red-600 bg-red-50 border border-red-200 px-1 py-0.5 rounded">SALDO: {saldo.saldoDisponivel.toLocaleString("pt-BR")}</span>}
                                       {qtdVal > 0 && <span className="text-amber-600 font-medium">✓</span>}
                                     </div>
                                   </div>
 
                                   {expanded && (
                                     <div className="px-4 py-3 bg-gray-50 border-l-2 border-l-amber-500 space-y-3">
-                                      {saldo && (
-                                        <div className="grid grid-cols-6 gap-1.5 text-[10px]">
-                                          <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
-                                            <div className="text-gray-400 uppercase font-medium">Orçado</div>
-                                            <div className="text-gray-900 font-bold text-xs">{parseFloat(String(saldo.qtdOrcada)).toLocaleString("pt-BR")}</div>
-                                            <div className="text-[9px] text-gray-500 font-semibold mt-0.5 bg-gray-100 rounded px-1 py-0.5 inline-block">{saldo.unidade || it.unidade || "un"}</div>
-                                          </div>
-                                          <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
-                                            <div className="text-blue-400 uppercase font-medium">Solicit.</div>
-                                            <div className="text-blue-600 font-bold text-xs">{parseFloat(String(saldo.qtdJaSolicitada)).toLocaleString("pt-BR")}</div>
-                                            <div className="text-[9px] text-blue-500 font-semibold mt-0.5 bg-blue-50 rounded px-1 py-0.5 inline-block">{saldo.unidade || it.unidade || "un"}</div>
-                                          </div>
-                                          <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
-                                            <div className="text-purple-400 uppercase font-medium">Comprado</div>
-                                            <div className="text-purple-600 font-bold text-xs">{parseFloat(String(saldo.qtdComprada ?? 0)).toLocaleString("pt-BR")}</div>
-                                            <div className="text-[9px] text-purple-500 font-semibold mt-0.5 bg-purple-50 rounded px-1 py-0.5 inline-block">{saldo.unidade || it.unidade || "un"}</div>
-                                          </div>
-                                          <div className="bg-white rounded px-1.5 py-1.5 border border-gray-200 text-center">
-                                            <div className="text-teal-400 uppercase font-medium">Recebido</div>
-                                            <div className="text-teal-600 font-bold text-xs">{parseFloat(String(saldo.qtdRecebida ?? 0)).toLocaleString("pt-BR")}</div>
-                                            <div className="text-[9px] text-teal-500 font-semibold mt-0.5 bg-teal-50 rounded px-1 py-0.5 inline-block">{saldo.unidade || it.unidade || "un"}</div>
-                                          </div>
-                                          <div className={`rounded px-1.5 py-1.5 border text-center ${estouro || saldo.saldoDisponivel < 0 ? "bg-red-50 border-red-200" : saldo.saldoDisponivel === 0 ? "bg-gray-100 border-gray-300" : "bg-emerald-50 border-emerald-200"}`}>
-                                            <div className={`uppercase font-medium ${estouro || saldo.saldoDisponivel < 0 ? "text-red-500" : saldo.saldoDisponivel === 0 ? "text-gray-500" : "text-emerald-500"}`}>Saldo</div>
-                                            <div className={`font-bold text-xs ${estouro || saldo.saldoDisponivel < 0 ? "text-red-600" : saldo.saldoDisponivel === 0 ? "text-gray-600" : "text-emerald-600"}`}>
-                                              {(() => {
-                                                const saldoAposReq = estouro ? saldo.saldoDisponivel - qtdVal : saldo.saldoDisponivel;
-                                                return saldoAposReq < 0
-                                                  ? `-${Math.abs(saldoAposReq).toLocaleString("pt-BR")}`
-                                                  : saldoAposReq.toLocaleString("pt-BR");
-                                              })()}
+                                      {(() => {
+                                        const insListaLocal = eapInsumos[it.id] || [];
+                                        const consolidados = insumosConsolidadosQ.data ?? [];
+                                        const totalIns = insListaLocal.length;
+                                        let comSaldo = 0, semSaldo = 0, parcial = 0;
+                                        for (const ins of insListaLocal) {
+                                          const c = consolidados.find((x: any) => x.insumoCodigo === ins.insumoCodigo);
+                                          if (!c) { comSaldo++; continue; }
+                                          const s = c.saldoDisponivel;
+                                          if (s <= 0) semSaldo++;
+                                          else if (s < Math.ceil((1 * ins.coeficiente) * 1000) / 1000) parcial++;
+                                          else comSaldo++;
+                                        }
+                                        if (totalIns === 0) return null;
+                                        return (
+                                          <div className="flex items-center gap-3 text-[10px]">
+                                            <div className="flex items-center gap-1">
+                                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                              <span className="text-emerald-700 font-medium">{comSaldo} com saldo</span>
                                             </div>
-                                            <div className={`text-[9px] font-semibold mt-0.5 rounded px-1 py-0.5 inline-block ${estouro || saldo.saldoDisponivel < 0 ? "text-red-500 bg-red-100" : saldo.saldoDisponivel === 0 ? "text-gray-500 bg-gray-200" : "text-emerald-500 bg-emerald-100"}`}>{saldo.unidade || it.unidade || "un"}</div>
+                                            {parcial > 0 && <div className="flex items-center gap-1">
+                                              <span className="w-2 h-2 rounded-full bg-yellow-500" />
+                                              <span className="text-yellow-700 font-medium">{parcial} saldo parcial</span>
+                                            </div>}
+                                            {semSaldo > 0 && <div className="flex items-center gap-1">
+                                              <span className="w-2 h-2 rounded-full bg-gray-400" />
+                                              <span className="text-gray-600 font-medium">{semSaldo} sem saldo</span>
+                                            </div>}
+                                            <span className="text-gray-400">({totalIns} insumos — saldo consolidado da obra)</span>
                                           </div>
-                                          <div className="bg-amber-50 rounded px-1.5 py-1.5 border border-amber-200 text-center">
-                                            <div className="text-amber-500 uppercase font-medium">Solic.</div>
-                                            <div className="text-amber-700 font-bold text-xs">{qtdVal.toLocaleString("pt-BR")}</div>
-                                            <div className="text-[9px] text-amber-600 font-semibold mt-0.5 bg-amber-100 rounded px-1 py-0.5 inline-block">{saldo.unidade || it.unidade || "un"}</div>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {estouro && (
-                                        <div className="flex items-center gap-1.5 text-[11px] text-red-600 bg-red-50 border border-red-200 rounded px-2.5 py-1.5">
-                                          <AlertTriangle className="h-3 w-3 shrink-0" />
-                                          <span>Estouro de saldo! Excede em {(qtdVal - saldo.saldoDisponivel).toLocaleString("pt-BR")} {saldo.unidade || "un"} ({((qtdVal - saldo.saldoDisponivel) / parseFloat(String(saldo.qtdOrcada)) * 100).toFixed(0)}%) — Saldo resultante: <strong className="text-red-700">-{(qtdVal - saldo.saldoDisponivel).toLocaleString("pt-BR")}</strong></span>
-                                        </div>
-                                      )}
+                                        );
+                                      })()}
 
                                       <div className="flex items-center gap-2">
                                         <label className="text-xs text-gray-600 font-medium whitespace-nowrap">Qtd. serviço a executar:</label>
                                         <input
                                           type="number" min="0" step="0.01"
-                                          className={`w-28 h-7 px-2 text-xs rounded border bg-white text-gray-900 outline-none focus:ring-1 ${estouro ? "border-red-300 focus:border-red-400 focus:ring-red-200" : "border-gray-300 focus:border-amber-400 focus:ring-amber-200"}`}
+                                          className="w-28 h-7 px-2 text-xs rounded border bg-white text-gray-900 outline-none focus:ring-1 border-gray-300 focus:border-amber-400 focus:ring-amber-200"
                                           placeholder="0"
                                           value={qtdStr}
                                           onChange={e => handleEapQtdChange(it.id, e.target.value, it)}
                                         />
                                         <span className="text-xs font-bold text-gray-700 bg-gray-100 border border-gray-300 rounded px-1.5 py-0.5">{it.unidade || "vb"}</span>
-                                        {saldo && saldo.saldoDisponivel > 0 && (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleEapQtdChange(it.id, String(saldo.saldoDisponivel), it)}
-                                            className="text-[10px] text-amber-600 hover:text-amber-700 underline font-medium"
-                                          >
-                                            Compra total
-                                          </button>
-                                        )}
+                                        <span className="text-[10px] text-gray-400">Orçado: {parseFloat(String(it.quantidade ?? "0")).toLocaleString("pt-BR")}</span>
                                       </div>
 
                                       {loadingInsumos === it.id ? (
@@ -1162,25 +1206,51 @@ export default function Solicitacoes() {
                                           <div className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide flex items-center gap-1">
                                             <Package className="h-3 w-3" /> Insumos da composição ({insLista.length})
                                           </div>
-                                          <div className="bg-white rounded border border-gray-200 divide-y divide-gray-100 max-h-36 overflow-y-auto">
+                                          <div className="bg-white rounded border border-gray-200 divide-y divide-gray-100 max-h-48 overflow-y-auto">
                                             {insLista.map((ins: any, idx: number) => {
                                               const qtdCalc = qtdVal > 0 ? Math.ceil((qtdVal * ins.coeficiente) * 1000) / 1000 : 0;
                                               const insConsolidado = (insumosConsolidadosQ.data ?? []).find((c: any) => c.insumoCodigo === ins.insumoCodigo);
                                               const insStatus = insConsolidado?.statusInsumo || "disponivel";
                                               const insStatusDotColor: Record<string, string> = { disponivel: "bg-emerald-500", solicitado: "bg-blue-500", em_cotacao: "bg-amber-500", comprado: "bg-purple-500", recebido: "bg-rose-500", estouro: "bg-red-700" };
                                               const insStatusLabel: Record<string, string> = { disponivel: "Disponível", solicitado: "Solicitado", em_cotacao: "Em cotação", comprado: "100% comprado", recebido: "Recebido", estouro: "Acima do orçado" };
-                                              const insRowBg = insStatus === "estouro" ? "bg-red-50/60" : insStatus === "comprado" ? "bg-purple-50/50" : insStatus === "recebido" ? "bg-rose-50/50" : "";
+                                              const saldoGlobal = insConsolidado ? insConsolidado.saldoDisponivel : null;
+                                              const saldoReal = saldoGlobal != null ? Math.max(0, saldoGlobal) : null;
+                                              const isBloqueado = saldoReal != null && saldoReal <= 0 && !eapExtraDesbloqueado[ins.insumoCodigo];
+                                              const isCapado = saldoReal != null && saldoReal > 0 && saldoReal < qtdCalc && !eapExtraDesbloqueado[ins.insumoCodigo];
+                                              const isExtra = eapExtraDesbloqueado[ins.insumoCodigo];
+                                              const qtdEfetiva = isBloqueado ? 0 : isCapado ? saldoReal : qtdCalc;
+                                              const insRowBg = isBloqueado ? "bg-gray-100/80 opacity-60" : isExtra ? "bg-amber-50/60" : isCapado ? "bg-yellow-50/50" : insStatus === "estouro" ? "bg-red-50/60" : insStatus === "comprado" ? "bg-purple-50/50" : insStatus === "recebido" ? "bg-rose-50/50" : "";
                                               return (
                                                 <div key={idx} className={`flex items-center gap-2 px-2.5 py-1.5 text-xs ${insRowBg}`}>
-                                                  <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${insStatusDotColor[insStatus] || "bg-emerald-500"}`} title={insStatusLabel[insStatus] || "Disponível"} />
+                                                  <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${isBloqueado ? "bg-gray-400" : insStatusDotColor[insStatus] || "bg-emerald-500"}`} title={isBloqueado ? "Saldo esgotado" : insStatusLabel[insStatus] || "Disponível"} />
                                                   <div className="flex-1 min-w-0">
-                                                    <div className="text-gray-900 truncate flex items-center gap-1 flex-wrap">{ins.descricao} {insStatus !== "disponivel" && <span className={`text-[8px] px-1 rounded font-bold ${insStatus === "estouro" ? "bg-red-100 text-red-700" : insStatus === "comprado" ? "bg-purple-100 text-purple-700" : insStatus === "recebido" ? "bg-rose-100 text-rose-700" : insStatus === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{insStatusLabel[insStatus]}</span>}{insConsolidado?.scDocs?.length > 0 && <DocLinks docs={insConsolidado.scDocs} prefix="SC" route="/compras/solicitacoes" navigate={navigate} />}{insConsolidado?.cotDocs?.length > 0 && <DocLinks docs={insConsolidado.cotDocs} prefix="COT" route="/compras/cotacoes" navigate={navigate} />}{insConsolidado?.ocDocs?.length > 0 && <DocLinks docs={insConsolidado.ocDocs} prefix="OC" route="/compras/ordens" navigate={navigate} />}</div>
-                                                    <div className="text-[10px] text-gray-400">Coef: {ins.coeficiente} | Meta: R$ {parseFloat(ins.precoUnitario || "0").toFixed(2)}{insConsolidado ? ` | Orçado: ${insConsolidado.qtdTotalOrcada.toLocaleString("pt-BR")} | Comprado: ${insConsolidado.qtdComprada.toLocaleString("pt-BR")}` : ""}</div>
+                                                    <div className="text-gray-900 truncate flex items-center gap-1 flex-wrap">
+                                                      {ins.descricao}
+                                                      {isBloqueado && <span className="text-[8px] px-1 rounded font-bold bg-gray-200 text-gray-600">SALDO ESGOTADO</span>}
+                                                      {isCapado && <span className="text-[8px] px-1 rounded font-bold bg-yellow-100 text-yellow-700">LIMITADO AO SALDO</span>}
+                                                      {isExtra && <span className="text-[8px] px-1 rounded font-bold bg-amber-100 text-amber-700">EXTRA-ORÇAMENTO</span>}
+                                                      {!isBloqueado && !isCapado && !isExtra && insStatus !== "disponivel" && <span className={`text-[8px] px-1 rounded font-bold ${insStatus === "estouro" ? "bg-red-100 text-red-700" : insStatus === "comprado" ? "bg-purple-100 text-purple-700" : insStatus === "recebido" ? "bg-rose-100 text-rose-700" : insStatus === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{insStatusLabel[insStatus]}</span>}
+                                                      {insConsolidado?.scDocs?.length > 0 && <DocLinks docs={insConsolidado.scDocs} prefix="SC" route="/compras/solicitacoes" navigate={navigate} />}
+                                                      {insConsolidado?.cotDocs?.length > 0 && <DocLinks docs={insConsolidado.cotDocs} prefix="COT" route="/compras/cotacoes" navigate={navigate} />}
+                                                      {insConsolidado?.ocDocs?.length > 0 && <DocLinks docs={insConsolidado.ocDocs} prefix="OC" route="/compras/ordens" navigate={navigate} />}
+                                                    </div>
+                                                    <div className="text-[10px] text-gray-400 flex items-center gap-1 flex-wrap">
+                                                      Coef: {ins.coeficiente} | Meta: R$ {parseFloat(ins.precoUnitario || "0").toFixed(2)}
+                                                      {insConsolidado && <span>| Orçado global: <strong className="text-gray-600">{insConsolidado.qtdTotalOrcada.toLocaleString("pt-BR")}</strong> | Solicitado: <strong className="text-blue-600">{insConsolidado.qtdJaSolicitada.toLocaleString("pt-BR")}</strong> | Saldo: <strong className={saldoGlobal != null && saldoGlobal <= 0 ? "text-red-600" : "text-emerald-600"}>{saldoGlobal != null ? saldoGlobal.toLocaleString("pt-BR") : "?"}</strong></span>}
+                                                    </div>
                                                   </div>
-                                                  <div className="text-right shrink-0">
-                                                    <div className="font-semibold text-gray-700">{qtdCalc.toLocaleString("pt-BR")} {ins.unidade}</div>
-                                                    {qtdCalc > 0 && <div className="text-[10px] text-gray-400">R$ {(qtdCalc * parseFloat(ins.precoUnitario || "0")).toFixed(2)}</div>}
-                                                    {(() => { const c = getConversao(ins.descricao, ins.unidade, qtdCalc); return c ? <div className="text-[9px] text-purple-600 bg-purple-50 rounded px-1 py-0.5 mt-0.5 font-medium">{c}</div> : null; })()}
+                                                  <div className="text-right shrink-0 flex items-center gap-1.5">
+                                                    {(isBloqueado || isCapado) && (
+                                                      <button type="button" onClick={(e) => { e.stopPropagation(); setEapExtraDesbloqueado(p => ({ ...p, [ins.insumoCodigo]: true })); }} className="text-[8px] font-semibold text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded px-1.5 py-0.5 whitespace-nowrap transition-colors">
+                                                        Extra-orçamento
+                                                      </button>
+                                                    )}
+                                                    <div>
+                                                      <div className={`font-semibold ${isBloqueado ? "text-gray-400 line-through" : isCapado ? "text-yellow-700" : "text-gray-700"}`}>{(isBloqueado ? qtdCalc : qtdEfetiva).toLocaleString("pt-BR")} {ins.unidade}</div>
+                                                      {isCapado && <div className="text-[9px] text-yellow-600">de {qtdCalc.toLocaleString("pt-BR")} calculado</div>}
+                                                      {qtdEfetiva > 0 && !isBloqueado && <div className="text-[10px] text-gray-400">R$ {(qtdEfetiva * parseFloat(ins.precoUnitario || "0")).toFixed(2)}</div>}
+                                                      {(() => { const c = getConversao(ins.descricao, ins.unidade, qtdEfetiva); return c ? <div className="text-[9px] text-purple-600 bg-purple-50 rounded px-1 py-0.5 mt-0.5 font-medium">{c}</div> : null; })()}
+                                                    </div>
                                                   </div>
                                                 </div>
                                               );
