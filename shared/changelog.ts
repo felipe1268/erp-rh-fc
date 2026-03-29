@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 867,
+    titulo: "Vínculo orçamentário via insumo_codigo na aprovação de SC",
+    descricao: "Itens de SC sem vínculo direto (orcamento_item_id null) mas com insumo_codigo agora são corretamente vinculados à tabela orcamento_insumos. O sistema cruza o código do insumo com o orçamento da obra para encontrar a verba orçada, e calcula o saldo real considerando todas as SCs e OCs que usam o mesmo insumo. Resolve o falso-positivo onde itens como Cimento (código 20.05.08) apareciam como 'sem vínculo' mesmo existindo no orçamento.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:59:00",
+  },
+  {
     version: 866,
     titulo: "Confirmação de Aprovação com Controle Orçamentário",
     descricao: "Dialog de aprovação/recusa da SC agora mostra dados orçamentários em tempo real para cada item: quantidade orçada, já solicitada, já comprada (com número da OC vinculada), e saldo disponível. Itens fora do orçamento ou sem verba são destacados em vermelho com alertas claros ('SEM VERBA', 'FORA DO ORÇAMENTO'). O fluxo não é bloqueado, mas o aprovador tem visibilidade total da situação financeira antes de decidir.",

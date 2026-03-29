@@ -149,7 +149,7 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
 
     if (item.situacao === "sem_vinculo") {
       return {
-        texto: `Este item não está vinculado diretamente a um item do orçamento. O controle de saldo não pôde ser calculado automaticamente.`,
+        texto: `Este item não está vinculado a nenhum item ou insumo do orçamento. O controle de saldo não pôde ser calculado automaticamente.`,
         cor: "gray",
         badge: null,
       };

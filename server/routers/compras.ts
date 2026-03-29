@@ -19,7 +19,7 @@ import {
   comprasRiscoDebitos,
   users,
   obras,
-  orcamentos, orcamentoItens,
+  orcamentos, orcamentoItens, orcamentoInsumos,
   composicaoInsumos, composicoesCatalogo, insumosCatalogo,
   bdiIndiretos, orcamentoBdi,
   planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades,
@@ -4151,7 +4151,7 @@ Retorne APENAS um JSON válido neste formato:
     .input(z.object({ companyId: z.number(), solicitacaoId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      const [sc] = await db.select({ id: comprasSolicitacoes.id }).from(comprasSolicitacoes)
+      const [sc] = await db.select({ id: comprasSolicitacoes.id, obraId: comprasSolicitacoes.obraId }).from(comprasSolicitacoes)
         .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
       if (!sc) return [];
 
@@ -4164,6 +4164,73 @@ Retorne APENAS um JSON válido neste formato:
         const rows = await db.select({ id: orcamentoItens.id, quantidade: orcamentoItens.quantidade, descricao: orcamentoItens.descricao, unidade: orcamentoItens.unidade })
           .from(orcamentoItens).where(and(inArray(orcamentoItens.id, orcItemIds), eq(orcamentoItens.companyId, input.companyId)));
         for (const r of rows) orcItensData[r.id] = { quantidade: r.quantidade ?? "0", descricao: r.descricao ?? "", unidade: r.unidade };
+      }
+
+      let insumoOrcData: Record<string, { quantidadeTotal: number; descricao: string; unidade: string | null }> = {};
+      const insumoCodigos = scItens.filter(i => !i.orcamentoItemId && i.insumoCodigo).map(i => i.insumoCodigo!);
+      if (insumoCodigos.length > 0 && sc.obraId) {
+        const orcRows = await db.select({ id: orcamentos.id }).from(orcamentos)
+          .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, sc.obraId), isNull(orcamentos.deletedAt)));
+        const orcIds = orcRows.map(o => o.id);
+        if (orcIds.length > 0) {
+          const insumoRows = await db.select({
+            codigo: orcamentoInsumos.codigo,
+            quantidadeTotal: orcamentoInsumos.quantidadeTotal,
+            descricao: orcamentoInsumos.descricao,
+            unidade: orcamentoInsumos.unidade,
+            orcamentoId: orcamentoInsumos.orcamentoId,
+          }).from(orcamentoInsumos)
+            .where(and(
+              inArray(orcamentoInsumos.orcamentoId, orcIds),
+              eq(orcamentoInsumos.companyId, input.companyId),
+            ));
+          for (const ins of insumoRows) {
+            if (ins.codigo && insumoCodigos.includes(ins.codigo)) {
+              const existing = insumoOrcData[ins.codigo];
+              if (!existing || n(ins.quantidadeTotal) > existing.quantidadeTotal) {
+                insumoOrcData[ins.codigo] = {
+                  quantidadeTotal: n(ins.quantidadeTotal),
+                  descricao: ins.descricao,
+                  unidade: ins.unidade,
+                };
+              }
+            }
+          }
+        }
+      }
+
+      const insumoSolicitadoMap: Record<string, number> = {};
+      if (insumoCodigos.length > 0 && sc.obraId) {
+        const rows = await db.execute(sql`
+          SELECT si.insumo_codigo, COALESCE(SUM(si.quantidade::numeric), 0) as total
+          FROM compras_solicitacoes_itens si
+          JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
+          WHERE si.insumo_codigo IN (${sql.join(insumoCodigos.map(c => sql`${c}`), sql`, `)})
+            AND si.orcamento_item_id IS NULL
+            AND s.company_id = ${input.companyId} AND s.status NOT IN ('cancelado')
+            AND s.obra_id = ${sc.obraId}
+          GROUP BY si.insumo_codigo
+        `);
+        for (const r of (rows as any).rows ?? []) insumoSolicitadoMap[r.insumo_codigo] = n(r.total);
+      }
+
+      const insumoCompradoMap: Record<string, { qtd: number; ocs: string[] }> = {};
+      if (insumoCodigos.length > 0 && sc.obraId) {
+        const rows = await db.execute(sql`
+          SELECT si.insumo_codigo, oi2.quantidade::numeric as qtd, o.numero_oc
+          FROM compras_solicitacoes_itens si
+          JOIN compras_ordens_itens oi2 ON oi2.solicitacao_item_id = si.id
+          JOIN compras_ordens o ON o.id = oi2.ordem_id AND o.status NOT IN ('cancelada') AND o.company_id = ${input.companyId}
+          JOIN compras_solicitacoes s ON s.id = si.solicitacao_id AND s.obra_id = ${sc.obraId}
+          WHERE si.insumo_codigo IN (${sql.join(insumoCodigos.map(c => sql`${c}`), sql`, `)})
+            AND si.orcamento_item_id IS NULL
+        `);
+        for (const r of (rows as any).rows ?? []) {
+          const cod = r.insumo_codigo;
+          if (!insumoCompradoMap[cod]) insumoCompradoMap[cod] = { qtd: 0, ocs: [] };
+          insumoCompradoMap[cod].qtd += n(r.qtd);
+          if (r.numero_oc && !insumoCompradoMap[cod].ocs.includes(r.numero_oc)) insumoCompradoMap[cod].ocs.push(r.numero_oc);
+        }
       }
 
       const solicitadoMap: Record<number, number> = {};
@@ -4198,20 +4265,41 @@ Retorne APENAS um JSON válido neste formato:
 
       return scItens.map(item => {
         const orcId = item.orcamentoItemId;
+        const insCode = item.insumoCodigo;
         const orcData = orcId ? orcItensData[orcId] : null;
-        const vinculadoAoOrcamento = orcId != null && orcData != null;
-        const qtdOrcada = orcData ? n(orcData.quantidade) : 0;
-        const qtdSolicitada = orcId ? (solicitadoMap[orcId] ?? 0) : 0;
-        const comp = orcId ? compradoMap[orcId] : null;
-        const qtdComprada = comp?.qtd ?? 0;
-        const ocsVinculadas = comp?.ocs ?? [];
+
+        let vinculado = false;
+        let qtdOrcada = 0;
+        let qtdSolicitada = 0;
+        let qtdComprada = 0;
+        let ocsVinculadas: string[] = [];
+        let fonteVinculo: "item" | "insumo" | null = null;
+
+        if (orcId && orcData) {
+          vinculado = true;
+          fonteVinculo = "item";
+          qtdOrcada = n(orcData.quantidade);
+          qtdSolicitada = solicitadoMap[orcId] ?? 0;
+          const comp = compradoMap[orcId];
+          qtdComprada = comp?.qtd ?? 0;
+          ocsVinculadas = comp?.ocs ?? [];
+        } else if (insCode && insumoOrcData[insCode]) {
+          vinculado = true;
+          fonteVinculo = "insumo";
+          qtdOrcada = insumoOrcData[insCode].quantidadeTotal;
+          qtdSolicitada = insumoSolicitadoMap[insCode] ?? 0;
+          const comp = insumoCompradoMap[insCode];
+          qtdComprada = comp?.qtd ?? 0;
+          ocsVinculadas = comp?.ocs ?? [];
+        }
+
         const qtdEstaSC = n(item.quantidade);
         const consumido = Math.max(qtdSolicitada, qtdComprada);
-        const saldo = qtdOrcada - consumido;
+        const saldo = vinculado ? qtdOrcada - consumido : 0;
 
         const semVerbaFlag = item.semVerba ?? false;
         let situacao: "ok" | "sem_vinculo" | "sem_vinculo_sem_verba" | "verba_esgotada_compras" | "verba_esgotada_solicitacoes" | "saldo_insuficiente" = "ok";
-        if (!vinculadoAoOrcamento) {
+        if (!vinculado) {
           situacao = semVerbaFlag ? "sem_vinculo_sem_verba" : "sem_vinculo";
         } else if (saldo < 0) {
           if (qtdComprada >= qtdOrcada) {
@@ -4236,6 +4324,7 @@ Retorne APENAS um JSON válido neste formato:
           ocsVinculadas,
           saldo,
           situacao,
+          fonteVinculo,
           semVerbaFlag: item.semVerba ?? false,
         };
       });
