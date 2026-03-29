@@ -701,6 +701,8 @@ export default function Solicitacoes() {
     if (eapExpanded === it.id) { setEapExpanded(null); return; }
     setEapExpanded(it.id);
 
+    if (form.tipo === "servico") return;
+
     if (!eapInsumos[it.id] && it.servicoCodigo) {
       setLoadingInsumos(it.id);
       try {
@@ -732,7 +734,20 @@ export default function Solicitacoes() {
 
     if (qtdServ > 0) {
       let newItems: ItemForm[];
-      if (insumosList.length > 0) {
+
+      if (form.tipo === "servico") {
+        newItems = [{
+          descricao: eapItem.descricao || `[${eapItem.eapCodigo}] Serviço`,
+          unidade: eapItem.unidade || "vb",
+          quantidade: String(qtdServ),
+          observacoes: "",
+          orcamentoItemId: orcItemId,
+          eapCodigo: eapItem.eapCodigo,
+          composicaoCodigo: eapItem.servicoCodigo,
+          quantidadeServico: qtdServ,
+          origemEap: true,
+        }];
+      } else if (insumosList.length > 0) {
         const extraDesbloqueados = eapExtraDesbloqueado;
         newItems = insumosList.map(ins => {
           const qtdCalculada = Math.ceil((qtdServ * ins.coeficiente) * 1000) / 1000;
@@ -861,7 +876,9 @@ export default function Solicitacoes() {
 
     const consolidados = new Map<string, ItemForm>();
     for (const it of validos) {
-      const key = it.insumoCodigo || it.descricao;
+      const key = form.tipo === "servico" && it.orcamentoItemId
+        ? `orc_${it.orcamentoItemId}`
+        : (it.insumoCodigo || it.descricao);
       if (consolidados.has(key)) {
         const prev = consolidados.get(key)!;
         prev.quantidade = String(parseFloat(prev.quantidade) + parseFloat(it.quantidade));
@@ -872,7 +889,24 @@ export default function Solicitacoes() {
 
     const saldoProblems: string[] = [];
     const itensSemVerba = new Set<string>();
-    if (modoSC === "eap") {
+    if (form.tipo === "servico") {
+      const eapItems = eapQ.data?.items || [];
+      for (const [, item] of consolidados) {
+        if (!item.orcamentoItemId) continue;
+        const eapItem = eapItems.find((e: any) => e.id === item.orcamentoItemId);
+        if (!eapItem) continue;
+        const mdoSaldo = (eapItem as any).mdoSaldo ?? 0;
+        const qtdSolicitando = parseFloat(item.quantidade) || 0;
+        if (qtdSolicitando > 0 && mdoSaldo <= 0) {
+          saldoProblems.push(`${eapItem.descricao}: SEM SALDO MDO (100%+ contratado)`);
+          itensSemVerba.add(String(item.orcamentoItemId));
+        } else if (qtdSolicitando > mdoSaldo && mdoSaldo > 0) {
+          const excesso = (((qtdSolicitando - mdoSaldo) / parseFloat(String(eapItem.quantidade || 1))) * 100).toFixed(0);
+          saldoProblems.push(`${eapItem.descricao}: excede saldo MDO em ${excesso}%`);
+          itensSemVerba.add(String(item.orcamentoItemId));
+        }
+      }
+    } else if (modoSC === "eap") {
       const consolidadosData = insumosConsolidadosQ.data ?? [];
       const qtdPorInsumo: Record<string, number> = {};
       for (const [, item] of consolidados) {
@@ -965,7 +999,7 @@ export default function Solicitacoes() {
     const { itensSemVerba, consolidados } = showSemVerba;
     const motivoFinal = semVerbaMotivo === "outro" ? `outro: ${semVerbaObs.trim()}` : semVerbaMotivo;
     for (const [, item] of consolidados) {
-      const matched = modoSC === "eap"
+      const matched = modoSC === "eap" && form.tipo !== "servico"
         ? (item.insumoCodigo && itensSemVerba.has(item.insumoCodigo))
         : (item.orcamentoItemId && itensSemVerba.has(String(item.orcamentoItemId)));
       if (matched) {
@@ -1293,6 +1327,7 @@ export default function Solicitacoes() {
                       setEapExpanded(null);
                       setSaldoData({});
                       setEapExtraDesbloqueado({});
+                      if (opt.value === "servico" && modoSC === "insumo") setModoSC("eap");
                     }}
                   >
                     <span className="mr-1">{opt.icon}</span> {opt.label}
@@ -1358,6 +1393,7 @@ export default function Solicitacoes() {
                   >
                     <Zap className="h-3 w-3" /> Via EAP (Inteligente)
                   </button>
+                  {form.tipo !== "servico" && (
                   <button
                     type="button"
                     onClick={() => setModoSC("insumo")}
@@ -1365,6 +1401,7 @@ export default function Solicitacoes() {
                   >
                     <Package className="h-3 w-3" /> Por Insumo
                   </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setModoSC("manual")}
@@ -1379,7 +1416,7 @@ export default function Solicitacoes() {
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
                         <ListTree className="h-3.5 w-3.5 text-amber-600" />
-                        {form.tipo === "servico" ? "Serviços da EAP — clique para explodir mão de obra" : form.tipo === "pacote" ? "Serviços da EAP — clique para explodir insumos e mão de obra" : "Serviços da EAP — clique para explodir insumos"}
+                        {form.tipo === "servico" ? "Composições da EAP — selecione os serviços para contratar" : form.tipo === "pacote" ? "Serviços da EAP — clique para explodir insumos e mão de obra" : "Serviços da EAP — clique para explodir insumos"}
                       </label>
                       {selectedEapIds.size > 0 && (
                         <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
@@ -1396,12 +1433,22 @@ export default function Solicitacoes() {
                       <div className="space-y-1.5">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-gray-500">
                           <span className="font-medium text-gray-600 mr-0.5">Legenda:</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-emerald-500" />Disponível</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-blue-500" />Solicitado</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-amber-500" />Em cotação</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-purple-500" />100% comprado</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-rose-500" />Recebido</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-red-700" />Estouro</span>
+                          {form.tipo === "servico" ? (
+                            <>
+                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-emerald-500" />Saldo disponível</span>
+                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-purple-500" />100% contratado</span>
+                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-red-500" />Sem saldo</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-emerald-500" />Disponível</span>
+                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-blue-500" />Solicitado</span>
+                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-amber-500" />Em cotação</span>
+                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-purple-500" />100% comprado</span>
+                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-rose-500" />Recebido</span>
+                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-red-700" />Estouro</span>
+                            </>
+                          )}
                         </div>
                       <div className="border border-gray-200 rounded-lg overflow-hidden">
                         <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
@@ -1417,8 +1464,8 @@ export default function Solicitacoes() {
                           {eapQ.data.items
                             .filter(it => it.nivel >= 2 && it.tipo !== "grupo")
                             .filter(it => {
+                              if (form.tipo === "servico") return !!it.servicoCodigo && (it as any).temMdo;
                               if (!it.servicoCodigo) return true;
-                              if (form.tipo === "servico") return (it as any).temMdo;
                               if (form.tipo === "material") return (it as any).temMat !== false;
                               return true;
                             })
@@ -1440,7 +1487,7 @@ export default function Solicitacoes() {
                                     onClick={() => handleEapExpand(it)}
                                     className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${expanded ? "bg-amber-50 border-l-2 border-l-amber-500" : "hover:bg-gray-50"}`}
                                   >
-                                    <span className={`inline-block w-4 h-4 rounded-full shrink-0 ${cobParcial && statusColor.label !== "Estouro" ? "bg-orange-500" : statusColor.dot} ring-1 ring-white shadow-sm`} title={cobParcial ? `Parcial: ${cob.insumosCobertos}/${cob.totalInsumos} insumos` : statusColor.label} />
+                                    <span className={`inline-block w-4 h-4 rounded-full shrink-0 ${form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "bg-purple-500" : ((it as any).mdoSaldo ?? 0) <= 0 ? "bg-red-500" : "bg-emerald-500") : cobParcial && statusColor.label !== "Estouro" ? "bg-orange-500" : statusColor.dot} ring-1 ring-white shadow-sm`} title={form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "100% contratado" : ((it as any).mdoSaldo ?? 0) <= 0 ? "Sem saldo" : "Disponível") : cobParcial ? `Parcial: ${cob.insumosCobertos}/${cob.totalInsumos} insumos` : statusColor.label} />
                                     <input
                                       type="checkbox"
                                       checked={selectedEapIds.has(it.id) || qtdVal > 0}
@@ -1452,18 +1499,27 @@ export default function Solicitacoes() {
                                           setSelectedEapIds(prev => { const n = new Set(prev); n.delete(it.id); return n; });
                                           setEapQtdServico(prev => { const n = { ...prev }; delete n[it.id]; return n; });
                                         } else {
-                                          if (eapExpanded !== it.id) {
-                                            await handleEapExpand(it);
-                                          }
-                                          let saldoVal = saldoData[it.id]?.saldoDisponivel;
-                                          if (saldoVal == null) {
-                                            try {
-                                              const s = await trpcCtx.compras.getSaldoOrcamentario.fetch({ companyId, orcamentoItemId: it.id, obraId: parseInt(form.obraId) });
-                                              if (s) { setSaldoData(prev => ({ ...prev, [it.id]: s })); saldoVal = s.saldoDisponivel; }
-                                            } catch {}
-                                          }
-                                          if (saldoVal != null && saldoVal > 0) {
-                                            handleEapQtdChange(it.id, String(saldoVal), it);
+                                          if (form.tipo === "servico") {
+                                            const mdoSaldo = (it as any).mdoSaldo;
+                                            if (mdoSaldo != null && mdoSaldo > 0) {
+                                              handleEapQtdChange(it.id, String(mdoSaldo), it);
+                                            } else {
+                                              handleEapQtdChange(it.id, "1", it);
+                                            }
+                                          } else {
+                                            if (eapExpanded !== it.id) {
+                                              await handleEapExpand(it);
+                                            }
+                                            let saldoVal = saldoData[it.id]?.saldoDisponivel;
+                                            if (saldoVal == null) {
+                                              try {
+                                                const s = await trpcCtx.compras.getSaldoOrcamentario.fetch({ companyId, orcamentoItemId: it.id, obraId: parseInt(form.obraId) });
+                                                if (s) { setSaldoData(prev => ({ ...prev, [it.id]: s })); saldoVal = s.saldoDisponivel; }
+                                              } catch {}
+                                            }
+                                            if (saldoVal != null && saldoVal > 0) {
+                                              handleEapQtdChange(it.id, String(saldoVal), it);
+                                            }
                                           }
                                         }
                                       }}
@@ -1475,7 +1531,15 @@ export default function Solicitacoes() {
                                         <span className="font-semibold text-amber-700 mr-1.5">{it.eapCodigo}</span>
                                         {it.descricao}
                                       </div>
-                                      {cob && cob.totalInsumos > 0 && cob.insumosCobertos > 0 && (
+                                      {form.tipo === "servico" ? (
+                                        ((it as any).mdoSaldo != null) && (
+                                          <div className="flex items-center gap-1.5 mt-0.5 ml-0.5 text-[9px]">
+                                            <span className={`font-medium ${((it as any).mdoSaldo ?? 0) > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                              Saldo: {((it as any).mdoSaldo ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} {it.unidade || "vb"}
+                                            </span>
+                                          </div>
+                                        )
+                                      ) : cob && cob.totalInsumos > 0 && cob.insumosCobertos > 0 && (
                                         <div className="flex items-center gap-1.5 mt-0.5 ml-0.5">
                                           <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                                             <div
@@ -1497,6 +1561,54 @@ export default function Solicitacoes() {
 
                                   {expanded && (
                                     <div className="px-4 py-3 bg-gray-50 border-l-2 border-l-amber-500 space-y-3">
+                                      {form.tipo === "servico" ? (
+                                        <>
+                                          <div className="grid grid-cols-3 gap-3 text-xs">
+                                            <div className="bg-white rounded-lg border border-gray-200 px-3 py-2 text-center">
+                                              <div className="text-[10px] text-gray-500 uppercase font-medium">Orçado</div>
+                                              <div className="text-sm font-bold text-gray-800">{parseFloat(String(it.quantidade ?? "0")).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                              <div className="text-[10px] text-gray-400">{it.unidade || "vb"}</div>
+                                            </div>
+                                            <div className="bg-white rounded-lg border border-blue-200 px-3 py-2 text-center">
+                                              <div className="text-[10px] text-blue-500 uppercase font-medium">Contratado</div>
+                                              <div className="text-sm font-bold text-blue-700">{((it as any).mdoContratado || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                              <div className="text-[10px] text-blue-400">{it.unidade || "vb"}</div>
+                                            </div>
+                                            <div className={`bg-white rounded-lg border px-3 py-2 text-center ${((it as any).mdoSaldo ?? 0) <= 0 ? "border-red-200" : "border-emerald-200"}`}>
+                                              <div className={`text-[10px] uppercase font-medium ${((it as any).mdoSaldo ?? 0) <= 0 ? "text-red-500" : "text-emerald-500"}`}>Saldo</div>
+                                              <div className={`text-sm font-bold ${((it as any).mdoSaldo ?? 0) <= 0 ? "text-red-700" : "text-emerald-700"}`}>{((it as any).mdoSaldo ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
+                                              <div className={`text-[10px] ${((it as any).mdoSaldo ?? 0) <= 0 ? "text-red-400" : "text-emerald-400"}`}>{it.unidade || "vb"}</div>
+                                            </div>
+                                          </div>
+                                          {((it as any).mdoSaldo ?? 0) <= 0 && qtdVal > 0 && (
+                                            <div className="px-2.5 py-1.5 text-[10px] font-medium bg-amber-100 border border-amber-300 rounded text-amber-800 flex items-center gap-1.5">
+                                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                                              Sem saldo disponível — a SC seguirá para aprovação especial (realocação / risco / admin)
+                                            </div>
+                                          )}
+                                          <div className="flex items-center gap-2">
+                                            <label className="text-xs text-gray-600 font-medium whitespace-nowrap">Qtd. a contratar:</label>
+                                            <input
+                                              type="number" min="0" step="0.01"
+                                              className="w-28 h-7 px-2 text-xs rounded border bg-white text-gray-900 outline-none focus:ring-1 border-gray-300 focus:border-amber-400 focus:ring-amber-200"
+                                              placeholder="0"
+                                              value={qtdStr}
+                                              onChange={e => handleEapQtdChange(it.id, e.target.value, it)}
+                                            />
+                                            <span className="text-xs font-bold text-gray-700 bg-gray-100 border border-gray-300 rounded px-1.5 py-0.5">{it.unidade || "vb"}</span>
+                                            {((it as any).mdoSaldo ?? 0) > 0 && (
+                                              <button
+                                                type="button"
+                                                className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 rounded px-2 py-0.5 hover:bg-emerald-100 transition-colors"
+                                                onClick={() => handleEapQtdChange(it.id, String((it as any).mdoSaldo), it)}
+                                              >
+                                                Usar saldo
+                                              </button>
+                                            )}
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <>
                                       {(() => {
                                         const insListaLocal = eapInsumos[it.id] || [];
                                         const consolidados = insumosConsolidadosQ.data ?? [];
@@ -1611,6 +1723,8 @@ export default function Solicitacoes() {
                                           <span>Este item nao possui codigo de composição vinculado no orçamento. Vincule o codigo da composição no modulo de Orcamento para ver os insumos detalhados aqui, ou use o <strong>modo Manual</strong> para adicionar itens diretamente.</span>
                                         </div>
                                       ) : null}
+                                        </>
+                                      )}
                                     </div>
                                   )}
                                 </div>

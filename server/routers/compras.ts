@@ -5338,6 +5338,8 @@ Retorne APENAS um JSON válido neste formato:
         metaUnitTotal: orcamentoItens.metaUnitTotal,
         metaTotal: orcamentoItens.metaTotal,
         custoUnitTotal: orcamentoItens.custoUnitTotal,
+        custoUnitMdo: orcamentoItens.custoUnitMdo,
+        custoUnitMat: orcamentoItens.custoUnitMat,
       }).from(orcamentoItens)
         .where(and(
           eq(orcamentoItens.orcamentoId, orc.id),
@@ -5394,12 +5396,34 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
+      const mdoContratadoMap: Record<number, number> = {};
+      const scServicoRows = await db.select({
+        orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+        quantidadeServico: comprasSolicitacoesItens.quantidadeServico,
+        quantidade: comprasSolicitacoesItens.quantidade,
+      }).from(comprasSolicitacoesItens)
+        .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
+        .where(and(
+          eq(comprasSolicitacoes.companyId, input.companyId),
+          eq(comprasSolicitacoes.obraId, input.obraId),
+          eq(comprasSolicitacoes.tipo, "servico"),
+          sql`${comprasSolicitacoes.status} NOT IN ('cancelado')`,
+        ));
+      for (const row of scServicoRows) {
+        if (row.orcamentoItemId) {
+          const qtd = n(row.quantidadeServico) || n(row.quantidade);
+          mdoContratadoMap[row.orcamentoItemId] = (mdoContratadoMap[row.orcamentoItemId] || 0) + qtd;
+        }
+      }
+
       const items = orcItems.map(it => ({
         ...it,
         prazoFim: atividadesMap[it.eapCodigo]?.dataFim ?? null,
         duracaoDias: atividadesMap[it.eapCodigo]?.duracaoDias ?? null,
         temMat: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMat ?? false) : true,
         temMdo: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMdo ?? false) : false,
+        mdoContratado: mdoContratadoMap[it.id] || 0,
+        mdoSaldo: n(it.quantidade) - (mdoContratadoMap[it.id] || 0),
       }));
 
       return { items, orcamentoId: orc.id, projetoId: proj?.id ?? null, semOrcamento: false };

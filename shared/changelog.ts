@@ -6158,4 +6158,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 23:45:00",
   },
+  {
+    version: 886,
+    titulo: "SC Serviço/MDO — Contratação por composição (não por hora de insumo)",
+    descricao: "Redesenho completo do fluxo de SC Serviço/MDO: contratação agora é feita por composição (m², m³, kg) " +
+      "e não mais por explosão de insumos individuais de mão de obra. " +
+      "Backend: getEapParaObra retorna custoUnitMdo, mdoContratado e mdoSaldo por composição. " +
+      "Frontend: EAP tree mostra cards de saldo (orçado/contratado/disponível), checkbox seleciona composição inteira, " +
+      "aba 'Por Insumo' ocultada quando tipo=servico, legenda adaptada, status dots baseados em saldo MDO. " +
+      "Sem-verba flow funciona igual ao material (realocação → risco → admin). " +
+      "Preços não aparecem na SC — apenas na etapa de cotação/OC.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 23:55:00",
+  },
 ];
