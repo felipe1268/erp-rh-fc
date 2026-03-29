@@ -978,7 +978,7 @@ export default function Solicitacoes() {
                             onChange={e => setEapSearch(e.target.value)}
                           />
                         </div>
-                        <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
+                        <div className="max-h-[50vh] overflow-y-auto divide-y divide-gray-100">
                           {eapQ.data.items
                             .filter(it => it.nivel >= 2 && it.tipo !== "grupo")
                             .filter(it => !eapSearch || `${it.eapCodigo} ${it.descricao}`.toLowerCase().includes(eapSearch.toLowerCase()))
@@ -1257,7 +1257,7 @@ export default function Solicitacoes() {
                           <span className="text-right">Valor Total</span>
                           <span className="text-center flex items-center justify-center gap-1">Conversão {conversaoQ.isLoading && <span className="inline-block w-2.5 h-2.5 border border-purple-400 border-t-transparent rounded-full animate-spin" />}</span>
                         </div>
-                        <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
+                        <div className="max-h-[50vh] overflow-y-auto divide-y divide-gray-100">
                           {(insumosConsolidadosQ.data ?? []).map((ins: any) => {
                             const qtdStr = insumoQtds[ins.insumoCodigo] || "";
                             const qtdVal = parseFloat(qtdStr) || 0;
@@ -1524,7 +1524,7 @@ export default function Solicitacoes() {
               </div>
 
               {modoSC === "eap" && itens.filter(i => i.origemEap).length > 0 ? (
-                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                <div className="space-y-1 max-h-[40vh] overflow-y-auto pr-1">
                   {(() => {
                     const consolidados = new Map<string, { descricao: string; unidade: string; qtdTotal: number; precoMeta: number; origens: string[]; insumoCodigo?: string }>();
                     for (const it of itens.filter(i => i.origemEap)) {
@@ -1569,7 +1569,7 @@ export default function Solicitacoes() {
                   Selecione um serviço acima e informe a quantidade para gerar os itens automaticamente.
                 </div>
               ) : (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
                   {itens.map((it, idx) => (
                     <div key={idx} className="space-y-1">
                       <div className="flex gap-2 items-center p-2 rounded-lg bg-gray-50 border border-gray-200">
