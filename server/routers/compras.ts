@@ -6054,6 +6054,12 @@ Retorne APENAS um JSON válido neste formato:
         atualizadoEm: new Date().toISOString(),
       }).where(eq(comprasSolicitacoes.id, input.id));
 
+      if (input.titulo) {
+        await db.update(comprasCotacoes).set({
+          descricao: normalizarTexto(input.titulo),
+        }).where(and(eq(comprasCotacoes.solicitacaoId, input.id), sql`${comprasCotacoes.status} NOT IN ('cancelada', 'recusada')`));
+      }
+
       if (input.itens) {
         const hasLinkedCot = await db.select({ id: comprasCotacoes.id }).from(comprasCotacoes)
           .where(and(eq(comprasCotacoes.solicitacaoId, input.id), sql`${comprasCotacoes.status} NOT IN ('cancelada', 'recusada')`))
