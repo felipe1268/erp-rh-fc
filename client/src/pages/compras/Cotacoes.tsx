@@ -2681,6 +2681,51 @@ export default function Cotacoes() {
         </div>
         {iaOverlayPortal}
         {condModalPortal}
+
+        {/* ── Cancelar Aprovação (dentro do detalhe) ── */}
+        <Dialog open={showCancelarAprovacao} onOpenChange={(o) => { if (!o) { setShowCancelarAprovacao(false); setCancelarCotacaoId(null); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-orange-700">
+                <Undo2 className="h-5 w-5" /> Cancelar Aprovação da Cotação
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-1">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                Esta ação irá remover a(s) OC(s) gerada(s) e retornar a cotação ao status <strong>Pendente</strong>.
+                A ação não pode ser desfeita. Confirme apenas se tiver certeza.
+              </div>
+              <div>
+                <Label htmlFor="just-cancelar-det" className="text-sm font-medium text-gray-700">Justificativa *</Label>
+                <Textarea
+                  id="just-cancelar-det"
+                  value={justificativaCancelar}
+                  onChange={(e) => setJustificativaCancelar(e.target.value)}
+                  placeholder="Descreva o motivo do cancelamento..."
+                  className="mt-1.5 resize-none"
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" onClick={() => setShowCancelarAprovacao(false)}>
+                  Voltar
+                </Button>
+                <Button
+                  disabled={!cancelarCotacaoId || justificativaCancelar.trim().length < 1 || cancelarAprovacao.isPending}
+                  onClick={() => {
+                    if (!cancelarCotacaoId) return;
+                    cancelarAprovacao.mutate({ cotacaoId: cancelarCotacaoId, companyId, justificativa: justificativaCancelar.trim() });
+                  }}
+                  className="bg-orange-600 hover:bg-orange-500 text-white gap-2"
+                >
+                  {cancelarAprovacao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+                  Confirmar Cancelamento
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
       </DashboardLayout>
     );
   }
