@@ -34,6 +34,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-30 02:00:00",
   },
   {
+    version: 872,
+    titulo: "Tooltip Saldo Orç. na Cotação agora mostra total solicitado",
+    descricao: "Tooltip da coluna Saldo Orç. no Mapa de Cotação agora inclui campo 'Solicitado total' além de Orçado, Comprado e Saldo, permitindo entender melhor a composição do saldo remanescente.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 03:00:00",
+  },
+  {
     version: 870,
     titulo: "Dialog de justificativa para SC sem verba orçamentária",
     descricao: "Ao criar uma SC com itens sem verba suficiente ou fora do orçamento, agora aparece um dialog profissional (em vez do antigo prompt do navegador) listando os itens problemáticos, pedindo seleção do motivo (Quebra/Dano, Furto, Erro de Orçamento, Qtd Insuficiente, Retrabalho, Aditivo, Outro) e justificativa obrigatória em texto livre. A justificativa fica salva no item da SC para rastreabilidade.",

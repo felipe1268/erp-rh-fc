@@ -2582,7 +2582,7 @@ export default function Cotacoes() {
                                     const isEstouro = saldoQtd < 0;
                                     const tooltipText = semVinculo
                                       ? `SEM VÍNCULO ORÇAMENTÁRIO\nNecessita realocação de verba`
-                                      : `Orçado: ${orcada.toLocaleString("pt-BR")}\nComprado: ${comprada.toLocaleString("pt-BR")}\nSaldo: ${saldoQtd.toLocaleString("pt-BR")}`;
+                                      : `Orçado: ${orcada.toLocaleString("pt-BR")}\nSolicitado total: ${((it as any).qtdTotalSolicitada ?? 0).toLocaleString("pt-BR")}\nComprado: ${comprada.toLocaleString("pt-BR")}\nSaldo: ${saldoQtd.toLocaleString("pt-BR")}`;
                                     return (
                                       <td
                                         title={tooltipText}
