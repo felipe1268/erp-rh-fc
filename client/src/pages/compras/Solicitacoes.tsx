@@ -1596,6 +1596,13 @@ export default function Solicitacoes() {
         <DialogContent className="border-gray-200 w-[96vw] max-w-[96vw] h-[94vh] max-h-[94vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
           {detalheQ.isLoading ? (
             <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+          ) : detalheQ.isError ? (
+            <div className="py-10 text-center space-y-2">
+              <AlertTriangle className="h-6 w-6 text-red-500 mx-auto" />
+              <p className="text-sm text-red-600 font-medium">Erro ao carregar solicitação</p>
+              <p className="text-xs text-gray-500">{detalheQ.error?.message || "Tente novamente."}</p>
+              <Button size="sm" variant="outline" onClick={() => detalheQ.refetch()} className="text-xs">Tentar novamente</Button>
+            </div>
           ) : detalhe ? (
             <>
               <DialogHeader>
@@ -2032,7 +2039,17 @@ export default function Solicitacoes() {
                 </Button>
               </div>
             </>
-          ) : null}
+          ) : (
+            <div className="py-10 text-center space-y-2">
+              <AlertTriangle className="h-6 w-6 text-yellow-500 mx-auto" />
+              <p className="text-sm text-gray-600 font-medium">Solicitação não encontrada</p>
+              <p className="text-xs text-gray-500">Os dados não puderam ser carregados.</p>
+              <div className="flex gap-2 justify-center pt-1">
+                <Button size="sm" variant="outline" onClick={() => detalheQ.refetch()} className="text-xs">Tentar novamente</Button>
+                <Button size="sm" variant="outline" onClick={() => setShowDetalhe(null)} className="text-xs">Fechar</Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

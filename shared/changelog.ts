@@ -5766,4 +5766,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 01:00:00",
   },
+  {
+    version: 845,
+    titulo: "Bugfix: Tela branca ao abrir detalhe de Solicitação de Compra",
+    descricao: "Corrigido bug onde o dialog de detalhe da SC ficava totalmente branco quando a query retornava erro (ex: timeout, perda de sessão). Adicionado tratamento de estado de erro com mensagem clara e botão 'Tentar novamente'. Também adicionado fallback de carregamento para o caso de dados ainda não disponíveis.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 12:20:00",
+  },
 ];
