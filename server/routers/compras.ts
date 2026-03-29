@@ -1049,6 +1049,13 @@ Responda APENAS com um objeto JSON no formato:
           r.observacoes?.toLowerCase().includes(b)
         );
       }
+      const prioridadeOrdem: Record<string, number> = { urgente: 0, alta: 1, normal: 2, baixa: 3 };
+      result.sort((a, b) => {
+        const pa = prioridadeOrdem[a.prioridade ?? "normal"] ?? 2;
+        const pb = prioridadeOrdem[b.prioridade ?? "normal"] ?? 2;
+        if (pa !== pb) return pa - pb;
+        return new Date(b.criadoEm ?? 0).getTime() - new Date(a.criadoEm ?? 0).getTime();
+      });
       return result;
     }),
 

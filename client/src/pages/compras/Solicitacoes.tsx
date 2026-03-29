@@ -153,6 +153,10 @@ export default function Solicitacoes() {
     { companyId, busca: busca || undefined, status: filtroStatus === "todos" ? undefined : filtroStatus },
     { enabled: companyId > 0 }
   );
+  const qTodas = trpc.compras.listarSolicitacoes.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && filtroStatus !== "todos" }
+  );
   const detalheQ = trpc.compras.getSolicitacao.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
   const eapQ = trpc.compras.getEapParaObra.useQuery(
@@ -586,6 +590,8 @@ export default function Solicitacoes() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  const todasSCs = filtroStatus !== "todos" ? (qTodas.data ?? lista) : lista;
+  const urgentesAtivos = useMemo(() => todasSCs.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(r.status)), [todasSCs]);
   const kpis = useMemo(() => ({
     pendente: lista.filter(r => r.status === "pendente").length,
     cotacao:  lista.filter(r => r.status === "cotacao").length,
@@ -663,6 +669,22 @@ export default function Solicitacoes() {
         </div>
       )}
 
+      {urgentesAtivos.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-red-50 border border-red-300 rounded-lg animate-pulse">
+          <span className="relative flex h-3 w-3 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600" />
+          </span>
+          <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+          <span className="text-sm font-semibold text-red-700">
+            {urgentesAtivos.length === 1
+              ? `1 solicitação URGENTE aguardando atenção — ${urgentesAtivos[0].numeroSc}: ${urgentesAtivos[0].titulo}`
+              : `${urgentesAtivos.length} solicitações URGENTES aguardando atenção imediata`
+            }
+          </span>
+        </div>
+      )}
+
       {/* Tabela */}
       <div className="rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
         <Table>
@@ -698,8 +720,9 @@ export default function Solicitacoes() {
             ) : lista.map((sc: any) => {
               const itC = sc._itens ?? { total: 0, atendidos: 0 };
               const pct = itC.total > 0 ? Math.round((itC.atendidos / itC.total) * 100) : 0;
+              const isUrgente = sc.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(sc.status);
               return (
-                <TableRow key={sc.id} className="border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setShowDetalhe(sc.id)}>
+                <TableRow key={sc.id} className={`cursor-pointer ${isUrgente ? "bg-red-50 border-l-4 border-l-red-500 hover:bg-red-100" : "border-gray-100 hover:bg-gray-50"}`} onClick={() => setShowDetalhe(sc.id)}>
                   <TableCell onClick={e => e.stopPropagation()}>
                     {sc.aprovacaoStatus === "aguardando" ? (
                       <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-amber-600"
@@ -714,16 +737,30 @@ export default function Solicitacoes() {
                       />
                     ) : <span className="w-4 block" />}
                   </TableCell>
-                  <TableCell className="text-gray-900 font-mono font-semibold text-xs">{sc.numeroSc}</TableCell>
+                  <TableCell className="text-gray-900 font-mono font-semibold text-xs">
+                    <div className="flex items-center gap-1.5">
+                      {isUrgente && (
+                        <span className="relative flex h-2.5 w-2.5 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
+                        </span>
+                      )}
+                      {sc.numeroSc}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <div className="text-gray-900 text-sm font-medium flex items-center gap-1.5">
                       {sc.titulo || "—"}
                       {sc.imagemReferenciaUrl && <ImageIcon className="h-3.5 w-3.5 text-blue-400 shrink-0" title="Possui imagem de referência" />}
                     </div>
                     {sc.departamento && <div className="text-gray-400 text-xs">{sc.departamento}</div>}
-                    {sc.prioridade && sc.prioridade !== "normal" && (
+                    {sc.prioridade === "urgente" ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-red-700 bg-red-100 border border-red-300 rounded px-1.5 py-0.5 mt-0.5">
+                        <AlertTriangle className="h-3 w-3" /> URGENTE
+                      </span>
+                    ) : sc.prioridade && sc.prioridade !== "normal" ? (
                       <span className={`text-[10px] font-semibold uppercase ${PRIORIDADE_COR[sc.prioridade] ?? "text-gray-400"}`}>{sc.prioridade}</span>
-                    )}
+                    ) : null}
                   </TableCell>
                   <TableCell>
                     {sc.obraId ? (
