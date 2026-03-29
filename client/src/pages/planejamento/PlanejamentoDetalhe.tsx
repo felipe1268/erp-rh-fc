@@ -625,6 +625,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             atividades={atividades}
             avancos={avancos}
             avancoAtual={avancoAtual}
+            avancoPrevistoDia={avancoPrevistoDia}
             refisLista={refisLista}
             revisaoAtiva={revisaoAtiva}
             fmt={fmt}
@@ -1277,7 +1278,7 @@ function WeatherWidget({ local }: { local: string | null | undefined }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: VISÃO GERAL
 // ═════════════════════════════════════════════════════════════════════════════
-function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, fmt, fPct, user, hideFinancial, onEditarProjeto, onVerRefisCompleto }: any) {
+function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia, refisLista, revisaoAtiva, fmt, fPct, user, hideFinancial, onEditarProjeto, onVerRefisCompleto }: any) {
   const { selectedCompany } = useCompany();
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const [atrasosAberto, setAtrasosAberto] = useState(false);
@@ -1289,13 +1290,17 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
   }).length;
 
   const ultimoRefis = refisLista[0];
-  const spi = ultimoRefis ? n(ultimoRefis.spi) : 1;
   const cpi = ultimoRefis ? n(ultimoRefis.cpi) : 1;
+
+  const realizado = avancoAtual;
+  const previsto = avancoPrevistoDia;
+  const spi = (previsto && previsto > 0) ? realizado / previsto : (realizado > 0 ? 1 : 0);
+  const spiValido = previsto !== null && previsto > 0;
 
   const kpis = [
     { label: "Atividades",         value: `${concluidas}/${totalAtiv}`,    color: "text-blue-600",   bg: "bg-blue-50",   icon: <ClipboardList className="h-4 w-4" />, tip: `Atividades concluídas (100%) sobre o total de atividades folha (excluindo grupos e indiretas). ${concluidas} de ${totalAtiv} finalizadas.` },
     { label: "Avanço Físico",      value: fPct(avancoAtual),               color: "text-emerald-600",bg: "bg-emerald-50",icon: <TrendingUp className="h-4 w-4" />, tip: "Progresso real ponderado da obra: média dos avanços de cada atividade multiplicada pelo seu peso financeiro. Não inclui atividades indiretas." },
-    { label: "SPI (prazo)",        value: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "—" : spi.toFixed(2), color: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600", bg: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" />, tip: `Schedule Performance Index — Realizado ÷ Previsto.${ultimoRefis ? `\n${n(ultimoRefis.avancoRealizado).toFixed(2)}% ÷ ${n(ultimoRefis.avancoPrevisto).toFixed(2)}% = ${spi.toFixed(2)}` : ""}\nAcima de 1.0 = adiantado; abaixo de 1.0 = atrasado.\nFonte: último REFIS emitido.`, detail: ultimoRefis ? `${n(ultimoRefis.avancoRealizado).toFixed(1)}% ÷ ${n(ultimoRefis.avancoPrevisto).toFixed(1)}%` : undefined },
+    { label: "SPI (prazo)",        value: spiValido ? spi.toFixed(2) : "—", color: !spiValido ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600", bg: !spiValido ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" />, tip: `Schedule Performance Index — Realizado ÷ Previsto.\n${realizado.toFixed(2)}% ÷ ${(previsto ?? 0).toFixed(2)}% = ${spiValido ? spi.toFixed(2) : "—"}\nAcima de 1.0 = adiantado; abaixo de 1.0 = atrasado.\nMesmos valores da barra de progresso acima.`, detail: spiValido ? `${realizado.toFixed(1)}% ÷ ${previsto!.toFixed(1)}%` : undefined },
     ...(!hideFinancial ? [
       { label: "CPI (custo)",        value: cpi.toFixed(2),                  color: cpi >= 1 ? "text-emerald-600" : "text-red-600", bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <DollarSign className="h-4 w-4" />, tip: "Cost Performance Index — Valor agregado ÷ Custo real. Acima de 1.0 = gastando menos que o previsto; abaixo de 1.0 = acima do orçamento." },
     ] : []),

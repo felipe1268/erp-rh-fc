@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 861,
+    titulo: "SPI calculado em tempo real (não mais do REFIS)",
+    descricao: "O SPI (Schedule Performance Index) no card da Visão Geral agora é calculado em tempo real usando os mesmos valores de Previsto e Realizado da barra de progresso acima, em vez de usar valores estáticos do último REFIS emitido. Garante consistência entre todos os indicadores exibidos na tela.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:30:00",
+  },
+  {
     version: 860,
     titulo: "SPI mostra fórmula no card e tooltip detalhado",
     descricao: "Card SPI (prazo) agora exibe a fórmula (Realizado% ÷ Previsto%) abaixo do valor. Tooltip mostra cálculo completo com valores do último REFIS. Tooltips com quebra de linha formatada.",
