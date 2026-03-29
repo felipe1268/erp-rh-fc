@@ -3711,7 +3711,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
       <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
         {[
           { key: "baseline",  show: hasBaseline,  color: "#1e40af", dash: false, width: 2, label: "Baseline (Rev 00)" },
-          { key: "planejada", show: hasPlanejada, color: "#ef4444", dash: false, width: 4, label: "Revisão Atual" },
+          { key: "planejada", show: hasPlanejada, color: "#ef4444", dash: false, width: 2, label: "Revisão Atual" },
           { key: "realizada", show: hasRealizada,   color: "#22c55e", dash: false, width: 3, label: "Realizado" },
           { key: "tendencia", show: hasTendencia, color: "#16a34a", dash: true,  width: 2, label: "Tendência (projeção)" },
         ].filter(l => l.show).map((l, i) => {
@@ -3834,7 +3834,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
               <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
             )}
             {seriesVisiveis.baseline !== false && <Line type="monotone" dataKey="baseline"  name="Baseline"       stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls />}
-            {seriesVisiveis.planejada !== false && <Line type="monotone" dataKey="planejada" name="Revisão Atual"  stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls />}
+            {seriesVisiveis.planejada !== false && <Line type="monotone" dataKey="planejada" name="Revisão Atual"  stroke="#ef4444" strokeWidth={2} dot={false} connectNulls />}
             {seriesVisiveis.realizada !== false && <Line type="monotone" dataKey="realizada" name="Realizado"      stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} connectNulls />}
             {seriesVisiveis.tendencia !== false && <Line type="monotone" dataKey="tendencia" name="Tendência"      stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />}
             {/* Linhas de revisões anteriores (quando ativas) */}
