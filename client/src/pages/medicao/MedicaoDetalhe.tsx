@@ -22,7 +22,7 @@ import {
 import {
   ArrowLeft, Plus, Loader2, FileText, ChevronRight, ChevronDown, CheckCircle2,
   Clock, Send, AlertCircle, DollarSign, Percent, Settings,
-  Edit, Trash2, Eye, TrendingUp, Package, Search, ListTree, Hammer, HardHat,
+  Edit, Trash2, Eye, TrendingUp, Package, Search, ListTree, Hammer, HardHat, Receipt,
 } from "lucide-react";
 
 const n = (v: unknown) => parseFloat(String(v || "0")) || 0;
@@ -70,6 +70,7 @@ export default function MedicaoDetalhe() {
   const [modalItens, setModalItens] = useState(false);
   const [editandoContrato, setEditandoContrato] = useState(false);
   const [modalEditBoletim, setModalEditBoletim] = useState(false);
+  const [expandedFdBoletimId, setExpandedFdBoletimId] = useState<number | null>(null);
   const [boletimEditando, setBoletimEditando] = useState<any | null>(null);
   const [formEditBoletim, setFormEditBoletim] = useState({ periodoReferencia: "", dataInicio: "", dataFim: "", observacoes: "" });
 
@@ -604,7 +605,12 @@ export default function MedicaoDetalhe() {
                           <TableCell className="text-right text-sm text-red-600">-{brl(n(b.descontoSinal))}</TableCell>
                           <TableCell className="text-right text-sm text-amber-600">-{brl(n(b.descontoRetencao))}</TableCell>
                           <TableCell className="text-right text-sm text-red-600">-{brl(n(b.glosa))}</TableCell>
-                          <TableCell className="text-right text-sm text-violet-600">-{brl(n(b.deducaoFd))}</TableCell>
+                          <TableCell className="text-right text-sm text-violet-600" onClick={e => { if (n(b.deducaoFd) > 0) { e.stopPropagation(); setExpandedFdBoletimId(expandedFdBoletimId === b.id ? null : b.id); } }}>
+                            <span className={`${n(b.deducaoFd) > 0 ? "cursor-pointer hover:underline" : ""}`}>
+                              -{brl(n(b.deducaoFd))}
+                              {n(b.deducaoFd) > 0 && <ChevronRight className={`inline h-3 w-3 ml-0.5 transition-transform ${expandedFdBoletimId === b.id ? "rotate-90" : ""}`} />}
+                            </span>
+                          </TableCell>
                           <TableCell className="text-right text-sm font-bold text-emerald-700">{brl(n(b.valorLiquido))}</TableCell>
                           <TableCell onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
@@ -629,6 +635,58 @@ export default function MedicaoDetalhe() {
                             </div>
                           </TableCell>
                         </TableRow>
+                        {expandedFdBoletimId === b.id && n(b.deducaoFd) > 0 && (() => {
+                          const fdForBoletim = (fdRegistros as any[]).filter((f: any) => f.boletimDescontoId === b.id || (f.status === "descontado" && f.boletimDescontoId === b.id));
+                          const fdPendentes = (fdRegistros as any[]).filter((f: any) => f.status === "pendente");
+                          const allFd = fdForBoletim.length > 0 ? fdForBoletim : fdPendentes;
+                          return (
+                            <TableRow className="bg-violet-50/50">
+                              <TableCell colSpan={10} className="py-3">
+                                <div className="ml-8 space-y-2">
+                                  <p className="text-xs font-semibold text-violet-700 flex items-center gap-1.5">
+                                    <Receipt className="h-3.5 w-3.5" /> Detalhamento do Faturamento Direto
+                                  </p>
+                                  <div className="bg-white border border-violet-200 rounded-lg overflow-hidden">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow className="border-violet-100">
+                                          <TableHead className="text-[10px] text-violet-500">Descrição</TableHead>
+                                          <TableHead className="text-[10px] text-violet-500">Origem</TableHead>
+                                          <TableHead className="text-[10px] text-violet-500">OC</TableHead>
+                                          <TableHead className="text-[10px] text-violet-500 text-right">Valor</TableHead>
+                                          <TableHead className="text-[10px] text-violet-500">Status</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {allFd.length > 0 ? (
+                                          allFd.map((fd: any) => (
+                                            <TableRow key={fd.id} className="border-violet-50">
+                                              <TableCell className="text-xs text-gray-900">{fd.descricao}</TableCell>
+                                              <TableCell className="text-xs text-gray-500">{fd.origem === "bdi" ? "BDI" : fd.origem === "manual" ? "Manual" : fd.origem}</TableCell>
+                                              <TableCell className="text-xs font-mono text-gray-500">{fd.compraId ? `OC #${fd.compraId}` : "—"}</TableCell>
+                                              <TableCell className="text-xs text-right font-semibold text-violet-700">{brl(n(fd.valor))}</TableCell>
+                                              <TableCell className="text-xs">
+                                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${fd.status === "descontado" ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"}`}>
+                                                  {fd.status === "descontado" ? "Descontado" : "Pendente"}
+                                                </span>
+                                              </TableCell>
+                                            </TableRow>
+                                          ))
+                                        ) : (
+                                          <TableRow>
+                                            <TableCell colSpan={5} className="text-xs text-center text-gray-400 py-3">
+                                              Dedução FD calculada automaticamente ({brl(n(b.deducaoFd))})
+                                            </TableCell>
+                                          </TableRow>
+                                        )}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })()}
                       );
                     })}
                   </TableBody>

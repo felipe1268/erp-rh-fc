@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 884,
+    titulo: "Sistema FD completo — PDF aprovação, medição cliente, adicionar/remover itens, detalhe expandível",
+    descricao: "PDF de aprovação FD Cliente com dados da obra, itens, saldo e bloco de assinatura. Auto-criação de registro FD na medição cliente ao aprovar OC. Endpoints para adicionar e remover itens do BDI FD (Admin Master + auditoria). Painel FD com tabela de OCs vinculadas e botão PDF. Detalhe expandível de FD no boletim de medição com breakdown por registro.",
+    tipo: "funcionalidade",
+    modulos: "Compras, Medição",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:00:00",
+  },
+  {
     version: 871,
     titulo: "Layout do dialog de aprovação SC simplificado — 6 colunas compactas",
     descricao: "Dialog de aprovação da SC reduzido de 10 para 6 colunas: #, Item, UN, Esta SC, Saldo Orçamentário (com barra de consumo integrada e tooltip com Orçado/Solicitado/Comprado), Status. Dialog reduzido de max-w-5xl para max-w-3xl. Layout mais limpo e legível sem perda de informação.",

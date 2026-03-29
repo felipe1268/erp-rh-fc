@@ -28,7 +28,7 @@ import {
   almoxarifadoNotificacoes,
   purchaseOrders, purchaseRequests, purchaseQuotations,
   budgetReallocations,
-  ocNumberConfig, pjContracts, pjDocumentos, bdiFd, fdAjustes,
+  ocNumberConfig, pjContracts, pjDocumentos, bdiFd, fdAjustes, medicaoFdRegistros, medicaoContratos,
 } from "../../drizzle/schema";
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -6970,15 +6970,22 @@ Retorne APENAS um JSON válido neste formato:
       const itensFd = await db.select().from(bdiFd).where(and(eq(bdiFd.orcamentoId, orcamentoId), eq(bdiFd.companyId, input.companyId)));
       const totalFdOrcado = itensFd.reduce((s, i) => s + n(i.total), 0);
 
-      const ocsComFd = await db.select({ fdValor: comprasOrdens.fdValor, fdStatus: comprasOrdens.fdStatus })
+      const ocsComFd = await db.select({
+          id: comprasOrdens.id,
+          numeroOc: comprasOrdens.numeroOc,
+          descricao: comprasOrdens.descricao,
+          fdValor: comprasOrdens.fdValor,
+          fdStatus: comprasOrdens.fdStatus,
+          modalidadeFd: comprasOrdens.modalidadeFd,
+        })
         .from(comprasOrdens)
         .where(and(
           eq(comprasOrdens.companyId, input.companyId),
           eq(comprasOrdens.obraId, input.obraId),
-          sql`${comprasOrdens.modalidadeFd} = 'fd_cliente'`,
+          sql`${comprasOrdens.modalidadeFd} IN ('fd_cliente', 'fd_terceiro')`,
           sql`${comprasOrdens.status} != 'cancelada'`,
         ));
-      const totalFdComprometido = ocsComFd.reduce((s, oc) => s + n(oc.fdValor), 0);
+      const totalFdComprometido = ocsComFd.filter(oc => (oc as any).modalidadeFd === "fd_cliente").reduce((s, oc) => s + n(oc.fdValor), 0);
 
       return {
         totalFdOrcado,
@@ -6992,6 +6999,14 @@ Retorne APENAS um JSON válido neste formato:
           qtdOrcada: n(i.qtdOrcada),
           precoUnit: n(i.precoUnit),
           total: n(i.total),
+        })),
+        ocsComFd: ocsComFd.map(oc => ({
+          id: oc.id,
+          numeroOc: oc.numeroOc,
+          descricao: oc.descricao,
+          fdValor: oc.fdValor,
+          fdStatus: (oc as any).fdStatus,
+          modalidadeFd: (oc as any).modalidadeFd,
         })),
       };
     }),
@@ -7066,12 +7081,45 @@ Retorne APENAS um JSON válido neste formato:
       if (!["admin", "admin_master"].includes(userRole)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem aprovar FD." });
       }
-      const result = await db.update(comprasOrdens).set({
+
+      const [oc] = await db.select().from(comprasOrdens)
+        .where(and(eq(comprasOrdens.id, input.ocId), eq(comprasOrdens.companyId, input.companyId)));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "OC não encontrada nesta empresa" });
+      if ((oc as any).modalidadeFd !== "fd_cliente") throw new TRPCError({ code: "BAD_REQUEST", message: "OC não é FD Cliente" });
+      if ((oc as any).fdStatus === "aprovado") throw new TRPCError({ code: "BAD_REQUEST", message: "FD já aprovado" });
+
+      await db.update(comprasOrdens).set({
         fdStatus: "aprovado",
         fdAprovadoEm: new Date().toISOString(),
         fdAprovadoPor: ctx.user.name || input.aprovadoPor,
         atualizadoEm: new Date().toISOString(),
       } as any).where(and(eq(comprasOrdens.id, input.ocId), eq(comprasOrdens.companyId, input.companyId)));
+
+      if (oc.obraId) {
+        const obraRes = await db.execute(sql`SELECT orcamento_id FROM obras WHERE id = ${oc.obraId} AND company_id = ${input.companyId} LIMIT 1`);
+        const orcamentoId = (obraRes as any).rows?.[0]?.orcamento_id;
+        if (orcamentoId) {
+          const contratos = await db.select().from(medicaoContratos)
+            .where(and(eq(medicaoContratos.companyId, input.companyId), sql`${medicaoContratos.orcamentoId} = ${orcamentoId}`));
+          if (contratos.length > 0) {
+            const existing = await db.select({ id: medicaoFdRegistros.id }).from(medicaoFdRegistros)
+              .where(and(eq(medicaoFdRegistros.companyId, input.companyId), eq(medicaoFdRegistros.compraId, oc.id)));
+            if (existing.length === 0) {
+              await db.insert(medicaoFdRegistros).values({
+                companyId: input.companyId,
+                contratoId: contratos[0].id,
+                descricao: `FD Cliente — OC ${oc.numeroOc || `#${oc.id}`}: ${oc.descricao || "Material"}`,
+                valor: String(n((oc as any).fdValor).toFixed(2)),
+                dataRegistro: new Date().toISOString().split("T")[0],
+                origem: "bdi",
+                observacoes: `Auto-gerado da OC #${oc.id} aprovada como FD Cliente`,
+                compraId: oc.id,
+              } as any);
+            }
+          }
+        }
+      }
+
       return { success: true };
     }),
 
@@ -7092,6 +7140,9 @@ Retorne APENAS um JSON válido neste formato:
         .from(users).where(eq(users.email, input.adminEmail)).limit(1);
       if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Admin não encontrado" });
       if (admin.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Somente Admin Master pode ajustar o FD" });
+
+      const adminComps = await db.select().from(userCompanies).where(and(eq(userCompanies.userId, admin.id), eq(userCompanies.companyId, input.companyId)));
+      if (adminComps.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Admin não pertence a esta empresa" });
 
       const bcrypt = await import("bcryptjs");
       if (!(await bcrypt.compare(input.adminSenha, admin.password))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
@@ -7124,5 +7175,116 @@ Retorne APENAS um JSON válido neste formato:
       return db.select().from(fdAjustes)
         .where(and(eq(fdAjustes.companyId, input.companyId), eq(fdAjustes.orcamentoId, input.orcamentoId)))
         .orderBy(desc(fdAjustes.createdAt));
+    }),
+
+  adicionarItemFd: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      orcamentoId: z.number(),
+      codigoInsumo: z.string().optional(),
+      descricao: z.string(),
+      unidade: z.string().optional(),
+      qtdOrcada: z.number(),
+      precoUnit: z.number(),
+      fornecedor: z.string().optional(),
+      adminEmail: z.string(),
+      adminSenha: z.string(),
+      justificativa: z.string().min(5),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      const [admin] = await db.select({ id: users.id, name: users.name, role: users.role, password: users.password })
+        .from(users).where(eq(users.email, input.adminEmail)).limit(1);
+      if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Admin não encontrado" });
+      if (admin.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Somente Admin Master pode adicionar itens FD" });
+
+      const adminComps = await db.select().from(userCompanies).where(and(eq(userCompanies.userId, admin.id), eq(userCompanies.companyId, input.companyId)));
+      if (adminComps.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Admin não pertence a esta empresa" });
+
+      const bcrypt = await import("bcryptjs");
+      if (!(await bcrypt.compare(input.adminSenha, admin.password))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
+
+      const total = input.qtdOrcada * input.precoUnit;
+
+      await db.insert(bdiFd).values({
+        orcamentoId: input.orcamentoId,
+        companyId: input.companyId,
+        codigoInsumo: input.codigoInsumo || null,
+        descricao: input.descricao,
+        unidade: input.unidade || "un",
+        qtdOrcada: String(input.qtdOrcada),
+        precoUnit: String(input.precoUnit.toFixed(2)),
+        total: String(total.toFixed(2)),
+        fornecedor: input.fornecedor || null,
+      } as any);
+
+      await db.insert(fdAjustes).values({
+        companyId: input.companyId,
+        orcamentoId: input.orcamentoId,
+        tipo: "adicao_item",
+        descricao: `Adicionado: ${input.descricao} (${input.codigoInsumo || "sem código"})`,
+        valorAnterior: "0",
+        valorNovo: String(total.toFixed(2)),
+        justificativa: input.justificativa,
+        adminId: admin.id,
+        adminNome: admin.name,
+      } as any);
+
+      return { success: true, adminNome: admin.name };
+    }),
+
+  removerItemFd: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      orcamentoId: z.number(),
+      bdiFdId: z.number(),
+      adminEmail: z.string(),
+      adminSenha: z.string(),
+      justificativa: z.string().min(5),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      const [admin] = await db.select({ id: users.id, name: users.name, role: users.role, password: users.password })
+        .from(users).where(eq(users.email, input.adminEmail)).limit(1);
+      if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Admin não encontrado" });
+      if (admin.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Somente Admin Master pode remover itens FD" });
+
+      const adminComps = await db.select().from(userCompanies).where(and(eq(userCompanies.userId, admin.id), eq(userCompanies.companyId, input.companyId)));
+      if (adminComps.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Admin não pertence a esta empresa" });
+
+      const bcrypt = await import("bcryptjs");
+      if (!(await bcrypt.compare(input.adminSenha, admin.password))) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
+
+      const [item] = await db.select().from(bdiFd).where(and(eq(bdiFd.id, input.bdiFdId), eq(bdiFd.companyId, input.companyId)));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item FD não encontrado" });
+
+      const ocsVinculadas = await db.select({ id: comprasOrdens.id })
+        .from(comprasOrdens)
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          sql`${comprasOrdens.fdBdiItemId} = ${input.bdiFdId}`,
+          sql`${comprasOrdens.status} != 'cancelada'`,
+        ));
+      if (ocsVinculadas.length > 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Este item FD possui ${ocsVinculadas.length} OC(s) vinculada(s). Cancele as OCs antes de remover.` });
+      }
+
+      await db.delete(bdiFd).where(eq(bdiFd.id, input.bdiFdId));
+
+      await db.insert(fdAjustes).values({
+        companyId: input.companyId,
+        orcamentoId: input.orcamentoId,
+        tipo: "remocao_item",
+        descricao: `Removido: ${item.descricao} (${item.codigoInsumo || "sem código"})`,
+        valorAnterior: String(n(item.total).toFixed(2)),
+        valorNovo: "0",
+        justificativa: input.justificativa,
+        adminId: admin.id,
+        adminNome: admin.name,
+      } as any);
+
+      return { success: true, adminNome: admin.name };
     }),
 });

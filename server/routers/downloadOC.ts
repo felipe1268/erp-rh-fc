@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import * as fs from "fs";
 import * as path from "path";
 import { fetchOCData, generateOCPdf } from "../services/purchaseOrderPdf";
+import { generateFdApprovalPdf } from "../services/fdApprovalPdf";
 import { storagePut } from "../storage";
 import { getDb } from "../db";
 import { comprasOrdens, userCompanies } from "../../drizzle/schema";
@@ -103,6 +104,60 @@ export function registerDownloadOCRoute(app: Express) {
       console.error("[Download OC PDF] Erro:", err);
       const status = message.includes("não encontrada") ? 404 : 500;
       res.status(status).json({ error: message });
+    }
+  });
+
+  app.get("/api/download/fd/:id", async (req: Request, res: Response) => {
+    try {
+      let user: { id: number; role: string };
+      try {
+        const authUser = await sdk.authenticateRequest(req);
+        user = { id: (authUser as Record<string, number>).id, role: (authUser as Record<string, string>).role };
+      } catch {
+        res.status(401).json({ error: "Não autenticado" });
+        return;
+      }
+
+      const ocId = parseInt(req.params.id, 10);
+      if (isNaN(ocId)) {
+        res.status(400).json({ error: "ID inválido" });
+        return;
+      }
+
+      const db = await getDb();
+      const [ocRow] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, ocId));
+      if (!ocRow) {
+        res.status(404).json({ error: "OC não encontrada" });
+        return;
+      }
+
+      if (user.role !== "admin_master") {
+        const userComps = await db
+          .select()
+          .from(userCompanies)
+          .where(and(eq(userCompanies.userId, user.id), eq(userCompanies.companyId, ocRow.companyId)));
+        if (userComps.length === 0) {
+          res.status(403).json({ error: "Sem permissão" });
+          return;
+        }
+      }
+
+      if ((ocRow as any).modalidadeFd !== "fd_cliente") {
+        res.status(400).json({ error: "OC não é FD Cliente" });
+        return;
+      }
+
+      const pdfBuffer = await generateFdApprovalPdf(ocId);
+      const displayName = `FD_${ocRow.numeroOc || ocId}.pdf`;
+      const mode = req.query.mode;
+      const disposition = mode === "view" ? "inline" : "attachment";
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `${disposition}; filename="${displayName}"`);
+      res.send(pdfBuffer);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro ao gerar PDF FD";
+      console.error("[Download FD PDF] Erro:", err);
+      res.status(500).json({ error: message });
     }
   });
 }

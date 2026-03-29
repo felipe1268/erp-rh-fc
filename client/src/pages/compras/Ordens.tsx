@@ -918,13 +918,21 @@ export default function Ordens() {
                       <div className="flex justify-between"><span className="text-gray-500">Status FD</span><span className={`font-medium ${(detalhe as any).fdStatus === "aprovado" ? "text-emerald-600" : "text-amber-600"}`}>{(detalhe as any).fdStatus === "aprovado" ? "Aprovado" : "Pendente aprovação"}</span></div>
                       {(detalhe as any).fdAprovadoPor && <div className="flex justify-between"><span className="text-gray-500">Aprovado por</span><span className="font-medium">{(detalhe as any).fdAprovadoPor}</span></div>}
                     </div>
-                    {(detalhe as any).fdStatus === "pendente_aprovacao" && (
-                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1"
-                        onClick={() => aprovarFd.mutate({ ocId: detalhe.id, companyId, aprovadoPor: "Cliente" })}
-                        disabled={aprovarFd.isPending}>
-                        <CheckCircle className="h-3 w-3" /> Registrar Aprovação FD
-                      </Button>
-                    )}
+                    <div className="flex gap-2 flex-wrap">
+                      {(detalhe as any).fdStatus === "pendente_aprovacao" && (
+                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1"
+                          onClick={() => aprovarFd.mutate({ ocId: detalhe.id, companyId, aprovadoPor: "Cliente" })}
+                          disabled={aprovarFd.isPending}>
+                          <CheckCircle className="h-3 w-3" /> Registrar Aprovação FD
+                        </Button>
+                      )}
+                      {(detalhe as any).modalidadeFd === "fd_cliente" && (
+                        <Button size="sm" variant="outline" className="text-xs gap-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                          onClick={() => window.open(`/api/download/fd/${detalhe.id}?mode=view`, "_blank")}>
+                          <FileDown className="h-3 w-3" /> PDF Aprovação FD
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ) : !["cancelada", "entregue"].includes(detalhe.status) && (detalhe as any).tipo !== "servico" && (detalhe as any).tipo !== "pacote" && (
                   <div className="border-t border-gray-200 pt-4">
