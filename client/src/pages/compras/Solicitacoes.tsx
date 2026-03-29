@@ -1732,7 +1732,21 @@ export default function Solicitacoes() {
                                   </div>
                                 )}
                                 <div className={`grid grid-cols-[3fr_0.6fr_1fr_1fr_1fr_1fr_0.8fr_1fr_1.5fr] gap-1 px-3 py-2 text-xs items-center hover:bg-gray-50 ${sc.bg}`}>
-                                  <div className="min-w-0 cursor-pointer" onClick={() => setInsumoExpanded(isExpanded ? null : ins.insumoCodigo)}>
+                                  <div className="min-w-0 flex items-center gap-1.5">
+                                    <input
+                                      type="checkbox"
+                                      checked={qtdVal > 0}
+                                      className="shrink-0 h-3.5 w-3.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          const val = ins.saldoDisponivel > 0 ? String(ins.saldoDisponivel) : "1";
+                                          setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: val }));
+                                        } else {
+                                          setInsumoQtds(p => { const n = { ...p }; delete n[ins.insumoCodigo]; return n; });
+                                        }
+                                      }}
+                                    />
+                                    <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setInsumoExpanded(isExpanded ? null : ins.insumoCodigo)}>
                                     <div className="flex items-center gap-1">
                                       <ChevronDown className={`h-3 w-3 text-gray-400 shrink-0 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />
                                       <span className={`shrink-0 w-2 h-2 rounded-full ${sc.cor}`} title={sc.label} />
@@ -1740,6 +1754,7 @@ export default function Solicitacoes() {
                                         <div className="text-gray-900 truncate font-medium">{ins.descricao}</div>
                                         <div className="text-[9px] text-gray-400 ml-4 flex items-center gap-1 flex-wrap">{ins.insumoCodigo} · {ins.composicoes.length} composiç{ins.composicoes.length > 1 ? "ões" : "ão"} · <span className="text-purple-500 underline cursor-pointer">ver onde é usado</span>{statusInsumo !== "disponivel" && <span className={`px-1 rounded text-[8px] font-bold ${statusInsumo === "estouro" ? "bg-red-100 text-red-700" : statusInsumo === "comprado" ? "bg-purple-100 text-purple-700" : statusInsumo === "recebido" ? "bg-rose-100 text-rose-700" : statusInsumo === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{sc.label}</span>}{ins.scDocs?.length > 0 && <DocLinks docs={ins.scDocs} prefix="SC" route="/compras/solicitacoes" navigate={navigate} />}{ins.cotDocs?.length > 0 && <DocLinks docs={ins.cotDocs} prefix="COT" route="/compras/cotacoes" navigate={navigate} />}{ins.ocDocs?.length > 0 && <DocLinks docs={ins.ocDocs} prefix="OC" route="/compras/ordens" navigate={navigate} />}</div>
                                       </div>
+                                    </div>
                                     </div>
                                   </div>
                                   <div className="text-center">
