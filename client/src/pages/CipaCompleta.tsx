@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { formatCPF, fmtNum } from "@/lib/formatters";
+import { normalizarTexto } from "@shared/textNormalization";
 import {
   Shield, Plus, Search, Calendar, Users, Trash2, Pencil, Eye, X,
   AlertTriangle, CheckCircle2, Clock, CalendarDays, UserCheck,
@@ -112,11 +113,15 @@ export default function CipaCompleta() {
   const [empSearch, setEmpSearch] = useState("");
   const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
   const selectedEmp = activeEmployees.find((e: any) => e.id === membroForm.employeeId);
-  const filteredEmps = activeEmployees.filter((e: any) => {
-    if (!empSearch) return true;
-    const s = empSearch.toLowerCase();
-    return (e.nomeCompleto || "").toLowerCase().includes(s) || (e.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, ""));
-  });
+  const filteredEmps = useMemo(() => {
+    if (!empSearch.trim()) return activeEmployees;
+    const s = normalizarTexto(empSearch);
+    return activeEmployees.filter((e: any) => {
+      const nome = normalizarTexto(e.nomeCompleto || "");
+      const cpf = (e.cpf || "").replace(/\D/g, "");
+      return nome.includes(s) || cpf.includes(s.replace(/\D/g, ""));
+    });
+  }, [activeEmployees, empSearch]);
 
   const selectedEleicao = (eleicoes as any[]).find((e: any) => e.id === selectedEleicaoId);
 
@@ -535,67 +540,55 @@ export default function CipaCompleta() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-3">
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Colaborador *</label>
-                <div className="relative" style={{ zIndex: 60 }}>
-                  <div className="flex items-center border rounded-lg px-3 py-2.5 bg-white hover:border-blue-400 transition-colors cursor-pointer" style={{ zIndex: 61 }} onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}>
-                    <Search className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
-                    {empDropdownOpen ? (
-                      <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Buscar por nome ou CPF..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }} onClick={e => e.stopPropagation()} />
-                    ) : (
-                      <span className={`flex-1 text-sm ${selectedEmp ? "text-slate-900 font-medium" : "text-slate-400"}`}>
-                        {selectedEmp ? selectedEmp.nomeCompleto : "Buscar colaborador..."}
-                      </span>
-                    )}
-                    {membroForm.employeeId && (
-                      <button type="button" className="ml-2 text-slate-400 hover:text-slate-600 transition-colors" onClick={e => { e.stopPropagation(); setMembroForm({ ...membroForm, employeeId: undefined }); setEmpSearch(""); setEmpDropdownOpen(false); }}>
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
+                {selectedEmp ? (
+                  <div className="bg-slate-50 rounded-lg p-3 flex items-center gap-3 border border-slate-200">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                      <span className="text-sm font-bold text-blue-600">{(selectedEmp.nomeCompleto || "?")[0]}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800">{selectedEmp.nomeCompleto}</p>
+                      <p className="text-xs text-slate-500">{selectedEmp.cargo || "Sem cargo"} · CPF: {formatCPF(selectedEmp.cpf)}</p>
+                    </div>
+                    <button type="button" className="text-slate-400 hover:text-red-500 transition-colors p-1" onClick={() => { setMembroForm({ ...membroForm, employeeId: undefined }); setEmpSearch(""); }}>
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                  {empDropdownOpen && (
-                    <>
-                      <div className="fixed inset-0" style={{ zIndex: 55 }} onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-72 overflow-y-auto" style={{ zIndex: 62 }}>
-                        <div className="sticky top-0 bg-slate-50 px-3 py-2 border-b text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                          {filteredEmps.length} colaborador{filteredEmps.length !== 1 ? "es" : ""} encontrado{filteredEmps.length !== 1 ? "s" : ""}
-                        </div>
-                        {filteredEmps.length === 0 ? (
-                          <div className="p-6 text-center">
-                            <Users className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                            <p className="text-sm text-slate-500">Nenhum colaborador encontrado</p>
-                            <p className="text-xs text-slate-400 mt-1">Tente outro nome ou CPF</p>
-                          </div>
-                        ) : filteredEmps.slice(0, 30).map((e: any) => (
-                          <div key={e.id} className={`px-3 py-2.5 hover:bg-blue-50 cursor-pointer text-sm flex items-center gap-3 border-b border-slate-50 last:border-0 transition-colors ${membroForm.employeeId === e.id ? "bg-blue-50" : ""}`} onClick={() => { setMembroForm({ ...membroForm, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); }}>
-                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                              <span className="text-xs font-bold text-slate-500">{(e.nomeCompleto || "?")[0]}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-slate-800 truncate">{e.nomeCompleto}</p>
-                              <p className="text-[11px] text-slate-400">{e.cargo || "Sem cargo"} · {formatCPF(e.cpf)}</p>
-                            </div>
-                            {membroForm.employeeId === e.id && <CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" />}
-                          </div>
-                        ))}
+                ) : (
+                  <>
+                    <div className="flex items-center border rounded-lg px-3 py-2.5 bg-white focus-within:border-blue-400 transition-colors">
+                      <Search className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
+                      <input className="flex-1 bg-transparent outline-none text-sm" placeholder="Buscar por nome ou CPF..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} />
+                      {empSearch && (
+                        <button type="button" className="ml-2 text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setEmpSearch("")}>
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-2 border rounded-lg max-h-56 overflow-y-auto bg-white">
+                      <div className="sticky top-0 bg-slate-50 px-3 py-1.5 border-b text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                        {filteredEmps.length} colaborador{filteredEmps.length !== 1 ? "es" : ""} encontrado{filteredEmps.length !== 1 ? "s" : ""}
                       </div>
-                    </>
-                  )}
-                </div>
+                      {filteredEmps.length === 0 ? (
+                        <div className="p-6 text-center">
+                          <Users className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                          <p className="text-sm text-slate-500">Nenhum colaborador encontrado</p>
+                          <p className="text-xs text-slate-400 mt-1">Tente outro nome ou CPF</p>
+                        </div>
+                      ) : filteredEmps.slice(0, 50).map((e: any) => (
+                        <div key={e.id} className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm flex items-center gap-3 border-b border-slate-50 last:border-0 transition-colors" onClick={() => { setMembroForm({ ...membroForm, employeeId: e.id }); setEmpSearch(""); }}>
+                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                            <span className="text-xs font-bold text-slate-500">{(e.nomeCompleto || "?")[0]}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-slate-800 truncate">{e.nomeCompleto}</p>
+                            <p className="text-[11px] text-slate-400">{e.cargo || "Sem cargo"} · {formatCPF(e.cpf)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
-
-              {selectedEmp && (
-                <div className="md:col-span-3 bg-slate-50 rounded-lg p-3 flex items-center gap-3 border border-slate-200">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                    <span className="text-sm font-bold text-blue-600">{(selectedEmp.nomeCompleto || "?")[0]}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800">{selectedEmp.nomeCompleto}</p>
-                    <p className="text-xs text-slate-500">{selectedEmp.cargo || "Sem cargo"} · CPF: {formatCPF(selectedEmp.cpf)}</p>
-                  </div>
-                  <button type="button" className="text-slate-400 hover:text-red-500 transition-colors p-1" onClick={() => { setMembroForm({ ...membroForm, employeeId: undefined }); }}>
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
 
               <div>
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Cargo na CIPA *</label>
