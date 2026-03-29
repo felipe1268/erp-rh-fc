@@ -4325,6 +4325,7 @@ Retorne APENAS um JSON válido neste formato:
             AND si.orcamento_item_id IS NULL
             AND s.company_id = ${input.companyId} AND s.status NOT IN ('cancelado')
             AND s.obra_id = ${sc.obraId}
+            AND s.id != ${sc.id}
           GROUP BY si.insumo_codigo
         `);
         for (const r of (rows as any).rows ?? []) insumoSolicitadoMap[r.insumo_codigo] = n(r.total);
@@ -4357,6 +4358,7 @@ Retorne APENAS um JSON válido neste formato:
           JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
           WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
             AND s.company_id = ${input.companyId} AND s.status NOT IN ('cancelado')
+            AND s.id != ${sc.id}
           GROUP BY si.orcamento_item_id
         `);
         for (const r of (rows as any).rows ?? []) solicitadoMap[r.orcamento_item_id] = n(r.total);

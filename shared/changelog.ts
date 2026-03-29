@@ -6045,4 +6045,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 17:00:00",
   },
+  {
+    version: 876,
+    titulo: "Correção: Saldo orçamentário não contabiliza a própria SC na aprovação",
+    descricao: "O cálculo de saldo ao aprovar uma SC agora exclui a própria SC do total de 'já solicitado'. Antes, a quantidade da SC sendo aprovada era contabilizada como consumida, causando falso alerta de 'SALDO INSUFICIENTE' mesmo na primeira compra de um insumo. Corrigido tanto para itens vinculados por orcamento_item_id quanto por insumoCodigo.",
+    tipo: "fix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 17:30:00",
+  },
 ];
