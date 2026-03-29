@@ -558,6 +558,48 @@ export const purchaseRouter = router({
       return { ...receb, status };
     }),
 
+  excluirRecebimentosEmLote: protectedProcedure
+    .input(z.object({
+      comprasIds: z.array(z.number()).default([]),
+      almoxIds: z.array(z.number()).default([]),
+      companyId: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const { getCompaniesForUser } = await import("../db");
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowed.some((c: any) => c.id === input.companyId))
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
+
+      let count = 0;
+
+      if (input.comprasIds.length > 0) {
+        const owned = await db.select({ id: purchaseReceipts.id })
+          .from(purchaseReceipts)
+          .where(and(inArray(purchaseReceipts.id, input.comprasIds), eq(purchaseReceipts.companyId, input.companyId)));
+        const ownedIds = owned.map(r => r.id);
+        if (ownedIds.length > 0) {
+          await db.delete(purchaseReceiptItems).where(inArray(purchaseReceiptItems.recebimentoId, ownedIds));
+          await db.delete(purchaseReceipts).where(inArray(purchaseReceipts.id, ownedIds));
+          count += ownedIds.length;
+        }
+      }
+
+      if (input.almoxIds.length > 0) {
+        const almoxOwned = await db.select({ id: almoxarifadoRecebimentos.id })
+          .from(almoxarifadoRecebimentos)
+          .where(and(inArray(almoxarifadoRecebimentos.id, input.almoxIds), eq(almoxarifadoRecebimentos.companyId, input.companyId)));
+        const validAlmoxIds = almoxOwned.map(r => r.id);
+        if (validAlmoxIds.length > 0) {
+          await db.delete(almoxarifadoRecebimentoItens).where(inArray(almoxarifadoRecebimentoItens.recebimentoId, validAlmoxIds));
+          await db.delete(almoxarifadoRecebimentos).where(inArray(almoxarifadoRecebimentos.id, validAlmoxIds));
+          count += validAlmoxIds.length;
+        }
+      }
+
+      return { count };
+    }),
+
   // ══════════════════════════════════════════════════════════════
   // CONTAS A PAGAR (AP)
   // ══════════════════════════════════════════════════════════════

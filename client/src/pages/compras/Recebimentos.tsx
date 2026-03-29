@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PackageCheck, Plus, Loader2, CheckCircle2, Clock, AlertCircle, Truck } from "lucide-react";
+import { PackageCheck, Plus, Loader2, CheckCircle2, Clock, AlertCircle, Truck, Trash2, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -29,6 +29,8 @@ export default function ComprasRecebimentos() {
   const [ordemId, setOrdemId] = useState("");
   const [notaFiscal, setNotaFiscal] = useState("");
   const [obs, setObs] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
 
   const { data, isLoading, refetch } = trpc.purchase.listarRecebimentos.useQuery(
     { companyId },
@@ -44,11 +46,34 @@ export default function ComprasRecebimentos() {
     onError: () => toast.error("Erro ao registrar recebimento"),
   });
 
+  const excluirLote = trpc.purchase.excluirRecebimentosEmLote.useMutation({
+    onSuccess: (res) => {
+      toast.success(`${res.count} recebimento(s) excluído(s)!`);
+      refetch(); setSelectedIds(new Set()); setConfirmExcluirLote(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const recebimentos = data ?? [];
   const totais = recebimentos.reduce((acc: any, r: any) => {
     acc[r.status] = (acc[r.status] || 0) + 1;
     return acc;
   }, {});
+
+  const makeKey = (r: any) => `${r._source || "compras"}-${r.id}`;
+
+  const splitSelectedBySource = () => {
+    const comprasIds: number[] = [];
+    const almoxIds: number[] = [];
+    for (const key of selectedIds) {
+      const [source, idStr] = key.split("-");
+      const id = parseInt(idStr);
+      if (isNaN(id)) continue;
+      if (source === "almoxarifado") almoxIds.push(id);
+      else comprasIds.push(id);
+    }
+    return { comprasIds, almoxIds };
+  };
 
   return (
     <DashboardLayout>
@@ -86,6 +111,22 @@ export default function ComprasRecebimentos() {
           ))}
         </div>
 
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg flex-wrap">
+            <CheckSquare className="h-4 w-4 text-amber-600" />
+            <span className="text-sm text-amber-800 font-medium">{selectedIds.size} selecionado(s)</span>
+            <Button size="sm" variant="destructive" className="text-xs gap-1"
+              disabled={excluirLote.isPending}
+              onClick={() => setConfirmExcluirLote(true)}>
+              <Trash2 className="h-3 w-3" /> Excluir Selecionados
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs border-gray-300 text-gray-600"
+              onClick={() => setSelectedIds(new Set())}>
+              Cancelar
+            </Button>
+          </div>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -105,6 +146,18 @@ export default function ComprasRecebimentos() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-amber-600"
+                        checked={recebimentos.length > 0 && recebimentos.every((r: any) => selectedIds.has(makeKey(r)))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(new Set(recebimentos.map((r: any) => makeKey(r))));
+                          } else {
+                            setSelectedIds(new Set());
+                          }
+                        }}
+                      />
+                    </TableHead>
                     <TableHead>#</TableHead>
                     <TableHead>OC #</TableHead>
                     <TableHead>Recebedor</TableHead>
@@ -116,48 +169,63 @@ export default function ComprasRecebimentos() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recebimentos.map((r: any) => (
-                    <TableRow key={`${r._source || "c"}-${r.id}`}>
-                      <TableCell className="font-mono">#{r.id}</TableCell>
-                      <TableCell>
-                        <span className="font-mono">{r.numeroOc ? r.numeroOc : `OC #${r.ordemId}`}</span>
-                        {r.fornecedorNome && <p className="text-xs text-gray-400 mt-0.5">{r.fornecedorNome}</p>}
-                      </TableCell>
-                      <TableCell>
-                        {r.recebedorNome || "—"}
-                        {r._source === "almoxarifado" && <span className="block text-[10px] text-blue-500 font-medium">via Almoxarifado</span>}
-                      </TableCell>
-                      <TableCell>{r.notaFiscalNumero || "—"}</TableCell>
-                      <TableCell>
-                        {(r as any).transportadora ? (
-                          <div className="flex items-center gap-1 text-xs">
-                            <Truck className="h-3 w-3 text-gray-400" />
-                            <span className="text-gray-700">{(r as any).transportadora}</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400">Veículo forn.</span>
-                        )}
-                        {(r as any).codigoRastreamento && (
-                          <div className="text-[10px] text-gray-400 font-mono mt-0.5">{(r as any).codigoRastreamento}</div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={(STATUS_CFG[r.status] || STATUS_CFG.pendente).cls}>
-                          {(STATUS_CFG[r.status] || STATUS_CFG.pendente).label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {r.valorLiberado
-                          ? `R$ ${Number(r.valorLiberado).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {r.recebidoEm
-                          ? format(new Date(r.recebidoEm), "dd/MM/yyyy HH:mm", { locale: ptBR })
-                          : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {recebimentos.map((r: any) => {
+                    const key = makeKey(r);
+                    return (
+                      <TableRow key={key}>
+                        <TableCell onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-amber-600"
+                            checked={selectedIds.has(key)}
+                            onChange={e => {
+                              setSelectedIds(prev => {
+                                const n = new Set(prev);
+                                e.target.checked ? n.add(key) : n.delete(key);
+                                return n;
+                              });
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="font-mono">#{r.id}</TableCell>
+                        <TableCell>
+                          <span className="font-mono">{r.numeroOc ? r.numeroOc : `OC #${r.ordemId}`}</span>
+                          {r.fornecedorNome && <p className="text-xs text-gray-400 mt-0.5">{r.fornecedorNome}</p>}
+                        </TableCell>
+                        <TableCell>
+                          {r.recebedorNome || "—"}
+                          {r._source === "almoxarifado" && <span className="block text-[10px] text-blue-500 font-medium">via Almoxarifado</span>}
+                        </TableCell>
+                        <TableCell>{r.notaFiscalNumero || "—"}</TableCell>
+                        <TableCell>
+                          {(r as any).transportadora ? (
+                            <div className="flex items-center gap-1 text-xs">
+                              <Truck className="h-3 w-3 text-gray-400" />
+                              <span className="text-gray-700">{(r as any).transportadora}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">Veículo forn.</span>
+                          )}
+                          {(r as any).codigoRastreamento && (
+                            <div className="text-[10px] text-gray-400 font-mono mt-0.5">{(r as any).codigoRastreamento}</div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={(STATUS_CFG[r.status] || STATUS_CFG.pendente).cls}>
+                            {(STATUS_CFG[r.status] || STATUS_CFG.pendente).label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {r.valorLiberado
+                            ? `R$ ${Number(r.valorLiberado).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {r.recebidoEm
+                            ? format(new Date(r.recebidoEm), "dd/MM/yyyy HH:mm", { locale: ptBR })
+                            : "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
@@ -194,6 +262,25 @@ export default function ComprasRecebimentos() {
                   Registrar
                 </Button>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={confirmExcluirLote} onOpenChange={setConfirmExcluirLote}>
+          <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+            <DialogHeader>
+              <DialogTitle className="text-gray-900">Confirmar Exclusão</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-gray-600 py-2">
+              Tem certeza que deseja excluir <strong>{selectedIds.size}</strong> recebimento(s)? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setConfirmExcluirLote(false)}>Cancelar</Button>
+              <Button variant="destructive" className="gap-1.5" disabled={excluirLote.isPending}
+                onClick={() => { const { comprasIds, almoxIds } = splitSelectedBySource(); excluirLote.mutate({ comprasIds, almoxIds, companyId }); }}>
+                {excluirLote.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Excluir {selectedIds.size}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
