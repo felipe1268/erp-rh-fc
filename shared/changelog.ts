@@ -6081,4 +6081,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 18:45:00",
   },
+  {
+    version: 880,
+    titulo: "Correção: Edição de SC com cotação vinculada",
+    descricao: "Ao editar uma SC que já possui cotação vinculada, o sistema agora atualiza os itens existentes (descrição, quantidade, unidade) ao invés de tentar deletar e re-inserir, evitando erro de chave estrangeira. SCs sem cotação continuam com o comportamento anterior de delete+insert.",
+    tipo: "fix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 19:00:00",
+  },
 ];

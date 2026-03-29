@@ -6055,27 +6055,44 @@ Retorne APENAS um JSON válido neste formato:
       }).where(eq(comprasSolicitacoes.id, input.id));
 
       if (input.itens) {
-        await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+        const hasLinkedCot = await db.select({ id: comprasCotacoes.id }).from(comprasCotacoes)
+          .where(and(eq(comprasCotacoes.solicitacaoId, input.id), sql`${comprasCotacoes.status} NOT IN ('cancelada', 'recusada')`))
+          .limit(1);
 
-        if (input.itens.length > 0) {
-          await db.insert(comprasSolicitacoesItens).values(
-            input.itens.map(it => ({
-              solicitacaoId: input.id,
-              descricao: normalizarTexto(it.descricao),
-              unidade: it.unidade,
-              quantidade: String(it.quantidade),
-              observacoes: it.observacoes,
-              statusItem: "pendente",
-              orcamentoItemId: it.orcamentoItemId ?? null,
-              eapCodigo: it.eapCodigo ?? null,
-              insumoCodigo: it.insumoCodigo ?? null,
-              composicaoCodigo: it.composicaoCodigo ?? null,
-              precoMeta: it.precoMeta ? String(it.precoMeta) : null,
-              quantidadeServico: it.quantidadeServico ? String(it.quantidadeServico) : null,
-              coeficiente: it.coeficiente ? String(it.coeficiente) : null,
-              origemEap: it.origemEap ?? false,
-            }))
-          );
+        if (hasLinkedCot.length > 0) {
+          for (const it of input.itens) {
+            if (it.id) {
+              await db.update(comprasSolicitacoesItens).set({
+                descricao: normalizarTexto(it.descricao),
+                unidade: it.unidade,
+                quantidade: String(it.quantidade),
+                observacoes: it.observacoes,
+              }).where(and(eq(comprasSolicitacoesItens.id, it.id), eq(comprasSolicitacoesItens.solicitacaoId, input.id)));
+            }
+          }
+        } else {
+          await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+
+          if (input.itens.length > 0) {
+            await db.insert(comprasSolicitacoesItens).values(
+              input.itens.map(it => ({
+                solicitacaoId: input.id,
+                descricao: normalizarTexto(it.descricao),
+                unidade: it.unidade,
+                quantidade: String(it.quantidade),
+                observacoes: it.observacoes,
+                statusItem: "pendente",
+                orcamentoItemId: it.orcamentoItemId ?? null,
+                eapCodigo: it.eapCodigo ?? null,
+                insumoCodigo: it.insumoCodigo ?? null,
+                composicaoCodigo: it.composicaoCodigo ?? null,
+                precoMeta: it.precoMeta ? String(it.precoMeta) : null,
+                quantidadeServico: it.quantidadeServico ? String(it.quantidadeServico) : null,
+                coeficiente: it.coeficiente ? String(it.coeficiente) : null,
+                origemEap: it.origemEap ?? false,
+              }))
+            );
+          }
         }
       }
 
