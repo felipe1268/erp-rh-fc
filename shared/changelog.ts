@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 854,
+    titulo: "Filtro interativo na legenda da Curva S Financeira",
+    descricao: "Os indicadores da Curva S Financeira (Previsto BCWS, Realizado BCWP, Tendência, Receita Acumulada) agora podem ser ativados/desativados clicando na legenda, da mesma forma que a Curva S de Trabalho. Itens desativados ficam esmaecidos com texto riscado e a linha correspondente é removida do gráfico.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 00:15:00",
+  },
+  {
     version: 853,
     titulo: "Filtro interativo na legenda da Curva S",
     descricao: "Os 4 indicadores da Curva S de Trabalho (Baseline, Revisão Atual, Realizado, Tendência) agora podem ser ativados/desativados clicando na legenda. Itens desativados ficam esmaecidos com texto riscado e a linha correspondente é removida do gráfico, permitindo melhor análise isolada de cada série.",

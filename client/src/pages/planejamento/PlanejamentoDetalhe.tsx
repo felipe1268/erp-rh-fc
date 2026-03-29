@@ -3601,6 +3601,8 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
   });
   const [seriesVisiveis, setSeriesVisiveis] = useState<Record<string, boolean>>({ baseline: true, planejada: true, realizada: true, tendencia: true });
   const toggleSerie = (key: string) => setSeriesVisiveis(prev => ({ ...prev, [key]: !prev[key] }));
+  const [finSeriesVisiveis, setFinSeriesVisiveis] = useState<Record<string, boolean>>({ planejada: true, realizada: true, tendencia: true, receita: true });
+  const toggleFinSerie = (key: string) => setFinSeriesVisiveis(prev => ({ ...prev, [key]: !prev[key] }));
 
   const merged = useMemo(() => {
     if (!curvaData) return [];
@@ -3953,32 +3955,28 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
                 </p>
               </div>
             </div>
-            {/* Legenda */}
             <div className="flex flex-wrap gap-4 text-xs mb-3">
-              {finHasPlanejada && (
-                <div className="flex items-center gap-1.5">
-                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#1e40af" strokeWidth="2.5" /></svg>
-                  <span className="text-slate-600">Previsto (BCWS)</span>
-                </div>
-              )}
-              {finHasRealizada && (
-                <div className="flex items-center gap-1.5">
-                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#22c55e" strokeWidth="2.5" /></svg>
-                  <span className="text-slate-600">Realizado (BCWP)</span>
-                </div>
-              )}
-              {finHasTendencia && (
-                <div className="flex items-center gap-1.5">
-                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#16a34a" strokeWidth="2" strokeDasharray="5 3" /></svg>
-                  <span className="text-slate-600">Tendência</span>
-                </div>
-              )}
-              {finHasReceita && (
-                <div className="flex items-center gap-1.5">
-                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#f59e0b" strokeWidth="2.5" /></svg>
-                  <span className="text-slate-600">Receita Acumulada</span>
-                </div>
-              )}
+              {[
+                { key: "planejada", show: finHasPlanejada, color: "#1e40af", dash: false, width: 2.5, label: "Previsto (BCWS)" },
+                { key: "realizada", show: finHasRealizada, color: "#22c55e", dash: false, width: 2.5, label: "Realizado (BCWP)" },
+                { key: "tendencia", show: finHasTendencia, color: "#16a34a", dash: true,  width: 2,   label: "Tendência" },
+                { key: "receita",   show: finHasReceita,   color: "#f59e0b", dash: false, width: 2.5, label: "Receita Acumulada" },
+              ].filter(l => l.show).map((l, i) => {
+                const ativo = finSeriesVisiveis[l.key] !== false;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => toggleFinSerie(l.key)}
+                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border transition-all cursor-pointer select-none ${ativo ? "border-transparent" : "border-slate-200 bg-slate-50 opacity-40"}`}
+                    title={ativo ? `Ocultar ${l.label}` : `Mostrar ${l.label}`}
+                  >
+                    <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5"
+                      stroke={ativo ? l.color : "#94a3b8"} strokeWidth={l.width} strokeDasharray={l.dash ? "5 3" : "0"} /></svg>
+                    <span className={ativo ? "text-slate-600" : "text-slate-400 line-through"}>{l.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             <p className="text-sm font-semibold text-slate-700 mb-1">
@@ -4031,10 +4029,10 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
                 {finFull.some((p: any) => p.semana === hoje) && (
                   <ReferenceLine x={hoje} stroke="#94a3b8" strokeDasharray="2 2" label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
                 )}
-                {finHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#1e40af" strokeWidth={2.5} dot={false} connectNulls />}
-                {finHasRealizada && <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />}
-                {finHasTendencia && <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />}
-                {finHasReceita && (
+                {finHasPlanejada && finSeriesVisiveis.planejada !== false && <Line type="monotone" dataKey="planejada" stroke="#1e40af" strokeWidth={2.5} dot={false} connectNulls />}
+                {finHasRealizada && finSeriesVisiveis.realizada !== false && <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />}
+                {finHasTendencia && finSeriesVisiveis.tendencia !== false && <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />}
+                {finHasReceita && finSeriesVisiveis.receita !== false && (
                   <Line type="stepAfter" dataKey="receita" stroke="#f59e0b" strokeWidth={2.5}
                     dot={{ r: 5, fill: "#f59e0b", strokeWidth: 0 }} activeDot={{ r: 7 }} connectNulls />
                 )}
