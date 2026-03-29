@@ -1281,15 +1281,15 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
   const cpi = ultimoRefis ? n(ultimoRefis.cpi) : 1;
 
   const kpis = [
-    { label: "Atividades",         value: `${concluidas}/${totalAtiv}`,    color: "text-blue-600",   bg: "bg-blue-50",   icon: <ClipboardList className="h-4 w-4" /> },
-    { label: "Avanço Físico",      value: fPct(avancoAtual),               color: "text-emerald-600",bg: "bg-emerald-50",icon: <TrendingUp className="h-4 w-4" /> },
-    { label: "SPI (prazo)",        value: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "—" : spi.toFixed(2), color: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600", bg: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" /> },
+    { label: "Atividades",         value: `${concluidas}/${totalAtiv}`,    color: "text-blue-600",   bg: "bg-blue-50",   icon: <ClipboardList className="h-4 w-4" />, tip: `Atividades concluídas (100%) sobre o total de atividades folha (excluindo grupos e indiretas). ${concluidas} de ${totalAtiv} finalizadas.` },
+    { label: "Avanço Físico",      value: fPct(avancoAtual),               color: "text-emerald-600",bg: "bg-emerald-50",icon: <TrendingUp className="h-4 w-4" />, tip: "Progresso real ponderado da obra: média dos avanços de cada atividade multiplicada pelo seu peso financeiro. Não inclui atividades indiretas." },
+    { label: "SPI (prazo)",        value: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "—" : spi.toFixed(2), color: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600", bg: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" />, tip: "Schedule Performance Index — Realizado ÷ Previsto. Acima de 1.0 = adiantado; abaixo de 1.0 = atrasado. Calculado pelo último REFIS emitido." },
     ...(!hideFinancial ? [
-      { label: "CPI (custo)",        value: cpi.toFixed(2),                  color: cpi >= 1 ? "text-emerald-600" : "text-red-600", bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <DollarSign className="h-4 w-4" /> },
+      { label: "CPI (custo)",        value: cpi.toFixed(2),                  color: cpi >= 1 ? "text-emerald-600" : "text-red-600", bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <DollarSign className="h-4 w-4" />, tip: "Cost Performance Index — Valor agregado ÷ Custo real. Acima de 1.0 = gastando menos que o previsto; abaixo de 1.0 = acima do orçamento." },
     ] : []),
-    { label: "REFIs emitidos",     value: String(refisLista.length),       color: "text-purple-600", bg: "bg-purple-50", icon: <FileText className="h-4 w-4" /> },
+    { label: "REFIs emitidos",     value: String(refisLista.length),       color: "text-purple-600", bg: "bg-purple-50", icon: <FileText className="h-4 w-4" />, tip: "Quantidade de Relatórios de Fiscalização (REFIS) emitidos. Cada REFIS registra o avanço semanal oficial da obra com fotos e indicadores." },
     ...(!hideFinancial ? [
-      { label: "Valor do Contrato",  value: fmt(n(proj.valorContrato)),      color: "text-slate-700",  bg: "bg-slate-100", icon: <DollarSign className="h-4 w-4" /> },
+      { label: "Valor do Contrato",  value: fmt(n(proj.valorContrato)),      color: "text-slate-700",  bg: "bg-slate-100", icon: <DollarSign className="h-4 w-4" />, tip: "Valor total do contrato da obra conforme cadastro do projeto. Base de referência para cálculos financeiros e medições." },
     ] : []),
   ];
 
@@ -1329,17 +1329,26 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
   return (
     <div className="space-y-5">
       {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {kpis.map((k, i) => (
-          <div key={i} className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex flex-col gap-2">
-            <div className={`w-8 h-8 rounded-lg ${k.bg} ${k.color} flex items-center justify-center`}>
-              {k.icon}
-            </div>
-            <p className="text-[10px] text-slate-500 leading-tight">{k.label}</p>
-            <p className={`text-base font-bold ${k.color} leading-tight`}>{k.value}</p>
-          </div>
-        ))}
-      </div>
+      <UiTooltipProvider delayDuration={200}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {kpis.map((k, i) => (
+            <UiTooltip key={i}>
+              <UiTooltipTrigger asChild>
+                <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex flex-col gap-2 cursor-default">
+                  <div className={`w-8 h-8 rounded-lg ${k.bg} ${k.color} flex items-center justify-center`}>
+                    {k.icon}
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-tight">{k.label}</p>
+                  <p className={`text-base font-bold ${k.color} leading-tight`}>{k.value}</p>
+                </div>
+              </UiTooltipTrigger>
+              <UiTooltipContent side="bottom" className="max-w-[260px] text-xs leading-relaxed">
+                {k.tip}
+              </UiTooltipContent>
+            </UiTooltip>
+          ))}
+        </div>
+      </UiTooltipProvider>
 
       {/* ── Tela Cheia: Atividades em Atraso ─────────────────────────────────── */}
       {atrasosAberto && (

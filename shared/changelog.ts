@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 857,
+    titulo: "Tooltips explicativos nos KPIs da Visão Geral",
+    descricao: "Ao passar o mouse sobre cada card de indicador na aba Visão Geral (Atividades, Avanço Físico, SPI, CPI, REFIs, Valor do Contrato), um balão explicativo aparece com a descrição resumida do que o indicador representa e como é calculado.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 22:00:00",
+  },
+  {
     version: 856,
     titulo: "Transferência de flags (indireta/marco/disabled) entre revisões",
     descricao: "Ao criar uma nova revisão do cronograma, os flags de atividades indiretas, marcos e desabilitadas da revisão anterior são automaticamente transferidos para a nova revisão via código EAP. Colunas is_indireta, is_marco e disabled criadas no banco. Garante que marcações manuais não sejam perdidas ao reimportar o MS Project.",
