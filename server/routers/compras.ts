@@ -1872,19 +1872,36 @@ Responda APENAS com um objeto JSON no formato:
       let insumoCompMap: Record<string, number> = {};
       if (insCodigosUnique.length > 0 && cot.obraId) {
         const cotOrcRows = await db.select({ id: orcamentos.id }).from(orcamentos)
-          .where(and(eq(orcamentos.companyId, cot.companyId), eq(orcamentos.obraId, cot.obraId), isNull(orcamentos.deletedAt)));
+          .where(and(eq(orcamentos.companyId, cot.companyId), eq(orcamentos.obraId, cot.obraId), isNull(orcamentos.deletedAt)))
+          .orderBy(desc(orcamentos.createdAt)).limit(1);
         const cotOrcIds = cotOrcRows.map(o => o.id);
         if (cotOrcIds.length > 0) {
-          const insRows = await db.select({
-            codigo: orcamentoInsumos.codigo,
-            quantidadeTotal: orcamentoInsumos.quantidadeTotal,
-          }).from(orcamentoInsumos)
-            .where(and(inArray(orcamentoInsumos.orcamentoId, cotOrcIds), eq(orcamentoInsumos.companyId, cot.companyId)));
-          for (const ins of insRows) {
-            if (ins.codigo && insCodigosUnique.includes(ins.codigo)) {
-              const existing = insumoOrcMap[ins.codigo] ?? 0;
-              const val = n(ins.quantidadeTotal);
-              if (val > existing) insumoOrcMap[ins.codigo] = val;
+          const orcItemsForIns = await db.select({
+            id: orcamentoItens.id,
+            servicoCodigo: orcamentoItens.servicoCodigo,
+            quantidade: orcamentoItens.quantidade,
+          }).from(orcamentoItens)
+            .where(and(inArray(orcamentoItens.orcamentoId, cotOrcIds), eq(orcamentoItens.companyId, cot.companyId)));
+          const svcsComCodigo = orcItemsForIns.filter(it => it.servicoCodigo);
+          if (svcsComCodigo.length > 0) {
+            const svcCodigos = [...new Set(svcsComCodigo.map(it => it.servicoCodigo!))];
+            const allCompIns = await db.select({
+              composicaoCodigo: composicaoInsumos.composicaoCodigo,
+              insumoCodigo: composicaoInsumos.insumoCodigo,
+              quantidade: composicaoInsumos.quantidade,
+              alocacaoMat: composicaoInsumos.alocacaoMat,
+              alocacaoMdo: composicaoInsumos.alocacaoMdo,
+            }).from(composicaoInsumos)
+              .where(and(eq(composicaoInsumos.companyId, Number(cot.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCodigos)));
+            const matsOnly = allCompIns.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+            for (const ins of matsOnly) {
+              const code = ins.insumoCodigo;
+              if (!code || !insCodigosUnique.includes(code)) continue;
+              const coef = n(ins.quantidade);
+              const matchSvcs = svcsComCodigo.filter(s => s.servicoCodigo === ins.composicaoCodigo);
+              for (const svc of matchSvcs) {
+                insumoOrcMap[code] = (insumoOrcMap[code] ?? 0) + n(svc.quantidade) * coef;
+              }
             }
           }
         }
@@ -4286,29 +4303,41 @@ Retorne APENAS um JSON válido neste formato:
       const insumoCodigos = scItens.filter(i => !i.orcamentoItemId && i.insumoCodigo).map(i => i.insumoCodigo!);
       if (insumoCodigos.length > 0 && sc.obraId) {
         const orcRows = await db.select({ id: orcamentos.id }).from(orcamentos)
-          .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, sc.obraId), isNull(orcamentos.deletedAt)));
+          .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, sc.obraId), isNull(orcamentos.deletedAt)))
+          .orderBy(desc(orcamentos.createdAt)).limit(1);
         const orcIds = orcRows.map(o => o.id);
         if (orcIds.length > 0) {
-          const insumoRows = await db.select({
-            codigo: orcamentoInsumos.codigo,
-            quantidadeTotal: orcamentoInsumos.quantidadeTotal,
-            descricao: orcamentoInsumos.descricao,
-            unidade: orcamentoInsumos.unidade,
-            orcamentoId: orcamentoInsumos.orcamentoId,
-          }).from(orcamentoInsumos)
-            .where(and(
-              inArray(orcamentoInsumos.orcamentoId, orcIds),
-              eq(orcamentoInsumos.companyId, input.companyId),
-            ));
-          for (const ins of insumoRows) {
-            if (ins.codigo && insumoCodigos.includes(ins.codigo)) {
-              const existing = insumoOrcData[ins.codigo];
-              if (!existing || n(ins.quantidadeTotal) > existing.quantidadeTotal) {
-                insumoOrcData[ins.codigo] = {
-                  quantidadeTotal: n(ins.quantidadeTotal),
-                  descricao: ins.descricao,
-                  unidade: ins.unidade,
-                };
+          const orcItemsForInsumo = await db.select({
+            id: orcamentoItens.id,
+            servicoCodigo: orcamentoItens.servicoCodigo,
+            quantidade: orcamentoItens.quantidade,
+          }).from(orcamentoItens)
+            .where(and(inArray(orcamentoItens.orcamentoId, orcIds), eq(orcamentoItens.companyId, input.companyId)));
+          const servicosComCodigo = orcItemsForInsumo.filter(it => it.servicoCodigo);
+          if (servicosComCodigo.length > 0) {
+            const servicoCodigos = [...new Set(servicosComCodigo.map(it => it.servicoCodigo!))];
+            const allCompInsumos = await db.select({
+              composicaoCodigo: composicaoInsumos.composicaoCodigo,
+              insumoCodigo: composicaoInsumos.insumoCodigo,
+              insumoDescricao: composicaoInsumos.insumoDescricao,
+              unidade: composicaoInsumos.unidade,
+              quantidade: composicaoInsumos.quantidade,
+              alocacaoMat: composicaoInsumos.alocacaoMat,
+              alocacaoMdo: composicaoInsumos.alocacaoMdo,
+            }).from(composicaoInsumos)
+              .where(and(eq(composicaoInsumos.companyId, Number(input.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
+            const materiaisOnly = allCompInsumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+            for (const ins of materiaisOnly) {
+              const code = ins.insumoCodigo;
+              if (!code || !insumoCodigos.includes(code)) continue;
+              const coef = n(ins.quantidade);
+              const matchingSvcs = servicosComCodigo.filter(s => s.servicoCodigo === ins.composicaoCodigo);
+              for (const svc of matchingSvcs) {
+                const qtdInsumo = n(svc.quantidade) * coef;
+                if (!insumoOrcData[code]) {
+                  insumoOrcData[code] = { quantidadeTotal: 0, descricao: ins.insumoDescricao || "", unidade: ins.unidade };
+                }
+                insumoOrcData[code].quantidadeTotal += qtdInsumo;
               }
             }
           }

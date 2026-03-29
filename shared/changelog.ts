@@ -6054,4 +6054,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 17:30:00",
   },
+  {
+    version: 877,
+    titulo: "Correção: Saldo orçamentário agora calculado diretamente das composições",
+    descricao: "O cálculo do total orçado de insumos no dialog de aprovação de SC e no Mapa de Cotação agora usa a mesma fórmula da tela 'Por Insumo': coeficiente do insumo × quantidade do serviço no orçamento. Antes, lia de uma tabela resumo (orcamento_insumos) que podia ter valores desatualizados, causando divergência entre o que a tela de criação mostrava e o que o dialog de aprovação calculava.",
+    tipo: "fix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 18:00:00",
+  },
 ];
