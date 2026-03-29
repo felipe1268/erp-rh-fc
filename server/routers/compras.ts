@@ -1513,13 +1513,23 @@ Responda APENAS com um objeto JSON no formato:
     .input(z.object({ companyId: z.number(), status: z.string().optional(), solicitacaoId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      return db.select().from(comprasCotacoes)
+      const rows = await db.select().from(comprasCotacoes)
         .where(and(
           eq(comprasCotacoes.companyId, input.companyId),
           input.status ? eq(comprasCotacoes.status, input.status) : undefined,
           input.solicitacaoId ? eq(comprasCotacoes.solicitacaoId, input.solicitacaoId) : undefined,
         ))
         .orderBy(desc(comprasCotacoes.criadoEm));
+      const scIds = [...new Set(rows.map(r => r.solicitacaoId).filter(Boolean))] as number[];
+      let scTituloMap: Record<number, string> = {};
+      if (scIds.length > 0) {
+        const scs = await db.select({ id: comprasSolicitacoes.id, titulo: comprasSolicitacoes.titulo }).from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.id, scIds));
+        for (const sc of scs) scTituloMap[sc.id] = sc.titulo;
+      }
+      return rows.map(r => ({
+        ...r,
+        descricao: (r.solicitacaoId && scTituloMap[r.solicitacaoId]) ? scTituloMap[r.solicitacaoId] : r.descricao,
+      }));
     }),
 
   getCotacao: protectedProcedure
