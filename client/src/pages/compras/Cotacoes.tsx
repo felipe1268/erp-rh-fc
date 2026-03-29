@@ -23,8 +23,8 @@ import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTi
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showContent, onAcao, onCoberto }: {
-  companyId: number; obraId?: number; cotacaoId?: number; deficit: number; showContent?: boolean; onAcao?: () => void; onCoberto?: () => void;
+function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showContent, onAcao, onCoberto, userId, userName }: {
+  companyId: number; obraId?: number; cotacaoId?: number; deficit: number; showContent?: boolean; onAcao?: () => void; onCoberto?: () => void; userId?: number; userName?: string;
 }) {
   const q = trpc.compras.buscarSaldosRealocacao.useQuery(
     { companyId, obraId, cotacaoId, deficit },
@@ -53,6 +53,19 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
     onSuccess: () => {
       toast.success("Solicitação de autorização enviada ao usuário master.");
       onAcao?.();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const confirmarRealocacao = trpc.compras.confirmarRealocacaoSobras.useMutation({
+    onSuccess: (d) => {
+      if (d.cobreDeficit) {
+        toast.success(`Realocação confirmada! ${fmt(d.totalSobrasRealocadas)} de sobras${d.riscoDebitado > 0 ? ` + ${fmt(d.riscoDebitado)} do risco` : ""} cobrem o déficit.`);
+      } else {
+        toast.success(`Realocação parcial: ${fmt(d.totalCoberto)} cobertos de ${fmt(deficit)}.`);
+      }
+      q.refetch();
+      onAcao?.();
+      if (d.cobreDeficit) onCoberto?.();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -225,15 +238,65 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
               </table>
             </div>
             {sobrasSel.size > 0 && (
-              <div className="flex items-center justify-between pt-1 border-t border-blue-200">
-                <p className="text-xs text-blue-800">
-                  <span className="font-bold">{fmt(totalSobrasSel)}</span> selecionados de <span className="font-bold">{fmt(totalSobras)}</span> disponíveis
-                  {totalSobrasSel >= deficitRestante
-                    ? <span className="ml-2 text-emerald-700 font-semibold">✓ Cobre o déficit</span>
-                    : <span className="ml-2 text-orange-600"> — faltam {fmt(deficitRestante - totalSobrasSel)}</span>
-                  }
-                </p>
-                <Button size="sm" variant="ghost" onClick={() => setSobrasSel(new Set())} className="h-6 text-[11px] text-gray-500 px-2">Limpar</Button>
+              <div className="space-y-2 pt-2 border-t border-blue-200">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-blue-800">
+                    <span className="font-bold">{fmt(totalSobrasSel)}</span> selecionados de <span className="font-bold">{fmt(totalSobras)}</span> disponíveis
+                    {totalSobrasSel >= deficitRestante
+                      ? <span className="ml-2 text-emerald-700 font-semibold">✓ Cobre o déficit</span>
+                      : <span className="ml-2 text-orange-600"> — faltam {fmt(deficitRestante - totalSobrasSel)}</span>
+                    }
+                  </p>
+                  <Button size="sm" variant="ghost" onClick={() => setSobrasSel(new Set())} className="h-6 text-[11px] text-gray-500 px-2">Limpar</Button>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {totalSobrasSel >= deficitRestante ? (
+                    <Button size="sm"
+                      disabled={confirmarRealocacao.isPending}
+                      onClick={() => obraId && cotacaoId && confirmarRealocacao.mutate({
+                        companyId, obraId, cotacaoId, deficit,
+                        sobrasIndices: [...sobrasSel],
+                        completarComRisco: false,
+                        usuarioId: userId ?? 0,
+                        usuarioNome: userName,
+                      })}
+                      className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5">
+                      {confirmarRealocacao.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                      Confirmar Realocação
+                    </Button>
+                  ) : (
+                    <>
+                      {risco.disponivel > 0 && risco.disponivel >= (deficitRestante - totalSobrasSel - 0.01) && (
+                        <Button size="sm"
+                          disabled={confirmarRealocacao.isPending}
+                          onClick={() => obraId && cotacaoId && confirmarRealocacao.mutate({
+                            companyId, obraId, cotacaoId, deficit,
+                            sobrasIndices: [...sobrasSel],
+                            completarComRisco: true,
+                            usuarioId: userId ?? 0,
+                            usuarioNome: userName,
+                          })}
+                          className="h-8 bg-orange-500 hover:bg-orange-600 text-white text-xs gap-1.5">
+                          {confirmarRealocacao.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                          Sobras + Completar com Risco ({fmt(deficitRestante - totalSobrasSel)})
+                        </Button>
+                      )}
+                      <Button size="sm"
+                        disabled={confirmarRealocacao.isPending}
+                        onClick={() => obraId && cotacaoId && confirmarRealocacao.mutate({
+                          companyId, obraId, cotacaoId, deficit,
+                          sobrasIndices: [...sobrasSel],
+                          completarComRisco: false,
+                          usuarioId: userId ?? 0,
+                          usuarioNome: userName,
+                        })}
+                        className="h-8 bg-blue-600 hover:bg-blue-700 text-white text-xs gap-1.5">
+                        {confirmarRealocacao.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                        Confirmar só Sobras ({fmt(totalSobrasSel)})
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
             )}
           </>
@@ -2830,6 +2893,8 @@ export default function Cotacoes() {
                             showContent={showRealocacao}
                             onCoberto={() => setCobertoPorRisco(true)}
                             onAcao={() => { mapaQ.refetch(); detalheQ.refetch(); }}
+                            userId={(user as any)?.id}
+                            userName={(user as any)?.name}
                           />
                         </div>
                       )}
@@ -2953,6 +3018,8 @@ export default function Cotacoes() {
                             onCoberto={() => {
                               setSemVerbaAutorizado({ adminId: 0, adminNome: "Reserva de Risco (DI-08)", justificativa: "Déficit coberto via reserva de risco" });
                             }}
+                            userId={(user as any)?.id}
+                            userName={(user as any)?.name}
                           />
                         </div>
                       ) : semVerbaAba === "realocacao" && !obraIdDialog ? (

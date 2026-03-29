@@ -2912,6 +2912,161 @@ Retorne APENAS um JSON válido neste formato:
       return { ok: true, novoDisponivel: disponivel - input.valor };
     }),
 
+  confirmarRealocacaoSobras: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      cotacaoId: z.number(),
+      deficit: z.number().positive(),
+      sobrasIndices: z.array(z.number()),
+      completarComRisco: z.boolean().default(false),
+      usuarioId: z.number(),
+      usuarioNome: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      const q = await db.select({
+        id: comprasOrdens.id,
+        numeroOc: comprasOrdens.numeroOc,
+        obraId: comprasOrdens.obraId,
+      }).from(comprasOrdens).where(and(
+        eq(comprasOrdens.companyId, input.companyId),
+        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida", "aguardando_aprovacao_extra"]),
+        eq(comprasOrdens.obraId, input.obraId),
+      ));
+
+      if (q.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma OC encontrada para esta obra." });
+
+      const ocItens = await db.select().from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, q.map(o => o.id)));
+      const scItemIds = ocItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
+      let scItensOc: any[] = [];
+      if (scItemIds.length > 0) {
+        scItensOc = await db.select({ id: comprasSolicitacoesItens.id, orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId, precoMeta: comprasSolicitacoesItens.precoMeta, insumoCodigo: comprasSolicitacoesItens.insumoCodigo })
+          .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+      }
+      const orcIdsOc = scItensOc.map((s: any) => s.orcamentoItemId).filter(Boolean) as number[];
+      let orcMetasOc: any[] = [];
+      if (orcIdsOc.length > 0) {
+        orcMetasOc = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal })
+          .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIdsOc));
+      }
+      const scToOrc: Record<number, number> = {};
+      const scToPrecoMeta: Record<number, number> = {};
+      const scToInsumoCod: Record<number, string> = {};
+      for (const s of scItensOc) {
+        if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+        if (n(s.precoMeta) > 0) scToPrecoMeta[s.id] = n(s.precoMeta);
+        if (s.insumoCodigo) scToInsumoCod[s.id] = s.insumoCodigo;
+      }
+      const orcToMeta: Record<number, number> = {};
+      for (const o of orcMetasOc) orcToMeta[o.id] = n(o.metaUnitTotal);
+
+      const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+        .from(orcamentos)
+        .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, input.obraId), isNull(orcamentos.deletedAt)))
+        .orderBy(desc(orcamentos.createdAt)).limit(1);
+      const insPriceMap: Record<string, number> = {};
+      if (orc) {
+        const orcItems = await db.select({ servicoCodigo: orcamentoItens.servicoCodigo })
+          .from(orcamentoItens).where(and(eq(orcamentoItens.orcamentoId, orc.id), eq(orcamentoItens.companyId, input.companyId)));
+        const svcCods = [...new Set(orcItems.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
+        if (svcCods.length > 0) {
+          const allIns = await db.select({
+            insumoCodigo: composicaoInsumos.insumoCodigo,
+            precoUnitario: composicaoInsumos.precoUnitario,
+            alocacaoMat: composicaoInsumos.alocacaoMat,
+            alocacaoMdo: composicaoInsumos.alocacaoMdo,
+          }).from(composicaoInsumos)
+            .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCods)));
+          for (const ins of allIns.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0))) {
+            if (ins.insumoCodigo && n(ins.precoUnitario) > 0) insPriceMap[ins.insumoCodigo] = n(ins.precoUnitario);
+          }
+        }
+      }
+
+      type Sobra = { descricao: string; unidade: string; ocNumero: string; vlrMeta: number; vlrComprado: number; sobra: number };
+      const sobras: Sobra[] = [];
+      for (const it of ocItens) {
+        if (!it.solicitacaoItemId) continue;
+        const orcId = scToOrc[it.solicitacaoItemId];
+        let metaUnit = orcId ? (orcToMeta[orcId] ?? 0) : 0;
+        if (metaUnit === 0) metaUnit = scToPrecoMeta[it.solicitacaoItemId] ?? 0;
+        if (metaUnit === 0) {
+          const ic = scToInsumoCod[it.solicitacaoItemId];
+          if (ic) metaUnit = insPriceMap[ic] ?? 0;
+        }
+        if (metaUnit === 0) continue;
+        const qty = n(it.quantidade);
+        const vlrMeta = metaUnit * qty;
+        const vlrComprado = n(it.precoUnitario) * qty;
+        const sobra = vlrMeta - vlrComprado;
+        if (sobra > 0.01) {
+          const oc = q.find(o => o.id === it.ordemId);
+          sobras.push({ descricao: it.descricao || "—", unidade: it.unidade || "", ocNumero: oc?.numeroOc || String(it.ordemId), vlrMeta, vlrComprado, sobra });
+        }
+      }
+      sobras.sort((a, b) => b.sobra - a.sobra);
+
+      let totalSobrasSel = 0;
+      const sobrasDesc: string[] = [];
+      for (const idx of input.sobrasIndices) {
+        if (idx >= 0 && idx < sobras.length) {
+          totalSobrasSel += sobras[idx].sobra;
+          sobrasDesc.push(`${sobras[idx].ocNumero}: ${sobras[idx].descricao} (${sobras[idx].sobra.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})`);
+        }
+      }
+
+      if (totalSobrasSel > 0) {
+        const valorRealocar = Math.min(totalSobrasSel, input.deficit);
+        await db.insert(budgetReallocations).values({
+          companyId: input.companyId,
+          obraId: input.obraId,
+          origemEapItemNome: `Economia OC: ${sobrasDesc.join("; ").substring(0, 250)}`,
+          destinoEapItemNome: `Cotação #${input.cotacaoId}`,
+          valorRealocado: String(valorRealocar.toFixed(2)),
+          motivo: `Realocação de sobras de compras para cobrir déficit da Cotação #${input.cotacaoId}`,
+          usuarioId: input.usuarioId,
+          usuarioNome: input.usuarioNome ?? null,
+        } as any);
+      }
+
+      let riscoDebitado = 0;
+      if (input.completarComRisco && totalSobrasSel < input.deficit) {
+        const falta = input.deficit - totalSobrasSel;
+        if (orc) {
+          const [di08] = await db.select({ valorAbsoluto: orcamentoBdi.valorAbsoluto })
+            .from(orcamentoBdi)
+            .where(and(eq(orcamentoBdi.orcamentoId, orc.id), eq(orcamentoBdi.codigo, "DI-08")));
+          const inicial = n(di08?.valorAbsoluto ?? 0);
+          const debitos = await db.select({ valor: comprasRiscoDebitos.valor })
+            .from(comprasRiscoDebitos).where(eq(comprasRiscoDebitos.orcamentoId, orc.id));
+          const usado = debitos.reduce((s, x) => s + n(x.valor), 0);
+          const disponivel = Math.max(0, inicial - usado);
+          riscoDebitado = Math.min(falta, disponivel);
+          if (riscoDebitado > 0.01) {
+            await db.insert(comprasRiscoDebitos).values({
+              companyId: input.companyId,
+              obraId: input.obraId,
+              orcamentoId: orc.id,
+              cotacaoId: input.cotacaoId,
+              valor: String(riscoDebitado.toFixed(2)),
+              observacao: `Complemento via risco — Cotação #${input.cotacaoId}`,
+            });
+          }
+        }
+      }
+
+      const totalCoberto = totalSobrasSel + riscoDebitado;
+      return {
+        ok: true,
+        totalSobrasRealocadas: Math.min(totalSobrasSel, input.deficit),
+        riscoDebitado,
+        totalCoberto,
+        cobreDeficit: totalCoberto >= input.deficit - 0.01,
+      };
+    }),
+
   reverterDebitoRisco: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number(), senhaMaster: z.string().min(1, "Senha do ADM Master obrigatória") }))
     .mutation(async ({ input, ctx }) => {
