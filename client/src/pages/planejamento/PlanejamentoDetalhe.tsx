@@ -1300,9 +1300,6 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
       { label: "CPI (custo)",        value: cpi.toFixed(2),                  color: cpi >= 1 ? "text-emerald-600" : "text-red-600", bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <DollarSign className="h-4 w-4" />, tip: "Cost Performance Index — Valor agregado ÷ Custo real. Acima de 1.0 = gastando menos que o previsto; abaixo de 1.0 = acima do orçamento." },
     ] : []),
     { label: "REFIs emitidos",     value: String(refisLista.length),       color: "text-purple-600", bg: "bg-purple-50", icon: <FileText className="h-4 w-4" />, tip: "Quantidade de Relatórios de Fiscalização (REFIS) emitidos. Cada REFIS registra o avanço semanal oficial da obra com fotos e indicadores." },
-    ...(!hideFinancial ? [
-      { label: "Valor do Contrato",  value: fmt(n(proj.valorContrato)),      color: "text-slate-700",  bg: "bg-slate-100", icon: <DollarSign className="h-4 w-4" />, tip: "Valor total do contrato da obra conforme cadastro do projeto. Base de referência para cálculos financeiros e medições." },
-    ] : []),
   ];
 
   // Atividades críticas (sem início ou com atraso)
@@ -1342,7 +1339,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
     <div className="space-y-5">
       {/* KPIs */}
       <UiTooltipProvider delayDuration={200}>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {kpis.map((k, i) => (
             <UiTooltip key={i}>
               <UiTooltipTrigger asChild>

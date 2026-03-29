@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 859,
+    titulo: "Removido card Valor do Contrato dos KPIs",
+    descricao: "Card 'Valor do Contrato' removido da Visão Geral do planejamento. Grid ajustado para 5 colunas.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:00:00",
+  },
+  {
     version: 858,
     titulo: "Barra superior Realizado acompanha semana selecionada",
     descricao: "Corrigido bug onde o Realizado na barra de Avanço Físico (topo da página) sempre mostrava o valor global mais recente, ignorando a semana selecionada na aba Avanço Semanal. Agora Previsto e Realizado acompanham a semana que o usuário está visualizando. Componentes como Diagrama de Rede e Programação Semanal continuam usando o mapa global de avanços.",
