@@ -694,19 +694,43 @@ export const purchaseRouter = router({
         : [];
       const scItemMap = new Map(allScItens.map(si => [si.id, si]));
 
-      const scIds = [...new Set(allScItens.map(si => (si as any).solicitacaoId).filter(Boolean))];
-      let orcItemMap: Record<number, { metaUnitTotal: number; quantidade: number }> = {};
-      if (scItemIds.length > 0) {
-        const { orcamentoItens: orcItensTable } = await import("../../drizzle/schema");
-        const orcItemIds = [...new Set(allScItens.map(si => (si as any).orcamentoItemId).filter(Boolean))];
-        if (orcItemIds.length > 0) {
-          const orcRows = await db.select({
-            id: orcItensTable.id,
-            metaUnitTotal: (orcItensTable as any).metaUnitTotal,
-            quantidade: orcItensTable.quantidade,
-          }).from(orcItensTable).where(inArray(orcItensTable.id, orcItemIds));
-          for (const r of orcRows) {
-            orcItemMap[r.id] = { metaUnitTotal: n((r as any).metaUnitTotal), quantidade: n(r.quantidade) };
+      const { comprasSolicitacoes, orcamentoItens: orcItensTable } = await import("../../drizzle/schema");
+
+      const scIdList = [...new Set(allScItens.map(si => (si as any).solicitacaoId).filter(Boolean))];
+      const scObraMap: Record<number, number> = {};
+      if (scIdList.length > 0) {
+        const scs = await db.select({ id: comprasSolicitacoes.id, obraId: comprasSolicitacoes.obraId })
+          .from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.id, scIdList));
+        for (const sc of scs) scObraMap[sc.id] = sc.obraId ?? 0;
+      }
+
+      const orcItemIds = [...new Set(allScItens.map(si => (si as any).orcamentoItemId).filter(Boolean))];
+      const orcItemQtyMap: Record<number, number> = {};
+      if (orcItemIds.length > 0) {
+        const orcRows = await db.select({ id: orcItensTable.id, quantidade: orcItensTable.quantidade })
+          .from(orcItensTable).where(inArray(orcItensTable.id, orcItemIds));
+        for (const r of orcRows) orcItemQtyMap[r.id] = n(r.quantidade);
+      }
+
+      const orcBudgetByKey: Record<string, number> = {};
+      for (const scItem of allScItens) {
+        const orcItemId = (scItem as any).orcamentoItemId;
+        const scObraId = scObraMap[(scItem as any).solicitacaoId] ?? 0;
+        if (orcItemId && orcItemQtyMap[orcItemId] !== undefined) {
+          const budgetKey = `${scObraId}:orc:${orcItemId}`;
+          orcBudgetByKey[budgetKey] = orcItemQtyMap[orcItemId];
+        }
+      }
+
+      const firstScQtyByKey: Record<string, number> = {};
+      for (const scItem of allScItens) {
+        const orcItemId = (scItem as any).orcamentoItemId;
+        const insumoCodigo = (scItem as any).insumoCodigo;
+        const scObraId = scObraMap[(scItem as any).solicitacaoId] ?? 0;
+        if (!orcItemId && insumoCodigo) {
+          const budgetKey = `${scObraId}:ins:${insumoCodigo}`;
+          if (firstScQtyByKey[budgetKey] === undefined) {
+            firstScQtyByKey[budgetKey] = n(scItem.quantidade);
           }
         }
       }
@@ -740,9 +764,10 @@ export const purchaseRouter = router({
           let totalBudgetQty = 0;
           if (orcItemId) {
             budgetKey = `${obraKey}:orc:${orcItemId}`;
-            totalBudgetQty = orcItemMap[orcItemId]?.quantidade ?? 0;
+            totalBudgetQty = orcBudgetByKey[budgetKey] ?? 0;
           } else if (insumoCodigo) {
             budgetKey = `${obraKey}:ins:${insumoCodigo}`;
+            totalBudgetQty = firstScQtyByKey[budgetKey] ?? 0;
           }
 
           if (budgetKey && totalBudgetQty > 0) {
@@ -751,11 +776,11 @@ export const purchaseRouter = router({
             const coveredQty = Math.min(qty, remainingBudgetQty);
             valorMeta += precoMeta * coveredQty;
             budgetConsumed[budgetKey] = alreadyConsumed + qty;
+          } else if (budgetKey) {
+            valorMeta += precoMeta * qty;
+            budgetConsumed[budgetKey] = (budgetConsumed[budgetKey] ?? 0) + qty;
           } else {
             valorMeta += precoMeta * qty;
-            if (budgetKey) {
-              budgetConsumed[budgetKey] = (budgetConsumed[budgetKey] ?? 0) + qty;
-            }
           }
         }
         const valorComprado = n(oc.total);
