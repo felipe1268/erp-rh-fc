@@ -3391,7 +3391,7 @@ Retorne APENAS um JSON válido neste formato:
     .input(z.object({ ids: z.array(z.number()).min(1), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const allowedCompanies = await getCompaniesForUser(db, ctx.user.id, ctx.user.role);
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
       const allowedIds = allowedCompanies.map((c: any) => c.id);
       if (!allowedIds.includes(input.companyId)) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
       const owned = await db.select({ id: comprasOrdens.id }).from(comprasOrdens).where(and(inArray(comprasOrdens.id, input.ids), eq(comprasOrdens.companyId, input.companyId)));
