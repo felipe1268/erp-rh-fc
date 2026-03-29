@@ -25,6 +25,24 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 851,
+    titulo: "Reativar revisão cancelada do cronograma",
+    descricao: "Administradores agora podem reverter o cancelamento de uma revisão do cronograma usando o botão 'Reativar' (verde) que aparece ao lado do badge 'cancelada'. A revisão volta ao status 'aprovada' e é considerada novamente no cronograma. Backend com validação de tenant (companyId) e registro automático do aprovador.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:30:00",
+  },
+  {
+    version: 850,
+    titulo: "Correção de ícones duplicados no seletor de módulos",
+    descricao: "O seletor de módulo na barra lateral exibia dois ícones para cada módulo (ex: dois carrinhos para Compras). Corrigido: removido o ícone duplicado do trigger do seletor, que já era renderizado automaticamente pelo valor selecionado.",
+    tipo: "bugfix",
+    modulos: "Sistema",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:00:00",
+  },
+  {
     version: 849,
     titulo: "Controle de saldo por insumo (global, consolidado da obra)",
     descricao: "O controle de saldo na criação de SC pelo modo EAP agora opera no nível do INSUMO e não mais do serviço. O saldo disponível de cada insumo é calculado globalmente somando todas as composições da obra onde ele aparece (qtd orçada total − qtd já solicitada). Insumos com saldo esgotado ficam BLOQUEADOS (zerados), com saldo parcial ficam LIMITADOS à quantidade disponível — ambos com badge visual e botão 'Extra-orçamento' para desbloquear manualmente. A validação ao salvar também passou a verificar o saldo global por insumo. Resumo de insumos com/sem/parcial saldo exibido no cabeçalho expandido da composição.",
