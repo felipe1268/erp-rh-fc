@@ -1714,12 +1714,16 @@ Responda APENAS com um objeto JSON no formato:
     .mutation(async ({ input }) => {
       const db = await getDb();
 
+      let tipoFinal = input.tipo ?? "material";
       if (input.solicitacaoId) {
-        const [sc] = await db.select({ id: comprasSolicitacoes.id, aprovacaoStatus: comprasSolicitacoes.aprovacaoStatus, status: comprasSolicitacoes.status })
+        const [sc] = await db.select({ id: comprasSolicitacoes.id, aprovacaoStatus: comprasSolicitacoes.aprovacaoStatus, status: comprasSolicitacoes.status, tipo: comprasSolicitacoes.tipo })
           .from(comprasSolicitacoes)
           .where(eq(comprasSolicitacoes.id, input.solicitacaoId));
         if (sc && sc.aprovacaoStatus !== "aprovada") {
           throw new Error("Esta solicitação ainda não foi aprovada. Só é possível criar cotação após a aprovação da SC.");
+        }
+        if (sc?.tipo && (!input.tipo || input.tipo === "material")) {
+          tipoFinal = sc.tipo === "servico" ? "servico" : sc.tipo === "pacote" ? "servico" : "material";
         }
 
         const existingCots = await db.select({ id: comprasCotacoes.id, numeroCotacao: comprasCotacoes.numeroCotacao, status: comprasCotacoes.status })
@@ -1757,7 +1761,7 @@ Responda APENAS com um objeto JSON no formato:
         numeroCotacao,
         descricao: normalizarTexto(input.descricao),
         prioridade: input.prioridade ?? "normal",
-        tipo: input.tipo ?? "material",
+        tipo: tipoFinal,
         obraId: input.obraId ?? null,
         solicitacaoId: input.solicitacaoId ?? null,
         fornecedorId: input.fornecedorId ?? null,

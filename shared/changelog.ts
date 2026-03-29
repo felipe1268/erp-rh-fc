@@ -6173,4 +6173,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 23:55:00",
   },
+  {
+    version: 887,
+    titulo: "Cotação herda tipo (Material/MDO) automaticamente da SC",
+    descricao: "O sistema agora detecta automaticamente o tipo da cotação a partir da SC vinculada. " +
+      "SC tipo servico/pacote → cotação tipo 'Mão de Obra'. SC tipo material → cotação tipo 'Material'. " +
+      "Botão único 'Enviar para Cotação' no detalhe da SC (com cor e ícone adaptados ao tipo). " +
+      "Nova Cotação no módulo de Cotações: ao selecionar SC vinculada, o tipo é preenchido automaticamente com badge visual. " +
+      "Backend: criarCotacao auto-detecta tipo da SC quando não fornecido explicitamente (defense in depth). " +
+      "Cotações existentes com tipo incorreto foram corrigidas no banco.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 00:10:00",
+  },
 ];

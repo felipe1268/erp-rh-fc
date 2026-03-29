@@ -615,6 +615,7 @@ export default function Cotacoes() {
   const [form, setForm] = useState({
     descricao: "", obraId: "", solicitacaoId: "", fornecedorId: "",
     dataValidade: "", condicaoPagamento: "", tipoPagamento: "", numeroParcelas: "", prazoEntregaDias: "", observacoes: "",
+    tipo: "material" as "material" | "servico",
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
 
@@ -936,17 +937,21 @@ export default function Cotacoes() {
   }, [mapaQ.data, abaAtiva]);
 
   function resetForm() {
-    setForm({ descricao: "", obraId: "", solicitacaoId: "", fornecedorId: "", dataValidade: "", condicaoPagamento: "", tipoPagamento: "", numeroParcelas: "", prazoEntregaDias: "", observacoes: "" });
+    setForm({ descricao: "", obraId: "", solicitacaoId: "", fornecedorId: "", dataValidade: "", condicaoPagamento: "", tipoPagamento: "", numeroParcelas: "", prazoEntregaDias: "", observacoes: "", tipo: "material" });
     setItens([newItem()]);
   }
 
   function handleScChange(scId: string) {
     setForm(p => ({ ...p, solicitacaoId: scId }));
-    if (!scId || scId === "none") return;
-    const sc = scsQ.data?.find(s => s.id === parseInt(scId)) as any;
-    if (sc?.obraId && !form.obraId) {
-      setForm(p => ({ ...p, solicitacaoId: scId, obraId: String(sc.obraId) }));
+    if (!scId || scId === "none") {
+      setForm(p => ({ ...p, solicitacaoId: scId, tipo: "material" }));
+      return;
     }
+    const sc = scsQ.data?.find(s => s.id === parseInt(scId)) as any;
+    const scTipo = sc?.tipo === "servico" ? "servico" as const : "material" as const;
+    const updates: any = { solicitacaoId: scId, tipo: scTipo };
+    if (sc?.obraId && !form.obraId) updates.obraId = String(sc.obraId);
+    setForm(p => ({ ...p, ...updates }));
   }
 
   function handleSalvar() {
@@ -956,6 +961,7 @@ export default function Cotacoes() {
     criar.mutate({
       companyId,
       descricao: form.descricao || undefined,
+      tipo: form.tipo,
       obraId: parseInt(form.obraId),
       solicitacaoId: form.solicitacaoId && form.solicitacaoId !== "none" ? parseInt(form.solicitacaoId) : undefined,
       fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
@@ -3286,10 +3292,18 @@ export default function Cotacoes() {
                   <SelectContent className="bg-white border-gray-200">
                     <SelectItem value="none">Nenhuma</SelectItem>
                     {(scsQ.data ?? []).filter(s => s.status === "pendente" && (s as any).aprovacaoStatus === "aprovada").map(s => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.numeroSc}{(s as any).titulo ? ` — ${(s as any).titulo}` : s.departamento ? ` — ${s.departamento}` : ""}</SelectItem>
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.numeroSc}{(s as any).titulo ? ` — ${(s as any).titulo}` : s.departamento ? ` — ${s.departamento}` : ""}
+                        {(s as any).tipo === "servico" ? " [MDO]" : (s as any).tipo === "pacote" ? " [PACOTE]" : ""}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {form.solicitacaoId && form.solicitacaoId !== "none" && (
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase mt-1 ${form.tipo === "servico" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                    {form.tipo === "servico" ? "Mão de Obra" : "Material"}
+                  </span>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-gray-700 text-sm font-medium">Fornecedor</Label>

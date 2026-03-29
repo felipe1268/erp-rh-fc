@@ -2737,26 +2737,22 @@ export default function Solicitacoes() {
               )}
 
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
-                {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && detalhe.aprovacaoStatus === "aprovada" && (
-                  <>
+                {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && detalhe.aprovacaoStatus === "aprovada" && (() => {
+                  const scTipo = (detalhe as any).tipo || "material";
+                  const tipoLabel = scTipo === "servico" ? "Mão de Obra" : scTipo === "pacote" ? "Pacote (Material + MDO)" : "Material";
+                  const tipoCor = scTipo === "servico" ? "bg-purple-600 hover:bg-purple-500" : scTipo === "pacote" ? "bg-indigo-600 hover:bg-indigo-500" : "bg-blue-600 hover:bg-blue-500";
+                  const tipoIcon = scTipo === "servico" || scTipo === "pacote" ? <Briefcase className="h-3 w-3" /> : <ShoppingCart className="h-3 w-3" />;
+                  return (
                     <Button size="sm"
-                      onClick={() => handleEnviarParaCotacao("material")}
+                      onClick={() => handleEnviarParaCotacao(scTipo === "pacote" ? "material" : scTipo)}
                       disabled={criarCotacao.isPending || (detalhe.itens as any[]).length === 0}
-                      className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1.5">
+                      className={`${tipoCor} text-white text-xs gap-1.5`}>
                       {criarCotacao.isPending
                         ? <><Loader2 className="h-3 w-3 animate-spin" /> Criando cotação...</>
-                        : <><ShoppingCart className="h-3 w-3" /> Cotação de Material</>}
+                        : <>{tipoIcon} Enviar para Cotação ({tipoLabel})</>}
                     </Button>
-                    <Button size="sm"
-                      onClick={() => handleEnviarParaCotacao("servico")}
-                      disabled={criarCotacao.isPending || (detalhe.itens as any[]).length === 0}
-                      className="bg-purple-600 hover:bg-purple-500 text-white text-xs gap-1.5">
-                      {criarCotacao.isPending
-                        ? <><Loader2 className="h-3 w-3 animate-spin" /> Criando cotação...</>
-                        : <><Briefcase className="h-3 w-3" /> Cotação de Mão de Obra</>}
-                    </Button>
-                  </>
-                )}
+                  );
+                })()}
                 {!editMode && !["cancelado"].includes(detalhe.status) && (
                   <Button size="sm" variant="outline"
                     onClick={() => {
