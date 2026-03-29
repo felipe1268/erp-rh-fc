@@ -523,7 +523,14 @@ export const planejamentoRouter = router({
           criadoPor:           av.criadoPor,
         }));
 
-      if (novosAvancos.length) await db.insert(planejamentoAvancos).values(novosAvancos);
+      if (novosAvancos.length) {
+        await db.transaction(async (tx) => {
+          const chunkSize = 200;
+          for (let i = 0; i < novosAvancos.length; i += chunkSize) {
+            await tx.insert(planejamentoAvancos).values(novosAvancos.slice(i, i + chunkSize));
+          }
+        });
+      }
       return { transferidas: novosAvancos.length };
     }),
 

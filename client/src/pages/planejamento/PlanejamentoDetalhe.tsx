@@ -8247,11 +8247,14 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
   });
 
   const transferirAvancosMut = trpc.planejamento.transferirAvancosParaNovaRevisao.useMutation({
-    onSuccess: (_, vars) => {
+    onSuccess: (data, vars) => {
+      if (data.transferidas > 0) {
+        toast.success(`${data.transferidas} registros de avanço transferidos para a nova revisão.`);
+      }
       aprovarMutation.mutate({ id: vars.novaRevisaoId });
     },
-    onError: (_, vars) => {
-      // Mesmo que a transferência falhe, aprovamos a revisão normalmente
+    onError: (err, vars) => {
+      toast.error("Falha ao transferir avanços", { description: "Os avanços da revisão anterior não foram copiados. Reimporte na aba Avanço Semanal." });
       aprovarMutation.mutate({ id: vars.novaRevisaoId });
     },
   });

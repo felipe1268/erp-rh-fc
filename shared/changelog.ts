@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 855,
+    titulo: "Correção transferência de avanços entre revisões + inserção em lotes",
+    descricao: "Corrigido problema onde avanços da revisão anterior não eram transferidos ao criar nova revisão (falha silenciosa). O insert agora é feito em lotes de 200 para evitar timeout. Se a transferência falhar, o usuário recebe um aviso visual (toast vermelho) em vez de silêncio. Dados históricos das revisões anteriores são sempre preservados.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 01:00:00",
+  },
+  {
     version: 854,
     titulo: "Filtro interativo na legenda da Curva S Financeira",
     descricao: "Os indicadores da Curva S Financeira (Previsto BCWS, Realizado BCWP, Tendência, Receita Acumulada) agora podem ser ativados/desativados clicando na legenda, da mesma forma que a Curva S de Trabalho. Itens desativados ficam esmaecidos com texto riscado e a linha correspondente é removida do gráfico.",
