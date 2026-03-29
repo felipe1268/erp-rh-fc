@@ -5769,7 +5769,7 @@ export const CHANGELOG: RevisionEntry[] = [
   {
     version: 845,
     titulo: "Bugfix: Tela branca ao abrir detalhe de Solicitação de Compra",
-    descricao: "Corrigido bug onde o dialog de detalhe da SC ficava totalmente branco quando a query retornava erro (ex: timeout, perda de sessão). Adicionado tratamento de estado de erro com mensagem clara e botão 'Tentar novamente'. Também adicionado fallback de carregamento para o caso de dados ainda não disponíveis.",
+    descricao: "Corrigido bug crítico: getSolicitacao comparava companyId (número) contra array de objetos empresa via .includes(), resultando em FORBIDDEN para todos os usuários. Corrigido para extrair IDs antes da comparação. Adicionado também tratamento de estado de erro no dialog (mensagem + botão Tentar novamente) e fallback para dados indisponíveis, eliminando a tela branca.",
     tipo: "bugfix",
     modulos: "Compras",
     criadoPor: "Sistema",

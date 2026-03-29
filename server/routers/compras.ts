@@ -1066,7 +1066,8 @@ Responda APENAS com um objeto JSON no formato:
       const [sc] = await db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
       if (!sc) throw new TRPCError({ code: "NOT_FOUND" });
       const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
-      if (!allowedCompanies.includes(sc.companyId)) throw new TRPCError({ code: "FORBIDDEN" });
+      const allowedIds = allowedCompanies.map((c: any) => c.id);
+      if (!allowedIds.includes(sc.companyId)) throw new TRPCError({ code: "FORBIDDEN" });
       const itens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
 
       let solicitanteNome: string | null = null;
