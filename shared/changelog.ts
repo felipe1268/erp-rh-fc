@@ -5775,4 +5775,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 12:20:00",
   },
+  {
+    version: 846,
+    titulo: "Bugfix: Crash ao abrir detalhe de SC — campo users.nome inexistente",
+    descricao: "Corrigido bug crítico que causava 'Cannot convert undefined or null to object': o handler getSolicitacao referenciava users.nome (inexistente), quando o campo correto no schema Drizzle é users.name. O Drizzle passava undefined para Object.entries() ao montar a query, causando crash. Corrigido em 3 pontos: solicitante, aprovador da SC e aprovadores das OCs.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 12:46:00",
+  },
 ];

@@ -1081,11 +1081,11 @@ Responda APENAS com um objeto JSON no formato:
       let solicitanteNome: string | null = null;
       let aprovadorNome: string | null = null;
       if (sc.solicitanteId) {
-        const uRows = await db.select({ nome: users.nome }).from(users).where(eq(users.id, sc.solicitanteId));
+        const uRows = await db.select({ nome: users.name }).from(users).where(eq(users.id, sc.solicitanteId));
         solicitanteNome = uRows[0]?.nome || null;
       }
       if (sc.aprovadorId) {
-        const uRows = await db.select({ nome: users.nome }).from(users).where(eq(users.id, sc.aprovadorId));
+        const uRows = await db.select({ nome: users.name }).from(users).where(eq(users.id, sc.aprovadorId));
         aprovadorNome = uRows[0]?.nome || null;
       }
 
@@ -1125,7 +1125,7 @@ Responda APENAS com um objeto JSON no formato:
       const ocAprovadores: Record<number, string> = {};
       if (ocAprovadorIds.length > 0) {
         try {
-          const aprovUsers = await db.select({ id: users.id, nome: users.nome }).from(users).where(inArray(users.id, ocAprovadorIds));
+          const aprovUsers = await db.select({ id: users.id, nome: users.name }).from(users).where(inArray(users.id, ocAprovadorIds));
           for (const u of aprovUsers) ocAprovadores[u.id] = u.nome || "";
         } catch (e: any) { console.warn("[getSolicitacao] aprovadores query failed:", e?.message); }
       }
