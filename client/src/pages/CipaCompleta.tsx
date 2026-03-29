@@ -113,15 +113,13 @@ export default function CipaCompleta() {
   const [empSearch, setEmpSearch] = useState("");
   const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
   const selectedEmp = activeEmployees.find((e: any) => e.id === membroForm.employeeId);
-  const filteredEmps = useMemo(() => {
-    if (!empSearch.trim()) return activeEmployees;
-    const s = normalizarTexto(empSearch);
-    return activeEmployees.filter((e: any) => {
-      const nome = normalizarTexto(e.nomeCompleto || "");
-      const cpf = (e.cpf || "").replace(/\D/g, "");
-      return nome.includes(s) || cpf.includes(s.replace(/\D/g, ""));
-    });
-  }, [activeEmployees, empSearch]);
+  const empSearchTrimmed = empSearch.trim().toLowerCase();
+  const filteredEmps = empSearchTrimmed
+    ? activeEmployees.filter((e: any) =>
+        (e.nomeCompleto || "").toLowerCase().includes(empSearchTrimmed) ||
+        (e.cpf || "").replace(/\D/g, "").includes(empSearchTrimmed.replace(/\D/g, ""))
+      )
+    : activeEmployees;
 
   const selectedEleicao = (eleicoes as any[]).find((e: any) => e.id === selectedEleicaoId);
 
