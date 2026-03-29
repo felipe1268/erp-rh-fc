@@ -2910,7 +2910,35 @@ Retorne APENAS um JSON válido neste formato:
         valor: String(input.valor),
         observacao: input.observacao ?? null,
       });
-      return { ok: true, novoDisponivel: disponivel - input.valor };
+
+      let ocsAprovadas = false;
+      if (input.cotacaoId && input.deficit !== undefined) {
+        const debitosTotais = await db.select({ valor: comprasRiscoDebitos.valor })
+          .from(comprasRiscoDebitos)
+          .where(eq(comprasRiscoDebitos.cotacaoId, input.cotacaoId));
+        const totalDebCot = debitosTotais.reduce((s, x) => s + n(x.valor), 0);
+        if (totalDebCot >= input.deficit - 0.01) {
+          const ocsAguardando = await db.select({ id: comprasOrdens.id })
+            .from(comprasOrdens)
+            .where(and(
+              eq(comprasOrdens.companyId, input.companyId),
+              eq(comprasOrdens.cotacaoId, input.cotacaoId),
+              eq(comprasOrdens.status as any, "aguardando_aprovacao_extra"),
+            ));
+          for (const oc of ocsAguardando) {
+            await db.update(comprasOrdens)
+              .set({
+                status: "aprovada",
+                aprovacaoStatus: "aprovado",
+                aprovacaoExtraMotivo: `Déficit coberto via reserva de risco (DI-08)`,
+              } as any)
+              .where(and(eq(comprasOrdens.id, oc.id), eq(comprasOrdens.companyId, input.companyId)));
+          }
+          ocsAprovadas = ocsAguardando.length > 0;
+        }
+      }
+
+      return { ok: true, novoDisponivel: disponivel - input.valor, ocsAprovadas };
     }),
 
   confirmarRealocacaoSobras: protectedProcedure
@@ -3059,12 +3087,34 @@ Retorne APENAS um JSON válido neste formato:
       }
 
       const totalCoberto = totalSobrasSel + riscoDebitado;
+      const cobreDeficit = totalCoberto >= input.deficit - 0.01;
+
+      if (cobreDeficit) {
+        const ocsAguardando = await db.select({ id: comprasOrdens.id })
+          .from(comprasOrdens)
+          .where(and(
+            eq(comprasOrdens.companyId, input.companyId),
+            eq(comprasOrdens.cotacaoId, input.cotacaoId),
+            eq(comprasOrdens.status as any, "aguardando_aprovacao_extra"),
+          ));
+        for (const oc of ocsAguardando) {
+          await db.update(comprasOrdens)
+            .set({
+              status: "aprovada",
+              aprovacaoStatus: "aprovado",
+              aprovacaoExtraMotivo: `Déficit coberto via realocação de verba (sobras${riscoDebitado > 0 ? " + risco DI-08" : ""})`,
+            } as any)
+            .where(and(eq(comprasOrdens.id, oc.id), eq(comprasOrdens.companyId, input.companyId)));
+        }
+      }
+
       return {
         ok: true,
         totalSobrasRealocadas: Math.min(totalSobrasSel, input.deficit),
         riscoDebitado,
         totalCoberto,
-        cobreDeficit: totalCoberto >= input.deficit - 0.01,
+        cobreDeficit,
+        ocsAprovadas: cobreDeficit,
       };
     }),
 

@@ -32,10 +32,11 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
   );
   const debitarRisco = trpc.compras.debitarDoRisco.useMutation({
     onSuccess: (d) => {
-      toast.success(`Debitado do RISCO! Reserva restante: ${fmt(d.novoDisponivel)}`);
+      toast.success(`Debitado do RISCO! Reserva restante: ${fmt(d.novoDisponivel)}${d.ocsAprovadas ? " — OC aprovada automaticamente." : ""}`);
       setValorDebito("");
       q.refetch();
       onAcao?.();
+      if (d.ocsAprovadas) onCoberto?.();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -59,7 +60,7 @@ function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showCont
   const confirmarRealocacao = trpc.compras.confirmarRealocacaoSobras.useMutation({
     onSuccess: (d) => {
       if (d.cobreDeficit) {
-        toast.success(`Realocação confirmada! ${fmt(d.totalSobrasRealocadas)} de sobras${d.riscoDebitado > 0 ? ` + ${fmt(d.riscoDebitado)} do risco` : ""} cobrem o déficit.`);
+        toast.success(`Realocação confirmada! ${fmt(d.totalSobrasRealocadas)} de sobras${d.riscoDebitado > 0 ? ` + ${fmt(d.riscoDebitado)} do risco` : ""} cobrem o déficit.${d.ocsAprovadas ? " OC aprovada automaticamente." : ""}`);
       } else {
         toast.success(`Realocação parcial: ${fmt(d.totalCoberto)} cobertos de ${fmt(deficit)}.`);
       }
