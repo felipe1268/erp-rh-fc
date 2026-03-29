@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer } from "lucide-react";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
@@ -103,6 +104,8 @@ export default function Ordens() {
   const [filtroAtrasadas, setFiltroAtrasadas] = useState(false);
   const [showNova, setShowNova] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
 
   const [form, setForm] = useState({
     obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "",
@@ -141,6 +144,10 @@ export default function Ordens() {
   });
   const excluir = trpc.compras.excluirOrdem.useMutation({
     onSuccess: () => { toast.success("OC excluída!"); q.refetch(); setShowDetalhe(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirLote = trpc.compras.excluirOrdensEmLote.useMutation({
+    onSuccess: (res) => { toast.success(`${res.count} OC(s) excluída(s)!`); q.refetch(); setSelectedIds(new Set()); setConfirmExcluirLote(false); },
     onError: (e) => toast.error(e.message),
   });
   const atualizarEntregaMut = trpc.compras.atualizarDadosEntregaOC.useMutation({
@@ -194,6 +201,15 @@ export default function Ordens() {
   const lista = q.data ?? [];
   const filt = lista.filter(o => !busca || o.numeroOc?.toLowerCase().includes(busca.toLowerCase()));
   const detalhe = detalheQ.data;
+
+  const allFilteredIds = filt.map(o => o.id);
+  const allSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selectedIds.has(id));
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
+  function toggleSelectAll() {
+    if (allSelected) { setSelectedIds(new Set()); } else { setSelectedIds(new Set(allFilteredIds)); }
+  }
 
   const totalItens = itens.reduce((s, it) => s + (parseFloat(it.quantidade) || 0) * (parseFloat(it.precoUnitario) || 0), 0);
   const totalOC = totalItens + (parseFloat(form.frete) || 0) + (parseFloat(form.outrasDespesas) || 0) + (parseFloat(form.impostos) || 0) - (parseFloat(form.desconto) || 0);
@@ -279,12 +295,25 @@ export default function Ordens() {
         </div>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-red-50 border border-red-200">
+          <span className="text-sm font-medium text-red-700">{selectedIds.size} OC(s) selecionada(s)</span>
+          <Button size="sm" variant="destructive" className="gap-1.5 ml-auto" onClick={() => setConfirmExcluirLote(true)} disabled={excluirLote.isPending}>
+            <Trash2 className="h-3.5 w-3.5" /> Excluir Selecionadas
+          </Button>
+          <Button size="sm" variant="outline" className="text-gray-600" onClick={() => setSelectedIds(new Set())}>Cancelar</Button>
+        </div>
+      )}
+
       {/* Tabela */}
       <TooltipProvider>
       <div className="rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
         <Table>
           <TableHeader>
             <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
+              <TableHead className="w-10 px-2">
+                <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} aria-label="Selecionar todas" />
+              </TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider w-10"></TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Número OC</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Obra</TableHead>
@@ -298,9 +327,9 @@ export default function Ordens() {
           </TableHeader>
           <TableBody>
             {q.isLoading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></TableCell></TableRow>
             ) : filt.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-400">Nenhuma ordem encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-10 text-gray-400">Nenhuma ordem encontrada</TableCell></TableRow>
             ) : filt.map(oc => {
               const st = STATUS_LABELS[oc.status] ?? STATUS_LABELS.pendente;
               const forn = fornecedores.find(f => f.id === oc.fornecedorId);
@@ -308,7 +337,10 @@ export default function Ordens() {
               const semCor = semaforoCor(semaforo.status);
               const semTip = semaforoTooltip(semaforo);
               return (
-                <TableRow key={oc.id} className={`border-gray-100 cursor-pointer ${oc.status === "entregue" ? "bg-emerald-50/40 hover:bg-emerald-50/70" : oc.status === "cancelada" ? "bg-gray-50/60 hover:bg-gray-100/60 opacity-60" : "hover:bg-gray-50"}`} onClick={() => setShowDetalhe(oc.id)}>
+                <TableRow key={oc.id} className={`border-gray-100 cursor-pointer ${selectedIds.has(oc.id) ? "bg-blue-50/60" : oc.status === "entregue" ? "bg-emerald-50/40 hover:bg-emerald-50/70" : oc.status === "cancelada" ? "bg-gray-50/60 hover:bg-gray-100/60 opacity-60" : "hover:bg-gray-50"}`} onClick={() => setShowDetalhe(oc.id)}>
+                  <TableCell className="px-2" onClick={e => e.stopPropagation()}>
+                    <Checkbox checked={selectedIds.has(oc.id)} onCheckedChange={() => toggleSelect(oc.id)} aria-label={`Selecionar ${oc.numeroOc}`} />
+                  </TableCell>
                   <TableCell className="text-center px-2">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -835,6 +867,23 @@ export default function Ordens() {
               </div>
             );
           })() : null}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={confirmExcluirLote} onOpenChange={setConfirmExcluirLote}>
+        <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="text-gray-900">Confirmar Exclusão</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 py-2">
+            Tem certeza que deseja excluir <strong>{selectedIds.size}</strong> ordem(ns) de compra? Esta ação não pode ser desfeita.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setConfirmExcluirLote(false)}>Cancelar</Button>
+            <Button variant="destructive" className="gap-1.5" disabled={excluirLote.isPending} onClick={() => excluirLote.mutate({ ids: [...selectedIds], companyId })}>
+              {excluirLote.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Excluir {selectedIds.size} OC(s)
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

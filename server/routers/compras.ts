@@ -3387,6 +3387,21 @@ Retorne APENAS um JSON válido neste formato:
       return { ok: true };
     }),
 
+  excluirOrdensEmLote: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const allowedCompanies = await getCompaniesForUser(db, ctx.user.id, ctx.user.role);
+      const allowedIds = allowedCompanies.map((c: any) => c.id);
+      if (!allowedIds.includes(input.companyId)) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
+      const owned = await db.select({ id: comprasOrdens.id }).from(comprasOrdens).where(and(inArray(comprasOrdens.id, input.ids), eq(comprasOrdens.companyId, input.companyId)));
+      const ownedIds = owned.map(o => o.id);
+      if (ownedIds.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Nenhuma OC encontrada" });
+      await db.delete(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ownedIds));
+      await db.delete(comprasOrdens).where(inArray(comprasOrdens.id, ownedIds));
+      return { ok: true, count: ownedIds.length };
+    }),
+
   // Resumo/contadores para dashboard (legado)
   resumoCompras: protectedProcedure
     .input(z.object({ companyId: z.number() }))
