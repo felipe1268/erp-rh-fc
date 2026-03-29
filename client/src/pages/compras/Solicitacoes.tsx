@@ -1283,7 +1283,7 @@ export default function Solicitacoes() {
                                   <div className="text-right text-blue-600">{ins.qtdJaSolicitada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
                                   <div className={`text-right font-bold ${saldoNeg ? "text-red-600" : "text-emerald-600"}`}>{ins.saldoDisponivel.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
                                   <div className="text-right text-purple-600">{ins.qtdComprada.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</div>
-                                  <div>
+                                  <div className="flex items-center gap-0.5">
                                     <input
                                       type="number" min="0" step="0.01"
                                       className="w-full h-6 px-1 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 text-center"
@@ -1291,6 +1291,16 @@ export default function Solicitacoes() {
                                       value={qtdStr}
                                       onChange={e => setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: e.target.value }))}
                                     />
+                                    {ins.saldoDisponivel > 0 && (
+                                      <button
+                                        type="button"
+                                        title={`Usar saldo: ${ins.saldoDisponivel.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}`}
+                                        className="shrink-0 h-6 px-1 text-[8px] font-bold rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors whitespace-nowrap"
+                                        onClick={() => setInsumoQtds(p => ({ ...p, [ins.insumoCodigo]: String(ins.saldoDisponivel) }))}
+                                      >
+                                        Saldo
+                                      </button>
+                                    )}
                                   </div>
                                   <div className="text-right">
                                     {qtdVal > 0 && ins.precoMedio > 0 ? (
