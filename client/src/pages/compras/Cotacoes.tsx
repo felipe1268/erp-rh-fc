@@ -582,6 +582,11 @@ export default function Cotacoes() {
   const [showAnexoInput, setShowAnexoInput] = useState<number | null>(null);
   const [showRealocacao, setShowRealocacao] = useState(false);
   const [cobertoPorRisco, setCobertoPorRisco] = useState(false);
+  const [showSemVerbaDialog, setShowSemVerbaDialog] = useState(false);
+  const [semVerbaAdminEmail, setSemVerbaAdminEmail] = useState("");
+  const [semVerbaAdminSenha, setSemVerbaAdminSenha] = useState("");
+  const [semVerbaJustificativa, setSemVerbaJustificativa] = useState("");
+  const [semVerbaAutorizado, setSemVerbaAutorizado] = useState<{ adminId: number; adminNome: string; justificativa: string } | null>(null);
   const [iaExtracao, setIaExtracao] = useState<{ fornecedorId: number; dados: any } | null>(null);
   const [iaFileBuffer, setIaFileBuffer] = useState<{ fornecedorId: number; base64: string; fileName: string; mimeType: string } | null>(null);
   const [iaTipoProposta, setIaTipoProposta] = useState<"complemento" | "revisao">("complemento");
@@ -626,6 +631,7 @@ export default function Cotacoes() {
     if (prevShowDetalhe.current !== showDetalhe) {
       prevShowDetalhe.current = showDetalhe;
       setCobertoPorRisco(false); setShowRealocacao(false); setIaExtracao(null); setIaFileBuffer(null); setIaProgress(null); setIaJobId(null); setIaPollingFornId(null); setShowPropostas(null); setIaTipoProposta("complemento");
+      setSemVerbaAutorizado(null); setShowSemVerbaDialog(false); setSemVerbaAdminEmail(""); setSemVerbaAdminSenha(""); setSemVerbaJustificativa("");
     }
   }, [showDetalhe]);
 
@@ -673,7 +679,15 @@ export default function Cotacoes() {
     onError: (e) => toast.error(e.message),
   });
   const gerarOC = trpc.compras.criarOrdemDeCotacao.useMutation({
-    onSuccess: () => { toast.success("Ordem de Compra gerada!"); q.refetch(); detalheQ.refetch(); },
+    onSuccess: () => { toast.success("Ordem de Compra gerada!"); q.refetch(); detalheQ.refetch(); setSemVerbaAutorizado(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const autorizarSemVerba = trpc.compras.autorizarCompraSemVerba.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Compra autorizada pelo admin ${data.adminNome}!`);
+      setSemVerbaAutorizado({ adminId: data.adminId, adminNome: data.adminNome, justificativa: semVerbaJustificativa });
+      setShowSemVerbaDialog(false);
+    },
     onError: (e) => toast.error(e.message),
   });
   const atualizarStatus = trpc.compras.atualizarStatusCotacao.useMutation({
@@ -1542,15 +1556,25 @@ export default function Cotacoes() {
     const vencedorSelecionado = (mapa?.participantes ?? []).find((p: any) => p.selecionado) ?? null;
     const fornParaSaldo = vencedorSelecionado || melhorForn;
 
+    const itensSemVerba = (mapa?.itens ?? []).filter((it: any) => (it as any).fonteVinculo !== "item");
+    const temItensSemVerba = itensSemVerba.length > 0;
+
     function handleAprovarGerarOC(cotacaoId: number) {
       if (!fornParaSaldo) {
         toast.error("Selecione um fornecedor vencedor antes de aprovar.");
         return;
       }
+      if (temItensSemVerba && !semVerbaAutorizado) {
+        setSemVerbaAdminEmail("");
+        setSemVerbaAdminSenha("");
+        setSemVerbaJustificativa("");
+        setShowSemVerbaDialog(true);
+        return;
+      }
       const fornTotal = parseFloat(fornParaSaldo.totalOrcado ?? "0");
       const metaTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
         acc + (parseFloat(it.metaUnitario ?? "0") * parseFloat(it.quantidade ?? "0")), 0);
-      if (metaTotal > 0 && fornTotal > metaTotal && !cobertoPorRisco) {
+      if (metaTotal > 0 && fornTotal > metaTotal && !cobertoPorRisco && !semVerbaAutorizado) {
         const defVal = (fornTotal - metaTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
         const fornNome = fornParaSaldo.fornecedor?.nomeFantasia || fornParaSaldo.fornecedor?.razaoSocial || "Fornecedor";
         const ok = confirm(
@@ -1562,7 +1586,33 @@ export default function Cotacoes() {
         );
         if (!ok) return;
       }
-      gerarOC.mutate({ companyId, cotacaoId, userId: user?.id, userName: user?.name });
+      gerarOC.mutate({
+        companyId, cotacaoId, userId: user?.id, userName: user?.name,
+        ...(semVerbaAutorizado ? { autorizacaoSemVerba: semVerbaAutorizado } : {}),
+      });
+    }
+
+    function handleAutorizarSemVerba() {
+      if (!showDetalhe) return;
+      const itensInfo = itensSemVerba.map((it: any) => {
+        const key = `${it.id}_${fornParaSaldo?.fornecedorId}`;
+        const precoUnit = parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
+        const qtd = parseFloat(it.quantidade ?? "0");
+        return {
+          descricao: it.descricao ?? "Item",
+          quantidade: qtd,
+          unidade: it.unidade ?? "un",
+          valorTotal: precoUnit * qtd,
+        };
+      });
+      autorizarSemVerba.mutate({
+        companyId,
+        cotacaoId: showDetalhe,
+        adminEmail: semVerbaAdminEmail,
+        adminSenha: semVerbaAdminSenha,
+        justificativa: semVerbaJustificativa,
+        itensSemVerba: itensInfo,
+      });
     }
 
     function handleSalvarPrecos(fornecedorId: number) {
@@ -1717,8 +1767,9 @@ export default function Cotacoes() {
                   {detalheFullscreen.status === "pendente" && (
                     <>
                       <Button onClick={() => handleAprovarGerarOC(detalheFullscreen.id)} disabled={gerarOC.isPending}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2">
-                        {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Aprovar e Gerar OC
+                        className={`${temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-500"} text-white gap-2`}>
+                        {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : temItensSemVerba && !semVerbaAutorizado ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+                        {temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : "Aprovar e Gerar OC"}
                       </Button>
                       <Button variant="outline" onClick={() => atualizarStatus.mutate({ id: detalheFullscreen.id, status: "recusada" })}
                         className="border-red-200 text-red-600 hover:bg-red-50 gap-2">
@@ -1842,8 +1893,9 @@ export default function Cotacoes() {
                     {detalheFullscreen.status === "pendente" && (
                       <>
                         <Button onClick={() => handleAprovarGerarOC(detalheFullscreen.id)} disabled={gerarOC.isPending}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2">
-                          {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Aprovar e Gerar OC
+                          className={`${temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-500"} text-white gap-2`}>
+                          {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : temItensSemVerba && !semVerbaAutorizado ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+                          {temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : "Aprovar e Gerar OC"}
                         </Button>
                         <Button variant="outline" onClick={() => atualizarStatus.mutate({ id: detalheFullscreen.id, status: "recusada" })}
                           className="border-red-200 text-red-600 hover:bg-red-50 gap-2">
@@ -2813,6 +2865,109 @@ export default function Cotacoes() {
         </div>
         {iaOverlayPortal}
         {condModalPortal}
+
+        <Dialog open={showSemVerbaDialog} onOpenChange={(o) => { if (!o) setShowSemVerbaDialog(false); }}>
+          <DialogContent className="max-w-lg" style={{ backgroundColor: "white" }}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-700">
+                <ShieldAlert className="h-5 w-5" />
+                Itens sem Verba Orçamentária
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-xs text-red-700 font-semibold mb-2">
+                  {itensSemVerba.length} item(ns) não possuem vínculo direto com o orçamento:
+                </p>
+                <div className="space-y-1">
+                  {itensSemVerba.map((it: any, idx: number) => {
+                    const key = `${it.id}_${fornParaSaldo?.fornecedorId}`;
+                    const precoUnit = parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
+                    const qtd = parseFloat(it.quantidade ?? "0");
+                    return (
+                      <div key={idx} className="flex items-center justify-between text-xs bg-white border border-red-100 rounded px-2 py-1.5">
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium text-gray-800 truncate block">{it.descricao}</span>
+                          <span className="text-gray-500">{qtd.toLocaleString("pt-BR")} {it.unidade}</span>
+                        </div>
+                        <span className="text-red-700 font-bold ml-2 whitespace-nowrap">
+                          {(precoUnit * qtd).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 pt-2 border-t border-red-200 flex justify-between text-xs font-bold text-red-800">
+                  <span>Total sem verba:</span>
+                  <span>
+                    {itensSemVerba.reduce((s: number, it: any) => {
+                      const key = `${it.id}_${fornParaSaldo?.fornecedorId}`;
+                      const p = parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
+                      return s + p * parseFloat(it.quantidade ?? "0");
+                    }, 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </span>
+                </div>
+              </div>
+
+              {semVerbaAutorizado ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                  <CheckCircle className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
+                  <p className="text-sm font-semibold text-emerald-800">Autorizado por {semVerbaAutorizado.adminNome}</p>
+                  <p className="text-xs text-emerald-600 mt-1">Clique em "Aprovar e Gerar OC" para continuar</p>
+                </div>
+              ) : (
+                <>
+                  <div className="border border-gray-200 rounded-lg p-3 space-y-3">
+                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-1">
+                      <ShieldCheck className="h-3.5 w-3.5" /> Autorização do Administrador
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Para prosseguir com a compra, é necessário autorização de um administrador.
+                    </p>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">E-mail do Admin</label>
+                      <input
+                        type="email"
+                        value={semVerbaAdminEmail}
+                        onChange={(e) => setSemVerbaAdminEmail(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="admin@empresa.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">Senha do Admin</label>
+                      <input
+                        type="password"
+                        value={semVerbaAdminSenha}
+                        onChange={(e) => setSemVerbaAdminSenha(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Digite a senha"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">Justificativa da compra</label>
+                      <textarea
+                        value={semVerbaJustificativa}
+                        onChange={(e) => setSemVerbaJustificativa(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                        rows={3}
+                        placeholder="Explique por que esta compra é necessária mesmo sem verba orçamentária..."
+                      />
+                    </div>
+                    <Button
+                      onClick={handleAutorizarSemVerba}
+                      disabled={!semVerbaAdminEmail || !semVerbaAdminSenha || semVerbaJustificativa.length < 5 || autorizarSemVerba.isPending}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      {autorizarSemVerba.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldAlert className="h-4 w-4 mr-2" />}
+                      Autorizar Compra sem Verba
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* ── Cancelar Aprovação (dentro do detalhe) ── */}
         <Dialog open={showCancelarAprovacao} onOpenChange={(o) => { if (!o) { setShowCancelarAprovacao(false); setCancelarCotacaoId(null); } }}>

@@ -3009,8 +3009,47 @@ Retorne APENAS um JSON válido neste formato:
       return { ...oc, itens, fornecedor, proximaEntregaProgramada };
     }),
 
+  autorizarCompraSemVerba: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      cotacaoId: z.number(),
+      adminEmail: z.string().min(1, "E-mail do admin é obrigatório"),
+      adminSenha: z.string().min(1, "Senha do admin é obrigatória"),
+      justificativa: z.string().min(5, "Justificativa deve ter ao menos 5 caracteres"),
+      itensSemVerba: z.array(z.object({
+        descricao: z.string(),
+        quantidade: z.number(),
+        unidade: z.string(),
+        valorTotal: z.number(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [admin] = await db.select({
+        id: users.id, name: users.name, role: users.role, password: users.password,
+      }).from(users).where(eq(users.email, input.adminEmail)).limit(1);
+      if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Usuário admin não encontrado com este e-mail" });
+      if (admin.role !== "admin" && admin.role !== "admin_master")
+        throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem autorizar compras sem verba" });
+      const bcrypt = await import("bcryptjs");
+      const senhaValida = await bcrypt.compare(input.adminSenha, admin.password);
+      if (!senhaValida) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
+      const allowed = await getCompaniesForUser(admin.id, admin.role);
+      if (!allowed.some((c: any) => c.id === input.companyId))
+        throw new TRPCError({ code: "FORBIDDEN", message: "Admin não tem acesso a esta empresa" });
+      const resumoItens = input.itensSemVerba.map(i => `${i.descricao} (${i.quantidade} ${i.unidade})`).join("; ");
+      const valorTotal = input.itensSemVerba.reduce((s, i) => s + i.valorTotal, 0);
+      await db.update(comprasCotacoes)
+        .set({ observacoes: sql`COALESCE(observacoes || E'\n', '') || ${`[AUTORIZAÇÃO SEM VERBA — Admin: ${admin.name} (${input.adminEmail}) em ${new Date().toLocaleString("pt-BR")}. Valor: R$ ${valorTotal.toFixed(2)}. Itens: ${resumoItens}. Justificativa: ${input.justificativa}]`}` })
+        .where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
+      return { ok: true, adminNome: admin.name, adminId: admin.id };
+    }),
+
   criarOrdemDeCotacao: protectedProcedure
-    .input(z.object({ companyId: z.number(), cotacaoId: z.number(), userId: z.number().optional(), userName: z.string().optional() }))
+    .input(z.object({
+      companyId: z.number(), cotacaoId: z.number(), userId: z.number().optional(), userName: z.string().optional(),
+      autorizacaoSemVerba: z.object({ adminId: z.number(), adminNome: z.string(), justificativa: z.string() }).optional(),
+    }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
@@ -3158,6 +3197,13 @@ Retorne APENAS um JSON válido neste formato:
         numeroParcelas: fornInfo?.numeroParcelas ?? cot.numeroParcelas ?? 1,
         dataEntregaPrevista: dataEntregaPrevista,
         pendenteCoberturaOrcamentaria: itens.some(it => (it as any).semVerba === true),
+        ...(input.autorizacaoSemVerba ? {
+          aprovacaoExtraAdminId: input.autorizacaoSemVerba.adminId,
+          aprovacaoExtraAdminNome: input.autorizacaoSemVerba.adminNome,
+          aprovacaoExtraJustificativa: input.autorizacaoSemVerba.justificativa,
+          aprovacaoExtraMotivo: "Compra sem verba orçamentária autorizada pelo admin",
+          aprovacaoExtraEm: new Date().toISOString(),
+        } : {}),
       } as any).returning();
       if (itens.length > 0) {
         await db.insert(comprasOrdensItens).values(

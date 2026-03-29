@@ -6018,4 +6018,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 13:00:00",
   },
+  {
+    version: 873,
+    titulo: "Bloqueio de OC sem Verba Orçamentária — Autorização Admin no Mapa de Cotação",
+    descricao: "Ao clicar 'Aprovar e Gerar OC' no Mapa de Cotação, se houver itens sem vínculo direto com o orçamento (fonteVinculo !== 'item'), o sistema bloqueia e exibe dialog de autorização. O dialog lista os itens sem verba com valores, e exige email + senha de administrador + justificativa. Validação via bcrypt no servidor com registro em observações da cotação. Botão muda para vermelho 'Requer Autorização' quando há itens sem verba. Após autorização, botão fica verde 'Aprovado' e a OC pode ser gerada normalmente com os dados de autorização anexados.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 15:00:00",
+  },
 ];
