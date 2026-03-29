@@ -362,6 +362,18 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     return m;
   }, [avancos]);
 
+  const avancosMapSemana = useMemo(() => {
+    if (!semanaVisualizacao) return avancosMap;
+    const m: Record<number, number> = {};
+    const semMap: Record<number, string> = {};
+    avancos.forEach((av: any) => {
+      if (av.semana > semanaVisualizacao) return;
+      const id = av.atividadeId;
+      if (!semMap[id] || av.semana > semMap[id]) { semMap[id] = av.semana; m[id] = n(av.percentualAcumulado); }
+    });
+    return m;
+  }, [avancos, semanaVisualizacao, avancosMap]);
+
   const avancoAtual = useMemo(() => {
     if (!atividades.length) return 0;
     const folhas    = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
@@ -370,10 +382,10 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     const pesoTotal = semPeso ? folhas.length || 1 : pesoBruto;
     const ponderado = folhas.reduce((s: number, a: any) => {
       const peso = semPeso ? 1 : n(a.pesoFinanceiro);
-      return s + (avancosMap[a.id] ?? 0) * (peso / pesoTotal);
+      return s + (avancosMapSemana[a.id] ?? 0) * (peso / pesoTotal);
     }, 0);
     return Math.min(100, ponderado);
-  }, [atividades, avancosMap]);
+  }, [atividades, avancosMapSemana]);
 
   const avancoPrevistoDia = useMemo(() => {
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);

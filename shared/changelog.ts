@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 858,
+    titulo: "Barra superior Realizado acompanha semana selecionada",
+    descricao: "Corrigido bug onde o Realizado na barra de Avanço Físico (topo da página) sempre mostrava o valor global mais recente, ignorando a semana selecionada na aba Avanço Semanal. Agora Previsto e Realizado acompanham a semana que o usuário está visualizando. Componentes como Diagrama de Rede e Programação Semanal continuam usando o mapa global de avanços.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 22:30:00",
+  },
+  {
     version: 857,
     titulo: "Tooltips explicativos nos KPIs da Visão Geral",
     descricao: "Ao passar o mouse sobre cada card de indicador na aba Visão Geral (Atividades, Avanço Físico, SPI, CPI, REFIs, Valor do Contrato), um balão explicativo aparece com a descrição resumida do que o indicador representa e como é calculado.",
