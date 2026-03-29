@@ -37,6 +37,33 @@ const STATUS_ELEICAO: Record<string, { label: string; color: string; bg: string 
   Concluida: { label: "Concluída", color: "text-green-700", bg: "bg-green-100" },
 };
 
+function EmployeeList({ employees, onSelect }: { employees: any[]; onSelect: (id: number) => void }) {
+  return (
+    <div className="mt-2 border rounded-lg max-h-56 overflow-y-auto bg-white">
+      <div className="sticky top-0 bg-slate-50 px-3 py-1.5 border-b text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+        {employees.length} colaborador{employees.length !== 1 ? "es" : ""} encontrado{employees.length !== 1 ? "s" : ""}
+      </div>
+      {employees.length === 0 ? (
+        <div className="p-6 text-center">
+          <Users className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+          <p className="text-sm text-slate-500">Nenhum colaborador encontrado</p>
+          <p className="text-xs text-slate-400 mt-1">Tente outro nome, CPF, RG ou código interno</p>
+        </div>
+      ) : employees.slice(0, 50).map((e: any) => (
+        <div key={e.id} className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm flex items-center gap-3 border-b border-slate-50 last:border-0 transition-colors" onClick={() => onSelect(e.id)}>
+          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+            <span className="text-xs font-bold text-slate-500">{(e.nomeCompleto || "?")[0]}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-slate-800 truncate">{e.nomeCompleto}</p>
+            <p className="text-[11px] text-slate-400">{e.cargo || "Sem cargo"} · {formatCPF(e.cpf)}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const CARGO_CIPA: Record<string, string> = {
   Presidente: "Presidente",
   Vice_Presidente: "Vice-Presidente",
@@ -113,13 +140,20 @@ export default function CipaCompleta() {
   const [empSearch, setEmpSearch] = useState("");
   const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
   const selectedEmp = activeEmployees.find((e: any) => e.id === membroForm.employeeId);
-  const empSearchTrimmed = empSearch.trim().toLowerCase();
-  const filteredEmps = empSearchTrimmed
-    ? activeEmployees.filter((e: any) =>
-        (e.nomeCompleto || "").toLowerCase().includes(empSearchTrimmed) ||
-        (e.cpf || "").replace(/\D/g, "").includes(empSearchTrimmed.replace(/\D/g, ""))
-      )
-    : activeEmployees;
+
+  function getFilteredEmps() {
+    const q = empSearch.trim().toLowerCase();
+    if (!q) return activeEmployees;
+    const qDigits = q.replace(/\D/g, "");
+    return activeEmployees.filter((e: any) => {
+      if ((e.nomeCompleto || "").toLowerCase().includes(q)) return true;
+      if ((e.cpf || "").replace(/\D/g, "").includes(qDigits) && qDigits.length > 0) return true;
+      if ((e.rg || "").replace(/\D/g, "").includes(qDigits) && qDigits.length > 0) return true;
+      if ((e.codigoInterno || "").toLowerCase().includes(q)) return true;
+      if ((e.matricula || "").toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }
 
   const selectedEleicao = (eleicoes as any[]).find((e: any) => e.id === selectedEleicaoId);
 
@@ -562,28 +596,7 @@ export default function CipaCompleta() {
                         </button>
                       )}
                     </div>
-                    <div className="mt-2 border rounded-lg max-h-56 overflow-y-auto bg-white">
-                      <div className="sticky top-0 bg-slate-50 px-3 py-1.5 border-b text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                        {filteredEmps.length} colaborador{filteredEmps.length !== 1 ? "es" : ""} encontrado{filteredEmps.length !== 1 ? "s" : ""}
-                      </div>
-                      {filteredEmps.length === 0 ? (
-                        <div className="p-6 text-center">
-                          <Users className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                          <p className="text-sm text-slate-500">Nenhum colaborador encontrado</p>
-                          <p className="text-xs text-slate-400 mt-1">Tente outro nome ou CPF</p>
-                        </div>
-                      ) : filteredEmps.slice(0, 50).map((e: any) => (
-                        <div key={e.id} className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm flex items-center gap-3 border-b border-slate-50 last:border-0 transition-colors" onClick={() => { setMembroForm({ ...membroForm, employeeId: e.id }); setEmpSearch(""); }}>
-                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                            <span className="text-xs font-bold text-slate-500">{(e.nomeCompleto || "?")[0]}</span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-slate-800 truncate">{e.nomeCompleto}</p>
-                            <p className="text-[11px] text-slate-400">{e.cargo || "Sem cargo"} · {formatCPF(e.cpf)}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <EmployeeList employees={getFilteredEmps()} onSelect={(id: number) => { setMembroForm({ ...membroForm, employeeId: id }); setEmpSearch(""); }} />
                   </>
                 )}
               </div>
