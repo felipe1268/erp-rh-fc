@@ -28,9 +28,6 @@ import {
   almoxarifadoNotificacoes,
   purchaseOrders, purchaseRequests, purchaseQuotations,
 } from "../../drizzle/schema";
-import { PermissionDeniedError } from "@anthropic-ai/sdk";
-import { createQueryUtilsProxy } from "node_modules/@trpc/react-query/dist/getQueryKey.d-CruH3ncI.d.mts";
-
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
 const iaExtractionJobs = new Map<string, { status: string; startedAt: number; result?: any; error?: string }>();
@@ -1064,84 +1061,130 @@ Responda APENAS com um objeto JSON no formato:
     .query(async ({ input, ctx }) => {
       try {
       const db = await getDb();
-      const [sc] = await db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      console.log("[getSolicitacao] step1: fetching SC id=" + input.id);
+      const scRows = await db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
+      const sc = scRows[0];
       if (!sc) throw new TRPCError({ code: "NOT_FOUND" });
+
+      console.log("[getSolicitacao] step2: checking permissions for user=" + ctx.user.id + " role=" + ctx.user.role);
       const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      console.log("[getSolicitacao] step2b: allowedCompanies type=" + typeof allowedCompanies + " isArray=" + Array.isArray(allowedCompanies) + " length=" + (allowedCompanies?.length ?? "null"));
       const allowedIds = (allowedCompanies || []).map((c: any) => c.id);
       if (!allowedIds.includes(sc.companyId)) throw new TRPCError({ code: "FORBIDDEN" });
+
+      console.log("[getSolicitacao] step3: fetching itens");
       const itens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
 
+      console.log("[getSolicitacao] step4: fetching nomes");
       let solicitanteNome: string | null = null;
       let aprovadorNome: string | null = null;
       if (sc.solicitanteId) {
-        const [u] = await db.select({ nome: users.nome }).from(users).where(eq(users.id, sc.solicitanteId));
-        solicitanteNome = u?.nome || null;
+        const uRows = await db.select({ nome: users.nome }).from(users).where(eq(users.id, sc.solicitanteId));
+        solicitanteNome = uRows[0]?.nome || null;
       }
       if (sc.aprovadorId) {
-        const [u] = await db.select({ nome: users.nome }).from(users).where(eq(users.id, sc.aprovadorId));
-        aprovadorNome = u?.nome || null;
+        const uRows = await db.select({ nome: users.nome }).from(users).where(eq(users.id, sc.aprovadorId));
+        aprovadorNome = uRows[0]?.nome || null;
       }
 
-      const cotacoes = await db.select({
-        id: comprasCotacoes.id,
-        numeroCotacao: comprasCotacoes.numeroCotacao,
-        status: comprasCotacoes.status,
-        criadoEm: comprasCotacoes.criadoEm,
-        total: comprasCotacoes.total,
-      }).from(comprasCotacoes)
-        .where(and(eq(comprasCotacoes.solicitacaoId, input.id), eq(comprasCotacoes.companyId, sc.companyId)))
-        .orderBy(asc(comprasCotacoes.criadoEm));
+      console.log("[getSolicitacao] step5: fetching cotacoes");
+      let cotacoes: any[] = [];
+      try {
+        cotacoes = await db.select({
+          id: comprasCotacoes.id,
+          numeroCotacao: comprasCotacoes.numeroCotacao,
+          status: comprasCotacoes.status,
+          criadoEm: comprasCotacoes.criadoEm,
+          total: comprasCotacoes.total,
+        }).from(comprasCotacoes)
+          .where(and(eq(comprasCotacoes.solicitacaoId, input.id), eq(comprasCotacoes.companyId, sc.companyId)))
+          .orderBy(asc(comprasCotacoes.criadoEm));
+      } catch (e: any) { console.warn("[getSolicitacao] cotacoes query failed:", e?.message); }
 
-      const ordens = await db.select({
-        id: comprasOrdens.id,
-        numeroOc: comprasOrdens.numeroOc,
-        status: comprasOrdens.status,
-        fornecedorNome: comprasOrdens.fornecedorNome,
-        total: comprasOrdens.total,
-        criadoEm: comprasOrdens.criadoEm,
-        aprovacaoStatus: comprasOrdens.aprovacaoStatus,
-        aprovadorId: comprasOrdens.aprovadorId,
-      }).from(comprasOrdens)
-        .where(and(eq(comprasOrdens.solicitacaoId, input.id), eq(comprasOrdens.companyId, sc.companyId)))
-        .orderBy(asc(comprasOrdens.criadoEm));
+      console.log("[getSolicitacao] step6: fetching ordens");
+      let ordens: any[] = [];
+      try {
+        ordens = await db.select({
+          id: comprasOrdens.id,
+          numeroOc: comprasOrdens.numeroOc,
+          status: comprasOrdens.status,
+          fornecedorNome: comprasOrdens.fornecedorNome,
+          total: comprasOrdens.total,
+          criadoEm: comprasOrdens.criadoEm,
+          aprovacaoStatus: comprasOrdens.aprovacaoStatus,
+          aprovadorId: comprasOrdens.aprovadorId,
+        }).from(comprasOrdens)
+          .where(and(eq(comprasOrdens.solicitacaoId, input.id), eq(comprasOrdens.companyId, sc.companyId)))
+          .orderBy(asc(comprasOrdens.criadoEm));
+      } catch (e: any) { console.warn("[getSolicitacao] ordens query failed:", e?.message); }
 
+      console.log("[getSolicitacao] step7: fetching aprovadores + recebimentos");
       const ocAprovadorIds = [...new Set(ordens.filter(o => o.aprovadorId).map(o => o.aprovadorId!))];
       const ocAprovadores: Record<number, string> = {};
       if (ocAprovadorIds.length > 0) {
-        const aprovUsers = await db.select({ id: users.id, nome: users.nome }).from(users).where(inArray(users.id, ocAprovadorIds));
-        for (const u of aprovUsers) ocAprovadores[u.id] = u.nome || "";
+        try {
+          const aprovUsers = await db.select({ id: users.id, nome: users.nome }).from(users).where(inArray(users.id, ocAprovadorIds));
+          for (const u of aprovUsers) ocAprovadores[u.id] = u.nome || "";
+        } catch (e: any) { console.warn("[getSolicitacao] aprovadores query failed:", e?.message); }
       }
 
+      let recebimentos: any[] = [];
       const ocIds = ordens.map(o => o.id).filter(Boolean);
-      const recebimentos = ocIds.length > 0 ? await db.select({
-        id: almoxarifadoRecebimentos.id,
-        ordemCompraId: almoxarifadoRecebimentos.ordemCompraId,
-        criadoEm: almoxarifadoRecebimentos.criadoEm,
-        usuarioNome: almoxarifadoRecebimentos.usuarioNome,
-        status: almoxarifadoRecebimentos.status,
-        numeroNf: almoxarifadoRecebimentos.numeroNf,
-      }).from(almoxarifadoRecebimentos)
-        .where(inArray(almoxarifadoRecebimentos.ordemCompraId, ocIds)) : [];
+      if (ocIds.length > 0) {
+        try {
+          recebimentos = await db.select({
+            id: almoxarifadoRecebimentos.id,
+            ordemCompraId: almoxarifadoRecebimentos.ordemCompraId,
+            criadoEm: almoxarifadoRecebimentos.criadoEm,
+            usuarioNome: almoxarifadoRecebimentos.usuarioNome,
+            status: almoxarifadoRecebimentos.status,
+            numeroNf: almoxarifadoRecebimentos.numeroNf,
+          }).from(almoxarifadoRecebimentos)
+            .where(inArray(almoxarifadoRecebimentos.ordemCompraId, ocIds));
+        } catch (e: any) { console.warn("[getSolicitacao] recebimentos query failed:", e?.message); }
+      }
 
+      console.log("[getSolicitacao] step8: building result, sc keys=" + Object.keys(sc).join(","));
       return {
-        ...sc,
-        itens,
+        id: sc.id,
+        companyId: sc.companyId,
+        numeroSc: sc.numeroSc,
+        obraId: sc.obraId,
+        projetoId: sc.projetoId,
+        solicitanteId: sc.solicitanteId,
+        departamento: sc.departamento,
+        titulo: sc.titulo,
+        dataNecessidade: sc.dataNecessidade,
+        prioridade: sc.prioridade,
+        status: sc.status,
+        aprovacaoStatus: sc.aprovacaoStatus,
+        aprovadorId: sc.aprovadorId,
+        aprovadoEm: sc.aprovadoEm,
+        observacoes: sc.observacoes,
+        imagemReferenciaUrl: sc.imagemReferenciaUrl,
+        criadoEm: sc.criadoEm,
+        atualizadoEm: sc.atualizadoEm,
+        itens: itens || [],
         solicitanteNome,
         aprovadorNome,
         rastreio: {
-          cotacoes: (cotacoes || []).map(c => ({ ...c, total: parseFloat(String(c.total || "0")) })),
+          cotacoes: (cotacoes || []).map(c => ({ id: c.id, numeroCotacao: c.numeroCotacao, status: c.status, criadoEm: c.criadoEm, total: parseFloat(String(c.total || "0")) })),
           ordens: (ordens || []).map(o => ({
-            ...o,
-            total: parseFloat(String(o.total || "0")),
+            id: o.id, numeroOc: o.numeroOc, status: o.status, fornecedorNome: o.fornecedorNome,
+            total: parseFloat(String(o.total || "0")), criadoEm: o.criadoEm,
+            aprovacaoStatus: o.aprovacaoStatus, aprovadorId: o.aprovadorId,
             aprovadorNome: o.aprovadorId ? (ocAprovadores[o.aprovadorId] || null) : null,
           })),
           recebimentos: recebimentos || [],
         },
       };
       } catch (err: any) {
-        console.error("[getSolicitacao] Error for SC id=" + input.id + ":", err?.message || err);
+        console.error("[getSolicitacao] CRASH for SC id=" + input.id + ":", err?.message);
+        console.error("[getSolicitacao] STACK:", err?.stack);
         if (err instanceof TRPCError) throw err;
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err?.message || "Erro interno ao carregar solicitação" });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err?.message || "Erro interno" });
       }
     }),
 
