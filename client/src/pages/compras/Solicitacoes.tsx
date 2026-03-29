@@ -166,8 +166,8 @@ export default function Solicitacoes() {
   );
 
   const insumosConsolidadosQ = trpc.compras.getInsumosConsolidados.useQuery(
-    { companyId, obraId: parseInt(form.obraId), busca: insumoBusca || undefined },
-    { enabled: modoSC === "insumo" && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 30_000 }
+    { companyId, obraId: parseInt(form.obraId), busca: modoSC === "insumo" ? (insumoBusca || undefined) : undefined },
+    { enabled: (modoSC === "insumo" || modoSC === "eap") && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 30_000 }
   );
 
   const conversaoInput = useMemo(() => {
@@ -961,12 +961,12 @@ export default function Solicitacoes() {
                       <div className="space-y-1.5">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-gray-500">
                           <span className="font-medium text-gray-600 mr-0.5">Legenda:</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-gray-300" />Disponível</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-emerald-500" />Disponível</span>
                           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-blue-500" />Solicitado</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-purple-500" />Em compra</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-orange-500" />Comprado parcial</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-emerald-500" />Concluído</span>
-                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-red-500" />Estouro</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-amber-500" />Em cotação</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-purple-500" />100% comprado</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-rose-500" />Recebido</span>
+                          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-red-700" />Estouro</span>
                         </div>
                       <div className="border border-gray-200 rounded-lg overflow-hidden">
                         <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
@@ -1141,11 +1141,17 @@ export default function Solicitacoes() {
                                           <div className="bg-white rounded border border-gray-200 divide-y divide-gray-100 max-h-36 overflow-y-auto">
                                             {insLista.map((ins: any, idx: number) => {
                                               const qtdCalc = qtdVal > 0 ? Math.ceil((qtdVal * ins.coeficiente) * 1000) / 1000 : 0;
+                                              const insConsolidado = (insumosConsolidadosQ.data ?? []).find((c: any) => c.insumoCodigo === ins.insumoCodigo);
+                                              const insStatus = insConsolidado?.statusInsumo || "disponivel";
+                                              const insStatusDotColor: Record<string, string> = { disponivel: "bg-emerald-500", solicitado: "bg-blue-500", em_cotacao: "bg-amber-500", comprado: "bg-purple-500", recebido: "bg-rose-500", estouro: "bg-red-700" };
+                                              const insStatusLabel: Record<string, string> = { disponivel: "Disponível", solicitado: "Solicitado", em_cotacao: "Em cotação", comprado: "100% comprado", recebido: "Recebido", estouro: "Acima do orçado" };
+                                              const insRowBg = insStatus === "estouro" ? "bg-red-50/60" : insStatus === "comprado" ? "bg-purple-50/50" : insStatus === "recebido" ? "bg-rose-50/50" : "";
                                               return (
-                                                <div key={idx} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+                                                <div key={idx} className={`flex items-center gap-2 px-2.5 py-1.5 text-xs ${insRowBg}`}>
+                                                  <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${insStatusDotColor[insStatus] || "bg-emerald-500"}`} title={insStatusLabel[insStatus] || "Disponível"} />
                                                   <div className="flex-1 min-w-0">
-                                                    <div className="text-gray-900 truncate">{ins.descricao}</div>
-                                                    <div className="text-[10px] text-gray-400">Coef: {ins.coeficiente} | Meta: R$ {parseFloat(ins.precoUnitario || "0").toFixed(2)}</div>
+                                                    <div className="text-gray-900 truncate">{ins.descricao} {insStatus !== "disponivel" && <span className={`ml-1 text-[8px] px-1 rounded font-bold ${insStatus === "estouro" ? "bg-red-100 text-red-700" : insStatus === "comprado" ? "bg-purple-100 text-purple-700" : insStatus === "recebido" ? "bg-rose-100 text-rose-700" : insStatus === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{insStatusLabel[insStatus]}</span>}</div>
+                                                    <div className="text-[10px] text-gray-400">Coef: {ins.coeficiente} | Meta: R$ {parseFloat(ins.precoUnitario || "0").toFixed(2)}{insConsolidado ? ` | Orçado: ${insConsolidado.qtdTotalOrcada.toLocaleString("pt-BR")} | Comprado: ${insConsolidado.qtdComprada.toLocaleString("pt-BR")}` : ""}</div>
                                                   </div>
                                                   <div className="text-right shrink-0">
                                                     <div className="font-semibold text-gray-700">{qtdCalc.toLocaleString("pt-BR")} {ins.unidade}</div>
