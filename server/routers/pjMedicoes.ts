@@ -76,68 +76,102 @@ export const pjMedicoesRouter = router({
         throw new TRPCError({ code: 'CONFLICT', message: 'Já existe medição para este contrato neste mês' });
       }
 
+      const [contrato] = await db.select().from(pjContracts).where(eq(pjContracts.id, input.contractId));
+      let valorRetencao = 0;
+      let valorLiquidoFinal = parseFloat(input.valorLiquido) || 0;
+
+      if (contrato) {
+        const retPerc = parseFloat(String((contrato as any).retencaoTecnicaPerc ?? "0")) || 0;
+        if (retPerc > 0) {
+          const valorBruto = parseFloat(input.valorBruto) || 0;
+          valorRetencao = valorBruto * (retPerc / 100);
+          valorLiquidoFinal = valorLiquidoFinal - valorRetencao;
+        }
+
+        const valorTotalContrato = parseFloat(String((contrato as any).valorTotalContrato ?? "0")) || 0;
+        const valorJaMedido = parseFloat(String((contrato as any).valorMedido ?? "0")) || 0;
+        if (valorTotalContrato > 0 && (valorJaMedido + parseFloat(input.valorBruto)) > valorTotalContrato * 1.001) {
+          const saldoDisp = Math.max(0, valorTotalContrato - valorJaMedido);
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `Valor da medição (R$ ${parseFloat(input.valorBruto).toFixed(2)}) excede o saldo do contrato (R$ ${saldoDisp.toFixed(2)}).` });
+        }
+      }
+
       await db.insert(pjMedicoes).values({
         ...input,
+        valorLiquido: String(valorLiquidoFinal.toFixed(2)),
         notaFiscalNumero: input.notaFiscalNumero || null,
-        observacoes: input.observacoes || null,
+        observacoes: input.observacoes ? `${input.observacoes}${valorRetencao > 0 ? `\nRetenção técnica: R$ ${valorRetencao.toFixed(2)}` : ""}` : (valorRetencao > 0 ? `Retenção técnica: R$ ${valorRetencao.toFixed(2)}` : null),
         descricaoDescontos: input.descricaoDescontos || null,
         descricaoAcrescimos: input.descricaoAcrescimos || null,
         criadoPor: ctx.user.name ?? 'Sistema',
       });
-      return { success: true };
+
+      if (contrato) {
+        const newMedido = parseFloat(String((contrato as any).valorMedido ?? "0")) + parseFloat(input.valorBruto);
+        const newRetido = parseFloat(String((contrato as any).valorRetido ?? "0")) + valorRetencao;
+        await db.update(pjContracts).set({
+          valorMedido: String(newMedido.toFixed(2)),
+          valorRetido: String(newRetido.toFixed(2)),
+          updatedAt: new Date().toISOString(),
+        } as any).where(eq(pjContracts.id, input.contractId));
+      }
+
+      return { success: true, retencaoAplicada: valorRetencao };
     }),
 
-  // Atualizar medição
   atualizar: protectedProcedure
     .input(z.object({
       id: z.number(),
+      companyId: z.number(),
       horasTrabalhadas: z.string().optional(),
-      valorBruto: z.string().optional(),
-      descontos: z.string().optional(),
-      acrescimos: z.string().optional(),
       descricaoDescontos: z.string().optional(),
       descricaoAcrescimos: z.string().optional(),
-      valorLiquido: z.string().optional(),
       notaFiscalNumero: z.string().optional(),
       observacoes: z.string().optional(),
       status: z.enum(['rascunho','pendente_aprovacao','aprovada','paga','cancelada']).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      const { id, ...rest } = input;
+      const [med] = await db.select().from(pjMedicoes).where(and(eq(pjMedicoes.id, input.id), eq(pjMedicoes.companyId, input.companyId)));
+      if (!med) throw new TRPCError({ code: 'NOT_FOUND', message: 'Medição não encontrada' });
+      if (med.status === 'paga') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Medição já paga não pode ser alterada' });
+      const { id, companyId, ...rest } = input;
       const updateData: any = {};
       Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
-      await db.update(pjMedicoes).set(updateData).where(eq(pjMedicoes.id, id));
+      await db.update(pjMedicoes).set(updateData).where(and(eq(pjMedicoes.id, id), eq(pjMedicoes.companyId, companyId)));
       return { success: true };
     }),
 
-  // Aprovar medição
   aprovar: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), companyId: z.number().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const conditions: any[] = [eq(pjMedicoes.id, input.id)];
+      if (input.companyId) conditions.push(eq(pjMedicoes.companyId, input.companyId));
       await db.update(pjMedicoes).set({
         status: 'aprovada',
         aprovadoPor: ctx.user.name ?? 'Sistema',
         aprovadoEm: sql`NOW()`,
-      } as any).where(eq(pjMedicoes.id, input.id));
+      } as any).where(and(...conditions));
       return { success: true };
     }),
 
-  // Registrar pagamento
   registrarPagamento: protectedProcedure
     .input(z.object({
       id: z.number(),
+      companyId: z.number().optional(),
       dataPagamento: z.string(),
       comprovanteUrl: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
+      const conditions: any[] = [eq(pjMedicoes.id, input.id)];
+      if (input.companyId) conditions.push(eq(pjMedicoes.companyId, input.companyId));
       await db.update(pjMedicoes).set({
         status: 'paga',
         dataPagamento: input.dataPagamento,
         comprovanteUrl: input.comprovanteUrl || null,
-      } as any).where(eq(pjMedicoes.id, input.id));
+      } as any).where(and(...conditions));
       return { success: true };
     }),
 

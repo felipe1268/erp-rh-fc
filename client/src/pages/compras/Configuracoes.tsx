@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, Save, Hash, ShieldCheck, Loader2 } from "lucide-react";
+import { Settings, Save, Hash, ShieldCheck, Loader2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ComprasConfiguracoes() {
@@ -19,6 +19,12 @@ export default function ComprasConfiguracoes() {
   const [separador, setSeparador] = useState("-");
   const [formatoAno, setFormatoAno] = useState("4dig");
   const [digitos, setDigitos] = useState("3");
+
+  const [prefixoOs, setPrefixoOs] = useState("OS");
+  const [retencaoTecnica, setRetencaoTecnica] = useState("5");
+  const [diaCorte, setDiaCorte] = useState("25");
+  const [prazoAprovacao, setPrazoAprovacao] = useState("5");
+  const [diaPagamento, setDiaPagamento] = useState("10");
 
   const { data, isLoading } = trpc.purchase.getConfigCompras.useQuery(
     { companyId },
@@ -31,6 +37,11 @@ export default function ComprasConfiguracoes() {
       setSeparador(data.config.separador || "-");
       setFormatoAno(data.config.formatoAno || "4dig");
       setDigitos(String(data.config.digitosSequencial || 3));
+      setPrefixoOs((data.config as any).prefixoOs || "OS");
+      setRetencaoTecnica(String((data.config as any).retencaoTecnicaPerc ?? 5));
+      setDiaCorte(String((data.config as any).diaCorte ?? 25));
+      setPrazoAprovacao(String((data.config as any).prazoAprovacaoDias ?? 5));
+      setDiaPagamento(String((data.config as any).diaPagamento ?? 10));
     }
   }, [data]);
 
@@ -71,6 +82,9 @@ export default function ComprasConfiguracoes() {
             </TabsTrigger>
             <TabsTrigger value="aprovacao" className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4" />Regras de Aprovação
+            </TabsTrigger>
+            <TabsTrigger value="servicos" className="flex items-center gap-2">
+              <Wrench className="h-4 w-4" />Serviços / Contratos
             </TabsTrigger>
           </TabsList>
 
@@ -160,6 +174,62 @@ export default function ComprasConfiguracoes() {
                     <p className="text-sm">Configure as regras de aprovação para o fluxo de compras.</p>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="servicos" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Configurações de Ordens de Serviço e Contratos PJ</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <p className="text-sm text-purple-700">
+                    Ao aprovar uma OS (Ordem de Serviço), o sistema gera automaticamente um contrato PJ
+                    no módulo Terceiros com os parâmetros abaixo. O fornecedor é importado como prestador PJ.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Prefixo da OS</Label>
+                    <Input placeholder="OS" value={prefixoOs} onChange={e => setPrefixoOs(e.target.value.toUpperCase())} maxLength={10} />
+                    <p className="text-xs text-gray-400 mt-1">Ex: OS, SVC</p>
+                  </div>
+                  <div>
+                    <Label>Retenção Técnica (%)</Label>
+                    <Input type="number" min="0" max="20" step="0.5" value={retencaoTecnica} onChange={e => setRetencaoTecnica(e.target.value)} />
+                    <p className="text-xs text-gray-400 mt-1">Percentual retido de cada medição. Liberado no fim do contrato.</p>
+                  </div>
+                  <div>
+                    <Label>Dia de Corte da Medição</Label>
+                    <Input type="number" min="1" max="31" value={diaCorte} onChange={e => setDiaCorte(e.target.value)} />
+                    <p className="text-xs text-gray-400 mt-1">Dia do mês para encerrar a medição (ex: dia 25)</p>
+                  </div>
+                  <div>
+                    <Label>Prazo de Aprovação (dias úteis)</Label>
+                    <Input type="number" min="1" max="15" value={prazoAprovacao} onChange={e => setPrazoAprovacao(e.target.value)} />
+                    <p className="text-xs text-gray-400 mt-1">Dias úteis para aprovar a medição após o corte</p>
+                  </div>
+                  <div>
+                    <Label>Dia de Pagamento</Label>
+                    <Input type="number" min="1" max="31" value={diaPagamento} onChange={e => setDiaPagamento(e.target.value)} />
+                    <p className="text-xs text-gray-400 mt-1">Dia do mês seguinte para pagamento (ex: dia 10)</p>
+                  </div>
+                </div>
+
+                <Button className="bg-purple-600 hover:bg-purple-700"
+                  disabled={salvarConfigMut.isPending}
+                  onClick={() => salvarConfigMut.mutate({
+                    companyId, prefixo, separador, formatoAno, digitosSequencial: parseInt(digitos),
+                    prefixoOs, retencaoTecnicaPerc: parseFloat(retencaoTecnica),
+                    diaCorte: parseInt(diaCorte), prazoAprovacaoDias: parseInt(prazoAprovacao),
+                    diaPagamento: parseInt(diaPagamento),
+                  } as any)}>
+                  {salvarConfigMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                  <Save className="h-4 w-4 mr-2" />Salvar Configurações de Serviços
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>

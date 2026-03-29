@@ -2186,6 +2186,16 @@ export const pjContracts = pgTable("pj_contracts", {
         revisaoMotivo: text(),
         criadoPor: varchar({ length: 255 }),
         criadoPorUserId: integer(),
+        ordemId: integer("ordem_id"),
+        obraId: integer("obra_id"),
+        eapItens: text("eap_itens"),
+        retencaoTecnicaPerc: numeric("retencao_tecnica_perc", { precision: 5, scale: 2 }).default("5"),
+        diaCorte: integer("dia_corte").default(25),
+        prazoAprovacaoDias: integer("prazo_aprovacao_dias").default(5),
+        diaPagamento: integer("dia_pagamento").default(10),
+        valorTotalContrato: numeric("valor_total_contrato", { precision: 14, scale: 2 }),
+        valorMedido: numeric("valor_medido", { precision: 14, scale: 2 }).default("0"),
+        valorRetido: numeric("valor_retido", { precision: 14, scale: 2 }).default("0"),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         deletedAt: timestamp({ mode: 'string' }),
@@ -2197,6 +2207,7 @@ export const pjContracts = pgTable("pj_contracts", {
         index("pjc_employee").on(table.employeeId),
         index("pjc_status").on(table.status),
         index("pjc_vencimento").on(table.dataFim),
+        index("pjc_ordem").on(table.ordemId),
 ]);
 
 export const pjContractRevisoes = pgTable("pj_contract_revisoes", {
@@ -4921,6 +4932,7 @@ export const comprasSolicitacoes = pgTable("compras_solicitacoes", {
   aprovacaoStatus:  varchar("aprovacao_status", { length: 30 }).default("aguardando"),
   aprovadorId:      integer("aprovador_id"),
   aprovadoEm:       timestamp("aprovado_em", { mode: "string" }),
+  tipo:             varchar({ length: 20 }).default("material"),
   observacoes:      text(),
   imagemReferenciaUrl: text("imagem_referencia_url"),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
@@ -5083,6 +5095,8 @@ export const comprasOrdens = pgTable("compras_ordens", {
   aprovacaoExtraJustificativa: text("aprovacao_extra_justificativa"),
   aprovacaoExtraEm: timestamp("aprovacao_extra_em", { mode: "string" }),
   aprovacaoExtraMotivo: text("aprovacao_extra_motivo"),
+  tipo:               varchar({ length: 20 }).default("compra"),
+  contratoId:         integer("contrato_id"),
   criadoEm:           timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:       timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });
@@ -5814,6 +5828,12 @@ export const ocNumberConfig = pgTable("oc_number_config", {
   reiniciarAnualmente: smallint("reiniciar_anualmente").default(1),
   proximoNumero: integer("proximo_numero").default(1),
   comissaoPercentual: numeric("comissao_percentual", { precision: 5, scale: 2 }).default("10"),
+  retencaoTecnicaPerc: numeric("retencao_tecnica_perc", { precision: 5, scale: 2 }).default("5"),
+  diaCorte: integer("dia_corte").default(25),
+  prazoAprovacaoDias: integer("prazo_aprovacao_dias").default(5),
+  diaPagamento: integer("dia_pagamento").default(10),
+  prefixoOs: varchar("prefixo_os", { length: 20 }).default("OS"),
+  proximoNumeroOs: integer("proximo_numero_os").default(1),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_onc_company").on(t.companyId)]);
 

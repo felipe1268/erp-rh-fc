@@ -1002,6 +1002,11 @@ export const purchaseRouter = router({
       companyId: z.number(), prefixo: z.string().optional(), separador: z.string().optional(),
       formatoAno: z.string().optional(), digitosSequencial: z.number().optional(),
       comissaoPercentual: z.number().optional(),
+      prefixoOs: z.string().optional(),
+      retencaoTecnicaPerc: z.number().optional(),
+      diaCorte: z.number().optional(),
+      prazoAprovacaoDias: z.number().optional(),
+      diaPagamento: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1009,6 +1014,9 @@ export const purchaseRouter = router({
       const vals: any = { ...rest, updatedAt: new Date().toISOString() };
       if (vals.comissaoPercentual !== undefined) {
         vals.comissaoPercentual = String(vals.comissaoPercentual);
+      }
+      if (vals.retencaoTecnicaPerc !== undefined) {
+        vals.retencaoTecnicaPerc = String(vals.retencaoTecnicaPerc);
       }
       const existing = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, companyId)).limit(1);
       if (existing.length) {

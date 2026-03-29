@@ -6099,4 +6099,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 20:15:00",
   },
+  {
+    version: 882,
+    titulo: "Compras → Serviços/Terceiros: SC com tipo, OS automática, contrato PJ auto-gerado",
+    descricao: "Expansão completa do módulo Compras para suportar contratação de serviços e mão de obra PJ. " +
+      "SC agora aceita 3 tipos: Material, Serviço/MDO e Pacote (Mat+MDO). " +
+      "Ao aprovar cotação de serviço, gera OS (Ordem de Serviço) com numeração própria (OS-YYYY-XXX) ao invés de OC. " +
+      "Na aprovação da OS, o sistema automaticamente: cria contrato PJ no módulo Terceiros, importa fornecedor como prestador PJ, " +
+      "copia escopo da EAP, define linha de corte (dia 25), prazo aprovação (5 dias úteis), dia pagamento (dia 10) e retenção técnica (5%). " +
+      "Medições vinculadas ao contrato: validação de saldo (não excede valor da OS), retenção técnica automática descontada do valor líquido, " +
+      "atualização automática do saldo consumido no contrato. " +
+      "Configurações de OS/Contratos disponíveis na aba Serviços/Contratos em Compras > Configurações. " +
+      "Badges visuais em toda a interface: SERV/PKT nas SCs, SERVIÇO/PACOTE nas OS, link para contrato PJ na listagem de ordens.",
+    tipo: "feature",
+    modulos: "Compras, Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 22:00:00",
+  },
 ];

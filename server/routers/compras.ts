@@ -28,6 +28,7 @@ import {
   almoxarifadoNotificacoes,
   purchaseOrders, purchaseRequests, purchaseQuotations,
   budgetReallocations,
+  ocNumberConfig, pjContracts,
 } from "../../drizzle/schema";
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -38,6 +39,107 @@ setInterval(() => {
     if (now - v.startedAt > 10 * 60 * 1000) iaExtractionJobs.delete(k);
   }
 }, 60000);
+
+async function gerarContratoPJDeOS(params: {
+  ocId: number;
+  companyId: number;
+  obraId: number | null;
+  fornecedorId: number;
+  fornecedorNome: string | null;
+  total: number;
+  itensOS: Array<{ descricao: string; unidade?: string | null; quantidade: string; precoUnitario: string; total: string; insumoCodigo?: string | null }>;
+  userId: number;
+  userName: string;
+}) {
+  const db = await getDb();
+  try {
+    const configRows = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, params.companyId)).limit(1);
+    const config = configRows[0];
+    const retPerc = config ? n((config as any).retencaoTecnicaPerc) : 5;
+    const diaCorte = config ? (config as any).diaCorte ?? 25 : 25;
+    const prazoAprov = config ? (config as any).prazoAprovacaoDias ?? 5 : 5;
+    const diaPag = config ? (config as any).diaPagamento ?? 10 : 10;
+
+    const [forn] = await db.select().from(fornecedores).where(and(eq(fornecedores.id, params.fornecedorId), eq(fornecedores.companyId, params.companyId)));
+    const cnpj = forn?.cnpj ?? "";
+    const razaoSocial = forn?.razaoSocial ?? params.fornecedorNome ?? "";
+
+    let employeeId: number;
+    const existingEmp = await db.execute(sql`
+      SELECT id FROM employees WHERE company_id = ${params.companyId} AND tipo = 'pj' AND cnpj = ${cnpj} AND deleted_at IS NULL LIMIT 1
+    `);
+    if ((existingEmp as any).rows?.length > 0) {
+      employeeId = (existingEmp as any).rows[0].id;
+    } else {
+      const insertRes = await db.execute(sql`
+        INSERT INTO employees (company_id, nome, tipo, cnpj, status, created_at, updated_at)
+        VALUES (${params.companyId}, ${razaoSocial}, 'pj', ${cnpj}, 'ativo', NOW(), NOW())
+        RETURNING id
+      `);
+      employeeId = (insertRes as any).rows[0].id;
+    }
+
+    const ano = new Date().getFullYear();
+    const countContratos = await db.execute(sql`
+      SELECT COUNT(*) as c FROM pj_contracts WHERE company_id = ${params.companyId}
+    `);
+    const seqC = (parseInt(String((countContratos as any).rows?.[0]?.c ?? "0")) + 1).toString().padStart(4, "0");
+    const numContrato = `CT-${ano}-${seqC}`;
+
+    const hoje = new Date().toISOString().slice(0, 10);
+    const fim = new Date();
+    fim.setFullYear(fim.getFullYear() + 1);
+    const dataFim = fim.toISOString().slice(0, 10);
+
+    const eapItensJson = JSON.stringify(params.itensOS.map(it => ({
+      descricao: it.descricao,
+      unidade: it.unidade,
+      quantidade: it.quantidade,
+      precoUnitario: it.precoUnitario,
+      total: it.total,
+      insumoCodigo: it.insumoCodigo ?? null,
+      percentualExecutado: 0,
+    })));
+
+    const objetoContrato = params.itensOS.map(it => `• ${it.descricao} — ${it.quantidade} ${it.unidade || "un"}`).join("\n");
+
+    const [contrato] = await db.insert(pjContracts).values({
+      companyId: params.companyId,
+      employeeId,
+      numeroContrato: numContrato,
+      cnpjPrestador: cnpj,
+      razaoSocialPrestador: razaoSocial,
+      objetoContrato: `Prestação de serviços conforme OS vinculada:\n${objetoContrato}`,
+      dataInicio: hoje,
+      dataFim: dataFim,
+      valorMensal: String(params.total.toFixed(2)),
+      status: "ativo",
+      ordemId: params.ocId,
+      obraId: params.obraId,
+      eapItens: eapItensJson,
+      retencaoTecnicaPerc: String(retPerc),
+      diaCorte,
+      prazoAprovacaoDias: prazoAprov,
+      diaPagamento: diaPag,
+      valorTotalContrato: String(params.total.toFixed(2)),
+      valorMedido: "0",
+      valorRetido: "0",
+      criadoPor: params.userName,
+      criadoPorUserId: params.userId,
+    } as any).returning();
+
+    await db.update(comprasOrdens).set({
+      contratoId: contrato.id,
+      atualizadoEm: new Date().toISOString(),
+    } as any).where(eq(comprasOrdens.id, params.ocId));
+
+    console.log(`[gerarContratoPJDeOS] Contrato ${numContrato} gerado para OS #${params.ocId} → PJ Contract #${contrato.id}`);
+    return contrato;
+  } catch (err: any) {
+    console.error(`[gerarContratoPJDeOS] Erro:`, err?.message);
+    return null;
+  }
+}
 
 const conversaoCache = new Map<string, { unidadeComercial: string; fatorConversao: number; embalagem: string }>();
 
@@ -1201,6 +1303,7 @@ Responda APENAS com um objeto JSON no formato:
       dataNecessidade: z.string().optional(),
       observacoes: z.string().optional(),
       imagemReferenciaUrl: z.string().optional(),
+      tipo: z.enum(["material", "servico", "pacote"]).optional(),
       itens: z.array(z.object({
         descricao: z.string(),
         unidade: z.string().optional(),
@@ -1235,9 +1338,10 @@ Responda APENAS com um objeto JSON no formato:
         dataNecessidade: input.dataNecessidade,
         observacoes: input.observacoes,
         imagemReferenciaUrl: input.imagemReferenciaUrl ?? null,
+        tipo: input.tipo ?? "material",
         status: "pendente",
         aprovacaoStatus: "aguardando",
-      }).returning();
+      } as any).returning();
       if (input.itens.length > 0) {
         await db.insert(comprasSolicitacoesItens).values(
           input.itens.map(it => ({
@@ -3417,9 +3521,31 @@ Retorne APENAS um JSON válido neste formato:
         dataEntregaPrevista = d.toISOString().slice(0, 10);
       }
 
-      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
-      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-      const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
+      const scTipo = cot.solicitacaoId
+        ? (await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId)))?.[0]?.tipo ?? "material"
+        : "material";
+      const isServico = scTipo === "servico" || scTipo === "pacote";
+      const ordemTipo = scTipo === "pacote" ? "pacote" : (scTipo === "servico" ? "servico" : "compra");
+
+      let numeroOc: string;
+      if (isServico) {
+        const configOS = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, input.companyId)).limit(1);
+        if (!configOS[0]) {
+          await db.insert(ocNumberConfig).values({ companyId: input.companyId, proximoNumeroOs: 1, prefixoOs: "OS" } as any);
+        }
+        const proxOs = (configOS[0] as any)?.proximoNumeroOs ?? 1;
+        const prefOs = (configOS[0] as any)?.prefixoOs ?? "OS";
+        const digitos = configOS[0]?.digitosSequencial ?? 3;
+        const seqOs = String(proxOs).padStart(digitos, "0");
+        numeroOc = `${prefOs}-${new Date().getFullYear()}-${seqOs}`;
+        await db.update(ocNumberConfig).set({ proximoNumeroOs: proxOs + 1, updatedAt: new Date().toISOString() } as any)
+          .where(eq(ocNumberConfig.companyId, input.companyId));
+      } else {
+        const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
+        const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+        numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
+      }
+
       const subtotalItens = n(cot.total) - freteParaTotal;
       const subtotal = Math.max(subtotalItens, 0);
       const totalOC = subtotal + freteParaTotal;
@@ -3500,6 +3626,7 @@ Retorne APENAS um JSON válido neste formato:
         obraId: cot.obraId ?? null,
         fornecedorId: cot.fornecedorId ?? null,
         fornecedorNome: cot.fornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId!))).map(f => f.nome || f.razao || null)[0] ?? null : null,
+        tipo: ordemTipo,
         status: extraAprovacaoRequerida ? "aguardando_aprovacao_extra" : "aprovada",
         aprovacaoStatus: extraAprovacaoRequerida ? "aguardando_admin" : "aprovado",
         aprovacaoExtraRequerida: extraAprovacaoRequerida,
@@ -3571,6 +3698,28 @@ Retorne APENAS um JSON válido neste formato:
       await db.update(comprasCotacoes).set({ status: "aprovada" }).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (cot.solicitacaoId) {
         await db.update(comprasSolicitacoes).set({ status: "aprovado", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+      }
+
+      if (isServico && !extraAprovacaoRequerida && cot.fornecedorId) {
+        const ocItensForContract = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+        await gerarContratoPJDeOS({
+          ocId: oc.id,
+          companyId: input.companyId,
+          obraId: cot.obraId ?? null,
+          fornecedorId: cot.fornecedorId,
+          fornecedorNome: oc.fornecedorNome ?? null,
+          total: n(oc.total),
+          itensOS: ocItensForContract.map(it => ({
+            descricao: it.descricao,
+            unidade: it.unidade,
+            quantidade: String(it.quantidade),
+            precoUnitario: String(it.precoUnitario),
+            total: String(it.total),
+            insumoCodigo: (it as any).insumoCodigo ?? null,
+          })),
+          userId: input.userId ?? 0,
+          userName: input.userName ?? "Sistema",
+        });
       }
 
       return oc;
@@ -4486,7 +4635,7 @@ Retorne APENAS um JSON válido neste formato:
   // SEM custos/metas (blind quotation até equalização)
   // ══════════════════════════════════════════════════════════════
   getInsumosComposicao: protectedProcedure
-    .input(z.object({ companyId: z.number(), servicoCodigo: z.string(), orcamentoItemId: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), servicoCodigo: z.string(), orcamentoItemId: z.number().optional(), tipoSC: z.enum(["material", "servico", "pacote"]).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const insumos = await db.select({
@@ -4505,9 +4654,16 @@ Retorne APENAS um JSON válido neste formato:
         ))
         .orderBy(asc(composicaoInsumos.insumoDescricao));
 
-      const materiaisOnly = insumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+      let filtered: typeof insumos;
+      if (input.tipoSC === "servico") {
+        filtered = insumos.filter(i => n(i.alocacaoMdo) > 0);
+      } else if (input.tipoSC === "pacote") {
+        filtered = insumos;
+      } else {
+        filtered = insumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+      }
 
-      return materiaisOnly.map(i => ({
+      return filtered.map(i => ({
         insumoCodigo: i.insumoCodigo,
         descricao: i.insumoDescricao || "",
         unidade: i.unidade || "un",
@@ -6695,6 +6851,29 @@ Retorne APENAS um JSON válido neste formato:
             await db.update(comprasOrdens).set({ financialEntryId: entryIds[0] }).where(eq(comprasOrdens.id, oc.id));
           }
         } catch (e: any) { console.warn("[aprovarOcExtra] Erro ao criar parcelas financeiras:", e?.message); }
+      }
+
+      const ocTipo = (oc as any).tipo;
+      if ((ocTipo === "servico" || ocTipo === "pacote") && oc.fornecedorId && !(oc as any).contratoId) {
+        const ocItensForContract = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+        await gerarContratoPJDeOS({
+          ocId: oc.id,
+          companyId: input.companyId,
+          obraId: oc.obraId ?? null,
+          fornecedorId: oc.fornecedorId,
+          fornecedorNome: oc.fornecedorNome ?? null,
+          total: n(oc.total),
+          itensOS: ocItensForContract.map(it => ({
+            descricao: it.descricao,
+            unidade: it.unidade,
+            quantidade: String(it.quantidade),
+            precoUnitario: String(it.precoUnitario),
+            total: String(it.total),
+            insumoCodigo: (it as any).insumoCodigo ?? null,
+          })),
+          userId: admin.id,
+          userName: admin.name,
+        });
       }
 
       return { success: true, adminNome: admin.name };

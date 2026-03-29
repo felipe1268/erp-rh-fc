@@ -427,7 +427,8 @@ export default function Solicitacoes() {
   }, []);
 
   const [form, setForm] = useState({
-    titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: ""
+    titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "",
+    tipo: "material" as "material" | "servico" | "pacote",
   });
   const [obraSearch, setObraSearch] = useState("");
   const [obraOpen, setObraOpen] = useState(false);
@@ -673,7 +674,7 @@ export default function Solicitacoes() {
   }, [batchSaldoQ.data]);
 
   function resetForm() {
-    setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "" });
+    setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "", tipo: "material" });
     setObraSearch(""); setObraOpen(false);
     setItens([newItem()]);
     setSelectedEapIds(new Set());
@@ -703,7 +704,7 @@ export default function Solicitacoes() {
     if (!eapInsumos[it.id] && it.servicoCodigo) {
       setLoadingInsumos(it.id);
       try {
-        const insumos = await trpcCtx.compras.getInsumosComposicao.fetch({ companyId, servicoCodigo: it.servicoCodigo });
+        const insumos = await trpcCtx.compras.getInsumosComposicao.fetch({ companyId, servicoCodigo: it.servicoCodigo, tipoSC: form.tipo });
         setEapInsumos(prev => ({ ...prev, [it.id]: insumos }));
       } catch { setEapInsumos(prev => ({ ...prev, [it.id]: [] })); }
       setLoadingInsumos(null);
@@ -937,6 +938,7 @@ export default function Solicitacoes() {
       prioridade: form.prioridade,
       observacoes: form.observacoes || undefined,
       imagemReferenciaUrl: imgUrl,
+      tipo: form.tipo,
       itens: Array.from(consolidados.values()).map(i => ({
         descricao: i.descricao,
         unidade: i.unidade,
@@ -1154,6 +1156,11 @@ export default function Solicitacoes() {
                         </span>
                       )}
                       {sc.numeroSc}
+                      {((sc as any).tipo === "servico" || (sc as any).tipo === "pacote") && (
+                        <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : "bg-indigo-100 text-indigo-700"}`}>
+                          {(sc as any).tipo === "servico" ? "SERV" : "PKT"}
+                        </span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -1258,6 +1265,35 @@ export default function Solicitacoes() {
                 onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
                 onBlur={e => setForm(p => ({ ...p, titulo: normalizarTexto(e.target.value) }))}
               />
+            </div>
+
+            {/* Tipo de Solicitação */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-700">Tipo de Solicitação</label>
+              <div className="flex gap-2">
+                {[
+                  { value: "material" as const, label: "Material", icon: "📦" },
+                  { value: "servico" as const, label: "Serviço / MDO", icon: "🔧" },
+                  { value: "pacote" as const, label: "Pacote (Mat+MDO)", icon: "📋" },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`flex-1 px-3 py-2 text-xs rounded-md border transition-all ${
+                      form.tipo === opt.value
+                        ? "border-amber-500 bg-amber-50 text-amber-700 font-semibold shadow-sm"
+                        : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                    onClick={() => {
+                      setForm(p => ({ ...p, tipo: opt.value }));
+                      setSelectedEapIds(new Set());
+                      setItens([newItem()]);
+                    }}
+                  >
+                    <span className="mr-1">{opt.icon}</span> {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Obra — combobox com busca */}
@@ -2161,8 +2197,17 @@ export default function Solicitacoes() {
               <DialogHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">Solicitação de Compra</div>
-                    <DialogTitle className="text-gray-900 text-lg">{detalhe.numeroSc}</DialogTitle>
+                    <div className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">
+                      {(detalhe as any).tipo === "servico" ? "Solicitação de Serviço" : (detalhe as any).tipo === "pacote" ? "Solicitação de Pacote" : "Solicitação de Compra"}
+                    </div>
+                    <DialogTitle className="text-gray-900 text-lg">
+                      {detalhe.numeroSc}
+                      {((detalhe as any).tipo === "servico" || (detalhe as any).tipo === "pacote") && (
+                        <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${(detalhe as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : "bg-indigo-100 text-indigo-700"}`}>
+                          {(detalhe as any).tipo === "servico" ? "SERVIÇO" : "PACOTE"}
+                        </span>
+                      )}
+                    </DialogTitle>
                     {detalhe.titulo && <p className="text-gray-600 text-sm mt-0.5">{detalhe.titulo}</p>}
                   </div>
                   <StatusBadge status={detalhe.status} />

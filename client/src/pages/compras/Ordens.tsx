@@ -371,8 +371,18 @@ export default function Ordens() {
                     </Tooltip>
                   </TableCell>
                   <TableCell className={`font-mono font-semibold text-sm ${oc.status === "entregue" ? "text-emerald-700" : oc.status === "cancelada" ? "text-gray-400 line-through" : "text-gray-900"}`}>
-                    {oc.numeroOc}
+                    <div className="flex items-center gap-1.5">
+                      {oc.numeroOc}
+                      {((oc as any).tipo === "servico" || (oc as any).tipo === "pacote") && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-sans font-semibold rounded bg-purple-100 text-purple-700">
+                          {(oc as any).tipo === "servico" ? "SERVIÇO" : "PACOTE"}
+                        </span>
+                      )}
+                    </div>
                     {oc.status === "entregue" && <span className="block text-[10px] font-sans font-normal text-emerald-500">OC concluída</span>}
+                    {((oc as any).tipo === "servico" || (oc as any).tipo === "pacote") && (oc as any).contratoId && (
+                      <span className="block text-[10px] font-sans font-normal text-blue-500">Contrato PJ vinculado</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {(oc as any).obraId ? (
@@ -605,7 +615,14 @@ export default function Ordens() {
       <Dialog open={showDetalhe !== null} onOpenChange={v => !v && setShowDetalhe(null)}>
         <DialogContent className="border-gray-200 w-screen h-screen max-w-none max-h-none rounded-none overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
           <DialogHeader>
-            <DialogTitle className="text-gray-900">{detalhe?.numeroOc} — Ordem de Compra</DialogTitle>
+            <DialogTitle className="text-gray-900">
+              {detalhe?.numeroOc} — {((detalhe as any)?.tipo === "servico" || (detalhe as any)?.tipo === "pacote") ? "Ordem de Serviço" : "Ordem de Compra"}
+              {((detalhe as any)?.tipo === "servico" || (detalhe as any)?.tipo === "pacote") && (
+                <span className="ml-2 px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-100 text-purple-700">
+                  {(detalhe as any).tipo === "servico" ? "SERVIÇO" : "PACOTE"}
+                </span>
+              )}
+            </DialogTitle>
           </DialogHeader>
           {detalheQ.isLoading ? (
             <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
