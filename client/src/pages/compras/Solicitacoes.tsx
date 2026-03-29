@@ -206,7 +206,7 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
 
   return (
     <Dialog open={confirmAprov !== null} onOpenChange={v => !v && setConfirmAprov(null)}>
-      <DialogContent className="border-gray-200 max-w-5xl w-[95vw]" style={{ background: '#ffffff', color: '#111827' }}>
+      <DialogContent className="border-gray-200 max-w-3xl w-[90vw]" style={{ background: '#ffffff', color: '#111827' }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 text-lg text-gray-900">
             {confirmAprov?.icone === "aprovar" && <CheckCircle2 className="h-6 w-6 text-emerald-600" />}
@@ -261,20 +261,16 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
               <div className="flex items-center gap-2 py-8 justify-center text-red-400"><AlertTriangle className="h-5 w-5" /> Erro ao carregar dados orçamentários</div>
             ) : (
               <div className="rounded-lg border border-gray-200 overflow-hidden">
-                <div className="overflow-x-auto max-h-[50vh]">
+                <div className="max-h-[50vh] overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 z-10">
                       <tr className="bg-gray-100 border-b border-gray-200">
-                        <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-600 w-[1%]">#</th>
+                        <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-600 w-8">#</th>
                         <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-600">Item</th>
-                        <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-600 whitespace-nowrap">UN</th>
-                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-blue-700 whitespace-nowrap bg-blue-50/50">Esta SC</th>
-                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-600 whitespace-nowrap">Orçado</th>
-                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-600 whitespace-nowrap">Solicitado</th>
-                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-600 whitespace-nowrap">Comprado</th>
-                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-600 whitespace-nowrap">Saldo</th>
-                        <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-600 w-[180px]">Consumo</th>
-                        <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-600 w-[1%]">Status</th>
+                        <th className="text-center px-2 py-2.5 text-xs font-semibold text-gray-600 w-12">UN</th>
+                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-blue-700 bg-blue-50/50 w-20">Esta SC</th>
+                        <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-600 w-36">Saldo Orçamentário</th>
+                        <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-600 w-28">Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -285,58 +281,48 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
                         const isGray = info.cor === "gray";
                         const linked = item.situacao !== "sem_vinculo" && item.situacao !== "sem_vinculo_sem_verba";
                         const consumoPct = linked && item.qtdOrcada > 0 ? Math.min(((item.qtdSolicitada) / item.qtdOrcada) * 100, 100) : 0;
-                        const compradoPct = linked && item.qtdOrcada > 0 ? Math.min((item.qtdComprada / item.qtdOrcada) * 100, 100) : 0;
                         const rowBg = isRed ? "bg-red-50/60" : isOrange ? "bg-orange-50/50" : isGray ? "bg-gray-50/50" : "";
+                        const saldoTooltip = linked
+                          ? `Orçado: ${fmt(item.qtdOrcada)} ${item.unidade}\nSolicitado: ${fmt(item.qtdSolicitada)} ${item.unidade}\nComprado: ${fmt(item.qtdComprada)} ${item.unidade}${item.ocsVinculadas.length > 0 ? ` (${item.ocsVinculadas.join(", ")})` : ""}\nSaldo: ${fmt(item.saldo)} ${item.unidade}`
+                          : "Sem vínculo ao orçamento";
                         return (
                           <tr key={item.id} className={`border-b border-gray-100 hover:bg-gray-50/80 transition-colors ${rowBg}`}>
                             <td className="px-3 py-2.5 text-xs text-gray-400 font-mono">{idx + 1}</td>
                             <td className="px-3 py-2.5">
-                              <p className={`text-sm font-medium truncate max-w-[280px] ${isRed ? "text-red-800" : "text-gray-800"}`} title={item.descricao}>
+                              <p className={`text-sm font-medium truncate max-w-[340px] ${isRed ? "text-red-800" : "text-gray-800"}`} title={item.descricao}>
                                 {item.descricao}
                               </p>
                               {info.texto && (
-                                <p className={`text-[10px] mt-0.5 truncate max-w-[280px] ${isRed ? "text-red-500" : isGray ? "text-gray-400" : "text-orange-500"}`} title={info.texto}>
+                                <p className={`text-[10px] mt-0.5 leading-tight line-clamp-2 max-w-[340px] ${isRed ? "text-red-500" : isGray ? "text-gray-400" : "text-orange-500"}`} title={info.texto}>
                                   {info.texto}
                                 </p>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 text-center text-xs text-gray-500">{item.unidade}</td>
+                            <td className="px-2 py-2.5 text-center text-xs text-gray-500">{item.unidade}</td>
                             <td className="px-3 py-2.5 text-right font-semibold text-blue-700 bg-blue-50/30 tabular-nums">{fmt(item.qtdEstaSC)}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums">{linked ? <span className="text-gray-700 font-medium">{fmt(item.qtdOrcada)}</span> : <span className="text-gray-300">—</span>}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums">{linked ? <span className="text-gray-600">{fmt(item.qtdSolicitada)}</span> : <span className="text-gray-300">—</span>}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums">
-                              {linked && item.qtdComprada > 0 ? (
-                                <span className="text-orange-600 font-medium" title={item.ocsVinculadas.length > 0 ? item.ocsVinculadas.join(", ") : ""}>
-                                  {fmt(item.qtdComprada)}
-                                  {item.ocsVinculadas.length > 0 && <span className="text-[9px] text-orange-400 ml-1">({item.ocsVinculadas.join(", ")})</span>}
-                                </span>
-                              ) : linked ? <span className="text-gray-300">0</span> : <span className="text-gray-300">—</span>}
-                            </td>
-                            <td className="px-3 py-2.5 text-right tabular-nums">
+                            <td className="px-3 py-2.5 text-center" title={saldoTooltip}>
                               {linked ? (
-                                <span className={`font-bold ${item.saldo < 0 ? "text-red-600" : item.saldo === 0 ? "text-amber-600" : "text-emerald-600"}`}>
-                                  {fmt(item.saldo)}
-                                </span>
-                              ) : <span className="text-gray-300">—</span>}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              {linked && item.qtdOrcada > 0 ? (
-                                <div className="flex items-center gap-2">
-                                  <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden relative">
-                                    {compradoPct > 0 && (
-                                      <div className="absolute inset-y-0 left-0 bg-orange-400 rounded-l-full" style={{ width: `${compradoPct}%` }} />
-                                    )}
-                                    <div
-                                      className={`absolute inset-y-0 left-0 rounded-full ${consumoPct > 100 ? "bg-red-500" : consumoPct > 85 ? "bg-amber-400" : "bg-emerald-400"}`}
-                                      style={{ width: `${Math.min(consumoPct, 100)}%`, opacity: 0.6 }}
-                                    />
-                                  </div>
-                                  <span className={`text-[10px] font-bold min-w-[32px] text-right ${consumoPct > 100 ? "text-red-600" : consumoPct > 85 ? "text-amber-600" : "text-emerald-600"}`}>
-                                    {Math.round(consumoPct)}%
+                                <div className="space-y-1">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${item.saldo < 0 ? "bg-red-100 text-red-700 border border-red-200" : item.saldo === 0 ? "bg-amber-100 text-amber-700 border border-amber-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
+                                    {item.saldo < 0 && <AlertTriangle className="h-3 w-3" />}
+                                    {fmt(item.saldo)} {item.unidade}
                                   </span>
+                                  {item.qtdOrcada > 0 && (
+                                    <div className="flex items-center gap-1.5 px-1">
+                                      <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                        <div
+                                          className={`h-full rounded-full ${consumoPct > 100 ? "bg-red-500" : consumoPct > 85 ? "bg-amber-400" : "bg-emerald-400"}`}
+                                          style={{ width: `${Math.min(consumoPct, 100)}%` }}
+                                        />
+                                      </div>
+                                      <span className={`text-[9px] font-bold ${consumoPct > 100 ? "text-red-600" : consumoPct > 85 ? "text-amber-600" : "text-emerald-600"}`}>
+                                        {Math.round(consumoPct)}%
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
-                                <span className="text-gray-300 text-xs text-center block">—</span>
+                                <span className="text-red-500 text-[10px] font-bold">S/ VÍNCULO</span>
                               )}
                             </td>
                             <td className="px-3 py-2.5 text-center">
@@ -359,7 +345,7 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
                         <tr className="bg-gray-50 border-t-2 border-gray-200">
                           <td colSpan={3} className="px-3 py-2 text-xs font-semibold text-gray-500">{itens.length} {itens.length === 1 ? "item" : "itens"}</td>
                           <td className="px-3 py-2 text-right text-xs font-bold text-blue-700 bg-blue-50/30">{fmt(itens.reduce((s, i) => s + i.qtdEstaSC, 0))}</td>
-                          <td colSpan={4} />
+                          <td />
                           <td className="px-3 py-2 text-center">
                             {itensAlerta.length > 0 ? (
                               <span className="text-[10px] font-bold text-red-600">{itensAlerta.length} alerta{itensAlerta.length > 1 ? "s" : ""}</span>

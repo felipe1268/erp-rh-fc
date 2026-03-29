@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 871,
+    titulo: "Layout do dialog de aprovação SC simplificado — 6 colunas compactas",
+    descricao: "Dialog de aprovação da SC reduzido de 10 para 6 colunas: #, Item, UN, Esta SC, Saldo Orçamentário (com barra de consumo integrada e tooltip com Orçado/Solicitado/Comprado), Status. Dialog reduzido de max-w-5xl para max-w-3xl. Layout mais limpo e legível sem perda de informação.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 02:00:00",
+  },
+  {
     version: 870,
     titulo: "Dialog de justificativa para SC sem verba orçamentária",
     descricao: "Ao criar uma SC com itens sem verba suficiente ou fora do orçamento, agora aparece um dialog profissional (em vez do antigo prompt do navegador) listando os itens problemáticos, pedindo seleção do motivo (Quebra/Dano, Furto, Erro de Orçamento, Qtd Insuficiente, Retrabalho, Aditivo, Outro) e justificativa obrigatória em texto livre. A justificativa fica salva no item da SC para rastreabilidade.",
