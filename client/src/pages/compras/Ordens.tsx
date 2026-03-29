@@ -166,7 +166,16 @@ export default function Ordens() {
     onError: (e) => toast.error(e.message),
   });
   const aprovarExtra = trpc.compras.aprovarOcExtra.useMutation({
-    onSuccess: (res) => { toast.success(`OC aprovada pelo administrador ${res.adminNome}!`); q.refetch(); detalheQ.refetch(); setShowAprovacaoExtra(null); setAprovExtraForm({ adminEmail: "", adminSenha: "", justificativa: "" }); },
+    onSuccess: (res) => {
+      toast.success(`OC aprovada pelo administrador ${res.adminNome}!`);
+      if (res.docsPendentes && res.docsPendentes.length > 0) {
+        toast.warning(`Atenção: Documentos PJ pendentes para o prestador: ${res.docsPendentes.join(", ")}. Regularize antes do pagamento.`, { duration: 8000 });
+      }
+      if (res.contratoGerado) {
+        toast.info(res.contratoGerado.tipo === "aditivo" ? "Contrato PJ existente atualizado via aditivo." : "Contrato PJ gerado automaticamente.", { duration: 5000 });
+      }
+      q.refetch(); detalheQ.refetch(); setShowAprovacaoExtra(null); setAprovExtraForm({ adminEmail: "", adminSenha: "", justificativa: "" });
+    },
     onError: (e) => toast.error(e.message),
   });
   const [showAprovacaoExtra, setShowAprovacaoExtra] = useState<any>(null);

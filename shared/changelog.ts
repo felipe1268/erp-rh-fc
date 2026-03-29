@@ -6110,7 +6110,10 @@ export const CHANGELOG: RevisionEntry[] = [
       "Medições vinculadas ao contrato: validação de saldo (não excede valor da OS), retenção técnica automática descontada do valor líquido, " +
       "atualização automática do saldo consumido no contrato. " +
       "Configurações de OS/Contratos disponíveis na aba Serviços/Contratos em Compras > Configurações. " +
-      "Badges visuais em toda a interface: SERV/PKT nas SCs, SERVIÇO/PACOTE nas OS, link para contrato PJ na listagem de ordens.",
+      "Badges visuais em toda a interface: SERV/PKT nas SCs, SERVIÇO/PACOTE nas OS, link para contrato PJ na listagem de ordens. " +
+      "Checklist documental: ao aprovar OS, sistema verifica se prestador PJ possui CNPJ, contrato social e seguro — exibe alerta se houver pendências. " +
+      "Alertas automáticos: contratos PJ vencendo (30 dias), saldo do contrato acima de 90%, documentos obrigatórios pendentes. " +
+      "Aditivo contratual: nova OS para mesmo prestador atualiza contrato existente (soma valor, merge da EAP, incrementa revisão).",
     tipo: "feature",
     modulos: "Compras, Terceiros",
     criadoPor: "Sistema",

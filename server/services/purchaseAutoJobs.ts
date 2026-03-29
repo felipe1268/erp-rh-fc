@@ -3,9 +3,9 @@ import {
   purchaseOrders, purchaseQuotations, supplierContracts,
   comprasEntregasProgramadas, purchaseOrderItems,
   almoxarifadoNotificacoes, notificationLogs,
-  comprasCotacoes,
+  comprasCotacoes, pjContracts, pjDocumentos,
 } from "../../drizzle/schema";
-import { eq, and, lte, gte, inArray, sql } from "drizzle-orm";
+import { eq, and, lte, gte, inArray, sql, isNull, ne } from "drizzle-orm";
 import { sendEmail } from "./smtpService";
 import crypto from "crypto";
 
@@ -17,6 +17,7 @@ export function startPurchaseJobs() {
       await checkContractExpirations();
       await checkEntregasProximas();
       await checkCotacoesVencendo();
+      await checkPJContractAlerts();
     } catch (e) { console.error("[PurchaseJobs] Erro inicial:", e); }
   }, 30000);
 
@@ -27,6 +28,7 @@ export function startPurchaseJobs() {
       await checkContractExpirations();
       await checkEntregasProximas();
       await checkCotacoesVencendo();
+      await checkPJContractAlerts();
     } catch (e) { console.error("[PurchaseJobs] Erro:", e); }
   }, 60 * 60 * 1000);
 
@@ -270,3 +272,103 @@ async function checkCotacoesVencendo() {
     console.log(`[PurchaseJobs] ${criados} alerta(s) de cotação vencendo criado(s).`);
   }
 }
+
+const DOCS_OBRIGATORIOS_PJ = ["CNPJ", "contrato_social", "seguro"];
+
+async function checkPJContractAlerts() {
+  const db = await getDb();
+  if (!db) return;
+
+  const hojeStr = new Date().toISOString().split("T")[0];
+  const em30dias = new Date();
+  em30dias.setDate(em30dias.getDate() + 30);
+  const em30diasStr = em30dias.toISOString().split("T")[0];
+
+  const contratosAtivos = await db.select().from(pjContracts)
+    .where(and(
+      eq(pjContracts.status, "ativo"),
+      isNull(pjContracts.deletedAt),
+    ));
+
+  const existentes = await db.select({
+    titulo: almoxarifadoNotificacoes.titulo,
+    companyId: almoxarifadoNotificacoes.companyId,
+  }).from(almoxarifadoNotificacoes)
+    .where(and(
+      sql`${almoxarifadoNotificacoes.tipo} IN ('pj_contrato_vencendo', 'pj_saldo_90', 'pj_docs_pendentes')`,
+      sql`DATE(${almoxarifadoNotificacoes.criadoEm}) = ${hojeStr}`,
+    ));
+  const chavesExistentes = new Set(existentes.map(e => `${e.companyId}::${e.titulo}`));
+
+  let criados = 0;
+
+  for (const ct of contratosAtivos) {
+    if (ct.dataFim && ct.dataFim <= em30diasStr) {
+      const titulo = `Contrato PJ ${ct.numeroContrato || "#" + ct.id} vence em ${ct.dataFim}`;
+      const chave = `${ct.companyId}::${titulo}`;
+      if (!chavesExistentes.has(chave)) {
+        const diasRestantes = Math.ceil((new Date(ct.dataFim).getTime() - Date.now()) / 86400000);
+        await db.insert(almoxarifadoNotificacoes).values({
+          companyId: ct.companyId,
+          tipo: "pj_contrato_vencendo",
+          destinoModulo: "terceiros",
+          titulo,
+          mensagem: `O contrato ${ct.numeroContrato} (${ct.razaoSocialPrestador || "Prestador"}) vence em ${diasRestantes} dia(s).\nData fim: ${ct.dataFim}.\nProvidenciar renovação ou encerramento.`,
+        } as any);
+        chavesExistentes.add(chave);
+        criados++;
+      }
+    }
+
+    const valorTotal = parseFloat(String(ct.valorTotalContrato || "0"));
+    const valorMedido = parseFloat(String(ct.valorMedido || "0"));
+    if (valorTotal > 0 && valorMedido >= valorTotal * 0.9) {
+      const pctUsado = Math.round((valorMedido / valorTotal) * 100);
+      const titulo = `Saldo do contrato ${ct.numeroContrato || "#" + ct.id} em ${pctUsado}%`;
+      const chave = `${ct.companyId}::${titulo}`;
+      if (!chavesExistentes.has(chave)) {
+        const saldoRestante = (valorTotal - valorMedido).toFixed(2);
+        await db.insert(almoxarifadoNotificacoes).values({
+          companyId: ct.companyId,
+          tipo: "pj_saldo_90",
+          destinoModulo: "terceiros",
+          titulo,
+          mensagem: `O contrato ${ct.numeroContrato} (${ct.razaoSocialPrestador || "Prestador"}) atingiu ${pctUsado}% do valor total.\nValor total: R$ ${valorTotal.toFixed(2)}\nValor medido: R$ ${valorMedido.toFixed(2)}\nSaldo restante: R$ ${saldoRestante}\nConsiderar aditivo ou novo contrato.`,
+        } as any);
+        chavesExistentes.add(chave);
+        criados++;
+      }
+    }
+
+    const docs = await db.select({ tipo: pjDocumentos.tipo }).from(pjDocumentos)
+      .where(and(
+        eq(pjDocumentos.employeeId, ct.employeeId),
+        eq(pjDocumentos.companyId, ct.companyId),
+        isNull(pjDocumentos.deletedAt),
+      ));
+    const tiposPresentes = new Set(docs.map(d => d.tipo));
+    const docsFaltando = DOCS_OBRIGATORIOS_PJ.filter(t => !tiposPresentes.has(t));
+
+    if (docsFaltando.length > 0) {
+      const titulo = `Documentos pendentes — ${ct.numeroContrato || "#" + ct.id} (${ct.razaoSocialPrestador || "Prestador"})`;
+      const chave = `${ct.companyId}::${titulo}`;
+      if (!chavesExistentes.has(chave)) {
+        await db.insert(almoxarifadoNotificacoes).values({
+          companyId: ct.companyId,
+          tipo: "pj_docs_pendentes",
+          destinoModulo: "terceiros",
+          titulo,
+          mensagem: `O prestador ${ct.razaoSocialPrestador || ""} vinculado ao contrato ${ct.numeroContrato} possui documentos obrigatórios pendentes:\n${docsFaltando.map(d => `• ${d}`).join("\n")}\n\nFavor regularizar antes do próximo pagamento.`,
+        } as any);
+        chavesExistentes.add(chave);
+        criados++;
+      }
+    }
+  }
+
+  if (criados > 0) {
+    console.log(`[PurchaseJobs] ${criados} alerta(s) de contratos PJ criado(s).`);
+  }
+}
+
+export { DOCS_OBRIGATORIOS_PJ };

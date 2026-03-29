@@ -28,7 +28,7 @@ import {
   almoxarifadoNotificacoes,
   purchaseOrders, purchaseRequests, purchaseQuotations,
   budgetReallocations,
-  ocNumberConfig, pjContracts,
+  ocNumberConfig, pjContracts, pjDocumentos,
 } from "../../drizzle/schema";
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -6854,28 +6854,108 @@ Retorne APENAS um JSON válido neste formato:
       }
 
       const ocTipo = (oc as any).tipo;
-      if ((ocTipo === "servico" || ocTipo === "pacote") && oc.fornecedorId && !(oc as any).contratoId) {
-        const ocItensForContract = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
-        await gerarContratoPJDeOS({
-          ocId: oc.id,
-          companyId: input.companyId,
-          obraId: oc.obraId ?? null,
-          fornecedorId: oc.fornecedorId,
-          fornecedorNome: oc.fornecedorNome ?? null,
-          total: n(oc.total),
-          itensOS: ocItensForContract.map(it => ({
-            descricao: it.descricao,
-            unidade: it.unidade,
-            quantidade: String(it.quantidade),
-            precoUnitario: String(it.precoUnitario),
-            total: String(it.total),
-            insumoCodigo: (it as any).insumoCodigo ?? null,
-          })),
-          userId: admin.id,
-          userName: admin.name,
-        });
+      let docsPendentes: string[] = [];
+      let contratoGerado: any = null;
+
+      if ((ocTipo === "servico" || ocTipo === "pacote") && oc.fornecedorId) {
+        const [forn] = await db.select().from(fornecedores)
+          .where(and(eq(fornecedores.id, oc.fornecedorId), eq(fornecedores.companyId, input.companyId)));
+        const cnpjForn = forn?.cnpj ?? "";
+
+        if (cnpjForn) {
+          const empPJ = await db.execute(sql`
+            SELECT id FROM employees WHERE company_id = ${input.companyId} AND tipo = 'pj' AND cnpj = ${cnpjForn} AND deleted_at IS NULL LIMIT 1
+          `);
+          if ((empPJ as any).rows?.length > 0) {
+            const empId = (empPJ as any).rows[0].id;
+            const docs = await db.select({ tipo: pjDocumentos.tipo }).from(pjDocumentos)
+              .where(and(eq(pjDocumentos.employeeId, empId), eq(pjDocumentos.companyId, input.companyId), sql`${pjDocumentos.deletedAt} IS NULL`));
+            const tiposPresentes = new Set(docs.map(d => d.tipo));
+            const obrigatorios = ["CNPJ", "contrato_social", "seguro"];
+            docsPendentes = obrigatorios.filter(t => !tiposPresentes.has(t));
+          } else {
+            docsPendentes = ["CNPJ", "contrato_social", "seguro"];
+          }
+        }
+
+        if (!(oc as any).contratoId) {
+          const existingContract = await db.select({ id: pjContracts.id }).from(pjContracts)
+            .where(and(
+              eq(pjContracts.companyId, input.companyId),
+              eq(pjContracts.status, "ativo"),
+              isNull(pjContracts.deletedAt),
+              sql`EXISTS (
+                SELECT 1 FROM employees e WHERE e.id = ${pjContracts.employeeId} AND e.cnpj = (SELECT cnpj FROM fornecedores WHERE id = ${oc.fornecedorId} LIMIT 1)
+              )`,
+            )).limit(1);
+
+          if (existingContract.length > 0 && (oc as any).isAditivo) {
+            const existCt = existingContract[0];
+            const ocItensForAditivo = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+            const novoValor = n(oc.total);
+
+            const [ctAtual] = await db.select().from(pjContracts).where(eq(pjContracts.id, existCt.id));
+            const valorAtual = parseFloat(String(ctAtual.valorTotalContrato || "0"));
+            const novoTotal = valorAtual + novoValor;
+
+            let eapAtual: any[] = [];
+            try { eapAtual = JSON.parse(ctAtual.eapItens || "[]"); } catch {}
+            const novosItens = ocItensForAditivo.map(it => ({
+              descricao: it.descricao,
+              unidade: it.unidade,
+              quantidade: String(it.quantidade),
+              precoUnitario: String(it.precoUnitario),
+              total: String(it.total),
+              insumoCodigo: (it as any).insumoCodigo ?? null,
+              percentualExecutado: 0,
+              aditivoOsId: oc.id,
+            }));
+            const eapMerged = [...eapAtual, ...novosItens];
+
+            const revisaoAtual = parseInt(ctAtual.revisao || "1");
+            await db.update(pjContracts).set({
+              valorTotalContrato: String(novoTotal.toFixed(2)),
+              eapItens: JSON.stringify(eapMerged),
+              revisao: String(revisaoAtual + 1).padStart(2, "0"),
+              revisaoMotivo: `Aditivo via OS #${oc.numeroOc || oc.id}`,
+              updatedAt: new Date().toISOString(),
+            } as any).where(eq(pjContracts.id, existCt.id));
+
+            await db.update(comprasOrdens).set({
+              contratoId: existCt.id,
+              atualizadoEm: new Date().toISOString(),
+            } as any).where(eq(comprasOrdens.id, oc.id));
+
+            contratoGerado = { id: existCt.id, tipo: "aditivo" };
+          } else {
+            const ocItensForContract = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+            contratoGerado = await gerarContratoPJDeOS({
+              ocId: oc.id,
+              companyId: input.companyId,
+              obraId: oc.obraId ?? null,
+              fornecedorId: oc.fornecedorId,
+              fornecedorNome: oc.fornecedorNome ?? null,
+              total: n(oc.total),
+              itensOS: ocItensForContract.map(it => ({
+                descricao: it.descricao,
+                unidade: it.unidade,
+                quantidade: String(it.quantidade),
+                precoUnitario: String(it.precoUnitario),
+                total: String(it.total),
+                insumoCodigo: (it as any).insumoCodigo ?? null,
+              })),
+              userId: admin.id,
+              userName: admin.name,
+            });
+          }
+        }
       }
 
-      return { success: true, adminNome: admin.name };
+      return {
+        success: true,
+        adminNome: admin.name,
+        docsPendentes: docsPendentes.length > 0 ? docsPendentes : undefined,
+        contratoGerado: contratoGerado ? { id: contratoGerado.id, tipo: contratoGerado.tipo || "novo" } : undefined,
+      };
     }),
 });
