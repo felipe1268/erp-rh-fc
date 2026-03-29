@@ -133,7 +133,59 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
     { enabled: confirmAprov !== null },
   );
   const itens = saldoQ.data ?? [];
-  const temProblemaOrc = itens.some(i => i.semVerba || i.foraOrcamento);
+  const temProblema = itens.some(i => i.situacao !== "ok");
+
+  function gerarTextoSituacao(item: typeof itens[number]): { texto: string; cor: "red" | "orange" | null; badge: string | null } {
+    const fmt = (v: number) => v.toLocaleString("pt-BR");
+    const u = item.unidade;
+
+    if (item.situacao === "sem_vinculo") {
+      return {
+        texto: `Este item não está vinculado a nenhum item do orçamento da obra. Não existe verba prevista para esta compra.`,
+        cor: "red",
+        badge: "SEM VÍNCULO",
+      };
+    }
+
+    if (item.situacao === "verba_esgotada_compras") {
+      const ocsTexto = item.ocsVinculadas.length > 0 ? ` (${item.ocsVinculadas.join(", ")})` : "";
+      return {
+        texto: `A verba deste item já foi totalmente consumida por compras anteriores. Foram compradas ${fmt(item.qtdComprada)} ${u}${ocsTexto} de um total orçado de ${fmt(item.qtdOrcada)} ${u}. Saldo atual: ${fmt(item.saldo)} ${u}.`,
+        cor: "red",
+        badge: "VERBA ESGOTADA",
+      };
+    }
+
+    if (item.situacao === "verba_esgotada_solicitacoes") {
+      return {
+        texto: `A verba deste item já foi comprometida por outras solicitações. Já foram solicitadas ${fmt(item.qtdSolicitada)} ${u} de um total orçado de ${fmt(item.qtdOrcada)} ${u}. Saldo atual: ${fmt(item.saldo)} ${u}.`,
+        cor: "red",
+        badge: "VERBA ESGOTADA",
+      };
+    }
+
+    if (item.situacao === "saldo_insuficiente") {
+      const motivo = item.qtdComprada > 0
+        ? `Já foram compradas ${fmt(item.qtdComprada)} ${u}${item.ocsVinculadas.length > 0 ? ` (${item.ocsVinculadas.join(", ")})` : ""} e solicitadas ${fmt(item.qtdSolicitada)} ${u}.`
+        : `Já foram solicitadas ${fmt(item.qtdSolicitada)} ${u} em outras SCs.`;
+      return {
+        texto: `O saldo disponível (${fmt(item.saldo)} ${u}) é insuficiente para esta solicitação de ${fmt(item.qtdEstaSC)} ${u}. ${motivo} Orçado: ${fmt(item.qtdOrcada)} ${u}.`,
+        cor: "red",
+        badge: "SALDO INSUFICIENTE",
+      };
+    }
+
+    if (item.qtdComprada > 0) {
+      const ocsTexto = item.ocsVinculadas.length > 0 ? item.ocsVinculadas.join(", ") : "OC";
+      return {
+        texto: `Já foram compradas ${fmt(item.qtdComprada)} ${u} via ${ocsTexto}. Saldo restante: ${fmt(item.saldo)} ${u}.`,
+        cor: "orange",
+        badge: null,
+      };
+    }
+
+    return { texto: "", cor: null, badge: null };
+  }
 
   return (
     <Dialog open={confirmAprov !== null} onOpenChange={v => !v && setConfirmAprov(null)}>
@@ -153,13 +205,19 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
             </p>
           </div>
 
-          {temProblemaOrc && (
+          {temProblema && (
             <div className="rounded-lg border-2 border-red-400 bg-red-50 p-3 space-y-1">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
-                <p className="text-sm font-bold text-red-700">ATENÇÃO — Itens com restrição orçamentária</p>
+                <p className="text-sm font-bold text-red-700">ATENÇÃO — Restrição orçamentária detectada</p>
               </div>
-              <p className="text-xs text-red-600">Um ou mais itens desta SC estão fora do orçamento ou sem verba disponível. O fluxo não será bloqueado, mas revise antes de prosseguir.</p>
+              <p className="text-xs text-red-600">
+                {itens.filter(i => i.situacao === "sem_vinculo").length > 0 && itens.filter(i => i.situacao !== "ok" && i.situacao !== "sem_vinculo").length > 0
+                  ? "Há itens sem vínculo orçamentário e itens com verba insuficiente. Revise os detalhes abaixo."
+                  : itens.some(i => i.situacao === "sem_vinculo")
+                    ? "Um ou mais itens não estão vinculados ao orçamento da obra."
+                    : "Um ou mais itens não possuem verba suficiente — o orçamento já foi consumido por outras solicitações ou compras. Veja os detalhes abaixo."}
+              </p>
             </div>
           )}
 
@@ -172,38 +230,38 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
             ) : (
               <div className="bg-gray-50 rounded-lg border border-gray-200 p-2.5 max-h-56 overflow-y-auto space-y-2">
                 {itens.map((item) => {
-                  const problemaOrc = item.semVerba || item.foraOrcamento;
+                  const info = gerarTextoSituacao(item);
+                  const isRed = info.cor === "red";
+                  const isOrange = info.cor === "orange";
                   return (
-                    <div key={item.id} className={`rounded-md p-2.5 ${problemaOrc ? "bg-red-50 border-2 border-red-300" : item.qtdComprada > 0 ? "bg-orange-50 border border-orange-200" : "bg-white border border-gray-200"}`}>
+                    <div key={item.id} className={`rounded-md p-2.5 ${isRed ? "bg-red-50 border-2 border-red-300" : isOrange ? "bg-orange-50 border border-orange-200" : "bg-white border border-gray-200"}`}>
                       <div className="flex items-start gap-2">
-                        <Package className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${problemaOrc ? "text-red-500" : "text-gray-400"}`} />
+                        <Package className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${isRed ? "text-red-500" : "text-gray-400"}`} />
                         <div className="flex-1 min-w-0 space-y-1">
-                          <p className={`text-sm font-medium ${problemaOrc ? "text-red-800" : "text-gray-700"}`}>
-                            {item.descricao} — {item.qtdEstaSC.toLocaleString("pt-BR")} {item.unidade}
-                          </p>
-                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-                            <span className="text-gray-500">Orçado: <strong className="text-gray-700">{item.qtdOrcada.toLocaleString("pt-BR")} {item.unidade}</strong></span>
-                            <span className="text-gray-500">Já solicitado: <strong className="text-gray-700">{item.qtdSolicitada.toLocaleString("pt-BR")}</strong></span>
-                            {item.qtdComprada > 0 && (
-                              <span className="text-orange-600">Já comprado: <strong>{item.qtdComprada.toLocaleString("pt-BR")}</strong>{item.ocsVinculadas.length > 0 && ` (${item.ocsVinculadas.join(", ")})`}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={`text-sm font-medium ${isRed ? "text-red-800" : "text-gray-700"}`}>
+                              {item.descricao} — {item.qtdEstaSC.toLocaleString("pt-BR")} {item.unidade}
+                            </p>
+                            {info.badge && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white uppercase tracking-wide">{info.badge}</span>
                             )}
-                            <span className={item.saldo < 0 ? "text-red-600 font-bold" : "text-emerald-600"}>
-                              Saldo: <strong>{item.saldo.toLocaleString("pt-BR")} {item.unidade}</strong>
-                            </span>
                           </div>
-                          {item.foraOrcamento && (
-                            <p className="text-xs font-bold text-red-600 flex items-center gap-1">
-                              <AlertTriangle className="h-3 w-3" /> ITEM FORA DO ORÇAMENTO — este item não possui vínculo com nenhum item orçamentário. Não há verba prevista.
-                            </p>
+                          {item.situacao !== "sem_vinculo" && (
+                            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                              <span className="text-gray-500">Orçado: <strong className="text-gray-700">{item.qtdOrcada.toLocaleString("pt-BR")} {item.unidade}</strong></span>
+                              <span className="text-gray-500">Solicitado: <strong className="text-gray-700">{item.qtdSolicitada.toLocaleString("pt-BR")}</strong></span>
+                              {item.qtdComprada > 0 && (
+                                <span className="text-orange-600">Comprado: <strong>{item.qtdComprada.toLocaleString("pt-BR")}</strong>{item.ocsVinculadas.length > 0 && ` (${item.ocsVinculadas.join(", ")})`}</span>
+                              )}
+                              <span className={item.saldo < 0 ? "text-red-600 font-bold" : item.saldo === 0 ? "text-amber-600 font-semibold" : "text-emerald-600"}>
+                                Saldo: <strong>{item.saldo.toLocaleString("pt-BR")} {item.unidade}</strong>
+                              </span>
+                            </div>
                           )}
-                          {item.semVerba && !item.foraOrcamento && (
-                            <p className="text-xs font-bold text-red-600 flex items-center gap-1">
-                              <AlertTriangle className="h-3 w-3" /> SEM VERBA — a quantidade solicitada excede o saldo orçamentário disponível (saldo: {item.saldo.toLocaleString("pt-BR")} {item.unidade})
-                            </p>
-                          )}
-                          {item.qtdComprada > 0 && (
-                            <p className="text-xs font-semibold text-orange-600 flex items-center gap-1">
-                              <ShoppingCart className="h-3 w-3" /> Já comprado {item.qtdComprada.toLocaleString("pt-BR")} {item.unidade} via {item.ocsVinculadas.join(", ") || "OC"}
+                          {info.texto && (
+                            <p className={`text-xs flex items-start gap-1 ${isRed ? "font-bold text-red-600" : "font-semibold text-orange-600"}`}>
+                              <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                              <span>{info.texto}</span>
                             </p>
                           )}
                         </div>

@@ -4199,15 +4199,30 @@ Retorne APENAS um JSON válido neste formato:
       return scItens.map(item => {
         const orcId = item.orcamentoItemId;
         const orcData = orcId ? orcItensData[orcId] : null;
+        const vinculadoAoOrcamento = orcId != null && orcData != null;
         const qtdOrcada = orcData ? n(orcData.quantidade) : 0;
         const qtdSolicitada = orcId ? (solicitadoMap[orcId] ?? 0) : 0;
         const comp = orcId ? compradoMap[orcId] : null;
         const qtdComprada = comp?.qtd ?? 0;
         const ocsVinculadas = comp?.ocs ?? [];
         const qtdEstaSC = n(item.quantidade);
-        const saldo = qtdOrcada - Math.max(qtdSolicitada, qtdComprada);
-        const foraOrcamento = !orcId;
-        const semVerba = saldo < 0;
+        const consumido = Math.max(qtdSolicitada, qtdComprada);
+        const saldo = qtdOrcada - consumido;
+
+        let situacao: "ok" | "sem_vinculo" | "verba_esgotada_compras" | "verba_esgotada_solicitacoes" | "saldo_insuficiente" = "ok";
+        if (!vinculadoAoOrcamento) {
+          situacao = "sem_vinculo";
+        } else if (saldo < 0) {
+          if (qtdComprada >= qtdOrcada) {
+            situacao = "verba_esgotada_compras";
+          } else if (qtdSolicitada >= qtdOrcada) {
+            situacao = "verba_esgotada_solicitacoes";
+          } else {
+            situacao = "saldo_insuficiente";
+          }
+        } else if (saldo < qtdEstaSC && saldo >= 0) {
+          situacao = "saldo_insuficiente";
+        }
 
         return {
           id: item.id,
@@ -4219,8 +4234,7 @@ Retorne APENAS um JSON válido neste formato:
           qtdComprada,
           ocsVinculadas,
           saldo,
-          foraOrcamento,
-          semVerba,
+          situacao,
           semVerbaFlag: item.semVerba ?? false,
         };
       });
