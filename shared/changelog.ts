@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 870,
+    titulo: "Dialog de justificativa para SC sem verba orçamentária",
+    descricao: "Ao criar uma SC com itens sem verba suficiente ou fora do orçamento, agora aparece um dialog profissional (em vez do antigo prompt do navegador) listando os itens problemáticos, pedindo seleção do motivo (Quebra/Dano, Furto, Erro de Orçamento, Qtd Insuficiente, Retrabalho, Aditivo, Outro) e justificativa obrigatória em texto livre. A justificativa fica salva no item da SC para rastreabilidade.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 01:30:00",
+  },
+  {
     version: 869,
     titulo: "Lógica de saldo corrigida — sem vínculo = negativo + realocação de verba",
     descricao: "Correção definitiva da lógica orçamentária: 1) Itens sem vínculo ao orçamento (sem orcamento_item_id nem insumo_codigo no orçamento) agora mostram saldo NEGATIVO (= -quantidade solicitada) e badge 'REALOCAR VERBA'. 2) Cotações (Mapa) agora também busca dados orçamentários via insumo_codigo quando orcamento_item_id é null, mostrando Orçado/Comprado/Saldo corretos para insumos como Cimento. 3) Saldo em R$ na Cotação também calcula prejuízo para itens sem verba. 4) Total footer e cobertura do Mapa corrigidos para refletir itens sem vínculo.",

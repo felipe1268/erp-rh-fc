@@ -422,6 +422,13 @@ export default function Solicitacoes() {
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [destaqueId, setDestaqueId] = useState<number | null>(null);
   const [confirmAprov, setConfirmAprov] = useState<{ id: number; key: string; titulo: string; descricao: string; cor: string; icone: "aprovar" | "recusar" | "voltar" } | null>(null);
+  const [showSemVerba, setShowSemVerba] = useState<{
+    problemas: string[];
+    itensSemVerba: Set<string>;
+    consolidados: Map<string, ItemForm>;
+  } | null>(null);
+  const [semVerbaMotivo, setSemVerbaMotivo] = useState("");
+  const [semVerbaObs, setSemVerbaObs] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -915,22 +922,16 @@ export default function Solicitacoes() {
     }
 
     if (saldoProblems.length > 0) {
-      const msg = `⚠️ ATENÇÃO - Itens sem verba:\n\n${saldoProblems.join("\n")}\n\nInforme o motivo e clique OK para continuar.`;
-      const motivo = prompt(msg + "\n\nMotivo:\n1 - Quebra/Dano\n2 - Furto/Roubo\n3 - Erro de Orçamento\n4 - Qtd Insuficiente\n5 - Retrabalho\n6 - Outro\n\nDigite o número:");
-      if (!motivo) return;
-      const motivoMap: Record<string, string> = { "1": "quebra_dano", "2": "furto", "3": "erro_orcamento", "4": "qtd_insuficiente", "5": "retrabalho", "6": "outro" };
-      const motivoVal = motivoMap[motivo.trim()] ?? "outro";
-      for (const [, item] of consolidados) {
-        const matched = modoSC === "eap"
-          ? (item.insumoCodigo && itensSemVerba.has(item.insumoCodigo))
-          : (item.orcamentoItemId && itensSemVerba.has(String(item.orcamentoItemId)));
-        if (matched) {
-          item.semVerba = true;
-          item.motivoSemVerba = motivoVal;
-        }
-      }
+      setShowSemVerba({ problemas: saldoProblems, itensSemVerba, consolidados });
+      setSemVerbaMotivo("");
+      setSemVerbaObs("");
+      return;
     }
 
+    await executarCriacao(consolidados);
+  }
+
+  async function executarCriacao(consolidados: Map<string, ItemForm>) {
     let imgUrl: string | undefined;
     if (imagemBase64 && imagemNome) {
       setUploadingImagem(true);
@@ -967,6 +968,28 @@ export default function Solicitacoes() {
         motivoSemVerba: i.motivoSemVerba,
       })),
     });
+  }
+
+  async function handleConfirmSemVerba() {
+    if (!showSemVerba) return;
+    if (!semVerbaMotivo) return toast.error("Selecione o motivo da solicitação sem verba.");
+    if (!semVerbaObs.trim()) return toast.error("Informe a justificativa para a solicitação sem verba.");
+    const { itensSemVerba, consolidados } = showSemVerba;
+    const motivoFinal = semVerbaMotivo === "outro" ? `outro: ${semVerbaObs.trim()}` : semVerbaMotivo;
+    for (const [, item] of consolidados) {
+      const matched = modoSC === "eap"
+        ? (item.insumoCodigo && itensSemVerba.has(item.insumoCodigo))
+        : (item.orcamentoItemId && itensSemVerba.has(String(item.orcamentoItemId)));
+      if (matched) {
+        item.semVerba = true;
+        item.motivoSemVerba = motivoFinal;
+        item.observacoes = item.observacoes
+          ? `${item.observacoes} | Justificativa sem verba: ${semVerbaObs.trim()}`
+          : `Justificativa sem verba: ${semVerbaObs.trim()}`;
+      }
+    }
+    setShowSemVerba(null);
+    await executarCriacao(consolidados);
   }
 
   const lista = q.data ?? [];
@@ -2042,6 +2065,95 @@ export default function Solicitacoes() {
               >
                 {(criar.isPending || uploadingImagem) ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar Solicitação"}
               </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog Confirmação Sem Verba ────────────────────────── */}
+      <Dialog open={!!showSemVerba} onOpenChange={v => { if (!v) setShowSemVerba(null); }}>
+        <DialogContent className="border-red-200 max-w-lg" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="p-2 rounded-full bg-red-100">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <DialogTitle className="text-red-800 text-base">Itens sem verba orçamentária</DialogTitle>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-xs font-semibold text-red-700 mb-2">
+                Os seguintes itens não possuem verba suficiente ou não foram previstos no orçamento:
+              </p>
+              <ul className="space-y-1 max-h-32 overflow-y-auto">
+                {showSemVerba?.problemas.map((p, i) => (
+                  <li key={i} className="text-xs text-red-600 flex items-start gap-1.5">
+                    <XCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                    <span>{p}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-xs font-semibold text-amber-800 mb-1">
+                Deseja realmente prosseguir com esta solicitação?
+              </p>
+              <p className="text-xs text-amber-700">
+                A solicitação será marcada como "sem verba" e precisará de aprovação especial.
+                Informe abaixo o motivo e a justificativa.
+              </p>
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold text-gray-700 mb-1">Motivo *</Label>
+              <Select value={semVerbaMotivo} onValueChange={setSemVerbaMotivo}>
+                <SelectTrigger className="h-9 text-sm border-gray-300">
+                  <SelectValue placeholder="Selecione o motivo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="quebra_dano">Quebra / Dano em obra</SelectItem>
+                  <SelectItem value="furto">Furto / Roubo</SelectItem>
+                  <SelectItem value="erro_orcamento">Erro de orçamento (qtd subestimada)</SelectItem>
+                  <SelectItem value="qtd_insuficiente">Quantidade insuficiente no orçamento</SelectItem>
+                  <SelectItem value="retrabalho">Retrabalho / Refação de serviço</SelectItem>
+                  <SelectItem value="aditivo">Aditivo contratual / Escopo novo</SelectItem>
+                  <SelectItem value="outro">Outro motivo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold text-gray-700 mb-1">Justificativa *</Label>
+              <Textarea
+                value={semVerbaObs}
+                onChange={e => setSemVerbaObs(e.target.value)}
+                placeholder="Descreva por que esta compra é necessária mesmo sem verba prevista no orçamento..."
+                className="text-sm min-h-[80px] border-gray-300 resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => setShowSemVerba(null)}
+              className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 font-medium transition"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirmSemVerba}
+              disabled={!semVerbaMotivo || !semVerbaObs.trim() || criar.isPending}
+              className="flex-1 h-9 text-sm rounded-md bg-red-600 hover:bg-red-500 text-white font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {criar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                <>
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Criar mesmo sem verba
+                </>
+              )}
+            </button>
           </div>
         </DialogContent>
       </Dialog>
