@@ -6072,4 +6072,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 18:30:00",
   },
+  {
+    version: 879,
+    titulo: "Tolerância de precisão aplicada em todo o fluxo de compras",
+    descricao: "A tolerância de 0,01 para comparações de quantidade orçada vs solicitada/comprada foi aplicada em todos os pontos do fluxo: criação de OC (criarOrdemDeCotacao), verificação de estouro na geração de OC, e cálculo de saldo no Mapa de Cotação. Evita falsos alertas de 'acima do orçamento' e 'saldo insuficiente' quando as quantidades são iguais mas diferem por imprecisão de ponto flutuante.",
+    tipo: "fix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 18:45:00",
+  },
 ];

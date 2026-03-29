@@ -3174,7 +3174,8 @@ Retorne APENAS um JSON válido neste formato:
                     const qtdOrc = qtdOrcMap[item.insumoCodigo!] || 0;
                     if (qtdOrc <= 0) continue;
                     const jaCom = jaCompMap[item.insumoCodigo!] || 0;
-                    if (jaCom + item.quantidade > qtdOrc) {
+                    const epsOc = 0.01;
+                    if (jaCom + item.quantidade > qtdOrc + epsOc) {
                       const exc = Math.round(((jaCom + item.quantidade - qtdOrc) / qtdOrc) * 100);
                       estouros.push(`${item.descricao}: orçado ${qtdOrc.toLocaleString("pt-BR")}, já comprado ${jaCom.toLocaleString("pt-BR")}, novo ${item.quantidade.toLocaleString("pt-BR")} (+${exc}%)`);
                     }
@@ -6286,7 +6287,7 @@ Retorne APENAS um JSON válido neste formato:
         if (qtdOrcada <= 0) continue;
         const jaComprada = jaCompradoMap[item.insumoCodigo] || 0;
         const total = jaComprada + item.quantidade;
-        if (total > qtdOrcada) {
+        if (total > qtdOrcada + 0.01) {
           estouros.push({
             insumoCodigo: item.insumoCodigo,
             descricao: item.descricao,

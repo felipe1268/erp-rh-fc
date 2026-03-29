@@ -1686,7 +1686,7 @@ export default function Cotacoes() {
       const custoCompra = precoForn * qtdItem;
       const qtdOrcada = parseFloat((it as any).qtdOrcada ?? "0");
       const qtdTotalSolicitada = parseFloat((it as any).qtdTotalSolicitada ?? "0");
-      const estourou = (it as any).semVerba || (qtdOrcada > 0 && qtdTotalSolicitada > qtdOrcada);
+      const estourou = (it as any).semVerba || (qtdOrcada > 0 && qtdTotalSolicitada > qtdOrcada + 0.01);
       if (estourou) {
         const qtdExcedente = qtdTotalSolicitada - qtdOrcada;
         const qtdCoberta = Math.max(0, qtdItem - qtdExcedente);
