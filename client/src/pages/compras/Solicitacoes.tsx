@@ -145,6 +145,7 @@ export default function Solicitacoes() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [selectedSCIds, setSelectedSCIds] = useState<Set<number>>(new Set());
+  const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState<{ titulo: string; prioridade: string; dataNecessidade: string; observacoes: string } | null>(null);
   const [editItens, setEditItens] = useState<any[]>([]);
@@ -243,6 +244,14 @@ export default function Solicitacoes() {
   });
   const excluir = trpc.compras.excluirSolicitacao.useMutation({
     onSuccess: () => { toast.success("SC excluída!"); q.refetch(); setShowDetalhe(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirLote = trpc.compras.excluirSolicitacoesEmLote.useMutation({
+    onSuccess: (res) => {
+      if (res.errors && res.errors.length > 0) { toast.warning(`${res.count} SC(s) excluída(s). ${res.errors.length} não puderam ser excluídas.`); }
+      else { toast.success(`${res.count} SC(s) excluída(s)!`); }
+      q.refetch(); setSelectedSCIds(new Set()); setConfirmExcluirLote(false);
+    },
     onError: (e) => toast.error(e.message),
   });
   const editar = trpc.compras.editarSolicitacao.useMutation({
@@ -653,18 +662,25 @@ export default function Solicitacoes() {
       </div>
 
       {selectedSCIds.size > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg flex-wrap">
           <CheckSquare className="h-4 w-4 text-amber-600" />
           <span className="text-sm text-amber-800 font-medium">{selectedSCIds.size} selecionada(s)</span>
-          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1 ml-2"
-            disabled={aprovarLote.isPending}
-            onClick={() => aprovarLote.mutate({ ids: Array.from(selectedSCIds), companyId, aprovacaoStatus: "aprovada", aprovadorId: user?.id ? parseInt(String(user.id)) : undefined })}>
-            {aprovarLote.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-            Aprovar Selecionadas
+          {lista.filter((s: any) => selectedSCIds.has(s.id) && s.aprovacaoStatus === "aguardando").length > 0 && (
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1 ml-2"
+              disabled={aprovarLote.isPending}
+              onClick={() => aprovarLote.mutate({ ids: Array.from(selectedSCIds), companyId, aprovacaoStatus: "aprovada", aprovadorId: user?.id ? parseInt(String(user.id)) : undefined })}>
+              {aprovarLote.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+              Aprovar Selecionadas
+            </Button>
+          )}
+          <Button size="sm" variant="destructive" className="text-xs gap-1"
+            disabled={excluirLote.isPending}
+            onClick={() => setConfirmExcluirLote(true)}>
+            <Trash2 className="h-3 w-3" /> Excluir Selecionadas
           </Button>
           <Button size="sm" variant="outline" className="text-xs border-gray-300 text-gray-600"
             onClick={() => setSelectedSCIds(new Set())}>
-            Limpar Seleção
+            Cancelar
           </Button>
         </div>
       )}
@@ -692,10 +708,10 @@ export default function Solicitacoes() {
             <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
               <TableHead className="w-10">
                 <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-amber-600"
-                  checked={lista.length > 0 && lista.filter((s: any) => s.aprovacaoStatus === "aguardando").every((s: any) => selectedSCIds.has(s.id))}
+                  checked={lista.length > 0 && lista.every((s: any) => selectedSCIds.has(s.id))}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedSCIds(new Set(lista.filter((s: any) => s.aprovacaoStatus === "aguardando").map((s: any) => s.id)));
+                      setSelectedSCIds(new Set(lista.map((s: any) => s.id)));
                     } else {
                       setSelectedSCIds(new Set());
                     }
@@ -724,18 +740,16 @@ export default function Solicitacoes() {
               return (
                 <TableRow key={sc.id} className={`cursor-pointer ${isUrgente ? "bg-red-50 border-l-4 border-l-red-500 hover:bg-red-100" : "border-gray-100 hover:bg-gray-50"}`} onClick={() => setShowDetalhe(sc.id)}>
                   <TableCell onClick={e => e.stopPropagation()}>
-                    {sc.aprovacaoStatus === "aguardando" ? (
-                      <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-amber-600"
-                        checked={selectedSCIds.has(sc.id)}
-                        onChange={e => {
-                          setSelectedSCIds(prev => {
-                            const n = new Set(prev);
-                            e.target.checked ? n.add(sc.id) : n.delete(sc.id);
-                            return n;
-                          });
-                        }}
-                      />
-                    ) : <span className="w-4 block" />}
+                    <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-amber-600"
+                      checked={selectedSCIds.has(sc.id)}
+                      onChange={e => {
+                        setSelectedSCIds(prev => {
+                          const n = new Set(prev);
+                          e.target.checked ? n.add(sc.id) : n.delete(sc.id);
+                          return n;
+                        });
+                      }}
+                    />
                   </TableCell>
                   <TableCell className="text-gray-900 font-mono font-semibold text-xs">
                     <div className="flex items-center gap-1.5">
@@ -2050,6 +2064,23 @@ export default function Solicitacoes() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={confirmExcluirLote} onOpenChange={setConfirmExcluirLote}>
+        <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="text-gray-900">Confirmar Exclusão</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 py-2">
+            Tem certeza que deseja excluir <strong>{selectedSCIds.size}</strong> solicitação(ões)? Cotações vinculadas serão canceladas. SCs com OC em andamento não serão excluídas.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setConfirmExcluirLote(false)}>Cancelar</Button>
+            <Button variant="destructive" className="gap-1.5" disabled={excluirLote.isPending} onClick={() => excluirLote.mutate({ ids: [...selectedSCIds], companyId })}>
+              {excluirLote.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Excluir {selectedSCIds.size} SC(s)
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

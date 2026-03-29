@@ -1469,6 +1469,42 @@ Responda APENAS com um objeto JSON no formato:
       return { ok: true };
     }),
 
+  excluirSolicitacoesEmLote: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = allowedCompanies.map((c: any) => c.id);
+      if (!allowedIds.includes(input.companyId)) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
+      const owned = await db.select({ id: comprasSolicitacoes.id }).from(comprasSolicitacoes).where(and(inArray(comprasSolicitacoes.id, input.ids), eq(comprasSolicitacoes.companyId, input.companyId)));
+      const ownedIds = owned.map(o => o.id);
+      if (ownedIds.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Nenhuma SC encontrada" });
+
+      const errors: string[] = [];
+      let deleted = 0;
+      for (const scId of ownedIds) {
+        try {
+          const linkedCots = await db.select({ id: comprasCotacoes.id, status: comprasCotacoes.status }).from(comprasCotacoes).where(eq(comprasCotacoes.solicitacaoId, scId));
+          const activeCots = linkedCots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
+          if (activeCots.length > 0) {
+            const linkedOCs = await db.select({ id: comprasOrdens.id, status: comprasOrdens.status }).from(comprasOrdens).where(inArray(comprasOrdens.cotacaoId, activeCots.map(c => c.id)));
+            const ocsAtivas = linkedOCs.filter(o => !["cancelada", "recebido"].includes(o.status ?? ""));
+            if (ocsAtivas.length > 0) { errors.push(`SC #${scId}: possui OC em andamento`); continue; }
+            for (const cot of activeCots) { await db.update(comprasCotacoes).set({ status: "cancelada" }).where(eq(comprasCotacoes.id, cot.id)); }
+          }
+          const allCotIds = linkedCots.map(c => c.id);
+          if (allCotIds.length > 0) { await db.update(comprasCotacoesItens).set({ solicitacaoItemId: null }).where(inArray(comprasCotacoesItens.cotacaoId, allCotIds)); }
+          if (linkedCots.length > 0) { await db.update(comprasCotacoes).set({ solicitacaoId: null }).where(eq(comprasCotacoes.solicitacaoId, scId)); }
+          const solItemIds = (await db.select({ id: comprasSolicitacoesItens.id }).from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, scId))).map(r => r.id);
+          if (solItemIds.length > 0) { await db.update(comprasOrdensItens).set({ solicitacaoItemId: null }).where(inArray(comprasOrdensItens.solicitacaoItemId, solItemIds)); }
+          await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, scId));
+          await db.delete(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, scId));
+          deleted++;
+        } catch (e: any) { errors.push(`SC #${scId}: ${e.message}`); }
+      }
+      return { ok: true, count: deleted, errors };
+    }),
+
   // ══════════════════════════════════════════════════════════════
   // COTAÇÕES
   // ══════════════════════════════════════════════════════════════
