@@ -22,6 +22,7 @@ import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   pendente:         { label: "Pendente",           cls: "bg-amber-50 text-amber-700 border-amber-200" },
   aprovada:         { label: "Aprovada",            cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  aguardando_aprovacao_extra: { label: "Aguardando Admin", cls: "bg-red-50 text-red-700 border-red-200" },
   entregue_parcial: { label: "Entrega Parcial",     cls: "bg-orange-50 text-orange-700 border-orange-200" },
   entregue:         { label: "Entregue",            cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   cancelada:        { label: "Cancelada",           cls: "bg-gray-100 text-gray-500 border-gray-200" },
@@ -154,6 +155,12 @@ export default function Ordens() {
     onSuccess: () => { toast.success("Dados de entrega atualizados!"); detalheQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const aprovarExtra = trpc.compras.aprovarOcExtra.useMutation({
+    onSuccess: (res) => { toast.success(`OC aprovada pelo administrador ${res.adminNome}!`); q.refetch(); detalheQ.refetch(); setShowAprovacaoExtra(null); setAprovExtraForm({ adminEmail: "", adminSenha: "", justificativa: "" }); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [showAprovacaoExtra, setShowAprovacaoExtra] = useState<any>(null);
+  const [aprovExtraForm, setAprovExtraForm] = useState({ adminEmail: "", adminSenha: "", justificativa: "" });
   const [editTransp, setEditTransp] = useState("");
   const [editRastreio, setEditRastreio] = useState("");
 
@@ -402,6 +409,11 @@ export default function Ordens() {
                           S/ VERBA
                         </span>
                       )}
+                      {oc.status === "aguardando_aprovacao_extra" && (
+                        <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 animate-pulse" title="Compra acima do orçamento — necessita aprovação de administrador">
+                          ADMIN
+                        </span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell><ChevronRight className="h-4 w-4 text-gray-400" /></TableCell>
@@ -626,6 +638,26 @@ export default function Ordens() {
                     </div>
                   </div>
                 )}
+                {detalhe.status === "aguardando_aprovacao_extra" && (
+                  <div className="rounded-lg border border-red-300 bg-red-50 p-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-red-800">Compra Acima do Orçamento — Aprovação Admin Necessária</p>
+                        <p className="text-xs text-red-600">{(detalhe as any).aprovacaoExtraMotivo || "Esta OC contém insumos que excedem a quantidade orçada. É necessário aprovação de um administrador para liberar."}</p>
+                      </div>
+                    </div>
+                    <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white gap-1.5" onClick={() => setShowAprovacaoExtra(detalhe)}>
+                      <CheckCircle className="h-3.5 w-3.5" /> Aprovar com Senha Admin
+                    </Button>
+                  </div>
+                )}
+                {(detalhe as any).aprovacaoExtraAdminNome && (
+                  <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-700">
+                    <CheckCircle className="h-4 w-4 shrink-0" />
+                    <span>Aprovação extra concedida por <strong>{(detalhe as any).aprovacaoExtraAdminNome}</strong> em {(detalhe as any).aprovacaoExtraEm ? new Date((detalhe as any).aprovacaoExtraEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3 text-sm bg-gray-50 rounded-lg p-3 border border-gray-200">
                   <div><span className="text-gray-400 text-xs">Obra</span><p className="text-gray-900 font-medium flex items-center gap-1"><Building2 className="h-3 w-3 text-gray-400" />{nomeObra((detalhe as any).obraId) ?? "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Status</span><p><span className={`inline-flex px-2 py-0.5 rounded text-xs border ${st.cls}`}>{st.label}</span></p></div>
@@ -809,7 +841,7 @@ export default function Ordens() {
                         { s: "entregue_parcial", label: "Entrega Parcial",   icon: Truck,        cls: "bg-orange-500 hover:bg-orange-400 text-white" },
                         { s: "entregue",         label: "Marcar Entregue",   icon: PackageCheck, cls: "bg-emerald-600 hover:bg-emerald-500 text-white" },
                         { s: "cancelada",        label: "Cancelar",          icon: Trash2,       cls: "border border-red-200 text-red-600 hover:bg-red-50 bg-transparent" },
-                      ].filter(a => a.s !== detalhe.status).map(a => (
+                      ].filter(a => a.s !== detalhe.status).filter(a => !(detalhe.status === "aguardando_aprovacao_extra" && a.s === "aprovada")).map(a => (
                         <Button key={a.s} size="sm" onClick={() => atualizarStatus.mutate({ id: detalhe.id, status: a.s })}
                           disabled={atualizarStatus.isPending}
                           className={`text-xs gap-1 ${a.cls}`}>
@@ -883,6 +915,43 @@ export default function Ordens() {
               {excluirLote.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               Excluir {selectedIds.size} OC(s)
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!showAprovacaoExtra} onOpenChange={(v) => { if (!v) setShowAprovacaoExtra(null); }}>
+        <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="text-red-700 flex items-center gap-2"><AlertTriangle className="h-5 w-5" /> Aprovação Extra-Orçamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            {showAprovacaoExtra?.aprovacaoExtraMotivo && (
+              <div className="text-xs bg-red-50 border border-red-200 rounded p-2.5 text-red-700 whitespace-pre-wrap">{showAprovacaoExtra.aprovacaoExtraMotivo}</div>
+            )}
+            <p className="text-sm text-gray-600">Esta OC contém insumos que ultrapassam a quantidade orçada. Um administrador deve autorizar a compra extra-orçamento.</p>
+            <div className="space-y-2">
+              <div>
+                <Label className="text-xs text-gray-700">Email do Administrador *</Label>
+                <Input className="h-8 text-sm bg-white text-gray-900 border-gray-300" type="email" placeholder="admin@empresa.com" value={aprovExtraForm.adminEmail} onChange={e => setAprovExtraForm(p => ({ ...p, adminEmail: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-700">Senha do Administrador *</Label>
+                <Input className="h-8 text-sm bg-white text-gray-900 border-gray-300" type="password" placeholder="••••••" value={aprovExtraForm.adminSenha} onChange={e => setAprovExtraForm(p => ({ ...p, adminSenha: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-700">Justificativa *</Label>
+                <Textarea className="text-sm bg-white text-gray-900 border-gray-300 min-h-[60px]" placeholder="Motivo da compra extra-orçamento..." value={aprovExtraForm.justificativa} onChange={e => setAprovExtraForm(p => ({ ...p, justificativa: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => setShowAprovacaoExtra(null)}>Cancelar</Button>
+              <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white gap-1.5" disabled={aprovarExtra.isPending || !aprovExtraForm.adminEmail || !aprovExtraForm.adminSenha || !aprovExtraForm.justificativa} onClick={() => {
+                if (!showAprovacaoExtra) return;
+                aprovarExtra.mutate({ ocId: showAprovacaoExtra.id, companyId, adminEmail: aprovExtraForm.adminEmail, adminSenha: aprovExtraForm.adminSenha, justificativa: aprovExtraForm.justificativa });
+              }}>
+                {aprovarExtra.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                Aprovar OC
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

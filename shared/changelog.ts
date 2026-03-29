@@ -5784,4 +5784,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 12:46:00",
   },
+  {
+    version: 847,
+    titulo: "Controle de Saldo Orçamentário em 3 Camadas — Compras",
+    descricao: "Sistema de controle de saldo orçamentário no fluxo de compras com 3 camadas: (1) Bolinhas coloridas de status nos insumos da Compra Consolidada e EAP (verde=disponível, azul=solicitado, laranja=em cotação, roxo=comprado, rosa=recebido, vermelho=estouro); (2) Alertas visuais na Compra Consolidada quando insumo já 100% comprado, aviso de compra extra-orçamento ao digitar quantidade; (3) Bloqueio na emissão de OC quando insumos ultrapassam quantidade orçada — OC fica com status 'aguardando_aprovacao_extra' e exige aprovação com senha de administrador. Endpoint getInsumosConsolidados retorna status por insumo (qtdEmCotacao, statusInsumo). Endpoint aprovarOcExtra valida senha bcrypt do admin, verifica acesso à empresa e registra auditoria completa (quem, quando, justificativa). Schema comprasOrdens expandido com campos de aprovação extra.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 13:00:00",
+  },
 ];

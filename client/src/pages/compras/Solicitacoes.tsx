@@ -1264,15 +1264,34 @@ export default function Solicitacoes() {
                             const conv = getConversao(ins.descricao, ins.unidade, qtdVal > 0 ? qtdVal : ins.qtdTotalOrcada);
                             const saldoNeg = ins.saldoDisponivel < 0;
                             const isExpanded = insumoExpanded === ins.insumoCodigo;
+                            const statusInsumo = ins.statusInsumo || "disponivel";
+                            const statusConfig: Record<string, { cor: string; label: string; bg: string }> = {
+                              disponivel: { cor: "bg-emerald-500", label: "Disponível", bg: "" },
+                              solicitado: { cor: "bg-blue-500", label: "Solicitado", bg: "" },
+                              em_cotacao: { cor: "bg-amber-500", label: "Em cotação", bg: "" },
+                              comprado: { cor: "bg-purple-500", label: "100% comprado", bg: "bg-purple-50/50" },
+                              recebido: { cor: "bg-rose-500", label: "Recebido", bg: "bg-rose-50/50" },
+                              estouro: { cor: "bg-red-700", label: "Acima do orçado", bg: "bg-red-50/60" },
+                            };
+                            const sc = statusConfig[statusInsumo] || statusConfig.disponivel;
+                            const comprado100 = ins.qtdComprada >= ins.qtdTotalOrcada && ins.qtdTotalOrcada > 0;
+                            const isExtraOrcamento = qtdVal > 0 && comprado100;
                             return (
                               <div key={ins.insumoCodigo}>
-                                <div className="grid grid-cols-[3fr_0.6fr_1fr_1fr_1fr_1fr_0.8fr_1fr_1.5fr] gap-1 px-3 py-2 text-xs items-center hover:bg-gray-50">
+                                {isExtraOrcamento && (
+                                  <div className="mx-3 mt-1 px-2.5 py-1.5 text-[10px] font-medium bg-amber-100 border border-amber-300 rounded text-amber-800 flex items-center gap-1.5">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                                    Compra extra-orçamento — a emissão da OC exigirá aprovação de administrador
+                                  </div>
+                                )}
+                                <div className={`grid grid-cols-[3fr_0.6fr_1fr_1fr_1fr_1fr_0.8fr_1fr_1.5fr] gap-1 px-3 py-2 text-xs items-center hover:bg-gray-50 ${sc.bg}`}>
                                   <div className="min-w-0 cursor-pointer" onClick={() => setInsumoExpanded(isExpanded ? null : ins.insumoCodigo)}>
                                     <div className="flex items-center gap-1">
                                       <ChevronDown className={`h-3 w-3 text-gray-400 shrink-0 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />
+                                      <span className={`shrink-0 w-2 h-2 rounded-full ${sc.cor}`} title={sc.label} />
                                       <div className="min-w-0">
                                         <div className="text-gray-900 truncate font-medium">{ins.descricao}</div>
-                                        <div className="text-[9px] text-gray-400 ml-4">{ins.insumoCodigo} · {ins.composicoes.length} composiç{ins.composicoes.length > 1 ? "ões" : "ão"} · <span className="text-purple-500 underline">ver onde é usado</span></div>
+                                        <div className="text-[9px] text-gray-400 ml-4">{ins.insumoCodigo} · {ins.composicoes.length} composiç{ins.composicoes.length > 1 ? "ões" : "ão"} · <span className="text-purple-500 underline">ver onde é usado</span>{statusInsumo !== "disponivel" && <span className={`ml-1 px-1 rounded text-[8px] font-bold ${statusInsumo === "estouro" ? "bg-red-100 text-red-700" : statusInsumo === "comprado" ? "bg-purple-100 text-purple-700" : statusInsumo === "recebido" ? "bg-rose-100 text-rose-700" : statusInsumo === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{sc.label}</span>}</div>
                                       </div>
                                     </div>
                                   </div>
@@ -1544,12 +1563,19 @@ export default function Solicitacoes() {
                         });
                       }
                     }
-                    return Array.from(consolidados.entries()).map(([key, c]) => (
+                    const statusDotColors: Record<string, string> = { disponivel: "bg-emerald-500", solicitado: "bg-blue-500", em_cotacao: "bg-amber-500", comprado: "bg-purple-500", recebido: "bg-rose-500", estouro: "bg-red-700" };
+                    const statusDotLabels: Record<string, string> = { disponivel: "Disponível", solicitado: "Solicitado", em_cotacao: "Em cotação", comprado: "100% comprado", recebido: "Recebido", estouro: "Acima do orçado" };
+                    const consolidadoLookup = (insumosConsolidadosQ.data ?? []) as any[];
+                    return Array.from(consolidados.entries()).map(([key, c]) => {
+                      const insData = consolidadoLookup.find((x: any) => x.insumoCodigo === c.insumoCodigo);
+                      const stIns = insData?.statusInsumo || "disponivel";
+                      return (
                       <div key={key} className="space-y-1">
                         <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-50/50 border border-amber-200/50 text-xs">
+                          <span className={`shrink-0 w-2 h-2 rounded-full ${statusDotColors[stIns] || "bg-emerald-500"}`} title={statusDotLabels[stIns] || "Disponível"} />
                           <Zap className="h-3 w-3 text-amber-500 shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <div className="text-gray-900 truncate">{c.descricao}</div>
+                            <div className="text-gray-900 truncate">{c.descricao} {stIns !== "disponivel" && <span className={`ml-1 text-[8px] px-1 rounded font-bold ${stIns === "estouro" ? "bg-red-100 text-red-700" : stIns === "comprado" ? "bg-purple-100 text-purple-700" : stIns === "recebido" ? "bg-rose-100 text-rose-700" : stIns === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{statusDotLabels[stIns]}</span>}</div>
                             {c.origens.length > 1 && (
                               <div className="text-[10px] text-amber-600">Consolidado de {c.origens.length} serviços: {c.origens.join(", ")}</div>
                             )}
@@ -1561,7 +1587,7 @@ export default function Solicitacoes() {
                         </div>
                         <UltimaCompraCard companyId={companyId} descricao={c.descricao} insumoCodigo={c.insumoCodigo} />
                       </div>
-                    ));
+                    ); });
                   })()}
                 </div>
               ) : modoSC === "eap" && itens.filter(i => i.origemEap).length === 0 ? (

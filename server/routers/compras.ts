@@ -2976,6 +2976,75 @@ Retorne APENAS um JSON válido neste formato:
       const subtotalItens = n(cot.total) - freteParaTotal;
       const subtotal = Math.max(subtotalItens, 0);
       const totalOC = subtotal + freteParaTotal;
+      let extraAprovacaoRequerida = false;
+      let extraMotivo = "";
+      if (cot.obraId) {
+        try {
+          const solicitacaoItemIds = itens.map(it => it.solicitacaoItemId).filter(Boolean);
+          if (solicitacaoItemIds.length > 0) {
+            const scItens = await db.select({
+              insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+              descricao: comprasSolicitacoesItens.descricao,
+              id: comprasSolicitacoesItens.id,
+            }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, solicitacaoItemIds as number[]));
+
+            const itensParaVerificar = itens.map(it => {
+              const scItem = scItens.find(s => s.id === it.solicitacaoItemId);
+              const resp = precoMap.get(it.id);
+              const qty = resp ? n(resp.quantidade) : n(it.quantidade);
+              return { insumoCodigo: scItem?.insumoCodigo || undefined, descricao: scItem?.descricao || it.descricao, quantidade: qty };
+            }).filter(it => it.insumoCodigo);
+
+            if (itensParaVerificar.length > 0) {
+              const [orcCheck] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+                .from(orcamentos)
+                .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, cot.obraId!), isNull(orcamentos.deletedAt)))
+                .orderBy(desc(orcamentos.createdAt)).limit(1);
+              if (orcCheck) {
+                const insCodigos = itensParaVerificar.map(it => it.insumoCodigo!);
+                const orcItCheck = await db.select({ servicoCodigo: orcamentoItens.servicoCodigo, quantidade: orcamentoItens.quantidade })
+                  .from(orcamentoItens).where(and(eq(orcamentoItens.orcamentoId, orcCheck.id), eq(orcamentoItens.companyId, input.companyId)));
+                const svcCods = [...new Set(orcItCheck.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
+                if (svcCods.length > 0) {
+                  const insCheck = await db.select({ composicaoCodigo: composicaoInsumos.composicaoCodigo, insumoCodigo: composicaoInsumos.insumoCodigo, quantidade: composicaoInsumos.quantidade, alocacaoMat: composicaoInsumos.alocacaoMat, alocacaoMdo: composicaoInsumos.alocacaoMdo })
+                    .from(composicaoInsumos).where(and(eq(composicaoInsumos.companyId, Number(orcCheck.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCods)));
+                  const matOnly = insCheck.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+                  const qtdOrcMap: Record<string, number> = {};
+                  for (const ins of matOnly) {
+                    if (!insCodigos.includes(ins.insumoCodigo || "")) continue;
+                    const coef = n(ins.quantidade);
+                    for (const svc of orcItCheck.filter(s => s.servicoCodigo === ins.composicaoCodigo)) {
+                      qtdOrcMap[ins.insumoCodigo || ""] = (qtdOrcMap[ins.insumoCodigo || ""] || 0) + (n(svc.quantidade) * coef);
+                    }
+                  }
+                  const ocExist = await db.select({ insumoCodigo: comprasSolicitacoesItens.insumoCodigo, quantidade: comprasOrdensItens.quantidade })
+                    .from(comprasOrdensItens)
+                    .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+                    .innerJoin(comprasSolicitacoesItens, eq(comprasOrdensItens.solicitacaoItemId, comprasSolicitacoesItens.id))
+                    .where(and(eq(comprasOrdens.companyId, input.companyId), eq(comprasOrdens.obraId, cot.obraId!), sql`${comprasOrdens.status} NOT IN ('cancelada')`));
+                  const jaCompMap: Record<string, number> = {};
+                  for (const oc of ocExist) { jaCompMap[oc.insumoCodigo || ""] = (jaCompMap[oc.insumoCodigo || ""] || 0) + n(oc.quantidade); }
+                  const estouros: string[] = [];
+                  for (const item of itensParaVerificar) {
+                    const qtdOrc = qtdOrcMap[item.insumoCodigo!] || 0;
+                    if (qtdOrc <= 0) continue;
+                    const jaCom = jaCompMap[item.insumoCodigo!] || 0;
+                    if (jaCom + item.quantidade > qtdOrc) {
+                      const exc = Math.round(((jaCom + item.quantidade - qtdOrc) / qtdOrc) * 100);
+                      estouros.push(`${item.descricao}: orçado ${qtdOrc.toLocaleString("pt-BR")}, já comprado ${jaCom.toLocaleString("pt-BR")}, novo ${item.quantidade.toLocaleString("pt-BR")} (+${exc}%)`);
+                    }
+                  }
+                  if (estouros.length > 0) {
+                    extraAprovacaoRequerida = true;
+                    extraMotivo = `Insumos acima do orçamento:\n${estouros.join("\n")}`;
+                  }
+                }
+              }
+            }
+          }
+        } catch (e: any) { console.warn("[criarOrdemDeCotacao] Erro na verificação de saldo:", e?.message); }
+      }
+
       const [oc] = await db.insert(comprasOrdens).values({
         companyId: input.companyId,
         numeroOc,
@@ -2983,8 +3052,10 @@ Retorne APENAS um JSON válido neste formato:
         obraId: cot.obraId ?? null,
         fornecedorId: cot.fornecedorId ?? null,
         fornecedorNome: cot.fornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId!))).map(f => f.nome || f.razao || null)[0] ?? null : null,
-        status: "aprovada",
-        aprovacaoStatus: "aprovado",
+        status: extraAprovacaoRequerida ? "aguardando_aprovacao_extra" : "aprovada",
+        aprovacaoStatus: extraAprovacaoRequerida ? "aguardando_admin" : "aprovado",
+        aprovacaoExtraRequerida: extraAprovacaoRequerida,
+        aprovacaoExtraMotivo: extraAprovacaoRequerida ? extraMotivo : null,
         subtotal: String(subtotal.toFixed(2)),
         frete: String(freteValor.toFixed(2)),
         freteTipo: freteTipoOC,
@@ -3019,7 +3090,7 @@ Retorne APENAS um JSON válido neste formato:
           })
         );
       }
-      if (cot.fornecedorId) {
+      if (cot.fornecedorId && !extraAprovacaoRequerida) {
         const forn = await db.select().from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId));
         const { entryIds, apIds } = await criarParcelasFinanceiras({
           ocId: oc.id,
@@ -3256,7 +3327,11 @@ Retorne APENAS um JSON válido neste formato:
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
 
-      // atualiza status da OC
+      const [ocCurrent] = await db.select({ status: comprasOrdens.status, aprovacaoExtraRequerida: comprasOrdens.aprovacaoExtraRequerida }).from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+      if (ocCurrent?.status === "aguardando_aprovacao_extra" && input.status === "aprovada") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Esta OC requer aprovação de administrador (compra extra-orçamento). Use o fluxo de aprovação com senha admin." });
+      }
+
       await db.update(comprasOrdens).set({
         status: input.status,
         dataEntregaReal: input.dataEntregaReal,
@@ -4198,13 +4273,33 @@ Retorne APENAS um JSON válido neste formato:
         ocMapRecebido[key] = (ocMapRecebido[key] || 0) + n(oc.quantidadeEntregue);
       }
 
-      return result.map(c => ({
-        ...c,
-        qtdJaSolicitada: scMap[c.insumoCodigo] || 0,
-        qtdComprada: ocMapComprado[c.insumoCodigo] || 0,
-        qtdRecebida: ocMapRecebido[c.insumoCodigo] || 0,
-        saldoDisponivel: c.qtdTotalOrcada - (scMap[c.insumoCodigo] || 0),
-      })).sort((a, b) => a.descricao.localeCompare(b.descricao));
+      const cotRows = await db.select({
+        insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+        quantidade: comprasSolicitacoesItens.quantidade,
+      }).from(comprasCotacoesItens)
+        .innerJoin(comprasSolicitacoesItens, eq(comprasCotacoesItens.solicitacaoItemId, comprasSolicitacoesItens.id))
+        .innerJoin(comprasCotacoes, eq(comprasCotacoesItens.cotacaoId, comprasCotacoes.id))
+        .where(and(eq(comprasCotacoes.companyId, input.companyId), eq(comprasCotacoes.obraId, input.obraId), sql`${comprasCotacoes.status} NOT IN ('cancelada','concluida')`));
+      const cotMap: Record<string, number> = {};
+      for (const ct of cotRows) {
+        const key = ct.insumoCodigo || "";
+        cotMap[key] = (cotMap[key] || 0) + n(ct.quantidade);
+      }
+
+      return result.map(c => {
+        const qtdJaSolicitada = scMap[c.insumoCodigo] || 0;
+        const qtdEmCotacao = cotMap[c.insumoCodigo] || 0;
+        const qtdComprada = ocMapComprado[c.insumoCodigo] || 0;
+        const qtdRecebida = ocMapRecebido[c.insumoCodigo] || 0;
+        const saldoDisponivel = c.qtdTotalOrcada - qtdJaSolicitada;
+        let statusInsumo: "disponivel" | "solicitado" | "em_cotacao" | "comprado" | "recebido" | "estouro" = "disponivel";
+        if (qtdComprada > c.qtdTotalOrcada) statusInsumo = "estouro";
+        else if (qtdRecebida >= c.qtdTotalOrcada) statusInsumo = "recebido";
+        else if (qtdComprada >= c.qtdTotalOrcada) statusInsumo = "comprado";
+        else if (qtdEmCotacao > 0) statusInsumo = "em_cotacao";
+        else if (qtdJaSolicitada > 0) statusInsumo = "solicitado";
+        return { ...c, qtdJaSolicitada, qtdEmCotacao, qtdComprada, qtdRecebida, saldoDisponivel, statusInsumo };
+      }).sort((a, b) => a.descricao.localeCompare(b.descricao));
     }),
 
   getSugestoesCompra: protectedProcedure
@@ -5746,5 +5841,163 @@ Retorne APENAS um JSON válido neste formato:
       }
 
       return novaSc;
+    }),
+
+  verificarSaldoOrcamentarioParaOC: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number(), itens: z.array(z.object({ insumoCodigo: z.string().optional(), descricao: z.string(), quantidade: z.number() })) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!input.obraId || input.itens.length === 0) return { ok: true, estouros: [] };
+
+      const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+        .from(orcamentos)
+        .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, input.obraId), isNull(orcamentos.deletedAt)))
+        .orderBy(desc(orcamentos.createdAt)).limit(1);
+      if (!orc) return { ok: true, estouros: [] };
+
+      const insumoCodigosFromInput = input.itens.map(it => it.insumoCodigo).filter(Boolean) as string[];
+      if (insumoCodigosFromInput.length === 0) return { ok: true, estouros: [] };
+
+      const orcItems = await db.select({
+        id: orcamentoItens.id,
+        servicoCodigo: orcamentoItens.servicoCodigo,
+        quantidade: orcamentoItens.quantidade,
+      }).from(orcamentoItens)
+        .where(and(eq(orcamentoItens.orcamentoId, orc.id), eq(orcamentoItens.companyId, input.companyId)));
+
+      const servicoCodigos = [...new Set(orcItems.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
+      if (servicoCodigos.length === 0) return { ok: true, estouros: [] };
+
+      const allInsumos = await db.select({
+        composicaoCodigo: composicaoInsumos.composicaoCodigo,
+        insumoCodigo: composicaoInsumos.insumoCodigo,
+        insumoDescricao: composicaoInsumos.insumoDescricao,
+        quantidade: composicaoInsumos.quantidade,
+        alocacaoMat: composicaoInsumos.alocacaoMat,
+        alocacaoMdo: composicaoInsumos.alocacaoMdo,
+      }).from(composicaoInsumos)
+        .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
+
+      const materiaisOnly = allInsumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+
+      const qtdOrcadaMap: Record<string, number> = {};
+      for (const ins of materiaisOnly) {
+        const key = ins.insumoCodigo || "";
+        if (!insumoCodigosFromInput.includes(key)) continue;
+        const coef = n(ins.quantidade);
+        const matchingServicos = orcItems.filter(s => s.servicoCodigo === ins.composicaoCodigo);
+        for (const svc of matchingServicos) {
+          const qtdServico = n(svc.quantidade);
+          qtdOrcadaMap[key] = (qtdOrcadaMap[key] || 0) + (qtdServico * coef);
+        }
+      }
+
+      const ocRows = await db.select({
+        insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+        quantidade: comprasOrdensItens.quantidade,
+      }).from(comprasOrdensItens)
+        .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+        .innerJoin(comprasSolicitacoesItens, eq(comprasOrdensItens.solicitacaoItemId, comprasSolicitacoesItens.id))
+        .where(and(eq(comprasOrdens.companyId, input.companyId), eq(comprasOrdens.obraId, input.obraId), sql`${comprasOrdens.status} NOT IN ('cancelada')`));
+
+      const jaCompradoMap: Record<string, number> = {};
+      for (const oc of ocRows) {
+        const key = oc.insumoCodigo || "";
+        jaCompradoMap[key] = (jaCompradoMap[key] || 0) + n(oc.quantidade);
+      }
+
+      const estouros: { insumoCodigo: string; descricao: string; qtdOrcada: number; qtdJaComprada: number; qtdNova: number; qtdTotal: number; excesso: number; percentualExcesso: number }[] = [];
+      for (const item of input.itens) {
+        if (!item.insumoCodigo) continue;
+        const qtdOrcada = qtdOrcadaMap[item.insumoCodigo] || 0;
+        if (qtdOrcada <= 0) continue;
+        const jaComprada = jaCompradoMap[item.insumoCodigo] || 0;
+        const total = jaComprada + item.quantidade;
+        if (total > qtdOrcada) {
+          estouros.push({
+            insumoCodigo: item.insumoCodigo,
+            descricao: item.descricao,
+            qtdOrcada,
+            qtdJaComprada: jaComprada,
+            qtdNova: item.quantidade,
+            qtdTotal: total,
+            excesso: total - qtdOrcada,
+            percentualExcesso: Math.round(((total - qtdOrcada) / qtdOrcada) * 100),
+          });
+        }
+      }
+
+      return { ok: estouros.length === 0, estouros };
+    }),
+
+  aprovarOcExtra: protectedProcedure
+    .input(z.object({
+      ocId: z.number(),
+      companyId: z.number(),
+      adminEmail: z.string(),
+      adminSenha: z.string(),
+      justificativa: z.string().min(1, "Justificativa é obrigatória"),
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      const [admin] = await db.select({
+        id: users.id,
+        name: users.name,
+        role: users.role,
+        password: users.password,
+      }).from(users).where(eq(users.email, input.adminEmail)).limit(1);
+
+      if (!admin) throw new TRPCError({ code: "NOT_FOUND", message: "Usuário admin não encontrado" });
+      if (admin.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem aprovar compras extra-orçamento" });
+
+      const bcrypt = await import("bcryptjs");
+      const senhaValida = await bcrypt.compare(input.adminSenha, admin.password);
+      if (!senhaValida) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
+
+      const allowed = await getCompaniesForUser(admin.id, admin.role);
+      if (!allowed.some((c: any) => c.id === input.companyId))
+        throw new TRPCError({ code: "FORBIDDEN", message: "Admin não tem acesso a esta empresa" });
+
+      const [oc] = await db.select().from(comprasOrdens)
+        .where(and(eq(comprasOrdens.id, input.ocId), eq(comprasOrdens.companyId, input.companyId)));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "OC não encontrada" });
+
+      await db.update(comprasOrdens).set({
+        aprovacaoExtraRequerida: false,
+        aprovacaoExtraAdminId: admin.id,
+        aprovacaoExtraAdminNome: admin.name,
+        aprovacaoExtraJustificativa: input.justificativa,
+        aprovacaoExtraMotivo: input.motivo || "Compra extra-orçamento aprovada pelo admin",
+        aprovacaoExtraEm: new Date().toISOString(),
+        status: "aprovada",
+        aprovacaoStatus: "aprovado",
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(comprasOrdens.id, input.ocId));
+
+      if (oc.fornecedorId && !oc.financialEntryId) {
+        try {
+          const forn = await db.select().from(fornecedores).where(eq(fornecedores.id, oc.fornecedorId));
+          const { entryIds } = await criarParcelasFinanceiras({
+            ocId: oc.id,
+            companyId: input.companyId,
+            obraId: oc.obraId ?? undefined,
+            supplierId: oc.fornecedorId,
+            supplierNome: forn?.[0]?.razaoSocial || null,
+            valorTotal: n(oc.total),
+            tipoPagamento: oc.tipoPagamento,
+            formaPagamento: (oc as any).formaPagamento || null,
+            numeroParcelas: oc.numeroParcelas ?? 1,
+            dataBase: oc.dataEntregaPrevista || null,
+            numero: oc.numeroOc,
+          }, admin.id, admin.name);
+          if (entryIds.length > 0) {
+            await db.update(comprasOrdens).set({ financialEntryId: entryIds[0] }).where(eq(comprasOrdens.id, oc.id));
+          }
+        } catch (e: any) { console.warn("[aprovarOcExtra] Erro ao criar parcelas financeiras:", e?.message); }
+      }
+
+      return { success: true, adminNome: admin.name };
     }),
 });
