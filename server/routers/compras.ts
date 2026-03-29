@@ -2609,54 +2609,96 @@ Retorne APENAS um JSON válido neste formato:
       const di08Usado = allDebitos.reduce((s, r) => s + n(r.valor), 0);
       const di08Disponivel = Math.max(0, di08Total - di08Usado);
 
-      // ── 2. Sobras das compras: comparação pelo total da OC (não item a item) ─
-      // Regra: se a OC inteira ficou abaixo do total orçado → economia.
-      // Se a soma final furou a meta → zero (itens que ficaram baratos não compensam
-      // os que furaram). Evita contabilizar sobras parciais em OCs que no total excederam.
+      // ── 2. Sobras das compras: comparação item-a-item (meta × qty vs comprado) ─
       const ocsConds: any[] = [
         eq(comprasOrdens.companyId, input.companyId),
-        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
+        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida", "aguardando_aprovacao_extra"]),
       ];
       if (input.obraId) ocsConds.push(eq(comprasOrdens.obraId, input.obraId));
-      const ocs = await db.select({ id: comprasOrdens.id }).from(comprasOrdens).where(and(...ocsConds));
+      const ocs = await db.select({ id: comprasOrdens.id, obraId: comprasOrdens.obraId }).from(comprasOrdens).where(and(...ocsConds));
 
       let totalSobras = 0;
       if (ocs.length > 0) {
         const ocItens = await db.select().from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocs.map(o => o.id)));
         const scItemIds = ocItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
-        let scItens: { id: number; orcamentoItemId: number | null }[] = [];
+        let scItens: { id: number; orcamentoItemId: number | null; precoMeta: string | null; insumoCodigo: string | null; solicitacaoId: number }[] = [];
         if (scItemIds.length > 0) {
-          scItens = await db.select({ id: comprasSolicitacoesItens.id, orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId })
-            .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+          scItens = await db.select({
+            id: comprasSolicitacoesItens.id,
+            orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+            precoMeta: comprasSolicitacoesItens.precoMeta,
+            insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+            solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
+          }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
         }
         const orcIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
-        // metaTotal = valor total orçado para a linha (já inclui qtd orçada × preço meta)
-        // Usar metaTotal e não metaUnitTotal × qtd_comprada: captura variação de preço E quantidade
-        let metas: { id: number; metaTotal: string | null }[] = [];
+        let metas: { id: number; metaUnitTotal: string | null }[] = [];
         if (orcIds.length > 0) {
-          metas = await db.select({ id: orcamentoItens.id, metaTotal: orcamentoItens.metaTotal })
+          metas = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal })
             .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIds));
         }
         const scToOrc: Record<number, number> = {};
-        for (const s of scItens) if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
-        const orcToMetaTotal: Record<number, number> = {};
-        for (const m of metas) orcToMetaTotal[m.id] = n(m.metaTotal);
+        const scToPrecoMeta: Record<number, number> = {};
+        const scToInsumoCodigo: Record<number, string> = {};
+        for (const s of scItens) {
+          if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+          if (n(s.precoMeta) > 0) scToPrecoMeta[s.id] = n(s.precoMeta);
+          if (s.insumoCodigo) scToInsumoCodigo[s.id] = s.insumoCodigo;
+        }
+        const orcToMetaUnit: Record<number, number> = {};
+        for (const m of metas) orcToMetaUnit[m.id] = n(m.metaUnitTotal);
 
-        // Acumula totalComprado e totalMeta por OC
+        const needInsumoLookup = scItens.filter(s => !s.orcamentoItemId && n(s.precoMeta) <= 0 && s.insumoCodigo);
+        const insumoPricePerObra: Record<number, Record<string, number>> = {};
+        if (needInsumoLookup.length > 0) {
+          const obraIds = [...new Set(ocs.map(o => o.obraId).filter(Boolean) as number[])];
+          for (const obraId of obraIds) {
+            const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+              .from(orcamentos)
+              .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, obraId), isNull(orcamentos.deletedAt)))
+              .orderBy(desc(orcamentos.createdAt)).limit(1);
+            if (!orc) continue;
+            const orcItems = await db.select({ servicoCodigo: orcamentoItens.servicoCodigo })
+              .from(orcamentoItens).where(and(eq(orcamentoItens.orcamentoId, orc.id), eq(orcamentoItens.companyId, input.companyId)));
+            const svcCods = [...new Set(orcItems.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
+            if (!svcCods.length) continue;
+            const allInsumos = await db.select({
+              insumoCodigo: composicaoInsumos.insumoCodigo,
+              precoUnitario: composicaoInsumos.precoUnitario,
+              alocacaoMat: composicaoInsumos.alocacaoMat,
+              alocacaoMdo: composicaoInsumos.alocacaoMdo,
+            }).from(composicaoInsumos)
+              .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCods)));
+            const matOnly = allInsumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+            const obraMap: Record<string, number> = {};
+            for (const ins of matOnly) {
+              if (ins.insumoCodigo && n(ins.precoUnitario) > 0) obraMap[ins.insumoCodigo] = n(ins.precoUnitario);
+            }
+            insumoPricePerObra[obraId] = obraMap;
+          }
+        }
+
+        const ocToObra: Record<number, number> = {};
+        for (const oc of ocs) if (oc.obraId) ocToObra[oc.id] = oc.obraId;
+
         const ocTotalComprado: Record<number, number> = {};
         const ocTotalMeta: Record<number, number> = {};
         for (const it of ocItens) {
           const ocId = it.ordemId;
           if (!it.solicitacaoItemId) continue;
           const orcId = scToOrc[it.solicitacaoItemId];
-          if (!orcId) continue;
-          const metaItemTotal = orcToMetaTotal[orcId] ?? 0;
-          if (metaItemTotal === 0) continue;
+          let metaUnit = orcId ? (orcToMetaUnit[orcId] ?? 0) : 0;
+          if (metaUnit === 0) metaUnit = scToPrecoMeta[it.solicitacaoItemId] ?? 0;
+          if (metaUnit === 0) {
+            const ic = scToInsumoCodigo[it.solicitacaoItemId];
+            const obraId = ocToObra[ocId];
+            if (ic && obraId) metaUnit = insumoPricePerObra[obraId]?.[ic] ?? 0;
+          }
+          if (metaUnit === 0) continue;
           const qty = n(it.quantidade);
           ocTotalComprado[ocId] = (ocTotalComprado[ocId] ?? 0) + n(it.precoUnitario) * qty;
-          ocTotalMeta[ocId]     = (ocTotalMeta[ocId]     ?? 0) + metaItemTotal;
+          ocTotalMeta[ocId]     = (ocTotalMeta[ocId]     ?? 0) + metaUnit * qty;
         }
-        // Só conta sobra se a OC INTEIRA ficou abaixo do total orçado
         for (const ocId of Object.keys(ocTotalMeta)) {
           const sobra = (ocTotalMeta[+ocId] ?? 0) - (ocTotalComprado[+ocId] ?? 0);
           if (sobra > 0.01) totalSobras += sobra;
@@ -2732,18 +2774,58 @@ Retorne APENAS um JSON válido neste formato:
         }
         const scToOrc: Record<number, number> = {};
         const scToPrecoMeta: Record<number, number> = {};
+        const scToInsumoCod: Record<number, string> = {};
         for (const s of scItensOc) {
           if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
-          if (s.precoMeta) scToPrecoMeta[s.id] = n(s.precoMeta);
+          if (n(s.precoMeta) > 0) scToPrecoMeta[s.id] = n(s.precoMeta);
+          if (s.insumoCodigo) scToInsumoCod[s.id] = s.insumoCodigo;
         }
         const orcToMeta: Record<number, number> = {};
         for (const o of orcMetasOc) orcToMeta[o.id] = n(o.metaUnitTotal);
+
+        const needInsLookup = scItensOc.filter((s: any) => !s.orcamentoItemId && n(s.precoMeta) <= 0 && s.insumoCodigo);
+        const insPricePerObra: Record<number, Record<string, number>> = {};
+        if (needInsLookup.length > 0) {
+          const obraIds = [...new Set(ocs.map(o => o.obraId).filter(Boolean) as number[])];
+          for (const obraId of obraIds) {
+            const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+              .from(orcamentos)
+              .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, obraId), isNull(orcamentos.deletedAt)))
+              .orderBy(desc(orcamentos.createdAt)).limit(1);
+            if (!orc) continue;
+            const orcItems = await db.select({ servicoCodigo: orcamentoItens.servicoCodigo })
+              .from(orcamentoItens).where(and(eq(orcamentoItens.orcamentoId, orc.id), eq(orcamentoItens.companyId, input.companyId)));
+            const svcCods = [...new Set(orcItems.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
+            if (!svcCods.length) continue;
+            const allIns = await db.select({
+              insumoCodigo: composicaoInsumos.insumoCodigo,
+              precoUnitario: composicaoInsumos.precoUnitario,
+              alocacaoMat: composicaoInsumos.alocacaoMat,
+              alocacaoMdo: composicaoInsumos.alocacaoMdo,
+            }).from(composicaoInsumos)
+              .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCods)));
+            const matOnly = allIns.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+            const obraMap: Record<string, number> = {};
+            for (const ins of matOnly) {
+              if (ins.insumoCodigo && n(ins.precoUnitario) > 0) obraMap[ins.insumoCodigo] = n(ins.precoUnitario);
+            }
+            insPricePerObra[obraId] = obraMap;
+          }
+        }
+
+        const ocToObraMap: Record<number, number> = {};
+        for (const oc of ocs) if (oc.obraId) ocToObraMap[oc.id] = oc.obraId;
 
         for (const it of ocItens) {
           if (!it.solicitacaoItemId) continue;
           const orcId = scToOrc[it.solicitacaoItemId];
           let metaUnit = orcId ? (orcToMeta[orcId] ?? 0) : 0;
           if (metaUnit === 0) metaUnit = scToPrecoMeta[it.solicitacaoItemId] ?? 0;
+          if (metaUnit === 0) {
+            const ic = scToInsumoCod[it.solicitacaoItemId];
+            const obraId = ocToObraMap[it.ordemId];
+            if (ic && obraId) metaUnit = insPricePerObra[obraId]?.[ic] ?? 0;
+          }
           if (metaUnit === 0) continue;
           const qty = n(it.quantidade);
           const vlrMeta = metaUnit * qty;

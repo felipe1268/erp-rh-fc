@@ -6090,4 +6090,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 19:00:00",
   },
+  {
+    version: 881,
+    titulo: "Economia em Compras: cálculo completo na Realocação",
+    descricao: "Corrigido cálculo de economia na tela de Realocação de Verba. Agora o sistema calcula a meta unitária usando 3 fontes (orcamentoItens.metaUnitTotal, precoMeta da SC, ou preço do insumo na composição) e inclui OCs com status 'aguardando_aprovacao_extra'. Aplicado nas duas queries: getSaldosRealocacaoGeral (painel principal) e buscarSaldosRealocacao (cobertura de estouro).",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 20:15:00",
+  },
 ];
