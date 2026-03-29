@@ -475,7 +475,7 @@ export default function Solicitacoes() {
   );
 
   const insumosConsolidadosQ = trpc.compras.getInsumosConsolidados.useQuery(
-    { companyId, obraId: parseInt(form.obraId), busca: modoSC === "insumo" ? (insumoBusca || undefined) : undefined },
+    { companyId, obraId: parseInt(form.obraId), busca: modoSC === "insumo" ? (insumoBusca || undefined) : undefined, tipoSC: form.tipo as "material" | "servico" | "pacote" },
     { enabled: (modoSC === "insumo" || modoSC === "eap") && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 30_000 }
   );
 
@@ -658,7 +658,7 @@ export default function Solicitacoes() {
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 }
   );
   const coberturaQ = trpc.compras.getCoberturaInsumosEAP.useQuery(
-    { companyId, obraId: parseInt(form.obraId || "0") },
+    { companyId, obraId: parseInt(form.obraId || "0"), tipoSC: form.tipo as "material" | "servico" | "pacote" },
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 }
   );
   const coberturaMap = Object.fromEntries(
@@ -1288,6 +1288,11 @@ export default function Solicitacoes() {
                       setForm(p => ({ ...p, tipo: opt.value }));
                       setSelectedEapIds(new Set());
                       setItens([newItem()]);
+                      setEapInsumos({});
+                      setEapQtdServico({});
+                      setEapExpanded(null);
+                      setSaldoData({});
+                      setEapExtraDesbloqueado({});
                     }}
                   >
                     <span className="mr-1">{opt.icon}</span> {opt.label}
@@ -1411,6 +1416,12 @@ export default function Solicitacoes() {
                         <div className="max-h-[50vh] overflow-y-auto divide-y divide-gray-100">
                           {eapQ.data.items
                             .filter(it => it.nivel >= 2 && it.tipo !== "grupo")
+                            .filter(it => {
+                              if (!it.servicoCodigo) return true;
+                              if (form.tipo === "servico") return (it as any).temMdo;
+                              if (form.tipo === "material") return (it as any).temMat !== false;
+                              return true;
+                            })
                             .filter(it => !eapSearch || `${it.eapCodigo} ${it.descricao}`.toLowerCase().includes(eapSearch.toLowerCase()))
                             .map(it => {
                               const expanded = eapExpanded === it.id;

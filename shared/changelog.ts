@@ -6145,4 +6145,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 23:30:00",
   },
+  {
+    version: 885,
+    titulo: "SC Serviço/MDO — Filtro de insumos por tipo corrigido",
+    descricao: "Corrigido bug onde SC do tipo Serviço/MDO não exibia insumos de mão de obra. " +
+      "Aba 'Por Insumo': agora filtra por alocacaoMdo quando tipo=servico, mostra todos quando tipo=pacote, mantém material como padrão. " +
+      "Aba 'Via EAP': composições sem insumos de MDO são ocultadas quando tipo=servico (e vice-versa para material). " +
+      "Cobertura de insumos (bolinhas de status) também respeita o tipo da SC. " +
+      "Backend: getInsumosConsolidados, getCoberturaInsumosEAP e getEapParaObra recebem tipoSC para filtro correto.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 23:45:00",
+  },
 ];

@@ -4978,7 +4978,7 @@ Retorne APENAS um JSON válido neste formato:
     }),
 
   getInsumosConsolidados: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number(), busca: z.string().optional() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), busca: z.string().optional(), tipoSC: z.enum(["material", "servico", "pacote"]).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
@@ -5013,7 +5013,14 @@ Retorne APENAS um JSON válido neste formato:
       }).from(composicaoInsumos)
         .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
 
-      const materiaisOnly = allInsumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+      let filteredInsumos: typeof allInsumos;
+      if (input.tipoSC === "servico") {
+        filteredInsumos = allInsumos.filter(i => n(i.alocacaoMdo) > 0);
+      } else if (input.tipoSC === "pacote") {
+        filteredInsumos = allInsumos;
+      } else {
+        filteredInsumos = allInsumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+      }
 
       const consolidado: Record<string, {
         insumoCodigo: string; descricao: string; unidade: string;
@@ -5021,7 +5028,7 @@ Retorne APENAS um JSON válido neste formato:
         eapItens: { orcamentoItemId: number; eapCodigo: string; servicoCodigo: string; servicoDescricao: string; qtdServico: number; coeficiente: number; qtdInsumo: number }[];
       }> = {};
 
-      for (const ins of materiaisOnly) {
+      for (const ins of filteredInsumos) {
         const key = ins.insumoCodigo || ins.insumoDescricao || "";
         if (!consolidado[key]) {
           consolidado[key] = {
@@ -5371,10 +5378,28 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
+      const servicoCodigosEap = [...new Set(orcItems.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
+      const mdoMatMap: Record<string, { temMat: boolean; temMdo: boolean }> = {};
+      if (servicoCodigosEap.length > 0) {
+        const insFlags = await db.select({
+          composicaoCodigo: composicaoInsumos.composicaoCodigo,
+          alocacaoMat: composicaoInsumos.alocacaoMat,
+          alocacaoMdo: composicaoInsumos.alocacaoMdo,
+        }).from(composicaoInsumos)
+          .where(and(eq(composicaoInsumos.companyId, input.companyId), inArray(composicaoInsumos.composicaoCodigo, servicoCodigosEap)));
+        for (const f of insFlags) {
+          if (!mdoMatMap[f.composicaoCodigo]) mdoMatMap[f.composicaoCodigo] = { temMat: false, temMdo: false };
+          if (n(f.alocacaoMat) > 0 || (n(f.alocacaoMdo) === 0 && n(f.alocacaoMat) === 0)) mdoMatMap[f.composicaoCodigo].temMat = true;
+          if (n(f.alocacaoMdo) > 0) mdoMatMap[f.composicaoCodigo].temMdo = true;
+        }
+      }
+
       const items = orcItems.map(it => ({
         ...it,
         prazoFim: atividadesMap[it.eapCodigo]?.dataFim ?? null,
         duracaoDias: atividadesMap[it.eapCodigo]?.duracaoDias ?? null,
+        temMat: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMat ?? false) : true,
+        temMdo: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMdo ?? false) : false,
       }));
 
       return { items, orcamentoId: orc.id, projetoId: proj?.id ?? null, semOrcamento: false };
@@ -6360,7 +6385,7 @@ Retorne APENAS um JSON válido neste formato:
     }),
 
   getCoberturaInsumosEAP: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), tipoSC: z.enum(["material", "servico", "pacote"]).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
@@ -6386,10 +6411,17 @@ Retorne APENAS um JSON válido neste formato:
       }).from(composicaoInsumos)
         .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
 
-      const materiaisOnly = insumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+      let filteredCob: typeof insumos;
+      if (input.tipoSC === "servico") {
+        filteredCob = insumos.filter(i => n(i.alocacaoMdo) > 0);
+      } else if (input.tipoSC === "pacote") {
+        filteredCob = insumos;
+      } else {
+        filteredCob = insumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+      }
 
       const totalInsumosPorComposicao: Record<string, Set<string>> = {};
-      for (const ins of materiaisOnly) {
+      for (const ins of filteredCob) {
         if (!totalInsumosPorComposicao[ins.composicaoCodigo]) totalInsumosPorComposicao[ins.composicaoCodigo] = new Set();
         totalInsumosPorComposicao[ins.composicaoCodigo].add(ins.insumoCodigo);
       }
