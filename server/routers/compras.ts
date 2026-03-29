@@ -2840,10 +2840,11 @@ Retorne APENAS um JSON válido neste formato:
       const freteParaTotal = freteTipoOC === "fob" ? freteValor : 0;
 
       const prazoEntregaDias = (fornInfo as any)?.prazoEntregaDias ?? null;
-      let dataEntregaPrevista: Date | null = null;
+      let dataEntregaPrevista: string | null = null;
       if (prazoEntregaDias && Number(prazoEntregaDias) > 0) {
-        dataEntregaPrevista = new Date();
-        dataEntregaPrevista.setDate(dataEntregaPrevista.getDate() + Number(prazoEntregaDias));
+        const d = new Date();
+        d.setDate(d.getDate() + Number(prazoEntregaDias));
+        dataEntregaPrevista = d.toISOString().slice(0, 10);
       }
 
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
