@@ -1779,6 +1779,14 @@ export default function Solicitacoes() {
                   </div>
                   <StatusBadge status={detalhe.status} />
                 </div>
+                {(detalhe.itens as any[])?.some((it: any) => it.semVerba) && (
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-red-50 border-2 border-red-300 rounded-lg print:border-red-500">
+                    <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                    <span className="text-xs font-bold text-red-700">
+                      ATENÇÃO — ITEM(NS) ACIMA DO ORÇADO OU SEM VERBA: Esta solicitação contém {(detalhe.itens as any[]).filter((it: any) => it.semVerba).length} item(ns) que geram prejuízo
+                    </span>
+                  </div>
+                )}
               </DialogHeader>
 
               {/* Info grid */}
