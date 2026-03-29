@@ -2709,7 +2709,7 @@ Retorne APENAS um JSON válido neste formato:
         obraId: comprasOrdens.obraId,
       }).from(comprasOrdens).where(and(
         eq(comprasOrdens.companyId, input.companyId),
-        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
+        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida", "aguardando_aprovacao_extra"]),
         input.obraId ? eq(comprasOrdens.obraId, input.obraId) : undefined,
       ));
 
@@ -2721,7 +2721,7 @@ Retorne APENAS um JSON válido neste formato:
         const scItemIds = ocItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
         let scItensOc: any[] = [];
         if (scItemIds.length > 0) {
-          scItensOc = await db.select({ id: comprasSolicitacoesItens.id, orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId })
+          scItensOc = await db.select({ id: comprasSolicitacoesItens.id, orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId, precoMeta: comprasSolicitacoesItens.precoMeta, insumoCodigo: comprasSolicitacoesItens.insumoCodigo })
             .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
         }
         const orcIdsOc = scItensOc.map(s => s.orcamentoItemId).filter(Boolean) as number[];
@@ -2731,15 +2731,19 @@ Retorne APENAS um JSON válido neste formato:
             .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIdsOc));
         }
         const scToOrc: Record<number, number> = {};
-        for (const s of scItensOc) if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+        const scToPrecoMeta: Record<number, number> = {};
+        for (const s of scItensOc) {
+          if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+          if (s.precoMeta) scToPrecoMeta[s.id] = n(s.precoMeta);
+        }
         const orcToMeta: Record<number, number> = {};
         for (const o of orcMetasOc) orcToMeta[o.id] = n(o.metaUnitTotal);
 
         for (const it of ocItens) {
           if (!it.solicitacaoItemId) continue;
           const orcId = scToOrc[it.solicitacaoItemId];
-          if (!orcId) continue;
-          const metaUnit = orcToMeta[orcId] ?? 0;
+          let metaUnit = orcId ? (orcToMeta[orcId] ?? 0) : 0;
+          if (metaUnit === 0) metaUnit = scToPrecoMeta[it.solicitacaoItemId] ?? 0;
           if (metaUnit === 0) continue;
           const qty = n(it.quantidade);
           const vlrMeta = metaUnit * qty;
