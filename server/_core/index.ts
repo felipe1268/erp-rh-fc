@@ -271,6 +271,14 @@ async function startServer() {
             total++;
           }
         }
+        const cotDescRows = await db.execute(sql.raw(`SELECT id, descricao FROM compras_cotacoes WHERE descricao IS NOT NULL AND descricao != ''`));
+        for (const row of (cotDescRows as any).rows || cotDescRows) {
+          const norm = normalizarTexto(row.descricao);
+          if (norm !== row.descricao) {
+            await db.execute(sql`UPDATE compras_cotacoes SET descricao = ${norm} WHERE id = ${row.id}`);
+            total++;
+          }
+        }
         console.log(`[ColFix] Normalização textos compras: ${total} registro(s) corrigido(s)`);
       } catch (e: any) { console.warn("[ColFix] Normalização descrições:", e?.message ?? e); }
     });
