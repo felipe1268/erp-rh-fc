@@ -121,6 +121,124 @@ function DocLinks({ docs, prefix, route, navigate }: { docs: { id: number; numer
   );
 }
 
+function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, companyId }: {
+  confirmAprov: { id: number; key: string; titulo: string; descricao: string; cor: string; icone: "aprovar" | "recusar" | "voltar" } | null;
+  setConfirmAprov: (v: any) => void;
+  aprovar: any;
+  user: any;
+  companyId: number;
+}) {
+  const saldoQ = trpc.compras.getSaldoItensSC.useQuery(
+    { companyId, solicitacaoId: confirmAprov?.id ?? 0 },
+    { enabled: confirmAprov !== null },
+  );
+  const itens = saldoQ.data ?? [];
+  const temProblemaOrc = itens.some(i => i.semVerba || i.foraOrcamento);
+
+  return (
+    <Dialog open={confirmAprov !== null} onOpenChange={v => !v && setConfirmAprov(null)}>
+      <DialogContent className="border-gray-200 max-w-xl" style={{ background: '#ffffff', color: '#111827' }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            {confirmAprov?.icone === "aprovar" && <CheckCircle2 className="h-5 w-5 text-emerald-600" />}
+            {confirmAprov?.icone === "recusar" && <XCircle className="h-5 w-5 text-red-600" />}
+            {confirmAprov?.icone === "voltar" && <Clock className="h-5 w-5 text-amber-600" />}
+            {confirmAprov?.titulo}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-1">
+          <div className={`rounded-lg border-2 p-3 ${confirmAprov?.cor === "emerald" ? "border-emerald-200 bg-emerald-50" : confirmAprov?.cor === "red" ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}>
+            <p className={`text-sm ${confirmAprov?.cor === "emerald" ? "text-emerald-800" : confirmAprov?.cor === "red" ? "text-red-800" : "text-amber-800"}`}>
+              {confirmAprov?.descricao}
+            </p>
+          </div>
+
+          {temProblemaOrc && (
+            <div className="rounded-lg border-2 border-red-400 bg-red-50 p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                <p className="text-sm font-bold text-red-700">ATENÇÃO — Itens com restrição orçamentária</p>
+              </div>
+              <p className="text-xs text-red-600">Um ou mais itens desta SC estão fora do orçamento ou sem verba disponível. O fluxo não será bloqueado, mas revise antes de prosseguir.</p>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Itens da Solicitação</p>
+            {saldoQ.isLoading ? (
+              <div className="flex items-center gap-2 py-4 justify-center text-gray-400"><Loader2 className="h-4 w-4 animate-spin" /> Carregando dados orçamentários...</div>
+            ) : saldoQ.isError ? (
+              <div className="flex items-center gap-2 py-4 justify-center text-red-400"><AlertTriangle className="h-4 w-4" /> Erro ao carregar dados orçamentários</div>
+            ) : (
+              <div className="bg-gray-50 rounded-lg border border-gray-200 p-2.5 max-h-56 overflow-y-auto space-y-2">
+                {itens.map((item) => {
+                  const problemaOrc = item.semVerba || item.foraOrcamento;
+                  return (
+                    <div key={item.id} className={`rounded-md p-2.5 ${problemaOrc ? "bg-red-50 border-2 border-red-300" : item.qtdComprada > 0 ? "bg-orange-50 border border-orange-200" : "bg-white border border-gray-200"}`}>
+                      <div className="flex items-start gap-2">
+                        <Package className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${problemaOrc ? "text-red-500" : "text-gray-400"}`} />
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <p className={`text-sm font-medium ${problemaOrc ? "text-red-800" : "text-gray-700"}`}>
+                            {item.descricao} — {item.qtdEstaSC.toLocaleString("pt-BR")} {item.unidade}
+                          </p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                            <span className="text-gray-500">Orçado: <strong className="text-gray-700">{item.qtdOrcada.toLocaleString("pt-BR")} {item.unidade}</strong></span>
+                            <span className="text-gray-500">Já solicitado: <strong className="text-gray-700">{item.qtdSolicitada.toLocaleString("pt-BR")}</strong></span>
+                            {item.qtdComprada > 0 && (
+                              <span className="text-orange-600">Já comprado: <strong>{item.qtdComprada.toLocaleString("pt-BR")}</strong>{item.ocsVinculadas.length > 0 && ` (${item.ocsVinculadas.join(", ")})`}</span>
+                            )}
+                            <span className={item.saldo < 0 ? "text-red-600 font-bold" : "text-emerald-600"}>
+                              Saldo: <strong>{item.saldo.toLocaleString("pt-BR")} {item.unidade}</strong>
+                            </span>
+                          </div>
+                          {item.foraOrcamento && (
+                            <p className="text-xs font-bold text-red-600 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" /> ITEM FORA DO ORÇAMENTO — este item não possui vínculo com nenhum item orçamentário. Não há verba prevista.
+                            </p>
+                          )}
+                          {item.semVerba && !item.foraOrcamento && (
+                            <p className="text-xs font-bold text-red-600 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" /> SEM VERBA — a quantidade solicitada excede o saldo orçamentário disponível (saldo: {item.saldo.toLocaleString("pt-BR")} {item.unidade})
+                            </p>
+                          )}
+                          {item.qtdComprada > 0 && (
+                            <p className="text-xs font-semibold text-orange-600 flex items-center gap-1">
+                              <ShoppingCart className="h-3 w-3" /> Já comprado {item.qtdComprada.toLocaleString("pt-BR")} {item.unidade} via {item.ocsVinculadas.join(", ") || "OC"}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+            <Button variant="outline" onClick={() => setConfirmAprov(null)} className="text-gray-600">
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (!confirmAprov) return;
+                aprovar.mutate({ id: confirmAprov.id, aprovacaoStatus: confirmAprov.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined });
+                setConfirmAprov(null);
+              }}
+              disabled={aprovar.isPending}
+              className={`gap-1.5 ${confirmAprov?.cor === "emerald" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : confirmAprov?.cor === "red" ? "bg-red-600 hover:bg-red-500 text-white" : "bg-amber-600 hover:bg-amber-500 text-white"}`}>
+              {confirmAprov?.icone === "aprovar" && <CheckCircle2 className="h-4 w-4" />}
+              {confirmAprov?.icone === "recusar" && <XCircle className="h-4 w-4" />}
+              {confirmAprov?.icone === "voltar" && <Clock className="h-4 w-4" />}
+              {confirmAprov?.icone === "aprovar" ? "Sim, Aprovar" : confirmAprov?.icone === "recusar" ? "Sim, Recusar" : "Sim, Voltar"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Solicitacoes() {
   const { user } = useAuth();
   const { selectedCompanyId } = useCompany();
@@ -132,6 +250,7 @@ export default function Solicitacoes() {
   const [showNova, setShowNova] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [destaqueId, setDestaqueId] = useState<number | null>(null);
+  const [confirmAprov, setConfirmAprov] = useState<{ id: number; key: string; titulo: string; descricao: string; cor: string; icone: "aprovar" | "recusar" | "voltar" } | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1826,14 +1945,34 @@ export default function Solicitacoes() {
                 ) : (
                 <div className="flex gap-2">
                   {[
-                    ...(detalhe.aprovacaoStatus !== "aguardando" ? [{ key: "aguardando", label: "Voltar p/ Aguardando", cls: "border-amber-300 text-amber-700 hover:bg-amber-50", msg: "Deseja realmente voltar esta SC para 'Aguardando'?" }] : []),
-                    ...(detalhe.aprovacaoStatus !== "aprovada" ? [{ key: "aprovada", label: "Aprovar", cls: "border-emerald-300 text-emerald-700 hover:bg-emerald-50", msg: `Confirma a APROVAÇÃO da ${detalhe.numeroSc}?\n\nItens:\n${(detalhe.itens as any[]).map((it: any) => `• ${it.descricao} — ${parseFloat(it.quantidade).toLocaleString("pt-BR")} ${it.unidade || "un"}`).join("\n")}\n\nAo aprovar, a SC poderá seguir para cotação.` }] : []),
-                    ...(detalhe.aprovacaoStatus !== "recusada" ? [{ key: "recusada", label: "Recusar", cls: "border-red-300 text-red-700 hover:bg-red-50", msg: `Confirma a RECUSA da ${detalhe.numeroSc}?\n\nEsta ação impedirá o prosseguimento da solicitação.` }] : []),
+                    ...(detalhe.aprovacaoStatus !== "aguardando" ? [{ key: "aguardando", label: "Voltar p/ Aguardando", cls: "border-amber-300 text-amber-700 hover:bg-amber-50" }] : []),
+                    ...(detalhe.aprovacaoStatus !== "aprovada" ? [{ key: "aprovada", label: "Aprovar", cls: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" }] : []),
+                    ...(detalhe.aprovacaoStatus !== "recusada" ? [{ key: "recusada", label: "Recusar", cls: "border-red-300 text-red-700 hover:bg-red-50" }] : []),
                   ].map(a => (
                     <Button key={a.key} size="sm" variant="outline"
                       onClick={() => {
-                        if (!confirm(a.msg)) return;
-                        aprovar.mutate({ id: detalhe.id, aprovacaoStatus: a.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined });
+                        if (a.key === "aprovada") {
+                          setConfirmAprov({
+                            id: detalhe.id, key: a.key, icone: "aprovar",
+                            titulo: `Aprovar ${detalhe.numeroSc}?`,
+                            descricao: "Ao aprovar, esta SC avançará no fluxo de compras e poderá ser enviada para cotação junto a fornecedores.",
+                            cor: "emerald",
+                          });
+                        } else if (a.key === "recusada") {
+                          setConfirmAprov({
+                            id: detalhe.id, key: a.key, icone: "recusar",
+                            titulo: `Recusar ${detalhe.numeroSc}?`,
+                            descricao: "Ao recusar, esta solicitação será bloqueada e não seguirá para cotação. O solicitante será notificado.",
+                            cor: "red",
+                          });
+                        } else {
+                          setConfirmAprov({
+                            id: detalhe.id, key: a.key, icone: "voltar",
+                            titulo: `Voltar ${detalhe.numeroSc} para Aguardando?`,
+                            descricao: "A solicitação voltará ao status 'Aguardando Aprovação' e poderá ser reavaliada.",
+                            cor: "amber",
+                          });
+                        }
                       }}
                       disabled={aprovar.isPending}
                       className={`text-xs ${a.cls}`}>
@@ -2245,6 +2384,7 @@ export default function Solicitacoes() {
           </div>
         </DialogContent>
       </Dialog>
+      <ConfirmAprovDialog confirmAprov={confirmAprov} setConfirmAprov={setConfirmAprov} aprovar={aprovar} user={user} companyId={companyId} />
     </div>
     </DashboardLayout>
   );

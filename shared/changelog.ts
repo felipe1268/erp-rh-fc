@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 866,
+    titulo: "Confirmação de Aprovação com Controle Orçamentário",
+    descricao: "Dialog de aprovação/recusa da SC agora mostra dados orçamentários em tempo real para cada item: quantidade orçada, já solicitada, já comprada (com número da OC vinculada), e saldo disponível. Itens fora do orçamento ou sem verba são destacados em vermelho com alertas claros ('SEM VERBA', 'FORA DO ORÇAMENTO'). O fluxo não é bloqueado, mas o aprovador tem visibilidade total da situação financeira antes de decidir.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:45:00",
+  },
+  {
     version: 865,
     titulo: "Confirmação de Aprovação/Recusa na SC",
     descricao: "Adicionado alerta de confirmação antes de Aprovar ou Recusar uma Solicitação de Compra. O diálogo mostra o número da SC, lista de itens com quantidades, e a consequência da ação. Evita cliques acidentais e garante que o usuário confirme a decisão conscientemente.",

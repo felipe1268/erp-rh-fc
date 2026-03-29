@@ -4147,6 +4147,85 @@ Retorne APENAS um JSON válido neste formato:
       };
     }),
 
+  getSaldoItensSC: protectedProcedure
+    .input(z.object({ companyId: z.number(), solicitacaoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [sc] = await db.select({ id: comprasSolicitacoes.id }).from(comprasSolicitacoes)
+        .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
+      if (!sc) return [];
+
+      const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, sc.id));
+      if (scItens.length === 0) return [];
+
+      const orcItemIds = scItens.map(i => i.orcamentoItemId).filter(Boolean) as number[];
+      let orcItensData: Record<number, { quantidade: string; descricao: string; unidade: string | null }> = {};
+      if (orcItemIds.length > 0) {
+        const rows = await db.select({ id: orcamentoItens.id, quantidade: orcamentoItens.quantidade, descricao: orcamentoItens.descricao, unidade: orcamentoItens.unidade })
+          .from(orcamentoItens).where(and(inArray(orcamentoItens.id, orcItemIds), eq(orcamentoItens.companyId, input.companyId)));
+        for (const r of rows) orcItensData[r.id] = { quantidade: r.quantidade ?? "0", descricao: r.descricao ?? "", unidade: r.unidade };
+      }
+
+      const solicitadoMap: Record<number, number> = {};
+      if (orcItemIds.length > 0) {
+        const rows = await db.execute(sql`
+          SELECT si.orcamento_item_id, COALESCE(SUM(si.quantidade::numeric), 0) as total
+          FROM compras_solicitacoes_itens si
+          JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
+          WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
+            AND s.company_id = ${input.companyId} AND s.status NOT IN ('cancelado')
+          GROUP BY si.orcamento_item_id
+        `);
+        for (const r of (rows as any).rows ?? []) solicitadoMap[r.orcamento_item_id] = n(r.total);
+      }
+
+      const compradoMap: Record<number, { qtd: number; ocs: string[] }> = {};
+      if (orcItemIds.length > 0) {
+        const rows = await db.execute(sql`
+          SELECT si.orcamento_item_id, oi2.quantidade::numeric as qtd, o.numero_oc
+          FROM compras_solicitacoes_itens si
+          JOIN compras_ordens_itens oi2 ON oi2.solicitacao_item_id = si.id
+          JOIN compras_ordens o ON o.id = oi2.ordem_id AND o.status NOT IN ('cancelada') AND o.company_id = ${input.companyId}
+          WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
+        `);
+        for (const r of (rows as any).rows ?? []) {
+          const oid = r.orcamento_item_id;
+          if (!compradoMap[oid]) compradoMap[oid] = { qtd: 0, ocs: [] };
+          compradoMap[oid].qtd += n(r.qtd);
+          if (r.numero_oc && !compradoMap[oid].ocs.includes(r.numero_oc)) compradoMap[oid].ocs.push(r.numero_oc);
+        }
+      }
+
+      return scItens.map(item => {
+        const orcId = item.orcamentoItemId;
+        const orcData = orcId ? orcItensData[orcId] : null;
+        const qtdOrcada = orcData ? n(orcData.quantidade) : 0;
+        const qtdSolicitada = orcId ? (solicitadoMap[orcId] ?? 0) : 0;
+        const comp = orcId ? compradoMap[orcId] : null;
+        const qtdComprada = comp?.qtd ?? 0;
+        const ocsVinculadas = comp?.ocs ?? [];
+        const qtdEstaSC = n(item.quantidade);
+        const saldo = qtdOrcada - Math.max(qtdSolicitada, qtdComprada);
+        const foraOrcamento = !orcId;
+        const semVerba = saldo < 0;
+
+        return {
+          id: item.id,
+          descricao: item.descricao,
+          unidade: item.unidade ?? "un",
+          qtdEstaSC,
+          qtdOrcada,
+          qtdSolicitada,
+          qtdComprada,
+          ocsVinculadas,
+          saldo,
+          foraOrcamento,
+          semVerba,
+          semVerbaFlag: item.semVerba ?? false,
+        };
+      });
+    }),
+
   getHistoricoPrecos: protectedProcedure
     .input(z.object({ companyId: z.number(), insumoCodigo: z.string().optional(), descricao: z.string().optional(), descricaoInsumo: z.string().optional() }))
     .query(async ({ input }) => {
