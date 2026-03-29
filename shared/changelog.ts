@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 860,
+    titulo: "SPI mostra fórmula no card e tooltip detalhado",
+    descricao: "Card SPI (prazo) agora exibe a fórmula (Realizado% ÷ Previsto%) abaixo do valor. Tooltip mostra cálculo completo com valores do último REFIS. Tooltips com quebra de linha formatada.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-29 23:15:00",
+  },
+  {
     version: 859,
     titulo: "Removido card Valor do Contrato dos KPIs",
     descricao: "Card 'Valor do Contrato' removido da Visão Geral do planejamento. Grid ajustado para 5 colunas.",

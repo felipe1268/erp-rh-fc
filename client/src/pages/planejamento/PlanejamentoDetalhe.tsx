@@ -1295,7 +1295,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
   const kpis = [
     { label: "Atividades",         value: `${concluidas}/${totalAtiv}`,    color: "text-blue-600",   bg: "bg-blue-50",   icon: <ClipboardList className="h-4 w-4" />, tip: `Atividades concluídas (100%) sobre o total de atividades folha (excluindo grupos e indiretas). ${concluidas} de ${totalAtiv} finalizadas.` },
     { label: "Avanço Físico",      value: fPct(avancoAtual),               color: "text-emerald-600",bg: "bg-emerald-50",icon: <TrendingUp className="h-4 w-4" />, tip: "Progresso real ponderado da obra: média dos avanços de cada atividade multiplicada pelo seu peso financeiro. Não inclui atividades indiretas." },
-    { label: "SPI (prazo)",        value: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "—" : spi.toFixed(2), color: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600", bg: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" />, tip: "Schedule Performance Index — Realizado ÷ Previsto. Acima de 1.0 = adiantado; abaixo de 1.0 = atrasado. Calculado pelo último REFIS emitido." },
+    { label: "SPI (prazo)",        value: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "—" : spi.toFixed(2), color: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600", bg: (ultimoRefis && n(ultimoRefis.avancoPrevisto) === 0) ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" />, tip: `Schedule Performance Index — Realizado ÷ Previsto.${ultimoRefis ? `\n${n(ultimoRefis.avancoRealizado).toFixed(2)}% ÷ ${n(ultimoRefis.avancoPrevisto).toFixed(2)}% = ${spi.toFixed(2)}` : ""}\nAcima de 1.0 = adiantado; abaixo de 1.0 = atrasado.\nFonte: último REFIS emitido.`, detail: ultimoRefis ? `${n(ultimoRefis.avancoRealizado).toFixed(1)}% ÷ ${n(ultimoRefis.avancoPrevisto).toFixed(1)}%` : undefined },
     ...(!hideFinancial ? [
       { label: "CPI (custo)",        value: cpi.toFixed(2),                  color: cpi >= 1 ? "text-emerald-600" : "text-red-600", bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <DollarSign className="h-4 w-4" />, tip: "Cost Performance Index — Valor agregado ÷ Custo real. Acima de 1.0 = gastando menos que o previsto; abaixo de 1.0 = acima do orçamento." },
     ] : []),
@@ -1349,9 +1349,10 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, refisLista, revisa
                   </div>
                   <p className="text-[10px] text-slate-500 leading-tight">{k.label}</p>
                   <p className={`text-base font-bold ${k.color} leading-tight`}>{k.value}</p>
+                  {(k as any).detail && <p className="text-[9px] text-slate-400 leading-tight -mt-1">{(k as any).detail}</p>}
                 </div>
               </UiTooltipTrigger>
-              <UiTooltipContent side="bottom" className="max-w-[260px] text-xs leading-relaxed">
+              <UiTooltipContent side="bottom" className="max-w-[280px] text-xs leading-relaxed whitespace-pre-line">
                 {k.tip}
               </UiTooltipContent>
             </UiTooltip>
