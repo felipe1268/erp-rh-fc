@@ -2818,8 +2818,9 @@ Retorne APENAS um JSON válido neste formato:
         : [];
       const fornInfoCheck = fornParts[0] ?? null;
       const condPag = (fornInfoCheck as any)?.condicaoPagamento ?? cot.condicaoPagamento;
+      const formaPag = (fornInfoCheck as any)?.formaPagamento ?? (cot as any).formaPagamento;
       const prazoEntrega = (fornInfoCheck as any)?.prazoEntregaDias;
-      if (!condPag) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina a Condição de Pagamento antes de gerar a OC. Edite as condições do vencedor na cotação." });
+      if (!condPag && !formaPag) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina a Condição de Pagamento antes de gerar a OC. Edite as condições do vencedor na cotação." });
       if (!prazoEntrega || Number(prazoEntrega) <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina o Prazo de Entrega antes de gerar a OC. Edite as condições do vencedor na cotação." });
 
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
