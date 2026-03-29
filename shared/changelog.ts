@@ -6063,4 +6063,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-29 18:00:00",
   },
+  {
+    version: 878,
+    titulo: "Correção: Tolerância de precisão na comparação de saldo orçamentário",
+    descricao: "Adicionada tolerância de 0,01 e arredondamento a 3 casas decimais na comparação de saldo vs quantidade solicitada. Evita falsos alertas de 'SALDO INSUFICIENTE' quando o saldo é igual ou praticamente igual à quantidade da SC, causados por diferenças de ponto flutuante nos cálculos de composição.",
+    tipo: "fix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-29 18:30:00",
+  },
 ];

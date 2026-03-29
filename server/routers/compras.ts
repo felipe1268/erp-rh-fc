@@ -2021,7 +2021,8 @@ Responda APENAS com um objeto JSON no formato:
 
         const vinculado = fonteVinculo === "item" || fonteVinculo === "insumo";
         const consumido = Math.max(qtdTotalSolicitada, qtdComprada);
-        const qtdSaldo = vinculado ? qtdOrcada - consumido : -qtdEstaSC;
+        const qtdSaldoRaw = vinculado ? qtdOrcada - consumido : -qtdEstaSC;
+        const qtdSaldo = Math.round(qtdSaldoRaw * 1000) / 1000;
         return { ...it, metaUnitario, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false };
       });
 
@@ -4442,21 +4443,23 @@ Retorne APENAS um JSON válido neste formato:
 
         const qtdEstaSC = n(item.quantidade);
         const consumido = Math.max(qtdSolicitada, qtdComprada);
-        const saldo = vinculado ? qtdOrcada - consumido : -qtdEstaSC;
+        const saldoRaw = vinculado ? qtdOrcada - consumido : -qtdEstaSC;
+        const saldo = Math.round(saldoRaw * 1000) / 1000;
+        const eps = 0.01;
 
         const semVerbaFlag = item.semVerba ?? false;
         let situacao: "ok" | "sem_vinculo" | "sem_vinculo_sem_verba" | "verba_esgotada_compras" | "verba_esgotada_solicitacoes" | "saldo_insuficiente" = "ok";
         if (!vinculado) {
           situacao = semVerbaFlag ? "sem_vinculo_sem_verba" : "sem_vinculo";
-        } else if (saldo < 0) {
-          if (qtdComprada >= qtdOrcada) {
+        } else if (saldo < -eps) {
+          if (qtdComprada >= qtdOrcada - eps) {
             situacao = "verba_esgotada_compras";
-          } else if (qtdSolicitada >= qtdOrcada) {
+          } else if (qtdSolicitada >= qtdOrcada - eps) {
             situacao = "verba_esgotada_solicitacoes";
           } else {
             situacao = "saldo_insuficiente";
           }
-        } else if (saldo < qtdEstaSC && saldo >= 0) {
+        } else if (saldo + eps < qtdEstaSC && saldo >= -eps) {
           situacao = "saldo_insuficiente";
         }
 
