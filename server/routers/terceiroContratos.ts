@@ -66,6 +66,7 @@ export const terceiroContratosRouter = router({
   getContrato: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
+      try {
       const db = await getDb();
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.id));
       if (!contrato) return null;
@@ -78,10 +79,13 @@ export const terceiroContratosRouter = router({
         .where(eq(terceiroMedicoes.contratoId, input.id))
         .orderBy(desc(terceiroMedicoes.numero));
 
-      const allMedicaoItens = medicoesRaw.length > 0
-        ? await db.select().from(terceiroMedicaoItens)
-            .where(inArray(terceiroMedicaoItens.medicaoId, medicoesRaw.map(m => m.id)))
-        : [];
+      let allMedicaoItens: any[] = [];
+      if (medicoesRaw.length > 0) {
+        try {
+          allMedicaoItens = await db.select().from(terceiroMedicaoItens)
+            .where(inArray(terceiroMedicaoItens.medicaoId, medicoesRaw.map(m => m.id)));
+        } catch (e) { console.error("[getContrato] medicaoItens query error:", e); }
+      }
 
       const medicoes = medicoesRaw.map(m => ({
         ...m,
@@ -251,6 +255,7 @@ export const terceiroContratosRouter = router({
         saldoALiberar,
         docsComPendencia: documentos.filter(d => d.status === "pendente" && d.bloqueiaPagemento).length,
       };
+      } catch (err: any) { console.error("[getContrato] ERRO:", err?.message || err); throw err; }
     }),
 
   // Retorna o próximo número de contrato automático para a empresa/ano
