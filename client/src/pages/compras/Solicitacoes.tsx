@@ -119,10 +119,11 @@ function DocLinks({ docs, prefix, route, navigate }: { docs: { id: number; numer
   );
 }
 
-function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, companyId }: {
+function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar, user, companyId }: {
   confirmAprov: { id: number; key: string; titulo: string; descricao: string; cor: string; icone: "aprovar" | "recusar" | "voltar" } | null;
   setConfirmAprov: (v: any) => void;
   aprovar: any;
+  desaprovar: any;
   user: any;
   companyId: number;
 }) {
@@ -376,15 +377,19 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, user, comp
               <Button
                 onClick={() => {
                   if (!confirmAprov) return;
-                  aprovar.mutate({ id: confirmAprov.id, aprovacaoStatus: confirmAprov.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined });
+                  if (confirmAprov.key === "desaprovar") {
+                    desaprovar.mutate({ id: confirmAprov.id, companyId });
+                  } else {
+                    aprovar.mutate({ id: confirmAprov.id, aprovacaoStatus: confirmAprov.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined });
+                  }
                   setConfirmAprov(null);
                 }}
-                disabled={aprovar.isPending}
+                disabled={aprovar.isPending || desaprovar.isPending}
                 className={`gap-1.5 px-6 ${confirmAprov?.cor === "emerald" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : confirmAprov?.cor === "red" ? "bg-red-600 hover:bg-red-500 text-white" : "bg-amber-600 hover:bg-amber-500 text-white"}`}>
                 {confirmAprov?.icone === "aprovar" && <CheckCircle2 className="h-4 w-4" />}
                 {confirmAprov?.icone === "recusar" && <XCircle className="h-4 w-4" />}
                 {confirmAprov?.icone === "voltar" && <Clock className="h-4 w-4" />}
-                {confirmAprov?.icone === "aprovar" ? "Sim, Aprovar" : confirmAprov?.icone === "recusar" ? "Sim, Recusar" : "Sim, Voltar"}
+                {confirmAprov?.key === "desaprovar" ? "Sim, Desaprovar" : confirmAprov?.icone === "aprovar" ? "Sim, Aprovar" : confirmAprov?.icone === "recusar" ? "Sim, Recusar" : "Sim, Voltar"}
               </Button>
             </div>
           </div>
@@ -569,6 +574,16 @@ export default function Solicitacoes() {
   });
   const duplicar = trpc.compras.duplicarSolicitacao.useMutation({
     onSuccess: (data) => { toast.success(`SC ${data.numeroSc} criada (cópia)!`); q.refetch(); setShowDetalhe(data.id); },
+    onError: (e) => toast.error(e.message),
+  });
+  const desaprovar = trpc.compras.desaprovarSolicitacao.useMutation({
+    onSuccess: (data) => {
+      const msg = data.cotacoesCanceladas > 0
+        ? `SC desaprovada! ${data.cotacoesCanceladas} cotação(ões) cancelada(s).`
+        : "SC desaprovada! Voltou para Pendente.";
+      toast.success(msg);
+      q.refetch(); detalheQ.refetch();
+    },
     onError: (e) => toast.error(e.message),
   });
   const aprovarLote = trpc.compras.aprovarSolicitacoesEmLote.useMutation({
@@ -2487,7 +2502,20 @@ export default function Solicitacoes() {
                   <AprovBadge status={detalhe.aprovacaoStatus} />
                 </div>
                 {detalhe.status === "cotacao" || detalhe.status === "aprovado" ? (
-                  <p className="text-xs text-gray-500">Esta solicitação já está em andamento no fluxo de compras.</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-500">Esta solicitação já está em andamento no fluxo de compras.</p>
+                    <Button size="sm" variant="outline"
+                      onClick={() => setConfirmAprov({
+                        id: detalhe.id, key: "desaprovar", icone: "voltar",
+                        titulo: `Desaprovar ${detalhe.numeroSc}?`,
+                        descricao: "A solicitação voltará ao status 'Pendente'. Cotações vinculadas que não possuem OC serão canceladas automaticamente.",
+                        cor: "red",
+                      })}
+                      disabled={aprovar.isPending || desaprovar.isPending}
+                      className="text-xs border-red-300 text-red-700 hover:bg-red-50">
+                      <XCircle className="h-3 w-3 mr-1" /> Desaprovar
+                    </Button>
+                  </div>
                 ) : (
                 <div className="flex gap-2">
                   {[
@@ -2926,7 +2954,7 @@ export default function Solicitacoes() {
           </div>
         </DialogContent>
       </Dialog>
-      <ConfirmAprovDialog confirmAprov={confirmAprov} setConfirmAprov={setConfirmAprov} aprovar={aprovar} user={user} companyId={companyId} />
+      <ConfirmAprovDialog confirmAprov={confirmAprov} setConfirmAprov={setConfirmAprov} aprovar={aprovar} desaprovar={desaprovar} user={user} companyId={companyId} />
     </div>
     </DashboardLayout>
   );

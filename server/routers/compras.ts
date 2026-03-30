@@ -1505,6 +1505,36 @@ Responda APENAS com um objeto JSON no formato:
       return { ok: true, cotacaoCriada };
     }),
 
+  desaprovarSolicitacao: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [sc] = await db.select().from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, input.id), eq(comprasSolicitacoes.companyId, input.companyId)));
+      if (!sc) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada." });
+      if (sc.status === "recebido" || sc.status === "recebido_parcial") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Não é possível desaprovar uma solicitação que já possui recebimentos." });
+      }
+      const linkedCots = await db.select({ id: comprasCotacoes.id, status: comprasCotacoes.status })
+        .from(comprasCotacoes)
+        .where(and(eq(comprasCotacoes.solicitacaoId, input.id), eq(comprasCotacoes.companyId, input.companyId)));
+      const activeCots = linkedCots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
+      for (const cot of activeCots) {
+        const linkedOCs = await db.select({ id: comprasOrdens.id }).from(comprasOrdens).where(eq(comprasOrdens.cotacaoId, cot.id));
+        if (linkedOCs.length > 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Cotação COT vinculada já possui Ordem de Compra. Cancele a OC antes de desaprovar.` });
+        }
+        await db.update(comprasCotacoes).set({ status: "cancelada" }).where(eq(comprasCotacoes.id, cot.id));
+      }
+      await db.update(comprasSolicitacoes).set({
+        status: "pendente",
+        aprovacaoStatus: "aguardando",
+        aprovadorId: null,
+        aprovadoEm: null,
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(comprasSolicitacoes.id, input.id));
+      return { ok: true, cotacoesCanceladas: activeCots.length };
+    }),
+
   registrarRecebimentoItem: protectedProcedure
     .input(z.object({ itemId: z.number(), solicitacaoId: z.number(), quantidadeAtendida: z.number() }))
     .mutation(async ({ input }) => {
