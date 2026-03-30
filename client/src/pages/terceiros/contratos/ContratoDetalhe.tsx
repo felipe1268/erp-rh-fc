@@ -164,22 +164,73 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
               <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{contrato.empresa?.nomeFantasia || contrato.empresa?.razaoSocial || "—"}</span>
               {contrato.obraNome && <span>📍 {contrato.obraNome}</span>}
-              {contrato.dataInicio && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{fmtDate(contrato.dataInicio)} → {fmtDate(contrato.dataTermino)}</span>}
-              <button
-                onClick={() => recalcularDatasMut.mutate({ contratoId: id, companyId: contrato.companyId })}
-                disabled={recalcularDatasMut.isPending}
-                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
-                title="Recalcular datas início/término a partir do cronograma da obra"
-              >
-                <RefreshCw className={`w-3 h-3 ${recalcularDatasMut.isPending ? "animate-spin" : ""}`} />
-                {recalcularDatasMut.isPending ? "Calculando..." : "Datas do Cronograma"}
-              </button>
             </div>
           </div>
           <Button onClick={() => setShowGerarMedicao(true)} className="gap-2 bg-blue-600 hover:bg-blue-700">
             <Zap className="w-4 h-4" /> Gerar Medição
           </Button>
         </div>
+
+        {/* Vigência do Contrato — destaque */}
+        {(() => {
+          const ini = contrato.dataInicio;
+          const fim = contrato.dataTermino;
+          const diasVigencia = ini && fim ? Math.ceil((new Date(fim + "T00:00:00").getTime() - new Date(ini + "T00:00:00").getTime()) / 86400000) : null;
+          const hoje = new Date();
+          const diasRestantes = fim ? Math.ceil((new Date(fim + "T00:00:00").getTime() - hoje.getTime()) / 86400000) : null;
+          const pctDecorrido = ini && fim && diasVigencia && diasVigencia > 0
+            ? Math.min(100, Math.max(0, ((Date.now() - new Date(ini + "T00:00:00").getTime()) / (diasVigencia * 86400000)) * 100))
+            : 0;
+          const corBorda = diasRestantes !== null && diasRestantes <= 15 ? "border-red-300 bg-red-50" : diasRestantes !== null && diasRestantes <= 30 ? "border-amber-300 bg-amber-50" : "border-blue-200 bg-blue-50";
+          const corBarra = diasRestantes !== null && diasRestantes <= 15 ? "bg-red-500" : diasRestantes !== null && diasRestantes <= 30 ? "bg-amber-500" : "bg-blue-500";
+          return (
+            <div className={`rounded-xl border-2 p-4 ${corBorda}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-blue-600" />
+                  <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">Vigência do Contrato</span>
+                </div>
+                <button
+                  onClick={() => recalcularDatasMut.mutate({ contratoId: id, companyId: contrato.companyId })}
+                  disabled={recalcularDatasMut.isPending}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
+                  title="Recalcular datas a partir do cronograma"
+                >
+                  <RefreshCw className={`w-3 h-3 ${recalcularDatasMut.isPending ? "animate-spin" : ""}`} />
+                  {recalcularDatasMut.isPending ? "Calculando..." : "Atualizar do Cronograma"}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-500 uppercase font-medium">Início</p>
+                  <p className="text-lg font-bold text-gray-900">{ini ? fmtDate(ini) : "—"}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-500 uppercase font-medium">Término</p>
+                  <p className="text-lg font-bold text-gray-900">{fim ? fmtDate(fim) : "—"}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-500 uppercase font-medium">Duração</p>
+                  <p className="text-lg font-bold text-gray-900">{diasVigencia !== null ? `${diasVigencia} dias` : "—"}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-gray-500 uppercase font-medium">Restam</p>
+                  <p className={`text-lg font-bold ${diasRestantes !== null && diasRestantes <= 15 ? "text-red-600" : diasRestantes !== null && diasRestantes <= 30 ? "text-amber-600" : "text-blue-700"}`}>
+                    {diasRestantes !== null ? (diasRestantes <= 0 ? "Encerrado" : `${diasRestantes} dias`) : "—"}
+                  </p>
+                </div>
+              </div>
+              {ini && fim && diasVigencia && diasVigencia > 0 && (
+                <div className="mt-3">
+                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${corBarra}`} style={{ width: `${pctDecorrido}%` }} />
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1 text-right">{pctDecorrido.toFixed(0)}% decorrido</p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Resumo financeiro */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

@@ -1004,6 +1004,42 @@ export const terceiroContratosRouter = router({
           .where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
       }
 
+      // 9. Auto-recalcular datas do cronograma (se obra vinculada)
+      if (contrato.obraId) {
+        try {
+          const [proj] = await db.select({ id: planejamentoProjetos.id })
+            .from(planejamentoProjetos)
+            .where(and(eq(planejamentoProjetos.companyId, input.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
+            .orderBy(desc(planejamentoProjetos.id))
+            .limit(1);
+          if (proj) {
+            const [rev] = await db.select({ id: planejamentoRevisoes.id })
+              .from(planejamentoRevisoes)
+              .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+              .orderBy(desc(planejamentoRevisoes.numero))
+              .limit(1);
+            if (rev) {
+              const dateResult = await db.execute(sql`
+                SELECT MIN(data_inicio) as min_inicio, MAX(data_fim) as max_fim
+                FROM planejamento_atividades
+                WHERE revisao_id = ${rev.id} AND projeto_id = ${proj.id}
+                  AND data_inicio IS NOT NULL AND disabled IS NOT TRUE
+              `);
+              const dr = (dateResult as any).rows?.[0];
+              if (dr?.min_inicio) {
+                await db.update(terceiroContratos).set({
+                  dataInicio: String(dr.min_inicio),
+                  dataTermino: dr.max_fim ? String(dr.max_fim) : contrato.dataTermino,
+                  atualizadoEm: new Date().toISOString(),
+                }).where(eq(terceiroContratos.id, contrato.id));
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[gerarContratoFromCotacao] Auto-cronograma error:", e);
+        }
+      }
+
       return { contratoId: contrato.id, numeroContrato, empresaTerceiraId, isNova };
     }),
 
