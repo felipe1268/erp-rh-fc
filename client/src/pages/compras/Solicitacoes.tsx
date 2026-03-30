@@ -221,7 +221,7 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar
             </p>
           </div>
 
-          {(() => {
+          {confirmAprov?.key !== "desaprovar" && (() => {
             const problemasGraves = itens.filter(i => i.situacao !== "ok" && i.situacao !== "sem_vinculo");
             if (problemasGraves.length > 0) {
               const msgs: string[] = [];
@@ -244,7 +244,7 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar
             return null;
           })()}
 
-          <div className="space-y-2">
+          {confirmAprov?.key !== "desaprovar" && <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Controle Orçamentário dos Itens</p>
               <div className="flex items-center gap-3 text-[10px]">
@@ -359,11 +359,11 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
           <div className="flex items-center justify-between pt-3 border-t border-gray-200">
             <div className="flex items-center gap-4 text-xs text-gray-400">
-              {itens.length > 0 && (
+              {confirmAprov?.key !== "desaprovar" && itens.length > 0 && (
                 <>
                   <span>{itensOk.length} OK</span>
                   {itensAlerta.length > 0 && <span className="text-red-500 font-semibold">{itensAlerta.length} com alerta</span>}
