@@ -118,10 +118,17 @@ export const terceiroContratosRouter = router({
                 const parts = eap.split(".");
                 for (let i = 1; i < parts.length; i++) parentSet.add(parts.slice(0, i).join("."));
               }
-              for (const [eap, atv] of atividadeMap) {
-                if (parentSet.has(eap)) {
-                  itensHierarchy.push({ _type: "grupo", eapCodigo: eap, nome: atv.nome, nivel: atv.nivel, dataInicio: atv.dataInicio, dataFim: atv.dataFim });
-                }
+              for (const parentEap of parentSet) {
+                const atv = atividadeMap.get(parentEap);
+                const nivel = parentEap.split(".").length;
+                itensHierarchy.push({
+                  _type: "grupo",
+                  eapCodigo: parentEap,
+                  nome: atv?.nome ?? `Nível ${parentEap}`,
+                  nivel: atv?.nivel ?? nivel,
+                  dataInicio: atv?.dataInicio ?? null,
+                  dataFim: atv?.dataFim ?? null,
+                });
               }
               itensHierarchy.sort((a: any, b: any) => a.eapCodigo.localeCompare(b.eapCodigo, undefined, { numeric: true }));
 
@@ -440,10 +447,17 @@ export const terceiroContratosRouter = router({
         }
 
         const hierarchy: any[] = [];
-        for (const [eap, atv] of atividadeMap) {
-          if (parentSet.has(eap)) {
-            hierarchy.push({ _type: "grupo", eapCodigo: eap, nome: atv.nome, nivel: atv.nivel, dataInicio: atv.dataInicio, dataFim: atv.dataFim });
-          }
+        for (const parentEap of parentSet) {
+          const atv = atividadeMap.get(parentEap);
+          const nivel = parentEap.split(".").length;
+          hierarchy.push({
+            _type: "grupo",
+            eapCodigo: parentEap,
+            nome: atv?.nome ?? `Nível ${parentEap}`,
+            nivel: atv?.nivel ?? nivel,
+            dataInicio: atv?.dataInicio ?? null,
+            dataFim: atv?.dataFim ?? null,
+          });
         }
         hierarchy.sort((a, b) => a.eapCodigo.localeCompare(b.eapCodigo, undefined, { numeric: true }));
 
