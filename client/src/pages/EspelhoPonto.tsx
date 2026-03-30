@@ -66,8 +66,14 @@ function getBatidas(r: any): string[] {
 
 type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado";
 
+function nextDay(d: string): string {
+  const dt = new Date(d + "T12:00:00Z");
+  dt.setUTCDate(dt.getUTCDate() + 1);
+  return dt.toISOString().slice(0, 10);
+}
+
 function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>, dataDesligamento?: string | null): DayStatus {
-  if (dataDesligamento && dateStr > dataDesligamento) return "desligado";
+  if (dataDesligamento && dateStr >= nextDay(dataDesligamento)) return "desligado";
   const { dow, isSun, isSat } = dayInfo(dateStr);
   if (isSun) return "domingo";
   if (isSat) return "sabado";
@@ -356,7 +362,7 @@ export default function EspelhoPonto() {
   const summary = useMemo(() => {
     let trabalhados = 0, diasFalta = 0, diasFerias = 0, totalHEMins = 0, totalAtrasoMins = 0, totalTrabMins = 0;
     for (const d of allDays) {
-      if (dataDesligamento && d > dataDesligamento) continue;
+      if (dataDesligamento && d >= nextDay(dataDesligamento)) continue;
       const { dow } = dayInfo(d);
       const isWeekendDay = dow === 0 || dow === 6;
       const r = recordMap[d];
