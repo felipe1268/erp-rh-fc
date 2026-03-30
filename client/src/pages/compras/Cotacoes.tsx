@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -2659,6 +2659,26 @@ export default function Cotacoes() {
                                           Propostas
                                         </button>
                                       </div>
+                                      {detalheFullscreen?.status !== "aprovada" && (
+                                        <div className="flex items-center gap-1 mt-1">
+                                          {editingFornId === p.fornecedorId ? (
+                                            <>
+                                              <Button size="sm" onClick={() => handleSalvarPrecos(p.fornecedorId)} disabled={salvarRespostas.isPending}
+                                                className="h-6 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white gap-1 px-2">
+                                                <Save className="h-3 w-3" /> Salvar
+                                              </Button>
+                                              <Button size="sm" variant="outline" onClick={() => setEditingFornId(null)} className="h-6 text-[10px] border-gray-300 text-gray-600 px-2">
+                                                Cancelar
+                                              </Button>
+                                            </>
+                                          ) : (
+                                            <Button size="sm" variant="outline" onClick={() => setEditingFornId(p.fornecedorId)}
+                                              className="h-6 text-[10px] border-blue-200 text-blue-600 hover:bg-blue-50 gap-1 px-2">
+                                              <Pencil className="h-3 w-3" /> Editar Preços
+                                            </Button>
+                                          )}
+                                        </div>
+                                      )}
                                       {showPropostas === p.fornecedorId && (
                                         <div className="mt-2 bg-indigo-50/50 border border-indigo-100 rounded-lg p-2.5 space-y-1.5">
                                           <div className="flex items-center justify-between mb-1">
@@ -3071,22 +3091,6 @@ export default function Cotacoes() {
                                   <td key={`bqty_${p.fornecedorId}`}></td>
                                   <td key={`bpreco_${p.fornecedorId}`}></td>
                                   <td key={`btot_${p.fornecedorId}`} className="px-2 py-2 text-center border-r border-gray-100">
-                                    {editingFornId === p.fornecedorId ? (
-                                      <div className="flex gap-1 justify-center">
-                                        <Button size="sm" onClick={() => handleSalvarPrecos(p.fornecedorId)} disabled={salvarRespostas.isPending}
-                                          className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1">
-                                          <Save className="h-3 w-3" /> Salvar
-                                        </Button>
-                                        <Button size="sm" variant="outline" onClick={() => setEditingFornId(null)} className="h-7 text-xs border-gray-300 text-gray-600">
-                                          Cancelar
-                                        </Button>
-                                      </div>
-                                    ) : (
-                                      <Button size="sm" variant="outline" onClick={() => setEditingFornId(p.fornecedorId)}
-                                        className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50">
-                                        Editar
-                                      </Button>
-                                    )}
                                   </td>
                                 </>
                               ))}
