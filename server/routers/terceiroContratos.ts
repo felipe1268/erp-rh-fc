@@ -1758,6 +1758,24 @@ export const terceiroContratosRouter = router({
           .where(eq(terceiroContratoItens.id, ic.id));
       }
 
+      const outrasMedicoes = await db.select().from(terceiroMedicoes)
+        .where(and(
+          eq(terceiroMedicoes.contratoId, medicao.contratoId),
+          eq(terceiroMedicoes.companyId, input.companyId),
+          sql`${terceiroMedicoes.id} != ${input.medicaoId}`,
+        ));
+      const outrasMedicaoIds = outrasMedicoes
+        .filter(om => om.status === "aprovada" || om.status === "paga")
+        .map(om => om.id);
+      const outrosItens = outrasMedicaoIds.length > 0
+        ? await db.select().from(terceiroMedicaoItens)
+            .where(sql`${terceiroMedicaoItens.medicaoId} IN (${sql.join(outrasMedicaoIds.map(id => sql`${id}`), sql`,`)})`)
+        : [];
+      const percAcumAnteriorPorItem: Record<number, number> = {};
+      for (const oi of outrosItens) {
+        percAcumAnteriorPorItem[oi.contratoItemId] = (percAcumAnteriorPorItem[oi.contratoItemId] || 0) + n(oi.percentualMedidoPeriodo);
+      }
+
       let valorMedidoPeriodo = 0;
       const itensResultado: { descricao: string; eapCodigo: string | null; vinculado: boolean; percentual: number }[] = [];
       for (const itemMed of itensMedicao) {
@@ -1834,7 +1852,7 @@ export const terceiroContratosRouter = router({
         }
         console.log(`[recalcularMedicao] Item "${itemContrato.descricao}" ativId=${atividadeId} → ${percentualFisico}% valorTotal=${itemContrato.valorTotal} valorUnit=${itemContrato.valorUnitario} qtd=${itemContrato.quantidade}`);
 
-        const percentualAnterior = n(itemContrato.percentualMedidoAcumulado);
+        const percentualAnterior = percAcumAnteriorPorItem[itemContrato.id] || 0;
         const percentualPeriodo = Math.max(0, percentualFisico - percentualAnterior);
         const valorPeriodo = (percentualPeriodo / 100) * n(itemContrato.valorTotal);
         const valorAcumuladoItem = (percentualFisico / 100) * n(itemContrato.valorTotal);
@@ -1857,9 +1875,21 @@ export const terceiroContratosRouter = router({
         } as any).where(eq(terceiroMedicaoItens.id, itemMed.id));
       }
 
-      const medicoesAprovadas = await db.select().from(terceiroMedicoes)
-        .where(and(eq(terceiroMedicoes.contratoId, medicao.contratoId), sql`${terceiroMedicoes.id} != ${input.medicaoId}`));
-      const valorAcumuladoAnterior = medicoesAprovadas
+      for (const itemMed of itensMedicao) {
+        const itemContrato = itensContrato.find(ic => ic.id === itemMed.contratoItemId);
+        if (!itemContrato) continue;
+        const anterior = percAcumAnteriorPorItem[itemContrato.id] || 0;
+        const [recalcItem] = await db.select({ percentualMedidoPeriodo: terceiroMedicaoItens.percentualMedidoPeriodo })
+          .from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.id, itemMed.id));
+        const novoAcum = anterior + n(recalcItem?.percentualMedidoPeriodo);
+        const valorAcumItem = (novoAcum / 100) * n(itemContrato.valorTotal);
+        await db.update(terceiroContratoItens).set({
+          percentualMedidoAcumulado: String(novoAcum),
+          valorMedidoAcumulado: String(valorAcumItem),
+        } as any).where(eq(terceiroContratoItens.id, itemContrato.id));
+      }
+
+      const valorAcumuladoAnterior = outrasMedicoes
         .filter(m => m.status === "aprovada" || m.status === "paga")
         .reduce((s, m) => s + n(m.valorMedido), 0);
       const valorAcumulado = valorAcumuladoAnterior + valorMedidoPeriodo;
