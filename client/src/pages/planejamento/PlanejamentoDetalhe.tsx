@@ -25,7 +25,7 @@ import {
   Activity, AlertTriangle, CheckCircle2, Clock, Edit3, ChevronRight,
   ChevronDown, Minus, Upload, XCircle, GripVertical,
   ShoppingCart, AlertOctagon, Cloud, CloudRain, Wind, Sun, Droplets,
-  MapPin, Package, Filter, Trash2, Pencil, X, RefreshCw,
+  MapPin, Package, Filter, Trash2, Pencil, X, RefreshCw, Search,
   Settings, AlertCircle, Lock, LockOpen,
   Bot, Brain, Sparkles, MessageSquare, Send, Zap,
   CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
@@ -2419,6 +2419,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   const [periodoFiltro, setPeriodoFiltro] = useState<PeriodoFiltro>("tudo");
   const [intervaloIni,  setIntervaloIni]  = useState("");
   const [intervaloFim,  setIntervaloFim]  = useState("");
+  const [buscaCrono, setBuscaCrono] = useState("");
   const [selectedAtiv,  setSelectedAtiv]  = useState<Set<number>>(new Set());
   const [modoSelecao,   setModoSelecao]   = useState(false);
 
@@ -2598,6 +2599,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
 
   function isHidden(eap: string) {
     if (!eap) return false;
+    if (buscaCrono.trim()) return false;
     const parts = eap.split(".");
     for (let i = 1; i < parts.length; i++) {
       const parent = parts.slice(0, i).join(".");
@@ -2629,24 +2631,44 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   );
   const displayAtiv = useMemo(() => {
     if (editando) return linhas;
-    if (!periodoRange) return atividades;
-    const [ini, fim] = periodoRange;
-    const matchIds = new Set(
-      atividades.filter((a: any) => {
-        if (!a.dataInicio) return false;
-        const inicioNoPeriodo = a.dataInicio >= ini && a.dataInicio <= fim;
-        const fimNoPeriodo    = a.dataFim && a.dataFim >= ini && a.dataFim <= fim;
-        return inicioNoPeriodo || fimNoPeriodo;
-      }).map((a: any) => a.id)
-    );
-    if (matchIds.size === 0) return [];
-    const parentEaps = new Set<string>();
-    atividades.filter((a: any) => matchIds.has(a.id) && a.eapCodigo).forEach((a: any) => {
-      const parts = String(a.eapCodigo).split(".");
-      for (let i = 1; i < parts.length; i++) parentEaps.add(parts.slice(0, i).join("."));
-    });
-    return atividades.filter((a: any) => matchIds.has(a.id) || (a.isGrupo && a.eapCodigo && parentEaps.has(a.eapCodigo)));
-  }, [editando, linhas, atividades, periodoRange]);
+    let base = atividades;
+    if (periodoRange) {
+      const [ini, fim] = periodoRange;
+      const matchIds = new Set(
+        atividades.filter((a: any) => {
+          if (!a.dataInicio) return false;
+          const inicioNoPeriodo = a.dataInicio >= ini && a.dataInicio <= fim;
+          const fimNoPeriodo    = a.dataFim && a.dataFim >= ini && a.dataFim <= fim;
+          return inicioNoPeriodo || fimNoPeriodo;
+        }).map((a: any) => a.id)
+      );
+      if (matchIds.size === 0) return [];
+      const parentEaps = new Set<string>();
+      atividades.filter((a: any) => matchIds.has(a.id) && a.eapCodigo).forEach((a: any) => {
+        const parts = String(a.eapCodigo).split(".");
+        for (let i = 1; i < parts.length; i++) parentEaps.add(parts.slice(0, i).join("."));
+      });
+      base = atividades.filter((a: any) => matchIds.has(a.id) || (a.isGrupo && a.eapCodigo && parentEaps.has(a.eapCodigo)));
+    }
+    if (buscaCrono.trim()) {
+      const q = buscaCrono.trim().toLowerCase();
+      const matchIds = new Set(
+        base.filter((a: any) => {
+          const nome = (a.nome || "").toLowerCase();
+          const eap = (a.eapCodigo || "").toLowerCase();
+          return nome.includes(q) || eap.includes(q);
+        }).map((a: any) => a.id)
+      );
+      if (matchIds.size === 0) return [];
+      const parentEaps = new Set<string>();
+      base.filter((a: any) => matchIds.has(a.id) && a.eapCodigo).forEach((a: any) => {
+        const parts = String(a.eapCodigo).split(".");
+        for (let i = 1; i < parts.length; i++) parentEaps.add(parts.slice(0, i).join("."));
+      });
+      base = base.filter((a: any) => matchIds.has(a.id) || (a.isGrupo && a.eapCodigo && parentEaps.has(a.eapCodigo)));
+    }
+    return base;
+  }, [editando, linhas, atividades, periodoRange, buscaCrono]);
 
   if (loadingAtiv) return (
     <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
@@ -2675,7 +2697,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
             </span>
           )}
           <span className="text-xs text-slate-400">
-            {periodoRange
+            {(periodoRange || buscaCrono.trim())
               ? <>{displayAtiv.filter((a: any) => !a.isGrupo).length} <span className="text-blue-500">de {atividades.filter((a: any) => !a.isGrupo).length}</span> atividades</>
               : <>{atividades.length} atividades</>}
           </span>
@@ -2933,6 +2955,31 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               {nivelAtivo === 0 ? "Tudo recolhido" : `Mostrando até N${nivelAtivo}`}
             </span>
           )}
+          <div className="w-px h-4 bg-slate-200 mx-0.5" />
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar EAP ou atividade..."
+              value={buscaCrono}
+              onChange={e => setBuscaCrono(e.target.value)}
+              className="h-7 w-56 pl-7 pr-7 text-[11px] border border-slate-200 rounded-md bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            />
+            {buscaCrono && (
+              <button
+                onClick={() => setBuscaCrono("")}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-4 w-4 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                title="Limpar busca"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          {buscaCrono.trim() && (
+            <span className="text-[10px] text-blue-600 font-medium">
+              {displayAtiv.filter((a: any) => !a.isGrupo).length} resultado{displayAtiv.filter((a: any) => !a.isGrupo).length !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
       )}
 
@@ -2993,7 +3040,9 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
             {displayAtiv.length === 0 && !editando && (
               <tr>
                 <td colSpan={8} className="py-8 text-center text-slate-400">
-                  Nenhuma atividade cadastrada. Clique em "Editar Cronograma" para adicionar.
+                  {(buscaCrono.trim() || periodoRange)
+                    ? <>Nenhuma atividade encontrada para os filtros aplicados.{buscaCrono.trim() && <> Tente outro termo de busca.</>}</>
+                    : <>Nenhuma atividade cadastrada. Clique em "Editar Cronograma" para adicionar.</>}
                 </td>
               </tr>
             )}

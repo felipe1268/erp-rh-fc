@@ -892,6 +892,61 @@ export const terceiroContratosRouter = router({
         .filter(m => m.status === "aprovada" || m.status === "paga")
         .reduce((s, m) => s + n(m.valorMedido), 0);
 
+      // Pre-load avanços map: atividadeId → max percentualAcumulado
+      const avancoMap: Record<number, number> = {};
+      if (contrato.obraId) {
+        try {
+          const [proj] = await db.select({ id: planejamentoProjetos.id })
+            .from(planejamentoProjetos)
+            .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
+            .orderBy(desc(planejamentoProjetos.id)).limit(1);
+          if (proj) {
+            const allAvancos = await db.select({
+              atividadeId: planejamentoAvancos.atividadeId,
+              percentualAcumulado: planejamentoAvancos.percentualAcumulado,
+              semana: planejamentoAvancos.semana,
+            }).from(planejamentoAvancos)
+              .where(eq(planejamentoAvancos.projetoId, proj.id))
+              .orderBy(desc(planejamentoAvancos.semana));
+            for (const av of allAvancos) {
+              if (!(av.atividadeId in avancoMap)) {
+                avancoMap[av.atividadeId] = n(av.percentualAcumulado);
+              }
+            }
+            console.log(`[gerarMedicao] avancoMap carregado: ${Object.keys(avancoMap).length} atividades com avanço`);
+          }
+        } catch (e) { console.warn("[gerarMedicao] Erro ao carregar avancoMap:", e); }
+      }
+
+      // Also build eapToAtividadeId map for fallback matching
+      const eapToAtividadeId: Record<string, number> = {};
+      if (contrato.obraId) {
+        try {
+          const [proj] = await db.select({ id: planejamentoProjetos.id })
+            .from(planejamentoProjetos)
+            .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
+            .orderBy(desc(planejamentoProjetos.id)).limit(1);
+          if (proj) {
+            const revs = await db.select({ id: planejamentoRevisoes.id })
+              .from(planejamentoRevisoes)
+              .where(eq(planejamentoRevisoes.projetoId, proj.id))
+              .orderBy(desc(planejamentoRevisoes.numero));
+            for (const rev of revs) {
+              const ativs = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo })
+                .from(planejamentoAtividades)
+                .where(and(eq(planejamentoAtividades.revisaoId, rev.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
+              for (const a of ativs) {
+                if (a.eapCodigo && !(a.eapCodigo in eapToAtividadeId)) {
+                  eapToAtividadeId[a.eapCodigo] = a.id;
+                }
+              }
+              if (Object.keys(eapToAtividadeId).length > 0) break;
+            }
+            console.log(`[gerarMedicao] eapToAtividadeId map: ${Object.keys(eapToAtividadeId).length} EAPs`);
+          }
+        } catch (e) { console.warn("[gerarMedicao] Erro ao carregar eapToAtividadeId:", e); }
+      }
+
       let valorMedidoPeriodo = 0;
       const itensMedicao: any[] = [];
       const itensNaoVinculados: string[] = [];
@@ -899,16 +954,34 @@ export const terceiroContratosRouter = router({
       console.log(`[gerarMedicao] Contrato ${input.contratoId}: ${itens.length} itens, verificando avanços...`);
       for (const item of itens) {
         let percentualFisico = n(item.percentualMedidoAcumulado);
+        let atividadeIdUsada = item.planejamentoAtividadeId;
 
-        if (item.planejamentoAtividadeId) {
-          const [avanco] = await db.select().from(planejamentoAvancos)
-            .where(eq(planejamentoAvancos.atividadeId, item.planejamentoAtividadeId))
-            .orderBy(desc(planejamentoAvancos.semana))
-            .limit(1);
-          console.log(`[gerarMedicao] Item "${item.descricao}" atividadeId=${item.planejamentoAtividadeId} → avanco=${avanco ? n(avanco.percentualAcumulado) : "SEM AVANCO"}`);
-          if (avanco) percentualFisico = n(avanco.percentualAcumulado);
+        // Fallback: if item has no linked activity but has eapCodigo, find via map
+        if (!atividadeIdUsada && (item as any).eapCodigo) {
+          const eap = (item as any).eapCodigo;
+          if (eapToAtividadeId[eap]) {
+            atividadeIdUsada = eapToAtividadeId[eap];
+            await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: atividadeIdUsada }).where(eq(terceiroContratoItens.id, item.id));
+            console.log(`[gerarMedicao] Fallback-link: "${item.descricao}" EAP=${eap} → atividade ${atividadeIdUsada}`);
+          }
+        }
+
+        if (atividadeIdUsada) {
+          const avPct = avancoMap[atividadeIdUsada];
+          if (avPct !== undefined) {
+            percentualFisico = avPct;
+            console.log(`[gerarMedicao] Item "${item.descricao}" atividadeId=${atividadeIdUsada} → avanco=${avPct}% (via map)`);
+          } else {
+            // Direct query as fallback
+            const [avanco] = await db.select().from(planejamentoAvancos)
+              .where(eq(planejamentoAvancos.atividadeId, atividadeIdUsada))
+              .orderBy(desc(planejamentoAvancos.semana))
+              .limit(1);
+            console.log(`[gerarMedicao] Item "${item.descricao}" atividadeId=${atividadeIdUsada} → avanco=${avanco ? n(avanco.percentualAcumulado) : "SEM AVANCO"} (query direta)`);
+            if (avanco) percentualFisico = n(avanco.percentualAcumulado);
+          }
         } else {
-          console.log(`[gerarMedicao] Item "${item.descricao}" SEM planejamentoAtividadeId (não vinculado)`);
+          console.log(`[gerarMedicao] Item "${item.descricao}" SEM vínculo (eap=${(item as any).eapCodigo || "N/A"})`);
           itensNaoVinculados.push(item.descricao || `Item #${item.id}`);
         }
 
@@ -1050,6 +1123,122 @@ export const terceiroContratosRouter = router({
       await db.delete(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
       await db.delete(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.id));
       return { ok: true };
+    }),
+
+  recalcularMedicao: protectedProcedure
+    .input(z.object({ medicaoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [medicao] = await db.select().from(terceiroMedicoes).where(
+        and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId))
+      );
+      if (!medicao) throw new Error("Medição não encontrada");
+      if (medicao.status === "aprovada" || medicao.status === "paga") throw new Error("Não é possível recalcular uma medição já aprovada/paga");
+
+      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, medicao.contratoId));
+      if (!contrato) throw new Error("Contrato não encontrado");
+
+      const itensContrato = await db.select().from(terceiroContratoItens)
+        .where(eq(terceiroContratoItens.contratoId, medicao.contratoId))
+        .orderBy(asc(terceiroContratoItens.ordem));
+      const itensMedicao = await db.select().from(terceiroMedicaoItens)
+        .where(eq(terceiroMedicaoItens.medicaoId, input.medicaoId));
+
+      // Build avancoMap + eapToAtividadeId
+      const avancoMap: Record<number, number> = {};
+      const eapToAtividadeId: Record<string, number> = {};
+      if (contrato.obraId) {
+        try {
+          const [proj] = await db.select({ id: planejamentoProjetos.id })
+            .from(planejamentoProjetos)
+            .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
+            .orderBy(desc(planejamentoProjetos.id)).limit(1);
+          if (proj) {
+            const allAvancos = await db.select({
+              atividadeId: planejamentoAvancos.atividadeId,
+              percentualAcumulado: planejamentoAvancos.percentualAcumulado,
+            }).from(planejamentoAvancos)
+              .where(eq(planejamentoAvancos.projetoId, proj.id))
+              .orderBy(desc(planejamentoAvancos.semana));
+            for (const av of allAvancos) {
+              if (!(av.atividadeId in avancoMap)) avancoMap[av.atividadeId] = n(av.percentualAcumulado);
+            }
+            const revs = await db.select({ id: planejamentoRevisoes.id })
+              .from(planejamentoRevisoes)
+              .where(eq(planejamentoRevisoes.projetoId, proj.id))
+              .orderBy(desc(planejamentoRevisoes.numero));
+            for (const rev of revs) {
+              const ativs = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo })
+                .from(planejamentoAtividades)
+                .where(and(eq(planejamentoAtividades.revisaoId, rev.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
+              for (const a of ativs) {
+                if (a.eapCodigo && !(a.eapCodigo in eapToAtividadeId)) eapToAtividadeId[a.eapCodigo] = a.id;
+              }
+              if (Object.keys(eapToAtividadeId).length > 0) break;
+            }
+          }
+        } catch (e) { console.warn("[recalcularMedicao] Erro:", e); }
+      }
+      console.log(`[recalcularMedicao] avancoMap: ${Object.keys(avancoMap).length} atividades, eapMap: ${Object.keys(eapToAtividadeId).length} EAPs`);
+
+      let valorMedidoPeriodo = 0;
+      for (const itemMed of itensMedicao) {
+        const itemContrato = itensContrato.find(ic => ic.id === itemMed.contratoItemId);
+        if (!itemContrato) continue;
+
+        let atividadeId = itemContrato.planejamentoAtividadeId;
+        if (!atividadeId && (itemContrato as any).eapCodigo) {
+          const eap = (itemContrato as any).eapCodigo;
+          if (eapToAtividadeId[eap]) {
+            atividadeId = eapToAtividadeId[eap];
+            await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: atividadeId }).where(eq(terceiroContratoItens.id, itemContrato.id));
+          }
+        }
+
+        let percentualFisico = n(itemContrato.percentualMedidoAcumulado);
+        if (atividadeId) {
+          const avPct = avancoMap[atividadeId];
+          if (avPct !== undefined) {
+            percentualFisico = avPct;
+          } else {
+            const [av] = await db.select().from(planejamentoAvancos)
+              .where(eq(planejamentoAvancos.atividadeId, atividadeId))
+              .orderBy(desc(planejamentoAvancos.semana)).limit(1);
+            if (av) percentualFisico = n(av.percentualAcumulado);
+          }
+        }
+        console.log(`[recalcularMedicao] Item "${itemContrato.descricao}" ativId=${atividadeId} → ${percentualFisico}%`);
+
+        const percentualAnterior = n(itemContrato.percentualMedidoAcumulado);
+        const percentualPeriodo = Math.max(0, percentualFisico - percentualAnterior);
+        const valorPeriodo = (percentualPeriodo / 100) * n(itemContrato.valorTotal);
+        const valorAcumuladoItem = (percentualFisico / 100) * n(itemContrato.valorTotal);
+        valorMedidoPeriodo += valorPeriodo;
+
+        await db.update(terceiroMedicaoItens).set({
+          percentualAvancoFisico: String(percentualFisico),
+          percentualAcumuladoAnterior: String(percentualAnterior),
+          percentualMedidoPeriodo: String(percentualPeriodo),
+          valorMedidoPeriodo: String(valorPeriodo),
+          valorAcumulado: String(valorAcumuladoItem),
+        } as any).where(eq(terceiroMedicaoItens.id, itemMed.id));
+      }
+
+      const medicoesAprovadas = await db.select().from(terceiroMedicoes)
+        .where(and(eq(terceiroMedicoes.contratoId, medicao.contratoId), sql`${terceiroMedicoes.id} != ${input.medicaoId}`));
+      const valorAcumuladoAnterior = medicoesAprovadas
+        .filter(m => m.status === "aprovada" || m.status === "paga")
+        .reduce((s, m) => s + n(m.valorMedido), 0);
+      const valorAcumulado = valorAcumuladoAnterior + valorMedidoPeriodo;
+      const percentualGlobal = n(contrato.valorTotal) > 0 ? (valorAcumulado / n(contrato.valorTotal)) * 100 : 0;
+
+      await db.update(terceiroMedicoes).set({
+        valorMedido: String(valorMedidoPeriodo),
+        valorAcumulado: String(valorAcumulado),
+        percentualGlobal: String(percentualGlobal),
+      } as any).where(eq(terceiroMedicoes.id, input.medicaoId));
+
+      return { ok: true, valorMedido: valorMedidoPeriodo, percentualGlobal };
     }),
 
   editarMedicao: protectedProcedure

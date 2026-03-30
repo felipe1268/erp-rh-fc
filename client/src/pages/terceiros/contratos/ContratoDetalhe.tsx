@@ -124,6 +124,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     onError: (e) => toast.error(e.message),
   });
 
+  const recalcularMut = trpc.terceiroContratos.recalcularMedicao.useMutation({
+    onSuccess: (data) => { toast.success(`Medição recalculada! Valor medido: R$ ${Number(data.valorMedido).toFixed(2)} (${Number(data.percentualGlobal).toFixed(1)}%)`); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
   const editarMedicaoItemMut = trpc.terceiroContratos.editarMedicaoItem.useMutation({
     onSuccess: () => { utils.terceiroContratos.getContrato.invalidate({ id }); },
     onError: (e) => toast.error(e.message),
@@ -792,6 +797,13 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, excluirMedicaoMut,
                         Rejeitar
                       </Button>
                     </>
+                  )}
+                  {(m.status === "aguardando_aprovacao" || m.status === "rascunho") && (
+                    <Button size="sm" variant="outline" className="gap-1 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                      disabled={recalcularMut.isPending}
+                      onClick={() => recalcularMut.mutate({ medicaoId: m.id, companyId: contrato.companyId })}>
+                      <RefreshCw className={`w-3 h-3 ${recalcularMut.isPending ? "animate-spin" : ""}`} /> Recalcular
+                    </Button>
                   )}
                   {m.status !== "paga" && (
                     <>

@@ -6427,4 +6427,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 22:30:00",
   },
+  {
+    versao: 906,
+    descricao:
+      "Filtro de busca no Cronograma: campo de pesquisa por nome de atividade ou código EAP " +
+      "com exibição hierárquica dos resultados (mantém grupos-pai visíveis). " +
+      "Contador de resultados filtrados no cabeçalho e ao lado do campo de busca. " +
+      "Medição Terceiros: botão 'Recalcular' para medições em rascunho/aguardando aprovação — " +
+      "re-busca avanços do cronograma e atualiza percentuais e valores. " +
+      "Melhoria no auto-link EAP: fallback busca em todas as revisões (não apenas aprovadas), " +
+      "pré-carrega mapa de avanços para melhor performance.",
+    tipo: "melhoria",
+    modulos: "Planejamento, Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 23:00:00",
+  },
 ];
