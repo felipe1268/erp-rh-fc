@@ -6256,4 +6256,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 11:30:00",
   },
+  {
+    version: 893,
+    titulo: "Editar itens da SC — adicionar e excluir",
+    descricao: "No modo de edição da Solicitação de Compra, agora é possível: " +
+      "(1) adicionar novos itens com descrição, unidade e quantidade editáveis; " +
+      "(2) excluir itens existentes via botão lixeira; " +
+      "(3) editar descrição e unidade de itens existentes (antes só a quantidade era editável). " +
+      "Validação: ao menos 1 item com descrição é obrigatório para salvar.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 12:00:00",
+  },
 ];

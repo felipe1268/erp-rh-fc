@@ -2816,46 +2816,64 @@ export default function Solicitacoes() {
                       onChange={e => setEditForm({ ...editForm, observacoes: e.target.value })} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-gray-700">Itens (quantidades editáveis)</Label>
+                    <Label className="text-xs text-gray-700">Itens</Label>
                     {editItens.map((it, idx) => (
                       <div key={idx} className="flex items-center gap-2 bg-white rounded border border-gray-200 px-2.5 py-1.5">
-                        <div className="flex-1 text-xs text-gray-900 truncate">{it.descricao}</div>
-                        <span className="text-xs text-gray-400">{it.unidade || "un"}</span>
+                        <Input className="flex-1 h-7 text-xs bg-white border-gray-300 text-gray-900"
+                          placeholder="Descrição do item"
+                          value={it.descricao}
+                          onChange={e => setEditItens(prev => prev.map((p, i) => i === idx ? { ...p, descricao: e.target.value } : p))} />
+                        <Input className="w-16 h-7 text-xs bg-white border-gray-300 text-gray-900"
+                          placeholder="Un."
+                          value={it.unidade || ""}
+                          onChange={e => setEditItens(prev => prev.map((p, i) => i === idx ? { ...p, unidade: e.target.value } : p))} />
                         <Input type="number" min="0.01" step="0.01" className="w-20 h-7 text-xs bg-white border-gray-300 text-gray-900"
+                          placeholder="Qtd"
                           value={it.quantidade}
                           onChange={e => setEditItens(prev => prev.map((p, i) => i === idx ? { ...p, quantidade: e.target.value } : p))} />
                         <button onClick={() => setEditItens(prev => prev.filter((_, i) => i !== idx))}
-                          className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600">
-                          <Trash2 className="h-3 w-3" />
+                          className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600"
+                          title="Excluir item">
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     ))}
+                    <Button type="button" size="sm" variant="outline"
+                      className="w-full border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 text-xs gap-1 mt-1"
+                      onClick={() => setEditItens(prev => [...prev, { descricao: "", unidade: "un", quantidade: "1", observacoes: "" }])}>
+                      <Plus className="h-3 w-3" /> Adicionar Item
+                    </Button>
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1"
-                      disabled={editar.isPending}
-                      onClick={() => editar.mutate({
-                        id: detalhe.id,
-                        companyId,
-                        titulo: editForm.titulo,
-                        prioridade: editForm.prioridade,
-                        dataNecessidade: editForm.dataNecessidade || undefined,
-                        observacoes: editForm.observacoes,
-                        itens: editItens.map(it => ({
-                          descricao: it.descricao,
-                          unidade: it.unidade || "un",
-                          quantidade: parseFloat(it.quantidade) || 0,
-                          observacoes: it.observacoes || undefined,
-                          orcamentoItemId: it.orcamentoItemId ?? undefined,
-                          eapCodigo: it.eapCodigo ?? undefined,
-                          insumoCodigo: it.insumoCodigo ?? undefined,
-                          composicaoCodigo: it.composicaoCodigo ?? undefined,
-                          precoMeta: it.precoMeta ? parseFloat(it.precoMeta) : undefined,
-                          quantidadeServico: it.quantidadeServico ? parseFloat(it.quantidadeServico) : undefined,
-                          coeficiente: it.coeficiente ? parseFloat(it.coeficiente) : undefined,
-                          origemEap: it.origemEap ?? undefined,
-                        })),
-                      })}>
+                      disabled={editar.isPending || editItens.length === 0}
+                      onClick={() => {
+                        const itensValidos = editItens.filter(it => it.descricao?.trim());
+                        if (itensValidos.length === 0) { toast.error("Adicione pelo menos um item com descrição."); return; }
+                        editar.mutate({
+                          id: detalhe.id,
+                          companyId,
+                          titulo: editForm.titulo,
+                          prioridade: editForm.prioridade,
+                          dataNecessidade: editForm.dataNecessidade || undefined,
+                          observacoes: editForm.observacoes,
+                          itens: itensValidos.map(it => ({
+                            id: it.id ?? undefined,
+                            descricao: it.descricao,
+                            unidade: it.unidade || "un",
+                            quantidade: parseFloat(it.quantidade) || 1,
+                            observacoes: it.observacoes || undefined,
+                            orcamentoItemId: it.orcamentoItemId ?? undefined,
+                            eapCodigo: it.eapCodigo ?? undefined,
+                            insumoCodigo: it.insumoCodigo ?? undefined,
+                            composicaoCodigo: it.composicaoCodigo ?? undefined,
+                            precoMeta: it.precoMeta ? parseFloat(it.precoMeta) : undefined,
+                            quantidadeServico: it.quantidadeServico ? parseFloat(it.quantidadeServico) : undefined,
+                            coeficiente: it.coeficiente ? parseFloat(it.coeficiente) : undefined,
+                            origemEap: it.origemEap ?? undefined,
+                          })),
+                        });
+                      }}>
                       {editar.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Salvar Alterações"}
                     </Button>
                     <Button size="sm" variant="outline" className="text-xs border-gray-300 text-gray-600"
@@ -2891,6 +2909,7 @@ export default function Solicitacoes() {
                         observacoes: detalhe.observacoes || "",
                       });
                       setEditItens((detalhe.itens as any[]).map(it => ({
+                        id: it.id,
                         descricao: it.descricao,
                         unidade: it.unidade,
                         quantidade: String(parseFloat(it.quantidade)),
