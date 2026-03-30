@@ -128,7 +128,19 @@ export const terceiroContratosRouter = router({
               itens = itensRaw.map(it => {
                 const eap = (it as any).eapCodigo;
                 const atv = eap ? atividadeMap.get(eap) : null;
-                return { ...it, atividadeNome: atv?.nome ?? null, atividadeDataInicio: atv?.dataInicio ?? null, atividadeDataFim: atv?.dataFim ?? null, atividadeNivel: atv?.nivel ?? null };
+                let origemPath: string | null = null;
+                if (eap) {
+                  const parts = eap.split(".");
+                  const pathParts: string[] = [];
+                  for (let i = 1; i <= parts.length; i++) {
+                    const parentEap = parts.slice(0, i).join(".");
+                    const p = atividadeMap.get(parentEap);
+                    if (p) pathParts.push(p.nome);
+                  }
+                  if (pathParts.length > 1) origemPath = pathParts.slice(0, -1).join(" > ");
+                  else if (pathParts.length === 1 && atv) origemPath = pathParts[0];
+                }
+                return { ...it, atividadeNome: atv?.nome ?? null, atividadeDataInicio: atv?.dataInicio ?? null, atividadeDataFim: atv?.dataFim ?? null, atividadeNivel: atv?.nivel ?? null, origemPath };
               });
             }
           }
@@ -438,12 +450,25 @@ export const terceiroContratosRouter = router({
         const enrichedItems = items.map(it => {
           const eap = (it as any).eapCodigo;
           const atv = eap ? atividadeMap.get(eap) : null;
+          let origemPath: string | null = null;
+          if (eap) {
+            const parts = eap.split(".");
+            const pathParts: string[] = [];
+            for (let i = 1; i <= parts.length; i++) {
+              const parentEap = parts.slice(0, i).join(".");
+              const p = atividadeMap.get(parentEap);
+              if (p) pathParts.push(p.nome);
+            }
+            if (pathParts.length > 1) origemPath = pathParts.slice(0, -1).join(" > ");
+            else if (pathParts.length === 1 && atv) origemPath = pathParts[0];
+          }
           return {
             ...it,
             atividadeNome: atv?.nome ?? null,
             atividadeDataInicio: atv?.dataInicio ?? null,
             atividadeDataFim: atv?.dataFim ?? null,
             atividadeNivel: atv?.nivel ?? null,
+            origemPath,
           };
         });
 
@@ -485,6 +510,60 @@ export const terceiroContratosRouter = router({
 
       await _recalcularValorContrato(db, input.contratoId);
       return item;
+    }),
+
+  relinkEapItens: protectedProcedure
+    .input(z.object({ contratoId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
+      if (!contrato) throw new Error("Contrato não encontrado");
+
+      const [cot] = await db.select().from(comprasCotacoes)
+        .where(eq((comprasCotacoes as any).contratoTerceiroId, input.contratoId));
+      if (!cot) return { updated: 0, msg: "Cotação de origem não encontrada" };
+
+      const cotItens = await db.select().from(comprasCotacoesItens)
+        .where(eq(comprasCotacoesItens.cotacaoId, cot.id));
+
+      const scItemIds = cotItens.map(ci => ci.solicitacaoItemId).filter(Boolean) as number[];
+      if (scItemIds.length === 0) return { updated: 0, msg: "Itens da cotação não possuem vínculo com SC" };
+
+      const scItems = await db.select({
+        id: comprasSolicitacoesItens.id,
+        eapCodigo: comprasSolicitacoesItens.eapCodigo,
+        orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+        descricao: comprasSolicitacoesItens.descricao,
+      }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+      const scMap = new Map(scItems.map(s => [s.id, s]));
+
+      const cotToSc = new Map<number, typeof scItems[0]>();
+      for (const ci of cotItens) {
+        if (ci.solicitacaoItemId && scMap.has(ci.solicitacaoItemId)) {
+          cotToSc.set(ci.id, scMap.get(ci.solicitacaoItemId)!);
+        }
+      }
+
+      const contratoItens = await db.select().from(terceiroContratoItens)
+        .where(eq(terceiroContratoItens.contratoId, input.contratoId))
+        .orderBy(asc(terceiroContratoItens.ordem));
+
+      let updated = 0;
+      const cotItensOrdered = [...cotItens].sort((a, b) => a.id - b.id);
+
+      for (let i = 0; i < contratoItens.length && i < cotItensOrdered.length; i++) {
+        const ci = contratoItens[i];
+        const cotItem = cotItensOrdered[i];
+        const scInfo = cotToSc.get(cotItem.id);
+        if (scInfo && scInfo.eapCodigo && !(ci as any).eapCodigo) {
+          await db.update(terceiroContratoItens)
+            .set({ eapCodigo: scInfo.eapCodigo, orcamentoItemId: scInfo.orcamentoItemId } as any)
+            .where(eq(terceiroContratoItens.id, ci.id));
+          updated++;
+        }
+      }
+
+      return { updated, msg: `${updated} item(ns) atualizado(s) com código EAP` };
     }),
 
   removerItem: protectedProcedure

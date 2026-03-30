@@ -6373,11 +6373,13 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 902,
-    titulo: "Itens do Contrato com Hierarquia EAP e Datas do Cronograma",
+    titulo: "Itens do Contrato com Hierarquia EAP, Origem e Datas do Cronograma",
     descricao: "Itens do contrato de terceiros agora exibem a estrutura hierárquica (pai/filho) da EAP do orçamento/cronograma. " +
-      "Linhas de grupo (folders azuis) mostram o caminho pai de cada atividade. " +
+      "Cada item mostra o código EAP [x.x.x] na descrição e a linha de 'Origem' indicando o caminho completo de títulos/subtítulos do orçamento (ex: Infraestrutura > Fundações > Estacas). " +
+      "Linhas de grupo (folders azuis) mostram os pais na árvore EAP. " +
       "Colunas 'Início' e 'Término' exibem as datas de cada atividade vindas do planejamento aprovado. " +
-      "Ao gerar contrato via cotação, os itens agora carregam automaticamente o código EAP e orcamentoItemId da solicitação de compra (SC) de origem.",
+      "Ao gerar contrato via cotação, os itens carregam automaticamente o código EAP e orcamentoItemId da SC de origem. " +
+      "Botão 'Vincular EAP' permite atualizar itens de contratos existentes que foram gerados antes desta revisão, rastreando de volta pela cotação → SC → EAP.",
     tipo: "feature",
     modulos: "Terceiros, Compras",
     criadoPor: "Sistema",

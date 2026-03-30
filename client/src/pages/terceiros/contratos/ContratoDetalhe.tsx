@@ -90,6 +90,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     onSuccess: () => { toast.success("Item removido"); utils.terceiroContratos.getContrato.invalidate({ id }); },
   });
 
+  const relinkEapMut = trpc.terceiroContratos.relinkEapItens.useMutation({
+    onSuccess: (data) => { toast.success(data.msg); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
   const gerarMedicaoMut = trpc.terceiroContratos.gerarMedicao.useMutation({
     onSuccess: () => { toast.success("Medição gerada com base no avanço físico!"); setShowGerarMedicao(false); setTab("medicoes"); utils.terceiroContratos.getContrato.invalidate({ id }); },
     onError: (e) => toast.error(e.message),
@@ -308,7 +313,13 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         {/* Tab: Itens */}
         {tab === "itens" && (
           <div className="space-y-3">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {contrato.itens.length > 0 && contrato.itens.some((it: any) => !it.eapCodigo) && (
+                <Button variant="outline" size="sm" className="gap-2 text-orange-600 border-orange-200 hover:bg-orange-50" disabled={relinkEapMut.isPending}
+                  onClick={() => relinkEapMut.mutate({ contratoId: id })}>
+                  <RefreshCw className={`w-4 h-4 ${relinkEapMut.isPending ? "animate-spin" : ""}`} /> Vincular EAP
+                </Button>
+              )}
               <Button variant="outline" size="sm" className="gap-2" onClick={() => setShowAddItem(!showAddItem)}>
                 <Plus className="w-4 h-4" /> Adicionar Item
               </Button>
@@ -452,7 +463,17 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                             <td className="px-4 py-2 font-mono text-xs text-gray-400">{item.eapCodigo || "—"}</td>
                             <td className="px-4 py-2">
                               <div style={{ paddingLeft: indent }}>
-                                <span className="font-medium text-gray-900">{item.descricao}</span>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="font-medium text-gray-900">
+                                    {item.eapCodigo && <span className="text-blue-600 font-mono text-xs mr-1.5">[{item.eapCodigo}]</span>}
+                                    {item.descricao}
+                                  </span>
+                                  {item.origemPath && (
+                                    <span className="text-[11px] text-gray-400 leading-tight">
+                                      <span className="text-gray-300 mr-1">Origem:</span>{item.origemPath}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </td>
                             {hasDates && (
