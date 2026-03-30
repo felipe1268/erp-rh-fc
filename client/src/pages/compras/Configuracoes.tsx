@@ -34,7 +34,7 @@ export default function ComprasConfiguracoes() {
   useEffect(() => {
     if (data?.config) {
       setPrefixo(data.config.prefixo || "OC");
-      setSeparador(data.config.separador || "-");
+      setSeparador(data.config.separador === "" ? "none" : (data.config.separador || "-"));
       setFormatoAno(data.config.formatoAno || "4dig");
       setDigitos(String(data.config.digitosSequencial || 3));
       setPrefixoOs((data.config as any).prefixoOs || "OS");
@@ -50,7 +50,8 @@ export default function ComprasConfiguracoes() {
     onError: () => toast.error("Erro ao salvar configurações"),
   });
 
-  const exemplarNumero = `${prefixo}${separador}${formatoAno === "2dig" ? "26" : "2026"}${separador}${"0".repeat(parseInt(digitos || "3") - 1)}1`;
+  const sep = separador === "none" ? "" : separador;
+  const exemplarNumero = `${prefixo}${sep}${formatoAno === "2dig" ? "26" : "2026"}${sep}${"0".repeat(parseInt(digitos || "3") - 1)}1`;
 
   if (isLoading) {
     return (
@@ -112,7 +113,7 @@ export default function ComprasConfiguracoes() {
                         <SelectItem value="-">Hífen ( - )</SelectItem>
                         <SelectItem value="/">Barra ( / )</SelectItem>
                         <SelectItem value=".">Ponto ( . )</SelectItem>
-                        <SelectItem value="">Sem separador</SelectItem>
+                        <SelectItem value="none">Sem separador</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -142,7 +143,7 @@ export default function ComprasConfiguracoes() {
                 <Button className="bg-blue-600 hover:bg-blue-700"
                   disabled={salvarConfigMut.isPending}
                   onClick={() => salvarConfigMut.mutate({
-                    companyId, prefixo, separador, formatoAno, digitosSequencial: parseInt(digitos),
+                    companyId, prefixo, separador: sep, formatoAno, digitosSequencial: parseInt(digitos),
                   })}>
                   {salvarConfigMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                   <Save className="h-4 w-4 mr-2" />Salvar Configurações
@@ -222,7 +223,7 @@ export default function ComprasConfiguracoes() {
                 <Button className="bg-purple-600 hover:bg-purple-700"
                   disabled={salvarConfigMut.isPending}
                   onClick={() => salvarConfigMut.mutate({
-                    companyId, prefixo, separador, formatoAno, digitosSequencial: parseInt(digitos),
+                    companyId, prefixo, separador: sep, formatoAno, digitosSequencial: parseInt(digitos),
                     prefixoOs, retencaoTecnicaPerc: parseFloat(retencaoTecnica),
                     diaCorte: parseInt(diaCorte), prazoAprovacaoDias: parseInt(prazoAprovacao),
                     diaPagamento: parseInt(diaPagamento),
