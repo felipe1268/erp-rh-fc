@@ -65,6 +65,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const utils = trpc.useUtils();
   const { data: contrato, isLoading } = trpc.terceiroContratos.getContrato.useQuery({ id }, { enabled: id > 0 });
 
+  const recalcularDatasMut = trpc.terceiroContratos.recalcularDatasCronograma.useMutation({
+    onSuccess: (r) => { toast.success(`Datas atualizadas do cronograma${r.usouEap ? " (via EAP)" : " (todas atividades)"}: ${fmtDate(r.dataInicio)} → ${fmtDate(r.dataTermino)}`); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
   const adicionarItemMut = trpc.terceiroContratos.adicionarItem.useMutation({
     onSuccess: () => { toast.success("Item adicionado!"); setShowAddItem(false); setNewItem({ descricao: "", unidade: "m²", quantidade: "1", valorUnitario: "0", eapCodigo: "", planejamentoAtividadeId: "" }); utils.terceiroContratos.getContrato.invalidate({ id }); },
     onError: (e) => toast.error(e.message),
@@ -149,6 +154,15 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{contrato.empresa?.nomeFantasia || contrato.empresa?.razaoSocial || "—"}</span>
               {contrato.obraNome && <span>📍 {contrato.obraNome}</span>}
               {contrato.dataInicio && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{fmtDate(contrato.dataInicio)} → {fmtDate(contrato.dataTermino)}</span>}
+              <button
+                onClick={() => recalcularDatasMut.mutate({ contratoId: id, companyId: contrato.companyId })}
+                disabled={recalcularDatasMut.isPending}
+                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
+                title="Recalcular datas início/término a partir do cronograma da obra"
+              >
+                <RefreshCw className={`w-3 h-3 ${recalcularDatasMut.isPending ? "animate-spin" : ""}`} />
+                {recalcularDatasMut.isPending ? "Calculando..." : "Datas do Cronograma"}
+              </button>
             </div>
           </div>
           <Button onClick={() => setShowGerarMedicao(true)} className="gap-2 bg-blue-600 hover:bg-blue-700">

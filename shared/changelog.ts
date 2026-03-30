@@ -6332,4 +6332,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 16:00:00",
   },
+  {
+    version: 899,
+    titulo: "Recalcular Datas do Contrato via Cronograma",
+    descricao: "Novo botão 'Datas do Cronograma' no detalhe do contrato de serviço permite recalcular dataInicio e dataTermino " +
+      "a partir das atividades do planejamento da obra. Prioriza atividades vinculadas aos códigos EAP dos itens do contrato; " +
+      "se não houver match, usa todas as atividades da revisão aprovada como fallback. " +
+      "Mesma lógica de fallback aplicada na geração automática do contrato (gerarContratoFromCotacao) — " +
+      "agora funciona mesmo quando os itens da SC não possuem EAP vinculado.",
+    tipo: "feature",
+    modulos: "Compras, Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 17:00:00",
+  },
 ];

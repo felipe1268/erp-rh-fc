@@ -202,6 +202,70 @@ export const terceiroContratosRouter = router({
       return c;
     }),
 
+  recalcularDatasCronograma: protectedProcedure
+    .input(z.object({ contratoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [contrato] = await db.select().from(terceiroContratos).where(
+        and(eq(terceiroContratos.id, input.contratoId), eq(terceiroContratos.companyId, input.companyId))
+      );
+      if (!contrato) throw new Error("Contrato não encontrado");
+      if (!contrato.obraId) throw new Error("Contrato não possui obra vinculada");
+
+      const [proj] = await db.select({ id: planejamentoProjetos.id })
+        .from(planejamentoProjetos)
+        .where(and(eq(planejamentoProjetos.companyId, input.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
+        .orderBy(desc(planejamentoProjetos.id))
+        .limit(1);
+      if (!proj) throw new Error("Nenhum projeto de planejamento encontrado para esta obra");
+
+      const [rev] = await db.select({ id: planejamentoRevisoes.id })
+        .from(planejamentoRevisoes)
+        .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+        .orderBy(desc(planejamentoRevisoes.numero))
+        .limit(1);
+      if (!rev) throw new Error("Nenhuma revisão aprovada encontrada no cronograma");
+
+      const contratoItens = await db.select({ eapCodigo: terceiroContratoItens.eapCodigo })
+        .from(terceiroContratoItens)
+        .where(eq(terceiroContratoItens.contratoId, input.contratoId));
+      const eapCodes = [...new Set(contratoItens.map(it => (it as any).eapCodigo).filter(Boolean))] as string[];
+
+      let dateRows: any;
+      if (eapCodes.length > 0) {
+        dateRows = await db.execute(sql`
+          SELECT MIN(data_inicio) as min_inicio, MAX(data_fim) as max_fim
+          FROM planejamento_atividades
+          WHERE revisao_id = ${rev.id} AND projeto_id = ${proj.id}
+            AND eap_codigo IN (${sql.join(eapCodes.map(c => sql`${c}`), sql`, `)})
+            AND data_inicio IS NOT NULL AND disabled IS NOT TRUE
+        `);
+      }
+      const row = (dateRows as any)?.rows?.[0];
+      if (!row?.min_inicio) {
+        dateRows = await db.execute(sql`
+          SELECT MIN(data_inicio) as min_inicio, MAX(data_fim) as max_fim
+          FROM planejamento_atividades
+          WHERE revisao_id = ${rev.id} AND projeto_id = ${proj.id}
+            AND data_inicio IS NOT NULL AND disabled IS NOT TRUE
+        `);
+      }
+      const fallbackRow = (dateRows as any)?.rows?.[0];
+      const finalRow = row?.min_inicio ? row : fallbackRow;
+      if (!finalRow?.min_inicio) throw new Error("Nenhuma atividade com data encontrada no cronograma");
+
+      const dataInicio = String(finalRow.min_inicio);
+      const dataTermino = finalRow.max_fim ? String(finalRow.max_fim) : null;
+
+      await db.update(terceiroContratos).set({
+        dataInicio,
+        dataTermino,
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(terceiroContratos.id, input.contratoId));
+
+      return { dataInicio, dataTermino, usouEap: eapCodes.length > 0 && !!row?.min_inicio };
+    }),
+
   // ── ITENS DO CONTRATO ──────────────────────────────────────
 
   listarItens: protectedProcedure
@@ -692,12 +756,15 @@ export const terceiroContratosRouter = router({
       let dataTerminoContrato: string | null = null;
       try {
         const scItemIds = itens.map(it => it.solicitacaoItemId).filter(Boolean) as number[];
-        if (scItemIds.length > 0 && cot.obraId) {
+        let eapCodes: string[] = [];
+        if (scItemIds.length > 0) {
           const scItensRows = await db.select({
             eapCodigo: comprasSolicitacoesItens.eapCodigo,
             composicaoCodigo: comprasSolicitacoesItens.composicaoCodigo,
           }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
-          const eapCodes = [...new Set(scItensRows.map(s => s.eapCodigo).filter(Boolean))] as string[];
+          eapCodes = [...new Set(scItensRows.map(s => s.eapCodigo).filter(Boolean))] as string[];
+        }
+        if (cot.obraId) {
           if (eapCodes.length > 0) {
             const [proj] = await db.select({ id: planejamentoProjetos.id })
               .from(planejamentoProjetos)
@@ -721,8 +788,44 @@ export const terceiroContratosRouter = router({
                     AND disabled IS NOT TRUE
                 `);
                 const row = (dateRows as any).rows?.[0];
-                if (row?.min_inicio) dataInicioContrato = String(row.min_inicio);
-                if (row?.max_fim) dataTerminoContrato = String(row.max_fim);
+                if (row?.min_inicio) {
+                  dataInicioContrato = String(row.min_inicio);
+                  if (row.max_fim) dataTerminoContrato = String(row.max_fim);
+                } else {
+                  const allDates = await db.execute(sql`
+                    SELECT MIN(data_inicio) as min_inicio, MAX(data_fim) as max_fim
+                    FROM planejamento_atividades
+                    WHERE revisao_id = ${rev.id} AND projeto_id = ${proj.id}
+                      AND data_inicio IS NOT NULL AND disabled IS NOT TRUE
+                  `);
+                  const allRow = (allDates as any).rows?.[0];
+                  if (allRow?.min_inicio) dataInicioContrato = String(allRow.min_inicio);
+                  if (allRow?.max_fim) dataTerminoContrato = String(allRow.max_fim);
+                }
+              }
+            }
+          } else {
+            const [proj] = await db.select({ id: planejamentoProjetos.id })
+              .from(planejamentoProjetos)
+              .where(and(eq(planejamentoProjetos.companyId, input.companyId), eq(planejamentoProjetos.obraId, cot.obraId)))
+              .orderBy(desc(planejamentoProjetos.id))
+              .limit(1);
+            if (proj) {
+              const [rev] = await db.select({ id: planejamentoRevisoes.id })
+                .from(planejamentoRevisoes)
+                .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+                .orderBy(desc(planejamentoRevisoes.numero))
+                .limit(1);
+              if (rev) {
+                const allDates = await db.execute(sql`
+                  SELECT MIN(data_inicio) as min_inicio, MAX(data_fim) as max_fim
+                  FROM planejamento_atividades
+                  WHERE revisao_id = ${rev.id} AND projeto_id = ${proj.id}
+                    AND data_inicio IS NOT NULL AND disabled IS NOT TRUE
+                `);
+                const allRow = (allDates as any).rows?.[0];
+                if (allRow?.min_inicio) dataInicioContrato = String(allRow.min_inicio);
+                if (allRow?.max_fim) dataTerminoContrato = String(allRow.max_fim);
               }
             }
           }
