@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -112,6 +112,8 @@ export default function Ordens() {
   const [showFdDialog, setShowFdDialog] = useState<any>(null);
   const [fdForm, setFdForm] = useState({ modalidade: "fd_cliente" as "fd_cliente" | "fd_terceiro", valor: "", bdiItemId: 0, contractId: 0 });
 
+  const [autoSwitchedForCompany, setAutoSwitchedForCompany] = useState<number | null>(null);
+  const urlTabHandled = useRef(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const d = params.get("destaque");
@@ -122,6 +124,7 @@ export default function Ordens() {
     }
     if (params.get("tab") === "os") {
       setAbaAtiva("os");
+      urlTabHandled.current = true;
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
@@ -148,6 +151,22 @@ export default function Ordens() {
     { companyId },
     { enabled: companyId > 0 }
   );
+
+  const allOCsQ = trpc.compras.listarOrdens.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+
+  useEffect(() => {
+    if (urlTabHandled.current) return;
+    if (autoSwitchedForCompany === companyId) return;
+    if (allOCsQ.data && contratosOS.data) {
+      if (allOCsQ.data.length === 0 && contratosOS.data.length > 0) {
+        setAbaAtiva("os");
+      }
+      setAutoSwitchedForCompany(companyId);
+    }
+  }, [allOCsQ.data, contratosOS.data, companyId, autoSwitchedForCompany]);
 
   const criarManual = trpc.compras.criarOrdemManual.useMutation({
     onSuccess: () => { toast.success("Ordem de Compra criada!"); setShowNova(false); resetForm(); q.refetch(); },
