@@ -2210,7 +2210,7 @@ export default function Cotacoes() {
                       </div>
                     </div>
                   )}
-                  {detalheFullscreen.status === "pendente" && (
+                  {detalheFullscreen.status === "pendente" && ((mapa as any)?.tipoEfetivo ?? (detalheFullscreen as any).tipo) !== "servico" && (
                     <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
