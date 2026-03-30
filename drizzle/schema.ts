@@ -3164,6 +3164,10 @@ export const terceiroContratos = pgTable("terceiro_contratos", {
   dataTermino:       date("data_termino"),
   status:            varchar({ length: 50 }).default("ativo"), // ativo | encerrado | suspenso | concluido
   observacoes:       text(),
+  percISS:           numeric("perc_iss", { precision: 6, scale: 3 }).default("0"),
+  percINSS:          numeric("perc_inss", { precision: 6, scale: 3 }).default("0"),
+  percIRRF:          numeric("perc_irrf", { precision: 6, scale: 3 }).default("0"),
+  percOutrasRetencoes: numeric("perc_outras_retencoes", { precision: 6, scale: 3 }).default("0"),
   criadoPor:         varchar("criado_por", { length: 255 }),
   criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:      timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),

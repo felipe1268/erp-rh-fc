@@ -1278,10 +1278,14 @@ export const terceiroContratosRouter = router({
       const totalValorPeriodo = itensEnriquecidos.reduce((s, i) => s + i.valorPeriodo, 0);
       const totalValorAcumulado = itensEnriquecidos.reduce((s, i) => s + i.valorAcumulado, 0);
 
-      const retISS = n((medicao as any).retencaoISS);
-      const retINSS = n((medicao as any).retencaoINSS);
-      const retIRRF = n((medicao as any).retencaoIRRF);
-      const retOutras = n((medicao as any).outrasRetencoes);
+      const pISS = n((contrato as any).percISS);
+      const pINSS = n((contrato as any).percINSS);
+      const pIRRF = n((contrato as any).percIRRF);
+      const pOutras = n((contrato as any).percOutrasRetencoes);
+      const retISS = pISS > 0 ? totalValorPeriodo * pISS / 100 : n((medicao as any).retencaoISS);
+      const retINSS = pINSS > 0 ? totalValorPeriodo * pINSS / 100 : n((medicao as any).retencaoINSS);
+      const retIRRF = pIRRF > 0 ? totalValorPeriodo * pIRRF / 100 : n((medicao as any).retencaoIRRF);
+      const retOutras = pOutras > 0 ? totalValorPeriodo * pOutras / 100 : n((medicao as any).outrasRetencoes);
       const descontos = n((medicao as any).descontos);
       const totalRetencoes = retISS + retINSS + retIRRF + retOutras;
       const valorLiquido = totalValorPeriodo - totalRetencoes - descontos;
@@ -1478,10 +1482,10 @@ export const terceiroContratosRouter = router({
           doc.strokeColor(accent).lineWidth(0.8).moveTo(mL, y).lineTo(mL + 200, y).stroke();
           y += 8;
           doc.fontSize(8).font("Helvetica").fillColor("#333");
-          if (retISS > 0) { doc.text(`ISS: ${BRL(retISS)}`, mL, y); y += 13; }
-          if (retINSS > 0) { doc.text(`INSS: ${BRL(retINSS)}`, mL, y); y += 13; }
-          if (retIRRF > 0) { doc.text(`IRRF: ${BRL(retIRRF)}`, mL, y); y += 13; }
-          if (retOutras > 0) { doc.text(`Outras Retenções: ${BRL(retOutras)}`, mL, y); y += 13; }
+          if (retISS > 0) { doc.text(`ISS${pISS > 0 ? ` (${pISS}%)` : ""}: ${BRL(retISS)}`, mL, y); y += 13; }
+          if (retINSS > 0) { doc.text(`INSS${pINSS > 0 ? ` (${pINSS}%)` : ""}: ${BRL(retINSS)}`, mL, y); y += 13; }
+          if (retIRRF > 0) { doc.text(`IRRF${pIRRF > 0 ? ` (${pIRRF}%)` : ""}: ${BRL(retIRRF)}`, mL, y); y += 13; }
+          if (retOutras > 0) { doc.text(`Outras Retenções${pOutras > 0 ? ` (${pOutras}%)` : ""}: ${BRL(retOutras)}`, mL, y); y += 13; }
           if (descontos > 0) { doc.text(`Descontos: ${BRL(descontos)}`, mL, y); y += 13; }
           doc.font("Helvetica-Bold").text(`Total Retenções: ${BRL(totalRetencoes)}`, mL, y); y += 13;
           if ((medicao as any).observacoesRetencao) { doc.font("Helvetica").fontSize(7).text(`Obs.: ${(medicao as any).observacoesRetencao}`, mL, y); y += 13; }
@@ -1925,6 +1929,29 @@ export const terceiroContratosRouter = router({
         observacoesRetencao: input.observacoesRetencao || null,
         atualizadoEm: new Date().toISOString(),
       } as any).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
+      return { ok: true };
+    }),
+
+  salvarRetencaoConfig: protectedProcedure
+    .input(z.object({
+      contratoId: z.number(),
+      companyId: z.number(),
+      percISS: z.number().min(0).max(100).default(0),
+      percINSS: z.number().min(0).max(100).default(0),
+      percIRRF: z.number().min(0).max(100).default(0),
+      percOutrasRetencoes: z.number().min(0).max(100).default(0),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [contrato] = await db.select().from(terceiroContratos).where(and(eq(terceiroContratos.id, input.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+      if (!contrato) throw new Error("Contrato não encontrado");
+      await db.update(terceiroContratos).set({
+        percISS: String(input.percISS),
+        percINSS: String(input.percINSS),
+        percIRRF: String(input.percIRRF),
+        percOutrasRetencoes: String(input.percOutrasRetencoes),
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(and(eq(terceiroContratos.id, input.contratoId), eq(terceiroContratos.companyId, input.companyId)));
       return { ok: true };
     }),
 

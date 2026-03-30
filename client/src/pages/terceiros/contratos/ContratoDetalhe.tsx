@@ -12,7 +12,7 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2, FileDown
+  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -1214,26 +1214,54 @@ function ComparativoTab({ contrato, id }: { contrato: any; id: number }) {
 }
 
 function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEditable: boolean }) {
-  const [editing, setEditing] = useState(false);
-  const [vals, setVals] = useState({
-    retencaoISS: Number(m.retencaoISS || 0),
-    retencaoINSS: Number(m.retencaoINSS || 0),
-    retencaoIRRF: Number(m.retencaoIRRF || 0),
-    outrasRetencoes: Number(m.outrasRetencoes || 0),
-    descontos: Number(m.descontos || 0),
-    observacoesRetencao: m.observacoesRetencao || "",
-  });
+  const [editingDescontos, setEditingDescontos] = useState(false);
+  const [editingConfig, setEditingConfig] = useState(false);
+  const [descontos, setDescontos] = useState(Number(m.descontos || 0));
+  const [obsRetencao, setObsRetencao] = useState(m.observacoesRetencao || "");
   const [pdfLoading, setPdfLoading] = useState(false);
+
+  const [percConfig, setPercConfig] = useState({
+    percISS: Number(contrato.percISS || 0),
+    percINSS: Number(contrato.percINSS || 0),
+    percIRRF: Number(contrato.percIRRF || 0),
+    percOutrasRetencoes: Number(contrato.percOutrasRetencoes || 0),
+  });
 
   const utils = trpc.useUtils();
   const salvarRetMut = trpc.terceiroContratos.salvarRetencoes.useMutation({
-    onSuccess: () => { toast.success("Retenções salvas"); setEditing(false); utils.terceiroContratos.getContrato.invalidate(); },
+    onSuccess: () => { toast.success("Descontos salvos"); setEditingDescontos(false); utils.terceiroContratos.getContrato.invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const salvarConfigMut = trpc.terceiroContratos.salvarRetencaoConfig.useMutation({
+    onSuccess: () => { toast.success("Configuração de retenções salva"); setEditingConfig(false); utils.terceiroContratos.getContrato.invalidate(); },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const totalRet = vals.retencaoISS + vals.retencaoINSS + vals.retencaoIRRF + vals.outrasRetencoes;
   const valorBruto = Number(m.valorMedido || 0);
-  const valorLiquido = valorBruto - totalRet - vals.descontos;
+  const pISS = Number(contrato.percISS || 0);
+  const pINSS = Number(contrato.percINSS || 0);
+  const pIRRF = Number(contrato.percIRRF || 0);
+  const pOutras = Number(contrato.percOutrasRetencoes || 0);
+
+  const retISS = valorBruto * pISS / 100;
+  const retINSS = valorBruto * pINSS / 100;
+  const retIRRF = valorBruto * pIRRF / 100;
+  const retOutras = valorBruto * pOutras / 100;
+  const totalRet = retISS + retINSS + retIRRF + retOutras;
+  const valorLiquido = valorBruto - totalRet - descontos;
+
+  const handleSaveDescontos = () => {
+    salvarRetMut.mutate({
+      medicaoId: m.id,
+      companyId: contrato.companyId,
+      retencaoISS: retISS,
+      retencaoINSS: retINSS,
+      retencaoIRRF: retIRRF,
+      outrasRetencoes: retOutras,
+      descontos,
+      observacoesRetencao: obsRetencao,
+    });
+  };
 
   const handlePdf = async () => {
     setPdfLoading(true);
@@ -1258,6 +1286,8 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
     setPdfLoading(false);
   };
 
+  const hasPerc = pISS > 0 || pINSS > 0 || pIRRF > 0 || pOutras > 0;
+
   return (
     <div className="border-t border-gray-100 p-4 space-y-3">
       <div className="flex items-center justify-between">
@@ -1266,76 +1296,110 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
           <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={handlePdf} disabled={pdfLoading}>
             {pdfLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />} Gerar PDF
           </Button>
-          {isEditable && !editing && (
-            <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setEditing(true)}>
-              <Pencil className="w-3 h-3" /> Editar
-            </Button>
-          )}
         </div>
       </div>
 
-      {editing ? (
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { key: "retencaoISS", label: "ISS (R$)" },
-            { key: "retencaoINSS", label: "INSS (R$)" },
-            { key: "retencaoIRRF", label: "IRRF (R$)" },
-            { key: "outrasRetencoes", label: "Outras Ret. (R$)" },
-            { key: "descontos", label: "Descontos (R$)" },
-          ].map(f => (
-            <div key={f.key}>
-              <Label className="text-xs">{f.label}</Label>
-              <Input type="number" step="0.01" min="0" className="text-xs h-8"
-                value={(vals as any)[f.key]}
-                onChange={e => setVals(prev => ({ ...prev, [f.key]: parseFloat(e.target.value) || 0 }))}
-              />
-            </div>
-          ))}
-          <div className="col-span-3">
-            <Label className="text-xs">Observações</Label>
-            <Input className="text-xs h-8" value={vals.observacoesRetencao}
-              onChange={e => setVals(prev => ({ ...prev, observacoesRetencao: e.target.value }))}
-            />
+      {!hasPerc && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+          Nenhum percentual de retenção configurado neste contrato.
+          <button className="ml-2 text-amber-900 font-semibold underline" onClick={() => setEditingConfig(true)}>
+            Configurar agora
+          </button>
+        </div>
+      )}
+
+      {editingConfig && (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+          <div className="text-xs font-semibold text-slate-600 mb-1">Configuração de Retenções do Contrato (%)</div>
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { key: "percISS", label: "ISS %" },
+              { key: "percINSS", label: "INSS %" },
+              { key: "percIRRF", label: "IRRF %" },
+              { key: "percOutrasRetencoes", label: "Outras %" },
+            ].map(f => (
+              <div key={f.key}>
+                <Label className="text-[10px] text-gray-500">{f.label}</Label>
+                <Input type="number" step="0.01" min="0" max="100" className="text-xs h-7"
+                  value={(percConfig as any)[f.key]}
+                  onChange={e => setPercConfig(prev => ({ ...prev, [f.key]: parseFloat(e.target.value) || 0 }))}
+                />
+              </div>
+            ))}
           </div>
-          <div className="col-span-3 flex gap-2 justify-end">
-            <Button size="sm" variant="ghost" className="text-xs" onClick={() => setEditing(false)}>Cancelar</Button>
-            <Button size="sm" className="text-xs gap-1" disabled={salvarRetMut.isPending}
-              onClick={() => salvarRetMut.mutate({ medicaoId: m.id, companyId: contrato.companyId, ...vals })}>
-              <Save className="w-3 h-3" /> Salvar
+          <div className="flex gap-2 justify-end pt-1">
+            <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditingConfig(false)}>Cancelar</Button>
+            <Button size="sm" className="text-xs h-7 gap-1" disabled={salvarConfigMut.isPending}
+              onClick={() => salvarConfigMut.mutate({ contratoId: contrato.id, companyId: contrato.companyId, ...percConfig })}>
+              <Save className="w-3 h-3" /> Salvar Config
             </Button>
           </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-          <div className="bg-gray-50 rounded-lg p-2">
-            <div className="text-gray-400">Valor Bruto</div>
-            <div className="font-semibold text-gray-900">{BRL(valorBruto)}</div>
-          </div>
-          <div className="bg-red-50 rounded-lg p-2">
-            <div className="text-gray-400">Retenções</div>
-            <div className="font-semibold text-red-600">{totalRet > 0 ? `- ${BRL(totalRet)}` : BRL(0)}</div>
-            {(vals.retencaoISS > 0 || vals.retencaoINSS > 0 || vals.retencaoIRRF > 0 || vals.outrasRetencoes > 0) && (
-              <div className="text-[10px] text-gray-400 mt-0.5 space-y-px">
-                {vals.retencaoISS > 0 && <div>ISS: {BRL(vals.retencaoISS)}</div>}
-                {vals.retencaoINSS > 0 && <div>INSS: {BRL(vals.retencaoINSS)}</div>}
-                {vals.retencaoIRRF > 0 && <div>IRRF: {BRL(vals.retencaoIRRF)}</div>}
-                {vals.outrasRetencoes > 0 && <div>Outras: {BRL(vals.outrasRetencoes)}</div>}
-              </div>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+        <div className="bg-gray-50 rounded-lg p-2.5">
+          <div className="text-gray-400 text-[10px]">Valor Bruto</div>
+          <div className="font-semibold text-gray-900">{BRL(valorBruto)}</div>
+        </div>
+        <div className="bg-red-50 rounded-lg p-2.5">
+          <div className="text-gray-400 text-[10px] flex items-center gap-1">
+            Retenções
+            {hasPerc && !editingConfig && (
+              <button className="text-gray-300 hover:text-gray-500" onClick={() => setEditingConfig(true)} title="Configurar %">
+                <Settings className="w-3 h-3" />
+              </button>
             )}
           </div>
-          <div className="bg-orange-50 rounded-lg p-2">
-            <div className="text-gray-400">Descontos</div>
-            <div className="font-semibold text-orange-600">{vals.descontos > 0 ? `- ${BRL(vals.descontos)}` : BRL(0)}</div>
-          </div>
-          <div className="bg-blue-50 rounded-lg p-2">
-            <div className="text-gray-400">Valor Líquido</div>
-            <div className="font-bold text-blue-700">{BRL(valorLiquido)}</div>
-          </div>
-          {vals.observacoesRetencao && (
-            <div className="col-span-4 text-[10px] text-gray-400">Obs.: {vals.observacoesRetencao}</div>
+          <div className="font-semibold text-red-600">{totalRet > 0 ? `- ${BRL(totalRet)}` : BRL(0)}</div>
+          {hasPerc && (
+            <div className="text-[10px] text-gray-400 mt-0.5 space-y-px">
+              {pISS > 0 && <div>ISS {pISS}%: {BRL(retISS)}</div>}
+              {pINSS > 0 && <div>INSS {pINSS}%: {BRL(retINSS)}</div>}
+              {pIRRF > 0 && <div>IRRF {pIRRF}%: {BRL(retIRRF)}</div>}
+              {pOutras > 0 && <div>Outras {pOutras}%: {BRL(retOutras)}</div>}
+            </div>
           )}
         </div>
-      )}
+        <div className="bg-orange-50 rounded-lg p-2.5">
+          <div className="text-gray-400 text-[10px] flex items-center gap-1">
+            Descontos
+            {isEditable && !editingDescontos && (
+              <button className="text-gray-300 hover:text-gray-500" onClick={() => setEditingDescontos(true)} title="Editar descontos">
+                <Pencil className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+          {editingDescontos ? (
+            <div className="flex items-center gap-1 mt-0.5">
+              <Input type="number" step="0.01" min="0" className="text-xs h-6 w-24"
+                value={descontos}
+                onChange={e => setDescontos(parseFloat(e.target.value) || 0)}
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === "Enter") handleSaveDescontos();
+                  if (e.key === "Escape") setEditingDescontos(false);
+                }}
+              />
+              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingDescontos(false)}>
+                <X className="w-3 h-3" />
+              </Button>
+              <Button size="sm" className="h-6 px-2 text-[10px]" disabled={salvarRetMut.isPending} onClick={handleSaveDescontos}>
+                <Save className="w-3 h-3" />
+              </Button>
+            </div>
+          ) : (
+            <div className="font-semibold text-orange-600">{descontos > 0 ? `- ${BRL(descontos)}` : BRL(0)}</div>
+          )}
+        </div>
+        <div className="bg-blue-50 rounded-lg p-2.5">
+          <div className="text-gray-400 text-[10px]">Valor Líquido</div>
+          <div className="font-bold text-blue-700">{BRL(valorLiquido)}</div>
+        </div>
+        {obsRetencao && (
+          <div className="col-span-5 text-[10px] text-gray-400">Obs.: {obsRetencao}</div>
+        )}
+      </div>
     </div>
   );
 }
