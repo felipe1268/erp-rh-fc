@@ -54,6 +54,12 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [showGerarMedicao, setShowGerarMedicao] = useState(false);
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [periodo, setPeriodo] = useState(() => new Date().toISOString().slice(0, 7));
+  const [medicaoDataInicio, setMedicaoDataInicio] = useState(() => {
+    const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  });
+  const [medicaoDataFim, setMedicaoDataFim] = useState(() => {
+    const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+  });
   const [newItem, setNewItem] = useState({ descricao: "", unidade: "m²", quantidade: "1", valorUnitario: "0", eapCodigo: "", planejamentoAtividadeId: "" });
   const [newDoc, setNewDoc] = useState({ tipo: "INSS", descricao: "", competencia: "", dataVencimento: "", bloqueiaPagemento: false });
   const [editMedicao, setEditMedicao] = useState<{ id: number; periodo: string; dataReferencia: string; observacoes: string; status: string } | null>(null);
@@ -614,7 +620,25 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               <div className="space-y-3">
                 <div>
                   <Label className="text-sm">Período de Referência (AAAA-MM)</Label>
-                  <Input className="mt-1" value={periodo} onChange={e => setPeriodo(e.target.value)} placeholder="2025-03" />
+                  <Input className="mt-1" value={periodo} onChange={e => {
+                    const v = e.target.value; setPeriodo(v);
+                    const m = v.match(/^(\d{4})-(\d{2})$/);
+                    if (m) {
+                      const y = parseInt(m[1]), mo = parseInt(m[2]) - 1;
+                      setMedicaoDataInicio(new Date(y, mo, 1).toISOString().slice(0, 10));
+                      setMedicaoDataFim(new Date(y, mo + 1, 0).toISOString().slice(0, 10));
+                    }
+                  }} placeholder="2025-03" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-sm">Data Início</Label>
+                    <Input className="mt-1" type="date" value={medicaoDataInicio} onChange={e => setMedicaoDataInicio(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-sm">Data Fim</Label>
+                    <Input className="mt-1" type="date" value={medicaoDataFim} onChange={e => setMedicaoDataFim(e.target.value)} />
+                  </div>
                 </div>
                 {contrato.docsComPendencia > 0 && (
                   <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg text-yellow-700 text-xs">
@@ -626,7 +650,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               <div className="flex gap-3 mt-5 justify-end">
                 <Button variant="outline" onClick={() => setShowGerarMedicao(false)}>Cancelar</Button>
                 <Button className="bg-blue-600 hover:bg-blue-700" disabled={gerarMedicaoMut.isPending}
-                  onClick={() => gerarMedicaoMut.mutate({ contratoId: id, companyId: contrato.companyId, periodo, criadoPor: "Responsável" })}>
+                  onClick={() => gerarMedicaoMut.mutate({ contratoId: id, companyId: contrato.companyId, periodo, dataInicio: medicaoDataInicio, dataFim: medicaoDataFim, criadoPor: "Responsável" })}>
                   <Zap className="w-4 h-4 mr-2" />{gerarMedicaoMut.isPending ? "Gerando..." : "Gerar Medição"}
                 </Button>
               </div>

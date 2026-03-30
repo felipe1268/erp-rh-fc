@@ -231,7 +231,9 @@ async function startServer() {
         console.log("[ColFix] cotacoes com contrato terceiro → concluida Rev.899 OK");
         await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_por VARCHAR(255)`);
         await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_em TIMESTAMP`);
-        console.log("[ColFix] terceiro_medicoes rejeitadoPor/rejeitadoEm Rev.904 OK");
+        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS data_inicio DATE`);
+        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS data_fim DATE`);
+        console.log("[ColFix] terceiro_medicoes rejeitadoPor/rejeitadoEm/dataInicio/dataFim Rev.905 OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Normalização de textos compras — agora feita no momento de salvar/editar

@@ -3220,6 +3220,8 @@ export const terceiroMedicoes = pgTable("terceiro_medicoes", {
   numero:            integer().default(1),
   periodo:           varchar({ length: 7 }).notNull(), // YYYY-MM
   dataReferencia:    date("data_referencia"),
+  dataInicio:        date("data_inicio", { mode: "string" }),
+  dataFim:           date("data_fim", { mode: "string" }),
   valorMedido:       numeric("valor_medido", { precision: 18, scale: 2 }).default("0"),
   valorAcumulado:    numeric("valor_acumulado", { precision: 18, scale: 2 }).default("0"),
   percentualGlobal:  numeric("percentual_global", { precision: 8, scale: 4 }).default("0"),

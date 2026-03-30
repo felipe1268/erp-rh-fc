@@ -6416,4 +6416,15 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 22:00:00",
   },
+  {
+    versao: 905,
+    descricao:
+      "Modal 'Gerar Medição' agora exibe campos de Data Início e Data Fim, preenchidos automaticamente " +
+      "pelo primeiro e último dia do período selecionado, podendo ser ajustados manualmente. " +
+      "Correção da migração de colunas rejeitadoPor/rejeitadoEm que impedia carregamento do contrato.",
+    tipo: "improvement",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 22:30:00",
+  },
 ];

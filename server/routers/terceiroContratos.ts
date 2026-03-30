@@ -801,6 +801,8 @@ export const terceiroContratosRouter = router({
       companyId: z.number(),
       periodo: z.string(),
       dataReferencia: z.string().optional(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
       criadoPor: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -871,6 +873,8 @@ export const terceiroContratosRouter = router({
         numero,
         periodo: input.periodo,
         dataReferencia: input.dataReferencia ?? null,
+        dataInicio: input.dataInicio ?? null,
+        dataFim: input.dataFim ?? null,
         valorMedido: String(valorMedidoPeriodo),
         valorAcumulado: String(valorAcumulado),
         percentualGlobal: String(percentualGlobal),
