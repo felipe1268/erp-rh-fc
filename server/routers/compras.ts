@@ -4957,11 +4957,11 @@ Retorne APENAS um JSON válido neste formato:
       if (scItens.length === 0) return [];
 
       const orcItemIds = scItens.map(i => i.orcamentoItemId).filter(Boolean) as number[];
-      let orcItensData: Record<number, { quantidade: string; descricao: string; unidade: string | null }> = {};
+      let orcItensData: Record<number, { quantidade: string; descricao: string; unidade: string | null; servicoCodigo: string | null }> = {};
       if (orcItemIds.length > 0) {
-        const rows = await db.select({ id: orcamentoItens.id, quantidade: orcamentoItens.quantidade, descricao: orcamentoItens.descricao, unidade: orcamentoItens.unidade })
+        const rows = await db.select({ id: orcamentoItens.id, quantidade: orcamentoItens.quantidade, descricao: orcamentoItens.descricao, unidade: orcamentoItens.unidade, servicoCodigo: orcamentoItens.servicoCodigo })
           .from(orcamentoItens).where(and(inArray(orcamentoItens.id, orcItemIds), eq(orcamentoItens.companyId, input.companyId)));
-        for (const r of rows) orcItensData[r.id] = { quantidade: r.quantidade ?? "0", descricao: r.descricao ?? "", unidade: r.unidade };
+        for (const r of rows) orcItensData[r.id] = { quantidade: r.quantidade ?? "0", descricao: r.descricao ?? "", unidade: r.unidade, servicoCodigo: r.servicoCodigo ?? null };
       }
 
       let insumoOrcData: Record<string, { quantidadeTotal: number; descricao: string; unidade: string | null }> = {};
@@ -5088,6 +5088,33 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
+      const svcCodigos = [...new Set(Object.values(orcItensData).map(o => o.servicoCodigo).filter(Boolean))] as string[];
+      let composicaoInsumosMap: Record<string, { insumoCodigo: string; descricao: string; unidade: string | null; coeficiente: number; alocacaoMat: number; alocacaoMdo: number }[]> = {};
+      if (svcCodigos.length > 0) {
+        const compIns = await db.select({
+          composicaoCodigo: composicaoInsumos.composicaoCodigo,
+          insumoCodigo: composicaoInsumos.insumoCodigo,
+          descricao: composicaoInsumos.insumoDescricao,
+          unidade: composicaoInsumos.unidade,
+          coeficiente: composicaoInsumos.quantidade,
+          alocacaoMat: composicaoInsumos.alocacaoMat,
+          alocacaoMdo: composicaoInsumos.alocacaoMdo,
+        }).from(composicaoInsumos)
+          .where(and(eq(composicaoInsumos.companyId, Number(input.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCodigos)));
+        for (const ins of compIns) {
+          const key = ins.composicaoCodigo;
+          if (!composicaoInsumosMap[key]) composicaoInsumosMap[key] = [];
+          composicaoInsumosMap[key].push({
+            insumoCodigo: ins.insumoCodigo || "",
+            descricao: ins.descricao || "",
+            unidade: ins.unidade,
+            coeficiente: n(ins.coeficiente),
+            alocacaoMat: n(ins.alocacaoMat),
+            alocacaoMdo: n(ins.alocacaoMdo),
+          });
+        }
+      }
+
       return scItens.map(item => {
         const orcId = item.orcamentoItemId;
         const insCode = item.insumoCodigo;
@@ -5143,6 +5170,24 @@ Retorne APENAS um JSON válido neste formato:
           situacao = "saldo_insuficiente";
         }
 
+        const svcCode = orcData?.servicoCodigo;
+        let insumos: { insumoCodigo: string; descricao: string; unidade: string | null; coeficiente: number; qtdCalculada: number }[] = [];
+        if (svcCode && composicaoInsumosMap[svcCode]) {
+          const allIns = composicaoInsumosMap[svcCode];
+          const filtered = scTipoGroup === "mat"
+            ? allIns.filter(i => i.alocacaoMat > 0 || (i.alocacaoMdo === 0 && i.alocacaoMat === 0))
+            : scTipoGroup === "mdo"
+              ? allIns.filter(i => i.alocacaoMdo > 0)
+              : allIns;
+          insumos = filtered.map(i => ({
+            insumoCodigo: i.insumoCodigo,
+            descricao: i.descricao,
+            unidade: i.unidade,
+            coeficiente: i.coeficiente,
+            qtdCalculada: Math.round(qtdEstaSC * i.coeficiente * 1000) / 1000,
+          }));
+        }
+
         return {
           id: item.id,
           descricao: item.descricao,
@@ -5156,6 +5201,7 @@ Retorne APENAS um JSON válido neste formato:
           situacao,
           fonteVinculo,
           semVerbaFlag: item.semVerba ?? false,
+          insumos,
         };
       });
     }),
