@@ -6385,4 +6385,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 19:00:00",
   },
+  {
+    version: 903,
+    titulo: "Hierarquia EAP — nomes do orçamento e remoção do nível raiz",
+    descricao:
+      "Nomes dos grupos intermediários na tabela de itens do contrato agora vêm prioritariamente do orçamento (orcamentoItens), " +
+      "garantindo nomes corretos como 'REVESTIMENTOS EM MASSA INTERNO' ao invés de 'SERVIÇOS COMPLEMENTARES' do planejamento. " +
+      "O nível raiz (ex: EAP 10) é omitido da hierarquia pois não pertence ao escopo específico do contrato — " +
+      "apenas os pais intermediários (pavimento, paredes, etc.) são exibidos. " +
+      "Breadcrumb 'Origem' também exclui o nível raiz para ficar mais limpo (ex: '5º PAVIMENTO > PAREDES').",
+    tipo: "melhoria",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 21:00:00",
+  },
 ];

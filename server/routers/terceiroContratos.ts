@@ -126,30 +126,35 @@ export const terceiroContratosRouter = router({
                 for (let i = 1; i < parts.length; i++) parentSet.add(parts.slice(0, i).join("."));
               }
 
-              const missingEaps = [...parentSet].filter(e => !atividadeMap.has(e));
-              const allNeededEaps = [...parentSet, ...eapCodes].filter(e => !atividadeMap.has(e));
-              if (allNeededEaps.length > 0) {
-                try {
-                  const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
-                    .where(and(eq(orcamentos.companyId, contrato.companyId), eq(orcamentos.obraId, contrato.obraId)))
-                    .orderBy(desc(orcamentos.id)).limit(1);
-                  if (orc) {
-                    const orcItens = await db.select({
-                      eapCodigo: orcamentoItens.eapCodigo,
-                      descricao: orcamentoItens.descricao,
-                      nivel: orcamentoItens.nivel,
-                    }).from(orcamentoItens)
-                      .where(eq(orcamentoItens.orcamentoId, orc.id));
-                    for (const oi of orcItens) {
-                      if (oi.eapCodigo && !atividadeMap.has(oi.eapCodigo)) {
-                        atividadeMap.set(oi.eapCodigo, { nome: oi.descricao, nivel: oi.nivel ?? oi.eapCodigo.split(".").length, isGrupo: true, dataInicio: null, dataFim: null });
-                      }
+              try {
+                const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
+                  .where(and(eq(orcamentos.companyId, contrato.companyId), eq(orcamentos.obraId, contrato.obraId)))
+                  .orderBy(desc(orcamentos.id)).limit(1);
+                if (orc) {
+                  const orcItens = await db.select({
+                    eapCodigo: orcamentoItens.eapCodigo,
+                    descricao: orcamentoItens.descricao,
+                    nivel: orcamentoItens.nivel,
+                  }).from(orcamentoItens)
+                    .where(eq(orcamentoItens.orcamentoId, orc.id));
+                  for (const oi of orcItens) {
+                    if (oi.eapCodigo) {
+                      atividadeMap.set(oi.eapCodigo, {
+                        nome: oi.descricao,
+                        nivel: oi.nivel ?? oi.eapCodigo.split(".").length,
+                        isGrupo: true,
+                        dataInicio: atividadeMap.get(oi.eapCodigo)?.dataInicio ?? null,
+                        dataFim: atividadeMap.get(oi.eapCodigo)?.dataFim ?? null,
+                      });
                     }
                   }
-                } catch {}
-              }
+                }
+              } catch {}
+
+              const topLevelEap = [...parentSet].reduce((min, e) => (!min || e.split(".").length < min.split(".").length) ? e : min, "");
 
               for (const parentEap of parentSet) {
+                if (parentEap === topLevelEap) continue;
                 const atv = atividadeMap.get(parentEap);
                 const nivel = parentEap.split(".").length;
                 itensHierarchy.push({
@@ -170,7 +175,7 @@ export const terceiroContratosRouter = router({
                 if (eap) {
                   const parts = eap.split(".");
                   const pathParts: string[] = [];
-                  for (let i = 1; i <= parts.length; i++) {
+                  for (let i = 2; i <= parts.length; i++) {
                     const parentEap = parts.slice(0, i).join(".");
                     const p = atividadeMap.get(parentEap);
                     if (p) pathParts.push(p.nome);
@@ -481,29 +486,35 @@ export const terceiroContratosRouter = router({
           }
         }
 
-        const allNeededEaps = [...parentSet, ...eapCodes].filter(e => !atividadeMap.has(e));
-        if (allNeededEaps.length > 0) {
-          try {
-            const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
-              .where(and(eq(orcamentos.companyId, contrato.companyId), eq(orcamentos.obraId, contrato.obraId)))
-              .orderBy(desc(orcamentos.id)).limit(1);
-            if (orc) {
-              const orcItens = await db.select({
-                eapCodigo: orcamentoItens.eapCodigo,
-                descricao: orcamentoItens.descricao,
-                nivel: orcamentoItens.nivel,
-              }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, orc.id));
-              for (const oi of orcItens) {
-                if (oi.eapCodigo && !atividadeMap.has(oi.eapCodigo)) {
-                  atividadeMap.set(oi.eapCodigo, { nome: oi.descricao, nivel: oi.nivel ?? oi.eapCodigo.split(".").length, isGrupo: true, dataInicio: null, dataFim: null });
-                }
+        try {
+          const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
+            .where(and(eq(orcamentos.companyId, contrato.companyId), eq(orcamentos.obraId, contrato.obraId)))
+            .orderBy(desc(orcamentos.id)).limit(1);
+          if (orc) {
+            const orcItens = await db.select({
+              eapCodigo: orcamentoItens.eapCodigo,
+              descricao: orcamentoItens.descricao,
+              nivel: orcamentoItens.nivel,
+            }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, orc.id));
+            for (const oi of orcItens) {
+              if (oi.eapCodigo) {
+                atividadeMap.set(oi.eapCodigo, {
+                  nome: oi.descricao,
+                  nivel: oi.nivel ?? oi.eapCodigo.split(".").length,
+                  isGrupo: true,
+                  dataInicio: atividadeMap.get(oi.eapCodigo)?.dataInicio ?? null,
+                  dataFim: atividadeMap.get(oi.eapCodigo)?.dataFim ?? null,
+                });
               }
             }
-          } catch {}
-        }
+          }
+        } catch {}
+
+        const topLevelEap = [...parentSet].reduce((min, e) => (!min || e.split(".").length < min.split(".").length) ? e : min, "");
 
         const hierarchy: any[] = [];
         for (const parentEap of parentSet) {
+          if (parentEap === topLevelEap) continue;
           const atv = atividadeMap.get(parentEap);
           const nivel = parentEap.split(".").length;
           hierarchy.push({
@@ -524,7 +535,7 @@ export const terceiroContratosRouter = router({
           if (eap) {
             const parts = eap.split(".");
             const pathParts: string[] = [];
-            for (let i = 1; i <= parts.length; i++) {
+            for (let i = 2; i <= parts.length; i++) {
               const parentEap = parts.slice(0, i).join(".");
               const p = atividadeMap.get(parentEap);
               if (p) pathParts.push(p.nome);
