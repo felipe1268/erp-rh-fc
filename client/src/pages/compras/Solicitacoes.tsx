@@ -2544,13 +2544,13 @@ export default function Solicitacoes() {
                     </div>
                     <DialogTitle className="text-gray-900 text-lg">
                       {detalhe.numeroSc}
+                      {detalhe.titulo && <span className="ml-2 text-gray-500 font-normal">— {detalhe.titulo}</span>}
                       {((detalhe as any).tipo === "servico" || (detalhe as any).tipo === "pacote") && (
                         <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${(detalhe as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : "bg-orange-100 text-orange-700"}`}>
                           {(detalhe as any).tipo === "servico" ? "SERVIÇO" : "PACOTE"}
                         </span>
                       )}
                     </DialogTitle>
-                    {detalhe.titulo && <p className="text-gray-600 text-sm mt-0.5">{detalhe.titulo}</p>}
                   </div>
                   <StatusBadge status={detalhe.status} />
                 </div>
