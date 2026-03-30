@@ -2258,43 +2258,35 @@ export const terceiroContratosRouter = router({
         return mon.toISOString().slice(0, 10);
       }
 
-      // Load atividades for date info (previsto distribution)
-      const linkedAtivIds = todosItens.filter(i => i.planejamentoAtividadeId).map(i => i.planejamentoAtividadeId!);
-      let atividadesMap: Record<number, { dataInicio: string | null; dataFim: string | null; pesoFinanceiro: number }> = {};
-      if (linkedAtivIds.length) {
-        const ativs = await db.select({
-          id: planejamentoAtividades.id,
-          dataInicio: planejamentoAtividades.dataInicio,
-          dataFim: planejamentoAtividades.dataFim,
-          pesoFinanceiro: planejamentoAtividades.pesoFinanceiro,
-        }).from(planejamentoAtividades).where(inArray(planejamentoAtividades.id, linkedAtivIds));
-        for (const a of ativs) {
-          atividadesMap[a.id] = { dataInicio: a.dataInicio, dataFim: a.dataFim, pesoFinanceiro: n(a.pesoFinanceiro) };
-        }
-      }
-
-      // PREVISTO: distribui valor de cada item pelas semanas entre dataInicio e dataFim da atividade
+      // PREVISTO: usa percentualSemanal do cronograma (avanço previsto por semana × valor do item)
+      // Se a atividade tiver avanços registrados no cronograma, usa a diferença semanal do percentualAcumulado
+      // O percentualSemanal em planejamento_avancos representa o avanço planejado para aquela semana
       const semanasMapPrev: Record<string, number> = {};
       for (const item of todosItens) {
         if (!item.planejamentoAtividadeId) continue;
-        const ativ = atividadesMap[item.planejamentoAtividadeId];
-        if (!ativ?.dataInicio || !ativ?.dataFim) continue;
-        const inicio = new Date(ativ.dataInicio + "T12:00:00");
-        const fim = new Date(ativ.dataFim + "T12:00:00");
-        if (fim <= inicio) continue;
-        const semanasPrev: string[] = [];
-        const cur = new Date(inicio);
-        while (cur <= fim) {
-          const mon = getMonday(cur);
-          if (!semanasPrev.includes(mon)) semanasPrev.push(mon);
-          cur.setDate(cur.getDate() + 7);
+        const avancosItem = avancos.filter(a => a.atividadeId === item.planejamentoAtividadeId);
+        if (avancosItem.length === 0) continue;
+
+        // Calcular previsto: distribuir o valor total conforme a curva do cronograma
+        // Usa percentualSemanal como peso relativo de cada semana
+        let totalPctPrev = 0;
+        for (const av of avancosItem) {
+          totalPctPrev += n(av.percentualSemanal ?? 0);
         }
-        const lastMon = getMonday(fim);
-        if (!semanasPrev.includes(lastMon)) semanasPrev.push(lastMon);
-        if (semanasPrev.length === 0) continue;
-        const valorPorSemana = n(item.valorTotal) / semanasPrev.length;
-        for (const sem of semanasPrev) {
-          semanasMapPrev[sem] = (semanasMapPrev[sem] || 0) + valorPorSemana;
+        if (totalPctPrev <= 0) {
+          // Fallback: distribuição linear pelas semanas com avanço registrado
+          const valorPorSemana = n(item.valorTotal) / avancosItem.length;
+          for (const av of avancosItem) {
+            semanasMapPrev[av.semana] = (semanasMapPrev[av.semana] || 0) + valorPorSemana;
+          }
+        } else {
+          // Distribuir proporcionalmente ao percentualSemanal
+          for (const av of avancosItem) {
+            const pctSem = n(av.percentualSemanal ?? 0);
+            if (pctSem <= 0) continue;
+            const valorSemana = (pctSem / totalPctPrev) * n(item.valorTotal);
+            semanasMapPrev[av.semana] = (semanasMapPrev[av.semana] || 0) + valorSemana;
+          }
         }
       }
 
