@@ -22,6 +22,8 @@ import {
   terceiroContratoTemplates,
   terceiroContratoRevisoes,
   companies,
+  orcamentos,
+  orcamentoItens,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(String(v ?? 0)) || 0;
@@ -104,13 +106,18 @@ export const terceiroContratosRouter = router({
                 isGrupo: planejamentoAtividades.isGrupo,
                 dataInicio: planejamentoAtividades.dataInicio,
                 dataFim: planejamentoAtividades.dataFim,
+                revisaoId: planejamentoAtividades.revisaoId,
               }).from(planejamentoAtividades)
-                .where(and(eq(planejamentoAtividades.projetoId, proj.id), eq(planejamentoAtividades.revisaoId, rev.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`))
+                .where(and(eq(planejamentoAtividades.projetoId, proj.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`))
                 .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
 
               const atividadeMap = new Map<string, { nome: string; nivel: number; isGrupo: boolean | null; dataInicio: string | null; dataFim: string | null }>();
               for (const a of allAtividades) {
-                if (a.eapCodigo) atividadeMap.set(a.eapCodigo, { nome: a.nome, nivel: a.nivel ?? 0, isGrupo: a.isGrupo, dataInicio: a.dataInicio, dataFim: a.dataFim });
+                if (!a.eapCodigo) continue;
+                const existing = atividadeMap.get(a.eapCodigo);
+                if (!existing || a.revisaoId === rev.id) {
+                  atividadeMap.set(a.eapCodigo, { nome: a.nome, nivel: a.nivel ?? 0, isGrupo: a.isGrupo, dataInicio: a.dataInicio, dataFim: a.dataFim });
+                }
               }
 
               const parentSet = new Set<string>();
@@ -118,6 +125,30 @@ export const terceiroContratosRouter = router({
                 const parts = eap.split(".");
                 for (let i = 1; i < parts.length; i++) parentSet.add(parts.slice(0, i).join("."));
               }
+
+              const missingEaps = [...parentSet].filter(e => !atividadeMap.has(e));
+              const allNeededEaps = [...parentSet, ...eapCodes].filter(e => !atividadeMap.has(e));
+              if (allNeededEaps.length > 0) {
+                try {
+                  const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
+                    .where(and(eq(orcamentos.companyId, contrato.companyId), eq(orcamentos.obraId, contrato.obraId)))
+                    .orderBy(desc(orcamentos.id)).limit(1);
+                  if (orc) {
+                    const orcItens = await db.select({
+                      eapCodigo: orcamentoItens.eapCodigo,
+                      descricao: orcamentoItens.descricao,
+                      nivel: orcamentoItens.nivel,
+                    }).from(orcamentoItens)
+                      .where(eq(orcamentoItens.orcamentoId, orc.id));
+                    for (const oi of orcItens) {
+                      if (oi.eapCodigo && !atividadeMap.has(oi.eapCodigo)) {
+                        atividadeMap.set(oi.eapCodigo, { nome: oi.descricao, nivel: oi.nivel ?? oi.eapCodigo.split(".").length, isGrupo: true, dataInicio: null, dataFim: null });
+                      }
+                    }
+                  }
+                } catch {}
+              }
+
               for (const parentEap of parentSet) {
                 const atv = atividadeMap.get(parentEap);
                 const nivel = parentEap.split(".").length;
@@ -425,17 +456,21 @@ export const terceiroContratosRouter = router({
           isGrupo: planejamentoAtividades.isGrupo,
           dataInicio: planejamentoAtividades.dataInicio,
           dataFim: planejamentoAtividades.dataFim,
+          revisaoId: planejamentoAtividades.revisaoId,
         }).from(planejamentoAtividades)
           .where(and(
             eq(planejamentoAtividades.projetoId, proj.id),
-            eq(planejamentoAtividades.revisaoId, rev.id),
             sql`${planejamentoAtividades.disabled} IS NOT TRUE`,
           ))
           .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
 
         const atividadeMap = new Map<string, { nome: string; nivel: number; isGrupo: boolean | null; dataInicio: string | null; dataFim: string | null }>();
         for (const a of allAtividades) {
-          if (a.eapCodigo) atividadeMap.set(a.eapCodigo, { nome: a.nome, nivel: a.nivel ?? 0, isGrupo: a.isGrupo, dataInicio: a.dataInicio, dataFim: a.dataFim });
+          if (!a.eapCodigo) continue;
+          const existing = atividadeMap.get(a.eapCodigo);
+          if (!existing || a.revisaoId === rev.id) {
+            atividadeMap.set(a.eapCodigo, { nome: a.nome, nivel: a.nivel ?? 0, isGrupo: a.isGrupo, dataInicio: a.dataInicio, dataFim: a.dataFim });
+          }
         }
 
         const parentSet = new Set<string>();
@@ -444,6 +479,27 @@ export const terceiroContratosRouter = router({
           for (let i = 1; i < parts.length; i++) {
             parentSet.add(parts.slice(0, i).join("."));
           }
+        }
+
+        const allNeededEaps = [...parentSet, ...eapCodes].filter(e => !atividadeMap.has(e));
+        if (allNeededEaps.length > 0) {
+          try {
+            const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
+              .where(and(eq(orcamentos.companyId, contrato.companyId), eq(orcamentos.obraId, contrato.obraId)))
+              .orderBy(desc(orcamentos.id)).limit(1);
+            if (orc) {
+              const orcItens = await db.select({
+                eapCodigo: orcamentoItens.eapCodigo,
+                descricao: orcamentoItens.descricao,
+                nivel: orcamentoItens.nivel,
+              }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, orc.id));
+              for (const oi of orcItens) {
+                if (oi.eapCodigo && !atividadeMap.has(oi.eapCodigo)) {
+                  atividadeMap.set(oi.eapCodigo, { nome: oi.descricao, nivel: oi.nivel ?? oi.eapCodigo.split(".").length, isGrupo: true, dataInicio: null, dataFim: null });
+                }
+              }
+            }
+          } catch {}
         }
 
         const hierarchy: any[] = [];
