@@ -6469,4 +6469,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 23:45:00",
   },
+  {
+    versao: 909,
+    descricao:
+      "Medição Terceiros — Edição de % de avanço agora disponível em todos os status (exceto Paga). " +
+      "Quando o % editado manualmente for superior ao avanço físico real do cronograma, o sistema " +
+      "exibe um alerta fixo e visível na medição (banner laranja). Itens editados manualmente são " +
+      "marcados com ícone de alerta. Botão 'Editar' (modal genérico) restrito a medições em rascunho/" +
+      "aguardando aprovação. Recalcular limpa alertas e restaura valores reais do cronograma.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 00:00:00",
+  },
 ];

@@ -491,6 +491,10 @@ async function startServer() {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_user_company ON user_activity_log(user_id, company_id, criado_em DESC)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_company_tipo ON user_activity_log(company_id, tipo, criado_em)`);
         console.log("[Telemetria] user_activity_log OK");
+        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS alerta_divergencia TEXT`);
+        await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS percentual_fisico_real NUMERIC(8,4)`);
+        await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS editado_manualmente BOOLEAN DEFAULT false`);
+        console.log("[ColFix] terceiro_medicoes alerta_divergencia + medicao_itens percentual_fisico_real Rev.909 OK");
       } catch (e: any) { console.warn("[MedicaoMigration] Aviso:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Migração aviso prévio (Rev.547/586) — já completada

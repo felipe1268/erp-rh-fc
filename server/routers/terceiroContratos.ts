@@ -1834,6 +1834,8 @@ export const terceiroContratosRouter = router({
           percentualAvancoFisico: String(percentualFisico),
           percentualAcumuladoAnterior: String(percentualAnterior),
           percentualMedidoPeriodo: String(percentualPeriodo),
+          percentualFisicoReal: String(percentualFisico),
+          editadoManualmente: false,
           valorMedidoPeriodo: String(valorPeriodo),
           valorAcumulado: String(valorAcumuladoItem),
         } as any).where(eq(terceiroMedicaoItens.id, itemMed.id));
@@ -1851,6 +1853,7 @@ export const terceiroContratosRouter = router({
         valorMedido: String(valorMedidoPeriodo),
         valorAcumulado: String(valorAcumulado),
         percentualGlobal: String(percentualGlobal),
+        alertaDivergencia: null,
       } as any).where(eq(terceiroMedicoes.id, input.medicaoId));
 
       const vinculados = itensResultado.filter(i => i.vinculado).length;
@@ -1911,18 +1914,19 @@ export const terceiroContratosRouter = router({
     .input(z.object({
       medicaoItemId: z.number(),
       medicaoId: z.number(),
+      companyId: z.number(),
       percentualMedidoPeriodo: z.number(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const [medicao] = await db.select().from(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.medicaoId));
+      const [medicao] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
       if (!medicao) throw new Error("Medição não encontrada");
-      if (medicao.status === "aprovada" || medicao.status === "paga") throw new Error("Não é possível editar itens de uma medição já aprovada/paga");
+      if (medicao.status === "paga") throw new Error("Não é possível editar itens de uma medição já paga");
 
       const [item] = await db.select().from(terceiroMedicaoItens).where(and(eq(terceiroMedicaoItens.id, input.medicaoItemId), eq(terceiroMedicaoItens.medicaoId, input.medicaoId)));
       if (!item) throw new Error("Item da medição não encontrado");
 
-      const [contratoItem] = await db.select().from(terceiroContratoItens).where(eq(terceiroContratoItens.id, item.contratoItemId));
+      const [contratoItem] = await db.select().from(terceiroContratoItens).where(and(eq(terceiroContratoItens.id, item.contratoItemId), eq(terceiroContratoItens.companyId, input.companyId)));
       if (!contratoItem) throw new Error("Item do contrato não encontrado");
 
       const percentualAnterior = n(item.percentualAcumuladoAnterior);
@@ -1931,30 +1935,73 @@ export const terceiroContratosRouter = router({
       const novoValorPeriodo = (novoPercentualPeriodo / 100) * n(contratoItem.valorTotal);
       const novoValorAcumulado = (novoPercentualFisico / 100) * n(contratoItem.valorTotal);
 
+      const percentualFisicoRealAntes = n(item.percentualFisicoReal ?? item.percentualAvancoFisico);
+      const fisicoRealPeriodo = Math.max(0, percentualFisicoRealAntes - percentualAnterior);
+      const editadoManualmente = Math.abs(novoPercentualPeriodo - fisicoRealPeriodo) > 0.01;
+
       await db.update(terceiroMedicaoItens).set({
         percentualMedidoPeriodo: String(novoPercentualPeriodo),
         percentualAvancoFisico: String(novoPercentualFisico),
         valorMedidoPeriodo: String(novoValorPeriodo),
         valorAcumulado: String(novoValorAcumulado),
-      }).where(eq(terceiroMedicaoItens.id, input.medicaoItemId));
+        editadoManualmente: editadoManualmente,
+        percentualFisicoReal: item.percentualFisicoReal ?? String(n(item.percentualAvancoFisico)),
+      } as any).where(eq(terceiroMedicaoItens.id, input.medicaoItemId));
 
       const todosItens = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.medicaoId));
       const novoValorMedido = todosItens.reduce((s, i) => s + (i.id === input.medicaoItemId ? novoValorPeriodo : n(i.valorMedidoPeriodo)), 0);
       const medicoesAprovadas = (await db.select().from(terceiroMedicoes)
-        .where(and(eq(terceiroMedicoes.contratoId, medicao.contratoId), inArray(terceiroMedicoes.status, ["aprovada", "paga"]))))
-        .reduce((s, m) => s + n(m.valorMedido), 0);
+        .where(and(eq(terceiroMedicoes.contratoId, medicao.contratoId), eq(terceiroMedicoes.companyId, input.companyId), inArray(terceiroMedicoes.status, ["aprovada", "paga"]))))
+        .reduce((s, m) => s + (m.id === input.medicaoId ? 0 : n(m.valorMedido)), 0);
       const novoValorAcumuladoMedicao = medicoesAprovadas + novoValorMedido;
-      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, medicao.contratoId));
+      const [contrato] = await db.select().from(terceiroContratos).where(and(eq(terceiroContratos.id, medicao.contratoId), eq(terceiroContratos.companyId, input.companyId)));
       const novoPercentualGlobal = n(contrato?.valorTotal) > 0 ? (novoValorAcumuladoMedicao / n(contrato.valorTotal)) * 100 : 0;
+
+      const todosItensAtualizado = todosItens.map(i => i.id === input.medicaoItemId ? { ...i, editadoManualmente, percentualMedidoPeriodo: String(novoPercentualPeriodo), percentualFisicoReal: item.percentualFisicoReal ?? String(n(item.percentualAvancoFisico)) } : i);
+      const itensDivergentes = todosItensAtualizado.filter(i => {
+        const realPerc = n(i.percentualFisicoReal);
+        const anterior = n(i.percentualAcumuladoAnterior);
+        const realPeriodo = Math.max(0, realPerc - anterior);
+        const medidoPeriodo = n(i.percentualMedidoPeriodo);
+        return i.editadoManualmente && Math.abs(medidoPeriodo - realPeriodo) > 0.01 && medidoPeriodo > realPeriodo;
+      });
+
+      const alertaDivergencia = itensDivergentes.length > 0
+        ? `⚠ ${itensDivergentes.length} item(ns) com % de avanço superior ao avanço físico real do cronograma. Alteração manual em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}.`
+        : null;
 
       await db.update(terceiroMedicoes).set({
         valorMedido: String(novoValorMedido),
         valorAcumulado: String(novoValorAcumuladoMedicao),
         percentualGlobal: String(novoPercentualGlobal),
+        alertaDivergencia: alertaDivergencia,
         atualizadoEm: new Date().toISOString(),
-      }).where(eq(terceiroMedicoes.id, input.medicaoId));
+      } as any).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
 
-      return { ok: true };
+      if (medicao.status === "aprovada") {
+        const todasMedicoesAprovadas = await db.select().from(terceiroMedicoes)
+          .where(and(eq(terceiroMedicoes.contratoId, medicao.contratoId), eq(terceiroMedicoes.companyId, input.companyId), inArray(terceiroMedicoes.status, ["aprovada", "paga"])));
+        const todasMedicaoIds = todasMedicoesAprovadas.map(m => m.id);
+        const todosItensAprovados = todasMedicaoIds.length > 0
+          ? await db.select().from(terceiroMedicaoItens).where(inArray(terceiroMedicaoItens.medicaoId, todasMedicaoIds))
+          : [];
+
+        const contratoItemIds = new Set(todosItens.map(i => i.contratoItemId));
+        for (const ciId of contratoItemIds) {
+          const somaPercPeriodo = todosItensAprovados
+            .filter(i => i.contratoItemId === ciId)
+            .reduce((s, i) => s + (i.id === input.medicaoItemId ? novoPercentualPeriodo : n(i.percentualMedidoPeriodo)), 0);
+          const somaValorPeriodo = todosItensAprovados
+            .filter(i => i.contratoItemId === ciId)
+            .reduce((s, i) => s + (i.id === input.medicaoItemId ? novoValorPeriodo : n(i.valorMedidoPeriodo)), 0);
+
+          await db.update(terceiroContratoItens)
+            .set({ percentualMedidoAcumulado: String(somaPercPeriodo), valorMedidoAcumulado: String(somaValorPeriodo) })
+            .where(and(eq(terceiroContratoItens.id, ciId), eq(terceiroContratoItens.companyId, input.companyId)));
+        }
+      }
+
+      return { ok: true, alertaDivergencia };
     }),
 
   salvarRetencoes: protectedProcedure

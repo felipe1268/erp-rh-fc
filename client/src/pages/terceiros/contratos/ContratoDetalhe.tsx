@@ -774,7 +774,8 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
       {contrato.medicoes.map((m: any) => {
         const st = STATUS_MEDICAO[m.status || "rascunho"] || STATUS_MEDICAO.rascunho;
         const isExpanded = expandedMedicao === m.id;
-        const isEditable = m.status === "aguardando_aprovacao" || m.status === "rascunho";
+        const isEditable = m.status !== "paga";
+        const isPreApproval = m.status === "aguardando_aprovacao" || m.status === "rascunho";
         const itens = m.itens || [];
 
         return (
@@ -818,23 +819,28 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                       <RefreshCw className={`w-3 h-3 ${recalcularMut.isPending ? "animate-spin" : ""}`} /> Recalcular
                     </Button>
                   )}
+                  {isPreApproval && (
+                    <Button size="sm" variant="outline" className="gap-1 text-xs"
+                      onClick={() => setEditMedicao({ id: m.id, periodo: m.periodo, dataReferencia: m.dataReferencia || "", observacoes: m.observacoes || "", status: m.status || "rascunho" })}>
+                      <Pencil className="w-3 h-3" /> Editar
+                    </Button>
+                  )}
                   {m.status !== "paga" && (
-                    <>
-                      <Button size="sm" variant="outline" className="gap-1 text-xs"
-                        onClick={() => setEditMedicao({ id: m.id, periodo: m.periodo, dataReferencia: m.dataReferencia || "", observacoes: m.observacoes || "", status: m.status || "rascunho" })}>
-                        <Pencil className="w-3 h-3" /> Editar
-                      </Button>
-                      <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
-                        disabled={excluirMedicaoMut.isPending}
-                        onClick={() => { if (confirm(`Excluir Medição ${String(m.numero).padStart(2, "0")}? ${m.status === "aprovada" ? "Os valores acumulados serão revertidos." : ""}`)) excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }); }}>
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </>
+                    <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                      disabled={excluirMedicaoMut.isPending}
+                      onClick={() => { if (confirm(`Excluir Medição ${String(m.numero).padStart(2, "0")}? ${m.status === "aprovada" ? "Os valores acumulados serão revertidos." : ""}`)) excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }); }}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
                   )}
                 </div>
               </div>
 
               {m.aprovadoPor && <p className="text-xs text-gray-400 mt-2 ml-6">Aprovado por <span className="font-medium">{m.aprovadoPor}</span> em {fmtDate(m.aprovadoEm)}</p>}
+              {m.alertaDivergencia && (
+                <div className="mt-2 ml-6 p-2.5 bg-orange-50 rounded-lg border border-orange-200">
+                  <p className="text-xs text-orange-700 font-medium"><AlertTriangle className="w-3.5 h-3.5 inline mr-1.5 text-orange-500" />{m.alertaDivergencia}</p>
+                </div>
+              )}
               {m.motivoRejeicao && (
                 <div className="mt-2 ml-6 p-2 bg-red-50 rounded-lg border border-red-100">
                   <p className="text-xs text-red-600"><AlertTriangle className="w-3 h-3 inline mr-1" />Rejeitada{(m as any).rejeitadoPor ? ` por ${(m as any).rejeitadoPor}` : ""}{(m as any).rejeitadoEm ? ` em ${fmtDate((m as any).rejeitadoEm)}` : ""}</p>
@@ -859,7 +865,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                       <th className="px-2 py-2 text-center w-[55px]">Acum.%</th>
                       <th className="px-2 py-2 text-right w-[90px]">V.Período</th>
                       <th className="px-2 py-2 text-right w-[90px]">V.Acum.</th>
-                      {isEditable && <th className="px-2 py-2 text-center w-[35px]"></th>}
+                      {isPreApproval && <th className="px-2 py-2 text-center w-[35px]"></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -883,7 +889,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                               const h = hierMap.get(parentEap);
                               const nivel = depth;
                               const isTopLevel = nivel === 1;
-                              const colCount = isEditable ? 12 : 11;
+                              const colCount = isPreApproval ? 12 : 11;
                               rows.push(
                                 <tr key={`grp-${parentEap}`}
                                   className={`${isTopLevel ? "bg-slate-100 border-l-[3px] border-l-amber-500" : "bg-gray-50/70"} ${isTopLevel && rows.length > 0 ? "border-t-2 border-t-gray-200" : ""}`}>
@@ -931,7 +937,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                                     onChange={e => setEditingItem({ ...editingItem, valor: e.target.value })}
                                     onKeyDown={e => {
                                       if (e.key === "Enter") {
-                                        editarMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id, percentualMedidoPeriodo: parseFloat(editingItem.valor) || 0 });
+                                        editarMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id, companyId: contrato.companyId, percentualMedidoPeriodo: parseFloat(editingItem.valor) || 0 });
                                         setEditingItem(null);
                                       } else if (e.key === "Escape") setEditingItem(null);
                                     }}
@@ -943,15 +949,17 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                                 <span
                                   className={`font-semibold ${percPeriodo > 0 ? "text-blue-700" : "text-gray-400"} ${isEditable ? "cursor-pointer hover:underline" : ""}`}
                                   onClick={() => isEditable && setEditingItem({ id: item.id, valor: percPeriodo.toFixed(1) })}
+                                  title={item.editadoManualmente ? `Avanço físico real: ${Number(item.percentualFisicoReal || 0).toFixed(1)}% — Editado manualmente` : undefined}
                                 >
                                   +{percPeriodo.toFixed(1)}%
+                                  {item.editadoManualmente && <AlertTriangle className="w-3 h-3 inline ml-0.5 text-orange-500" />}
                                 </span>
                               )}
                             </td>
                             <td className="px-2 py-2 text-center font-semibold text-gray-700">{percAcumulado.toFixed(1)}%</td>
                             <td className="px-2 py-2 text-right text-gray-600">{BRL(item.valorMedidoPeriodo)}</td>
                             <td className="px-2 py-2 text-right font-semibold text-gray-900">{BRL(item.valorAcumulado)}</td>
-                            {isEditable && (
+                            {isPreApproval && (
                               <td className="px-2 py-2 text-center">
                                 <button onClick={() => { if (confirm("Remover este item da medição?")) removerMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id }); }}
                                   className="text-red-300 hover:text-red-500 p-0.5">
@@ -970,7 +978,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                       <td className="px-3 py-2 text-right text-gray-600" colSpan={9}>Total Período</td>
                       <td className="px-2 py-2 text-right text-blue-700">{BRL(m.valorMedido)}</td>
                       <td className="px-2 py-2 text-right text-gray-900">{BRL(m.valorAcumulado)}</td>
-                      {isEditable && <td />}
+                      {isPreApproval && <td />}
                     </tr>
                   </tfoot>
                 </table>
