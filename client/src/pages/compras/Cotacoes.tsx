@@ -3352,6 +3352,64 @@ export default function Cotacoes() {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={showFdCotDialog} onOpenChange={setShowFdCotDialog}>
+          <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827', zIndex: 9999 }}>
+            <DialogHeader>
+              <DialogTitle className="text-gray-900">Definir Faturamento Direto</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Quem paga?</label>
+                <Select value={fdCotForm.modalidade} onValueChange={v => setFdCotForm(p => ({ ...p, modalidade: v as any }))}>
+                  <SelectTrigger className="bg-white border-gray-300">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fd_cliente">FD Cliente (cliente paga ao fornecedor)</SelectItem>
+                    <SelectItem value="fd_fc">FD FC (a FC paga diretamente)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-400 mt-1">
+                  {fdCotForm.modalidade === "fd_cliente"
+                    ? "O cliente pagará diretamente ao fornecedor. O valor será abatido do saldo de FD orçado."
+                    : "A FC realizará o pagamento direto ao fornecedor. Não consome saldo de FD do orçamento."}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Valor do FD (R$)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={fdCotForm.valor}
+                  onChange={e => setFdCotForm(p => ({ ...p, valor: e.target.value }))}
+                  placeholder="0,00"
+                  className="bg-white border-gray-300"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowFdCotDialog(false)}>Cancelar</Button>
+              <Button
+                disabled={!fdCotForm.valor || parseFloat(fdCotForm.valor) <= 0 || marcarFd.isPending || !showDetalhe}
+                onClick={() => {
+                  if (!showDetalhe) return;
+                  marcarFd.mutate({
+                    cotacaoId: showDetalhe,
+                    companyId,
+                    modalidade: fdCotForm.modalidade,
+                    valor: parseFloat(fdCotForm.valor),
+                  });
+                }}
+                className="bg-amber-600 hover:bg-amber-500 text-white gap-2"
+              >
+                {marcarFd.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
+                Confirmar FD
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
       </DashboardLayout>
     );
   }
