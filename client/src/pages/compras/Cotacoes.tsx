@@ -406,6 +406,7 @@ function CoberturaRealocacaoInfo({ companyId, obraId, cotacaoId, deficit }: {
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   pendente:  { label: "Pendente",  cls: "bg-amber-50 text-amber-700 border-amber-200" },
   aprovada:  { label: "Aprovada",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  concluida: { label: "Concluída", cls: "bg-blue-50 text-blue-700 border-blue-200" },
   recusada:  { label: "Recusada",  cls: "bg-red-50 text-red-700 border-red-200" },
   expirada:  { label: "Expirada",  cls: "bg-gray-100 text-gray-500 border-gray-200" },
 };
@@ -3362,7 +3363,7 @@ export default function Cotacoes() {
           <Input placeholder="Buscar por número..." className="pl-9 bg-white border-gray-300 text-gray-900" value={busca} onChange={e => setBusca(e.target.value)} />
         </div>
         <div className="flex gap-2">
-          {["todos", "pendente", "aprovada", "recusada", "expirada"].map(s => (
+          {["todos", "pendente", "aprovada", "concluida", "recusada", "expirada"].map(s => (
             <button key={s} onClick={() => setFiltroStatus(s)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === s ? "bg-blue-600 border-blue-500 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"}`}>
               {s === "todos" ? "Todos" : STATUS_LABELS[s]?.label}

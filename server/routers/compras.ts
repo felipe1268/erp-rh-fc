@@ -5881,6 +5881,21 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
+      if (cot && (cot as any).contratoTerceiroId && !oc) {
+        etapas.push({
+          key: "contrato_gerado",
+          label: "Contrato Gerado",
+          status: "concluida",
+          data: cot.atualizadoEm || cot.criadoEm,
+          tempoDesdeAnterior: daysBetween(prevDate, cot.atualizadoEm || cot.criadoEm),
+          detalhe: "Gerenciado em Terceiros",
+        });
+
+        const resolvedAtual = etapas.find(e => e.status === "atual");
+        const etapaAtual = resolvedAtual?.label ?? etapas[etapas.length - 1]?.label ?? null;
+        return { etapas, etapaAtual };
+      }
+
       if (oc) {
         const dias = daysBetween(prevDate, oc.criadoEm);
         etapas.push({

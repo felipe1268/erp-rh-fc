@@ -985,19 +985,18 @@ export const terceiroContratosRouter = router({
         );
       }
 
-      // 8. Marcar cotação como convertida + aprovar se estava pendente
-      const cotUpdate: any = { contratoTerceiroId: contrato.id };
+      // 8. Marcar cotação como concluída (contrato gerado no módulo Terceiros)
+      const cotUpdate: any = { contratoTerceiroId: contrato.id, status: "concluida" };
       if (isPendente) {
-        cotUpdate.status = "aprovada";
         cotUpdate.condicaoPagamento = "Medição conforme avanço físico";
       }
       await db.update(comprasCotacoes)
         .set(cotUpdate)
         .where(eq(comprasCotacoes.id, input.cotacaoId));
 
-      if (isPendente && cot.solicitacaoId) {
+      if (cot.solicitacaoId) {
         await db.update(comprasSolicitacoes)
-          .set({ status: "em_cotacao", atualizadoEm: new Date().toISOString() })
+          .set({ status: "concluida", atualizadoEm: new Date().toISOString() })
           .where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
       }
 

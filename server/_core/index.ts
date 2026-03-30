@@ -224,6 +224,8 @@ async function startServer() {
         console.log("[ColFix] compras_cotacoes FD columns Rev.895 OK");
         await db.execute(sql`ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS modulo_medicao VARCHAR(30)`);
         console.log("[ColFix] compras_cotacao_fornecedores modulo_medicao Rev.897 OK");
+        await db.execute(sql`UPDATE compras_cotacoes SET status = 'concluida' WHERE contrato_terceiro_id IS NOT NULL AND status = 'aprovada'`);
+        console.log("[ColFix] cotacoes com contrato terceiro → concluida Rev.899 OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Normalização de textos compras — agora feita no momento de salvar/editar
