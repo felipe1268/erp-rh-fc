@@ -16,6 +16,8 @@ import {
   comprasCotacoes,
   comprasCotacoesItens,
   comprasSolicitacoes,
+  comprasSolicitacoesItens,
+  planejamentoRevisoes,
   fornecedores,
   terceiroContratoTemplates,
   terceiroContratoRevisoes,
@@ -685,7 +687,51 @@ export const terceiroContratosRouter = router({
         isNova = true;
       }
 
-      // 5. Gerar número de contrato CT-AAAA-NNN
+      // 5. Consultar datas das atividades do cronograma vinculadas aos itens
+      let dataInicioContrato = new Date().toISOString().slice(0, 10);
+      let dataTerminoContrato: string | null = null;
+      try {
+        const scItemIds = itens.map(it => it.solicitacaoItemId).filter(Boolean) as number[];
+        if (scItemIds.length > 0 && cot.obraId) {
+          const scItensRows = await db.select({
+            eapCodigo: comprasSolicitacoesItens.eapCodigo,
+            composicaoCodigo: comprasSolicitacoesItens.composicaoCodigo,
+          }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+          const eapCodes = [...new Set(scItensRows.map(s => s.eapCodigo).filter(Boolean))] as string[];
+          if (eapCodes.length > 0) {
+            const [proj] = await db.select({ id: planejamentoProjetos.id })
+              .from(planejamentoProjetos)
+              .where(and(eq(planejamentoProjetos.companyId, input.companyId), eq(planejamentoProjetos.obraId, cot.obraId)))
+              .orderBy(desc(planejamentoProjetos.id))
+              .limit(1);
+            if (proj) {
+              const [rev] = await db.select({ id: planejamentoRevisoes.id })
+                .from(planejamentoRevisoes)
+                .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+                .orderBy(desc(planejamentoRevisoes.numero))
+                .limit(1);
+              if (rev) {
+                const dateRows = await db.execute(sql`
+                  SELECT MIN(data_inicio) as min_inicio, MAX(data_fim) as max_fim
+                  FROM planejamento_atividades
+                  WHERE revisao_id = ${rev.id}
+                    AND projeto_id = ${proj.id}
+                    AND eap_codigo IN (${sql.join(eapCodes.map(c => sql`${c}`), sql`, `)})
+                    AND data_inicio IS NOT NULL
+                    AND disabled IS NOT TRUE
+                `);
+                const row = (dateRows as any).rows?.[0];
+                if (row?.min_inicio) dataInicioContrato = String(row.min_inicio);
+                if (row?.max_fim) dataTerminoContrato = String(row.max_fim);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[gerarContratoFromCotacao] Erro ao consultar datas do cronograma:", e);
+      }
+
+      // 6. Gerar número de contrato CT-AAAA-NNN
       const year = new Date().getFullYear();
       const [{ cnt }] = await db.select({ cnt: sql<number>`count(*)` })
         .from(terceiroContratos)
@@ -696,7 +742,7 @@ export const terceiroContratosRouter = router({
       const seq = (Number(cnt) + 1).toString().padStart(3, "0");
       const numeroContrato = `CT-${year}-${seq}`;
 
-      // 6. Criar contrato
+      // 7. Criar contrato
       const valorTotal = parseFloat(String(cot.total || "0"));
       const [contrato] = await db.insert(terceiroContratos).values({
         companyId: input.companyId,
@@ -707,7 +753,8 @@ export const terceiroContratosRouter = router({
         tipoContrato: "empreitada_global",
         valorTotal: String(valorTotal),
         valorPago: "0",
-        dataInicio: new Date().toISOString().slice(0, 10),
+        dataInicio: dataInicioContrato,
+        dataTermino: dataTerminoContrato,
         status: "ativo",
         observacoes: `Gerado automaticamente da cotação ${cot.numeroCotacao}.${cot.condicaoPagamento ? ` Cond. pagamento: ${cot.condicaoPagamento}.` : ""}${(cot as any).modalidadeFd && (cot as any).modalidadeFd !== "normal" ? ` [FD ${(cot as any).fdPagador === "cliente" ? "Cliente" : "FC"}: R$ ${parseFloat((cot as any).fdValor || "0").toFixed(2)}]` : ""}`,
       }).returning();
