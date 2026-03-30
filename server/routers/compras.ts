@@ -1515,7 +1515,7 @@ Responda APENAS com um objeto JSON no formato:
       if (sc.status === "recebido" || sc.status === "recebido_parcial") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Não é possível desaprovar uma solicitação que já possui recebimentos." });
       }
-      const linkedCots = await db.select({ id: comprasCotacoes.id, status: comprasCotacoes.status })
+      const linkedCots = await db.select({ id: comprasCotacoes.id, status: comprasCotacoes.status, numeroCotacao: comprasCotacoes.numeroCotacao })
         .from(comprasCotacoes)
         .where(and(eq(comprasCotacoes.solicitacaoId, input.id), eq(comprasCotacoes.companyId, input.companyId)));
       const activeCots = linkedCots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
@@ -1524,7 +1524,18 @@ Responda APENAS com um objeto JSON no formato:
         if (linkedOCs.length > 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: `Cotação COT vinculada já possui Ordem de Compra. Cancele a OC antes de desaprovar.` });
         }
-        await db.update(comprasCotacoes).set({ status: "cancelada" }).where(eq(comprasCotacoes.id, cot.id));
+      }
+      const allCotIds = linkedCots.map(c => c.id);
+      if (allCotIds.length > 0) {
+        await db.delete(comprasCotacaoRespostas).where(inArray(comprasCotacaoRespostas.cotacaoId, allCotIds));
+        await db.delete(comprasCotacaoPropostas).where(inArray(comprasCotacaoPropostas.cotacaoId, allCotIds));
+        await db.delete(comprasCotacaoFornecedores).where(inArray(comprasCotacaoFornecedores.cotacaoId, allCotIds));
+        await db.delete(comprasCotacoesItens).where(inArray(comprasCotacoesItens.cotacaoId, allCotIds));
+        await db.execute(sql`DELETE FROM compras_risco_debitos WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+        await db.execute(sql`DELETE FROM purchase_quotation_tokens WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+        await db.execute(sql`DELETE FROM purchase_negotiations WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+        await db.execute(sql`DELETE FROM supplier_price_history WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+        await db.delete(comprasCotacoes).where(inArray(comprasCotacoes.id, allCotIds));
       }
       await db.update(comprasSolicitacoes).set({
         status: "pendente",
@@ -1533,7 +1544,7 @@ Responda APENAS com um objeto JSON no formato:
         aprovadoEm: null,
         atualizadoEm: new Date().toISOString(),
       }).where(eq(comprasSolicitacoes.id, input.id));
-      return { ok: true, cotacoesCanceladas: activeCots.length };
+      return { ok: true, cotacoesExcluidas: allCotIds.length };
     }),
 
   registrarRecebimentoItem: protectedProcedure

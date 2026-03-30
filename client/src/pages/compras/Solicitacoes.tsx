@@ -586,8 +586,8 @@ export default function Solicitacoes() {
   });
   const desaprovar = trpc.compras.desaprovarSolicitacao.useMutation({
     onSuccess: (data) => {
-      const msg = data.cotacoesCanceladas > 0
-        ? `SC desaprovada! ${data.cotacoesCanceladas} cotação(ões) cancelada(s).`
+      const msg = data.cotacoesExcluidas > 0
+        ? `SC desaprovada! ${data.cotacoesExcluidas} cotação(ões) excluída(s).`
         : "SC desaprovada! Voltou para Pendente.";
       toast.success(msg);
       q.refetch(); detalheQ.refetch();

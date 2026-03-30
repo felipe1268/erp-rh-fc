@@ -6244,4 +6244,16 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 11:00:00",
   },
+  {
+    version: 892,
+    titulo: "Desaprovar SC — cotação excluída completamente",
+    descricao: "Ao desaprovar uma Solicitação de Compra, as cotações vinculadas agora são " +
+      "excluídas completamente (itens, fornecedores, respostas e a cotação em si) em vez de " +
+      "apenas marcadas como 'cancelada'. Isso evita duplicidade de cotações ao re-aprovar a SC. " +
+      "Bloqueio mantido: se a cotação possuir OC vinculada, a desaprovação é impedida.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 11:30:00",
+  },
 ];
