@@ -859,22 +859,36 @@ export default function Solicitacoes() {
     }
   }, [eapExtraDesbloqueado]);
 
+  function isTituloItem(it: any, allItems: any[]): boolean {
+    const prefix = it.eapCodigo + ".";
+    const hasChildren = allItems.some((o: any) => o.eapCodigo.startsWith(prefix));
+    const qtdZero = !it.quantidade || parseFloat(String(it.quantidade)) === 0;
+    const descEndsColon = it.descricao?.trim().endsWith(":");
+    let score = 0;
+    if (hasChildren) score++;
+    if (qtdZero) score++;
+    if (descEndsColon) score++;
+    return score >= 2;
+  }
+
   function handleEapDoubleClick(clickedItem: any) {
     const eapItems = eapQ.data?.items;
     if (!eapItems) return;
 
+    const allVisible = eapItems.filter((it: any) => it.nivel >= 2 && it.tipo !== "grupo");
+
     const prefix = clickedItem.eapCodigo + ".";
-    const childItems = eapItems
-      .filter((it: any) => it.nivel >= 2 && it.tipo !== "grupo")
+    const childItems = allVisible
       .filter((it: any) => {
         if (form.tipo === "servico") return !!it.servicoCodigo && (it as any).temMdo;
         if (!it.servicoCodigo) return true;
         if (form.tipo === "material") return (it as any).temMat !== false;
         return true;
       })
-      .filter((it: any) => it.eapCodigo.startsWith(prefix) || it.id === clickedItem.id);
+      .filter((it: any) => it.eapCodigo.startsWith(prefix) || it.id === clickedItem.id)
+      .filter((it: any) => !isTituloItem(it, eapItems));
 
-    if (childItems.length <= 1) return;
+    if (childItems.length === 0) return;
 
     const allSelected = childItems.every((it: any) => selectedEapIds.has(it.id) || (parseFloat(eapQtdServico[it.id] || "") > 0));
 
