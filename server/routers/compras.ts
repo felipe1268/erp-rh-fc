@@ -7292,22 +7292,24 @@ Retorne APENAS um JSON válido neste formato:
       const [cot] = await db.select().from(comprasCotacoes).where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
 
-      let tipoEfetivo = cot.tipo ?? "material";
+      let tipoSC: string | null = null;
       if (cot.solicitacaoId) {
         const [sc] = await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
-        if (sc?.tipo) tipoEfetivo = sc.tipo;
+        tipoSC = sc?.tipo ?? null;
       }
+      const tipoOrigem = tipoSC ?? cot.tipo ?? "material";
 
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
 
-      let respostas: any[] = [];
-      if (cot.fornecedorId) {
-        respostas = await db.select().from(comprasCotacaoRespostas).where(
-          and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId))
-        );
+      const allRespostas = await db.select().from(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId));
+      const respByItem: Record<number, any> = {};
+      for (const r of allRespostas) {
+        if (cot.fornecedorId && r.fornecedorId === cot.fornecedorId) {
+          respByItem[r.itemId] = r;
+        } else if (!respByItem[r.itemId]) {
+          respByItem[r.itemId] = r;
+        }
       }
-      const respMap: Record<number, any> = {};
-      for (const r of respostas) respMap[r.itemId] = r;
 
       const scItemIds = itens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
       let scItens: any[] = [];
@@ -7315,10 +7317,18 @@ Retorne APENAS um JSON válido neste formato:
         scItens = await db.select({
           id: comprasSolicitacoesItens.id,
           orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+          insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+          composicaoCodigo: comprasSolicitacoesItens.composicaoCodigo,
         }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
       }
       const scToOrc: Record<number, number> = {};
-      for (const s of scItens) if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+      const scToInsumo: Record<number, string> = {};
+      const scToComposicao: Record<number, string> = {};
+      for (const s of scItens) {
+        if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+        if (s.insumoCodigo) scToInsumo[s.id] = s.insumoCodigo;
+        if (s.composicaoCodigo) scToComposicao[s.id] = s.composicaoCodigo;
+      }
 
       const orcItemIds = [...new Set(Object.values(scToOrc))];
       let orcMap: Record<number, { custoUnitMat: number; custoUnitMdo: number; custoUnitTotal: number }> = {};
@@ -7332,18 +7342,39 @@ Retorne APENAS um JSON válido neste formato:
         for (const o of orcData) orcMap[o.id] = { custoUnitMat: n(o.custoUnitMat), custoUnitMdo: n(o.custoUnitMdo), custoUnitTotal: n(o.custoUnitTotal) };
       }
 
+      const insCodigos = [...new Set(Object.values(scToInsumo))];
+      let insumoAlocMap: Record<string, { mat: number; mdo: number }> = {};
+      if (insCodigos.length > 0) {
+        try {
+          const compIns = await db.select({
+            insumoCodigo: composicaoInsumos.insumoCodigo,
+            alocacaoMat: composicaoInsumos.alocacaoMat,
+            alocacaoMdo: composicaoInsumos.alocacaoMdo,
+          }).from(composicaoInsumos)
+            .where(and(eq(composicaoInsumos.companyId, input.companyId), inArray(composicaoInsumos.insumoCodigo, insCodigos)));
+          for (const ci of compIns) {
+            const mat = n(ci.alocacaoMat);
+            const mdo = n(ci.alocacaoMdo);
+            if (!insumoAlocMap[ci.insumoCodigo]) {
+              insumoAlocMap[ci.insumoCodigo] = { mat, mdo };
+            }
+          }
+        } catch (e) { /* composicaoInsumos may not exist */ }
+      }
+
       let totalMat = 0;
       let totalMdo = 0;
       const itensClassificados: { id: number; descricao: string; valor: number; valorMat: number; valorMdo: number; tipo: string }[] = [];
 
       for (const it of itens) {
-        const resp = respMap[it.id];
-        const valorItem = resp ? n(resp.total) : n(it.total);
+        const resp = respByItem[it.id];
         const qtd = resp ? n(resp.quantidade) : n(it.quantidade);
-        const pu = resp ? n(resp.precoUnitario) : n(it.precoUnitario);
+        const valorItem = resp ? n(resp.total) : n(it.total);
 
         const orcId = it.solicitacaoItemId ? scToOrc[it.solicitacaoItemId] : undefined;
         const orc = orcId ? orcMap[orcId] : undefined;
+        const insCode = it.solicitacaoItemId ? scToInsumo[it.solicitacaoItemId] : undefined;
+        const alocacao = insCode ? insumoAlocMap[insCode] : undefined;
 
         let ratioMat = 1;
         let itemTipo = "material";
@@ -7351,27 +7382,40 @@ Retorne APENAS um JSON válido neste formato:
         if (orc && orc.custoUnitTotal > 0) {
           ratioMat = orc.custoUnitMat / orc.custoUnitTotal;
           itemTipo = ratioMat >= 0.99 ? "material" : ratioMat <= 0.01 ? "servico" : "pacote";
-        } else if (tipoEfetivo === "servico") {
+        } else if (alocacao) {
+          const total = alocacao.mat + alocacao.mdo;
+          ratioMat = total > 0 ? alocacao.mat / total : 1;
+          itemTipo = ratioMat >= 0.99 ? "material" : ratioMat <= 0.01 ? "servico" : "pacote";
+        } else if (tipoOrigem === "material") {
+          ratioMat = 1;
+          itemTipo = "material";
+        } else if (tipoOrigem === "servico") {
           ratioMat = 0;
           itemTipo = "servico";
-        } else if (tipoEfetivo === "pacote") {
+        } else if (tipoOrigem === "pacote") {
           ratioMat = 1;
           itemTipo = "material";
         }
 
-        const vMat = valorItem * ratioMat;
-        const vMdo = valorItem * (1 - ratioMat);
+        let valorEfetivo = valorItem;
+        if (valorEfetivo <= 0 && orc) {
+          valorEfetivo = orc.custoUnitTotal * qtd;
+        }
+
+        const vMat = valorEfetivo * ratioMat;
+        const vMdo = valorEfetivo * (1 - ratioMat);
         totalMat += vMat;
         totalMdo += vMdo;
-        itensClassificados.push({ id: it.id, descricao: it.descricao, valor: valorItem, valorMat: Math.round(vMat * 100) / 100, valorMdo: Math.round(vMdo * 100) / 100, tipo: itemTipo });
+        itensClassificados.push({ id: it.id, descricao: it.descricao, valor: Math.round(valorEfetivo * 100) / 100, valorMat: Math.round(vMat * 100) / 100, valorMdo: Math.round(vMdo * 100) / 100, tipo: itemTipo });
       }
 
       return {
-        tipoEfetivo,
+        tipoOrigem,
         totalGeral: Math.round((totalMat + totalMdo) * 100) / 100,
         totalMat: Math.round(totalMat * 100) / 100,
         totalMdo: Math.round(totalMdo * 100) / 100,
         temVencedor: !!cot.fornecedorId,
+        temRespostas: allRespostas.length > 0,
         itens: itensClassificados,
       };
     }),
@@ -7392,12 +7436,12 @@ Retorne APENAS um JSON válido neste formato:
       if (cot.status !== "pendente") throw new TRPCError({ code: "BAD_REQUEST", message: "FD só pode ser definido em cotações pendentes" });
 
       {
-        let tipoEfetivo = cot.tipo ?? "material";
+        let tipoOrigem = cot.tipo ?? "material";
         if (cot.solicitacaoId) {
           const [sc] = await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
-          if (sc?.tipo) tipoEfetivo = sc.tipo;
+          if (sc?.tipo) tipoOrigem = sc.tipo;
         }
-        if (tipoEfetivo === "servico") {
+        if (tipoOrigem === "servico") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "FD não é permitido para cotações 100% mão de obra." });
         }
 
@@ -7406,36 +7450,76 @@ Retorne APENAS um JSON válido neste formato:
           const scFdIds = fdItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
           let fdScItens: any[] = [];
           if (scFdIds.length > 0) {
-            fdScItens = await db.select({ id: comprasSolicitacoesItens.id, orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId })
-              .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scFdIds));
+            fdScItens = await db.select({
+              id: comprasSolicitacoesItens.id,
+              orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+              insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+            }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scFdIds));
           }
           const fdScToOrc: Record<number, number> = {};
-          for (const s of fdScItens) if (s.orcamentoItemId) fdScToOrc[s.id] = s.orcamentoItemId;
+          const fdScToInsumo: Record<number, string> = {};
+          for (const s of fdScItens) {
+            if (s.orcamentoItemId) fdScToOrc[s.id] = s.orcamentoItemId;
+            if (s.insumoCodigo) fdScToInsumo[s.id] = s.insumoCodigo;
+          }
           const fdOrcIds = [...new Set(Object.values(fdScToOrc))];
-          let fdOrcMap: Record<number, { mat: number; total: number }> = {};
+          let fdOrcMap: Record<number, { mat: number; mdo: number; total: number }> = {};
           if (fdOrcIds.length > 0) {
-            const fdOrcData = await db.select({ id: orcamentoItens.id, custoUnitMat: orcamentoItens.custoUnitMat, custoUnitTotal: orcamentoItens.custoUnitTotal })
+            const fdOrcData = await db.select({ id: orcamentoItens.id, custoUnitMat: orcamentoItens.custoUnitMat, custoUnitMdo: orcamentoItens.custoUnitMdo, custoUnitTotal: orcamentoItens.custoUnitTotal })
               .from(orcamentoItens).where(inArray(orcamentoItens.id, fdOrcIds));
-            for (const o of fdOrcData) fdOrcMap[o.id] = { mat: n(o.custoUnitMat), total: n(o.custoUnitTotal) };
+            for (const o of fdOrcData) fdOrcMap[o.id] = { mat: n(o.custoUnitMat), mdo: n(o.custoUnitMdo), total: n(o.custoUnitTotal) };
           }
 
-          let resps: any[] = [];
-          if (cot.fornecedorId) {
-            resps = await db.select().from(comprasCotacaoRespostas).where(
-              and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId))
-            );
+          const fdInsCodigos = [...new Set(Object.values(fdScToInsumo))];
+          let fdInsumoAlocMap: Record<string, { mat: number; mdo: number }> = {};
+          if (fdInsCodigos.length > 0) {
+            try {
+              const compIns = await db.select({
+                insumoCodigo: composicaoInsumos.insumoCodigo,
+                alocacaoMat: composicaoInsumos.alocacaoMat,
+                alocacaoMdo: composicaoInsumos.alocacaoMdo,
+              }).from(composicaoInsumos)
+                .where(and(eq(composicaoInsumos.companyId, input.companyId), inArray(composicaoInsumos.insumoCodigo, fdInsCodigos)));
+              for (const ci of compIns) {
+                if (!fdInsumoAlocMap[ci.insumoCodigo]) {
+                  fdInsumoAlocMap[ci.insumoCodigo] = { mat: n(ci.alocacaoMat), mdo: n(ci.alocacaoMdo) };
+                }
+              }
+            } catch (e) { /* composicaoInsumos may not exist */ }
           }
+
+          const allResps = await db.select().from(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId));
           const rMap: Record<number, any> = {};
-          for (const r of resps) rMap[r.itemId] = r;
+          for (const r of allResps) {
+            if (cot.fornecedorId && r.fornecedorId === cot.fornecedorId) {
+              rMap[r.itemId] = r;
+            } else if (!rMap[r.itemId]) {
+              rMap[r.itemId] = r;
+            }
+          }
 
           let totalMatCalc = 0;
           for (const it of fdItens) {
             const resp = rMap[it.id];
-            const valorItem = resp ? n(resp.total) : n(it.total);
+            let valorItem = resp ? n(resp.total) : n(it.total);
+            const qtd = resp ? n(resp.quantidade) : n(it.quantidade);
             const orcId = it.solicitacaoItemId ? fdScToOrc[it.solicitacaoItemId] : undefined;
             const orc = orcId ? fdOrcMap[orcId] : undefined;
-            let ratioMat = tipoEfetivo === "material" || tipoEfetivo === "pacote" ? 1 : 0;
-            if (orc && orc.total > 0) ratioMat = orc.mat / orc.total;
+            const insCode = it.solicitacaoItemId ? fdScToInsumo[it.solicitacaoItemId] : undefined;
+            const alocacao = insCode ? fdInsumoAlocMap[insCode] : undefined;
+
+            let ratioMat = tipoOrigem === "material" || tipoOrigem === "pacote" ? 1 : 0;
+            if (orc && orc.total > 0) {
+              ratioMat = orc.mat / orc.total;
+            } else if (alocacao) {
+              const aTotal = alocacao.mat + alocacao.mdo;
+              ratioMat = aTotal > 0 ? alocacao.mat / aTotal : 1;
+            }
+
+            if (valorItem <= 0 && orc) {
+              valorItem = orc.total * qtd;
+            }
+
             totalMatCalc += valorItem * ratioMat;
           }
           totalMatCalc = Math.round(totalMatCalc * 100) / 100;

@@ -3402,9 +3402,14 @@ export default function Cotacoes() {
                         {sp.totalGeral > 0 && <p className="text-[10px] text-purple-400">{((sp.totalMdo / sp.totalGeral) * 100).toFixed(1)}%</p>}
                       </div>
                     </div>
+                    {sp.tipoOrigem && (
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        Tipo SC: <span className="font-semibold">{sp.tipoOrigem === "material" ? "Material" : sp.tipoOrigem === "servico" ? "Serviço/MDO" : sp.tipoOrigem === "pacote" ? "Pacote (Mat+MDO)" : sp.tipoOrigem}</span>
+                      </p>
+                    )}
                     {!sp.temVencedor && sp.totalGeral > 0 && (
-                      <p className="text-[10px] text-amber-600 mt-2 flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3" /> Valores baseados na meta orçamentária (nenhum vencedor selecionado)
+                      <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" /> {sp.temRespostas ? "Valores das respostas dos fornecedores (nenhum vencedor selecionado)" : "Valores baseados na meta orçamentária (nenhuma resposta de fornecedor)"}
                       </p>
                     )}
                     {sp.itens.length > 0 && sp.itens.some(i => i.tipo === "pacote") && (
@@ -4038,9 +4043,14 @@ export default function Cotacoes() {
                       {sp.totalGeral > 0 && <p className="text-[10px] text-purple-400">{((sp.totalMdo / sp.totalGeral) * 100).toFixed(1)}%</p>}
                     </div>
                   </div>
+                  {sp.tipoOrigem && (
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Tipo SC: <span className="font-semibold">{sp.tipoOrigem === "material" ? "Material" : sp.tipoOrigem === "servico" ? "Serviço/MDO" : sp.tipoOrigem === "pacote" ? "Pacote (Mat+MDO)" : sp.tipoOrigem}</span>
+                    </p>
+                  )}
                   {!sp.temVencedor && sp.totalGeral > 0 && (
-                    <p className="text-[10px] text-amber-600 mt-2 flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" /> Valores baseados na meta orçamentária (nenhum vencedor selecionado)
+                    <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> {sp.temRespostas ? "Valores das respostas dos fornecedores (nenhum vencedor selecionado)" : "Valores baseados na meta orçamentária (nenhuma resposta de fornecedor)"}
                     </p>
                   )}
                   {sp.itens.length > 0 && sp.itens.some(i => i.tipo === "pacote") && (
