@@ -129,6 +129,10 @@ export const avisoPrevioFeriasRouter = router({
           novoEmpregoAtivo: terminationNotices.novoEmpregoAtivo,
           novoEmpregoComunicadoEm: terminationNotices.novoEmpregoComunicadoEm,
           novoEmpregoCartaUrl: terminationNotices.novoEmpregoCartaUrl,
+          motivoCancelamento: terminationNotices.motivoCancelamento,
+          canceladoPorNome: sql<string>`"termination_notices"."canceladoPorNome"`.as("canceladoPorNome"),
+          canceladoPorId: sql<number>`"termination_notices"."canceladoPorId"`.as("canceladoPorId"),
+          dataCancelamento: sql<string>`"termination_notices"."dataCancelamento"`.as("dataCancelamento"),
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
           employeeCargo: employees.cargo,
@@ -932,11 +936,17 @@ export const avisoPrevioFeriasRouter = router({
         diasTrabalhados: z.number().optional(),
         recalcular: z.boolean().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         const { id, recalcular, diasTrabalhados, dataDesligamento, ...rest } = input;
         const updateData: any = {};
         Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
+
+        if (input.status === "cancelado") {
+          updateData.canceladoPorNome = ctx.user?.name ?? ctx.user?.email ?? "Sistema";
+          updateData.canceladoPorId = ctx.user?.id ?? null;
+          updateData.dataCancelamento = new Date().toISOString();
+        }
 
         // Se recalcular=true, busca o aviso e o funcionário para recalcular tudo
         if (recalcular) {

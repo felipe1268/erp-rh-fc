@@ -722,6 +722,30 @@ export default function AvisoPrevio() {
                   <p className="text-sm text-muted-foreground">{TIPO_LABELS[selectedItem.tipo]?.label}</p>
                 </div>
               </div>
+
+              {selectedItem.status === "cancelado" && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-5 w-5 text-red-600" />
+                    <p className="text-sm font-bold text-red-700 uppercase">Aviso Cancelado</p>
+                  </div>
+                  {selectedItem.motivoCancelamento && (
+                    <div>
+                      <p className="text-xs text-red-500 font-medium">Motivo do Cancelamento</p>
+                      <p className="text-sm text-red-800 font-medium">{selectedItem.motivoCancelamento}</p>
+                    </div>
+                  )}
+                  <div className="flex gap-6 text-xs text-red-600">
+                    {(selectedItem as any).canceladoPorNome && (
+                      <span>Cancelado por: <strong>{(selectedItem as any).canceladoPorNome}</strong></span>
+                    )}
+                    {(selectedItem as any).dataCancelamento && (
+                      <span>Em: <strong>{new Date((selectedItem as any).dataCancelamento).toLocaleDateString("pt-BR")} às {new Date((selectedItem as any).dataCancelamento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</strong></span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="bg-blue-50 rounded-lg p-4 text-center">
                   <Calendar className="h-5 w-5 mx-auto text-blue-600 mb-1" />
