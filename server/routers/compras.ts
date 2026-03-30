@@ -4127,10 +4127,15 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
-      // ── Integração automática: OC entregue → Almoxarifado ───────────
+      // ── Integração automática: OC entregue → Almoxarifado (somente material) ──
       if (input.status === "entregue") {
         const [oc] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
         if (!oc) return { ok: true, almoxarifado: false };
+
+        const ocTipo = (oc as any).tipo ?? "compra";
+        if (ocTipo === "servico" || ocTipo === "pacote") {
+          return { ok: true, almoxarifado: false, itens: 0 };
+        }
 
         const itensOC = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
 
