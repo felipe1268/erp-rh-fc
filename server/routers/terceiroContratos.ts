@@ -818,6 +818,14 @@ export const terceiroContratosRouter = router({
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
       if (!contrato) throw new Error("Contrato não encontrado");
 
+      const existentes = await db.select({ id: terceiroMedicoes.id, periodo: terceiroMedicoes.periodo, status: terceiroMedicoes.status })
+        .from(terceiroMedicoes)
+        .where(and(eq(terceiroMedicoes.contratoId, input.contratoId), eq(terceiroMedicoes.periodo, input.periodo)));
+      const ativas = existentes.filter(m => m.status !== "rejeitada");
+      if (ativas.length > 0) {
+        throw new Error(`Já existe uma medição para o período ${input.periodo} neste contrato. Delete ou rejeite a medição existente antes de gerar uma nova.`);
+      }
+
       const itens = await db.select().from(terceiroContratoItens)
         .where(eq(terceiroContratoItens.contratoId, input.contratoId))
         .orderBy(asc(terceiroContratoItens.ordem));
