@@ -1436,7 +1436,7 @@ function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLab
       <div className="flex items-center gap-2">
         {isMobile ? <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" /> : null}
         <button
-          onClick={() => setLocation("/")}
+          onClick={() => setLocation(MODULE_HOME_ROUTES[activeModule] || "/")}
           title="Tela Inicial"
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground shrink-0"
         >
