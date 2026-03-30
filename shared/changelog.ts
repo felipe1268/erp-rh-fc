@@ -6456,4 +6456,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 23:30:00",
   },
+  {
+    versao: 908,
+    descricao:
+      "Controle de Documentos — Correção na lógica de status dos ASOs: quando existe um ASO vencido e " +
+      "um novo ASO válido para o mesmo colaborador e tipo, o sistema agora considera o ASO mais recente " +
+      "como referência. ASOs antigos recebem status 'SUBSTITUÍDO' (badge cinza) com opacidade reduzida, " +
+      "mantendo o histórico completo sem perda de dados. Painel de validade agora exibe apenas o ASO " +
+      "mais recente por colaborador/tipo nas contagens e alertas. Filtro 'Substituídos' adicionado.",
+    tipo: "bugfix",
+    modulos: "RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 23:45:00",
+  },
 ];

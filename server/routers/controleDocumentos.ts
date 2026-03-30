@@ -220,10 +220,29 @@ export const controleDocumentosRouter = router({
           .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), isNull(asos.deletedAt)))
           .orderBy(employees.nomeCompleto);
 
-        return rows.map((r: any) => ({
-          ...r,
-          ...calcularStatusASO(r.dataValidade),
-        }));
+        const byEmployeeTipo = new Map<string, any[]>();
+        for (const r of rows) {
+          const key = `${r.employeeId}_${r.tipo}`;
+          if (!byEmployeeTipo.has(key)) byEmployeeTipo.set(key, []);
+          byEmployeeTipo.get(key)!.push(r);
+        }
+
+        const latestByEmployee = new Map<string, string>();
+        for (const [key, group] of byEmployeeTipo) {
+          group.sort((a: any, b: any) => (b.dataExame || "").localeCompare(a.dataExame || "") || b.id - a.id);
+          latestByEmployee.set(key, group[0].id.toString());
+        }
+
+        return rows.map((r: any) => {
+          const key = `${r.employeeId}_${r.tipo}`;
+          const isLatest = latestByEmployee.get(key) === r.id.toString();
+          const statusCalc = calcularStatusASO(r.dataValidade);
+
+          if (!isLatest && statusCalc.status === "VENCIDO") {
+            return { ...r, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
+          }
+          return { ...r, ...statusCalc, isHistorico: !isLatest };
+        });
       }),
 
     create: protectedProcedure
@@ -1491,11 +1510,24 @@ export const controleDocumentosRouter = router({
         ))
         .orderBy(trainings.dataValidade);
 
-      // Calcular status para cada item
-      const asosComStatus = asoRows.map((r: any) => {
-        const { status, diasRestantes } = calcularStatusASO(r.dataValidade);
-        return { ...r, tipoDoc: "ASO" as const, descricao: r.tipo, status, diasRestantes };
-      });
+      const asoByEmpTipo = new Map<string, any[]>();
+      for (const r of asoRows) {
+        const key = `${r.employeeId}_${r.tipo}`;
+        if (!asoByEmpTipo.has(key)) asoByEmpTipo.set(key, []);
+        asoByEmpTipo.get(key)!.push(r);
+      }
+      const latestAsoIds = new Set<number>();
+      for (const [, group] of asoByEmpTipo) {
+        group.sort((a: any, b: any) => (b.dataExame || "").localeCompare(a.dataExame || "") || b.id - a.id);
+        latestAsoIds.add(group[0].id);
+      }
+
+      const asosComStatus = asoRows
+        .filter((r: any) => latestAsoIds.has(r.id))
+        .map((r: any) => {
+          const { status, diasRestantes } = calcularStatusASO(r.dataValidade);
+          return { ...r, tipoDoc: "ASO" as const, descricao: r.tipo, status, diasRestantes };
+        });
 
       const treinsComStatus = treinRows.map((r: any) => {
         const { status, diasRestantes } = calcularStatusASO(r.dataValidade!);

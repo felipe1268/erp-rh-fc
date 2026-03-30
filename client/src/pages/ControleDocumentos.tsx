@@ -29,6 +29,7 @@ import { TRAINING_RULES, TRAINING_CATEGORIES, calcularDataValidade, type Trainin
 
 // ============ HELPERS ============
 function StatusBadge({ status, diasRestantes }: { status: string; diasRestantes: number }) {
+  if (status === "SUBSTITUÍDO") return <Badge className="bg-gray-100 text-gray-500 hover:bg-gray-100">SUBSTITUÍDO</Badge>;
   if (status === "VENCIDO") return <Badge variant="destructive">VENCIDO</Badge>;
   if (status.includes("DIAS PARA VENCER")) {
     const cor = diasRestantes <= 7 ? "bg-red-100 text-red-800" : diasRestantes <= 30 ? "bg-yellow-100 text-yellow-800" : "bg-orange-100 text-orange-800";
@@ -1042,6 +1043,7 @@ export default function ControleDocumentos() {
     if (statusFilter === "valido") list = list.filter((a: any) => a.status === "VÁLIDO");
     else if (statusFilter === "vencer") list = list.filter((a: any) => a.status?.includes("DIAS PARA VENCER"));
     else if (statusFilter === "vencido") list = list.filter((a: any) => a.status === "VENCIDO");
+    else if (statusFilter === "substituido") list = list.filter((a: any) => a.status === "SUBSTITUÍDO");
     return list;
   }, [asoList, search, statusFilter]);
 
@@ -1493,6 +1495,7 @@ export default function ControleDocumentos() {
                 <SelectItem value="valido">Válidos</SelectItem>
                 <SelectItem value="vencer">A Vencer</SelectItem>
                 <SelectItem value="vencido">Vencidos</SelectItem>
+                <SelectItem value="substituido">Substituídos</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -1571,7 +1574,7 @@ export default function ControleDocumentos() {
                       {filteredAso.length === 0 ? (
                         <tr><td colSpan={11} className="py-8 text-center text-muted-foreground">Nenhum ASO cadastrado</td></tr>
                       ) : filteredAso.map((a: any, idx: number) => (
-                        <tr key={a.id} className="border-b last:border-0 hover:bg-muted/30">
+                        <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${a.isHistorico ? "opacity-60" : ""}`}>
                           <td className="py-2 text-muted-foreground">{idx + 1}</td>
                           <td className="py-2">
                             <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</div>
