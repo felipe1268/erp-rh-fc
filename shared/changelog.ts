@@ -6214,4 +6214,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 03:00:00",
   },
+  {
+    version: 890,
+    titulo: "Correção Meta Mapa de Cotação — valores de referência por item",
+    descricao: "Corrigido bug onde a função 'Definir Meta' com valor total (R$) " +
+      "recalculava os preços de referência por item usando o percentual global, " +
+      "sobrescrevendo os valores corretos definidos na importação da planilha CUSTO. " +
+      "Agora, ao definir meta por valor total negociado, apenas o total do orçamento é atualizado " +
+      "— os valores unitários de referência (meta MAT/MDO por item) permanecem inalterados. " +
+      "Cálculo 'Só profissional' no mapa agora usa proporção sobre o meta_unit_mdo do orçamento " +
+      "em vez de recalcular a partir do custo. " +
+      "Filtro 'Com orçamento' adicionado ao Dashboard de Obras. " +
+      "Corrigido crash na página de Configurações Compras (SelectItem com value vazio).",
+    tipo: "bugfix",
+    modulos: "Compras, Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 10:00:00",
+  },
 ];

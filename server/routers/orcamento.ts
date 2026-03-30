@@ -1908,15 +1908,17 @@ export const orcamentoRouter = router({
         status:            'aprovado',
       }).where(eq(orcamentos.id, input.id));
 
-      const metaFator = String(1 - input.metaPercentual);
-      await db.update(orcamentoItens).set({
-        metaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotal}::numeric, 0) * ${metaFator}, 2)`,
-        metaUnitTotal: sql`CASE WHEN COALESCE(${orcamentoItens.quantidade}::numeric, 0) > 0 THEN ROUND(COALESCE(${orcamentoItens.custoTotal}::numeric, 0) * ${metaFator} / COALESCE(${orcamentoItens.quantidade}::numeric, 1), 4) ELSE 0 END`,
-        metaUnitMat:   sql`ROUND(COALESCE(${orcamentoItens.custoUnitMat}::numeric, 0) * ${metaFator}, 4)`,
-        metaUnitMdo:   sql`ROUND(COALESCE(${orcamentoItens.custoUnitMdo}::numeric, 0) * ${metaFator}, 4)`,
-        metaTotalMat:  sql`ROUND(COALESCE(${orcamentoItens.custoTotalMat}::numeric, 0) * ${metaFator}, 2)`,
-        metaTotalMdo:  sql`ROUND(COALESCE(${orcamentoItens.custoTotalMdo}::numeric, 0) * ${metaFator}, 2)`,
-      }).where(eq(orcamentoItens.orcamentoId, input.id));
+      if (input.totalMetaExato == null) {
+        const metaFator = String(1 - input.metaPercentual);
+        await db.update(orcamentoItens).set({
+          metaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotal}::numeric, 0) * ${metaFator}, 2)`,
+          metaUnitTotal: sql`CASE WHEN COALESCE(${orcamentoItens.quantidade}::numeric, 0) > 0 THEN ROUND(COALESCE(${orcamentoItens.custoTotal}::numeric, 0) * ${metaFator} / COALESCE(${orcamentoItens.quantidade}::numeric, 1), 4) ELSE 0 END`,
+          metaUnitMat:   sql`ROUND(COALESCE(${orcamentoItens.custoUnitMat}::numeric, 0) * ${metaFator}, 4)`,
+          metaUnitMdo:   sql`ROUND(COALESCE(${orcamentoItens.custoUnitMdo}::numeric, 0) * ${metaFator}, 4)`,
+          metaTotalMat:  sql`ROUND(COALESCE(${orcamentoItens.custoTotalMat}::numeric, 0) * ${metaFator}, 2)`,
+          metaTotalMdo:  sql`ROUND(COALESCE(${orcamentoItens.custoTotalMdo}::numeric, 0) * ${metaFator}, 2)`,
+        }).where(eq(orcamentoItens.orcamentoId, input.id));
+      }
 
       return { success: true };
     }),
