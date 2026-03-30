@@ -11,7 +11,7 @@ import {
   ArrowLeft, Plus, FileCheck, AlertTriangle, CheckCircle,
   ChevronRight, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
-  FileEdit, Save, Clock, RefreshCw, History, ExternalLink
+  FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -55,6 +55,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [periodo, setPeriodo] = useState(() => new Date().toISOString().slice(0, 7));
   const [newItem, setNewItem] = useState({ descricao: "", unidade: "m²", quantidade: "1", valorUnitario: "0", eapCodigo: "", planejamentoAtividadeId: "" });
   const [newDoc, setNewDoc] = useState({ tipo: "INSS", descricao: "", competencia: "", dataVencimento: "", bloqueiaPagemento: false });
+  const [editMedicao, setEditMedicao] = useState<{ id: number; periodo: string; dataReferencia: string; observacoes: string; status: string } | null>(null);
 
   // Documento tab state
   const [textoEditado, setTextoEditado] = useState<string | null>(null);
@@ -67,6 +68,16 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
   const recalcularDatasMut = trpc.terceiroContratos.recalcularDatasCronograma.useMutation({
     onSuccess: (r) => { toast.success(`Datas atualizadas do cronograma${r.usouEap ? " (via EAP)" : " (todas atividades)"}: ${fmtDate(r.dataInicio)} → ${fmtDate(r.dataTermino)}`); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const excluirMedicaoMut = trpc.terceiroContratos.excluirMedicao.useMutation({
+    onSuccess: () => { toast.success("Medição excluída"); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const editarMedicaoMut = trpc.terceiroContratos.editarMedicao.useMutation({
+    onSuccess: () => { toast.success("Medição atualizada"); setEditMedicao(null); utils.terceiroContratos.getContrato.invalidate({ id }); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -366,6 +377,19 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                           </Button>
                         </>
                       )}
+                      {m.status !== "paga" && (
+                        <>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs"
+                            onClick={() => setEditMedicao({ id: m.id, periodo: m.periodo, dataReferencia: m.dataReferencia || "", observacoes: m.observacoes || "", status: m.status || "rascunho" })}>
+                            <Pencil className="w-3 h-3" /> Editar
+                          </Button>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                            disabled={excluirMedicaoMut.isPending}
+                            onClick={() => { if (confirm(`Excluir Medição #${m.numero}? ${m.status === "aprovada" ? "Os valores acumulados serão revertidos." : ""}`)) excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }); }}>
+                            <Trash2 className="w-3 h-3" /> Excluir
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                   {m.aprovadoPor && <p className="text-xs text-gray-400 mt-2">Aprovado por {m.aprovadoPor} em {fmtDate(m.aprovadoEm)}</p>}
@@ -610,6 +634,52 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                 <Button className="bg-blue-600 hover:bg-blue-700" disabled={gerarMedicaoMut.isPending}
                   onClick={() => gerarMedicaoMut.mutate({ contratoId: id, companyId: contrato.companyId, periodo, criadoPor: "Responsável" })}>
                   <Zap className="w-4 h-4 mr-2" />{gerarMedicaoMut.isPending ? "Gerando..." : "Gerar Medição"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editMedicao && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+              <h2 className="text-lg font-bold mb-4">Editar Medição</h2>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-sm">Período (AAAA-MM)</Label>
+                  <Input className="mt-1" value={editMedicao.periodo} onChange={e => setEditMedicao(prev => prev ? { ...prev, periodo: e.target.value } : null)} />
+                </div>
+                <div>
+                  <Label className="text-sm">Data de Referência</Label>
+                  <Input type="date" className="mt-1" value={editMedicao.dataReferencia} onChange={e => setEditMedicao(prev => prev ? { ...prev, dataReferencia: e.target.value } : null)} />
+                </div>
+                <div>
+                  <Label className="text-sm">Observações</Label>
+                  <Input className="mt-1" value={editMedicao.observacoes} onChange={e => setEditMedicao(prev => prev ? { ...prev, observacoes: e.target.value } : null)} placeholder="Observações..." />
+                </div>
+                <div>
+                  <Label className="text-sm">Status</Label>
+                  <Select value={editMedicao.status} onValueChange={v => setEditMedicao(prev => prev ? { ...prev, status: v } : null)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="rascunho">Rascunho</SelectItem>
+                      <SelectItem value="aguardando_aprovacao">Aguardando Aprovação</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-5 justify-end">
+                <Button variant="outline" onClick={() => setEditMedicao(null)}>Cancelar</Button>
+                <Button className="bg-blue-600 hover:bg-blue-700" disabled={editarMedicaoMut.isPending}
+                  onClick={() => editarMedicaoMut.mutate({
+                    id: editMedicao.id,
+                    companyId: contrato.companyId,
+                    periodo: editMedicao.periodo,
+                    dataReferencia: editMedicao.dataReferencia || null,
+                    observacoes: editMedicao.observacoes || null,
+                    status: editMedicao.status as "rascunho" | "aguardando_aprovacao",
+                  })}>
+                  <Save className="w-4 h-4 mr-2" />{editarMedicaoMut.isPending ? "Salvando..." : "Salvar"}
                 </Button>
               </div>
             </div>

@@ -519,6 +519,71 @@ export const terceiroContratosRouter = router({
       return medicao;
     }),
 
+  excluirMedicao: protectedProcedure
+    .input(z.object({ id: z.number(), contratoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [medicao] = await db.select().from(terceiroMedicoes).where(
+        and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId))
+      );
+      if (!medicao) throw new Error("Medição não encontrada");
+      if (medicao.status === "paga") throw new Error("Não é possível excluir uma medição já paga");
+
+      if (medicao.status === "aprovada") {
+        const itensMedicao = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
+        for (const im of itensMedicao) {
+          const prevAcum = n(im.percentualAvancoFisico);
+          const prevValAcum = n(im.valorAcumulado);
+          const [contratoItem] = await db.select().from(terceiroContratoItens).where(eq(terceiroContratoItens.id, im.contratoItemId));
+          if (contratoItem) {
+            const novoPerc = Math.max(0, n(contratoItem.percentualMedidoAcumulado) - prevAcum);
+            const novoVal = Math.max(0, n(contratoItem.valorMedidoAcumulado) - prevValAcum);
+            await db.update(terceiroContratoItens).set({
+              percentualMedidoAcumulado: String(novoPerc),
+              valorMedidoAcumulado: String(novoVal),
+            }).where(eq(terceiroContratoItens.id, im.contratoItemId));
+          }
+        }
+      }
+
+      await db.delete(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
+      await db.delete(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.id));
+      return { ok: true };
+    }),
+
+  editarMedicao: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      periodo: z.string().optional(),
+      dataReferencia: z.string().nullable().optional(),
+      observacoes: z.string().nullable().optional(),
+      status: z.enum(["rascunho", "aguardando_aprovacao"]).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [medicao] = await db.select().from(terceiroMedicoes).where(
+        and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId))
+      );
+      if (!medicao) throw new Error("Medição não encontrada");
+      if (medicao.status === "paga") throw new Error("Não é possível editar uma medição já paga");
+
+      const upd: any = { atualizadoEm: new Date().toISOString() };
+      if (input.periodo !== undefined) upd.periodo = input.periodo;
+      if (input.dataReferencia !== undefined) upd.dataReferencia = input.dataReferencia;
+      if (input.observacoes !== undefined) upd.observacoes = input.observacoes;
+      if (input.status !== undefined) {
+        upd.status = input.status;
+        if (input.status === "rascunho") {
+          upd.aprovadoPor = null;
+          upd.aprovadoEm = null;
+        }
+      }
+
+      const [updated] = await db.update(terceiroMedicoes).set(upd).where(eq(terceiroMedicoes.id, input.id)).returning();
+      return updated;
+    }),
+
   registrarPagamento: protectedProcedure
     .input(z.object({ medicaoId: z.number(), contratoId: z.number(), valor: z.number() }))
     .mutation(async ({ input }) => {
