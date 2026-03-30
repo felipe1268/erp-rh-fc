@@ -315,8 +315,9 @@ export default function EspelhoPonto() {
     }
   }, []);
 
+  const [incluirDesligados, setIncluirDesligados] = useState(false);
   const empListQ = trpc.employees.list.useQuery(
-    { companyId, companyIds },
+    { companyId, companyIds, excludeTerminated: !incluirDesligados },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const empList: any[] = (empListQ.data as any[]) || [];
@@ -441,7 +442,14 @@ export default function EspelhoPonto() {
           <div className="flex flex-wrap items-end gap-3">
             {/* Employee autocomplete */}
             <div className="flex-1 min-w-[260px] relative">
-              <label className="text-xs font-medium text-slate-500 block mb-1">Funcionário</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-slate-500">Funcionário</label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={incluirDesligados} onChange={e => setIncluirDesligados(e.target.checked)}
+                    className="h-3 w-3 rounded border-gray-300 text-slate-600 focus:ring-slate-500" />
+                  <span className="text-[10px] text-slate-400">Incluir desligados</span>
+                </label>
+              </div>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                 <input
