@@ -2739,7 +2739,12 @@ export default function Cotacoes() {
                                   <td className="px-3 py-2 text-gray-500 text-xs text-center border-r border-gray-100">{it.unidade || "un"}</td>
                                   {/* Meta cols */}
                                   <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-medium">
-                                    {metaUnit > 0 ? metaUnit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                    <div className="flex items-center justify-end gap-1">
+                                      {(it as any).incluirAjudante === false && (it as any).metaMdoProfissional > 0 && (
+                                        <span className="px-1 py-0 text-[8px] font-bold rounded bg-purple-100 text-purple-700 border border-purple-200 whitespace-nowrap" title="Cotação sem ajudante — meta apenas do profissional">Só prof.</span>
+                                      )}
+                                      {metaUnit > 0 ? metaUnit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                    </div>
                                   </td>
                                   <td className="px-3 py-2 text-blue-600 text-xs text-right bg-blue-50/30">
                                     {metaQtd > 0 ? metaQtd.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}

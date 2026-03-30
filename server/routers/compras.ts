@@ -1319,6 +1319,9 @@ Responda APENAS com um objeto JSON no formato:
         origemEap: z.boolean().optional(),
         semVerba: z.boolean().optional(),
         motivoSemVerba: z.string().optional(),
+        incluirAjudante: z.boolean().optional(),
+        metaMdoProfissional: z.number().optional(),
+        metaMdoAjudante: z.number().optional(),
       })),
     }))
     .mutation(async ({ input }) => {
@@ -1361,6 +1364,9 @@ Responda APENAS com um objeto JSON no formato:
             origemEap: it.origemEap ?? false,
             semVerba: it.semVerba ?? false,
             motivoSemVerba: it.motivoSemVerba ?? null,
+            incluirAjudante: it.incluirAjudante ?? true,
+            metaMdoProfissional: it.metaMdoProfissional ? String(it.metaMdoProfissional) : null,
+            metaMdoAjudante: it.metaMdoAjudante ? String(it.metaMdoAjudante) : null,
           }))
         );
       }
@@ -1917,6 +1923,9 @@ Responda APENAS com um objeto JSON no formato:
           precoMeta: comprasSolicitacoesItens.precoMeta,
           semVerba: comprasSolicitacoesItens.semVerba,
           motivoSemVerba: comprasSolicitacoesItens.motivoSemVerba,
+          incluirAjudante: comprasSolicitacoesItens.incluirAjudante,
+          metaMdoProfissional: comprasSolicitacoesItens.metaMdoProfissional,
+          metaMdoAjudante: comprasSolicitacoesItens.metaMdoAjudante,
         }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
       }
       const orcItemIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
@@ -1972,11 +1981,17 @@ Responda APENAS com um objeto JSON no formato:
 
       const scItemToOrcItem: Record<number, number> = {};
       const scItemToPrecoMeta: Record<number, number> = {};
+      const scItemToIncluirAjudante: Record<number, boolean> = {};
+      const scItemToMetaMdoProf: Record<number, number> = {};
+      const scItemToMetaMdoAjud: Record<number, number> = {};
       const scItemToTraceability: Record<number, { eapCodigo?: string; insumoCodigo?: string; composicaoCodigo?: string; origemEap?: boolean; solicitacaoId?: number; semVerba?: boolean; motivoSemVerba?: string }> = {};
       for (const s of scItens) {
         if (s.orcamentoItemId) scItemToOrcItem[s.id] = s.orcamentoItemId;
         const pm = n(s.precoMeta);
         if (pm > 0) scItemToPrecoMeta[s.id] = pm;
+        scItemToIncluirAjudante[s.id] = s.incluirAjudante ?? true;
+        scItemToMetaMdoProf[s.id] = n(s.metaMdoProfissional);
+        scItemToMetaMdoAjud[s.id] = n(s.metaMdoAjudante);
         scItemToTraceability[s.id] = { eapCodigo: s.eapCodigo, insumoCodigo: s.insumoCodigo, composicaoCodigo: s.composicaoCodigo, origemEap: s.origemEap, solicitacaoId: s.solicitacaoId };
       }
 
@@ -2131,9 +2146,23 @@ Responda APENAS com um objeto JSON no formato:
         const metaUnitarioTotal = metaFromOrcTotal > 0 ? metaFromOrcTotal : metaFromSC;
         const metaUnitarioMat = metaFromOrcMat;
         const metaUnitarioMdo = metaFromOrcMdo;
-        const metaUnitario = isCotacaoMdo && metaUnitarioMdo > 0
-          ? metaUnitarioMdo
-          : metaUnitarioTotal;
+
+        const incluirAjud = it.solicitacaoItemId ? (scItemToIncluirAjudante[it.solicitacaoItemId] ?? true) : true;
+        const metaMdoProf = it.solicitacaoItemId ? (scItemToMetaMdoProf[it.solicitacaoItemId] ?? 0) : 0;
+        const metaMdoAjud = it.solicitacaoItemId ? (scItemToMetaMdoAjud[it.solicitacaoItemId] ?? 0) : 0;
+
+        let metaUnitario: number;
+        if (isCotacaoMdo && metaUnitarioMdo > 0) {
+          if (!incluirAjud && metaMdoProf > 0) {
+            const metaPerc = orcId ? (orcToMetaPerc[orcItensData.find(o => o.id === orcId)?.orcamentoId ?? 0] ?? 0) : 0;
+            metaUnitario = metaMdoProf * (1 - metaPerc);
+          } else {
+            metaUnitario = metaUnitarioMdo;
+          }
+        } else {
+          metaUnitario = metaUnitarioTotal;
+        }
+
         const eapPath = orcId ? (orcItemToPath[orcId] ?? "") : "";
         const trace = it.solicitacaoItemId ? scItemToTraceability[it.solicitacaoItemId] : undefined;
         const scNumero = trace?.solicitacaoId ? (scMap[trace.solicitacaoId] ?? "") : "";
@@ -2161,7 +2190,7 @@ Responda APENAS com um objeto JSON no formato:
         const consumido = Math.max(qtdTotalSolicitada, qtdComprada);
         const qtdSaldoRaw = vinculado ? qtdOrcada - consumido : -qtdEstaSC;
         const qtdSaldo = Math.round(qtdSaldoRaw * 1000) / 1000;
-        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false };
+        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};
@@ -5405,17 +5434,41 @@ Retorne APENAS um JSON válido neste formato:
 
       const servicoCodigosEap = [...new Set(orcItems.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
       const mdoMatMap: Record<string, { temMat: boolean; temMdo: boolean }> = {};
+      const mdoDecompMap: Record<string, { profissional: number; ajudante: number; temAjudante: boolean }> = {};
       if (servicoCodigosEap.length > 0) {
         const insFlags = await db.select({
           composicaoCodigo: composicaoInsumos.composicaoCodigo,
           alocacaoMat: composicaoInsumos.alocacaoMat,
           alocacaoMdo: composicaoInsumos.alocacaoMdo,
+          insumoDescricao: composicaoInsumos.insumoDescricao,
+          insumoCodigo: composicaoInsumos.insumoCodigo,
         }).from(composicaoInsumos)
           .where(and(eq(composicaoInsumos.companyId, input.companyId), inArray(composicaoInsumos.composicaoCodigo, servicoCodigosEap)));
+
+        const ajudantePattern = /ajudante|servente|auxiliar/i;
+        const seenInsumosPerComp: Record<string, Set<string>> = {};
+
         for (const f of insFlags) {
           if (!mdoMatMap[f.composicaoCodigo]) mdoMatMap[f.composicaoCodigo] = { temMat: false, temMdo: false };
           if (n(f.alocacaoMat) > 0 || (n(f.alocacaoMdo) === 0 && n(f.alocacaoMat) === 0)) mdoMatMap[f.composicaoCodigo].temMat = true;
           if (n(f.alocacaoMdo) > 0) mdoMatMap[f.composicaoCodigo].temMdo = true;
+
+          if (n(f.alocacaoMdo) > 0) {
+            const dedupKey = `${f.composicaoCodigo}:${f.insumoCodigo || f.insumoDescricao}`;
+            if (!seenInsumosPerComp[f.composicaoCodigo]) seenInsumosPerComp[f.composicaoCodigo] = new Set();
+            if (seenInsumosPerComp[f.composicaoCodigo].has(dedupKey)) continue;
+            seenInsumosPerComp[f.composicaoCodigo].add(dedupKey);
+
+            if (!mdoDecompMap[f.composicaoCodigo]) mdoDecompMap[f.composicaoCodigo] = { profissional: 0, ajudante: 0, temAjudante: false };
+            const custoMdo = n(f.alocacaoMdo);
+            const isAjudante = ajudantePattern.test(f.insumoDescricao || "");
+            if (isAjudante) {
+              mdoDecompMap[f.composicaoCodigo].ajudante += custoMdo;
+              mdoDecompMap[f.composicaoCodigo].temAjudante = true;
+            } else {
+              mdoDecompMap[f.composicaoCodigo].profissional += custoMdo;
+            }
+          }
         }
       }
 
@@ -5439,15 +5492,21 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
-      const items = orcItems.map(it => ({
-        ...it,
-        prazoFim: atividadesMap[it.eapCodigo]?.dataFim ?? null,
-        duracaoDias: atividadesMap[it.eapCodigo]?.duracaoDias ?? null,
-        temMat: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMat ?? false) : true,
-        temMdo: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMdo ?? false) : false,
-        mdoContratado: mdoContratadoMap[it.id] || 0,
-        mdoSaldo: n(it.quantidade) - (mdoContratadoMap[it.id] || 0),
-      }));
+      const items = orcItems.map(it => {
+        const decomp = it.servicoCodigo ? mdoDecompMap[it.servicoCodigo] : undefined;
+        return {
+          ...it,
+          prazoFim: atividadesMap[it.eapCodigo]?.dataFim ?? null,
+          duracaoDias: atividadesMap[it.eapCodigo]?.duracaoDias ?? null,
+          temMat: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMat ?? false) : true,
+          temMdo: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMdo ?? false) : false,
+          mdoContratado: mdoContratadoMap[it.id] || 0,
+          mdoSaldo: n(it.quantidade) - (mdoContratadoMap[it.id] || 0),
+          mdoProfissional: decomp?.profissional ?? 0,
+          mdoAjudante: decomp?.ajudante ?? 0,
+          temAjudante: decomp?.temAjudante ?? false,
+        };
+      });
 
       return { items, orcamentoId: orc.id, projetoId: proj?.id ?? null, semOrcamento: false };
     }),

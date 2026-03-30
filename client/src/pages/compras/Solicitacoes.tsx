@@ -18,7 +18,7 @@ import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
   Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare,
-  UserCircle, ShieldCheck, FileSearch, Truck,
+  UserCircle, ShieldCheck, FileSearch, Truck, Users,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -53,6 +53,7 @@ interface ItemForm {
   insumoCodigo?: string; composicaoCodigo?: string; precoMeta?: number;
   quantidadeServico?: number; coeficiente?: number; origemEap?: boolean;
   semVerba?: boolean; motivoSemVerba?: string;
+  incluirAjudante?: boolean; metaMdoProfissional?: number; metaMdoAjudante?: number;
 }
 const MOTIVOS_SEM_VERBA = [
   { value: "quebra_dano", label: "Quebra / Dano" },
@@ -445,6 +446,8 @@ export default function Solicitacoes() {
   const [eapQtdServico, setEapQtdServico] = useState<Record<number, string>>({});
   const [eapInsumos, setEapInsumos] = useState<Record<number, any[]>>({});
   const [eapExtraDesbloqueado, setEapExtraDesbloqueado] = useState<Record<string, boolean>>({});
+  const [incluirAjudanteGlobal, setIncluirAjudanteGlobal] = useState(true);
+  const [incluirAjudanteOverride, setIncluirAjudanteOverride] = useState<Record<number, boolean>>({});
   const [loadingInsumos, setLoadingInsumos] = useState<number | null>(null);
   const [saldoData, setSaldoData] = useState<Record<number, any>>({});
   const [imagemPreview, setImagemPreview] = useState<string | null>(null);
@@ -682,6 +685,7 @@ export default function Solicitacoes() {
     setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setEapExtraDesbloqueado({});
     setInsumoBusca(""); setInsumoQtds({}); setInsumoExpanded(null);
     setImagemPreview(null); setImagemBase64(null); setImagemNome("");
+    setIncluirAjudanteGlobal(true); setIncluirAjudanteOverride({});
   }
 
   function handleImagemFile(file: File) {
@@ -736,6 +740,7 @@ export default function Solicitacoes() {
       let newItems: ItemForm[];
 
       if (form.tipo === "servico") {
+        const incAjud = incluirAjudanteOverride[orcItemId] ?? incluirAjudanteGlobal;
         newItems = [{
           descricao: eapItem.descricao || `[${eapItem.eapCodigo}] Serviço`,
           unidade: eapItem.unidade || "vb",
@@ -746,6 +751,9 @@ export default function Solicitacoes() {
           composicaoCodigo: eapItem.servicoCodigo,
           quantidadeServico: qtdServ,
           origemEap: true,
+          incluirAjudante: incAjud,
+          metaMdoProfissional: (eapItem as any).mdoProfissional ?? 0,
+          metaMdoAjudante: (eapItem as any).mdoAjudante ?? 0,
         }];
       } else if (insumosList.length > 0) {
         const extraDesbloqueados = eapExtraDesbloqueado;
@@ -988,6 +996,9 @@ export default function Solicitacoes() {
         origemEap: i.origemEap,
         semVerba: i.semVerba,
         motivoSemVerba: i.motivoSemVerba,
+        incluirAjudante: i.incluirAjudante,
+        metaMdoProfissional: i.metaMdoProfissional,
+        metaMdoAjudante: i.metaMdoAjudante,
       })),
     });
   }
@@ -1425,6 +1436,27 @@ export default function Solicitacoes() {
                       )}
                     </div>
 
+                    {form.tipo === "servico" && eapQ.data && eapQ.data.items.some((it: any) => it.temAjudante) && (
+                      <div className="flex items-center gap-3 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 mb-1">
+                        <Users className="h-4 w-4 text-purple-600 shrink-0" />
+                        <label className="text-xs font-semibold text-purple-800">Considerar MDO:</label>
+                        <select
+                          value={incluirAjudanteGlobal ? "completa" : "profissional"}
+                          onChange={e => {
+                            const val = e.target.value === "completa";
+                            setIncluirAjudanteGlobal(val);
+                            setIncluirAjudanteOverride({});
+                            setItens(prev => prev.map(it => it.origemEap ? { ...it, incluirAjudante: val } : it));
+                          }}
+                          className="text-xs border border-purple-300 rounded px-2 py-1 bg-white text-purple-900 font-medium"
+                        >
+                          <option value="completa">Equipe completa (profissional + ajudante)</option>
+                          <option value="profissional">Só profissional (sem ajudante)</option>
+                        </select>
+                        <span className="text-[10px] text-purple-600 ml-auto">Aplica para todos os itens</span>
+                      </div>
+                    )}
+
                     {eapQ.data?.semOrcamento ? (
                       <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                         Esta obra não possui orçamento vinculado. Use o modo Manual.
@@ -1532,13 +1564,47 @@ export default function Solicitacoes() {
                                         {it.descricao}
                                       </div>
                                       {form.tipo === "servico" ? (
-                                        ((it as any).mdoSaldo != null) && (
-                                          <div className="flex items-center gap-1.5 mt-0.5 ml-0.5 text-[9px]">
-                                            <span className={`font-medium ${((it as any).mdoSaldo ?? 0) > 0 ? "text-emerald-600" : "text-red-600"}`}>
-                                              Saldo: {((it as any).mdoSaldo ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} {it.unidade || "vb"}
-                                            </span>
-                                          </div>
-                                        )
+                                        <div className="mt-0.5 ml-0.5 space-y-0.5">
+                                          {((it as any).mdoSaldo != null) && (
+                                            <div className="flex items-center gap-1.5 text-[9px]">
+                                              <span className={`font-medium ${((it as any).mdoSaldo ?? 0) > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                                Saldo: {((it as any).mdoSaldo ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} {it.unidade || "vb"}
+                                              </span>
+                                            </div>
+                                          )}
+                                          {(it as any).temAjudante && (it as any).mdoProfissional > 0 && (() => {
+                                            const prof = (it as any).mdoProfissional ?? 0;
+                                            const ajud = (it as any).mdoAjudante ?? 0;
+                                            const total = prof + ajud;
+                                            const incAjud = incluirAjudanteOverride[it.id] ?? incluirAjudanteGlobal;
+                                            return (
+                                              <div className="flex items-center gap-1.5 text-[9px] flex-wrap">
+                                                <span className="text-gray-500">MDO:</span>
+                                                <span className="font-medium text-gray-700">R$ {total.toFixed(2)}</span>
+                                                <span className="text-gray-400">=</span>
+                                                <span className={`font-medium ${!incAjud ? "text-purple-700" : "text-gray-600"}`}>
+                                                  Prof: R$ {prof.toFixed(2)}
+                                                </span>
+                                                <span className="text-gray-400">+</span>
+                                                <span className={`font-medium ${!incAjud ? "text-red-400 line-through" : "text-gray-600"}`}>
+                                                  Ajud: R$ {ajud.toFixed(2)}
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  onClick={e => {
+                                                    e.stopPropagation();
+                                                    const newVal = !incAjud;
+                                                    setIncluirAjudanteOverride(prev => ({ ...prev, [it.id]: newVal }));
+                                                    setItens(prev => prev.map(pi => pi.orcamentoItemId === it.id ? { ...pi, incluirAjudante: newVal } : pi));
+                                                  }}
+                                                  className={`px-1.5 py-0 rounded text-[8px] font-bold border ${incAjud ? "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100" : "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"}`}
+                                                >
+                                                  {incAjud ? "Excluir ajudante" : "Incluir ajudante"}
+                                                </button>
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
                                       ) : cob && cob.totalInsumos > 0 && cob.insumosCobertos > 0 && (
                                         <div className="flex items-center gap-1.5 mt-0.5 ml-0.5">
                                           <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">

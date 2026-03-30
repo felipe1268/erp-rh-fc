@@ -6199,4 +6199,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 02:00:00",
   },
+  {
+    version: 889,
+    titulo: "Separação Profissional/Ajudante na SC de Serviço e Mapa de Cotação",
+    descricao: "SC de serviço agora permite escolher se a contratação inclui ou não ajudante/auxiliar. " +
+      "Select global 'Considerar MDO' no topo da SC (Equipe completa ou Só profissional) com override por item. " +
+      "Decomposição visual do custo MDO (Profissional R$X + Ajudante R$Y) em cada composição da EAP. " +
+      "Meta MDO na cotação ajustada automaticamente conforme a escolha (só profissional = meta menor). " +
+      "Indicador 'Só prof.' no mapa de cotação quando item foi configurado sem ajudante. " +
+      "Classificação automática por nome: insumos com 'ajudante/servente/auxiliar' = ajudante, demais = profissional. " +
+      "Agrupar itens iguais no mapa de cotação: toggle para consolidar itens com mesma descrição+unidade, somando quantidades.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 03:00:00",
+  },
 ];

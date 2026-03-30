@@ -555,6 +555,27 @@ async function startServer() {
           console.log("[ColFix] cotações tipo já OK Rev.888");
         }
       } catch (e: any) { console.warn("[ColFix] cotações tipo Rev.888:", e?.message ?? e); }
+
+      try {
+        const db3 = await getDb();
+        if (!db3) return;
+        const { sql: sql3 } = await import("drizzle-orm");
+        const colCheck = await db3.execute(sql3`
+          SELECT column_name FROM information_schema.columns
+          WHERE table_name = 'compras_solicitacoes_itens' AND column_name = 'incluir_ajudante'
+        `);
+        if (((colCheck as any).rows ?? []).length === 0) {
+          await db3.execute(sql3`
+            ALTER TABLE compras_solicitacoes_itens
+            ADD COLUMN IF NOT EXISTS incluir_ajudante BOOLEAN DEFAULT true,
+            ADD COLUMN IF NOT EXISTS meta_mdo_profissional NUMERIC(18,4) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS meta_mdo_ajudante NUMERIC(18,4) DEFAULT 0
+          `);
+          console.log("[ColFix] compras_solicitacoes_itens incluir_ajudante + meta_mdo_prof/ajud Rev.889");
+        } else {
+          console.log("[ColFix] compras_solicitacoes_itens incluir_ajudante já OK Rev.889");
+        }
+      } catch (e: any) { console.warn("[ColFix] incluir_ajudante Rev.889:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Limpeza empresas de teste (Rev.738) — já completada
     // [REMOVIDO Rev.844] Purga de orfanatos/fantasmas — já completada, limpar via deleteObra cascata

@@ -4976,6 +4976,9 @@ export const comprasSolicitacoesItens = pgTable("compras_solicitacoes_itens", {
   origemEap:          boolean("origem_eap").default(false),
   semVerba:           boolean("sem_verba").default(false),
   motivoSemVerba:     varchar("motivo_sem_verba", { length: 50 }),
+  incluirAjudante:    boolean("incluir_ajudante").default(true),
+  metaMdoProfissional: numeric("meta_mdo_profissional", { precision: 18, scale: 4 }).default("0"),
+  metaMdoAjudante:    numeric("meta_mdo_ajudante", { precision: 18, scale: 4 }).default("0"),
 });
 
 export const comprasCotacoes = pgTable("compras_cotacoes", {
