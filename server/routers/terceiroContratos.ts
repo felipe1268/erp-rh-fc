@@ -238,6 +238,10 @@ export const terceiroContratosRouter = router({
         await db.delete(terceiroMedicoes).where(eq(terceiroMedicoes.contratoId, cid));
         await db.delete(terceiroDocumentos).where(eq(terceiroDocumentos.contratoId, cid));
         await db.delete(terceiroContratoItens).where(eq(terceiroContratoItens.contratoId, cid));
+        await db.delete(terceiroContratoRevisoes).where(eq(terceiroContratoRevisoes.contratoId, cid));
+        await db.update(comprasCotacoes)
+          .set({ status: "aprovada", contratoTerceiroId: null, atualizadoEm: new Date().toISOString() } as any)
+          .where(sql`"contratoTerceiroId" = ${cid} AND "companyId" = ${input.companyId}`);
         await db.delete(terceiroContratos).where(eq(terceiroContratos.id, cid));
         deleted++;
       }

@@ -1171,11 +1171,18 @@ function ContratosServicoTab({ companyId }: { companyId: number }) {
   const [, navigate] = useLocation();
   const [buscaOS, setBuscaOS] = useState("");
   const [filtroStatusOS, setFiltroStatusOS] = useState("todos");
+  const [selectedOS, setSelectedOS] = useState<Set<number>>(new Set());
+  const [confirmExcluirOS, setConfirmExcluirOS] = useState(false);
 
-  const { data: contratos = [], isLoading } = trpc.terceiroContratos.listarContratos.useQuery(
+  const { data: contratos = [], isLoading, refetch } = trpc.terceiroContratos.listarContratos.useQuery(
     { companyId },
     { enabled: companyId > 0 }
   );
+
+  const excluirLoteOS = trpc.terceiroContratos.excluirContratosLote.useMutation({
+    onSuccess: (res) => { toast.success(`${res.deleted} contrato(s) excluído(s)`); setSelectedOS(new Set()); setConfirmExcluirOS(false); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const filtrados = contratos.filter((c: any) => {
     const b = buscaOS.toLowerCase();
@@ -1184,12 +1191,43 @@ function ContratosServicoTab({ companyId }: { companyId: number }) {
     return matchBusca && matchStatus;
   });
 
+  const toggleSelectOS = (id: number) => {
+    setSelectedOS(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  };
+  const allSelectedOS = filtrados.length > 0 && filtrados.every((c: any) => selectedOS.has(c.id));
+  const toggleSelectAllOS = () => {
+    if (allSelectedOS) setSelectedOS(new Set());
+    else setSelectedOS(new Set(filtrados.map((c: any) => c.id)));
+  };
+
   const totalAtivos = contratos.filter((c: any) => c.status === "ativo").length;
   const totalValor = contratos.reduce((s: number, c: any) => s + parseFloat(c.valorTotal ?? "0"), 0);
   const totalMedido = contratos.reduce((s: number, c: any) => s + parseFloat(c.valorPago ?? "0"), 0);
 
   return (
     <>
+      {selectedOS.size > 0 && (
+        <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-xl">
+          <span className="text-sm font-medium text-red-700">{selectedOS.size} contrato(s) selecionado(s)</span>
+          <Button size="sm" variant="destructive" className="ml-auto gap-1.5" onClick={() => setConfirmExcluirOS(true)}>
+            <Trash2 className="h-3.5 w-3.5" /> Excluir Selecionados
+          </Button>
+        </div>
+      )}
+
+      {confirmExcluirOS && (
+        <div className="flex items-center gap-3 p-3 bg-red-100 border border-red-300 rounded-xl">
+          <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+          <span className="text-sm text-red-800">Excluir <strong>{selectedOS.size}</strong> contrato(s)? Medições, itens e documentos vinculados também serão excluídos. Esta ação não pode ser desfeita.</span>
+          <div className="flex gap-2 ml-auto">
+            <Button size="sm" variant="outline" onClick={() => setConfirmExcluirOS(false)}>Cancelar</Button>
+            <Button size="sm" variant="destructive" disabled={excluirLoteOS.isPending} onClick={() => excluirLoteOS.mutate({ ids: Array.from(selectedOS), companyId })}>
+              {excluirLoteOS.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Confirmar
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="rounded-xl border p-4 bg-purple-50 border-purple-200 text-purple-700">
           <div className="flex items-center gap-2 mb-1"><Wrench className="h-4 w-4" /><span className="text-xs font-medium text-gray-500">Total Contratos</span></div>
@@ -1228,6 +1266,7 @@ function ContratosServicoTab({ companyId }: { companyId: number }) {
         <Table>
           <TableHeader>
             <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
+              <TableHead className="w-10"><Checkbox checked={allSelectedOS} onCheckedChange={toggleSelectAllOS} aria-label="Selecionar todos" /></TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Nº Contrato</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Descrição</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Empresa</TableHead>
@@ -1240,15 +1279,16 @@ function ContratosServicoTab({ companyId }: { companyId: number }) {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
             ) : filtrados.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">Nenhum contrato de serviço encontrado</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-gray-400">Nenhum contrato de serviço encontrado</TableCell></TableRow>
             ) : filtrados.map((c: any) => {
               const pct = parseFloat(c.valorTotal ?? "0") > 0
                 ? ((parseFloat(c.valorPago ?? "0") / parseFloat(c.valorTotal ?? "1")) * 100).toFixed(1)
                 : "0.0";
               return (
-                <TableRow key={c.id} className="hover:bg-purple-50/30 cursor-pointer border-gray-100" onClick={() => navigate(`/terceiros/contratos/${c.id}`)}>
+                <TableRow key={c.id} className={`hover:bg-purple-50/30 cursor-pointer border-gray-100 ${selectedOS.has(c.id) ? "bg-purple-50/50" : ""}`} onClick={() => navigate(`/terceiros/contratos/${c.id}`)}>
+                  <TableCell onClick={e => e.stopPropagation()}><Checkbox checked={selectedOS.has(c.id)} onCheckedChange={() => toggleSelectOS(c.id)} aria-label={`Selecionar ${c.numeroContrato}`} /></TableCell>
                   <TableCell className="font-mono text-xs text-purple-700 font-medium">{c.numeroContrato || "—"}</TableCell>
                   <TableCell className="text-sm text-gray-900 max-w-60 truncate">{c.descricao || "—"}</TableCell>
                   <TableCell className="text-sm text-gray-600">{(c as any).empresaNome || "—"}</TableCell>
