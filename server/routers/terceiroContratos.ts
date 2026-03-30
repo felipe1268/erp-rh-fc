@@ -1003,6 +1003,58 @@ export const terceiroContratosRouter = router({
       return { contratoId: contrato.id, numeroContrato, empresaTerceiraId, isNova };
     }),
 
+  reverterAprovacaoOS: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const userRole = (ctx.user as any)?.role;
+      if (userRole !== "admin" && userRole !== "admin_master") {
+        throw new Error("Apenas administradores podem reverter a aprovação de uma OS");
+      }
+
+      const db = await getDb();
+
+      const [cot] = await db.select().from(comprasCotacoes).where(
+        and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId))
+      );
+      if (!cot) throw new Error("Cotação não encontrada");
+      if (cot.status !== "concluida") throw new Error("Só é possível reverter cotações com status 'concluída'");
+      const contratoId = (cot as any).contratoTerceiroId;
+      if (!contratoId) throw new Error("Cotação não possui contrato de serviço vinculado");
+
+      const [contrato] = await db.select().from(terceiroContratos).where(
+        and(eq(terceiroContratos.id, contratoId), eq(terceiroContratos.companyId, input.companyId))
+      );
+      if (!contrato) throw new Error("Contrato de serviço não encontrado ou não pertence a esta empresa");
+
+      const medicoes = await db.select({ id: terceiroMedicoes.id, status: terceiroMedicoes.status })
+        .from(terceiroMedicoes).where(eq(terceiroMedicoes.contratoId, contratoId));
+      const temMedicaoPaga = medicoes.some(m => m.status === "paga");
+      if (temMedicaoPaga) throw new Error("Não é possível reverter: o contrato possui medições já pagas");
+      const temMedicaoAprovada = medicoes.some(m => m.status === "aprovada");
+      if (temMedicaoAprovada) throw new Error("Não é possível reverter: o contrato possui medições aprovadas. Exclua-as primeiro.");
+
+      for (const m of medicoes) {
+        await db.delete(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, m.id));
+      }
+      await db.delete(terceiroMedicoes).where(eq(terceiroMedicoes.contratoId, contratoId));
+      await db.delete(terceiroDocumentos).where(eq(terceiroDocumentos.contratoId, contratoId));
+      await db.delete(terceiroContratoItens).where(eq(terceiroContratoItens.contratoId, contratoId));
+      await db.delete(terceiroContratoRevisoes).where(eq(terceiroContratoRevisoes.contratoId, contratoId));
+      await db.delete(terceiroContratos).where(eq(terceiroContratos.id, contratoId));
+
+      await db.update(comprasCotacoes)
+        .set({ status: "aprovada", contratoTerceiroId: null, atualizadoEm: new Date().toISOString() } as any)
+        .where(eq(comprasCotacoes.id, input.cotacaoId));
+
+      if (cot.solicitacaoId) {
+        await db.update(comprasSolicitacoes)
+          .set({ status: "concluida", atualizadoEm: new Date().toISOString() })
+          .where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+      }
+
+      return { ok: true };
+    }),
+
   // ══════════════════════════════════════════════════════════════
   // TEMPLATE DE CONTRATO
   // ══════════════════════════════════════════════════════════════

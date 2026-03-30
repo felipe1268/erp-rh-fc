@@ -887,6 +887,14 @@ export default function Cotacoes() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const reverterOS = trpc.terceiroContratos.reverterAprovacaoOS.useMutation({
+    onSuccess: () => {
+      toast.success("Aprovação revertida. Contrato de serviço excluído. Cotação voltou para 'Aprovada' — pode ser editada e gerar novo contrato.");
+      setShowDetalhe(null);
+      q.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   useEffect(() => {
     if (abaAtiva === "mapa" && mapaQ.data) {
@@ -1915,19 +1923,30 @@ export default function Cotacoes() {
                       </Button>
                     </>
                   )}
-                  {detalheFullscreen.status === "aprovada" && (detalheFullscreen as any).contratoTerceiroId && (
+                  {detalheFullscreen.status === "concluida" && (detalheFullscreen as any).contratoTerceiroId && (
                     <Button variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalheFullscreen as any).contratoTerceiroId}`); }}
                       className="border-blue-200 text-blue-600 hover:bg-blue-50 gap-2">
                       <FileText className="h-4 w-4" /> Ver Contrato de Serviço
                     </Button>
                   )}
-                  {detalheFullscreen.status === "aprovada" && isAdminMaster && (
+                  {detalheFullscreen.status === "concluida" && (detalheFullscreen as any).contratoTerceiroId && isAdminMaster && (
+                    <Button variant="outline" onClick={() => {
+                      if (confirm("Tem certeza? O contrato de serviço será excluído e a cotação voltará para 'Aprovada', permitindo edições e nova geração de contrato.")) {
+                        reverterOS.mutate({ cotacaoId: showDetalhe!, companyId });
+                      }
+                    }}
+                      disabled={reverterOS.isPending}
+                      className="border-orange-200 text-orange-600 hover:bg-orange-50 gap-2">
+                      {reverterOS.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} Reverter Aprovação
+                    </Button>
+                  )}
+                  {detalheFullscreen.status === "aprovada" && isAdminMaster && !(detalheFullscreen as any).contratoTerceiroId && (
                     <Button variant="outline" onClick={() => { setJustificativaCancelar(""); setCancelarCotacaoId(showDetalhe); setShowCancelarAprovacao(true); }}
                       className="border-orange-200 text-orange-600 hover:bg-orange-50 gap-2">
                       <Undo2 className="h-4 w-4" /> Cancelar Aprovação
                     </Button>
                   )}
-                  {!["cancelada", "aprovada"].includes(detalheFullscreen.status ?? "") && (
+                  {!["cancelada", "aprovada", "concluida"].includes(detalheFullscreen.status ?? "") && (
                     <Button variant="outline" onClick={() => {
                       if (confirm("Tem certeza que deseja cancelar esta cotação? A SC voltará para o status 'Aprovado' e poderá gerar nova cotação.")) {
                         cancelarCotacaoMut.mutate({ cotacaoId: showDetalhe!, companyId });
@@ -2051,7 +2070,7 @@ export default function Cotacoes() {
                         </Button>
                       </>
                     )}
-                    {detalheFullscreen.status === "aprovada" && (detalheFullscreen as any).contratoTerceiroId && (
+                    {detalheFullscreen.status === "concluida" && (detalheFullscreen as any).contratoTerceiroId && (
                       <Button variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalheFullscreen as any).contratoTerceiroId}`); }}
                         className="border-blue-200 text-blue-600 hover:bg-blue-50 gap-2">
                         <FileText className="h-4 w-4" /> Ver Contrato de Serviço
@@ -3752,7 +3771,7 @@ export default function Cotacoes() {
                       </Button>
                     </>
                   )}
-                  {detalhe.status === "aprovada" && (detalhe as any).contratoTerceiroId && (
+                  {detalhe.status === "concluida" && (detalhe as any).contratoTerceiroId && (
                     <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalhe as any).contratoTerceiroId}`); }}
                       className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs gap-1">
                       <FileText className="h-3 w-3" /> Ver Contrato de Serviço

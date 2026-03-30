@@ -6358,4 +6358,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 17:30:00",
   },
+  {
+    version: 901,
+    titulo: "Fluxo OS aprovação automática + Reverter Aprovação",
+    descricao: "Ao gerar contrato de serviço (OS) a partir de cotação, a aprovação é automática — cotação vai direto para 'Concluída'. " +
+      "Timeline corrigida: cotações concluídas agora exibem 'Cotação Aprovada' + 'Contrato Gerado' (antes mostrava 'Aguardando Aprovação'). " +
+      "Novo endpoint reverterAprovacaoOS (Admin only): exclui contrato + medições/itens/documentos/revisões e reverte cotação para 'Aprovada'. " +
+      "Bloqueio de reversão se houver medições pagas ou aprovadas. " +
+      "Botões atualizados: 'Ver Contrato de Serviço' e 'Reverter Aprovação' para status concluída; 'Cancelar Cotação' oculto para concluída.",
+    tipo: "feature",
+    modulos: "Compras, Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 18:00:00",
+  },
 ];

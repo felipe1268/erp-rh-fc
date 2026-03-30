@@ -5869,6 +5869,29 @@ Retorne APENAS um JSON válido neste formato:
           const resolvedAtual2 = etapas.find(e => e.status === "atual");
           const etapaAtual2 = resolvedAtual2?.label ?? "Processo encerrado";
           return { etapas, etapaAtual: etapaAtual2 };
+        } else if (cot.status === "concluida" && (cot as any).contratoTerceiroId) {
+          etapas.push({
+            key: "cotacao_aprovada",
+            label: "Cotação Aprovada",
+            status: "concluida",
+            data: cot.atualizadoEm || cot.criadoEm,
+            tempoDesdeAnterior: daysBetween(prevDate, cot.atualizadoEm || cot.criadoEm),
+            detalhe: "Fornecedor selecionado",
+          });
+          prevDate = cot.atualizadoEm || cot.criadoEm;
+
+          etapas.push({
+            key: "contrato_gerado",
+            label: "Contrato Gerado",
+            status: "concluida",
+            data: cot.atualizadoEm || cot.criadoEm,
+            tempoDesdeAnterior: 0,
+            detalhe: "Gerenciado em Terceiros",
+          });
+
+          const resolvedAtual = etapas.find(e => e.status === "atual");
+          const etapaAtual = resolvedAtual?.label ?? etapas[etapas.length - 1]?.label ?? null;
+          return { etapas, etapaAtual };
         } else {
           etapas.push({
             key: "cotacao_aprovada",
