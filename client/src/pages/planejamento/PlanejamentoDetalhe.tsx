@@ -4141,6 +4141,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
   const [importProgress, setImportProgress] = useState(0);
   const [importFileName, setImportFileName] = useState("");
   const [confirmLimpar, setConfirmLimpar] = useState(false);
+  const [confirmTodasSemanas, setConfirmTodasSemanas] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [filtroAtivo, setFiltroAtivo] = useState<"semana" | "pendentes" | "todas">("semana");
   const fileRef   = useRef<HTMLInputElement>(null);
@@ -4705,7 +4706,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
               <span>Qual escopo deseja limpar? <span className="text-red-500 text-xs">(não pode ser desfeito)</span></span>
             </div>
             <div className="flex gap-2 shrink-0 flex-wrap">
-              <Button size="sm" variant="outline" onClick={() => setConfirmLimpar(false)}>
+              <Button size="sm" variant="outline" onClick={() => { setConfirmLimpar(false); setConfirmTodasSemanas(false); }}>
                 Cancelar
               </Button>
               <Button size="sm" variant="outline"
@@ -4717,14 +4718,22 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                   : <XCircle className="h-3.5 w-3.5" />}
                 Só {semLabel}
               </Button>
-              <Button size="sm" className="bg-red-600 hover:bg-red-700 gap-1.5"
-                disabled={limparMutation.isPending}
-                onClick={() => limparMutation.mutate({ projetoId })}>
-                {limparMutation.isPending
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <XCircle className="h-3.5 w-3.5" />}
-                Todas as semanas
-              </Button>
+              {!confirmTodasSemanas ? (
+                <Button size="sm" className="bg-red-600 hover:bg-red-700 gap-1.5"
+                  onClick={() => setConfirmTodasSemanas(true)}>
+                  <XCircle className="h-3.5 w-3.5" />
+                  Todas as semanas
+                </Button>
+              ) : (
+                <Button size="sm" className="bg-red-800 hover:bg-red-900 gap-1.5 animate-pulse"
+                  disabled={limparMutation.isPending}
+                  onClick={() => { limparMutation.mutate({ projetoId }); setConfirmTodasSemanas(false); }}>
+                  {limparMutation.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <AlertTriangle className="h-3.5 w-3.5" />}
+                  Confirmar limpeza TOTAL
+                </Button>
+              )}
             </div>
           </div>
         );
