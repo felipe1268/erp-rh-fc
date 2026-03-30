@@ -7,7 +7,7 @@ A full-stack HR/ERP system built for FC Engenharia. It handles employees, payrol
 1. **RH & DP** — Payroll, time tracking, employees, benefits
 2. **SST** — Safety (EPIs, ASOs, CIPA, NRs)
 3. **Jurídico** — Labor lawsuits, deadlines, risk analysis
-4. **Terceiros** — Third-party companies and contractors
+4. **Terceiros** — Third-party companies, contractors, medição with inline-edit %, reject flow, comparativo (físico×medido×pago), item history, divergence alerts, partial medição
 5. **Parceiros** — Benefits partners (pharmacy, gas station, etc.)
 6. **Orçamento** — Excel import, 3 budget versions (Venda/Custo/Meta), ABC curve, BDI, EAP tree
 7. **Financeiro** (Rev.342) — 17 DB tables, 25+ tRPC endpoints, 12 React pages: DRE, fluxo de caixa, contas, conciliação bancária, obrigações fiscais

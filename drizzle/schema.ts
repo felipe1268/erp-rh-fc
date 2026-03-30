@@ -3228,6 +3228,8 @@ export const terceiroMedicoes = pgTable("terceiro_medicoes", {
   aprovadoEm:        timestamp("aprovado_em", { mode: "string" }),
   observacoes:       text(),
   motivoRejeicao:    text("motivo_rejeicao"),
+  rejeitadoPor:      varchar("rejeitado_por", { length: 255 }),
+  rejeitadoEm:       timestamp("rejeitado_em", { mode: "string" }),
   geradoAutomaticamente: boolean("gerado_automaticamente").default(false),
   criadoPor:         varchar("criado_por", { length: 255 }),
   criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),

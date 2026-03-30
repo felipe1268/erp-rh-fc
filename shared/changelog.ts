@@ -6399,4 +6399,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 21:00:00",
   },
+  {
+    version: 904,
+    titulo: "Medição Terceiros — edição inline, rejeição, comparativo físico×financeiro e histórico",
+    descricao:
+      "Auto-vinculação de planejamentoAtividadeId ao criar contrato via cotação e no relink EAP. " +
+      "Geração de medição agora retorna itens sem vínculo ao cronograma para alerta visual. " +
+      "Percentuais de medição editáveis inline antes da aprovação com recálculo automático de totais. " +
+      "Remoção parcial de itens da medição (medição parcial) com recálculo. " +
+      "Aba Comparativo com 3 colunas (Físico × Medido × Pago) e indicador de divergência (Δ). " +
+      "Modal de histórico de medição por item com timeline visual de evolução percentual. " +
+      "Rejeição de medição com motivo obrigatório, registro de rejeitadoPor/rejeitadoEm e exibição na UI. " +
+      "Medições expansíveis na aba com tabela detalhada de itens.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 22:00:00",
+  },
 ];

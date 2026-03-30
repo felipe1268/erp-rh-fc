@@ -11,7 +11,8 @@ import {
   ArrowLeft, Plus, FileCheck, AlertTriangle, CheckCircle,
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
-  FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen
+  FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
+  Eye, EyeOff, BarChart3
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -37,7 +38,7 @@ const STATUS_DOC: Record<string, { label: string; cls: string }> = {
   vencido:  { label: "Vencido",  cls: "bg-orange-100 text-orange-700 border-orange-200" },
 };
 
-type Tab = "itens" | "medicoes" | "documentos" | "documento";
+type Tab = "itens" | "medicoes" | "comparativo" | "documentos" | "documento";
 
 export default function ContratoDetalheWrapper() {
   const [, params] = useRoute("/terceiros/contratos/:id");
@@ -96,12 +97,34 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   });
 
   const gerarMedicaoMut = trpc.terceiroContratos.gerarMedicao.useMutation({
-    onSuccess: () => { toast.success("Medição gerada com base no avanço físico!"); setShowGerarMedicao(false); setTab("medicoes"); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onSuccess: (data) => {
+      if (data.itensNaoVinculados && data.itensNaoVinculados.length > 0) {
+        toast.warning(`Medição gerada, mas ${data.itensNaoVinculados.length} item(ns) sem vínculo ao cronograma (avanço = 0%): ${data.itensNaoVinculados.slice(0, 3).join(", ")}${data.itensNaoVinculados.length > 3 ? "..." : ""}`, { duration: 8000 });
+      } else {
+        toast.success("Medição gerada com base no avanço físico!");
+      }
+      setShowGerarMedicao(false); setTab("medicoes"); utils.terceiroContratos.getContrato.invalidate({ id });
+    },
     onError: (e) => toast.error(e.message),
   });
 
   const aprovarMut = trpc.terceiroContratos.aprovarMedicao.useMutation({
     onSuccess: () => { toast.success("Medição aprovada!"); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const rejeitarMut = trpc.terceiroContratos.rejeitarMedicao.useMutation({
+    onSuccess: () => { toast.success("Medição rejeitada"); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const editarMedicaoItemMut = trpc.terceiroContratos.editarMedicaoItem.useMutation({
+    onSuccess: () => { utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const removerMedicaoItemMut = trpc.terceiroContratos.removerMedicaoItem.useMutation({
+    onSuccess: (data) => { toast.success(`Item removido (${data.restantes} restantes)`); utils.terceiroContratos.getContrato.invalidate({ id }); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -299,11 +322,12 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200">
-          {(["itens", "medicoes", "documentos", "documento"] as Tab[]).map(t => (
+          {(["itens", "medicoes", "comparativo", "documentos", "documento"] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${tab === t ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500 hover:text-gray-700"}`}>
               {t === "itens" ? `Itens (${contrato.itens.length})` :
                t === "medicoes" ? `Medições (${contrato.medicoes.length})` :
+               t === "comparativo" ? <span className="flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" />Comparativo</span> :
                t === "documentos" ? `Docs (${contrato.documentos.length})` :
                <span className="flex items-center gap-1.5"><FileEdit className="w-3.5 h-3.5" />Documento</span>}
             </button>
@@ -362,59 +386,12 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
         {/* Tab: Medições */}
         {tab === "medicoes" && (
-          <div className="space-y-3">
-            {contrato.medicoes.length === 0 ? (
-              <div className="py-10 text-center text-gray-400 text-sm">
-                <ClipboardCheck className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                Nenhuma medição. Use o botão "Gerar Medição" para criar a primeira.
-              </div>
-            ) : contrato.medicoes.map(m => {
-              const st = STATUS_MEDICAO[m.status || "rascunho"] || STATUS_MEDICAO.rascunho;
-              return (
-                <div key={m.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold text-gray-900">Medição #{m.numero} — {m.periodo}</span>
-                        <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
-                        {m.geradoAutomaticamente && <Badge className="text-xs border bg-purple-100 text-purple-700 border-purple-200"><Zap className="w-3 h-3 mr-1" />Auto</Badge>}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Ref: {fmtDate(m.dataReferencia)} • Medido: {BRL(m.valorMedido)} • Acumulado: {BRL(m.valorAcumulado)} • {Number(m.percentualGlobal).toFixed(1)}% global
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      {m.status === "aguardando_aprovacao" && (
-                        <>
-                          <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs" onClick={() => aprovarMut.mutate({ id: m.id, aprovadoPor: "Responsável" })}>
-                            <CheckCircle className="w-3 h-3" /> Aprovar
-                          </Button>
-                          <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50">
-                            Rejeitar
-                          </Button>
-                        </>
-                      )}
-                      {m.status !== "paga" && (
-                        <>
-                          <Button size="sm" variant="outline" className="gap-1 text-xs"
-                            onClick={() => setEditMedicao({ id: m.id, periodo: m.periodo, dataReferencia: m.dataReferencia || "", observacoes: m.observacoes || "", status: m.status || "rascunho" })}>
-                            <Pencil className="w-3 h-3" /> Editar
-                          </Button>
-                          <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
-                            disabled={excluirMedicaoMut.isPending}
-                            onClick={() => { if (confirm(`Excluir Medição #${m.numero}? ${m.status === "aprovada" ? "Os valores acumulados serão revertidos." : ""}`)) excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }); }}>
-                            <Trash2 className="w-3 h-3" /> Excluir
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {m.aprovadoPor && <p className="text-xs text-gray-400 mt-2">Aprovado por {m.aprovadoPor} em {fmtDate(m.aprovadoEm)}</p>}
-                  {m.motivoRejeicao && <p className="text-xs text-red-500 mt-2">Motivo da rejeição: {m.motivoRejeicao}</p>}
-                </div>
-              );
-            })}
-          </div>
+          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} />
+        )}
+
+        {/* Tab: Comparativo */}
+        {tab === "comparativo" && (
+          <ComparativoTab contrato={contrato} id={id} />
         )}
 
         {/* Tab: Documentos */}
@@ -704,6 +681,352 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         )}
       </div>
     </DashboardLayout>
+  );
+}
+
+function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao }: any) {
+  const [expandedMedicao, setExpandedMedicao] = useState<number | null>(null);
+  const [rejeicaoModal, setRejeicaoModal] = useState<{ id: number; numero: number } | null>(null);
+  const [motivoRejeicao, setMotivoRejeicao] = useState("");
+  const [editingItem, setEditingItem] = useState<{ id: number; valor: string } | null>(null);
+
+  if (contrato.medicoes.length === 0) {
+    return (
+      <div className="py-10 text-center text-gray-400 text-sm">
+        <ClipboardCheck className="w-8 h-8 mx-auto mb-2 opacity-30" />
+        Nenhuma medição. Use o botão "Gerar Medição" para criar a primeira.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {contrato.medicoes.map((m: any) => {
+        const st = STATUS_MEDICAO[m.status || "rascunho"] || STATUS_MEDICAO.rascunho;
+        const isExpanded = expandedMedicao === m.id;
+        const isEditable = m.status === "aguardando_aprovacao" || m.status === "rascunho";
+        const itens = m.itens || [];
+
+        return (
+          <div key={m.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 cursor-pointer" onClick={() => setExpandedMedicao(isExpanded ? null : m.id)}>
+                  <div className="flex items-center gap-2 mb-1">
+                    {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                    <span className="font-semibold text-gray-900">Medição #{m.numero} — {m.periodo}</span>
+                    <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
+                    {m.geradoAutomaticamente && <Badge className="text-xs border bg-purple-100 text-purple-700 border-purple-200"><Zap className="w-3 h-3 mr-1" />Auto</Badge>}
+                  </div>
+                  <div className="text-xs text-gray-500 ml-6">
+                    Ref: {fmtDate(m.dataReferencia)} • Medido: {BRL(m.valorMedido)} • Acumulado: {BRL(m.valorAcumulado)} • {Number(m.percentualGlobal).toFixed(1)}% global
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  {m.status === "aguardando_aprovacao" && (
+                    <>
+                      <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs" onClick={() => aprovarMut.mutate({ id: m.id, aprovadoPor: "Responsável" })}>
+                        <CheckCircle className="w-3 h-3" /> Aprovar
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={() => { setRejeicaoModal({ id: m.id, numero: m.numero }); setMotivoRejeicao(""); }}>
+                        Rejeitar
+                      </Button>
+                    </>
+                  )}
+                  {m.status !== "paga" && (
+                    <>
+                      <Button size="sm" variant="outline" className="gap-1 text-xs"
+                        onClick={() => setEditMedicao({ id: m.id, periodo: m.periodo, dataReferencia: m.dataReferencia || "", observacoes: m.observacoes || "", status: m.status || "rascunho" })}>
+                        <Pencil className="w-3 h-3" /> Editar
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                        disabled={excluirMedicaoMut.isPending}
+                        onClick={() => { if (confirm(`Excluir Medição #${m.numero}? ${m.status === "aprovada" ? "Os valores acumulados serão revertidos." : ""}`)) excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }); }}>
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {m.aprovadoPor && <p className="text-xs text-gray-400 mt-2 ml-6">Aprovado por <span className="font-medium">{m.aprovadoPor}</span> em {fmtDate(m.aprovadoEm)}</p>}
+              {m.motivoRejeicao && (
+                <div className="mt-2 ml-6 p-2 bg-red-50 rounded-lg border border-red-100">
+                  <p className="text-xs text-red-600"><AlertTriangle className="w-3 h-3 inline mr-1" />Rejeitada{(m as any).rejeitadoPor ? ` por ${(m as any).rejeitadoPor}` : ""}{(m as any).rejeitadoEm ? ` em ${fmtDate((m as any).rejeitadoEm)}` : ""}</p>
+                  <p className="text-xs text-red-500 mt-0.5">{m.motivoRejeicao}</p>
+                </div>
+              )}
+            </div>
+
+            {isExpanded && itens.length > 0 && (
+              <div className="border-t border-gray-100">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 text-gray-500">
+                      <th className="px-4 py-2 text-left">Item</th>
+                      <th className="px-4 py-2 text-center w-[80px]">Anterior</th>
+                      <th className="px-4 py-2 text-center w-[100px]">% Período</th>
+                      <th className="px-4 py-2 text-center w-[80px]">Acumulado</th>
+                      <th className="px-4 py-2 text-right w-[110px]">Valor Período</th>
+                      <th className="px-4 py-2 text-right w-[110px]">Valor Acum.</th>
+                      {isEditable && <th className="px-4 py-2 text-center w-[40px]"></th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {itens.map((item: any) => {
+                      const isEditingThis = editingItem?.id === item.id;
+                      const percAnterior = Number(item.percentualAcumuladoAnterior || 0);
+                      const percPeriodo = Number(item.percentualMedidoPeriodo || 0);
+                      const percAcumulado = Number(item.percentualAvancoFisico || 0);
+
+                      return (
+                        <tr key={item.id} className="hover:bg-blue-50/30">
+                          <td className="px-4 py-2 text-gray-800">{item.descricao}</td>
+                          <td className="px-4 py-2 text-center text-gray-500">{percAnterior.toFixed(1)}%</td>
+                          <td className="px-4 py-2 text-center">
+                            {isEditable && isEditingThis ? (
+                              <div className="flex items-center gap-1 justify-center">
+                                <input
+                                  type="number" step="0.1" min="0" max={100 - percAnterior}
+                                  className="w-16 text-center border rounded px-1 py-0.5 text-xs"
+                                  value={editingItem.valor}
+                                  onChange={e => setEditingItem({ ...editingItem, valor: e.target.value })}
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") {
+                                      editarMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id, percentualMedidoPeriodo: parseFloat(editingItem.valor) || 0 });
+                                      setEditingItem(null);
+                                    } else if (e.key === "Escape") setEditingItem(null);
+                                  }}
+                                  autoFocus
+                                />
+                                <span className="text-gray-400">%</span>
+                              </div>
+                            ) : (
+                              <span
+                                className={`font-semibold ${percPeriodo > 0 ? "text-blue-700" : "text-gray-400"} ${isEditable ? "cursor-pointer hover:underline" : ""}`}
+                                onClick={() => isEditable && setEditingItem({ id: item.id, valor: percPeriodo.toFixed(1) })}
+                              >
+                                +{percPeriodo.toFixed(1)}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-center font-semibold text-gray-700">{percAcumulado.toFixed(1)}%</td>
+                          <td className="px-4 py-2 text-right text-gray-600">{BRL(item.valorMedidoPeriodo)}</td>
+                          <td className="px-4 py-2 text-right font-semibold text-gray-900">{BRL(item.valorAcumulado)}</td>
+                          {isEditable && (
+                            <td className="px-4 py-2 text-center">
+                              <button onClick={() => { if (confirm("Remover este item da medição?")) removerMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id }); }}
+                                className="text-red-300 hover:text-red-500 p-0.5">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50 font-semibold text-xs">
+                      <td className="px-4 py-2 text-right text-gray-600" colSpan={4}>Total Período</td>
+                      <td className="px-4 py-2 text-right text-blue-700">{BRL(m.valorMedido)}</td>
+                      <td className="px-4 py-2 text-right text-gray-900">{BRL(m.valorAcumulado)}</td>
+                      {isEditable && <td />}
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+
+            {isExpanded && itens.length === 0 && (
+              <div className="border-t border-gray-100 p-4 text-center text-xs text-gray-400">
+                Itens da medição não carregados. Expanda para ver detalhes.
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {rejeicaoModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setRejeicaoModal(null)}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900">Rejeitar Medição #{rejeicaoModal.numero}</h3>
+            <div>
+              <Label className="text-xs">Motivo da rejeição</Label>
+              <textarea className="w-full mt-1 border border-gray-200 rounded-lg p-3 text-sm min-h-[80px]" placeholder="Descreva o motivo..."
+                value={motivoRejeicao} onChange={e => setMotivoRejeicao(e.target.value)} />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setRejeicaoModal(null)}>Cancelar</Button>
+              <Button size="sm" className="bg-red-600 hover:bg-red-700" disabled={!motivoRejeicao.trim() || rejeitarMut.isPending}
+                onClick={() => { rejeitarMut.mutate({ id: rejeicaoModal.id, motivo: motivoRejeicao, rejeitadoPor: "Responsável" }); setRejeicaoModal(null); }}>
+                Confirmar Rejeição
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ComparativoTab({ contrato, id }: { contrato: any; id: number }) {
+  const [historyItem, setHistoryItem] = useState<{ contratoItemId: number; descricao: string } | null>(null);
+  const historyQuery = trpc.terceiroContratos.historicoMedicaoItem.useQuery(
+    { contratoId: id, contratoItemId: historyItem?.contratoItemId || 0 },
+    { enabled: !!historyItem }
+  );
+
+  const itens = contrato.itens || [];
+  const hasDivergence = itens.some((i: any) => i.divergencia !== null && Math.abs(i.divergencia) > 5);
+  const valorPago = Number(contrato.valorPago || 0);
+
+  return (
+    <div className="space-y-4">
+      {hasDivergence && (
+        <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800">Divergências detectadas</p>
+            <p className="text-xs text-amber-600 mt-0.5">Alguns itens têm diferença significativa ({">"}5%) entre avanço físico e financeiro.</p>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-[#1e3a5f] text-white">
+              <th className="px-3 py-2.5 text-left font-semibold" rowSpan={2}>Item</th>
+              <th className="px-3 py-2.5 text-right font-semibold" rowSpan={2}>Valor Contrato</th>
+              <th className="px-3 py-2 text-center font-semibold border-l border-white/20" colSpan={2}>Físico</th>
+              <th className="px-3 py-2 text-center font-semibold border-l border-white/20" colSpan={2}>Medido</th>
+              <th className="px-3 py-2 text-center font-semibold border-l border-white/20" colSpan={2}>Pago</th>
+              <th className="px-3 py-2 text-center font-semibold border-l border-white/20" rowSpan={2}>Δ</th>
+              <th className="px-3 py-2 text-center font-semibold" rowSpan={2}></th>
+            </tr>
+            <tr className="bg-[#2a4a6f] text-white/80 text-[10px]">
+              <th className="px-3 py-1 text-center border-l border-white/20">%</th>
+              <th className="px-3 py-1 text-right">R$</th>
+              <th className="px-3 py-1 text-center border-l border-white/20">%</th>
+              <th className="px-3 py-1 text-right">R$</th>
+              <th className="px-3 py-1 text-center border-l border-white/20">%</th>
+              <th className="px-3 py-1 text-right">R$</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {itens.map((item: any) => {
+              const valorTotal = Number(item.valorTotal || 0);
+              const avancoFisico = item.avancoFisicoReal;
+              const percFinanceiro = item.percentualFinanceiro || 0;
+              const valorMedido = Number(item.valorMedidoAcumulado || 0);
+              const percPago = valorTotal > 0 ? (valorPago > 0 ? Math.min((valorMedido / valorTotal) * (valorPago / Number(contrato.valorTotal || 1)), 1) * 100 : 0) : 0;
+              const valorItemPago = (percPago / 100) * valorTotal;
+              const div = item.divergencia;
+              const hasDivItem = div !== null && Math.abs(div) > 5;
+
+              return (
+                <tr key={item.id} className={`hover:bg-blue-50/30 ${hasDivItem ? "bg-amber-50/40" : ""}`}>
+                  <td className="px-3 py-2 text-gray-800 max-w-[200px] truncate" title={item.descricao}>{item.descricao}</td>
+                  <td className="px-3 py-2 text-right text-gray-600">{BRL(valorTotal)}</td>
+                  <td className="px-3 py-2 text-center border-l border-gray-100">
+                    {avancoFisico !== null ? (
+                      <span className="font-medium text-green-700">{avancoFisico.toFixed(1)}%</span>
+                    ) : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right text-gray-500">
+                    {avancoFisico !== null ? BRL((avancoFisico / 100) * valorTotal) : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-center border-l border-gray-100">
+                    <span className="font-medium text-blue-700">{percFinanceiro.toFixed(1)}%</span>
+                  </td>
+                  <td className="px-3 py-2 text-right text-gray-600">{BRL(valorMedido)}</td>
+                  <td className="px-3 py-2 text-center border-l border-gray-100">
+                    <span className="text-gray-500">{percPago.toFixed(1)}%</span>
+                  </td>
+                  <td className="px-3 py-2 text-right text-gray-500">{BRL(valorItemPago)}</td>
+                  <td className="px-3 py-2 text-center border-l border-gray-100">
+                    {div !== null ? (
+                      <span className={`font-semibold ${Math.abs(div) > 5 ? (div > 0 ? "text-red-600" : "text-amber-600") : "text-green-600"}`}>
+                        {div > 0 ? <TrendingUp className="w-3 h-3 inline mr-0.5" /> : div < 0 ? <TrendingDown className="w-3 h-3 inline mr-0.5" /> : <Minus className="w-3 h-3 inline mr-0.5" />}
+                        {div > 0 ? "+" : ""}{div.toFixed(1)}%
+                      </span>
+                    ) : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <button onClick={() => setHistoryItem({ contratoItemId: item.id, descricao: item.descricao })}
+                      className="text-gray-400 hover:text-blue-600 p-0.5" title="Histórico">
+                      <History className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="bg-gray-50 font-semibold text-xs">
+              <td className="px-3 py-2 text-right">Total</td>
+              <td className="px-3 py-2 text-right">{BRL(contrato.valorTotal)}</td>
+              <td className="px-3 py-2" colSpan={2}></td>
+              <td className="px-3 py-2 text-center border-l border-gray-100">{Number(contrato.percentualMedidoGlobal || 0).toFixed(1)}%</td>
+              <td className="px-3 py-2 text-right">{BRL(contrato.valorMedidoAcumulado)}</td>
+              <td className="px-3 py-2 text-center border-l border-gray-100"></td>
+              <td className="px-3 py-2 text-right">{BRL(valorPago)}</td>
+              <td className="px-3 py-2" colSpan={2}></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {historyItem && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setHistoryItem(null)}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="font-semibold text-gray-900">Histórico de Medição</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{historyItem.descricao}</p>
+              </div>
+              <button onClick={() => setHistoryItem(null)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+            </div>
+
+            {historyQuery.isLoading ? (
+              <div className="py-6 text-center text-gray-400 text-sm">Carregando...</div>
+            ) : historyQuery.data && historyQuery.data.length > 0 ? (
+              <div className="space-y-2">
+                {historyQuery.data.map((h: any, idx: number) => {
+                  const st = STATUS_MEDICAO[h.status || "rascunho"] || STATUS_MEDICAO.rascunho;
+                  return (
+                    <div key={idx} className="flex items-center gap-3 p-2 border border-gray-100 rounded-lg">
+                      <div className="flex-shrink-0 w-16 text-center">
+                        <span className="text-xs font-bold text-gray-700">Med #{h.numero}</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-gray-500">{h.periodo}</span>
+                          <Badge className={`text-[10px] border ${st.cls}`}>{st.label}</Badge>
+                        </div>
+                        <div className="flex gap-4 mt-1 text-xs">
+                          <span className="text-blue-700 font-medium">+{h.percentualPeriodo.toFixed(1)}%</span>
+                          <span className="text-gray-600">= {h.percentualAcumulado.toFixed(1)}% acum.</span>
+                          <span className="text-gray-500">{BRL(h.valorPeriodo)}</span>
+                        </div>
+                      </div>
+                      <div className="flex-shrink-0 w-20">
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${Math.min(h.percentualAcumulado, 100)}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-gray-400 text-sm">Nenhuma medição encontrada para este item.</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

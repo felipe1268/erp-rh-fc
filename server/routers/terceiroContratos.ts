@@ -74,9 +74,24 @@ export const terceiroContratosRouter = router({
         .where(eq(terceiroContratoItens.contratoId, input.id))
         .orderBy(asc(terceiroContratoItens.ordem));
 
-      const medicoes = await db.select().from(terceiroMedicoes)
+      const medicoesRaw = await db.select().from(terceiroMedicoes)
         .where(eq(terceiroMedicoes.contratoId, input.id))
         .orderBy(desc(terceiroMedicoes.numero));
+
+      const allMedicaoItens = medicoesRaw.length > 0
+        ? await db.select().from(terceiroMedicaoItens)
+            .where(inArray(terceiroMedicaoItens.medicaoId, medicoesRaw.map(m => m.id)))
+        : [];
+
+      const medicoes = medicoesRaw.map(m => ({
+        ...m,
+        itens: allMedicaoItens
+          .filter(i => i.medicaoId === m.id)
+          .map(i => {
+            const ci = itensRaw.find(c => c.id === i.contratoItemId);
+            return { ...i, descricao: ci?.descricao || `Item #${i.contratoItemId}`, eapCodigo: (ci as any)?.eapCodigo || "" };
+          }),
+      }));
 
       const documentos = await db.select().from(terceiroDocumentos)
         .where(eq(terceiroDocumentos.contratoId, input.id))
@@ -190,6 +205,33 @@ export const terceiroContratosRouter = router({
           }
         } catch {}
       }
+
+      const atividadeIds = itensRaw.map(i => (i as any).planejamentoAtividadeId).filter(Boolean) as number[];
+      let avancoFisicoMap = new Map<number, number>();
+      if (atividadeIds.length > 0) {
+        try {
+          const avancos = await db.select({
+            atividadeId: planejamentoAvancos.atividadeId,
+            percentualAcumulado: planejamentoAvancos.percentualAcumulado,
+            semana: planejamentoAvancos.semana,
+          }).from(planejamentoAvancos)
+            .where(inArray(planejamentoAvancos.atividadeId, atividadeIds))
+            .orderBy(desc(planejamentoAvancos.semana));
+          for (const av of avancos) {
+            if (!avancoFisicoMap.has(av.atividadeId)) {
+              avancoFisicoMap.set(av.atividadeId, n(av.percentualAcumulado));
+            }
+          }
+        } catch {}
+      }
+      itens = itens.map((it: any) => {
+        const atId = it.planejamentoAtividadeId;
+        const avancoFisico = atId ? (avancoFisicoMap.get(atId) ?? null) : null;
+        const percentualFinanceiro = n(it.valorMedidoAcumulado) > 0 && n(it.valorTotal) > 0
+          ? (n(it.valorMedidoAcumulado) / n(it.valorTotal)) * 100 : 0;
+        const divergencia = avancoFisico !== null ? percentualFinanceiro - avancoFisico : null;
+        return { ...it, avancoFisicoReal: avancoFisico, percentualFinanceiro, divergencia };
+      });
 
       const valorMedidoAcumulado = itensRaw.reduce((s, i) => s + n(i.valorMedidoAcumulado), 0);
       const percentualMedidoGlobal = n(contrato.valorTotal) > 0 ? (valorMedidoAcumulado / n(contrato.valorTotal)) * 100 : 0;
@@ -631,6 +673,29 @@ export const terceiroContratosRouter = router({
         .where(eq(terceiroContratoItens.contratoId, input.contratoId))
         .orderBy(asc(terceiroContratoItens.ordem));
 
+      let eapToAtividadeId: Record<string, number> = {};
+      const [contratoRow] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
+      if (contratoRow?.obraId) {
+        try {
+          const [proj] = await db.select({ id: planejamentoProjetos.id })
+            .from(planejamentoProjetos)
+            .where(and(eq(planejamentoProjetos.companyId, contratoRow.companyId), eq(planejamentoProjetos.obraId, contratoRow.obraId)))
+            .orderBy(desc(planejamentoProjetos.id)).limit(1);
+          if (proj) {
+            const [rev] = await db.select({ id: planejamentoRevisoes.id })
+              .from(planejamentoRevisoes)
+              .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+              .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
+            if (rev) {
+              const atividades = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo })
+                .from(planejamentoAtividades)
+                .where(and(eq(planejamentoAtividades.revisaoId, rev.id), eq(planejamentoAtividades.projetoId, proj.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
+              for (const a of atividades) { if (a.eapCodigo) eapToAtividadeId[a.eapCodigo] = a.id; }
+            }
+          }
+        } catch {}
+      }
+
       let updated = 0;
       const cotItensOrdered = [...cotItens].sort((a, b) => a.id - b.id);
 
@@ -638,15 +703,20 @@ export const terceiroContratosRouter = router({
         const ci = contratoItens[i];
         const cotItem = cotItensOrdered[i];
         const scInfo = cotToSc.get(cotItem.id);
-        if (scInfo && scInfo.eapCodigo && !(ci as any).eapCodigo) {
-          await db.update(terceiroContratoItens)
-            .set({ eapCodigo: scInfo.eapCodigo, orcamentoItemId: scInfo.orcamentoItemId } as any)
-            .where(eq(terceiroContratoItens.id, ci.id));
-          updated++;
+        if (scInfo && scInfo.eapCodigo) {
+          const upd: any = {};
+          if (!(ci as any).eapCodigo) { upd.eapCodigo = scInfo.eapCodigo; upd.orcamentoItemId = scInfo.orcamentoItemId; }
+          if (!ci.planejamentoAtividadeId && eapToAtividadeId[scInfo.eapCodigo]) {
+            upd.planejamentoAtividadeId = eapToAtividadeId[scInfo.eapCodigo];
+          }
+          if (Object.keys(upd).length > 0) {
+            await db.update(terceiroContratoItens).set(upd).where(eq(terceiroContratoItens.id, ci.id));
+            updated++;
+          }
         }
       }
 
-      return { updated, msg: `${updated} item(ns) atualizado(s) com código EAP` };
+      return { updated, msg: `${updated} item(ns) atualizado(s) com EAP e vínculo ao cronograma` };
     }),
 
   removerItem: protectedProcedure
@@ -750,17 +820,19 @@ export const terceiroContratosRouter = router({
 
       let valorMedidoPeriodo = 0;
       const itensMedicao: any[] = [];
+      const itensNaoVinculados: string[] = [];
 
       for (const item of itens) {
         let percentualFisico = n(item.percentualMedidoAcumulado);
 
-        // Busca avanço mais recente do planejamento para a atividade vinculada
         if (item.planejamentoAtividadeId) {
           const [avanco] = await db.select().from(planejamentoAvancos)
             .where(eq(planejamentoAvancos.atividadeId, item.planejamentoAtividadeId))
             .orderBy(desc(planejamentoAvancos.semana))
             .limit(1);
           if (avanco) percentualFisico = n(avanco.percentualAcumulado);
+        } else {
+          itensNaoVinculados.push(item.descricao || `Item #${item.id}`);
         }
 
         const percentualAnterior = n(item.percentualMedidoAcumulado);
@@ -806,7 +878,7 @@ export const terceiroContratosRouter = router({
         await db.insert(terceiroMedicaoItens).values({ ...im, medicaoId: medicao.id } as any);
       }
 
-      return { medicao, itens: itensMedicao.length };
+      return { medicao, itens: itensMedicao.length, itensNaoVinculados };
     }),
 
   getMedicao: protectedProcedure
@@ -828,6 +900,9 @@ export const terceiroContratosRouter = router({
     .input(z.object({ id: z.number(), aprovadoPor: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      const [existing] = await db.select().from(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.id));
+      if (!existing) throw new Error("Medição não encontrada");
+      if (existing.status !== "aguardando_aprovacao") throw new Error(`Medição não pode ser aprovada (status: ${existing.status})`);
       const [medicao] = await db.update(terceiroMedicoes)
         .set({ status: "aprovada", aprovadoPor: input.aprovadoPor, aprovadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() })
         .where(eq(terceiroMedicoes.id, input.id))
@@ -850,8 +925,17 @@ export const terceiroContratosRouter = router({
     .input(z.object({ id: z.number(), motivo: z.string(), rejeitadoPor: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      const [existing] = await db.select().from(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.id));
+      if (!existing) throw new Error("Medição não encontrada");
+      if (existing.status !== "aguardando_aprovacao") throw new Error(`Medição não pode ser rejeitada (status: ${existing.status})`);
       const [medicao] = await db.update(terceiroMedicoes)
-        .set({ status: "rejeitada", motivoRejeicao: input.motivo, atualizadoEm: new Date().toISOString() })
+        .set({
+          status: "rejeitada",
+          motivoRejeicao: input.motivo,
+          rejeitadoPor: input.rejeitadoPor ?? null,
+          rejeitadoEm: new Date().toISOString(),
+          atualizadoEm: new Date().toISOString(),
+        } as any)
         .where(eq(terceiroMedicoes.id, input.id))
         .returning();
       return medicao;
@@ -936,6 +1020,112 @@ export const terceiroContratosRouter = router({
         .where(eq(terceiroContratos.id, input.contratoId))
         .returning();
       return c;
+    }),
+
+  editarMedicaoItem: protectedProcedure
+    .input(z.object({
+      medicaoItemId: z.number(),
+      medicaoId: z.number(),
+      percentualMedidoPeriodo: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [medicao] = await db.select().from(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.medicaoId));
+      if (!medicao) throw new Error("Medição não encontrada");
+      if (medicao.status === "aprovada" || medicao.status === "paga") throw new Error("Não é possível editar itens de uma medição já aprovada/paga");
+
+      const [item] = await db.select().from(terceiroMedicaoItens).where(and(eq(terceiroMedicaoItens.id, input.medicaoItemId), eq(terceiroMedicaoItens.medicaoId, input.medicaoId)));
+      if (!item) throw new Error("Item da medição não encontrado");
+
+      const [contratoItem] = await db.select().from(terceiroContratoItens).where(eq(terceiroContratoItens.id, item.contratoItemId));
+      if (!contratoItem) throw new Error("Item do contrato não encontrado");
+
+      const percentualAnterior = n(item.percentualAcumuladoAnterior);
+      const novoPercentualPeriodo = Math.max(0, Math.min(100 - percentualAnterior, input.percentualMedidoPeriodo));
+      const novoPercentualFisico = percentualAnterior + novoPercentualPeriodo;
+      const novoValorPeriodo = (novoPercentualPeriodo / 100) * n(contratoItem.valorTotal);
+      const novoValorAcumulado = (novoPercentualFisico / 100) * n(contratoItem.valorTotal);
+
+      await db.update(terceiroMedicaoItens).set({
+        percentualMedidoPeriodo: String(novoPercentualPeriodo),
+        percentualAvancoFisico: String(novoPercentualFisico),
+        valorMedidoPeriodo: String(novoValorPeriodo),
+        valorAcumulado: String(novoValorAcumulado),
+      }).where(eq(terceiroMedicaoItens.id, input.medicaoItemId));
+
+      const todosItens = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.medicaoId));
+      const novoValorMedido = todosItens.reduce((s, i) => s + (i.id === input.medicaoItemId ? novoValorPeriodo : n(i.valorMedidoPeriodo)), 0);
+      const medicoesAprovadas = (await db.select().from(terceiroMedicoes)
+        .where(and(eq(terceiroMedicoes.contratoId, medicao.contratoId), inArray(terceiroMedicoes.status, ["aprovada", "paga"]))))
+        .reduce((s, m) => s + n(m.valorMedido), 0);
+      const novoValorAcumuladoMedicao = medicoesAprovadas + novoValorMedido;
+      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, medicao.contratoId));
+      const novoPercentualGlobal = n(contrato?.valorTotal) > 0 ? (novoValorAcumuladoMedicao / n(contrato.valorTotal)) * 100 : 0;
+
+      await db.update(terceiroMedicoes).set({
+        valorMedido: String(novoValorMedido),
+        valorAcumulado: String(novoValorAcumuladoMedicao),
+        percentualGlobal: String(novoPercentualGlobal),
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(terceiroMedicoes.id, input.medicaoId));
+
+      return { ok: true };
+    }),
+
+  removerMedicaoItem: protectedProcedure
+    .input(z.object({ medicaoItemId: z.number(), medicaoId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [medicao] = await db.select().from(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.medicaoId));
+      if (!medicao) throw new Error("Medição não encontrada");
+      if (medicao.status === "aprovada" || medicao.status === "paga") throw new Error("Não é possível remover itens de uma medição já aprovada/paga");
+
+      await db.delete(terceiroMedicaoItens).where(and(eq(terceiroMedicaoItens.id, input.medicaoItemId), eq(terceiroMedicaoItens.medicaoId, input.medicaoId)));
+
+      const todosItens = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.medicaoId));
+      const novoValorMedido = todosItens.reduce((s, i) => s + n(i.valorMedidoPeriodo), 0);
+      const medicoesAprovadas = (await db.select().from(terceiroMedicoes)
+        .where(and(eq(terceiroMedicoes.contratoId, medicao.contratoId), inArray(terceiroMedicoes.status, ["aprovada", "paga"]))))
+        .reduce((s, m) => s + n(m.valorMedido), 0);
+      const novoValorAcumuladoMedicao = medicoesAprovadas + novoValorMedido;
+      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, medicao.contratoId));
+      const novoPercentualGlobal = n(contrato?.valorTotal) > 0 ? (novoValorAcumuladoMedicao / n(contrato.valorTotal)) * 100 : 0;
+
+      await db.update(terceiroMedicoes).set({
+        valorMedido: String(novoValorMedido),
+        valorAcumulado: String(novoValorAcumuladoMedicao),
+        percentualGlobal: String(novoPercentualGlobal),
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(terceiroMedicoes.id, input.medicaoId));
+
+      return { ok: true, restantes: todosItens.length };
+    }),
+
+  historicoMedicaoItem: protectedProcedure
+    .input(z.object({ contratoId: z.number(), contratoItemId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const medicoes = await db.select().from(terceiroMedicoes)
+        .where(eq(terceiroMedicoes.contratoId, input.contratoId))
+        .orderBy(asc(terceiroMedicoes.numero));
+      const result: any[] = [];
+      for (const m of medicoes) {
+        const [item] = await db.select().from(terceiroMedicaoItens)
+          .where(and(eq(terceiroMedicaoItens.medicaoId, m.id), eq(terceiroMedicaoItens.contratoItemId, input.contratoItemId)));
+        if (item) {
+          result.push({
+            medicaoId: m.id,
+            numero: m.numero,
+            periodo: m.periodo,
+            status: m.status,
+            percentualPeriodo: n(item.percentualMedidoPeriodo),
+            percentualAcumulado: n(item.percentualAvancoFisico),
+            valorPeriodo: n(item.valorMedidoPeriodo),
+            valorAcumulado: n(item.valorAcumulado),
+          });
+        }
+      }
+      return result;
     }),
 
   // ── DOCUMENTOS ────────────────────────────────────────────
@@ -1278,9 +1468,34 @@ export const terceiroContratosRouter = router({
           for (const si of scItems) scItemMap[si.id] = { eapCodigo: si.eapCodigo, orcamentoItemId: si.orcamentoItemId };
         }
 
+        let eapToAtividadeId: Record<string, number> = {};
+        if (cot.obraId) {
+          try {
+            const [proj] = await db.select({ id: planejamentoProjetos.id })
+              .from(planejamentoProjetos)
+              .where(and(eq(planejamentoProjetos.companyId, input.companyId), eq(planejamentoProjetos.obraId, cot.obraId)))
+              .orderBy(desc(planejamentoProjetos.id)).limit(1);
+            if (proj) {
+              const [rev] = await db.select({ id: planejamentoRevisoes.id })
+                .from(planejamentoRevisoes)
+                .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+                .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
+              if (rev) {
+                const atividades = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo })
+                  .from(planejamentoAtividades)
+                  .where(and(eq(planejamentoAtividades.revisaoId, rev.id), eq(planejamentoAtividades.projetoId, proj.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
+                for (const a of atividades) {
+                  if (a.eapCodigo) eapToAtividadeId[a.eapCodigo] = a.id;
+                }
+              }
+            }
+          } catch {}
+        }
+
         await db.insert(terceiroContratoItens).values(
           itens.map((it, idx) => {
             const scInfo = it.solicitacaoItemId ? scItemMap[it.solicitacaoItemId] : null;
+            const eap = scInfo?.eapCodigo ?? null;
             return {
               contratoId: contrato.id,
               companyId: input.companyId,
@@ -1289,8 +1504,9 @@ export const terceiroContratosRouter = router({
               quantidade: String(it.quantidade || "1"),
               valorUnitario: String(it.precoUnitario || "0"),
               valorTotal: String(it.total || "0"),
-              eapCodigo: scInfo?.eapCodigo ?? null,
+              eapCodigo: eap,
               orcamentoItemId: scInfo?.orcamentoItemId ?? null,
+              planejamentoAtividadeId: eap && eapToAtividadeId[eap] ? eapToAtividadeId[eap] : null,
               ordem: idx,
             };
           })
