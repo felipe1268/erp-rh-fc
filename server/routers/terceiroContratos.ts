@@ -825,30 +825,35 @@ export const terceiroContratosRouter = router({
       if (!itens.length) throw new Error("Contrato sem itens — adicione atividades antes de gerar medição");
 
       // Auto-link: vincular itens ao planejamento pelo EAP se ainda não vinculados
-      const itensDesvinculados = itens.filter(i => !i.planejamentoAtividadeId && (i as any).eapCodigo);
+      const itensDesvinculados = itens.filter(i => !i.planejamentoAtividadeId);
+      console.log(`[gerarMedicao] ${itensDesvinculados.length} itens desvinculados, obraId=${contrato.obraId}`);
       if (itensDesvinculados.length > 0 && contrato.obraId) {
         try {
           const [proj] = await db.select({ id: planejamentoProjetos.id })
             .from(planejamentoProjetos)
             .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
             .orderBy(desc(planejamentoProjetos.id)).limit(1);
+          console.log(`[gerarMedicao] Projeto planejamento: ${proj ? proj.id : "NÃO ENCONTRADO"}`);
           if (proj) {
             const [rev] = await db.select({ id: planejamentoRevisoes.id })
               .from(planejamentoRevisoes)
               .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
               .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
+            console.log(`[gerarMedicao] Revisão aprovada: ${rev ? rev.id : "NÃO ENCONTRADA"}`);
             if (rev) {
               const atividades = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo })
                 .from(planejamentoAtividades)
                 .where(and(eq(planejamentoAtividades.revisaoId, rev.id), eq(planejamentoAtividades.projetoId, proj.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
               const eapMap: Record<string, number> = {};
               for (const a of atividades) { if (a.eapCodigo) eapMap[a.eapCodigo] = a.id; }
+              console.log(`[gerarMedicao] ${atividades.length} atividades no planejamento, ${Object.keys(eapMap).length} com EAP`);
               for (const item of itensDesvinculados) {
                 const eap = (item as any).eapCodigo;
+                console.log(`[gerarMedicao] Tentando vincular item "${item.descricao}" eapCodigo="${eap}" → match=${eap ? !!eapMap[eap] : false}`);
                 if (eap && eapMap[eap]) {
                   await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: eapMap[eap] }).where(eq(terceiroContratoItens.id, item.id));
                   (item as any).planejamentoAtividadeId = eapMap[eap];
-                  console.log(`[gerarMedicao] Auto-link: "${item.descricao}" → atividade ${eapMap[eap]} (EAP ${eap})`);
+                  console.log(`[gerarMedicao] Auto-link OK: "${item.descricao}" → atividade ${eapMap[eap]} (EAP ${eap})`);
                 }
               }
             }

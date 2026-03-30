@@ -12,7 +12,7 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3
+  Eye, EyeOff, BarChart3, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -647,8 +647,21 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                   </div>
                 )}
               </div>
+              {gerarMedicaoMut.isPending && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-blue-600">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Gerando medição...
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                    <div className="bg-blue-600 h-2.5 rounded-full animate-pulse" style={{ width: "100%", animation: "progress-indeterminate 1.5s ease-in-out infinite" }} />
+                  </div>
+                  <p className="text-xs text-gray-400">Vinculando itens ao planejamento e calculando avanço físico...</p>
+                  <style>{`@keyframes progress-indeterminate { 0% { width: 10%; margin-left: 0; } 50% { width: 60%; margin-left: 20%; } 100% { width: 10%; margin-left: 90%; } }`}</style>
+                </div>
+              )}
               <div className="flex gap-3 mt-5 justify-end">
-                <Button variant="outline" onClick={() => setShowGerarMedicao(false)}>Cancelar</Button>
+                <Button variant="outline" onClick={() => setShowGerarMedicao(false)} disabled={gerarMedicaoMut.isPending}>Cancelar</Button>
                 <Button className="bg-blue-600 hover:bg-blue-700" disabled={gerarMedicaoMut.isPending}
                   onClick={() => gerarMedicaoMut.mutate({ contratoId: id, companyId: contrato.companyId, periodo, dataInicio: medicaoDataInicio, dataFim: medicaoDataFim, criadoPor: "Responsável" })}>
                   <Zap className="w-4 h-4 mr-2" />{gerarMedicaoMut.isPending ? "Gerando..." : "Gerar Medição"}
