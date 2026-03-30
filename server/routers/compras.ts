@@ -6667,6 +6667,7 @@ Retorne APENAS um JSON válido neste formato:
       dataNecessidade: z.string().optional(),
       observacoes: z.string().optional(),
       obraId: z.number().nullable().optional(),
+      tipo: z.string().optional(),
       itens: z.array(z.object({
         id: z.number().optional(),
         descricao: z.string(),
@@ -6681,6 +6682,11 @@ Retorne APENAS um JSON válido neste formato:
         quantidadeServico: z.number().optional(),
         coeficiente: z.number().optional(),
         origemEap: z.boolean().optional(),
+        semVerba: z.boolean().optional(),
+        motivoSemVerba: z.string().optional(),
+        incluirAjudante: z.boolean().optional(),
+        metaMdoProfissional: z.number().optional(),
+        metaMdoAjudante: z.number().optional(),
       })).optional(),
     }))
     .mutation(async ({ input }) => {
@@ -6716,6 +6722,7 @@ Retorne APENAS um JSON válido neste formato:
         dataNecessidade: input.dataNecessidade ?? sc.dataNecessidade,
         observacoes: input.observacoes !== undefined ? input.observacoes : sc.observacoes,
         obraId: input.obraId !== undefined ? input.obraId : sc.obraId,
+        tipo: input.tipo ?? sc.tipo,
         atualizadoEm: new Date().toISOString(),
       }).where(eq(comprasSolicitacoes.id, input.id));
 
@@ -6761,6 +6768,11 @@ Retorne APENAS um JSON válido neste formato:
                 quantidadeServico: it.quantidadeServico ? String(it.quantidadeServico) : null,
                 coeficiente: it.coeficiente ? String(it.coeficiente) : null,
                 origemEap: it.origemEap ?? false,
+                semVerba: it.semVerba ?? false,
+                motivoSemVerba: it.motivoSemVerba ?? null,
+                incluirAjudante: it.incluirAjudante ?? true,
+                metaMdoProfissional: it.metaMdoProfissional ? String(it.metaMdoProfissional) : null,
+                metaMdoAjudante: it.metaMdoAjudante ? String(it.metaMdoAjudante) : null,
               }))
             );
           }

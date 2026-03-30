@@ -471,6 +471,7 @@ export default function Solicitacoes() {
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState<{ titulo: string; prioridade: string; dataNecessidade: string; observacoes: string } | null>(null);
   const [editItens, setEditItens] = useState<any[]>([]);
+  const [editingSc, setEditingSc] = useState<{ id: number; companyId: number } | null>(null);
 
   const q = trpc.compras.listarSolicitacoes.useQuery(
     { companyId, busca: busca || undefined, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -577,7 +578,11 @@ export default function Solicitacoes() {
     onError: (e) => toast.error(e.message),
   });
   const editar = trpc.compras.editarSolicitacao.useMutation({
-    onSuccess: () => { toast.success("SC atualizada!"); q.refetch(); detalheQ.refetch(); setEditMode(false); },
+    onSuccess: () => {
+      toast.success("SC atualizada!");
+      q.refetch(); detalheQ.refetch(); setEditMode(false);
+      if (editingSc) { setShowNova(false); resetForm(); setEditingSc(null); }
+    },
     onError: (e) => toast.error(e.message),
   });
   const duplicar = trpc.compras.duplicarSolicitacao.useMutation({
@@ -991,36 +996,52 @@ export default function Solicitacoes() {
       setUploadingImagem(false);
     }
 
-    criar.mutate({
-      companyId,
-      solicitanteId: user?.id ? parseInt(String(user.id)) : undefined,
-      titulo: form.titulo,
-      obraId: parseInt(form.obraId),
-      dataNecessidade: form.dataNecessidade || undefined,
-      prioridade: form.prioridade,
-      observacoes: form.observacoes || undefined,
-      imagemReferenciaUrl: imgUrl,
-      tipo: form.tipo,
-      itens: Array.from(consolidados.values()).map(i => ({
-        descricao: i.descricao,
-        unidade: i.unidade,
-        quantidade: parseFloat(i.quantidade) || 1,
-        observacoes: i.observacoes || undefined,
-        orcamentoItemId: i.orcamentoItemId,
-        eapCodigo: i.eapCodigo,
-        insumoCodigo: i.insumoCodigo,
-        composicaoCodigo: i.composicaoCodigo,
-        precoMeta: i.precoMeta,
-        quantidadeServico: i.quantidadeServico,
-        coeficiente: i.coeficiente,
-        origemEap: i.origemEap,
-        semVerba: i.semVerba,
-        motivoSemVerba: i.motivoSemVerba,
-        incluirAjudante: i.incluirAjudante,
-        metaMdoProfissional: i.metaMdoProfissional,
-        metaMdoAjudante: i.metaMdoAjudante,
-      })),
-    });
+    const itensPayload = Array.from(consolidados.values()).map(i => ({
+      descricao: i.descricao,
+      unidade: i.unidade,
+      quantidade: parseFloat(i.quantidade) || 1,
+      observacoes: i.observacoes || undefined,
+      orcamentoItemId: i.orcamentoItemId,
+      eapCodigo: i.eapCodigo,
+      insumoCodigo: i.insumoCodigo,
+      composicaoCodigo: i.composicaoCodigo,
+      precoMeta: i.precoMeta,
+      quantidadeServico: i.quantidadeServico,
+      coeficiente: i.coeficiente,
+      origemEap: i.origemEap,
+      semVerba: i.semVerba,
+      motivoSemVerba: i.motivoSemVerba,
+      incluirAjudante: i.incluirAjudante,
+      metaMdoProfissional: i.metaMdoProfissional,
+      metaMdoAjudante: i.metaMdoAjudante,
+    }));
+
+    if (editingSc) {
+      editar.mutate({
+        id: editingSc.id,
+        companyId: editingSc.companyId,
+        titulo: form.titulo,
+        obraId: parseInt(form.obraId) || null,
+        dataNecessidade: form.dataNecessidade || undefined,
+        prioridade: form.prioridade,
+        observacoes: form.observacoes || undefined,
+        tipo: form.tipo,
+        itens: itensPayload,
+      });
+    } else {
+      criar.mutate({
+        companyId,
+        solicitanteId: user?.id ? parseInt(String(user.id)) : undefined,
+        titulo: form.titulo,
+        obraId: parseInt(form.obraId),
+        dataNecessidade: form.dataNecessidade || undefined,
+        prioridade: form.prioridade,
+        observacoes: form.observacoes || undefined,
+        imagemReferenciaUrl: imgUrl,
+        tipo: form.tipo,
+        itens: itensPayload,
+      });
+    }
   }
 
   async function handleConfirmSemVerba() {
@@ -1269,10 +1290,10 @@ export default function Solicitacoes() {
                         <button
                           title="Editar SC"
                           className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
-                          onClick={(e) => { e.stopPropagation(); setShowDetalhe(sc.id); setTimeout(() => {
-                            setEditForm({ titulo: sc.titulo || "", prioridade: sc.prioridade || "normal", dataNecessidade: sc.dataNecessidade || "", observacoes: sc.observacoes || "" });
-                            setEditMode(true);
-                          }, 300); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDetalhe(sc.id);
+                          }}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -1307,14 +1328,14 @@ export default function Solicitacoes() {
       </div>
 
       {/* ── Dialog Nova SC ─────────────────────────────────────────── */}
-      <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) resetForm(); }}>
+      <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) { resetForm(); setEditingSc(null); } }}>
         <DialogContent
           className="border-gray-200 w-[96vw] max-w-[96vw] h-[94vh] max-h-[94vh] flex flex-col p-0 gap-0"
           style={{ background: '#ffffff', color: '#111827' }}
         >
           {/* Header fixo */}
           <DialogHeader className="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
-            <DialogTitle style={{ color: '#111827' }} className="text-base font-semibold">Nova Solicitação de Compra</DialogTitle>
+            <DialogTitle style={{ color: '#111827' }} className="text-base font-semibold">{editingSc ? "Editar Solicitação de Compra" : "Nova Solicitação de Compra"}</DialogTitle>
           </DialogHeader>
 
           {/* Corpo rolável */}
@@ -2330,17 +2351,17 @@ export default function Solicitacoes() {
           {/* Rodapé fixo com botões */}
           <div className="px-5 py-3 border-t border-gray-100 bg-white shrink-0 flex gap-2">
               <button
-                onClick={() => { setShowNova(false); resetForm(); }}
+                onClick={() => { setShowNova(false); resetForm(); setEditingSc(null); }}
                 className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 font-medium transition"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSalvar}
-                disabled={criar.isPending || uploadingImagem}
+                disabled={criar.isPending || editar.isPending || uploadingImagem}
                 className="flex-1 h-9 text-sm rounded-md bg-amber-600 hover:bg-amber-500 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2"
               >
-                {(criar.isPending || uploadingImagem) ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar Solicitação"}
+                {(criar.isPending || editar.isPending || uploadingImagem) ? <Loader2 className="h-4 w-4 animate-spin" /> : editingSc ? "Salvar Alterações" : "Criar Solicitação"}
               </button>
           </div>
         </DialogContent>
@@ -2784,104 +2805,6 @@ export default function Solicitacoes() {
                   </span>
                 </div>
               )}
-              {editMode && editForm && (
-                <div className="border border-blue-200 bg-blue-50 rounded-lg p-4 space-y-3">
-                  <div className="text-xs font-semibold text-blue-700 uppercase tracking-widest flex items-center gap-1">
-                    <Pencil className="h-3 w-3" /> Editando Solicitação
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs text-gray-700">Título</Label>
-                      <Input className="bg-white border-gray-300 text-gray-900 text-sm" value={editForm.titulo}
-                        onChange={e => setEditForm({ ...editForm, titulo: e.target.value })} />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-gray-700">Prioridade</Label>
-                      <Select value={editForm.prioridade} onValueChange={v => setEditForm({ ...editForm, prioridade: v })}>
-                        <SelectTrigger className="bg-white border-gray-300 text-gray-900 text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {["normal", "alta", "urgente", "baixa"].map(p => <SelectItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-gray-700">Data de Necessidade</Label>
-                      <Input type="date" className="bg-white border-gray-300 text-gray-900 text-sm" value={editForm.dataNecessidade}
-                        onChange={e => setEditForm({ ...editForm, dataNecessidade: e.target.value })} />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-700">Observações</Label>
-                    <Textarea className="bg-white border-gray-300 text-gray-900 text-sm" rows={2} value={editForm.observacoes}
-                      onChange={e => setEditForm({ ...editForm, observacoes: e.target.value })} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-gray-700">Itens</Label>
-                    {editItens.map((it, idx) => (
-                      <div key={idx} className="flex items-center gap-2 bg-white rounded border border-gray-200 px-2.5 py-1.5">
-                        <Input className="flex-1 h-7 text-xs bg-white border-gray-300 text-gray-900"
-                          placeholder="Descrição do item"
-                          value={it.descricao}
-                          onChange={e => setEditItens(prev => prev.map((p, i) => i === idx ? { ...p, descricao: e.target.value } : p))} />
-                        <Input className="w-16 h-7 text-xs bg-white border-gray-300 text-gray-900"
-                          placeholder="Un."
-                          value={it.unidade || ""}
-                          onChange={e => setEditItens(prev => prev.map((p, i) => i === idx ? { ...p, unidade: e.target.value } : p))} />
-                        <Input type="number" min="0.01" step="0.01" className="w-20 h-7 text-xs bg-white border-gray-300 text-gray-900"
-                          placeholder="Qtd"
-                          value={it.quantidade}
-                          onChange={e => setEditItens(prev => prev.map((p, i) => i === idx ? { ...p, quantidade: e.target.value } : p))} />
-                        <button onClick={() => setEditItens(prev => prev.filter((_, i) => i !== idx))}
-                          className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600"
-                          title="Excluir item">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                    <Button type="button" size="sm" variant="outline"
-                      className="w-full border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 text-xs gap-1 mt-1"
-                      onClick={() => setEditItens(prev => [...prev, { descricao: "", unidade: "un", quantidade: "1", observacoes: "" }])}>
-                      <Plus className="h-3 w-3" /> Adicionar Item
-                    </Button>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1"
-                      disabled={editar.isPending || editItens.length === 0}
-                      onClick={() => {
-                        const itensValidos = editItens.filter(it => it.descricao?.trim());
-                        if (itensValidos.length === 0) { toast.error("Adicione pelo menos um item com descrição."); return; }
-                        editar.mutate({
-                          id: detalhe.id,
-                          companyId,
-                          titulo: editForm.titulo,
-                          prioridade: editForm.prioridade,
-                          dataNecessidade: editForm.dataNecessidade || undefined,
-                          observacoes: editForm.observacoes,
-                          itens: itensValidos.map(it => ({
-                            id: it.id ?? undefined,
-                            descricao: it.descricao,
-                            unidade: it.unidade || "un",
-                            quantidade: parseFloat(it.quantidade) || 1,
-                            observacoes: it.observacoes || undefined,
-                            orcamentoItemId: it.orcamentoItemId ?? undefined,
-                            eapCodigo: it.eapCodigo ?? undefined,
-                            insumoCodigo: it.insumoCodigo ?? undefined,
-                            composicaoCodigo: it.composicaoCodigo ?? undefined,
-                            precoMeta: it.precoMeta ? parseFloat(it.precoMeta) : undefined,
-                            quantidadeServico: it.quantidadeServico ? parseFloat(it.quantidadeServico) : undefined,
-                            coeficiente: it.coeficiente ? parseFloat(it.coeficiente) : undefined,
-                            origemEap: it.origemEap ?? undefined,
-                          })),
-                        });
-                      }}>
-                      {editar.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Salvar Alterações"}
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-xs border-gray-300 text-gray-600"
-                      onClick={() => setEditMode(false)}>Cancelar Edição</Button>
-                  </div>
-                </div>
-              )}
-
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
                 {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && detalhe.aprovacaoStatus === "aprovada" && (() => {
                   const scTipo = (detalhe as any).tipo || "material";
@@ -2899,31 +2822,41 @@ export default function Solicitacoes() {
                     </Button>
                   );
                 })()}
-                {!editMode && !["cancelado"].includes(detalhe.status) && (
+                {!["cancelado"].includes(detalhe.status) && (
                   <Button size="sm" variant="outline"
                     onClick={() => {
-                      setEditForm({
+                      const scTipo = (detalhe as any).tipo || "material";
+                      setForm({
                         titulo: detalhe.titulo || "",
-                        prioridade: detalhe.prioridade || "normal",
+                        obraId: detalhe.obraId ? String(detalhe.obraId) : "",
                         dataNecessidade: detalhe.dataNecessidade || "",
+                        prioridade: detalhe.prioridade || "normal",
                         observacoes: detalhe.observacoes || "",
+                        tipo: scTipo,
                       });
-                      setEditItens((detalhe.itens as any[]).map(it => ({
-                        id: it.id,
-                        descricao: it.descricao,
-                        unidade: it.unidade,
-                        quantidade: String(parseFloat(it.quantidade)),
-                        observacoes: it.observacoes,
-                        orcamentoItemId: it.orcamentoItemId,
-                        eapCodigo: it.eapCodigo,
-                        insumoCodigo: it.insumoCodigo,
-                        composicaoCodigo: it.composicaoCodigo,
-                        precoMeta: it.precoMeta,
-                        quantidadeServico: it.quantidadeServico,
-                        coeficiente: it.coeficiente,
-                        origemEap: it.origemEap,
-                      })));
-                      setEditMode(true);
+                      if (detalhe.obraId) {
+                        const obra = obrasQ.data?.find((o: any) => o.id === detalhe.obraId);
+                        if (obra) setObraSearch(obra.nome || "");
+                      }
+                      const scItens = (detalhe.itens as any[]).map((it: any): ItemForm => ({
+                        descricao: it.descricao || "",
+                        unidade: it.unidade || "un",
+                        quantidade: String(parseFloat(it.quantidade) || 1),
+                        observacoes: it.observacoes || "",
+                        orcamentoItemId: it.orcamentoItemId ?? undefined,
+                        eapCodigo: it.eapCodigo ?? undefined,
+                        insumoCodigo: it.insumoCodigo ?? undefined,
+                        composicaoCodigo: it.composicaoCodigo ?? undefined,
+                        precoMeta: it.precoMeta ? parseFloat(it.precoMeta) : undefined,
+                        quantidadeServico: it.quantidadeServico ? parseFloat(it.quantidadeServico) : undefined,
+                        coeficiente: it.coeficiente ? parseFloat(it.coeficiente) : undefined,
+                        origemEap: it.origemEap ?? undefined,
+                      }));
+                      setItens(scItens.length > 0 ? scItens : [newItem()]);
+                      setModoSC("manual");
+                      setEditingSc({ id: detalhe.id, companyId: detalhe.companyId ?? companyId });
+                      setShowDetalhe(null);
+                      setShowNova(true);
                     }}
                     className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs gap-1">
                     <Pencil className="h-3 w-3" /> Editar

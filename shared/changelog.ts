@@ -6269,4 +6269,16 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 12:00:00",
   },
+  {
+    version: 894,
+    titulo: "Editar SC abre formulário completo",
+    descricao: "Ao clicar em 'Editar' na Solicitação de Compra, agora abre o mesmo formulário completo " +
+      "usado na criação — com busca de insumos via EAP, seleção de obra, tipo de solicitação, etc. " +
+      "Os dados existentes da SC são pré-carregados no formulário. O botão muda para 'Salvar Alterações'. " +
+      "Substitui o antigo editor inline que só permitia edição básica de campos.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 12:30:00",
+  },
 ];
