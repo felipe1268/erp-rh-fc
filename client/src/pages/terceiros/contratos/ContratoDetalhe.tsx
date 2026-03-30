@@ -613,7 +613,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         {showGerarMedicao && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-              <h2 className="text-lg font-bold mb-4">Gerar Medição Automática</h2>
+              <h2 className="text-lg font-bold mb-4">Gerar Medição {String((contrato.medicoes?.length || 0) + 1).padStart(2, "0")} — Automática</h2>
               <p className="text-sm text-gray-500 mb-4">
                 O sistema vai buscar o avanço físico atual de cada atividade no planejamento e calcular o valor a medir automaticamente.
               </p>
@@ -751,7 +751,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, excluirMedicaoMut,
                 <div className="flex-1 cursor-pointer" onClick={() => setExpandedMedicao(isExpanded ? null : m.id)}>
                   <div className="flex items-center gap-2 mb-1">
                     {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                    <span className="font-semibold text-gray-900">Medição #{m.numero} — {m.periodo}</span>
+                    <span className="font-semibold text-gray-900">Medição {String(m.numero).padStart(2, "0")} — {m.periodo}</span>
                     <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
                     {m.geradoAutomaticamente && <Badge className="text-xs border bg-purple-100 text-purple-700 border-purple-200"><Zap className="w-3 h-3 mr-1" />Auto</Badge>}
                   </div>
@@ -766,7 +766,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, excluirMedicaoMut,
                         <CheckCircle className="w-3 h-3" /> Aprovar
                       </Button>
                       <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
-                        onClick={() => { setRejeicaoModal({ id: m.id, numero: m.numero }); setMotivoRejeicao(""); }}>
+                        onClick={() => { setRejeicaoModal({ id: m.id, numero: String(m.numero).padStart(2, "0") }); setMotivoRejeicao(""); }}>
                         Rejeitar
                       </Button>
                     </>
@@ -779,7 +779,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, excluirMedicaoMut,
                       </Button>
                       <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
                         disabled={excluirMedicaoMut.isPending}
-                        onClick={() => { if (confirm(`Excluir Medição #${m.numero}? ${m.status === "aprovada" ? "Os valores acumulados serão revertidos." : ""}`)) excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }); }}>
+                        onClick={() => { if (confirm(`Excluir Medição ${String(m.numero).padStart(2, "0")}? ${m.status === "aprovada" ? "Os valores acumulados serão revertidos." : ""}`)) excluirMedicaoMut.mutate({ id: m.id, contratoId: id, companyId: contrato.companyId }); }}>
                         <Trash2 className="w-3 h-3" />
                       </Button>
                     </>
