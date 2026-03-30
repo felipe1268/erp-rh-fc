@@ -6519,4 +6519,15 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 01:30:00",
   },
+  {
+    versao: 913,
+    descricao:
+      "CIPA Membros: botão Editar para alterar o cargo CIPA de um membro (inline), " +
+      "botão Encerrar para desligamento durante mandato (preserva histórico sem excluir), " +
+      "botão Reativar para membros encerrados, status 'Encerrado' em vermelho.",
+    tipo: "feature",
+    modulos: "RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 02:00:00",
+  },
 ];

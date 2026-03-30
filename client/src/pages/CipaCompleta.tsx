@@ -85,6 +85,8 @@ export default function CipaCompleta() {
   const [membroForm, setMembroForm] = useState<any>({});
   const [reuniaoForm, setReuniaoForm] = useState<any>({});
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  const [editMembroId, setEditMembroId] = useState<number | null>(null);
+  const [editMembroForm, setEditMembroForm] = useState<any>({});
 
   // Queries
   const { data: necessidade } = trpc.cipa.verificarNecessidade.useQuery(
@@ -119,6 +121,10 @@ export default function CipaCompleta() {
   });
   const createMembro = trpc.cipa.membros.create.useMutation({
     onSuccess: () => { refetchMembros(); toast.success("Membro adicionado!"); setShowMembroDialog(false); setMembroForm({}); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const updateMembro = trpc.cipa.membros.update.useMutation({
+    onSuccess: () => { refetchMembros(); toast.success("Membro atualizado!"); setEditMembroId(null); setEditMembroForm({}); },
     onError: (e: any) => toast.error(e.message),
   });
   const deleteMembro = trpc.cipa.membros.delete.useMutation({
@@ -388,14 +394,25 @@ export default function CipaCompleta() {
                           {(membros as any[]).length === 0 ? (
                             <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">Nenhum membro cadastrado</td></tr>
                           ) : (membros as any[]).map((m: any) => (
-                            <tr key={m.id} className="border-b last:border-0 hover:bg-muted/20">
+                            <tr key={m.id} className={`border-b last:border-0 hover:bg-muted/20 ${m.statusMembro === "Encerrado" ? "opacity-60" : ""}`}>
                               <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(m.employeeId)}>
                                 {m.employeeName}
                               </td>
                               <td className="p-3">{formatCPF(m.employeeCpf)}</td>
                               <td className="p-3 text-xs">{m.employeeCargo}</td>
                               <td className="p-3">
-                                <Badge variant="outline">{CARGO_CIPA[m.cargoCipa] || m.cargoCipa}</Badge>
+                                {editMembroId === m.id ? (
+                                  <Select value={editMembroForm.cargoCipa || m.cargoCipa} onValueChange={v => setEditMembroForm({ ...editMembroForm, cargoCipa: v })}>
+                                    <SelectTrigger className="h-8 text-xs w-40"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      {Object.entries(CARGO_CIPA).map(([k, v]) => (
+                                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <Badge variant="outline">{CARGO_CIPA[m.cargoCipa] || m.cargoCipa}</Badge>
+                                )}
                               </td>
                               <td className="p-3">
                                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${m.representacao === "Empregados" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
@@ -414,12 +431,48 @@ export default function CipaCompleta() {
                                 )}
                               </td>
                               <td className="p-3 text-center">
-                                <Badge variant={m.statusMembro === "Ativo" ? "default" : "secondary"}>{m.statusMembro}</Badge>
+                                <Badge variant={m.statusMembro === "Ativo" ? "default" : m.statusMembro === "Encerrado" ? "destructive" : "secondary"}>{m.statusMembro}</Badge>
                               </td>
                               <td className="p-3">
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Remover" onClick={() => { if (confirm("Remover membro?")) deleteMembro.mutate({ id: m.id }); }}>
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                  {editMembroId === m.id ? (
+                                    <>
+                                      <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-2" onClick={() => {
+                                        updateMembro.mutate({ id: m.id, cargoCipa: editMembroForm.cargoCipa || m.cargoCipa });
+                                      }} disabled={updateMembro.isPending}>
+                                        <CheckCircle2 className="h-3 w-3 mr-1" /> Salvar
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => { setEditMembroId(null); setEditMembroForm({}); }}>
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500" title="Editar cargo" onClick={() => { setEditMembroId(m.id); setEditMembroForm({ cargoCipa: m.cargoCipa }); }}>
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </Button>
+                                      {m.statusMembro === "Ativo" && (
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-600" title="Encerrar participação (desligamento/afastamento)" onClick={() => {
+                                          if (confirm(`Encerrar participação de ${m.employeeName} na CIPA?\n\nO histórico será mantido, mas o membro não aparecerá mais como ativo.`))
+                                            updateMembro.mutate({ id: m.id, statusMembro: "Encerrado" });
+                                        }}>
+                                          <AlertTriangle className="h-3.5 w-3.5" />
+                                        </Button>
+                                      )}
+                                      {m.statusMembro === "Encerrado" && (
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Reativar membro" onClick={() => {
+                                          if (confirm(`Reativar ${m.employeeName} na CIPA?`))
+                                            updateMembro.mutate({ id: m.id, statusMembro: "Ativo" });
+                                        }}>
+                                          <RefreshCw className="h-3.5 w-3.5" />
+                                        </Button>
+                                      )}
+                                      <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Remover permanentemente" onClick={() => { if (confirm("Remover membro permanentemente?\n\nPara preservar o histórico, use 'Encerrar' ao invés de remover.")) deleteMembro.mutate({ id: m.id }); }}>
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))}
