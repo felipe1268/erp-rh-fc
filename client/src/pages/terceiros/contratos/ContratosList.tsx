@@ -6,8 +6,10 @@ import { useCompany } from "@/hooks/useCompany";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FileText, Search, Building2, Calendar, TrendingUp, TrendingDown, ChevronRight } from "lucide-react";
+import { Plus, FileText, Search, Building2, Calendar, TrendingUp, TrendingDown, ChevronRight, Trash2, Pencil, X, CheckSquare, Square, Save } from "lucide-react";
+import { toast } from "sonner";
 
 const BRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const fmtDate = (d: string | null | undefined) => {
@@ -28,7 +30,13 @@ export default function ContratosList() {
   const { companyId } = useCompany();
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  const [editContrato, setEditContrato] = useState<{
+    id: number; descricao: string; numeroContrato: string; status: string;
+    valorOrcamento: string; valorTotal: string; dataInicio: string; dataTermino: string; observacoes: string;
+  } | null>(null);
 
+  const utils = trpc.useUtils();
   const { data: contratos = [], isLoading } = trpc.terceiroContratos.listarContratos.useQuery(
     { companyId },
     { enabled: companyId > 0 }
@@ -39,12 +47,45 @@ export default function ContratosList() {
     { enabled: companyId > 0 }
   );
 
+  const excluirMut = trpc.terceiroContratos.excluirContrato.useMutation({
+    onSuccess: () => { toast.success("Contrato excluído"); utils.terceiroContratos.listarContratos.invalidate(); utils.terceiroContratos.dashboardTerceiroContratos.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const excluirLoteMut = trpc.terceiroContratos.excluirContratosLote.useMutation({
+    onSuccess: (r) => { toast.success(`${r.deleted} contrato(s) excluído(s)`); setSelecionados(new Set()); utils.terceiroContratos.listarContratos.invalidate(); utils.terceiroContratos.dashboardTerceiroContratos.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const atualizarMut = trpc.terceiroContratos.atualizarContrato.useMutation({
+    onSuccess: () => { toast.success("Contrato atualizado"); setEditContrato(null); utils.terceiroContratos.listarContratos.invalidate(); utils.terceiroContratos.dashboardTerceiroContratos.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
   const filtrados = contratos.filter(c => {
     const ok = filtroStatus === "todos" || c.status === filtroStatus;
     const b = busca.toLowerCase();
     const match = !b || c.descricao.toLowerCase().includes(b) || (c.empresaNome || "").toLowerCase().includes(b) || (c.numeroContrato || "").toLowerCase().includes(b) || (c.obraNome || "").toLowerCase().includes(b);
     return ok && match;
   });
+
+  const modoSelecao = selecionados.size > 0;
+
+  const toggleSelecao = (id: number) => {
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleTodos = () => {
+    if (selecionados.size === filtrados.length) {
+      setSelecionados(new Set());
+    } else {
+      setSelecionados(new Set(filtrados.map(c => c.id)));
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -59,7 +100,6 @@ export default function ContratosList() {
           </Button>
         </div>
 
-        {/* KPIs */}
         {kpis && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
@@ -82,7 +122,6 @@ export default function ContratosList() {
           </div>
         )}
 
-        {/* Filtros */}
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -100,7 +139,24 @@ export default function ContratosList() {
           </Select>
         </div>
 
-        {/* Lista */}
+        {modoSelecao && (
+          <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
+            <button onClick={toggleTodos} className="flex items-center gap-2 text-sm text-blue-700 hover:text-blue-900 font-medium">
+              {selecionados.size === filtrados.length ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+              {selecionados.size} selecionado(s)
+            </button>
+            <div className="flex-1" />
+            <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setSelecionados(new Set())}>
+              <X className="w-3 h-3" /> Cancelar
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
+              disabled={excluirLoteMut.isPending}
+              onClick={() => { if (confirm(`Excluir ${selecionados.size} contrato(s)? Todas as medições, itens e documentos serão removidos.`)) excluirLoteMut.mutate({ ids: [...selecionados], companyId }); }}>
+              <Trash2 className="w-3 h-3" /> {excluirLoteMut.isPending ? "Excluindo..." : "Excluir Selecionados"}
+            </Button>
+          </div>
+        )}
+
         <div className="space-y-2">
           {isLoading ? (
             <div className="py-12 text-center text-gray-400">Carregando...</div>
@@ -117,18 +173,27 @@ export default function ContratosList() {
             const valFec = Number(c.valorTotal ?? 0);
             const variacao = valFec - valOrc;
             const variacaoPct = valOrc > 0 ? (variacao / valOrc) * 100 : 0;
+            const selected = selecionados.has(c.id);
             return (
-              <button
+              <div
                 key={c.id}
-                onClick={() => navigate(`/terceiros/contratos/${c.id}`)}
-                className="w-full bg-white rounded-xl border border-gray-200 p-4 text-left hover:shadow-md hover:border-blue-300 transition-all"
+                className={`bg-white rounded-xl border p-4 transition-all ${selected ? "border-blue-400 bg-blue-50/30 shadow-md" : "border-gray-200 hover:shadow-md hover:border-blue-300"}`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
+                <div className="flex items-start gap-3">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleSelecao(c.id); }}
+                    className="mt-1 flex-shrink-0 text-gray-400 hover:text-blue-600"
+                  >
+                    {selected ? <CheckSquare className="w-5 h-5 text-blue-600" /> : <Square className="w-5 h-5" />}
+                  </button>
+
+                  <div
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => navigate(`/terceiros/contratos/${c.id}`)}
+                  >
                     <div className="flex items-center gap-2 mb-1">
                       {c.numeroContrato && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">{c.numeroContrato}</span>}
                       <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
-                      {/* Badge variação orçamento × fechado */}
                       {valOrc > 0 && (
                         <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border font-medium ${
                           variacao > 0 ? "bg-red-50 text-red-700 border-red-200" :
@@ -147,15 +212,54 @@ export default function ContratosList() {
                       {c.dataInicio && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{fmtDate(c.dataInicio)} → {fmtDate(c.dataTermino)}</span>}
                     </div>
                   </div>
+
                   <div className="text-right flex-shrink-0">
                     <p className="font-bold text-gray-900">{BRL(valFec)}</p>
                     {valOrc > 0 && <p className="text-xs text-gray-400">Orçado: {BRL(valOrc)}</p>}
                     <p className="text-xs text-gray-400">Pago: {BRL(Number(c.valorPago))}</p>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0 mt-1" />
+
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditContrato({
+                          id: c.id,
+                          descricao: c.descricao,
+                          numeroContrato: c.numeroContrato || "",
+                          status: c.status || "ativo",
+                          valorOrcamento: String(valOrc),
+                          valorTotal: String(valFec),
+                          dataInicio: c.dataInicio || "",
+                          dataTermino: c.dataTermino || "",
+                          observacoes: "",
+                        });
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors"
+                      title="Editar contrato"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Excluir contrato ${c.numeroContrato || c.descricao}? Todas as medições, itens e documentos serão removidos.`))
+                          excluirMut.mutate({ id: c.id, companyId });
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
+                      title="Excluir contrato"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <ChevronRight
+                    className="w-4 h-4 text-gray-300 flex-shrink-0 mt-1 cursor-pointer"
+                    onClick={() => navigate(`/terceiros/contratos/${c.id}`)}
+                  />
                 </div>
-                {/* Barra de progresso */}
-                <div className="mt-3">
+
+                <div className="mt-3 ml-8">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
                     <span>Execução financeira</span>
                     <span>{pct.toFixed(1)}%</span>
@@ -164,11 +268,82 @@ export default function ContratosList() {
                     <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
       </div>
+
+      {editContrato && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold">Editar Contrato</h2>
+              <button onClick={() => setEditContrato(null)} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-sm">Descrição</Label>
+                <Input className="mt-1" value={editContrato.descricao} onChange={e => setEditContrato(p => p ? { ...p, descricao: e.target.value } : null)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-sm">Nº Contrato</Label>
+                  <Input className="mt-1" value={editContrato.numeroContrato} onChange={e => setEditContrato(p => p ? { ...p, numeroContrato: e.target.value } : null)} />
+                </div>
+                <div>
+                  <Label className="text-sm">Status</Label>
+                  <Select value={editContrato.status} onValueChange={v => setEditContrato(p => p ? { ...p, status: v } : null)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ativo">Ativo</SelectItem>
+                      <SelectItem value="concluido">Concluído</SelectItem>
+                      <SelectItem value="suspenso">Suspenso</SelectItem>
+                      <SelectItem value="encerrado">Encerrado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-sm">Valor Orçamento</Label>
+                  <Input type="number" className="mt-1" value={editContrato.valorOrcamento} onChange={e => setEditContrato(p => p ? { ...p, valorOrcamento: e.target.value } : null)} />
+                </div>
+                <div>
+                  <Label className="text-sm">Valor Fechado (Contrato)</Label>
+                  <Input type="number" className="mt-1" value={editContrato.valorTotal} onChange={e => setEditContrato(p => p ? { ...p, valorTotal: e.target.value } : null)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-sm">Data Início</Label>
+                  <Input type="date" className="mt-1" value={editContrato.dataInicio} onChange={e => setEditContrato(p => p ? { ...p, dataInicio: e.target.value } : null)} />
+                </div>
+                <div>
+                  <Label className="text-sm">Data Término</Label>
+                  <Input type="date" className="mt-1" value={editContrato.dataTermino} onChange={e => setEditContrato(p => p ? { ...p, dataTermino: e.target.value } : null)} />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5 justify-end">
+              <Button variant="outline" onClick={() => setEditContrato(null)}>Cancelar</Button>
+              <Button className="bg-blue-600 hover:bg-blue-700 gap-2" disabled={atualizarMut.isPending}
+                onClick={() => atualizarMut.mutate({
+                  id: editContrato.id,
+                  descricao: editContrato.descricao,
+                  numeroContrato: editContrato.numeroContrato || undefined,
+                  status: editContrato.status,
+                  valorOrcamento: parseFloat(editContrato.valorOrcamento) || undefined,
+                  valorTotal: parseFloat(editContrato.valorTotal) || undefined,
+                  dataInicio: editContrato.dataInicio || undefined,
+                  dataTermino: editContrato.dataTermino || undefined,
+                })}>
+                <Save className="w-4 h-4" />{atualizarMut.isPending ? "Salvando..." : "Salvar"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

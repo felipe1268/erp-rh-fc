@@ -202,6 +202,48 @@ export const terceiroContratosRouter = router({
       return c;
     }),
 
+  excluirContrato: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [contrato] = await db.select().from(terceiroContratos).where(
+        and(eq(terceiroContratos.id, input.id), eq(terceiroContratos.companyId, input.companyId))
+      );
+      if (!contrato) throw new Error("Contrato não encontrado");
+      const medicoes = await db.select({ id: terceiroMedicoes.id }).from(terceiroMedicoes).where(eq(terceiroMedicoes.contratoId, input.id));
+      for (const m of medicoes) {
+        await db.delete(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, m.id));
+      }
+      await db.delete(terceiroMedicoes).where(eq(terceiroMedicoes.contratoId, input.id));
+      await db.delete(terceiroDocumentos).where(eq(terceiroDocumentos.contratoId, input.id));
+      await db.delete(terceiroContratoItens).where(eq(terceiroContratoItens.contratoId, input.id));
+      await db.delete(terceiroContratos).where(eq(terceiroContratos.id, input.id));
+      return { ok: true };
+    }),
+
+  excluirContratosLote: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      let deleted = 0;
+      for (const cid of input.ids) {
+        const [contrato] = await db.select().from(terceiroContratos).where(
+          and(eq(terceiroContratos.id, cid), eq(terceiroContratos.companyId, input.companyId))
+        );
+        if (!contrato) continue;
+        const medicoes = await db.select({ id: terceiroMedicoes.id }).from(terceiroMedicoes).where(eq(terceiroMedicoes.contratoId, cid));
+        for (const m of medicoes) {
+          await db.delete(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, m.id));
+        }
+        await db.delete(terceiroMedicoes).where(eq(terceiroMedicoes.contratoId, cid));
+        await db.delete(terceiroDocumentos).where(eq(terceiroDocumentos.contratoId, cid));
+        await db.delete(terceiroContratoItens).where(eq(terceiroContratoItens.contratoId, cid));
+        await db.delete(terceiroContratos).where(eq(terceiroContratos.id, cid));
+        deleted++;
+      }
+      return { deleted };
+    }),
+
   recalcularDatasCronograma: protectedProcedure
     .input(z.object({ contratoId: z.number(), companyId: z.number() }))
     .mutation(async ({ input }) => {
