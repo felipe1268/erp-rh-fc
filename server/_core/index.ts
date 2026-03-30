@@ -229,9 +229,8 @@ async function startServer() {
         console.log("[ColFix] compras_cotacao_fornecedores modulo_medicao Rev.897 OK");
         await db.execute(sql`UPDATE compras_cotacoes SET status = 'concluida' WHERE contrato_terceiro_id IS NOT NULL AND status = 'aprovada'`);
         console.log("[ColFix] cotacoes com contrato terceiro → concluida Rev.899 OK");
-        const { db: db4, sql: sql4 } = getDb2();
-        await db4.execute(sql4`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_por VARCHAR(255)`);
-        await db4.execute(sql4`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_em TIMESTAMP`);
+        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_por VARCHAR(255)`);
+        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_em TIMESTAMP`);
         console.log("[ColFix] terceiro_medicoes rejeitadoPor/rejeitadoEm Rev.904 OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
