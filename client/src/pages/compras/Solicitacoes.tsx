@@ -260,16 +260,24 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar
               <div className="flex items-center gap-2 py-8 justify-center text-red-400"><AlertTriangle className="h-5 w-5" /> Erro ao carregar dados orçamentários</div>
             ) : (
               <div className="rounded-lg border border-gray-200 overflow-hidden">
-                <div className="max-h-[50vh] overflow-y-auto">
-                  <table className="w-full text-sm">
+                <div className="max-h-[50vh] overflow-auto">
+                  <table className="w-full text-sm table-fixed">
+                    <colgroup>
+                      <col className="w-8" />
+                      <col />
+                      <col className="w-10" />
+                      <col className="w-16" />
+                      <col className="w-24" />
+                      <col className="w-24" />
+                    </colgroup>
                     <thead className="sticky top-0 z-10">
                       <tr className="bg-gray-100 border-b border-gray-200">
-                        <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-600 w-8">#</th>
-                        <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-600">Item</th>
-                        <th className="text-center px-2 py-2.5 text-xs font-semibold text-gray-600 w-12">UN</th>
-                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-blue-700 bg-blue-50/50 w-20">Esta SC</th>
-                        <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-600 w-36">Saldo Orçamentário</th>
-                        <th className="text-center px-3 py-2.5 text-xs font-semibold text-gray-600 w-28">Status</th>
+                        <th className="text-left px-2 py-2 text-[10px] font-semibold text-gray-600">#</th>
+                        <th className="text-left px-2 py-2 text-[10px] font-semibold text-gray-600">Item</th>
+                        <th className="text-center px-1 py-2 text-[10px] font-semibold text-gray-600">UN</th>
+                        <th className="text-right px-2 py-2 text-[10px] font-semibold text-blue-700 bg-blue-50/50">SC</th>
+                        <th className="text-center px-1 py-2 text-[10px] font-semibold text-gray-600">Saldo</th>
+                        <th className="text-center px-1 py-2 text-[10px] font-semibold text-gray-600">Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -286,24 +294,24 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar
                           : "Sem vínculo ao orçamento";
                         return (
                           <tr key={item.id} className={`border-b border-gray-100 hover:bg-gray-50/80 transition-colors ${rowBg}`}>
-                            <td className="px-3 py-2.5 text-xs text-gray-400 font-mono">{idx + 1}</td>
-                            <td className="px-3 py-2.5">
-                              <p className={`text-sm font-medium truncate max-w-[340px] ${isRed ? "text-red-800" : "text-gray-800"}`} title={item.descricao}>
+                            <td className="px-2 py-2 text-[10px] text-gray-400 font-mono">{idx + 1}</td>
+                            <td className="px-2 py-2">
+                              <p className={`text-xs font-medium truncate ${isRed ? "text-red-800" : "text-gray-800"}`} title={item.descricao}>
                                 {item.descricao}
                               </p>
                               {info.texto && (
-                                <p className={`text-[10px] mt-0.5 leading-tight line-clamp-2 max-w-[340px] ${isRed ? "text-red-500" : isGray ? "text-gray-400" : "text-orange-500"}`} title={info.texto}>
+                                <p className={`text-[9px] mt-0.5 leading-tight line-clamp-2 ${isRed ? "text-red-500" : isGray ? "text-gray-400" : "text-orange-500"}`} title={info.texto}>
                                   {info.texto}
                                 </p>
                               )}
                             </td>
-                            <td className="px-2 py-2.5 text-center text-xs text-gray-500">{item.unidade}</td>
-                            <td className="px-3 py-2.5 text-right font-semibold text-blue-700 bg-blue-50/30 tabular-nums">{fmt(item.qtdEstaSC)}</td>
-                            <td className="px-3 py-2.5 text-center" title={saldoTooltip}>
+                            <td className="px-1 py-2 text-center text-[10px] text-gray-500">{item.unidade}</td>
+                            <td className="px-2 py-2 text-right text-xs font-semibold text-blue-700 bg-blue-50/30 tabular-nums">{fmt(item.qtdEstaSC)}</td>
+                            <td className="px-1 py-2 text-center" title={saldoTooltip}>
                               {linked ? (
                                 <div className="space-y-1">
-                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${item.saldo < 0 ? "bg-red-100 text-red-700 border border-red-200" : item.saldo === 0 ? "bg-amber-100 text-amber-700 border border-amber-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
-                                    {item.saldo < 0 && <AlertTriangle className="h-3 w-3" />}
+                                  <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${item.saldo < 0 ? "bg-red-100 text-red-700 border border-red-200" : item.saldo === 0 ? "bg-amber-100 text-amber-700 border border-amber-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
+                                    {item.saldo < 0 && <AlertTriangle className="h-2.5 w-2.5" />}
                                     {fmt(item.saldo)} {item.unidade}
                                   </span>
                                   {item.qtdOrcada > 0 && (
@@ -324,13 +332,13 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar
                                 <span className="text-red-500 text-[10px] font-bold">S/ VÍNCULO</span>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 text-center">
+                            <td className="px-1 py-2 text-center">
                               {info.badge ? (
-                                <span className="text-[9px] font-bold px-1.5 py-1 rounded bg-red-600 text-white uppercase tracking-wide whitespace-nowrap">{info.badge}</span>
+                                <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-red-600 text-white uppercase leading-tight whitespace-nowrap">{info.badge}</span>
                               ) : isGray ? (
-                                <span className="text-[9px] font-medium px-1.5 py-1 rounded bg-gray-200 text-gray-500 uppercase whitespace-nowrap">N/A</span>
+                                <span className="text-[8px] font-medium px-1 py-0.5 rounded bg-gray-200 text-gray-500 uppercase whitespace-nowrap">N/A</span>
                               ) : isOrange ? (
-                                <span className="text-[9px] font-medium px-1.5 py-1 rounded bg-amber-100 text-amber-700 uppercase whitespace-nowrap">PARCIAL</span>
+                                <span className="text-[8px] font-medium px-1 py-0.5 rounded bg-amber-100 text-amber-700 uppercase whitespace-nowrap">PARCIAL</span>
                               ) : (
                                 <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" />
                               )}
@@ -342,10 +350,10 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar
                     {itens.length > 0 && (
                       <tfoot>
                         <tr className="bg-gray-50 border-t-2 border-gray-200">
-                          <td colSpan={3} className="px-3 py-2 text-xs font-semibold text-gray-500">{itens.length} {itens.length === 1 ? "item" : "itens"}</td>
-                          <td className="px-3 py-2 text-right text-xs font-bold text-blue-700 bg-blue-50/30">{fmt(itens.reduce((s, i) => s + i.qtdEstaSC, 0))}</td>
+                          <td colSpan={3} className="px-2 py-2 text-[10px] font-semibold text-gray-500">{itens.length} {itens.length === 1 ? "item" : "itens"}</td>
+                          <td className="px-2 py-2 text-right text-[10px] font-bold text-blue-700 bg-blue-50/30">{fmt(itens.reduce((s, i) => s + i.qtdEstaSC, 0))}</td>
                           <td />
-                          <td className="px-3 py-2 text-center">
+                          <td className="px-1 py-2 text-center">
                             {itensAlerta.length > 0 ? (
                               <span className="text-[10px] font-bold text-red-600">{itensAlerta.length} alerta{itensAlerta.length > 1 ? "s" : ""}</span>
                             ) : (
