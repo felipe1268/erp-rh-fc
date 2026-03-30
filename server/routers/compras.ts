@@ -2175,8 +2175,8 @@ Responda APENAS com um objeto JSON no formato:
         let metaUnitario: number;
         if (isCotacaoMdo && metaUnitarioMdo > 0) {
           if (!incluirAjud && metaMdoProf > 0) {
-            const metaPerc = orcId ? (orcToMetaPerc[orcItensData.find(o => o.id === orcId)?.orcamentoId ?? 0] ?? 0) : 0;
-            metaUnitario = metaMdoProf * (1 - metaPerc);
+            const totalMdoCusto = metaMdoProf + metaMdoAjud;
+            metaUnitario = totalMdoCusto > 0 ? metaUnitarioMdo * (metaMdoProf / totalMdoCusto) : metaUnitarioMdo;
           } else {
             metaUnitario = metaUnitarioMdo;
           }
