@@ -356,161 +356,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                 <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
                 Nenhum item — adicione atividades vinculadas ao cronograma
               </div>
-            ) : (() => {
-              const hierarchy: any[] = (contrato as any).itensHierarchy || [];
-              const hasEap = contrato.itens.some((it: any) => it.eapCodigo);
-              const hasDates = contrato.itens.some((it: any) => it.atividadeDataInicio || it.atividadeDataFim) || hierarchy.some((h: any) => h.dataInicio || h.dataFim);
-              const hasHierarchy = hierarchy.length > 0;
-
-              const buildRows = () => {
-                if (!hasHierarchy) {
-                  return contrato.itens.map((item: any) => ({ type: "item" as const, item }));
-                }
-
-                type Row = { type: "grupo"; eapCodigo: string; nome: string; nivel: number; dataInicio: string | null; dataFim: string | null }
-                       | { type: "item"; item: any; nivel: number };
-
-                const allEaps = [...hierarchy.map(h => h.eapCodigo), ...contrato.itens.map((it: any) => it.eapCodigo).filter(Boolean)];
-                allEaps.sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true }));
-
-                const rows: Row[] = [];
-                const groupsPlaced = new Set<string>();
-                const itemsByEap = new Map<string, any[]>();
-                const itemsNoEap: any[] = [];
-
-                for (const it of contrato.itens) {
-                  const eap = (it as any).eapCodigo;
-                  if (eap) {
-                    if (!itemsByEap.has(eap)) itemsByEap.set(eap, []);
-                    itemsByEap.get(eap)!.push(it);
-                  } else {
-                    itemsNoEap.push(it);
-                  }
-                }
-
-                const uniqueEaps = [...new Set(allEaps)] as string[];
-                uniqueEaps.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-
-                for (const eap of uniqueEaps) {
-                  const grupo = hierarchy.find((h: any) => h.eapCodigo === eap);
-                  if (grupo && !groupsPlaced.has(eap)) {
-                    groupsPlaced.add(eap);
-                    rows.push({ type: "grupo", eapCodigo: grupo.eapCodigo, nome: grupo.nome, nivel: grupo.nivel, dataInicio: grupo.dataInicio, dataFim: grupo.dataFim });
-                  }
-                  const items = itemsByEap.get(eap);
-                  if (items) {
-                    for (const it of items) {
-                      rows.push({ type: "item", item: it, nivel: (it.atividadeNivel ?? (eap ? eap.split(".").length : 0)) });
-                    }
-                  }
-                }
-
-                for (const it of itemsNoEap) {
-                  rows.push({ type: "item" as const, item: it, nivel: 0 });
-                }
-
-                return rows;
-              };
-
-              const rows = buildRows();
-
-              return (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-500 text-xs">
-                      <tr>
-                        <th className="px-4 py-2 text-left">EAP</th>
-                        <th className="px-4 py-2 text-left">Descrição</th>
-                        {hasDates && <th className="px-4 py-2 text-center">Início</th>}
-                        {hasDates && <th className="px-4 py-2 text-center">Término</th>}
-                        <th className="px-4 py-2 text-right">Qtd</th>
-                        <th className="px-4 py-2 text-right">Unit.</th>
-                        <th className="px-4 py-2 text-right">Total</th>
-                        <th className="px-4 py-2 text-right">Medido</th>
-                        <th className="px-4 py-2 text-center">Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {rows.map((row, idx) => {
-                        if (row.type === "grupo") {
-                          const indent = Math.max(0, (row.nivel || 1) - 1) * 16;
-                          return (
-                            <tr key={`g-${row.eapCodigo}`} className="bg-blue-50/60">
-                              <td className="px-4 py-2 font-mono text-xs font-bold text-blue-700">{row.eapCodigo}</td>
-                              <td className="px-4 py-2" colSpan={1}>
-                                <div style={{ paddingLeft: indent }} className="flex items-center gap-1.5">
-                                  <FolderOpen className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                                  <span className="font-semibold text-blue-900">{row.nome}</span>
-                                </div>
-                              </td>
-                              {hasDates && (
-                                <td className="px-4 py-2 text-center text-xs text-blue-600">{fmtDate(row.dataInicio)}</td>
-                              )}
-                              {hasDates && (
-                                <td className="px-4 py-2 text-center text-xs text-blue-600">{fmtDate(row.dataFim)}</td>
-                              )}
-                              <td colSpan={4} />
-                              <td />
-                            </tr>
-                          );
-                        }
-
-                        const item = row.item;
-                        const nivel = (row as any).nivel ?? 0;
-                        const indent = Math.max(0, nivel - 1) * 16 + (hasEap ? 20 : 0);
-                        return (
-                          <tr key={item.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-2 font-mono text-xs text-gray-400">{item.eapCodigo || "—"}</td>
-                            <td className="px-4 py-2">
-                              <div style={{ paddingLeft: indent }}>
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="font-medium text-gray-900">
-                                    {item.eapCodigo && <span className="text-blue-600 font-mono text-xs mr-1.5">[{item.eapCodigo}]</span>}
-                                    {item.descricao}
-                                  </span>
-                                  {item.origemPath && (
-                                    <span className="text-[11px] text-gray-400 leading-tight">
-                                      <span className="text-gray-300 mr-1">Origem:</span>{item.origemPath}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            {hasDates && (
-                              <td className="px-4 py-2 text-center text-xs text-gray-500">{fmtDate(item.atividadeDataInicio)}</td>
-                            )}
-                            {hasDates && (
-                              <td className="px-4 py-2 text-center text-xs text-gray-500">{fmtDate(item.atividadeDataFim)}</td>
-                            )}
-                            <td className="px-4 py-2 text-right text-gray-600">{Number(item.quantidade).toFixed(2)} {item.unidade}</td>
-                            <td className="px-4 py-2 text-right text-gray-600">{BRL(item.valorUnitario)}</td>
-                            <td className="px-4 py-2 text-right font-semibold">{BRL(item.valorTotal)}</td>
-                            <td className="px-4 py-2 text-right">
-                              <span className={`font-semibold ${Number(item.percentualMedidoAcumulado) >= 100 ? "text-green-700" : "text-blue-700"}`}>
-                                {Number(item.percentualMedidoAcumulado).toFixed(1)}%
-                              </span>
-                            </td>
-                            <td className="px-4 py-2 text-center">
-                              <button onClick={() => removerItemMut.mutate({ id: item.id, contratoId: id })} className="text-red-400 hover:text-red-600 p-1">
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot className="bg-gray-50 font-semibold">
-                      <tr>
-                        <td colSpan={hasDates ? 6 : 4} className="px-4 py-2 text-right text-gray-700">Total</td>
-                        <td className="px-4 py-2 text-right">{BRL(contrato.valorTotal)}</td>
-                        <td className="px-4 py-2 text-right text-blue-700">{pct.toFixed(1)}%</td>
-                        <td />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              );
-            })()}
+            ) : (<ItemsTreeTable contrato={contrato} id={id} pct={pct} removerItemMut={removerItemMut} />)}
           </div>
         )}
 
@@ -858,5 +704,177 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         )}
       </div>
     </DashboardLayout>
+  );
+}
+
+function ItemsTreeTable({ contrato, id, pct, removerItemMut }: { contrato: any; id: number; pct: number; removerItemMut: any }) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const hierarchy: any[] = (contrato as any).itensHierarchy || [];
+  const hasHierarchy = hierarchy.length > 0;
+
+  const toggle = (eap: string) => {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(eap)) next.delete(eap);
+      else next.add(eap);
+      return next;
+    });
+  };
+
+  const isHidden = (eap: string) => {
+    if (!eap) return false;
+    const parts = eap.split(".");
+    for (let i = 1; i < parts.length; i++) {
+      const ancestor = parts.slice(0, i).join(".");
+      if (collapsed.has(ancestor)) return true;
+    }
+    return false;
+  };
+
+  type Row = { type: "grupo"; eapCodigo: string; nome: string; nivel: number }
+           | { type: "item"; item: any; nivel: number };
+
+  const buildRows = (): Row[] => {
+    if (!hasHierarchy) {
+      return contrato.itens.map((item: any) => ({ type: "item" as const, item, nivel: 0 }));
+    }
+
+    const itemsByEap = new Map<string, any[]>();
+    const itemsNoEap: any[] = [];
+    for (const it of contrato.itens) {
+      const eap = (it as any).eapCodigo;
+      if (eap) {
+        if (!itemsByEap.has(eap)) itemsByEap.set(eap, []);
+        itemsByEap.get(eap)!.push(it);
+      } else {
+        itemsNoEap.push(it);
+      }
+    }
+
+    const allEaps = [...new Set([...hierarchy.map((h: any) => h.eapCodigo), ...contrato.itens.map((it: any) => it.eapCodigo).filter(Boolean)])] as string[];
+    allEaps.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    const rows: Row[] = [];
+    const groupsPlaced = new Set<string>();
+
+    for (const eap of allEaps) {
+      const grupo = hierarchy.find((h: any) => h.eapCodigo === eap);
+      if (grupo && !groupsPlaced.has(eap)) {
+        groupsPlaced.add(eap);
+        rows.push({ type: "grupo", eapCodigo: grupo.eapCodigo, nome: grupo.nome, nivel: grupo.nivel });
+      }
+      const items = itemsByEap.get(eap);
+      if (items) {
+        for (const it of items) {
+          rows.push({ type: "item", item: it, nivel: it.atividadeNivel ?? (eap ? eap.split(".").length : 0) });
+        }
+      }
+    }
+
+    for (const it of itemsNoEap) {
+      rows.push({ type: "item" as const, item: it, nivel: 0 });
+    }
+
+    return rows;
+  };
+
+  const rows = buildRows();
+
+  const minNivel = hasHierarchy
+    ? Math.min(...hierarchy.map((h: any) => h.nivel ?? h.eapCodigo.split(".").length), ...contrato.itens.map((it: any) => it.eapCodigo ? it.eapCodigo.split(".").length : 99))
+    : 0;
+
+  const hasChildren = (eap: string) => {
+    return rows.some(r => {
+      const re = r.type === "grupo" ? r.eapCodigo : (r.item?.eapCodigo || "");
+      return re !== eap && re.startsWith(eap + ".");
+    });
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-[#1e3a5f] text-white text-xs">
+            <th className="px-4 py-2.5 text-left font-semibold w-[130px]">Item</th>
+            <th className="px-4 py-2.5 text-left font-semibold">Descrição</th>
+            <th className="px-4 py-2.5 text-center font-semibold w-[60px]">Un</th>
+            <th className="px-4 py-2.5 text-right font-semibold w-[100px]">Qtd</th>
+            <th className="px-4 py-2.5 text-right font-semibold w-[100px]">Total</th>
+            <th className="px-4 py-2.5 text-center font-semibold w-[60px]">%</th>
+            <th className="px-4 py-2.5 text-center font-semibold w-[40px]"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, idx) => {
+            if (row.type === "grupo") {
+              if (isHidden(row.eapCodigo)) return null;
+              const depth = (row.nivel ?? row.eapCodigo.split(".").length) - minNivel;
+              const indent = depth * 24;
+              const isCollapsed = collapsed.has(row.eapCodigo);
+              const expandable = hasChildren(row.eapCodigo);
+              return (
+                <tr key={`g-${row.eapCodigo}`} className="border-b border-gray-100 bg-gray-50/50 hover:bg-gray-100/50 cursor-pointer" onClick={() => expandable && toggle(row.eapCodigo)}>
+                  <td className="px-4 py-2">
+                    <div style={{ paddingLeft: indent }} className="flex items-center gap-1">
+                      {expandable && (
+                        isCollapsed
+                          ? <ChevronRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                          : <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                      )}
+                      <span className="font-mono text-xs font-semibold text-gray-700">{row.eapCodigo}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2">
+                    <span className="font-bold text-gray-900 uppercase text-xs tracking-wide">{row.nome}:</span>
+                  </td>
+                  <td colSpan={5} />
+                </tr>
+              );
+            }
+
+            const item = row.item;
+            const eap = item.eapCodigo || "";
+            if (isHidden(eap)) return null;
+
+            const depth = hasHierarchy ? ((row.nivel ?? 0) - minNivel) * 24 : 0;
+            return (
+              <tr key={item.id} className="border-b border-gray-50 hover:bg-blue-50/30">
+                <td className="px-4 py-2">
+                  <div style={{ paddingLeft: Math.max(0, depth) }}>
+                    <span className="font-mono text-xs text-gray-500">{eap || "—"}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-2">
+                  <span className="text-gray-800">{item.descricao}</span>
+                </td>
+                <td className="px-4 py-2 text-center text-gray-500">{item.unidade || "—"}</td>
+                <td className="px-4 py-2 text-right text-gray-700 font-mono">{Number(item.quantidade).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                <td className="px-4 py-2 text-right font-semibold text-gray-900">{BRL(item.valorTotal)}</td>
+                <td className="px-4 py-2 text-center">
+                  <span className={`text-xs font-semibold ${Number(item.percentualMedidoAcumulado) >= 100 ? "text-green-700" : Number(item.percentualMedidoAcumulado) > 0 ? "text-blue-700" : "text-gray-400"}`}>
+                    {Number(item.percentualMedidoAcumulado).toFixed(1)}%
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-center">
+                  <button onClick={(e) => { e.stopPropagation(); removerItemMut.mutate({ id: item.id, contratoId: id }); }} className="text-red-300 hover:text-red-500 p-0.5">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr className="bg-gray-50 border-t border-gray-200">
+            <td colSpan={4} className="px-4 py-2.5 text-right font-semibold text-gray-700 text-xs">Total</td>
+            <td className="px-4 py-2.5 text-right font-bold text-gray-900">{BRL(contrato.valorTotal)}</td>
+            <td className="px-4 py-2.5 text-center font-bold text-blue-700 text-xs">{pct.toFixed(1)}%</td>
+            <td />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
   );
 }

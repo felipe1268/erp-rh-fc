@@ -127,18 +127,22 @@ export const terceiroContratosRouter = router({
               }
 
               try {
-                const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
-                  .where(and(eq(orcamentos.companyId, contrato.companyId), eq(orcamentos.obraId, contrato.obraId)))
-                  .orderBy(desc(orcamentos.id)).limit(1);
-                if (orc) {
+                let orcId: number | null = (contrato as any).orcamentoId ?? null;
+                if (!orcId) {
+                  const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
+                    .where(and(eq(orcamentos.companyId, contrato.companyId), eq(orcamentos.obraId, contrato.obraId)))
+                    .orderBy(desc(orcamentos.id)).limit(1);
+                  if (orc) orcId = orc.id;
+                }
+                if (orcId) {
                   const orcItens = await db.select({
                     eapCodigo: orcamentoItens.eapCodigo,
                     descricao: orcamentoItens.descricao,
                     nivel: orcamentoItens.nivel,
                   }).from(orcamentoItens)
-                    .where(eq(orcamentoItens.orcamentoId, orc.id));
+                    .where(eq(orcamentoItens.orcamentoId, orcId));
                   for (const oi of orcItens) {
-                    if (oi.eapCodigo) {
+                    if (oi.eapCodigo && oi.descricao) {
                       atividadeMap.set(oi.eapCodigo, {
                         nome: oi.descricao,
                         nivel: oi.nivel ?? oi.eapCodigo.split(".").length,
@@ -151,10 +155,7 @@ export const terceiroContratosRouter = router({
                 }
               } catch {}
 
-              const topLevelEap = [...parentSet].reduce((min, e) => (!min || e.split(".").length < min.split(".").length) ? e : min, "");
-
               for (const parentEap of parentSet) {
-                if (parentEap === topLevelEap) continue;
                 const atv = atividadeMap.get(parentEap);
                 const nivel = parentEap.split(".").length;
                 itensHierarchy.push({
@@ -175,7 +176,7 @@ export const terceiroContratosRouter = router({
                 if (eap) {
                   const parts = eap.split(".");
                   const pathParts: string[] = [];
-                  for (let i = 2; i <= parts.length; i++) {
+                  for (let i = 1; i <= parts.length; i++) {
                     const parentEap = parts.slice(0, i).join(".");
                     const p = atividadeMap.get(parentEap);
                     if (p) pathParts.push(p.nome);
@@ -487,17 +488,21 @@ export const terceiroContratosRouter = router({
         }
 
         try {
-          const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
-            .where(and(eq(orcamentos.companyId, contrato.companyId), eq(orcamentos.obraId, contrato.obraId)))
-            .orderBy(desc(orcamentos.id)).limit(1);
-          if (orc) {
+          let orcId: number | null = (contrato as any).orcamentoId ?? null;
+          if (!orcId) {
+            const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
+              .where(and(eq(orcamentos.companyId, contrato.companyId), eq(orcamentos.obraId, contrato.obraId)))
+              .orderBy(desc(orcamentos.id)).limit(1);
+            if (orc) orcId = orc.id;
+          }
+          if (orcId) {
             const orcItens = await db.select({
               eapCodigo: orcamentoItens.eapCodigo,
               descricao: orcamentoItens.descricao,
               nivel: orcamentoItens.nivel,
-            }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, orc.id));
+            }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, orcId));
             for (const oi of orcItens) {
-              if (oi.eapCodigo) {
+              if (oi.eapCodigo && oi.descricao) {
                 atividadeMap.set(oi.eapCodigo, {
                   nome: oi.descricao,
                   nivel: oi.nivel ?? oi.eapCodigo.split(".").length,
@@ -510,11 +515,8 @@ export const terceiroContratosRouter = router({
           }
         } catch {}
 
-        const topLevelEap = [...parentSet].reduce((min, e) => (!min || e.split(".").length < min.split(".").length) ? e : min, "");
-
         const hierarchy: any[] = [];
         for (const parentEap of parentSet) {
-          if (parentEap === topLevelEap) continue;
           const atv = atividadeMap.get(parentEap);
           const nivel = parentEap.split(".").length;
           hierarchy.push({
@@ -535,7 +537,7 @@ export const terceiroContratosRouter = router({
           if (eap) {
             const parts = eap.split(".");
             const pathParts: string[] = [];
-            for (let i = 2; i <= parts.length; i++) {
+            for (let i = 1; i <= parts.length; i++) {
               const parentEap = parts.slice(0, i).join(".");
               const p = atividadeMap.get(parentEap);
               if (p) pathParts.push(p.nome);
