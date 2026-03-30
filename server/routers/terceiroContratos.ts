@@ -817,6 +817,38 @@ export const terceiroContratosRouter = router({
 
       if (!itens.length) throw new Error("Contrato sem itens — adicione atividades antes de gerar medição");
 
+      // Auto-link: vincular itens ao planejamento pelo EAP se ainda não vinculados
+      const itensDesvinculados = itens.filter(i => !i.planejamentoAtividadeId && (i as any).eapCodigo);
+      if (itensDesvinculados.length > 0 && contrato.obraId) {
+        try {
+          const [proj] = await db.select({ id: planejamentoProjetos.id })
+            .from(planejamentoProjetos)
+            .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
+            .orderBy(desc(planejamentoProjetos.id)).limit(1);
+          if (proj) {
+            const [rev] = await db.select({ id: planejamentoRevisoes.id })
+              .from(planejamentoRevisoes)
+              .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+              .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
+            if (rev) {
+              const atividades = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo })
+                .from(planejamentoAtividades)
+                .where(and(eq(planejamentoAtividades.revisaoId, rev.id), eq(planejamentoAtividades.projetoId, proj.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
+              const eapMap: Record<string, number> = {};
+              for (const a of atividades) { if (a.eapCodigo) eapMap[a.eapCodigo] = a.id; }
+              for (const item of itensDesvinculados) {
+                const eap = (item as any).eapCodigo;
+                if (eap && eapMap[eap]) {
+                  await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: eapMap[eap] }).where(eq(terceiroContratoItens.id, item.id));
+                  (item as any).planejamentoAtividadeId = eapMap[eap];
+                  console.log(`[gerarMedicao] Auto-link: "${item.descricao}" → atividade ${eapMap[eap]} (EAP ${eap})`);
+                }
+              }
+            }
+          }
+        } catch (e) { console.warn("[gerarMedicao] Auto-link falhou:", e); }
+      }
+
       // Contagem de medições anteriores
       const medicoesAnteriores = await db.select().from(terceiroMedicoes)
         .where(eq(terceiroMedicoes.contratoId, input.contratoId));
@@ -829,6 +861,7 @@ export const terceiroContratosRouter = router({
       const itensMedicao: any[] = [];
       const itensNaoVinculados: string[] = [];
 
+      console.log(`[gerarMedicao] Contrato ${input.contratoId}: ${itens.length} itens, verificando avanços...`);
       for (const item of itens) {
         let percentualFisico = n(item.percentualMedidoAcumulado);
 
@@ -837,8 +870,10 @@ export const terceiroContratosRouter = router({
             .where(eq(planejamentoAvancos.atividadeId, item.planejamentoAtividadeId))
             .orderBy(desc(planejamentoAvancos.semana))
             .limit(1);
+          console.log(`[gerarMedicao] Item "${item.descricao}" atividadeId=${item.planejamentoAtividadeId} → avanco=${avanco ? n(avanco.percentualAcumulado) : "SEM AVANCO"}`);
           if (avanco) percentualFisico = n(avanco.percentualAcumulado);
         } else {
+          console.log(`[gerarMedicao] Item "${item.descricao}" SEM planejamentoAtividadeId (não vinculado)`);
           itensNaoVinculados.push(item.descricao || `Item #${item.id}`);
         }
 
