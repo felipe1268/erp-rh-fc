@@ -2460,13 +2460,13 @@ export default function Cotacoes() {
                           <span className="text-xs text-gray-500">Agrupar itens iguais</span>
                         </label>
                       </div>
-                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
                         <table className="text-sm border-collapse" style={{ minWidth: "max-content" }}>
-                          <thead>
+                          <thead className="sticky top-0 z-20">
                             {/* Linha 1: nomes dos grupos de colunas */}
                             <tr className="border-b border-gray-200 bg-gray-50">
-                              <th rowSpan={2} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3 min-w-56 border-r border-gray-200">Item</th>
-                              <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-3 py-3 w-14 border-r border-gray-200">Un.</th>
+                              <th rowSpan={2} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-2 min-w-56 max-w-md border-r border-gray-200 bg-gray-50 sticky left-0 z-30">Item</th>
+                              <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-2 py-2 w-12 border-r border-gray-200 bg-gray-50">Un.</th>
                               <th colSpan={3} className="text-center text-xs font-semibold text-blue-600 uppercase px-2 py-2 border-r border-blue-100 bg-blue-50/60">
                                 {mapa?.cotacao?.tipo === 'servico' || mapa?.cotacao?.tipo === 'pacote'
                                   ? "Meta MDO (Orçamento)"
@@ -2481,52 +2481,52 @@ export default function Cotacoes() {
                                 const isRecomendado = scoreVal >= 4.0 && sc && sc.totalOCs >= 1;
                                 const isAtencao = scoreVal > 0 && scoreVal < 2.5 && sc && sc.totalOCs >= 1;
                                 return (
-                                  <th key={p.fornecedorId} colSpan={3} className={`text-center text-xs font-semibold uppercase px-2 py-2 border-r border-gray-200 ${isMelhor ? "text-emerald-700 bg-emerald-50/60" : "text-gray-500"}`}>
-                                    <div className="flex flex-col items-center gap-1">
+                                  <th key={p.fornecedorId} colSpan={3} className={`text-center text-xs font-semibold uppercase px-2 py-2 border-r border-gray-200 align-top ${isMelhor ? "text-emerald-700 bg-emerald-50/60" : "text-gray-500"}`}>
+                                    <div className="flex flex-col items-center gap-0.5">
                                       <div className="flex items-center gap-1">
                                         {isMelhor && <Trophy className="h-3 w-3 text-emerald-500" />}
                                         <FornecedorContatoPopover fornecedor={p.fornecedor}>
-                                          <button type="button" className="hover:underline hover:text-blue-600 transition-colors cursor-pointer">{nome}</button>
+                                          <button type="button" className="hover:underline hover:text-blue-600 transition-colors cursor-pointer text-[11px]">{nome}</button>
                                         </FornecedorContatoPopover>
                                         {sc && scoreVal > 0 && (
-                                          <span className="flex items-center gap-0.5 text-[10px] font-bold normal-case" title={`Score: ${scoreVal}/5 · OCs: ${sc.totalOCs} · Pontualidade: ${sc.taxaPontualidade}%`}>
+                                          <span className="flex items-center gap-0.5 text-[9px] font-bold normal-case" title={`Score: ${scoreVal}/5 · OCs: ${sc.totalOCs} · Pontualidade: ${sc.taxaPontualidade}%`}>
                                             <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
                                             {scoreVal}
                                           </span>
                                         )}
+                                        {isRecomendado && (
+                                          <span className="flex items-center gap-0.5 text-[8px] normal-case font-semibold bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded-full border border-emerald-200">
+                                            <ShieldCheck className="h-2 w-2" />Rec
+                                          </span>
+                                        )}
+                                        {isAtencao && (
+                                          <span className="flex items-center gap-0.5 text-[8px] normal-case font-semibold bg-red-100 text-red-700 px-1 py-0.5 rounded-full border border-red-200">
+                                            <ShieldAlert className="h-2 w-2" />!
+                                          </span>
+                                        )}
                                       </div>
-                                      {isRecomendado && (
-                                        <span className="flex items-center gap-0.5 text-[9px] normal-case font-semibold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full border border-emerald-200">
-                                          <ShieldCheck className="h-2.5 w-2.5" />Recomendado
-                                        </span>
-                                      )}
-                                      {isAtencao && (
-                                        <span className="flex items-center gap-0.5 text-[9px] normal-case font-semibold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full border border-red-200">
-                                          <ShieldAlert className="h-2.5 w-2.5" />Atenção
-                                        </span>
-                                      )}
-                                      {p.selecionado ? (
-                                        <span className="flex items-center gap-1 text-[10px] normal-case font-semibold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full border border-emerald-300">
-                                          <CheckCircle className="h-3 w-3" /> Vencedor
-                                        </span>
-                                      ) : detalheFullscreen?.status !== "aprovada" && (
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); selecionarVencedor.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId }); }}
-                                          disabled={selecionarVencedor.isPending}
-                                          className="flex items-center gap-1 text-[10px] normal-case font-medium bg-blue-50 text-blue-600 px-2 py-1 rounded-full border border-blue-200 hover:bg-blue-100 hover:text-blue-700 transition-colors"
-                                          title="Selecionar este fornecedor como vencedor"
-                                        >
-                                          <Trophy className="h-3 w-3" /> Selecionar Vencedor
-                                        </button>
-                                      )}
-                                      <div className="flex items-center gap-1">
-                                        {(p as any).arquivoUrl ? (
-                                          <a href={(p as any).arquivoUrl} target="_blank" rel="noreferrer" className="ml-1 text-blue-500 hover:text-blue-700" title="Ver cotação anexada">
+                                      <div className="flex items-center gap-1 flex-wrap justify-center">
+                                        {p.selecionado ? (
+                                          <span className="flex items-center gap-0.5 text-[9px] normal-case font-semibold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full border border-emerald-300">
+                                            <CheckCircle className="h-2.5 w-2.5" /> Vencedor
+                                          </span>
+                                        ) : detalheFullscreen?.status !== "aprovada" && (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); selecionarVencedor.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId }); }}
+                                            disabled={selecionarVencedor.isPending}
+                                            className="flex items-center gap-0.5 text-[9px] normal-case font-medium bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full border border-blue-200 hover:bg-blue-100 transition-colors"
+                                            title="Selecionar este fornecedor como vencedor"
+                                          >
+                                            <Trophy className="h-2.5 w-2.5" /> Vencedor
+                                          </button>
+                                        )}
+                                        {(p as any).arquivoUrl && (
+                                          <a href={(p as any).arquivoUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-700" title="Ver cotação anexada">
                                             <ExternalLink className="h-3 w-3" />
                                           </a>
-                                        ) : null}
+                                        )}
                                       </div>
-                                      {/* Botão de anexo */}
+                                      <div className="flex items-center gap-1 flex-wrap justify-center">
                                       <div className="relative">
                                         {showAnexoInput === p.fornecedorId ? (
                                           <div className="absolute z-50 top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-xl p-3 space-y-3" onClick={e => e.stopPropagation()}>
@@ -2679,29 +2679,24 @@ export default function Cotacoes() {
                                           )}
                                         </div>
                                       )}
+                                      </div>
                                       {showPropostas === p.fornecedorId && (
-                                        <div className="mt-2 bg-indigo-50/50 border border-indigo-100 rounded-lg p-2.5 space-y-1.5">
-                                          <div className="flex items-center justify-between mb-1">
-                                            <span className="text-[10px] font-semibold text-indigo-700 uppercase tracking-wide">Propostas enviadas</span>
-                                          </div>
+                                        <div className="mt-1 bg-indigo-50/50 border border-indigo-100 rounded-lg p-2 space-y-1 text-left">
+                                          <span className="text-[9px] font-semibold text-indigo-700 uppercase tracking-wide">Propostas</span>
                                           {propostasQ.isLoading && <p className="text-[10px] text-gray-400">Carregando...</p>}
                                           {propostasQ.data && propostasQ.data.length === 0 && (
-                                            <p className="text-[10px] text-gray-400 italic">Nenhuma proposta registrada</p>
+                                            <p className="text-[10px] text-gray-400 italic">Nenhuma proposta</p>
                                           )}
                                           {(propostasQ.data ?? []).map((prop: any) => (
-                                            <div key={prop.id} className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-[11px] ${prop.status === "ativa" ? "bg-white border border-indigo-200" : prop.status === "substituida" ? "bg-gray-100 border border-gray-200 opacity-60" : "bg-red-50 border border-red-200 opacity-50"}`}>
-                                              <div className="flex items-center gap-2 min-w-0">
+                                            <div key={prop.id} className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded text-[10px] ${prop.status === "ativa" ? "bg-white border border-indigo-200" : prop.status === "substituida" ? "bg-gray-100 border border-gray-200 opacity-60" : "bg-red-50 border border-red-200 opacity-50"}`}>
+                                              <div className="flex items-center gap-1 min-w-0">
                                                 <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${prop.status === "ativa" ? "bg-emerald-500" : prop.status === "substituida" ? "bg-gray-400" : "bg-red-400"}`} />
                                                 <span className="truncate font-medium text-gray-700">{prop.fileName || "Proposta"}</span>
-                                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${prop.tipo === "revisao" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+                                                <span className={`px-1 py-0.5 rounded text-[8px] font-medium ${prop.tipo === "revisao" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
                                                   {prop.tipo === "revisao" ? "Rev" : "Comp"}
                                                 </span>
-                                                <span className="text-[9px] text-gray-400">{prop.itensComMatch ?? 0} itens</span>
                                               </div>
-                                              <div className="flex items-center gap-1.5 flex-shrink-0">
-                                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${prop.status === "ativa" ? "bg-emerald-100 text-emerald-700" : prop.status === "substituida" ? "bg-gray-200 text-gray-600" : "bg-red-100 text-red-600"}`}>
-                                                  {prop.status === "ativa" ? "Ativa" : prop.status === "substituida" ? "Substituída" : "Excluída"}
-                                                </span>
+                                              <div className="flex items-center gap-1 flex-shrink-0">
                                                 {prop.status === "ativa" && (
                                                   <button
                                                     onClick={() => { if (confirm("Excluir proposta e remover preços vinculados?")) excluirProposta.mutate({ propostaId: prop.id, cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId }); }}
@@ -2821,7 +2816,7 @@ export default function Cotacoes() {
                               const { saldo, hasMeta } = getItemSaldo(it);
                               return (
                                 <tr key={it.id} className="border-b border-gray-100 hover:bg-gray-50/60">
-                                  <td className="px-4 py-2 border-r border-gray-100">
+                                  <td className="px-4 py-2 border-r border-gray-100 bg-white sticky left-0 z-10 max-w-md">
                                     <div className="flex items-start gap-1.5">
                                       <div className="flex-1 min-w-0">
                                         <span className="text-gray-900 text-xs font-medium">{it.descricao}</span>

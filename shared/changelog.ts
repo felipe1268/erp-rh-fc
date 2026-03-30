@@ -6506,4 +6506,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 01:00:00",
   },
+  {
+    versao: 912,
+    descricao:
+      "Mapa de Cotação — layout melhorado: cabeçalho do fornecedor compactado, " +
+      "coluna Item fixa à esquerda (sticky) ao rolar horizontalmente, " +
+      "cabeçalho da tabela fixo ao topo (sticky) ao rolar verticalmente, " +
+      "altura máxima com barra de rolagem vertical. " +
+      "Espelho de Ponto: por padrão esconde desligados, com checkbox para incluí-los.",
+    tipo: "melhoria",
+    modulos: "Compras,RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 01:30:00",
+  },
 ];
