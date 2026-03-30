@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
@@ -49,7 +49,9 @@ export default function ContratoDetalheWrapper() {
 function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [, navigate] = useLocation();
   const id = routeId;
-  const [tab, setTab] = useState<Tab>("itens");
+  const urlParams = new URLSearchParams(window.location.search);
+  const medicaoIdFromUrl = urlParams.get("medicao") ? parseInt(urlParams.get("medicao")!) : null;
+  const [tab, setTab] = useState<Tab>(medicaoIdFromUrl ? "medicoes" : "itens");
   const [showAddItem, setShowAddItem] = useState(false);
   const [showGerarMedicao, setShowGerarMedicao] = useState(false);
   const [showAddDoc, setShowAddDoc] = useState(false);
@@ -402,7 +404,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
         {/* Tab: Medições */}
         {tab === "medicoes" && (
-          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} />
+          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} initialMedicaoId={medicaoIdFromUrl} />
         )}
 
         {/* Tab: Comparativo */}
@@ -753,8 +755,15 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   );
 }
 
-function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao }: any) {
-  const [expandedMedicao, setExpandedMedicao] = useState<number | null>(null);
+function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao, initialMedicaoId }: any) {
+  const [expandedMedicao, setExpandedMedicao] = useState<number | null>(initialMedicaoId ?? null);
+  const medicaoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialMedicaoId && medicaoRef.current) {
+      setTimeout(() => medicaoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+    }
+  }, [initialMedicaoId]);
   const [rejeicaoModal, setRejeicaoModal] = useState<{ id: number; numero: number } | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [editingItem, setEditingItem] = useState<{ id: number; valor: string } | null>(null);
@@ -779,7 +788,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
         const itens = m.itens || [];
 
         return (
-          <div key={m.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div key={m.id} ref={m.id === initialMedicaoId ? medicaoRef : undefined} className={`bg-white rounded-xl border overflow-hidden ${m.id === initialMedicaoId ? "border-blue-400 ring-2 ring-blue-100" : "border-gray-200"}`}>
             <div className="p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1 cursor-pointer" onClick={() => setExpandedMedicao(isExpanded ? null : m.id)}>

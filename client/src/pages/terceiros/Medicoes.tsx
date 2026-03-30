@@ -94,7 +94,10 @@ export default function Medicoes() {
             {filtradas.map(m => {
               const st = STATUS_MAP[m.status || "rascunho"] || STATUS_MAP.rascunho;
               return (
-                <div key={m.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <div key={m.id}
+                  className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm cursor-pointer hover:border-blue-300 hover:shadow-md transition-all"
+                  onClick={() => navigate(`/terceiros/contratos/${m.contratoId}?medicao=${m.id}`)}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -121,10 +124,8 @@ export default function Medicoes() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button onClick={() => navigate(`/terceiros/contratos/${m.contratoId}`)} className="p-1.5 hover:bg-gray-100 rounded text-gray-400">
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
+                    <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
                       {m.status === "aguardando_aprovacao" && (
                         <>
                           <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs"
