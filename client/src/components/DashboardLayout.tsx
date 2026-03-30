@@ -308,7 +308,7 @@ const menuSectionsCompras: MenuSection[] = [
     items: [
       { icon: ClipboardList,   label: "Solicitações (SC)",    path: "/compras/solicitacoes"     },
       { icon: FileText,        label: "Cotações",             path: "/compras/cotacoes"         },
-      { icon: ShoppingCart,    label: "Ordens de Compra (OC)",path: "/compras/ordens"           },
+      { icon: ShoppingCart,    label: "Ordens (OC / OS)",path: "/compras/ordens"           },
       { icon: Package,         label: "Recebimentos",         path: "/compras/recebimentos"     },
     ],
   },

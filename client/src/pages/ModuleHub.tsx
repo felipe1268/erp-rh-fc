@@ -160,7 +160,7 @@ const MODULES: Module[] = [
     id: "compras", title: "Compras", subtitle: "Suprimentos",
     description: "Solicitações de compra com aprovação, cotações comparativas, ordens de compra com totalizadores e almoxarifado com saldo em tempo real.",
     icon: ShoppingCart, accentFrom: "#F43F5E", accentTo: "#E11D48", accentGlow: "rgba(244,63,94,0.35)", iconBg: "rgba(244,63,94,0.12)", path: "/compras/painel", active: true,
-    features: ["Solicitações (SC)", "Cotações", "Ordens de Compra (OC)", "Almoxarifado / Estoque"],
+    features: ["Solicitações (SC)", "Cotações", "Ordens (OC / OS)", "Almoxarifado / Estoque"],
   },
   {
     id: "crm", title: "CRM", subtitle: "Gestão de Relacionamento",

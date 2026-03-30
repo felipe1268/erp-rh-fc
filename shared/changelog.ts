@@ -6345,4 +6345,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 17:00:00",
   },
+  {
+    version: 900,
+    titulo: "Ordens (OC / OS) — Abas unificadas de Compra e Serviço",
+    descricao: "A tela de Ordens agora exibe duas abas: 'Ordens de Compra (Material)' com a listagem de OCs existente, " +
+      "e 'Contratos de Serviço (OS)' com a listagem dos contratos de terceiros (KPIs, filtros, barra de progresso de pagamento). " +
+      "Sidebar, breadcrumb e referências renomeados para 'Ordens (OC / OS)'. " +
+      "Suporte a ?tab=os na URL para abrir direto na aba de serviços. " +
+      "Clique em qualquer contrato redireciona ao detalhe completo no módulo Terceiros.",
+    tipo: "feature",
+    modulos: "Compras, Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 17:30:00",
+  },
 ];

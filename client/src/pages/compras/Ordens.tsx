@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink } from "lucide-react";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
 
@@ -100,6 +101,7 @@ export default function Ordens() {
   const { selectedCompanyId } = useCompany();
   const companyId = parseInt(selectedCompanyId || "0");
 
+  const [abaAtiva, setAbaAtiva] = useState<"oc" | "os">("oc");
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroAtrasadas, setFiltroAtrasadas] = useState(false);
@@ -116,6 +118,10 @@ export default function Ordens() {
     if (d) {
       const id = parseInt(d);
       if (!isNaN(id)) setShowDetalhe(id);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    if (params.get("tab") === "os") {
+      setAbaAtiva("os");
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
@@ -138,6 +144,10 @@ export default function Ordens() {
   );
   const fornQ = trpc.compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: companyId > 0 });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
+  const contratosOS = trpc.terceiroContratos.listarContratos.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
 
   const criarManual = trpc.compras.criarOrdemManual.useMutation({
     onSuccess: () => { toast.success("Ordem de Compra criada!"); setShowNova(false); resetForm(); q.refetch(); },
@@ -289,15 +299,36 @@ export default function Ordens() {
             <ShoppingBag className="h-5 w-5 text-emerald-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Ordens de Compra</h1>
-            <p className="text-sm text-gray-500">Acompanhe pedidos emitidos aos fornecedores</p>
+            <h1 className="text-xl font-bold text-gray-900">Ordens de Compra / Serviço</h1>
+            <p className="text-sm text-gray-500">Acompanhe OCs de material e contratos de serviço (OS)</p>
           </div>
         </div>
-        <DraggableCommandBar barId="ordens-compra" items={[
-          { id: "nova", node: <Button onClick={() => setShowNova(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2"><Plus className="h-4 w-4" /> Nova OC Manual</Button> },
-        ]} />
+        {abaAtiva === "oc" && (
+          <DraggableCommandBar barId="ordens-compra" items={[
+            { id: "nova", node: <Button onClick={() => setShowNova(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2"><Plus className="h-4 w-4" /> Nova OC Manual</Button> },
+          ]} />
+        )}
       </div>
 
+      {/* Tabs OC / OS */}
+      <div className="flex gap-1 bg-white rounded-xl border border-gray-200 p-1 shadow-sm w-fit">
+        <button
+          onClick={() => { setAbaAtiva("oc"); setBusca(""); setFiltroStatus("todos"); setFiltroAtrasadas(false); }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${abaAtiva === "oc" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
+          <ShoppingBag className="h-4 w-4" />
+          Ordens de Compra (Material)
+          {(q.data?.length ?? 0) > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full ${abaAtiva === "oc" ? "bg-emerald-500" : "bg-gray-200 text-gray-600"}`}>{q.data?.length ?? 0}</span>}
+        </button>
+        <button
+          onClick={() => { setAbaAtiva("os"); setBusca(""); }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${abaAtiva === "os" ? "bg-purple-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
+          <Wrench className="h-4 w-4" />
+          Contratos de Serviço (OS)
+          {(contratosOS.data?.length ?? 0) > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full ${abaAtiva === "os" ? "bg-purple-500" : "bg-gray-200 text-gray-600"}`}>{contratosOS.data?.length ?? 0}</span>}
+        </button>
+      </div>
+
+      {abaAtiva === "oc" && <>
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {kpiCards.map((k, i) => (
@@ -1091,7 +1122,148 @@ export default function Ordens() {
           </div>
         </DialogContent>
       </Dialog>
+      </>}
+
+      {abaAtiva === "os" && <ContratosServicoTab companyId={companyId} />}
     </div>
     </DashboardLayout>
+  );
+}
+
+const OS_STATUS_MAP: Record<string, { label: string; cls: string }> = {
+  ativo:     { label: "Ativo",     cls: "bg-green-100 text-green-800 border-green-200" },
+  encerrado: { label: "Encerrado", cls: "bg-gray-100 text-gray-600 border-gray-200" },
+  suspenso:  { label: "Suspenso",  cls: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+  concluido: { label: "Concluído", cls: "bg-blue-100 text-blue-800 border-blue-200" },
+};
+
+const BRL_OS = (v: number | string | null | undefined) => {
+  const n = typeof v === "string" ? parseFloat(v) : (v ?? 0);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+};
+
+const fmtDateOS = (d: string | null | undefined) => {
+  if (!d) return "—";
+  const [y, m, day] = d.slice(0, 10).split("-");
+  return `${day}/${m}/${y}`;
+};
+
+function ContratosServicoTab({ companyId }: { companyId: number }) {
+  const [, navigate] = useLocation();
+  const [buscaOS, setBuscaOS] = useState("");
+  const [filtroStatusOS, setFiltroStatusOS] = useState("todos");
+
+  const { data: contratos = [], isLoading } = trpc.terceiroContratos.listarContratos.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+
+  const filtrados = contratos.filter((c: any) => {
+    const b = buscaOS.toLowerCase();
+    const matchBusca = !buscaOS || (c.descricao || "").toLowerCase().includes(b) || (c.numeroContrato || "").toLowerCase().includes(b);
+    const matchStatus = filtroStatusOS === "todos" || c.status === filtroStatusOS;
+    return matchBusca && matchStatus;
+  });
+
+  const totalAtivos = contratos.filter((c: any) => c.status === "ativo").length;
+  const totalValor = contratos.reduce((s: number, c: any) => s + parseFloat(c.valorTotal ?? "0"), 0);
+  const totalMedido = contratos.reduce((s: number, c: any) => s + parseFloat(c.valorPago ?? "0"), 0);
+
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="rounded-xl border p-4 bg-purple-50 border-purple-200 text-purple-700">
+          <div className="flex items-center gap-2 mb-1"><Wrench className="h-4 w-4" /><span className="text-xs font-medium text-gray-500">Total Contratos</span></div>
+          <div className="text-xl font-bold">{contratos.length}</div>
+        </div>
+        <div className="rounded-xl border p-4 bg-green-50 border-green-200 text-green-700">
+          <div className="flex items-center gap-2 mb-1"><CheckCircle className="h-4 w-4" /><span className="text-xs font-medium text-gray-500">Ativos</span></div>
+          <div className="text-xl font-bold">{totalAtivos}</div>
+        </div>
+        <div className="rounded-xl border p-4 bg-indigo-50 border-indigo-200 text-indigo-700">
+          <div className="flex items-center gap-2 mb-1"><DollarSign className="h-4 w-4" /><span className="text-xs font-medium text-gray-500">Valor Total</span></div>
+          <div className="text-xl font-bold">{BRL_OS(totalValor)}</div>
+        </div>
+        <div className="rounded-xl border p-4 bg-amber-50 border-amber-200 text-amber-700">
+          <div className="flex items-center gap-2 mb-1"><Receipt className="h-4 w-4" /><span className="text-xs font-medium text-gray-500">Total Pago</span></div>
+          <div className="text-xl font-bold">{BRL_OS(totalMedido)}</div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-48">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input placeholder="Buscar por descrição ou número..." className="pl-9 bg-white border-gray-300 text-gray-900" value={buscaOS} onChange={e => setBuscaOS(e.target.value)} />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {["todos", "ativo", "encerrado", "suspenso", "concluido"].map(s => (
+            <button key={s} onClick={() => setFiltroStatusOS(s)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatusOS === s ? "bg-purple-600 border-purple-500 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"}`}>
+              {s === "todos" ? "Todos" : OS_STATUS_MAP[s]?.label ?? s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Nº Contrato</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Descrição</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Empresa</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Valor Total</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Pago</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Vigência</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Status</TableHead>
+              <TableHead className="w-10"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
+            ) : filtrados.length === 0 ? (
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">Nenhum contrato de serviço encontrado</TableCell></TableRow>
+            ) : filtrados.map((c: any) => {
+              const pct = parseFloat(c.valorTotal ?? "0") > 0
+                ? ((parseFloat(c.valorPago ?? "0") / parseFloat(c.valorTotal ?? "1")) * 100).toFixed(1)
+                : "0.0";
+              return (
+                <TableRow key={c.id} className="hover:bg-purple-50/30 cursor-pointer border-gray-100" onClick={() => navigate(`/terceiros/contratos/${c.id}`)}>
+                  <TableCell className="font-mono text-xs text-purple-700 font-medium">{c.numeroContrato || "—"}</TableCell>
+                  <TableCell className="text-sm text-gray-900 max-w-60 truncate">{c.descricao || "—"}</TableCell>
+                  <TableCell className="text-sm text-gray-600">{(c as any).empresaNome || "—"}</TableCell>
+                  <TableCell className="text-sm font-medium text-gray-900">{BRL_OS(c.valorTotal)}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs text-gray-600">{BRL_OS(c.valorPago)} ({pct}%)</span>
+                      <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min(parseFloat(pct), 100)}%` }} />
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-xs text-gray-500">{fmtDateOS(c.dataInicio)} → {fmtDateOS(c.dataTermino)}</TableCell>
+                  <TableCell>
+                    {OS_STATUS_MAP[c.status]
+                      ? <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${OS_STATUS_MAP[c.status].cls}`}>{OS_STATUS_MAP[c.status].label}</span>
+                      : <span className="text-xs text-gray-400">{c.status}</span>}
+                  </TableCell>
+                  <TableCell>
+                    <ExternalLink className="h-4 w-4 text-gray-400" />
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="text-center">
+        <button onClick={() => navigate("/terceiros/contratos")} className="text-sm text-purple-600 hover:text-purple-800 hover:underline flex items-center gap-1 mx-auto">
+          <Wrench className="h-3.5 w-3.5" /> Gerenciar contratos completos no módulo Terceiros
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </>
   );
 }

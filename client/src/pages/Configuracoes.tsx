@@ -2180,7 +2180,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Painel", label: "Painel de Controle", path: "/compras/painel" },
     { section: "Fluxo", label: "Solicitações (SC)", path: "/compras/solicitacoes" },
     { section: "Fluxo", label: "Cotações", path: "/compras/cotacoes" },
-    { section: "Fluxo", label: "Ordens de Compra (OC)", path: "/compras/ordens" },
+    { section: "Fluxo", label: "Ordens (OC / OS)", path: "/compras/ordens" },
     { section: "Fluxo", label: "Recebimentos", path: "/compras/recebimentos" },
     { section: "Prioridade", label: "Compras Emergenciais", path: "/compras/emergencial" },
     { section: "Prioridade", label: "Aprovações Pendentes", path: "/compras/aprovacoes" },

@@ -102,7 +102,7 @@ const ALL_ROUTES = [
     { path: "/compras/painel", label: "Painel de Compras", icon: "LayoutDashboard" },
     { path: "/compras/solicitacoes", label: "Solicitações de Compra", icon: "ClipboardList" },
     { path: "/compras/cotacoes", label: "Cotações", icon: "FileText" },
-    { path: "/compras/ordens", label: "Ordens de Compra", icon: "ShoppingCart" },
+    { path: "/compras/ordens", label: "Ordens (OC / OS)", icon: "ShoppingCart" },
     { path: "/compras/recebimentos", label: "Recebimentos", icon: "Package" },
     { path: "/compras/fornecedores", label: "Fornecedores", icon: "Store" },
     { path: "/compras/aprovacoes", label: "Aprovações", icon: "CheckCircle" },
