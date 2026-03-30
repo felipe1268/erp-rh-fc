@@ -1142,7 +1142,7 @@ Responda APENAS com um objeto JSON no formato:
       let scWithCotacao = new Set<number>();
       let scWithOC = new Set<number>();
       if (ids.length > 0) {
-        const activeCots = await db.select({ solicitacaoId: comprasCotacoes.solicitacaoId }).from(comprasCotacoes)
+        const activeCots = await db.select({ id: comprasCotacoes.id, solicitacaoId: comprasCotacoes.solicitacaoId, status: comprasCotacoes.status }).from(comprasCotacoes)
           .where(and(
             sql`${comprasCotacoes.solicitacaoId} = ANY(${sql.raw("ARRAY[" + ids.join(",") + "]::int[]")})`,
             sql`${comprasCotacoes.status} NOT IN ('cancelada')`,
@@ -1156,6 +1156,17 @@ Responda APENAS com um objeto JSON no formato:
           ));
         activeOrdens.forEach(o => { if (o.solicitacaoId) scWithOC.add(o.solicitacaoId); });
 
+        const cotIds = activeCots.map(c => c.id);
+        if (cotIds.length > 0) {
+          const ocsViaCot = await db.select({ cotacaoId: comprasOrdens.cotacaoId }).from(comprasOrdens)
+            .where(and(
+              sql`${comprasOrdens.cotacaoId} = ANY(${sql.raw("ARRAY[" + cotIds.join(",") + "]::int[]")})`,
+              sql`${comprasOrdens.status} NOT IN ('cancelada')`,
+            ));
+          const cotIdWithOC = new Set(ocsViaCot.map(o => o.cotacaoId));
+          activeCots.forEach(c => { if (c.solicitacaoId && cotIdWithOC.has(c.id)) scWithOC.add(c.solicitacaoId); });
+        }
+
         const pendingIds = rows.filter(r => r.status === "pendente").map(r => r.id);
         const toFixIds = pendingIds.filter(id => scWithCotacao.has(id) || scWithOC.has(id));
         if (toFixIds.length > 0) {
@@ -1167,7 +1178,10 @@ Responda APENAS com um objeto JSON no formato:
       }
 
       let result = rows.map(r => {
-        const status = (r.status === "pendente" && (scWithCotacao.has(r.id) || scWithOC.has(r.id))) ? "cotacao" : r.status;
+        let status = r.status;
+        if (status === "pendente" && (scWithCotacao.has(r.id) || scWithOC.has(r.id))) {
+          status = "cotacao";
+        }
         return { ...r, status, _hasOC: scWithOC.has(r.id), _itens: itensCounts[r.id] ?? { total: 0, atendidos: 0 } };
       });
       if (input.busca) {
@@ -3776,6 +3790,7 @@ Retorne APENAS um JSON válido neste formato:
         companyId: input.companyId,
         numeroOc,
         cotacaoId: input.cotacaoId,
+        solicitacaoId: cot.solicitacaoId ?? null,
         obraId: cot.obraId ?? null,
         fornecedorId: cot.fornecedorId ?? null,
         fornecedorNome: cot.fornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId!))).map(f => f.nome || f.razao || null)[0] ?? null : null,
