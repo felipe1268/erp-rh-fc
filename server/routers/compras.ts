@@ -1329,6 +1329,19 @@ Responda APENAS com um objeto JSON no formato:
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId));
       const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
       const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
+      let tipoSC = input.tipo ?? "material";
+      if (tipoSC === "material" && input.itens.length > 0) {
+        const mdoPattern = /\bm\.?o\.?\b|mão\s*de\s*obra|mdo|pedreiro|servente|ajudante|auxiliar|encanador|eletricista|pintor|carpinteiro|armador|soldador|serralheiro|gesseiro|azulejista|marmorista|vidraceiro|bombeiro\s*hidr|impermeabilizador|operador/i;
+        const hasMdoItem = input.itens.some(it => mdoPattern.test(it.descricao));
+        const hasComposicao = input.itens.some(it => it.composicaoCodigo);
+        if (hasMdoItem || hasComposicao) {
+          if (input.itens.length > 0 && input.itens.every(it => it.composicaoCodigo)) {
+            tipoSC = "servico";
+          } else if (hasMdoItem && !hasComposicao) {
+            tipoSC = "servico";
+          }
+        }
+      }
       const [sc] = await db.insert(comprasSolicitacoes).values({
         companyId: input.companyId,
         numeroSc,
@@ -1341,7 +1354,7 @@ Responda APENAS com um objeto JSON no formato:
         dataNecessidade: input.dataNecessidade,
         observacoes: input.observacoes,
         imagemReferenciaUrl: input.imagemReferenciaUrl ?? null,
-        tipo: input.tipo ?? "material",
+        tipo: tipoSC,
         status: "pendente",
         aprovacaoStatus: "aguardando",
       } as any).returning();
@@ -1632,15 +1645,23 @@ Responda APENAS com um objeto JSON no formato:
         ))
         .orderBy(desc(comprasCotacoes.criadoEm));
       const scIds = [...new Set(rows.map(r => r.solicitacaoId).filter(Boolean))] as number[];
-      let scTituloMap: Record<number, string> = {};
+      let scMap: Record<number, { titulo: string; tipo: string }> = {};
       if (scIds.length > 0) {
-        const scs = await db.select({ id: comprasSolicitacoes.id, titulo: comprasSolicitacoes.titulo }).from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.id, scIds));
-        for (const sc of scs) scTituloMap[sc.id] = sc.titulo;
+        const scs = await db.select({ id: comprasSolicitacoes.id, titulo: comprasSolicitacoes.titulo, tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.id, scIds));
+        for (const sc of scs) scMap[sc.id] = { titulo: sc.titulo, tipo: sc.tipo };
       }
-      return rows.map(r => ({
-        ...r,
-        descricao: (r.solicitacaoId && scTituloMap[r.solicitacaoId]) ? scTituloMap[r.solicitacaoId] : r.descricao,
-      }));
+      return rows.map(r => {
+        const sc = r.solicitacaoId ? scMap[r.solicitacaoId] : null;
+        let tipo = r.tipo;
+        if (sc && sc.tipo && (sc.tipo === "servico" || sc.tipo === "pacote") && tipo === "material") {
+          tipo = sc.tipo === "pacote" ? "servico" : sc.tipo;
+        }
+        return {
+          ...r,
+          descricao: sc?.titulo || r.descricao,
+          tipo,
+        };
+      });
     }),
 
   getCotacao: protectedProcedure

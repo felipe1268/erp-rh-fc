@@ -1308,7 +1308,16 @@ export default function Solicitacoes() {
                 placeholder="Ex: Materiais de alvenaria - Bloco A"
                 value={form.titulo}
                 onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
-                onBlur={e => setForm(p => ({ ...p, titulo: normalizarTexto(e.target.value) }))}
+                onBlur={e => {
+                  const titulo = normalizarTexto(e.target.value);
+                  setForm(p => {
+                    const mdoPattern = /\bm\.?o\.?\b|mão\s*de\s*obra|\bmdo\b|pedreiro|servente|ajudante|auxiliar|encanador|eletricista|pintor|carpinteiro|armador|soldador|serralheiro|gesseiro|azulejista|marmorista|vidraceiro|impermeabilizador|operador/i;
+                    if (p.tipo === "material" && mdoPattern.test(titulo)) {
+                      return { ...p, titulo, tipo: "servico" };
+                    }
+                    return { ...p, titulo };
+                  });
+                }}
               />
             </div>
 
