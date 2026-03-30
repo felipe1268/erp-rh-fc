@@ -6308,4 +6308,15 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 13:30:00",
   },
+  {
+    version: 897,
+    titulo: "Módulo de Medição na Cotação de Serviço",
+    descricao: "No modal de Condições de Pagamento, cotações de mão de obra e serviço agora exibem uma seção 'Módulo de Medição' " +
+      "com 5 opções: Medição Mensal, Medição por Avanço, Medição por Etapa, Empreitada Global e Administração. " +
+      "A seleção é salva por fornecedor e propagada junto com as demais condições comerciais.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 14:30:00",
+  },
 ];

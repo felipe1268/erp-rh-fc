@@ -222,6 +222,8 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_pagador VARCHAR(20)`);
         await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_bdi_item_id INTEGER`);
         console.log("[ColFix] compras_cotacoes FD columns Rev.895 OK");
+        await db.execute(sql`ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS modulo_medicao VARCHAR(30)`);
+        console.log("[ColFix] compras_cotacao_fornecedores modulo_medicao Rev.897 OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Normalização de textos compras — agora feita no momento de salvar/editar

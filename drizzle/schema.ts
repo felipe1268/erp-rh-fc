@@ -5039,6 +5039,7 @@ export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores"
   freteTipo:        varchar("frete_tipo", { length: 10 }).default("cif"),
   valorFrete:       numeric("valor_frete", { precision: 14, scale: 2 }).default("0"),
   transportadora:   varchar("transportadora", { length: 255 }),
+  moduloMedicao:    varchar("modulo_medicao", { length: 30 }),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 

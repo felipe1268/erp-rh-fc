@@ -640,6 +640,7 @@ export default function Cotacoes() {
   const [editDataEntrega, setEditDataEntrega] = useState<Record<number, string>>({});
   const [editValorFrete, setEditValorFrete] = useState<Record<number, string>>({});
   const [editTransportadora, setEditTransportadora] = useState<Record<number, string>>({});
+  const [editModuloMedicao, setEditModuloMedicao] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
   const [showGerenciarCond, setShowGerenciarCond] = useState(false);
   const [novaCondicao, setNovaCondicao] = useState("");
@@ -924,6 +925,7 @@ export default function Cotacoes() {
       const freteTipoInicial: Record<number, string> = {};
       const valorFreteInicial: Record<number, string> = {};
       const transportadoraInicial: Record<number, string> = {};
+      const moduloMedicaoInicial: Record<number, string> = {};
       for (const p of mapaQ.data.participantes) {
         prazoInicial[p.fornecedorId] = p.prazoEntregaDias ? String(p.prazoEntregaDias) : "";
         condInicial[p.fornecedorId] = p.condicaoPagamento ?? "";
@@ -932,6 +934,7 @@ export default function Cotacoes() {
         freteTipoInicial[p.fornecedorId] = (p as any).freteTipo ?? "cif";
         valorFreteInicial[p.fornecedorId] = (p as any).valorFrete ? String(parseFloat((p as any).valorFrete)) : "0";
         transportadoraInicial[p.fornecedorId] = (p as any).transportadora ?? "";
+        moduloMedicaoInicial[p.fornecedorId] = (p as any).moduloMedicao ?? "";
         if ((p as any).arquivoUrl) anexoInicial[p.fornecedorId] = (p as any).arquivoUrl;
       }
       setEditPrecos(inicialPrecos);
@@ -943,6 +946,7 @@ export default function Cotacoes() {
       setEditFreteTipo(freteTipoInicial);
       setEditValorFrete(valorFreteInicial);
       setEditTransportadora(transportadoraInicial);
+      setEditModuloMedicao(moduloMedicaoInicial);
       setAnexoUrl(anexoInicial);
     }
   }, [mapaQ.data, abaAtiva]);
@@ -1584,6 +1588,40 @@ export default function Cotacoes() {
                 </div>
               )}
             </div>
+
+            {(() => {
+              const cotTipo = (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
+              const isMdo = cotTipo === "servico" || cotTipo === "pacote";
+              if (!isMdo) return null;
+              const MODULOS = [
+                { v: "medicao_mensal", l: "Medição Mensal", desc: "Pagamento mensal por medição de serviço executado", icon: "📅", sel: "bg-purple-100 text-purple-700 border-purple-300 ring-purple-200" },
+                { v: "medicao_avanco", l: "Medição por Avanço", desc: "Pagamento baseado no % de avanço físico", icon: "📊", sel: "bg-blue-100 text-blue-700 border-blue-300 ring-blue-200" },
+                { v: "medicao_etapa", l: "Medição por Etapa", desc: "Pagamento ao concluir etapas/marcos definidos", icon: "🎯", sel: "bg-green-100 text-green-700 border-green-300 ring-green-200" },
+                { v: "empreitada", l: "Empreitada Global", desc: "Preço fechado para o escopo total do serviço", icon: "📋", sel: "bg-amber-100 text-amber-700 border-amber-300 ring-amber-200" },
+                { v: "administracao", l: "Administração", desc: "Custo por hora/dia + materiais aplicados", icon: "⏱️", sel: "bg-indigo-100 text-indigo-700 border-indigo-300 ring-indigo-200" },
+              ];
+              return (
+                <div>
+                  <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-2">Módulo de Medição</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {MODULOS.map(m => (
+                      <button key={m.v} type="button" onClick={() => setEditModuloMedicao(prev => ({ ...prev, [fId]: prev[fId] === m.v ? "" : m.v }))}
+                        className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl text-left border-2 transition-all ${editModuloMedicao[fId] === m.v ? `${m.sel} ring-2` : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                        <span className="flex items-center gap-1.5 text-sm font-medium"><span>{m.icon}</span> {m.l}</span>
+                        <span className="text-[10px] opacity-70 leading-tight">{m.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {editModuloMedicao[fId] && (
+                    <div className="mt-2 px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg">
+                      <p className="text-xs text-purple-700 font-medium">
+                        {MODULOS.find(m => m.v === editModuloMedicao[fId])?.icon} Módulo selecionado: <strong>{MODULOS.find(m => m.v === editModuloMedicao[fId])?.l}</strong>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 rounded-b-2xl flex justify-end gap-2">
@@ -1721,6 +1759,7 @@ export default function Cotacoes() {
         freteTipo: editFreteTipo[fornecedorId] || "cif",
         valorFrete: parseFloat(editValorFrete[fornecedorId] ?? "0") || 0,
         transportadora: editTransportadora[fornecedorId] || undefined,
+        moduloMedicao: editModuloMedicao[fornecedorId] || undefined,
         respostas,
       });
     }

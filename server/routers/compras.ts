@@ -2277,7 +2277,7 @@ Responda APENAS com um objeto JSON no formato:
         const pValorFrete = pFreteTipo === "fob" ? n((p as any).valorFrete) : 0;
         totaisPorFornecedor[p.fornecedorId] = totalItens + pValorFrete;
       }
-      return { cotacao: cot, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor };
+      return { cotacao: cot, tipoEfetivo, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor };
     }),
 
   adicionarFornecedorMapa: protectedProcedure
@@ -2310,6 +2310,7 @@ Responda APENAS com um objeto JSON no formato:
       freteTipo: z.string().optional(),
       valorFrete: z.number().optional(),
       transportadora: z.string().optional(),
+      moduloMedicao: z.enum(["medicao_mensal", "medicao_avanco", "medicao_etapa", "empreitada", "administracao"]).optional(),
       respostas: z.array(z.object({
         itemId: z.number(),
         precoUnitario: z.number(),
@@ -2357,6 +2358,7 @@ Responda APENAS com um objeto JSON no formato:
         freteTipo: input.freteTipo ?? "cif",
         valorFrete: String(valorFrete.toFixed(2)),
         transportadora: input.transportadora ?? null,
+        moduloMedicao: input.moduloMedicao ?? null,
       } as any)
         .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
       return { ok: true, total: totalComFrete };
