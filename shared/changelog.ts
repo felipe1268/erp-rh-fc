@@ -6543,4 +6543,15 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 02:30:00",
   },
+  {
+    versao: 915,
+    descricao:
+      "Cotações FD: correção do erro na query orcamento_id (try/catch para coluna ausente), " +
+      "campo Valor do FD agora aceita formato brasileiro (500.000,00) com preview " +
+      "formatado em R$ abaixo do campo. Ambos os dialogs de FD (fullscreen e lista) atualizados.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 03:00:00",
+  },
 ];

@@ -7301,37 +7301,42 @@ Retorne APENAS um JSON válido neste formato:
       if (cot.status !== "pendente") throw new TRPCError({ code: "BAD_REQUEST", message: "FD só pode ser definido em cotações pendentes" });
 
       if (input.modalidade === "fd_cliente" && cot.obraId) {
-        const obraRes = await db.execute(sql`SELECT orcamento_id FROM obras WHERE id = ${cot.obraId} AND company_id = ${input.companyId} LIMIT 1`);
-        const orcamentoId = (obraRes as any).rows?.[0]?.orcamento_id;
-        if (orcamentoId) {
-          const itensFd = await db.select().from(bdiFd).where(and(eq(bdiFd.orcamentoId, orcamentoId), eq(bdiFd.companyId, input.companyId)));
-          const totalFdOrcado = itensFd.reduce((s, i) => s + n(i.total), 0);
+        try {
+          const obraRes = await db.execute(sql`SELECT orcamento_id FROM obras WHERE id = ${cot.obraId} AND company_id = ${input.companyId} LIMIT 1`);
+          const orcamentoId = (obraRes as any).rows?.[0]?.orcamento_id;
+          if (orcamentoId) {
+            const itensFd = await db.select().from(bdiFd).where(and(eq(bdiFd.orcamentoId, orcamentoId), eq(bdiFd.companyId, input.companyId)));
+            const totalFdOrcado = itensFd.reduce((s, i) => s + n(i.total), 0);
 
-          const ocsComFd = await db.select({ fdValor: comprasOrdens.fdValor })
-            .from(comprasOrdens)
-            .where(and(
-              eq(comprasOrdens.companyId, input.companyId),
-              eq(comprasOrdens.obraId, cot.obraId!),
-              sql`${comprasOrdens.modalidadeFd} = 'fd_cliente'`,
-              sql`${comprasOrdens.status} != 'cancelada'`,
-            ));
-          const totalFdComprometidoOcs = ocsComFd.reduce((s, o) => s + n(o.fdValor), 0);
+            const ocsComFd = await db.select({ fdValor: comprasOrdens.fdValor })
+              .from(comprasOrdens)
+              .where(and(
+                eq(comprasOrdens.companyId, input.companyId),
+                eq(comprasOrdens.obraId, cot.obraId!),
+                sql`${comprasOrdens.modalidadeFd} = 'fd_cliente'`,
+                sql`${comprasOrdens.status} != 'cancelada'`,
+              ));
+            const totalFdComprometidoOcs = ocsComFd.reduce((s, o) => s + n(o.fdValor), 0);
 
-          const cotsFd = await db.execute(sql`
-            SELECT fd_valor FROM compras_cotacoes
-            WHERE company_id = ${input.companyId} AND obra_id = ${cot.obraId}
-              AND modalidade_fd = 'fd_cliente' AND status = 'pendente'
-              AND id != ${input.cotacaoId}
-          `);
-          const totalFdComprometidoCots = ((cotsFd as any).rows ?? []).reduce((s: number, r: any) => s + n(r.fd_valor), 0);
+            const cotsFd = await db.execute(sql`
+              SELECT fd_valor FROM compras_cotacoes
+              WHERE company_id = ${input.companyId} AND obra_id = ${cot.obraId}
+                AND modalidade_fd = 'fd_cliente' AND status = 'pendente'
+                AND id != ${input.cotacaoId}
+            `);
+            const totalFdComprometidoCots = ((cotsFd as any).rows ?? []).reduce((s: number, r: any) => s + n(r.fd_valor), 0);
 
-          const saldoFd = totalFdOrcado - totalFdComprometidoOcs - totalFdComprometidoCots;
-          if (input.valor > saldoFd) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: `Saldo de FD insuficiente. Disponível: R$ ${saldoFd.toFixed(2)}. Valor solicitado: R$ ${input.valor.toFixed(2)}.`,
-            });
+            const saldoFd = totalFdOrcado - totalFdComprometidoOcs - totalFdComprometidoCots;
+            if (input.valor > saldoFd) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Saldo de FD insuficiente. Disponível: R$ ${saldoFd.toFixed(2)}. Valor solicitado: R$ ${input.valor.toFixed(2)}.`,
+              });
+            }
           }
+        } catch (e: any) {
+          if (e instanceof TRPCError) throw e;
+          console.warn("[FD] Erro ao verificar saldo FD (coluna pode não existir):", e.message);
         }
       }
 

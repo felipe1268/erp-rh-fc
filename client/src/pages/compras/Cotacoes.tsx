@@ -21,6 +21,19 @@ import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, 
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
+function parseBRNumber(v: string): number {
+  if (!v) return 0;
+  const s = v.trim();
+  if (s.includes(",") && s.includes(".")) {
+    const lastComma = s.lastIndexOf(",");
+    const lastDot = s.lastIndexOf(".");
+    if (lastComma > lastDot) return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+    return parseFloat(s.replace(/,/g, "")) || 0;
+  }
+  if (s.includes(",")) return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+  return parseFloat(s) || 0;
+}
+
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showContent, onAcao, onCoberto, userId, userName }: {
@@ -3377,27 +3390,37 @@ export default function Cotacoes() {
               <div>
                 <label className="text-xs font-medium text-gray-700 mb-1 block">Valor do FD (R$)</label>
                 <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={fdCotForm.valor}
-                  onChange={e => setFdCotForm(p => ({ ...p, valor: e.target.value }))}
+                  onChange={e => {
+                    let v = e.target.value.replace(/[^\d.,]/g, "");
+                    setFdCotForm(p => ({ ...p, valor: v }));
+                  }}
                   placeholder="0,00"
                   className="bg-white border-gray-300"
                 />
+                {fdCotForm.valor && (() => {
+                  const num = parseBRNumber(fdCotForm.valor);
+                  return num > 0 ? (
+                    <p className="text-xs text-emerald-600 mt-1 font-medium">
+                      {num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </p>
+                  ) : null;
+                })()}
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowFdCotDialog(false)}>Cancelar</Button>
               <Button
-                disabled={!fdCotForm.valor || parseFloat(fdCotForm.valor) <= 0 || marcarFd.isPending || !showDetalhe}
+                disabled={!fdCotForm.valor || parseBRNumber(fdCotForm.valor) <= 0 || marcarFd.isPending || !showDetalhe}
                 onClick={() => {
                   if (!showDetalhe) return;
                   marcarFd.mutate({
                     cotacaoId: showDetalhe,
                     companyId,
                     modalidade: fdCotForm.modalidade,
-                    valor: parseFloat(fdCotForm.valor),
+                    valor: parseBRNumber(fdCotForm.valor),
                   });
                 }}
                 className="bg-amber-600 hover:bg-amber-500 text-white gap-2"
@@ -3936,27 +3959,37 @@ export default function Cotacoes() {
             <div>
               <label className="text-xs font-medium text-gray-700 mb-1 block">Valor do FD (R$)</label>
               <Input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={fdCotForm.valor}
-                onChange={e => setFdCotForm(p => ({ ...p, valor: e.target.value }))}
+                onChange={e => {
+                  let v = e.target.value.replace(/[^\d.,]/g, "");
+                  setFdCotForm(p => ({ ...p, valor: v }));
+                }}
                 placeholder="0,00"
                 className="bg-white border-gray-300"
               />
+              {fdCotForm.valor && (() => {
+                const num = parseBRNumber(fdCotForm.valor);
+                return num > 0 ? (
+                  <p className="text-xs text-emerald-600 mt-1 font-medium">
+                    {num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </p>
+                ) : null;
+              })()}
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setShowFdCotDialog(false)}>Cancelar</Button>
             <Button
-              disabled={!fdCotForm.valor || parseFloat(fdCotForm.valor) <= 0 || marcarFd.isPending || !showDetalhe}
+              disabled={!fdCotForm.valor || parseBRNumber(fdCotForm.valor) <= 0 || marcarFd.isPending || !showDetalhe}
               onClick={() => {
                 if (!showDetalhe) return;
                 marcarFd.mutate({
                   cotacaoId: showDetalhe,
                   companyId,
                   modalidade: fdCotForm.modalidade,
-                  valor: parseFloat(fdCotForm.valor),
+                  valor: parseBRNumber(fdCotForm.valor),
                 });
               }}
               className="bg-amber-600 hover:bg-amber-500 text-white gap-2"
