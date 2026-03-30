@@ -2250,28 +2250,61 @@ export const terceiroContratosRouter = router({
       }
 
       // Agrupa previsões por semana
-      const semanasMap: Record<string, number> = {};
+      const semanasMapPrev: Record<string, number> = {};
       for (const item of todosItens) {
         if (!item.planejamentoAtividadeId) continue;
         const avancosItem = avancos.filter(a => a.atividadeId === item.planejamentoAtividadeId);
-        let prevAnterior = 0;
         for (const av of avancosItem) {
           const prevPeriodo = n(av.percentualSemanal ?? 0);
           const valorSemana = (prevPeriodo / 100) * n(item.valorTotal);
-          semanasMap[av.semana] = (semanasMap[av.semana] ?? 0) + valorSemana;
-          prevAnterior = n(av.percentualAcumulado);
+          semanasMapPrev[av.semana] = (semanasMapPrev[av.semana] ?? 0) + valorSemana;
         }
       }
 
-      const semanas = Object.entries(semanasMap)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([semana, valor]) => ({ semana, valor }));
+      // Realizado: medições aprovadas/pagas — distribui valor por semana via avanço real
+      const semanasMapReal: Record<string, number> = {};
+      let totalRealizado = 0;
+      const todasMedicoes = await db.select().from(terceiroMedicoes)
+        .where(and(
+          eq(terceiroMedicoes.companyId, input.companyId),
+          inArray(terceiroMedicoes.contratoId, contratosIds),
+        ));
+      const medicoesAprovPaga = todasMedicoes.filter(m => m.status === "aprovada" || m.status === "paga");
 
-      const totalPrevisto = semanas.reduce((s, w) => s + w.valor, 0);
+      if (medicoesAprovPaga.length > 0) {
+        const medicaoIds = medicoesAprovPaga.map(m => m.id);
+        const itensMedicao = await db.select().from(terceiroMedicaoItens)
+          .where(inArray(terceiroMedicaoItens.medicaoId, medicaoIds));
+
+        for (const med of medicoesAprovPaga) {
+          const itensMed = itensMedicao.filter(im => im.medicaoId === med.id);
+          const valorMed = n(med.valorMedido);
+          totalRealizado += valorMed;
+
+          const approvedDate = med.aprovadoEm ? new Date(med.aprovadoEm) : new Date(med.criadoEm);
+          const dayOfWeek = approvedDate.getDay();
+          const monday = new Date(approvedDate);
+          monday.setDate(monday.getDate() - ((dayOfWeek + 6) % 7));
+          const semanaKey = monday.toISOString().slice(0, 10);
+          semanasMapReal[semanaKey] = (semanasMapReal[semanaKey] || 0) + valorMed;
+        }
+      }
+
+      const allSemanas = new Set([...Object.keys(semanasMapPrev), ...Object.keys(semanasMapReal)]);
+      const semanas = [...allSemanas]
+        .sort()
+        .map(semana => ({
+          semana,
+          previsto: semanasMapPrev[semana] || 0,
+          realizado: semanasMapReal[semana] || 0,
+        }));
+
+      const totalPrevisto = semanas.reduce((s, w) => s + w.previsto, 0);
 
       return {
         semanas,
         totalPrevisto,
+        totalRealizado,
         contratos: contratos.map(c => ({
           ...c,
           empresaNome: empMap[c.empresaTerceiraId] || "—",
