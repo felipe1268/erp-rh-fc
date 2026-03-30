@@ -859,6 +859,49 @@ export default function Solicitacoes() {
     }
   }, [eapExtraDesbloqueado]);
 
+  function handleEapDoubleClick(clickedItem: any) {
+    const eapItems = eapQ.data?.items;
+    if (!eapItems) return;
+
+    const prefix = clickedItem.eapCodigo + ".";
+    const childItems = eapItems
+      .filter((it: any) => it.nivel >= 2 && it.tipo !== "grupo")
+      .filter((it: any) => {
+        if (form.tipo === "servico") return !!it.servicoCodigo && (it as any).temMdo;
+        if (!it.servicoCodigo) return true;
+        if (form.tipo === "material") return (it as any).temMat !== false;
+        return true;
+      })
+      .filter((it: any) => it.eapCodigo.startsWith(prefix) || it.id === clickedItem.id);
+
+    if (childItems.length <= 1) return;
+
+    const allSelected = childItems.every((it: any) => selectedEapIds.has(it.id) || (parseFloat(eapQtdServico[it.id] || "") > 0));
+
+    if (allSelected) {
+      childItems.forEach((it: any) => {
+        setSelectedEapIds(prev => { const n = new Set(prev); n.delete(it.id); return n; });
+        setEapQtdServico(prev => { const n = { ...prev }; delete n[it.id]; return n; });
+      });
+      setItens(p => p.filter(x => !childItems.some((c: any) => c.id === x.orcamentoItemId)));
+    } else {
+      childItems.forEach((it: any) => {
+        if (!selectedEapIds.has(it.id) && !(parseFloat(eapQtdServico[it.id] || "") > 0)) {
+          if (form.tipo === "servico") {
+            const mdoSaldo = (it as any).mdoSaldo;
+            handleEapQtdChange(it.id, mdoSaldo != null && mdoSaldo > 0 ? String(mdoSaldo) : "1", it);
+          } else {
+            toggleEapItem(it);
+          }
+        }
+      });
+    }
+    toast.success(allSelected
+      ? `${childItems.length} itens desmarcados (${clickedItem.eapCodigo})`
+      : `${childItems.length} itens selecionados (${clickedItem.eapCodigo})`
+    );
+  }
+
   function toggleEapItem(it: any) {
     setSelectedEapIds(prev => {
       const next = new Set(prev);
@@ -1612,6 +1655,7 @@ export default function Solicitacoes() {
                                 <div key={it.id} className={`group ${statusColor.bg}`}>
                                   <div
                                     onClick={() => handleEapExpand(it)}
+                                    onDoubleClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEapDoubleClick(it); }}
                                     className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${expanded ? "bg-amber-50 border-l-2 border-l-amber-500" : isOriginalItem ? "bg-blue-50/50 border-l-2 border-l-blue-400 hover:bg-blue-50" : "hover:bg-gray-50"}`}
                                   >
                                     <span className={`inline-block w-4 h-4 rounded-full shrink-0 ${form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "bg-purple-500" : ((it as any).mdoSaldo ?? 0) <= 0 ? "bg-red-500" : "bg-emerald-500") : cobParcial && statusColor.label !== "Estouro" ? "bg-orange-500" : statusColor.dot} ring-1 ring-white shadow-sm`} title={form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "100% contratado" : ((it as any).mdoSaldo ?? 0) <= 0 ? "Sem saldo" : "Disponível") : cobParcial ? `Parcial: ${cob.insumosCobertos}/${cob.totalInsumos} insumos` : statusColor.label} />
