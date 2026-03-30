@@ -647,6 +647,7 @@ export default function Cotacoes() {
   const [showAnexoInput, setShowAnexoInput] = useState<number | null>(null);
   const [showRealocacao, setShowRealocacao] = useState(false);
   const [cobertoPorRisco, setCobertoPorRisco] = useState(false);
+  const [agruparItens, setAgruparItens] = useState(false);
   const [showSemVerbaDialog, setShowSemVerbaDialog] = useState(false);
   const [semVerbaAdminEmail, setSemVerbaAdminEmail] = useState("");
   const [semVerbaAdminSenha, setSemVerbaAdminSenha] = useState("");
@@ -2310,6 +2311,13 @@ export default function Cotacoes() {
                     <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
                   ) : (mapa?.participantes ?? []).length === 0 ? null : (
                     <div className="space-y-4">
+                      <div className="flex items-center justify-end gap-2 px-1">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input type="checkbox" checked={agruparItens} onChange={e => setAgruparItens(e.target.checked)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5" />
+                          <span className="text-xs text-gray-500">Agrupar itens iguais</span>
+                        </label>
+                      </div>
                       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
                         <table className="text-sm border-collapse" style={{ minWidth: "max-content" }}>
                           <thead>
@@ -2610,7 +2618,40 @@ export default function Cotacoes() {
                             </tr>
                           </thead>
                           <tbody>
-                            {(mapa?.itens ?? []).map((it: any) => {
+                            {(() => {
+                              const rawItens = mapa?.itens ?? [];
+                              const itensParaRenderizar: any[] = agruparItens ? (() => {
+                                const groups: Record<string, any[]> = {};
+                                for (const it of rawItens) {
+                                  const key = (it.descricao ?? "") + "|" + (it.unidade ?? "un");
+                                  if (!groups[key]) groups[key] = [];
+                                  groups[key].push(it);
+                                }
+                                return Object.values(groups).map(items => {
+                                  if (items.length === 1) return items[0];
+                                  const first = items[0];
+                                  const totalQtd = items.reduce((s: number, i: any) => s + parseFloat(i.quantidade ?? "0"), 0);
+                                  const metaU = parseFloat(first.metaUnitario ?? "0");
+                                  const totalOrcada = items.reduce((s: number, i: any) => s + ((i as any).qtdOrcada ?? 0), 0);
+                                  const totalComprada = items.reduce((s: number, i: any) => s + ((i as any).qtdComprada ?? 0), 0);
+                                  const totalSolic = items.reduce((s: number, i: any) => s + ((i as any).qtdTotalSolicitada ?? 0), 0);
+                                  return {
+                                    ...first,
+                                    id: first.id,
+                                    quantidade: String(totalQtd),
+                                    qtdOrcada: totalOrcada,
+                                    qtdComprada: totalComprada,
+                                    qtdTotalSolicitada: totalSolic,
+                                    qtdSaldo: totalOrcada - totalComprada,
+                                    _grouped: true,
+                                    _childIds: items.map((i: any) => i.id),
+                                    _childItems: items,
+                                    _groupCount: items.length,
+                                  };
+                                });
+                              })() : rawItens;
+                              return itensParaRenderizar;
+                            })().map((it: any) => {
                               const melhorPreco = getMelhorPrecoItem(it.id);
                               const metaUnit = parseFloat(it.metaUnitario ?? "0");
                               const metaQtd = parseFloat(it.quantidade ?? "0");
@@ -2622,14 +2663,21 @@ export default function Cotacoes() {
                                     <div className="flex items-start gap-1.5">
                                       <div className="flex-1 min-w-0">
                                         <span className="text-gray-900 text-xs font-medium">{it.descricao}</span>
-                                        {it.eapPath && (
+                                        {it._grouped && (
+                                          <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                            {it._groupCount} composições
+                                          </span>
+                                        )}
+                                        {!it._grouped && it.eapPath && (
                                           <div className="text-[10px] text-gray-400 mt-0.5 leading-tight">{it.eapPath}</div>
                                         )}
-                                        <RastreabilidadeTag
-                                          scNumero={(it as any).scNumero}
-                                          eapCodigo={(it as any).eapCodigo}
-                                          origemEap={(it as any).origemEap}
-                                        />
+                                        {!it._grouped && (
+                                          <RastreabilidadeTag
+                                            scNumero={(it as any).scNumero}
+                                            eapCodigo={(it as any).eapCodigo}
+                                            origemEap={(it as any).origemEap}
+                                          />
+                                        )}
                                         {(it as any).semVerba && (
                                           <div className="mt-1 flex items-center gap-1.5">
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
@@ -2733,34 +2781,55 @@ export default function Cotacoes() {
                                     const key = `${it.id}_${p.fornecedorId}`;
                                     const isEditing = editingFornId === p.fornecedorId;
                                     const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
-                                    const savedPreco = parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
-                                    const savedQty = parseFloat(mapa?.respostaMap?.[key]?.quantidade ?? it.quantidade ?? "1");
-                                    const displayPreco = isEditing ? parseFloat(editPrecos[key] ?? "0") : savedPreco;
-                                    const displayQty = isEditing
-                                      ? (parseFloat(editQtds[key] ?? "0") || savedQty)
-                                      : savedQty;
-                                    const displayTotal = displayPreco * displayQty;
+
+                                    let savedPreco: number, savedQty: number, displayPreco: number, displayQty: number, displayTotal: number;
+                                    if (it._grouped) {
+                                      const childItems = it._childItems as any[];
+                                      savedPreco = parseFloat(mapa?.respostaMap?.[`${childItems[0].id}_${p.fornecedorId}`]?.precoUnitario ?? "0");
+                                      savedQty = childItems.reduce((s: number, ci: any) => s + parseFloat(mapa?.respostaMap?.[`${ci.id}_${p.fornecedorId}`]?.quantidade ?? ci.quantidade ?? "0"), 0);
+                                      displayPreco = isEditing ? parseFloat(editPrecos[key] ?? String(savedPreco)) : savedPreco;
+                                      displayQty = savedQty || parseFloat(it.quantidade ?? "0");
+                                      displayTotal = displayPreco * displayQty;
+                                    } else {
+                                      savedPreco = parseFloat(mapa?.respostaMap?.[key]?.precoUnitario ?? "0");
+                                      savedQty = parseFloat(mapa?.respostaMap?.[key]?.quantidade ?? it.quantidade ?? "1");
+                                      displayPreco = isEditing ? parseFloat(editPrecos[key] ?? "0") : savedPreco;
+                                      displayQty = isEditing ? (parseFloat(editQtds[key] ?? "0") || savedQty) : savedQty;
+                                      displayTotal = displayPreco * displayQty;
+                                    }
+
                                     const isBest = melhorPreco !== null && displayPreco > 0 && displayPreco === melhorPreco;
                                     const rowCls = isMelhor ? "bg-emerald-50/30" : "";
+
+                                    const handleGroupedPrecoChange = (val: string) => {
+                                      if (it._grouped) {
+                                        const updates: Record<string, string> = { [key]: val };
+                                        for (const ci of it._childItems) {
+                                          updates[`${ci.id}_${p.fornecedorId}`] = val;
+                                        }
+                                        setEditPrecos(prev => ({ ...prev, ...updates }));
+                                      } else {
+                                        setEditPrecos(prev => ({ ...prev, [key]: val }));
+                                      }
+                                    };
+
                                     return (
                                       <>
-                                        {/* QTD (editável) */}
                                         <td key={`qty_${p.fornecedorId}`} className={`px-1 py-1 text-right border-r border-gray-100 ${rowCls}`}>
-                                          {isEditing ? (
+                                          {isEditing && !it._grouped ? (
                                             <Input type="number" step="0.001" min="0"
                                               value={editQtds[key] ?? String(savedQty)}
                                               onChange={e => setEditQtds(prev => ({ ...prev, [key]: e.target.value }))}
                                               className="h-8 text-sm text-right border-gray-300 bg-white text-gray-900 w-28 ml-auto" />
                                           ) : (
-                                            <span className="text-xs text-gray-600">{savedQty > 0 ? savedQty.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}</span>
+                                            <span className="text-xs text-gray-600">{displayQty > 0 ? displayQty.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}</span>
                                           )}
                                         </td>
-                                        {/* Preço unit (editável) */}
                                         <td key={`preco_${p.fornecedorId}`} className={`px-1 py-1 text-right border-r border-gray-100 ${rowCls} ${isBest ? "bg-emerald-50" : ""}`}>
                                           {isEditing ? (
                                             <Input type="number" step="0.01" min="0"
                                               value={editPrecos[key] ?? ""}
-                                              onChange={e => setEditPrecos(prev => ({ ...prev, [key]: e.target.value }))}
+                                              onChange={e => handleGroupedPrecoChange(e.target.value)}
                                               className={`h-8 text-sm text-right border-gray-300 bg-white text-gray-900 w-32 ml-auto ${isBest ? "border-emerald-400" : ""}`}
                                               placeholder="0,00" />
                                           ) : (
@@ -2769,7 +2838,6 @@ export default function Cotacoes() {
                                             </span>
                                           )}
                                         </td>
-                                        {/* Total */}
                                         <td key={`tot_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-200 ${rowCls} ${isBest ? "bg-emerald-50" : ""}`}>
                                           <span className={`text-xs font-semibold ${isMelhor ? "text-emerald-700" : "text-gray-700"}`}>
                                             {displayTotal > 0 ? displayTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
