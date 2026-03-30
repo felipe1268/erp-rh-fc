@@ -415,4 +415,46 @@ export const cipaRouter = router({
       
       return { eleicao, membros, reunioes };
     }),
+
+  checkEstabilidade: protectedProcedure
+    .input(z.object({ employeeId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const hoje = new Date().toISOString().split("T")[0];
+      const rows = await db.select({
+        id: cipaMembers.id,
+        cargoCipa: cipaMembers.cargoCipa,
+        representacao: cipaMembers.representacao,
+        statusMembro: cipaMembers.statusMembro,
+        inicioEstabilidade: cipaMembers.inicioEstabilidade,
+        fimEstabilidade: cipaMembers.fimEstabilidade,
+        mandatoInicio: cipaElections.mandatoInicio,
+        mandatoFim: cipaElections.mandatoFim,
+      })
+      .from(cipaMembers)
+      .innerJoin(cipaElections, eq(cipaMembers.electionId, cipaElections.id))
+      .where(and(
+        eq(cipaMembers.employeeId, input.employeeId),
+        sql`${cipaMembers.statusMembro} != 'Encerrado'`,
+      ));
+
+      const ativos = rows.filter(r => {
+        if (r.fimEstabilidade && r.fimEstabilidade >= hoje) return true;
+        if (!r.fimEstabilidade && r.mandatoFim && r.mandatoFim >= hoje) return true;
+        return false;
+      });
+
+      if (ativos.length === 0) return { temEstabilidade: false, membros: [] };
+
+      return {
+        temEstabilidade: true,
+        membros: ativos.map(r => ({
+          cargoCipa: r.cargoCipa,
+          representacao: r.representacao,
+          mandatoInicio: r.mandatoInicio,
+          mandatoFim: r.mandatoFim,
+          fimEstabilidade: r.fimEstabilidade,
+        })),
+      };
+    }),
 });

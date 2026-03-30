@@ -6530,4 +6530,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 02:00:00",
   },
+  {
+    versao: 914,
+    descricao:
+      "Proteção legal CIPA no Aviso Prévio: ao selecionar um colaborador que é membro " +
+      "da CIPA com estabilidade vigente, exibe alerta vermelho com fundamentação legal " +
+      "(CLT Art. 165, CF Art. 10 ADCT, Súmula 379 TST). Mostra cargo, mandato e data " +
+      "de fim da estabilidade. Exige dupla confirmação antes de prosseguir. " +
+      "Backend: novo endpoint checkEstabilidade que verifica vínculos CIPA ativos.",
+    tipo: "feature",
+    modulos: "RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 02:30:00",
+  },
 ];

@@ -97,6 +97,11 @@ export default function AvisoPrevio() {
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
+  const cipaCheckQ = trpc.cipa.checkEstabilidade.useQuery(
+    { employeeId: form.employeeId! },
+    { enabled: !!form.employeeId }
+  );
+
   // tRPC utils for imperative queries & invalidation
   const utils = trpc.useUtils();
 
@@ -317,6 +322,16 @@ export default function AvisoPrevio() {
     if (!form.employeeId || !form.tipo || !form.dataDesligamento) {
       toast.error("Preencha todos os campos obrigatórios");
       return;
+    }
+    if (cipaCheckQ.data?.temEstabilidade) {
+      const cipaMembro = cipaCheckQ.data.membros[0];
+      const msg = `⚠️ ATENÇÃO: CIPEIRO COM ESTABILIDADE!\n\n` +
+        `Este colaborador é membro da CIPA (${cipaMembro?.cargoCipa}) ` +
+        `com estabilidade até ${cipaMembro?.fimEstabilidade || cipaMembro?.mandatoFim}.\n\n` +
+        `Conforme CLT Art. 165 e CF Art. 10 ADCT, cipeiro eleito NÃO PODE ser dispensado sem justa causa.\n\n` +
+        `Prosseguir pode gerar reintegração judicial e indenização.\n\n` +
+        `Deseja REALMENTE continuar?`;
+      if (!confirm(msg)) return;
     }
     if (editingItem) {
       // Modo edição
@@ -1283,6 +1298,55 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     </PopoverContent>
                   </Popover>
                 </div>
+
+                {/* Alerta CIPA - Estabilidade provisória (CLT Art. 165 + CF Art. 10 ADCT) */}
+                {form.employeeId && cipaCheckQ.data?.temEstabilidade && (
+                  <div className="rounded-xl border-2 border-red-400 bg-red-50 p-4 space-y-2">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center shrink-0">
+                        <ShieldAlert className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-bold text-red-800 uppercase tracking-wide">
+                          CIPEIRO — Estabilidade Provisória
+                        </h4>
+                        <p className="text-xs text-red-700 mt-1 leading-relaxed">
+                          Este colaborador é membro da <strong>CIPA</strong> e possui <strong>estabilidade provisória</strong> no emprego.
+                          Conforme <strong>CLT Art. 165</strong> e <strong>CF/88 Art. 10, II, "a" do ADCT</strong>,
+                          o cipeiro eleito pelos empregados <strong>não pode ser dispensado sem justa causa</strong> desde
+                          o registro da candidatura até <strong>1 ano após o término do mandato</strong>.
+                        </p>
+                        <div className="mt-2 space-y-1">
+                          {(cipaCheckQ.data?.membros ?? []).map((m: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-xs">
+                              <Badge className="bg-red-100 text-red-700 border-red-300 text-[10px]">{
+                                m.cargoCipa === "Presidente" ? "Presidente" :
+                                m.cargoCipa === "Vice_Presidente" ? "Vice-Presidente" :
+                                m.cargoCipa === "Secretario" ? "Secretário" :
+                                m.cargoCipa === "Membro_Titular" ? "Membro Titular" :
+                                m.cargoCipa === "Membro_Suplente" ? "Membro Suplente" :
+                                m.cargoCipa
+                              }</Badge>
+                              <span className="text-red-600">
+                                Mandato: {formatDate(m.mandatoInicio)} — {formatDate(m.mandatoFim)}
+                              </span>
+                              {m.fimEstabilidade && (
+                                <span className="font-bold text-red-800">
+                                  Estabilidade até: {formatDate(m.fimEstabilidade)}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-red-600 mt-2 italic">
+                          A dispensa de cipeiro com estabilidade só é permitida por <strong>justa causa</strong> (CLT Art. 482),
+                          devidamente comprovada por inquérito judicial (Súmula 379 TST).
+                          Prosseguir pode gerar reintegração judicial e indenização.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Seção 2: Tipo e Data */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
