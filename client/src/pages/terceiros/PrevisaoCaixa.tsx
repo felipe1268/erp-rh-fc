@@ -25,6 +25,8 @@ const fmtSemanaFull = (s: string) => {
 export default function PrevisaoCaixa() {
   const { companyId } = useCompany();
   const [obraId, setObraId] = useState<string>("todos");
+  const [showPrevisto, setShowPrevisto] = useState(true);
+  const [showRealizado, setShowRealizado] = useState(true);
 
   const { data: obrasData = [] } = trpc.obras.list.useQuery({ companyId }, { enabled: companyId > 0 });
 
@@ -34,7 +36,7 @@ export default function PrevisaoCaixa() {
   );
 
   const semanas = data?.semanas || [];
-  const maxVal = Math.max(...semanas.map(s => Math.max(s.previsto, s.realizado)), 1);
+  const maxVal = Math.max(...semanas.map(s => Math.max(showPrevisto ? s.previsto : 0, showRealizado ? s.realizado : 0)), 1);
   const totalPrevisto = data?.totalPrevisto || 0;
   const totalRealizado = data?.totalRealizado || 0;
   const variacao = totalPrevisto > 0 ? ((totalRealizado - totalPrevisto) / totalPrevisto) * 100 : 0;
@@ -91,9 +93,19 @@ export default function PrevisaoCaixa() {
                 <h3 className="font-semibold text-gray-800 text-sm flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-blue-600" /> Fluxo Semanal — Previsto vs Realizado
                 </h3>
-                <div className="flex items-center gap-4 text-xs text-gray-500">
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-blue-500 rounded-sm inline-block" /> Previsto</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-emerald-500 rounded-sm inline-block" /> Realizado</span>
+                <div className="flex items-center gap-4 text-xs">
+                  <button
+                    onClick={() => setShowPrevisto(p => !p)}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-all ${showPrevisto ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-400 line-through opacity-60 hover:opacity-80"}`}
+                  >
+                    <span className={`w-3 h-3 rounded-sm inline-block ${showPrevisto ? "bg-blue-500" : "bg-gray-300"}`} /> Previsto
+                  </button>
+                  <button
+                    onClick={() => setShowRealizado(r => !r)}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-all ${showRealizado ? "bg-emerald-50 text-emerald-700 font-medium" : "text-gray-400 line-through opacity-60 hover:opacity-80"}`}
+                  >
+                    <span className={`w-3 h-3 rounded-sm inline-block ${showRealizado ? "bg-emerald-500" : "bg-gray-300"}`} /> Realizado
+                  </button>
                 </div>
               </div>
 
@@ -124,22 +136,26 @@ export default function PrevisaoCaixa() {
                           return (
                             <div key={i} className="flex flex-col items-center flex-shrink-0 group" style={{ width: barW + 8 }}>
                               <div className="flex items-end gap-px w-full justify-center" style={{ height: 210 }}>
-                                <div
-                                  className="rounded-t bg-blue-500 hover:bg-blue-600 transition-all relative"
-                                  style={{ height: `${Math.max(hPrev, 0.5)}%`, width: barW / 2 }}
-                                >
-                                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                    P: {BRL(s.previsto)}
+                                {showPrevisto && (
+                                  <div
+                                    className="rounded-t bg-blue-500 hover:bg-blue-600 transition-all relative"
+                                    style={{ height: `${Math.max(hPrev, 0.5)}%`, width: showRealizado ? barW / 2 : barW * 0.7 }}
+                                  >
+                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                      P: {BRL(s.previsto)}
+                                    </div>
                                   </div>
-                                </div>
-                                <div
-                                  className="rounded-t bg-emerald-500 hover:bg-emerald-600 transition-all relative"
-                                  style={{ height: `${Math.max(hReal, s.realizado > 0 ? 1 : 0)}%`, width: barW / 2 }}
-                                >
-                                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                    R: {BRL(s.realizado)}
+                                )}
+                                {showRealizado && (
+                                  <div
+                                    className="rounded-t bg-emerald-500 hover:bg-emerald-600 transition-all relative"
+                                    style={{ height: `${Math.max(hReal, s.realizado > 0 ? 1 : 0)}%`, width: showPrevisto ? barW / 2 : barW * 0.7 }}
+                                  >
+                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                      R: {BRL(s.realizado)}
+                                    </div>
                                   </div>
-                                </div>
+                                )}
                               </div>
                             </div>
                           );
