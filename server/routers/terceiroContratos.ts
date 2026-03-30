@@ -938,9 +938,10 @@ export const terceiroContratosRouter = router({
         } catch (e) { console.warn("[gerarMedicao] Erro ao carregar avancoMap:", e); }
       }
 
-      // Also build eapToAtividadeId + nomeToAtividadeId maps for fallback matching
+      // Build eapToAtividadeId + hierarchical name matching maps
       const eapToAtividadeId: Record<string, number> = {};
-      const nomeToAtividadeId: Record<string, number> = {};
+      const cronoEapNomeGen: Record<string, string> = {};
+      const nomeToAtividadesGen: Record<string, {id: number; eap: string}[]> = {};
       if (contrato.obraId) {
         try {
           const [proj] = await db.select({ id: planejamentoProjetos.id })
@@ -957,22 +958,44 @@ export const terceiroContratosRouter = router({
                 .from(planejamentoAtividades)
                 .where(and(eq(planejamentoAtividades.revisaoId, rev.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
               for (const a of ativs) {
-                if (a.eapCodigo && !(a.eapCodigo in eapToAtividadeId)) {
-                  eapToAtividadeId[a.eapCodigo] = a.id;
+                if (a.eapCodigo) {
+                  if (!(a.eapCodigo in eapToAtividadeId)) eapToAtividadeId[a.eapCodigo] = a.id;
+                  cronoEapNomeGen[a.eapCodigo] = a.nome;
                 }
-                if (a.nome) {
+                if (a.nome && a.eapCodigo) {
                   const nomeNorm = a.nome.trim().toLowerCase();
-                  if (!(nomeNorm in nomeToAtividadeId)) nomeToAtividadeId[nomeNorm] = a.id;
+                  if (!nomeToAtividadesGen[nomeNorm]) nomeToAtividadesGen[nomeNorm] = [];
+                  nomeToAtividadesGen[nomeNorm].push({id: a.id, eap: a.eapCodigo});
                 }
               }
               if (Object.keys(eapToAtividadeId).length > 0) break;
             }
-            console.log(`[gerarMedicao] eapToAtividadeId map: ${Object.keys(eapToAtividadeId).length} EAPs, nomeMap: ${Object.keys(nomeToAtividadeId).length}`);
-            const sampleEaps = Object.keys(eapToAtividadeId).slice(0, 10);
-            console.log(`[gerarMedicao] Sample EAPs from planejamento: ${sampleEaps.join(", ")}`);
+            console.log(`[gerarMedicao] eapToAtividadeId: ${Object.keys(eapToAtividadeId).length} EAPs, nomeAtiv: ${Object.keys(nomeToAtividadesGen).length}`);
           }
         } catch (e) { console.warn("[gerarMedicao] Erro ao carregar eapToAtividadeId:", e); }
       }
+
+      // Build orcamento EAP→nome map for parent context matching
+      const orcEapNomeGen: Record<string, string> = {};
+      if (contrato.orcamentoId) {
+        try {
+          const orcItens = await db.select({ eapCodigo: orcamentoItens.eapCodigo, descricao: orcamentoItens.descricao })
+            .from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, contrato.orcamentoId));
+          for (const oi of orcItens) orcEapNomeGen[oi.eapCodigo] = oi.descricao;
+        } catch {}
+      }
+
+      function getParentNamesGen(eap: string, map: Record<string, string>): string[] {
+        const parts = eap.split(".");
+        const names: string[] = [];
+        for (let i = 1; i < parts.length; i++) {
+          const parentEap = parts.slice(0, i).join(".");
+          if (map[parentEap]) names.push(map[parentEap].trim().toLowerCase());
+        }
+        return names;
+      }
+
+      const usedAtividadesGen = new Set<number>();
 
       // If all contract items have valorTotal=0, distribute contract total evenly
       const allItemsZeroGen = itens.every(ic => n(ic.valorTotal) === 0);
@@ -1006,13 +1029,42 @@ export const terceiroContratosRouter = router({
           }
         }
 
-        // Fallback 2: match by nome/descricao (orçamento EAPs differ from cronograma EAPs)
+        // Fallback 2: match by nome + parent hierarchy context
         if (!atividadeIdUsada && item.descricao) {
           const descNorm = item.descricao.trim().toLowerCase();
-          if (nomeToAtividadeId[descNorm]) {
-            atividadeIdUsada = nomeToAtividadeId[descNorm];
-            await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: atividadeIdUsada }).where(eq(terceiroContratoItens.id, item.id));
-            console.log(`[gerarMedicao] Fallback-NOME: "${item.descricao}" → atividade ${atividadeIdUsada}`);
+          const candidates = nomeToAtividadesGen[descNorm];
+          if (candidates && candidates.length > 0) {
+            const itemEap = (item as any).eapCodigo as string | null;
+            if (candidates.length === 1) {
+              if (!usedAtividadesGen.has(candidates[0].id)) {
+                atividadeIdUsada = candidates[0].id;
+                usedAtividadesGen.add(atividadeIdUsada);
+              }
+            } else if (itemEap && Object.keys(orcEapNomeGen).length > 0) {
+              const orcParents = getParentNamesGen(itemEap, orcEapNomeGen);
+              let bestMatch: {id: number; score: number} | null = null;
+              for (const cand of candidates) {
+                if (usedAtividadesGen.has(cand.id)) continue;
+                const cronoParents = getParentNamesGen(cand.eap, cronoEapNomeGen);
+                let score = 0;
+                for (const op of orcParents) {
+                  for (const cp of cronoParents) {
+                    if (op === cp) score += 2;
+                    else if (op.includes(cp) || cp.includes(op)) score += 1;
+                  }
+                }
+                if (!bestMatch || score > bestMatch.score) bestMatch = {id: cand.id, score};
+              }
+              if (bestMatch && bestMatch.score > 0) {
+                atividadeIdUsada = bestMatch.id;
+                usedAtividadesGen.add(atividadeIdUsada);
+                console.log(`[gerarMedicao] Fallback-HIERARQUIA: "${item.descricao}" eap=${itemEap} → atividade ${atividadeIdUsada} (score=${bestMatch.score})`);
+              }
+            }
+            if (atividadeIdUsada) {
+              await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: atividadeIdUsada }).where(eq(terceiroContratoItens.id, item.id));
+              console.log(`[gerarMedicao] Fallback-NOME: "${item.descricao}" → atividade ${atividadeIdUsada}`);
+            }
           }
         }
 
@@ -1194,10 +1246,13 @@ export const terceiroContratosRouter = router({
       const itensMedicao = await db.select().from(terceiroMedicaoItens)
         .where(eq(terceiroMedicaoItens.medicaoId, input.medicaoId));
 
-      // Build avancoMap + eapToAtividadeId + nomeToAtividadeId
+      // Build avancoMap + eapToAtividadeId + hierarchical name matching
       const avancoMap: Record<number, number> = {};
       const eapToAtividadeId: Record<string, number> = {};
-      const nomeToAtividadeId: Record<string, number> = {};
+      // cronograma: eap→nome map for building parent paths
+      const cronoEapNome: Record<string, string> = {};
+      // name → [{id, eap}] for multiple matches
+      const nomeToAtividades: Record<string, {id: number; eap: string}[]> = {};
       if (contrato.obraId) {
         try {
           const [proj] = await db.select({ id: planejamentoProjetos.id })
@@ -1223,10 +1278,14 @@ export const terceiroContratosRouter = router({
                 .from(planejamentoAtividades)
                 .where(and(eq(planejamentoAtividades.revisaoId, rev.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
               for (const a of ativs) {
-                if (a.eapCodigo && !(a.eapCodigo in eapToAtividadeId)) eapToAtividadeId[a.eapCodigo] = a.id;
-                if (a.nome) {
+                if (a.eapCodigo) {
+                  if (!(a.eapCodigo in eapToAtividadeId)) eapToAtividadeId[a.eapCodigo] = a.id;
+                  cronoEapNome[a.eapCodigo] = a.nome;
+                }
+                if (a.nome && a.eapCodigo) {
                   const nomeNorm = a.nome.trim().toLowerCase();
-                  if (!(nomeNorm in nomeToAtividadeId)) nomeToAtividadeId[nomeNorm] = a.id;
+                  if (!nomeToAtividades[nomeNorm]) nomeToAtividades[nomeNorm] = [];
+                  nomeToAtividades[nomeNorm].push({id: a.id, eap: a.eapCodigo});
                 }
               }
               if (Object.keys(eapToAtividadeId).length > 0) break;
@@ -1234,7 +1293,32 @@ export const terceiroContratosRouter = router({
           }
         } catch (e) { console.warn("[recalcularMedicao] Erro:", e); }
       }
-      console.log(`[recalcularMedicao] avancoMap: ${Object.keys(avancoMap).length} atividades, eapMap: ${Object.keys(eapToAtividadeId).length} EAPs, nomeMap: ${Object.keys(nomeToAtividadeId).length}`);
+
+      // Build orcamento EAP→nome map for parent context matching
+      const orcEapNome: Record<string, string> = {};
+      if (contrato.orcamentoId) {
+        try {
+          const orcItens = await db.select({ eapCodigo: orcamentoItens.eapCodigo, descricao: orcamentoItens.descricao })
+            .from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, contrato.orcamentoId));
+          for (const oi of orcItens) orcEapNome[oi.eapCodigo] = oi.descricao;
+        } catch {}
+      }
+
+      // Helper: get parent names from EAP hierarchy
+      function getParentNames(eap: string, map: Record<string, string>): string[] {
+        const parts = eap.split(".");
+        const names: string[] = [];
+        for (let i = 1; i < parts.length; i++) {
+          const parentEap = parts.slice(0, i).join(".");
+          if (map[parentEap]) names.push(map[parentEap].trim().toLowerCase());
+        }
+        return names;
+      }
+
+      // Track used activities to prevent duplicate matching
+      const usedAtividades = new Set<number>();
+
+      console.log(`[recalcularMedicao] avancoMap: ${Object.keys(avancoMap).length} atividades, eapMap: ${Object.keys(eapToAtividadeId).length} EAPs, nomeAtiv: ${Object.keys(nomeToAtividades).length}, orcEapNome: ${Object.keys(orcEapNome).length}`);
 
       // If all contract items have valorTotal=0, distribute contract total evenly
       const allItemsZero = itensContrato.every(ic => n(ic.valorTotal) === 0);
@@ -1249,13 +1333,27 @@ export const terceiroContratosRouter = router({
         }
       }
 
+      // Reset previous auto-links so hierarchical matching can re-assign correctly
+      for (const ic of itensContrato) {
+        if (ic.planejamentoAtividadeId) {
+          usedAtividades.add(ic.planejamentoAtividadeId);
+        }
+      }
+      // Clear usedAtividades and re-match ALL items for correct hierarchical assignment
+      usedAtividades.clear();
+      for (const ic of itensContrato) {
+        (ic as any).planejamentoAtividadeId = null;
+        await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: null } as any)
+          .where(eq(terceiroContratoItens.id, ic.id));
+      }
+
       let valorMedidoPeriodo = 0;
       const itensResultado: { descricao: string; eapCodigo: string | null; vinculado: boolean; percentual: number }[] = [];
       for (const itemMed of itensMedicao) {
         const itemContrato = itensContrato.find(ic => ic.id === itemMed.contratoItemId);
         if (!itemContrato) continue;
 
-        let atividadeId = itemContrato.planejamentoAtividadeId;
+        let atividadeId: number | null = null;
         // Fallback 1: match by EAP code
         if (!atividadeId && (itemContrato as any).eapCodigo) {
           const eap = (itemContrato as any).eapCodigo;
@@ -1265,19 +1363,47 @@ export const terceiroContratosRouter = router({
             console.log(`[recalcularMedicao] Link EAP "${eap}" → ativId ${atividadeId}`);
           }
         }
-        // Fallback 2: match by nome/descricao (orçamento EAPs differ from cronograma EAPs)
+        // Fallback 2: match by nome + parent hierarchy context
         if (!atividadeId && itemContrato.descricao) {
           const descNorm = itemContrato.descricao.trim().toLowerCase();
-          if (nomeToAtividadeId[descNorm]) {
-            atividadeId = nomeToAtividadeId[descNorm];
-            await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: atividadeId }).where(eq(terceiroContratoItens.id, itemContrato.id));
-            console.log(`[recalcularMedicao] Link NOME "${itemContrato.descricao}" → ativId ${atividadeId}`);
+          const candidates = nomeToAtividades[descNorm];
+          if (candidates && candidates.length > 0) {
+            const itemEap = (itemContrato as any).eapCodigo as string | null;
+            if (candidates.length === 1) {
+              if (!usedAtividades.has(candidates[0].id)) {
+                atividadeId = candidates[0].id;
+                usedAtividades.add(atividadeId);
+              }
+            } else if (itemEap && Object.keys(orcEapNome).length > 0) {
+              // Multiple candidates — match by parent hierarchy context
+              const orcParents = getParentNames(itemEap, orcEapNome);
+              let bestMatch: {id: number; score: number} | null = null;
+              for (const cand of candidates) {
+                if (usedAtividades.has(cand.id)) continue;
+                const cronoParents = getParentNames(cand.eap, cronoEapNome);
+                let score = 0;
+                for (const op of orcParents) {
+                  for (const cp of cronoParents) {
+                    if (op === cp) score += 2;
+                    else if (op.includes(cp) || cp.includes(op)) score += 1;
+                  }
+                }
+                if (!bestMatch || score > bestMatch.score) bestMatch = {id: cand.id, score};
+              }
+              if (bestMatch && bestMatch.score > 0) {
+                atividadeId = bestMatch.id;
+                usedAtividades.add(atividadeId);
+                console.log(`[recalcularMedicao] Link HIERARQUIA "${itemContrato.descricao}" eap=${itemEap} orcParents=[${orcParents.join(";")}] → ativId ${atividadeId} (score=${bestMatch.score})`);
+              }
+            }
+            if (atividadeId && atividadeId !== itemContrato.planejamentoAtividadeId) {
+              await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: atividadeId }).where(eq(terceiroContratoItens.id, itemContrato.id));
+              console.log(`[recalcularMedicao] Link NOME "${itemContrato.descricao}" → ativId ${atividadeId}`);
+            }
           }
         }
         if (!atividadeId) {
-          const descNorm = itemContrato.descricao?.trim().toLowerCase() || "";
-          const sampleNomes = Object.keys(nomeToAtividadeId).filter(n => n.includes("reboco") || n.includes("revest")).slice(0, 5);
-          console.log(`[recalcularMedicao] Item sem link: id=${itemContrato.id} eap=${(itemContrato as any).eapCodigo || "NULL"} desc="${itemContrato.descricao}" descNorm="${descNorm}" sampleNomes=[${sampleNomes.join("; ")}]`);
+          console.log(`[recalcularMedicao] Item sem link: id=${itemContrato.id} eap=${(itemContrato as any).eapCodigo || "NULL"} desc="${itemContrato.descricao}"`);
         }
 
         let percentualFisico = n(itemContrato.percentualMedidoAcumulado);
