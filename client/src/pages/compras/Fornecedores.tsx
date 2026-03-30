@@ -266,6 +266,7 @@ export default function Fornecedores() {
   const [editando, setEditando]       = useState<number | null>(null);
   const [form, setForm]               = useState({ ...EMPTY_FORM });
   const [buscandoCNPJ, setBuscandoCNPJ] = useState(false);
+  const [buscaCategoria, setBuscaCategoria] = useState("");
   const [erroCNPJ, setErroCNPJ]       = useState<string | null>(null);
   const [detalheId, setDetalheId]     = useState<number | null>(null);
 
@@ -342,6 +343,7 @@ export default function Fornecedores() {
     setModalAberto(false);
     setEditando(null);
     setErroCNPJ(null);
+    setBuscaCategoria("");
   }
 
   const lastFetchedCNPJ = useRef("");
@@ -933,25 +935,66 @@ export default function Fornecedores() {
                       </div>
                       <span className="text-xs font-bold text-slate-700">Categorias de Fornecimento</span>
                       {form.categorias.length > 0 && (
-                        <Badge className="bg-violet-100 text-violet-700 text-[10px] border-0 ml-auto">{form.categorias.length}</Badge>
+                        <Badge className="bg-violet-100 text-violet-700 text-[10px] border-0 ml-auto">{form.categorias.length} selecionada{form.categorias.length !== 1 ? "s" : ""}</Badge>
                       )}
                     </div>
-                    <div className="p-4">
-                      <div className="flex flex-wrap gap-1.5">
-                        {todasCategorias.map(c => (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => toggleCategoria(c)}
-                            className={`text-[11px] px-2.5 py-1 rounded-full border transition-all font-medium ${
-                              form.categorias.includes(c)
-                                ? "bg-violet-600 text-white border-violet-600 shadow-sm"
-                                : "bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:bg-violet-50"
-                            }`}
-                          >
-                            {c}
+                    <div className="p-3">
+                      <div className="relative mb-2">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                        <Input
+                          value={buscaCategoria}
+                          onChange={e => setBuscaCategoria(e.target.value)}
+                          placeholder="Filtrar categorias..."
+                          className="pl-8 h-8 text-xs"
+                        />
+                        {buscaCategoria && (
+                          <button onClick={() => setBuscaCategoria("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                            <X className="h-3.5 w-3.5" />
                           </button>
-                        ))}
+                        )}
+                      </div>
+                      {form.categorias.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2 pb-2 border-b border-slate-100">
+                          {form.categorias.map(c => (
+                            <span
+                              key={c}
+                              className="inline-flex items-center gap-1 text-[10px] font-medium bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full cursor-pointer hover:bg-violet-200 transition-colors"
+                              onClick={() => toggleCategoria(c)}
+                            >
+                              {c}
+                              <X className="h-2.5 w-2.5" />
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="max-h-[180px] overflow-y-auto space-y-0.5">
+                        {todasCategorias
+                          .filter(c => !buscaCategoria || c.toLowerCase().includes(buscaCategoria.toLowerCase()))
+                          .map(c => {
+                            const selected = form.categorias.includes(c);
+                            return (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => toggleCategoria(c)}
+                                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-left transition-all ${
+                                  selected
+                                    ? "bg-violet-50 text-violet-700 font-medium"
+                                    : "text-slate-600 hover:bg-slate-50"
+                                }`}
+                              >
+                                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
+                                  selected ? "bg-violet-600 border-violet-600" : "border-slate-300"
+                                }`}>
+                                  {selected && <CheckCircle2 className="h-3 w-3 text-white" />}
+                                </div>
+                                {c}
+                              </button>
+                            );
+                          })}
+                        {todasCategorias.filter(c => !buscaCategoria || c.toLowerCase().includes(buscaCategoria.toLowerCase())).length === 0 && (
+                          <p className="text-xs text-slate-400 text-center py-3">Nenhuma categoria encontrada</p>
+                        )}
                       </div>
                     </div>
                   </div>
