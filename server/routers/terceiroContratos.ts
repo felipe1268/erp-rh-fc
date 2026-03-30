@@ -240,6 +240,10 @@ export const terceiroContratosRouter = router({
               descricao: ci?.descricao || `Item #${i.contratoItemId}`,
               eapCodigo: (ci as any)?.eapCodigo || "",
               origemPath: (ci as any)?.origemPath || null,
+              unidade: ci?.unidade || null,
+              quantidade: ci?.quantidade || "0",
+              valorUnitario: ci?.valorUnitario || "0",
+              valorTotalItem: ci?.valorTotal || "0",
             };
           }),
       }));
@@ -1208,6 +1212,207 @@ export const terceiroContratosRouter = router({
       return medicao;
     }),
 
+  gerarPdfMedicao: protectedProcedure
+    .input(z.object({ medicaoId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [medicao] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
+      if (!medicao) throw new Error("Medição não encontrada");
+      const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, medicao.contratoId));
+      if (!contrato) throw new Error("Contrato não encontrado");
+      const [empresa] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, contrato.empresaTerceiraId));
+      const [company] = await db.select().from(companies).where(eq(companies.id, input.companyId));
+      let obraNome = "";
+      if (contrato.obraId) {
+        const [obra] = await db.select().from(obras).where(eq(obras.id, contrato.obraId));
+        if (obra) obraNome = obra.nome;
+      }
+      const itensMedicao = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.medicaoId));
+      const itensContrato = await db.select().from(terceiroContratoItens).where(eq(terceiroContratoItens.contratoId, contrato.id)).orderBy(asc(terceiroContratoItens.ordem));
+
+      const itensEnriquecidos = itensMedicao.map(im => {
+        const ci = itensContrato.find(c => c.id === im.contratoItemId);
+        return {
+          descricao: ci?.descricao || im.descricao || "",
+          unidade: ci?.unidade || "-",
+          quantidade: n(ci?.quantidade),
+          valorUnitario: n(ci?.valorUnitario),
+          valorTotal: n(ci?.valorTotal),
+          percAnterior: n(im.percentualAcumuladoAnterior),
+          percPeriodo: n(im.percentualMedidoPeriodo),
+          percAcumulado: n(im.percentualAvancoFisico),
+          valorPeriodo: n(im.valorMedidoPeriodo),
+          valorAcumulado: n(im.valorAcumulado),
+        };
+      });
+
+      const totalValorContrato = itensEnriquecidos.reduce((s, i) => s + i.valorTotal, 0);
+      const totalValorPeriodo = itensEnriquecidos.reduce((s, i) => s + i.valorPeriodo, 0);
+      const totalValorAcumulado = itensEnriquecidos.reduce((s, i) => s + i.valorAcumulado, 0);
+
+      const retISS = n((medicao as any).retencaoISS);
+      const retINSS = n((medicao as any).retencaoINSS);
+      const retIRRF = n((medicao as any).retencaoIRRF);
+      const retOutras = n((medicao as any).outrasRetencoes);
+      const descontos = n((medicao as any).descontos);
+      const totalRetencoes = retISS + retINSS + retIRRF + retOutras;
+      const valorLiquido = totalValorPeriodo - totalRetencoes - descontos;
+
+      const PDFDocument = (await import("pdfkit")).default;
+
+      return new Promise<{ base64: string; filename: string }>((resolve, reject) => {
+        const doc = new PDFDocument({ size: "A4", margin: 40, bufferPages: true });
+        const chunks: Buffer[] = [];
+        doc.on("data", (c: Buffer) => chunks.push(c));
+        doc.on("end", () => {
+          const buf = Buffer.concat(chunks);
+          const numStr = String(medicao.numero || 1).padStart(2, "0");
+          resolve({ base64: buf.toString("base64"), filename: `Medicao_${numStr}_${medicao.periodo}.pdf` });
+        });
+        doc.on("error", reject);
+
+        const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const PCT = (v: number) => v.toFixed(1) + "%";
+        const pageW = doc.page.width - 80;
+
+        doc.fontSize(16).font("Helvetica-Bold").text(company?.name || "FC Engenharia", 40, 40);
+        doc.fontSize(8).font("Helvetica").text(company?.cnpj ? `CNPJ: ${company.cnpj}` : "", 40, 58);
+        doc.moveDown(0.3);
+
+        doc.moveTo(40, 72).lineTo(40 + pageW, 72).stroke("#2563eb");
+        doc.moveTo(40, 73).lineTo(40 + pageW, 73).stroke("#2563eb");
+
+        doc.fontSize(13).font("Helvetica-Bold").fillColor("#1e40af")
+          .text(`BOLETIM DE MEDIÇÃO Nº ${String(medicao.numero || 1).padStart(2, "0")}`, 40, 82);
+        doc.fontSize(9).font("Helvetica").fillColor("#333");
+
+        let y = 100;
+        const col1 = 40, col2 = 300;
+        const infoLine = (label: string, value: string, x: number, yy: number) => {
+          doc.font("Helvetica-Bold").text(label, x, yy, { continued: true }).font("Helvetica").text(` ${value}`);
+        };
+
+        infoLine("Contrato:", contrato.descricao || `#${contrato.id}`, col1, y);
+        infoLine("Período:", medicao.periodo || "-", col2, y);
+        y += 14;
+        infoLine("Terceiro:", empresa?.razaoSocial || empresa?.nomeFantasia || "-", col1, y);
+        infoLine("CNPJ:", empresa?.cnpj || "-", col2, y);
+        y += 14;
+        infoLine("Obra:", obraNome || "-", col1, y);
+        const statusLabels: Record<string, string> = { rascunho: "Rascunho", aguardando_aprovacao: "Aguard. Aprovação", aprovada: "Aprovada", paga: "Paga", rejeitada: "Rejeitada" };
+        infoLine("Status:", statusLabels[medicao.status || "rascunho"] || medicao.status || "-", col2, y);
+        y += 14;
+        if ((medicao as any).dataInicio || (medicao as any).dataFim) {
+          infoLine("Data Início:", (medicao as any).dataInicio || "-", col1, y);
+          infoLine("Data Fim:", (medicao as any).dataFim || "-", col2, y);
+          y += 14;
+        }
+        infoLine("Valor Contrato:", BRL(n(contrato.valorTotal)), col1, y);
+        y += 20;
+
+        // Table header
+        const cols = [
+          { label: "Item", width: 140, align: "left" as const },
+          { label: "Unid.", width: 35, align: "center" as const },
+          { label: "Qtd.", width: 40, align: "right" as const },
+          { label: "V.Unit.", width: 60, align: "right" as const },
+          { label: "V.Total", width: 60, align: "right" as const },
+          { label: "Ant.%", width: 40, align: "right" as const },
+          { label: "Per.%", width: 40, align: "right" as const },
+          { label: "Acum.%", width: 40, align: "right" as const },
+          { label: "V.Período", width: 60, align: "right" as const },
+        ];
+        let xOff = col1;
+        doc.rect(col1, y, pageW, 16).fill("#1e40af");
+        doc.fillColor("#fff").fontSize(7).font("Helvetica-Bold");
+        for (const c of cols) {
+          const tx = c.align === "right" ? xOff + c.width - 3 : c.align === "center" ? xOff + c.width / 2 : xOff + 3;
+          doc.text(c.label, tx, y + 4, { width: c.width, align: c.align });
+          xOff += c.width;
+        }
+        y += 16;
+
+        doc.fillColor("#333").fontSize(7).font("Helvetica");
+        for (let idx = 0; idx < itensEnriquecidos.length; idx++) {
+          if (y > 760) { doc.addPage(); y = 40; }
+          const item = itensEnriquecidos[idx];
+          if (idx % 2 === 0) doc.rect(col1, y, pageW, 14).fill("#f8fafc");
+          doc.fillColor("#333");
+          xOff = col1;
+          const vals = [
+            { v: item.descricao.substring(0, 35), a: "left" as const },
+            { v: item.unidade, a: "center" as const },
+            { v: item.quantidade.toFixed(2), a: "right" as const },
+            { v: BRL(item.valorUnitario), a: "right" as const },
+            { v: BRL(item.valorTotal), a: "right" as const },
+            { v: PCT(item.percAnterior), a: "right" as const },
+            { v: PCT(item.percPeriodo), a: "right" as const },
+            { v: PCT(item.percAcumulado), a: "right" as const },
+            { v: BRL(item.valorPeriodo), a: "right" as const },
+          ];
+          for (let ci = 0; ci < cols.length; ci++) {
+            const c = cols[ci];
+            const tx = c.align === "right" ? xOff + c.width - 3 : c.align === "center" ? xOff + c.width / 2 : xOff + 3;
+            doc.text(vals[ci].v, tx, y + 3, { width: c.width, align: vals[ci].a });
+            xOff += c.width;
+          }
+          y += 14;
+        }
+
+        // Totals row
+        if (y > 760) { doc.addPage(); y = 40; }
+        doc.rect(col1, y, pageW, 16).fill("#e2e8f0");
+        doc.fillColor("#1e293b").font("Helvetica-Bold").fontSize(7);
+        doc.text("TOTAL", col1 + 3, y + 4);
+        const totXStart = col1 + 140 + 35 + 40 + 60;
+        doc.text(BRL(totalValorContrato), totXStart - 3, y + 4, { width: 60, align: "right" });
+        doc.text(BRL(totalValorPeriodo), totXStart + 60 + 40 + 40 + 40 - 3, y + 4, { width: 60, align: "right" });
+        y += 24;
+
+        // Retenções section
+        if (totalRetencoes > 0 || descontos > 0) {
+          if (y > 720) { doc.addPage(); y = 40; }
+          doc.fontSize(10).font("Helvetica-Bold").fillColor("#1e40af").text("RETENÇÕES E DESCONTOS", col1, y);
+          y += 16;
+          doc.fontSize(8).font("Helvetica").fillColor("#333");
+          const retW = 250;
+          if (retISS > 0) { doc.text("ISS:", col1, y, { continued: true }).text(` ${BRL(retISS)}`, { align: "left" }); y += 13; }
+          if (retINSS > 0) { doc.text("INSS:", col1, y, { continued: true }).text(` ${BRL(retINSS)}`, { align: "left" }); y += 13; }
+          if (retIRRF > 0) { doc.text("IRRF:", col1, y, { continued: true }).text(` ${BRL(retIRRF)}`, { align: "left" }); y += 13; }
+          if (retOutras > 0) { doc.text("Outras Retenções:", col1, y, { continued: true }).text(` ${BRL(retOutras)}`, { align: "left" }); y += 13; }
+          if (descontos > 0) { doc.text("Descontos:", col1, y, { continued: true }).text(` ${BRL(descontos)}`, { align: "left" }); y += 13; }
+          doc.font("Helvetica-Bold").text("Total Retenções:", col1, y, { continued: true }).text(` ${BRL(totalRetencoes)}`); y += 13;
+          if ((medicao as any).observacoesRetencao) { doc.font("Helvetica").fontSize(7).text(`Obs.: ${(medicao as any).observacoesRetencao}`, col1, y); y += 13; }
+          y += 8;
+        }
+
+        // Summary
+        if (y > 720) { doc.addPage(); y = 40; }
+        doc.rect(col1, y, pageW, 50).lineWidth(1).stroke("#2563eb");
+        doc.fontSize(9).font("Helvetica-Bold").fillColor("#1e40af");
+        doc.text("RESUMO FINANCEIRO", col1 + 10, y + 6);
+        doc.fontSize(8).font("Helvetica").fillColor("#333");
+        doc.text(`Valor Bruto Período: ${BRL(totalValorPeriodo)}`, col1 + 10, y + 20);
+        doc.text(`Retenções: ${BRL(totalRetencoes)}`, col1 + 200, y + 20);
+        doc.text(`Descontos: ${BRL(descontos)}`, col1 + 350, y + 20);
+        doc.font("Helvetica-Bold").fontSize(10).fillColor("#1e40af");
+        doc.text(`Valor Líquido: ${BRL(valorLiquido)}`, col1 + 10, y + 35);
+        y += 60;
+
+        // Signature lines
+        if (y > 700) { doc.addPage(); y = 40; }
+        y += 30;
+        const sigW = 180;
+        doc.moveTo(col1 + 20, y).lineTo(col1 + 20 + sigW, y).stroke("#666");
+        doc.moveTo(col1 + pageW - 20 - sigW, y).lineTo(col1 + pageW - 20, y).stroke("#666");
+        doc.fontSize(7).font("Helvetica").fillColor("#666");
+        doc.text("Contratante", col1 + 20, y + 4, { width: sigW, align: "center" });
+        doc.text("Contratada", col1 + pageW - 20 - sigW, y + 4, { width: sigW, align: "center" });
+
+        doc.end();
+      });
+    }),
+
   excluirMedicao: protectedProcedure
     .input(z.object({ id: z.number(), contratoId: z.number(), companyId: z.number() }))
     .mutation(async ({ input }) => {
@@ -1588,6 +1793,34 @@ export const terceiroContratosRouter = router({
         atualizadoEm: new Date().toISOString(),
       }).where(eq(terceiroMedicoes.id, input.medicaoId));
 
+      return { ok: true };
+    }),
+
+  salvarRetencoes: protectedProcedure
+    .input(z.object({
+      medicaoId: z.number(),
+      companyId: z.number(),
+      retencaoISS: z.number().default(0),
+      retencaoINSS: z.number().default(0),
+      retencaoIRRF: z.number().default(0),
+      outrasRetencoes: z.number().default(0),
+      descontos: z.number().default(0),
+      observacoesRetencao: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [medicao] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
+      if (!medicao) throw new Error("Medição não encontrada");
+      if (medicao.status === "aprovada" || medicao.status === "paga") throw new Error("Não é possível editar retenções de uma medição já aprovada/paga");
+      await db.update(terceiroMedicoes).set({
+        retencaoISS: String(input.retencaoISS),
+        retencaoINSS: String(input.retencaoINSS),
+        retencaoIRRF: String(input.retencaoIRRF),
+        outrasRetencoes: String(input.outrasRetencoes),
+        descontos: String(input.descontos),
+        observacoesRetencao: input.observacoesRetencao || null,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
       return { ok: true };
     }),
 

@@ -12,7 +12,7 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2
+  Eye, EyeOff, BarChart3, Loader2, FileDown
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -831,18 +831,22 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, exc
               )}
             </div>
 
-            {isExpanded && itens.length > 0 && (
-              <div className="border-t border-gray-100">
-                <table className="w-full text-xs">
+            {isExpanded && itens.length > 0 && (<>
+              <div className="border-t border-gray-100 overflow-x-auto">
+                <table className="w-full text-xs min-w-[900px]">
                   <thead>
                     <tr className="bg-gray-50 text-gray-500">
-                      <th className="px-4 py-2 text-left">Item</th>
-                      <th className="px-4 py-2 text-center w-[80px]">Anterior</th>
-                      <th className="px-4 py-2 text-center w-[100px]">% Período</th>
-                      <th className="px-4 py-2 text-center w-[80px]">Acumulado</th>
-                      <th className="px-4 py-2 text-right w-[110px]">Valor Período</th>
-                      <th className="px-4 py-2 text-right w-[110px]">Valor Acum.</th>
-                      {isEditable && <th className="px-4 py-2 text-center w-[40px]"></th>}
+                      <th className="px-3 py-2 text-left">Item</th>
+                      <th className="px-2 py-2 text-center w-[45px]">Unid.</th>
+                      <th className="px-2 py-2 text-right w-[55px]">Qtd.</th>
+                      <th className="px-2 py-2 text-right w-[80px]">V.Unit.</th>
+                      <th className="px-2 py-2 text-right w-[80px]">V.Total</th>
+                      <th className="px-2 py-2 text-center w-[55px] border-l border-gray-200">Ant.%</th>
+                      <th className="px-2 py-2 text-center w-[70px]">% Período</th>
+                      <th className="px-2 py-2 text-center w-[55px]">Acum.%</th>
+                      <th className="px-2 py-2 text-right w-[90px]">V.Período</th>
+                      <th className="px-2 py-2 text-right w-[90px]">V.Acum.</th>
+                      {isEditable && <th className="px-2 py-2 text-center w-[35px]"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -854,7 +858,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, exc
 
                       return (
                         <tr key={item.id} className="hover:bg-blue-50/30">
-                          <td className="px-4 py-2">
+                          <td className="px-3 py-2">
                             {item.origemPath && (
                               <div className="text-[10px] text-gray-400 leading-tight mb-0.5">{item.origemPath}</div>
                             )}
@@ -863,8 +867,12 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, exc
                               {item.descricao}
                             </div>
                           </td>
-                          <td className="px-4 py-2 text-center text-gray-500">{percAnterior.toFixed(1)}%</td>
-                          <td className="px-4 py-2 text-center">
+                          <td className="px-2 py-2 text-center text-gray-500">{item.unidade || "-"}</td>
+                          <td className="px-2 py-2 text-right text-gray-500">{Number(item.quantidade || 0).toFixed(2)}</td>
+                          <td className="px-2 py-2 text-right text-gray-500">{BRL(item.valorUnitario)}</td>
+                          <td className="px-2 py-2 text-right text-gray-700 font-medium">{BRL(item.valorTotalItem)}</td>
+                          <td className="px-2 py-2 text-center text-gray-500 border-l border-gray-100">{percAnterior.toFixed(1)}%</td>
+                          <td className="px-2 py-2 text-center">
                             {isEditable && isEditingThis ? (
                               <div className="flex items-center gap-1 justify-center">
                                 <input
@@ -891,11 +899,11 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, exc
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2 text-center font-semibold text-gray-700">{percAcumulado.toFixed(1)}%</td>
-                          <td className="px-4 py-2 text-right text-gray-600">{BRL(item.valorMedidoPeriodo)}</td>
-                          <td className="px-4 py-2 text-right font-semibold text-gray-900">{BRL(item.valorAcumulado)}</td>
+                          <td className="px-2 py-2 text-center font-semibold text-gray-700">{percAcumulado.toFixed(1)}%</td>
+                          <td className="px-2 py-2 text-right text-gray-600">{BRL(item.valorMedidoPeriodo)}</td>
+                          <td className="px-2 py-2 text-right font-semibold text-gray-900">{BRL(item.valorAcumulado)}</td>
                           {isEditable && (
-                            <td className="px-4 py-2 text-center">
+                            <td className="px-2 py-2 text-center">
                               <button onClick={() => { if (confirm("Remover este item da medição?")) removerMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id }); }}
                                 className="text-red-300 hover:text-red-500 p-0.5">
                                 <X className="w-3 h-3" />
@@ -908,15 +916,16 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, exc
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-50 font-semibold text-xs">
-                      <td className="px-4 py-2 text-right text-gray-600" colSpan={4}>Total Período</td>
-                      <td className="px-4 py-2 text-right text-blue-700">{BRL(m.valorMedido)}</td>
-                      <td className="px-4 py-2 text-right text-gray-900">{BRL(m.valorAcumulado)}</td>
+                      <td className="px-3 py-2 text-right text-gray-600" colSpan={8}>Total Período</td>
+                      <td className="px-2 py-2 text-right text-blue-700">{BRL(m.valorMedido)}</td>
+                      <td className="px-2 py-2 text-right text-gray-900">{BRL(m.valorAcumulado)}</td>
                       {isEditable && <td />}
                     </tr>
                   </tfoot>
                 </table>
               </div>
-            )}
+              <RetencoesSec m={m} contrato={contrato} isEditable={isEditable} />
+            </>)}
 
             {isExpanded && itens.length === 0 && (
               <div className="border-t border-gray-100 p-4 text-center text-xs text-gray-400">
@@ -1159,6 +1168,133 @@ function ComparativoTab({ contrato, id }: { contrato: any; id: number }) {
               <div className="py-6 text-center text-gray-400 text-sm">Nenhuma medição encontrada para este item.</div>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEditable: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [vals, setVals] = useState({
+    retencaoISS: Number(m.retencaoISS || 0),
+    retencaoINSS: Number(m.retencaoINSS || 0),
+    retencaoIRRF: Number(m.retencaoIRRF || 0),
+    outrasRetencoes: Number(m.outrasRetencoes || 0),
+    descontos: Number(m.descontos || 0),
+    observacoesRetencao: m.observacoesRetencao || "",
+  });
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const utils = trpc.useUtils();
+  const salvarRetMut = trpc.terceiroContratos.salvarRetencoes.useMutation({
+    onSuccess: () => { toast.success("Retenções salvas"); setEditing(false); utils.terceiroContratos.getContrato.invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const totalRet = vals.retencaoISS + vals.retencaoINSS + vals.retencaoIRRF + vals.outrasRetencoes;
+  const valorBruto = Number(m.valorMedido || 0);
+  const valorLiquido = valorBruto - totalRet - vals.descontos;
+
+  const handlePdf = async () => {
+    setPdfLoading(true);
+    try {
+      const inputPayload = { json: { medicaoId: m.id, companyId: contrato.companyId } };
+      const res = await fetch(`/api/trpc/terceiroContratos.gerarPdfMedicao?input=${encodeURIComponent(JSON.stringify(inputPayload))}`);
+      const json = await res.json();
+      const data = json?.result?.data?.json || json?.result?.data;
+      if (!data?.base64) throw new Error("PDF não gerado");
+      const byteChars = atob(data.base64);
+      const byteArr = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteArr], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = data.filename || "medicao.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF gerado com sucesso");
+    } catch (e: any) { toast.error(e.message || "Erro ao gerar PDF"); }
+    setPdfLoading(false);
+  };
+
+  return (
+    <div className="border-t border-gray-100 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Retenções e Descontos</h4>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={handlePdf} disabled={pdfLoading}>
+            {pdfLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />} Gerar PDF
+          </Button>
+          {isEditable && !editing && (
+            <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setEditing(true)}>
+              <Pencil className="w-3 h-3" /> Editar
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {editing ? (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { key: "retencaoISS", label: "ISS (R$)" },
+            { key: "retencaoINSS", label: "INSS (R$)" },
+            { key: "retencaoIRRF", label: "IRRF (R$)" },
+            { key: "outrasRetencoes", label: "Outras Ret. (R$)" },
+            { key: "descontos", label: "Descontos (R$)" },
+          ].map(f => (
+            <div key={f.key}>
+              <Label className="text-xs">{f.label}</Label>
+              <Input type="number" step="0.01" min="0" className="text-xs h-8"
+                value={(vals as any)[f.key]}
+                onChange={e => setVals(prev => ({ ...prev, [f.key]: parseFloat(e.target.value) || 0 }))}
+              />
+            </div>
+          ))}
+          <div className="col-span-3">
+            <Label className="text-xs">Observações</Label>
+            <Input className="text-xs h-8" value={vals.observacoesRetencao}
+              onChange={e => setVals(prev => ({ ...prev, observacoesRetencao: e.target.value }))}
+            />
+          </div>
+          <div className="col-span-3 flex gap-2 justify-end">
+            <Button size="sm" variant="ghost" className="text-xs" onClick={() => setEditing(false)}>Cancelar</Button>
+            <Button size="sm" className="text-xs gap-1" disabled={salvarRetMut.isPending}
+              onClick={() => salvarRetMut.mutate({ medicaoId: m.id, companyId: contrato.companyId, ...vals })}>
+              <Save className="w-3 h-3" /> Salvar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <div className="bg-gray-50 rounded-lg p-2">
+            <div className="text-gray-400">Valor Bruto</div>
+            <div className="font-semibold text-gray-900">{BRL(valorBruto)}</div>
+          </div>
+          <div className="bg-red-50 rounded-lg p-2">
+            <div className="text-gray-400">Retenções</div>
+            <div className="font-semibold text-red-600">{totalRet > 0 ? `- ${BRL(totalRet)}` : BRL(0)}</div>
+            {(vals.retencaoISS > 0 || vals.retencaoINSS > 0 || vals.retencaoIRRF > 0 || vals.outrasRetencoes > 0) && (
+              <div className="text-[10px] text-gray-400 mt-0.5 space-y-px">
+                {vals.retencaoISS > 0 && <div>ISS: {BRL(vals.retencaoISS)}</div>}
+                {vals.retencaoINSS > 0 && <div>INSS: {BRL(vals.retencaoINSS)}</div>}
+                {vals.retencaoIRRF > 0 && <div>IRRF: {BRL(vals.retencaoIRRF)}</div>}
+                {vals.outrasRetencoes > 0 && <div>Outras: {BRL(vals.outrasRetencoes)}</div>}
+              </div>
+            )}
+          </div>
+          <div className="bg-orange-50 rounded-lg p-2">
+            <div className="text-gray-400">Descontos</div>
+            <div className="font-semibold text-orange-600">{vals.descontos > 0 ? `- ${BRL(vals.descontos)}` : BRL(0)}</div>
+          </div>
+          <div className="bg-blue-50 rounded-lg p-2">
+            <div className="text-gray-400">Valor Líquido</div>
+            <div className="font-bold text-blue-700">{BRL(valorLiquido)}</div>
+          </div>
+          {vals.observacoesRetencao && (
+            <div className="col-span-4 text-[10px] text-gray-400">Obs.: {vals.observacoesRetencao}</div>
+          )}
         </div>
       )}
     </div>

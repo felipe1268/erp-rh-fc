@@ -6442,4 +6442,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 23:00:00",
   },
+  {
+    versao: 907,
+    descricao:
+      "Medição Terceiros — Tabela de itens agora exibe Unidade, Quantidade, Valor Unitário e Valor Total " +
+      "de cada item do contrato. Seção de Retenções e Descontos (ISS, INSS, IRRF, outras retenções, " +
+      "descontos) com cálculo automático do valor líquido. Geração de PDF do Boletim de Medição " +
+      "com cabeçalho da empresa, tabela completa de itens, seção de retenções, resumo financeiro " +
+      "e linhas de assinatura. Melhoria no matching hierárquico: normalização de nomes (remove pontuação " +
+      "trailing como ':') e derivação automática do orçamento quando orcamentoId está vazio no contrato.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 23:30:00",
+  },
 ];
