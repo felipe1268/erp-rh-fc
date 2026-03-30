@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -16,6 +16,7 @@ import {
   Search, Plus, Pencil, Building2, Phone, Mail, MapPin,
   CheckCircle2, XCircle, AlertTriangle, Loader2, X, ChevronDown, ChevronUp, Users,
   Star, Trophy, Medal, ShieldCheck, ShieldAlert, TrendingUp, Package, Clock, BarChart3, Truck,
+  CreditCard, FileText, Tag, MessageSquare, Landmark, Hash, KeyRound,
 } from "lucide-react";
 
 function StarRating({ value, onChange, size = 18 }: { value: number; onChange?: (v: number) => void; size?: number }) {
@@ -317,6 +318,7 @@ export default function Fornecedores() {
     setForm({ ...EMPTY_FORM });
     setEditando(null);
     setErroCNPJ(null);
+    lastFetchedCNPJ.current = "";
     setModalAberto(true);
   }
 
@@ -332,6 +334,7 @@ export default function Fornecedores() {
     });
     setEditando(f.id);
     setErroCNPJ(null);
+    lastFetchedCNPJ.current = (f.cnpj ?? "").replace(/\D/g, "");
     setModalAberto(true);
   }
 
@@ -341,9 +344,12 @@ export default function Fornecedores() {
     setErroCNPJ(null);
   }
 
-  async function buscarCNPJ() {
+  const lastFetchedCNPJ = useRef("");
+
+  const buscarCNPJ = useCallback(async () => {
     const cnpj = form.cnpj.replace(/\D/g, "");
     if (cnpj.length !== 14) { setErroCNPJ("Digite um CNPJ completo (14 dígitos)."); return; }
+    if (cnpj === lastFetchedCNPJ.current) return;
     setBuscandoCNPJ(true);
     setErroCNPJ(null);
     try {
@@ -357,6 +363,7 @@ export default function Fornecedores() {
         if ([3, 4, 8].includes(situacaoCod)) return;
       }
 
+      lastFetchedCNPJ.current = cnpj;
       setForm(prev => ({
         ...prev,
         razaoSocial: d.razaoSocial || prev.razaoSocial,
@@ -372,12 +379,21 @@ export default function Fornecedores() {
         telefone: d.telefone || prev.telefone,
         email: d.email || prev.email,
       }));
+      toast.success("Dados do CNPJ carregados com sucesso!");
     } catch {
       setErroCNPJ("Erro ao consultar a Receita Federal. Verifique o CNPJ e tente novamente.");
     } finally {
       setBuscandoCNPJ(false);
     }
-  }
+  }, [form.cnpj]);
+
+  useEffect(() => {
+    const cnpjDigits = form.cnpj.replace(/\D/g, "");
+    if (cnpjDigits.length === 14 && modalAberto && !editando && cnpjDigits !== lastFetchedCNPJ.current) {
+      const timer = setTimeout(() => buscarCNPJ(), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [form.cnpj, modalAberto, editando, buscarCNPJ]);
 
   function toggleCategoria(c: string) {
     setForm(prev => ({
@@ -673,169 +689,276 @@ export default function Fornecedores() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Cadastro/Edição */}
+      {/* Modal de Cadastro/Edição — Tela Paisagem */}
       <Dialog open={modalAberto} onOpenChange={v => !v && fecharModal()}>
-        <DialogContent className="max-w-4xl w-full">
-          <DialogHeader className="pb-2">
-            <DialogTitle className="text-base">{editando ? "Editar Fornecedor" : "Novo Fornecedor"}</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            {/* Linha 1: CNPJ + Razão Social */}
-            <div className="grid grid-cols-12 gap-3 items-end">
-              <div className="col-span-3">
-                <Label className="text-xs text-slate-500">CNPJ</Label>
-                <div className="flex gap-1 mt-0.5">
-                  <Input
-                    value={form.cnpj}
-                    onChange={e => setForm(p => ({ ...p, cnpj: formatCNPJ(e.target.value) }))}
-                    placeholder="00.000.000/0000-00"
-                    className="font-mono h-8 text-xs"
-                    maxLength={18}
-                  />
-                  <Button type="button" variant="outline" size="sm" className="h-8 px-2 text-xs shrink-0" onClick={buscarCNPJ} disabled={buscandoCNPJ || form.cnpj.replace(/\D/g, "").length !== 14}>
-                    {buscandoCNPJ ? <Loader2 className="h-3 w-3 animate-spin" /> : "Buscar"}
-                  </Button>
-                </div>
+        <DialogContent className="max-w-[95vw] w-[1200px] max-h-[90vh] overflow-hidden p-0 gap-0 [&>[data-slot=dialog-close]]:text-white [&>[data-slot=dialog-close]]:top-5 [&>[data-slot=dialog-close]]:right-5" resizable={false}>
+          <DialogHeader className="sr-only"><DialogTitle>{editando ? "Editar Fornecedor" : "Cadastro de Fornecedor"}</DialogTitle></DialogHeader>
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 rounded-lg p-2">
+                <Building2 className="h-5 w-5 text-white" />
               </div>
-              <div className="col-span-6">
-                <Label className="text-xs text-slate-500">Razão Social *</Label>
-                <Input value={form.razaoSocial} onChange={e => setForm(p => ({ ...p, razaoSocial: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-              </div>
-              <div className="col-span-3">
-                <Label className="text-xs text-slate-500">Nome Fantasia</Label>
-                <Input value={form.nomeFantasia} onChange={e => setForm(p => ({ ...p, nomeFantasia: e.target.value }))} className="mt-0.5 h-8 text-xs" />
+              <div>
+                <h2 className="text-lg font-bold text-white">{editando ? "Editar Fornecedor" : "Cadastro de Fornecedor"}</h2>
+                <p className="text-blue-200 text-xs">
+                  {editando ? "Atualize os dados do fornecedor" : "Digite o CNPJ para preencher automaticamente"}
+                </p>
               </div>
             </div>
-
-            {erroCNPJ && (
-              <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                {erroCNPJ}
+            {form.situacaoReceita && (
+              <div className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                form.situacaoReceita.toUpperCase().includes("ATIVA") ? "bg-emerald-400/20 text-emerald-100 border border-emerald-400/30"
+                : form.situacaoReceita.toUpperCase().includes("SUSPENSA") ? "bg-yellow-400/20 text-yellow-100 border border-yellow-400/30"
+                : "bg-red-400/20 text-red-100 border border-red-400/30"
+              }`}>
+                Receita Federal: {form.situacaoReceita}
               </div>
             )}
+          </div>
 
-            {/* Linha 2: Endereço */}
-            <div>
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Endereço</p>
-              <div className="grid grid-cols-12 gap-2">
-                <div className="col-span-5">
-                  <Label className="text-xs text-slate-500">Logradouro</Label>
-                  <Input value={form.endereco} onChange={e => setForm(p => ({ ...p, endereco: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-1">
-                  <Label className="text-xs text-slate-500">Nº</Label>
-                  <Input value={form.numero} onChange={e => setForm(p => ({ ...p, numero: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-slate-500">Complemento</Label>
-                  <Input value={form.complemento} onChange={e => setForm(p => ({ ...p, complemento: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-slate-500">Bairro</Label>
-                  <Input value={form.bairro} onChange={e => setForm(p => ({ ...p, bairro: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-slate-500">CEP</Label>
-                  <Input value={form.cep} onChange={e => setForm(p => ({ ...p, cep: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-4">
-                  <Label className="text-xs text-slate-500">Cidade</Label>
-                  <Input value={form.cidade} onChange={e => setForm(p => ({ ...p, cidade: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-slate-500">Estado</Label>
-                  <Input value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value.toUpperCase().slice(0, 2) }))} className="mt-0.5 h-8 text-xs" maxLength={2} />
-                </div>
-                <div className="col-span-3">
-                  <Label className="text-xs text-slate-500">Situação Receita</Label>
-                  <Input value={form.situacaoReceita} readOnly className="mt-0.5 h-8 text-xs bg-slate-50" />
-                </div>
-              </div>
-            </div>
-
-            {/* Linha 3: Contato */}
-            <div>
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Contato</p>
-              <div className="grid grid-cols-12 gap-2">
-                <div className="col-span-2">
-                  <Label className="text-xs text-slate-500">Telefone</Label>
-                  <Input value={form.telefone} onChange={e => setForm(p => ({ ...p, telefone: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-4">
-                  <Label className="text-xs text-slate-500">E-mail</Label>
-                  <Input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className="mt-0.5 h-8 text-xs" type="email" />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-slate-500">Contato Comercial</Label>
-                  <Input value={form.contatoNome} onChange={e => setForm(p => ({ ...p, contatoNome: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-slate-500">Celular</Label>
-                  <Input value={form.contatoCelular} onChange={e => setForm(p => ({ ...p, contatoCelular: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-slate-500">E-mail Contato</Label>
-                  <Input value={form.contatoEmail} onChange={e => setForm(p => ({ ...p, contatoEmail: e.target.value }))} className="mt-0.5 h-8 text-xs" type="email" />
-                </div>
-              </div>
-            </div>
-
-            {/* Linha 4: Dados bancários */}
-            <div>
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Dados Bancários</p>
-              <div className="grid grid-cols-12 gap-2">
-                <div className="col-span-3">
-                  <Label className="text-xs text-slate-500">Banco</Label>
-                  <Input value={form.banco} onChange={e => setForm(p => ({ ...p, banco: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-slate-500">Agência</Label>
-                  <Input value={form.agencia} onChange={e => setForm(p => ({ ...p, agencia: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-slate-500">Conta</Label>
-                  <Input value={form.conta} onChange={e => setForm(p => ({ ...p, conta: e.target.value }))} className="mt-0.5 h-8 text-xs" />
-                </div>
-                <div className="col-span-5">
-                  <Label className="text-xs text-slate-500">Chave PIX</Label>
-                  <Input value={form.pix} onChange={e => setForm(p => ({ ...p, pix: e.target.value }))} className="mt-0.5 h-8 text-xs" placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória" />
-                </div>
-              </div>
-            </div>
-
-            {/* Linha 5: Categorias + Observações lado a lado */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Categorias de Fornecimento</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {todasCategorias.map(c => (
-                    <button
-                      key={c}
+          <div className="overflow-y-auto px-6 py-4" style={{ maxHeight: "calc(90vh - 140px)" }}>
+            {/* CNPJ Hero Row */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <Label className="text-xs font-semibold text-slate-600 mb-1.5 block">CNPJ</Label>
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex-1 max-w-xs">
+                      <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        value={form.cnpj}
+                        onChange={e => setForm(p => ({ ...p, cnpj: formatCNPJ(e.target.value) }))}
+                        placeholder="00.000.000/0000-00"
+                        className="pl-9 font-mono h-10 text-sm border-slate-300 focus:border-blue-500"
+                        maxLength={18}
+                        autoFocus={!editando}
+                      />
+                    </div>
+                    <Button
                       type="button"
-                      onClick={() => toggleCategoria(c)}
-                      className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${
-                        form.categorias.includes(c)
-                          ? "bg-blue-600 text-white border-blue-600"
-                          : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
-                      }`}
+                      variant="outline"
+                      size="sm"
+                      className="h-10 px-4 text-xs font-semibold shrink-0 gap-2"
+                      onClick={buscarCNPJ}
+                      disabled={buscandoCNPJ || form.cnpj.replace(/\D/g, "").length !== 14}
                     >
-                      {c}
-                    </button>
-                  ))}
+                      {buscandoCNPJ ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      {buscandoCNPJ ? "Consultando..." : "Buscar CNPJ"}
+                    </Button>
+                    {buscandoCNPJ && (
+                      <span className="text-xs text-blue-600 font-medium animate-pulse">
+                        Consultando Receita Federal...
+                      </span>
+                    )}
+                  </div>
                 </div>
+                {!editando && (
+                  <div className="text-xs text-slate-400 max-w-[200px] leading-relaxed">
+                    Ao digitar o CNPJ completo, o sistema busca automaticamente os dados na Receita Federal.
+                  </div>
+                )}
               </div>
-              <div>
-                <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Observações</Label>
-                <Textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} className="mt-1.5 text-xs resize-none" rows={3} />
-              </div>
+              {erroCNPJ && (
+                <div className="flex items-center gap-2 mt-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  {erroCNPJ}
+                </div>
+              )}
             </div>
 
-            {/* Botões */}
-            <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-              <Button variant="outline" size="sm" onClick={fecharModal}>Cancelar</Button>
-              <Button size="sm" onClick={salvar} disabled={criarMut.isPending || atualizarMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
-                {(criarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> : null}
+            <div className="grid grid-cols-2 gap-5">
+              {/* COLUNA ESQUERDA */}
+              <div className="space-y-5">
+                {/* Identificação */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-blue-600" />
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Identificação</span>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <Label className="text-xs text-slate-500">Razão Social *</Label>
+                      <Input value={form.razaoSocial} onChange={e => setForm(p => ({ ...p, razaoSocial: e.target.value }))} className="mt-1 h-9 text-sm" placeholder="Nome registrado na Receita Federal" />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-slate-500">Nome Fantasia</Label>
+                      <Input value={form.nomeFantasia} onChange={e => setForm(p => ({ ...p, nomeFantasia: e.target.value }))} className="mt-1 h-9 text-sm" placeholder="Nome comercial / marca" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Endereço */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-blue-600" />
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Endereço</span>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div className="grid grid-cols-12 gap-2">
+                      <div className="col-span-8">
+                        <Label className="text-xs text-slate-500">Logradouro</Label>
+                        <Input value={form.endereco} onChange={e => setForm(p => ({ ...p, endereco: e.target.value }))} className="mt-1 h-9 text-sm" />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs text-slate-500">Nº</Label>
+                        <Input value={form.numero} onChange={e => setForm(p => ({ ...p, numero: e.target.value }))} className="mt-1 h-9 text-sm" />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs text-slate-500">CEP</Label>
+                        <Input value={form.cep} onChange={e => setForm(p => ({ ...p, cep: e.target.value }))} className="mt-1 h-9 text-sm" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-12 gap-2">
+                      <div className="col-span-4">
+                        <Label className="text-xs text-slate-500">Complemento</Label>
+                        <Input value={form.complemento} onChange={e => setForm(p => ({ ...p, complemento: e.target.value }))} className="mt-1 h-9 text-sm" />
+                      </div>
+                      <div className="col-span-3">
+                        <Label className="text-xs text-slate-500">Bairro</Label>
+                        <Input value={form.bairro} onChange={e => setForm(p => ({ ...p, bairro: e.target.value }))} className="mt-1 h-9 text-sm" />
+                      </div>
+                      <div className="col-span-3">
+                        <Label className="text-xs text-slate-500">Cidade</Label>
+                        <Input value={form.cidade} onChange={e => setForm(p => ({ ...p, cidade: e.target.value }))} className="mt-1 h-9 text-sm" />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs text-slate-500">UF</Label>
+                        <Input value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value.toUpperCase().slice(0, 2) }))} className="mt-1 h-9 text-sm" maxLength={2} placeholder="SP" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dados Bancários */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+                    <Landmark className="h-4 w-4 text-blue-600" />
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Dados Bancários</span>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-xs text-slate-500">Banco</Label>
+                        <Input value={form.banco} onChange={e => setForm(p => ({ ...p, banco: e.target.value }))} className="mt-1 h-9 text-sm" placeholder="Ex: Bradesco" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-500">Agência</Label>
+                        <Input value={form.agencia} onChange={e => setForm(p => ({ ...p, agencia: e.target.value }))} className="mt-1 h-9 text-sm" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-500">Conta</Label>
+                        <Input value={form.conta} onChange={e => setForm(p => ({ ...p, conta: e.target.value }))} className="mt-1 h-9 text-sm" />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-slate-500">Chave PIX</Label>
+                      <div className="relative">
+                        <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input value={form.pix} onChange={e => setForm(p => ({ ...p, pix: e.target.value }))} className="mt-1 h-9 text-sm pl-9" placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* COLUNA DIREITA */}
+              <div className="space-y-5">
+                {/* Contato da Empresa */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-blue-600" />
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Contato da Empresa</span>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs text-slate-500">Telefone</Label>
+                        <Input value={form.telefone} onChange={e => setForm(p => ({ ...p, telefone: e.target.value }))} className="mt-1 h-9 text-sm" placeholder="(00) 0000-0000" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-500">E-mail</Label>
+                        <Input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className="mt-1 h-9 text-sm" type="email" placeholder="empresa@email.com" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contato Comercial */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+                    <Users className="h-4 w-4 text-blue-600" />
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Contato Comercial</span>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <Label className="text-xs text-slate-500">Nome do Contato</Label>
+                      <Input value={form.contatoNome} onChange={e => setForm(p => ({ ...p, contatoNome: e.target.value }))} className="mt-1 h-9 text-sm" placeholder="Responsável comercial" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs text-slate-500">Celular</Label>
+                        <Input value={form.contatoCelular} onChange={e => setForm(p => ({ ...p, contatoCelular: e.target.value }))} className="mt-1 h-9 text-sm" placeholder="(00) 90000-0000" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-500">E-mail do Contato</Label>
+                        <Input value={form.contatoEmail} onChange={e => setForm(p => ({ ...p, contatoEmail: e.target.value }))} className="mt-1 h-9 text-sm" type="email" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Categorias */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-blue-600" />
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Categorias de Fornecimento</span>
+                    {form.categorias.length > 0 && (
+                      <Badge className="bg-blue-100 text-blue-700 text-[10px] border-0 ml-auto">{form.categorias.length} selecionada{form.categorias.length !== 1 ? "s" : ""}</Badge>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <div className="flex flex-wrap gap-1.5">
+                      {todasCategorias.map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => toggleCategoria(c)}
+                          className={`text-[11px] px-2.5 py-1.5 rounded-lg border transition-all font-medium ${
+                            form.categorias.includes(c)
+                              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                              : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:bg-blue-50"
+                          }`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Observações */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-blue-600" />
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Observações</span>
+                  </div>
+                  <div className="p-4">
+                    <Textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} className="text-sm resize-none" rows={3} placeholder="Informações adicionais sobre o fornecedor..." />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer fixo */}
+          <div className="border-t border-slate-200 bg-white px-6 py-3 flex items-center justify-between">
+            <div className="text-xs text-slate-400">
+              {editando ? `Editando fornecedor #${editando}` : "Campos com * são obrigatórios"}
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={fecharModal}>Cancelar</Button>
+              <Button onClick={salvar} disabled={criarMut.isPending || atualizarMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-6">
+                {(criarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                 {editando ? "Salvar Alterações" : "Cadastrar Fornecedor"}
               </Button>
             </div>

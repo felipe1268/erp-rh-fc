@@ -6319,4 +6319,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 14:30:00",
   },
+  {
+    version: 898,
+    titulo: "Tela de Cadastro de Fornecedor Redesenhada",
+    descricao: "Nova tela de cadastro/edição de fornecedor em formato paisagem (1200px) com layout profissional. " +
+      "Header azul com status da Receita Federal em destaque. CNPJ com busca automática — ao digitar 14 dígitos, " +
+      "o sistema consulta a Receita Federal e preenche todos os campos automaticamente (razão social, endereço, contato). " +
+      "Seções organizadas em duas colunas com cards: Identificação, Endereço, Dados Bancários (esquerda) e " +
+      "Contato da Empresa, Contato Comercial, Categorias, Observações (direita). Footer fixo com botões de ação.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 16:00:00",
+  },
 ];
