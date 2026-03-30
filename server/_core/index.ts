@@ -504,6 +504,37 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE obra_funcionarios ADD COLUMN IF NOT EXISTS adicional_escolhido VARCHAR(20) DEFAULT 'auto'`);
         console.log("[ColFix] obras + obra_funcionarios adicionais Rev.730 OK");
       } catch (e: any) { console.warn("[ColFix] adicionais Rev.730:", e?.message ?? e); }
+
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_unit_mat NUMERIC(18,4)`);
+        await db.execute(sql`ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_unit_mdo NUMERIC(18,4)`);
+        await db.execute(sql`ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_total_mat NUMERIC(18,2)`);
+        await db.execute(sql`ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_total_mdo NUMERIC(18,2)`);
+        const nullCount = await db.execute(sql`
+          SELECT COUNT(*) as cnt FROM orcamento_itens
+          WHERE (meta_unit_mat IS NULL OR meta_unit_mdo IS NULL OR meta_total_mat IS NULL OR meta_total_mdo IS NULL)
+        `);
+        const cnt = parseInt((nullCount as any).rows?.[0]?.cnt ?? '0', 10);
+        if (cnt > 0) {
+          await db.execute(sql`
+            UPDATE orcamento_itens oi
+            SET
+              meta_unit_mat = ROUND(COALESCE("custoUnitMat"::numeric, 0) * (1 - COALESCE(o."metaPercentual"::numeric, 0.20)), 4),
+              meta_unit_mdo = ROUND(COALESCE("custoUnitMdo"::numeric, 0) * (1 - COALESCE(o."metaPercentual"::numeric, 0.20)), 4),
+              meta_total_mat = ROUND(COALESCE("custoTotalMat"::numeric, 0) * (1 - COALESCE(o."metaPercentual"::numeric, 0.20)), 2),
+              meta_total_mdo = ROUND(COALESCE("custoTotalMdo"::numeric, 0) * (1 - COALESCE(o."metaPercentual"::numeric, 0.20)), 2)
+            FROM orcamentos o
+            WHERE o.id = oi."orcamentoId"
+              AND (oi.meta_unit_mat IS NULL OR oi.meta_unit_mdo IS NULL OR oi.meta_total_mat IS NULL OR oi.meta_total_mdo IS NULL)
+          `);
+          console.log(`[ColFix] orcamento_itens meta MAT/MDO: ${cnt} itens atualizados Rev.888`);
+        } else {
+          console.log("[ColFix] orcamento_itens meta MAT/MDO já OK Rev.888");
+        }
+      } catch (e: any) { console.warn("[ColFix] meta MAT/MDO Rev.888:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Limpeza empresas de teste (Rev.738) — já completada
     // [REMOVIDO Rev.844] Purga de orfanatos/fantasmas — já completada, limpar via deleteObra cascata

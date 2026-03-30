@@ -6187,4 +6187,16 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 00:10:00",
   },
+  {
+    version: 888,
+    titulo: "Meta separada MAT/MDO no orçamento e mapa de cotação",
+    descricao: "Import de orçamento agora calcula e armazena metaUnitMat e metaUnitMdo separadamente (custoUnit × (1-metaPerc)). " +
+      "Mapa de cotação: cotações tipo MDO/serviço usam metaUnitMdo como referência de preço (não mais metaUnitTotal que incluía MAT). " +
+      "Header do mapa mostra 'Meta MDO (Orçamento)' para cotações de serviço/pacote. " +
+      "ColFix backfill: itens de orçamento existentes recalculados automaticamente.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 02:00:00",
+  },
 ];

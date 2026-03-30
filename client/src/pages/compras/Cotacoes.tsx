@@ -2317,7 +2317,11 @@ export default function Cotacoes() {
                             <tr className="border-b border-gray-200 bg-gray-50">
                               <th rowSpan={2} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3 min-w-56 border-r border-gray-200">Item</th>
                               <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-3 py-3 w-14 border-r border-gray-200">Un.</th>
-                              <th colSpan={3} className="text-center text-xs font-semibold text-blue-600 uppercase px-2 py-2 border-r border-blue-100 bg-blue-50/60">Meta (Orçamento)</th>
+                              <th colSpan={3} className="text-center text-xs font-semibold text-blue-600 uppercase px-2 py-2 border-r border-blue-100 bg-blue-50/60">
+                                {mapa?.cotacao?.tipo === 'servico' || mapa?.cotacao?.tipo === 'pacote'
+                                  ? "Meta MDO (Orçamento)"
+                                  : "Meta (Orçamento)"}
+                              </th>
                               <th rowSpan={2} className="text-center text-xs font-semibold text-orange-600 uppercase px-2 py-2 border-r border-orange-100 bg-orange-50/60 w-24">Saldo<br/>Orç.</th>
                               {(mapa?.participantes ?? []).map((p: any) => {
                                 const nome = p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`;

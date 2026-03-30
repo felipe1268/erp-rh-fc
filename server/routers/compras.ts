@@ -1891,9 +1891,11 @@ Responda APENAS com um objeto JSON no formato:
 
   getMapaCotacao: protectedProcedure
     .input(z.object({ cotacaoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
-      const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      const [cot] = await db.select().from(comprasCotacoes).where(
+        and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, ctx.user!.companyId))
+      );
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
       const participantes = await db.select().from(comprasCotacaoFornecedores).where(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId));
@@ -1926,8 +1928,11 @@ Responda APENAS com um objeto JSON no formato:
           id: orcamentoItens.id,
           orcamentoId: orcamentoItens.orcamentoId,
           custoUnitMat: orcamentoItens.custoUnitMat,
+          custoUnitMdo: orcamentoItens.custoUnitMdo,
           custoUnitTotal: orcamentoItens.custoUnitTotal,
           metaUnitTotal: orcamentoItens.metaUnitTotal,
+          metaUnitMat: orcamentoItens.metaUnitMat,
+          metaUnitMdo: orcamentoItens.metaUnitMdo,
           quantidade: orcamentoItens.quantidade,
           eapCodigo: orcamentoItens.eapCodigo,
         }).from(orcamentoItens).where(inArray(orcamentoItens.id, orcItemIds));
@@ -2051,17 +2056,25 @@ Responda APENAS com um objeto JSON no formato:
         }
       }
 
-      // Mapa: orcamentoItemId → { metaUnitario, eapPath }
+      // Mapa: orcamentoItemId → { metaUnitario (total, mat, mdo), eapPath }
       const orcItemToMeta: Record<number, number> = {};
+      const orcItemToMetaMat: Record<number, number> = {};
+      const orcItemToMetaMdo: Record<number, number> = {};
       const orcItemToPath: Record<number, string> = {};
       for (const o of orcItensData) {
         const metaPerc = orcToMetaPerc[o.orcamentoId] ?? 0;
-        // Prioridade: usar metaUnitTotal pré-calculado do orçamento.
-        // Fallback: custo de MATERIAL × (1 − metaPercentual)
         const metaDireta = n(o.metaUnitTotal);
         orcItemToMeta[o.id] = metaDireta > 0
           ? metaDireta
+          : n(o.custoUnitTotal) * (1 - metaPerc);
+        const metaMatDireta = n(o.metaUnitMat);
+        orcItemToMetaMat[o.id] = metaMatDireta > 0
+          ? metaMatDireta
           : n(o.custoUnitMat) * (1 - metaPerc);
+        const metaMdoDireta = n(o.metaUnitMdo);
+        orcItemToMetaMdo[o.id] = metaMdoDireta > 0
+          ? metaMdoDireta
+          : n(o.custoUnitMdo) * (1 - metaPerc);
         // Montar breadcrumb com até 3 níveis intermediários
         if (o.eapCodigo) {
           const parts = String(o.eapCodigo).split(".");
@@ -2110,11 +2123,19 @@ Responda APENAS com um objeto JSON no formato:
         }
       }
 
+      const isCotacaoMdo = cot.tipo === 'servico' || cot.tipo === 'pacote';
       const itensComMeta = itens.map(it => {
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
-        const metaFromOrc = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
+        const metaFromOrcTotal = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
+        const metaFromOrcMat = orcId ? (orcItemToMetaMat[orcId] ?? 0) : 0;
+        const metaFromOrcMdo = orcId ? (orcItemToMetaMdo[orcId] ?? 0) : 0;
         const metaFromSC = it.solicitacaoItemId ? (scItemToPrecoMeta[it.solicitacaoItemId] ?? 0) : 0;
-        const metaUnitario = metaFromOrc > 0 ? metaFromOrc : metaFromSC;
+        const metaUnitarioTotal = metaFromOrcTotal > 0 ? metaFromOrcTotal : metaFromSC;
+        const metaUnitarioMat = metaFromOrcMat;
+        const metaUnitarioMdo = metaFromOrcMdo;
+        const metaUnitario = isCotacaoMdo && metaUnitarioMdo > 0
+          ? metaUnitarioMdo
+          : metaUnitarioTotal;
         const eapPath = orcId ? (orcItemToPath[orcId] ?? "") : "";
         const trace = it.solicitacaoItemId ? scItemToTraceability[it.solicitacaoItemId] : undefined;
         const scNumero = trace?.solicitacaoId ? (scMap[trace.solicitacaoId] ?? "") : "";
@@ -2142,7 +2163,7 @@ Responda APENAS com um objeto JSON no formato:
         const consumido = Math.max(qtdTotalSolicitada, qtdComprada);
         const qtdSaldoRaw = vinculado ? qtdOrcada - consumido : -qtdEstaSC;
         const qtdSaldo = Math.round(qtdSaldoRaw * 1000) / 1000;
-        return { ...it, metaUnitario, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false };
+        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};
