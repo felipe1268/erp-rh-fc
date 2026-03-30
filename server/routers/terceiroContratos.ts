@@ -1192,6 +1192,59 @@ export const terceiroContratosRouter = router({
       return medicao;
     }),
 
+  cancelarAprovacao: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [existing] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
+      if (!existing) throw new Error("Medição não encontrada");
+      if (existing.status !== "aprovada") throw new Error(`Apenas medições aprovadas podem ter a aprovação cancelada (status: ${existing.status})`);
+
+      const itensMedicao = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
+
+      const outrasAprovadas = await db.select().from(terceiroMedicoes)
+        .where(and(
+          eq(terceiroMedicoes.contratoId, existing.contratoId),
+          eq(terceiroMedicoes.companyId, input.companyId),
+          inArray(terceiroMedicoes.status, ["aprovada", "paga"]),
+          sql`${terceiroMedicoes.id} != ${input.id}`
+        ));
+
+      const outrosItens: any[] = [];
+      for (const om of outrasAprovadas) {
+        const its = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, om.id));
+        outrosItens.push(...its);
+      }
+
+      for (const im of itensMedicao) {
+        const somaPercPeriodo = outrosItens
+          .filter(o => o.contratoItemId === im.contratoItemId)
+          .reduce((s, o) => s + Number(o.percentualMedidoPeriodo || 0), 0);
+        const somaValorPeriodo = outrosItens
+          .filter(o => o.contratoItemId === im.contratoItemId)
+          .reduce((s, o) => s + Number(o.valorMedidoPeriodo || 0), 0);
+
+        await db.update(terceiroContratoItens)
+          .set({
+            percentualMedidoAcumulado: String(somaPercPeriodo),
+            valorMedidoAcumulado: String(somaValorPeriodo),
+          })
+          .where(and(eq(terceiroContratoItens.id, im.contratoItemId), eq(terceiroContratoItens.companyId, input.companyId)));
+      }
+
+      const [medicao] = await db.update(terceiroMedicoes)
+        .set({
+          status: "aguardando_aprovacao",
+          aprovadoPor: null,
+          aprovadoEm: null,
+          atualizadoEm: new Date().toISOString(),
+        } as any)
+        .where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)))
+        .returning();
+
+      return medicao;
+    }),
+
   rejeitarMedicao: protectedProcedure
     .input(z.object({ id: z.number(), motivo: z.string(), rejeitadoPor: z.string().optional() }))
     .mutation(async ({ input }) => {

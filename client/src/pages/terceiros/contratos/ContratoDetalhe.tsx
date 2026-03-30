@@ -12,7 +12,7 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings
+  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -121,6 +121,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
   const rejeitarMut = trpc.terceiroContratos.rejeitarMedicao.useMutation({
     onSuccess: () => { toast.success("Medição rejeitada"); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const cancelarAprovacaoMut = trpc.terceiroContratos.cancelarAprovacao.useMutation({
+    onSuccess: () => { toast.success("Aprovação cancelada — medição voltou para aguardando aprovação"); utils.terceiroContratos.getContrato.invalidate({ id }); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -397,7 +402,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
         {/* Tab: Medições */}
         {tab === "medicoes" && (
-          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} />
+          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} />
         )}
 
         {/* Tab: Comparativo */}
@@ -748,7 +753,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   );
 }
 
-function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao }: any) {
+function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao }: any) {
   const [expandedMedicao, setExpandedMedicao] = useState<number | null>(null);
   const [rejeicaoModal, setRejeicaoModal] = useState<{ id: number; numero: number } | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
@@ -798,6 +803,13 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, exc
                         Rejeitar
                       </Button>
                     </>
+                  )}
+                  {m.status === "aprovada" && (
+                    <Button size="sm" variant="outline" className="gap-1 text-xs text-orange-600 border-orange-200 hover:bg-orange-50"
+                      disabled={cancelarAprovacaoMut.isPending}
+                      onClick={() => { if (confirm(`Cancelar aprovação da Medição ${String(m.numero).padStart(2, "0")}? A medição voltará para "Aguardando Aprovação" e os valores acumulados serão recalculados.`)) cancelarAprovacaoMut.mutate({ id: m.id, companyId: contrato.companyId }); }}>
+                      <Undo2 className="w-3 h-3" /> Cancelar Aprovação
+                    </Button>
                   )}
                   {(m.status === "aguardando_aprovacao" || m.status === "rascunho") && (
                     <Button size="sm" variant="outline" className="gap-1 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
