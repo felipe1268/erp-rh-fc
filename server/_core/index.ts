@@ -495,6 +495,9 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS percentual_fisico_real NUMERIC(8,4)`);
         await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS editado_manualmente BOOLEAN DEFAULT false`);
         console.log("[ColFix] terceiro_medicoes alerta_divergencia + medicao_itens percentual_fisico_real Rev.909 OK");
+        await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_retencao_tecnica NUMERIC(6,3) DEFAULT 0`);
+        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS retencao_tecnica NUMERIC(18,2) DEFAULT 0`);
+        console.log("[ColFix] terceiro retencao_tecnica Rev.910 OK");
       } catch (e: any) { console.warn("[MedicaoMigration] Aviso:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Migração aviso prévio (Rev.547/586) — já completada

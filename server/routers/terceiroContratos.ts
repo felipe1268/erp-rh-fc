@@ -1335,13 +1335,27 @@ export const terceiroContratosRouter = router({
       const pINSS = n((contrato as any).percINSS);
       const pIRRF = n((contrato as any).percIRRF);
       const pOutras = n((contrato as any).percOutrasRetencoes);
+      const pRetTecnica = n((contrato as any).percRetencaoTecnica);
       const retISS = pISS > 0 ? totalValorPeriodo * pISS / 100 : n((medicao as any).retencaoISS);
       const retINSS = pINSS > 0 ? totalValorPeriodo * pINSS / 100 : n((medicao as any).retencaoINSS);
       const retIRRF = pIRRF > 0 ? totalValorPeriodo * pIRRF / 100 : n((medicao as any).retencaoIRRF);
       const retOutras = pOutras > 0 ? totalValorPeriodo * pOutras / 100 : n((medicao as any).outrasRetencoes);
+      const retTecnica = pRetTecnica > 0 ? totalValorPeriodo * pRetTecnica / 100 : n((medicao as any).retencaoTecnica);
       const descontos = n((medicao as any).descontos);
-      const totalRetencoes = retISS + retINSS + retIRRF + retOutras;
+      const totalRetencoes = retISS + retINSS + retIRRF + retOutras + retTecnica;
       const valorLiquido = totalValorPeriodo - totalRetencoes - descontos;
+
+      let retTecnicaAcumulada = 0;
+      if (pRetTecnica > 0) {
+        const todasMedicoes = await db.select().from(terceiroMedicoes)
+          .where(and(
+            eq(terceiroMedicoes.contratoId, (medicao as any).contratoId),
+            eq(terceiroMedicoes.companyId, input.companyId),
+          ));
+        retTecnicaAcumulada = todasMedicoes
+          .filter((md: any) => md.status === "aprovada" || md.status === "paga")
+          .reduce((acc: number, md: any) => acc + n(md.valorMedido) * pRetTecnica / 100, 0);
+      }
 
       const PDFDocument = (await import("pdfkit")).default;
       const fs = await import("fs");
@@ -1539,8 +1553,10 @@ export const terceiroContratosRouter = router({
           if (retINSS > 0) { doc.text(`INSS${pINSS > 0 ? ` (${pINSS}%)` : ""}: ${BRL(retINSS)}`, mL, y); y += 13; }
           if (retIRRF > 0) { doc.text(`IRRF${pIRRF > 0 ? ` (${pIRRF}%)` : ""}: ${BRL(retIRRF)}`, mL, y); y += 13; }
           if (retOutras > 0) { doc.text(`Outras Retenções${pOutras > 0 ? ` (${pOutras}%)` : ""}: ${BRL(retOutras)}`, mL, y); y += 13; }
+          if (retTecnica > 0) { doc.text(`Retenção Técnica${pRetTecnica > 0 ? ` (${pRetTecnica}%)` : ""}: ${BRL(retTecnica)} *`, mL, y); y += 13; }
           if (descontos > 0) { doc.text(`Descontos: ${BRL(descontos)}`, mL, y); y += 13; }
           doc.font("Helvetica-Bold").text(`Total Retenções: ${BRL(totalRetencoes)}`, mL, y); y += 13;
+          if (retTecnica > 0) { doc.font("Helvetica").fontSize(7).fillColor("#666").text(`* Retenção Técnica: valor retido e liberado somente após a última medição do contrato. Acumulado: ${BRL(retTecnicaAcumulada)}`, mL, y); y += 13; }
           if ((medicao as any).observacoesRetencao) { doc.font("Helvetica").fontSize(7).text(`Obs.: ${(medicao as any).observacoesRetencao}`, mL, y); y += 13; }
           y += 8;
         }
@@ -2012,6 +2028,7 @@ export const terceiroContratosRouter = router({
       retencaoINSS: z.number().default(0),
       retencaoIRRF: z.number().default(0),
       outrasRetencoes: z.number().default(0),
+      retencaoTecnica: z.number().default(0),
       descontos: z.number().default(0),
       observacoesRetencao: z.string().optional(),
     }))
@@ -2025,6 +2042,7 @@ export const terceiroContratosRouter = router({
         retencaoINSS: String(input.retencaoINSS),
         retencaoIRRF: String(input.retencaoIRRF),
         outrasRetencoes: String(input.outrasRetencoes),
+        retencaoTecnica: String(input.retencaoTecnica),
         descontos: String(input.descontos),
         observacoesRetencao: input.observacoesRetencao || null,
         atualizadoEm: new Date().toISOString(),
@@ -2040,6 +2058,7 @@ export const terceiroContratosRouter = router({
       percINSS: z.number().min(0).max(100).default(0),
       percIRRF: z.number().min(0).max(100).default(0),
       percOutrasRetencoes: z.number().min(0).max(100).default(0),
+      percRetencaoTecnica: z.number().min(0).max(100).default(0),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -2050,6 +2069,7 @@ export const terceiroContratosRouter = router({
         percINSS: String(input.percINSS),
         percIRRF: String(input.percIRRF),
         percOutrasRetencoes: String(input.percOutrasRetencoes),
+        percRetencaoTecnica: String(input.percRetencaoTecnica),
         atualizadoEm: new Date().toISOString(),
       } as any).where(and(eq(terceiroContratos.id, input.contratoId), eq(terceiroContratos.companyId, input.companyId)));
       return { ok: true };

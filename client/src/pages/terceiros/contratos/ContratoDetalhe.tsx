@@ -1245,6 +1245,7 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
     percINSS: Number(contrato.percINSS || 0),
     percIRRF: Number(contrato.percIRRF || 0),
     percOutrasRetencoes: Number(contrato.percOutrasRetencoes || 0),
+    percRetencaoTecnica: Number(contrato.percRetencaoTecnica || 0),
   });
 
   const utils = trpc.useUtils();
@@ -1262,13 +1263,21 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
   const pINSS = Number(contrato.percINSS || 0);
   const pIRRF = Number(contrato.percIRRF || 0);
   const pOutras = Number(contrato.percOutrasRetencoes || 0);
+  const pRetTecnica = Number(contrato.percRetencaoTecnica || 0);
 
   const retISS = valorBruto * pISS / 100;
   const retINSS = valorBruto * pINSS / 100;
   const retIRRF = valorBruto * pIRRF / 100;
   const retOutras = valorBruto * pOutras / 100;
-  const totalRet = retISS + retINSS + retIRRF + retOutras;
+  const retTecnica = valorBruto * pRetTecnica / 100;
+  const totalRet = retISS + retINSS + retIRRF + retOutras + retTecnica;
   const valorLiquido = valorBruto - totalRet - descontos;
+
+  const retTecnicaAcumulada = pRetTecnica > 0
+    ? (contrato.medicoes || [])
+        .filter((med: any) => med.status === "aprovada" || med.status === "paga")
+        .reduce((acc: number, med: any) => acc + Number(med.valorMedido || 0) * pRetTecnica / 100, 0)
+    : 0;
 
   const handleSaveDescontos = () => {
     salvarRetMut.mutate({
@@ -1278,6 +1287,7 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
       retencaoINSS: retINSS,
       retencaoIRRF: retIRRF,
       outrasRetencoes: retOutras,
+      retencaoTecnica: retTecnica,
       descontos,
       observacoesRetencao: obsRetencao,
     });
@@ -1306,7 +1316,7 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
     setPdfLoading(false);
   };
 
-  const hasPerc = pISS > 0 || pINSS > 0 || pIRRF > 0 || pOutras > 0;
+  const hasPerc = pISS > 0 || pINSS > 0 || pIRRF > 0 || pOutras > 0 || pRetTecnica > 0;
 
   return (
     <div className="border-t border-gray-100 p-4 space-y-3">
@@ -1331,12 +1341,13 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
       {editingConfig && (
         <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
           <div className="text-xs font-semibold text-slate-600 mb-1">Configuração de Retenções do Contrato (%)</div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-5 gap-3">
             {[
               { key: "percISS", label: "ISS %" },
               { key: "percINSS", label: "INSS %" },
               { key: "percIRRF", label: "IRRF %" },
               { key: "percOutrasRetencoes", label: "Outras %" },
+              { key: "percRetencaoTecnica", label: "Ret. Técnica %" },
             ].map(f => (
               <div key={f.key}>
                 <Label className="text-[10px] text-gray-500">{f.label}</Label>
@@ -1378,6 +1389,7 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
               {pINSS > 0 && <div>INSS {pINSS}%: {BRL(retINSS)}</div>}
               {pIRRF > 0 && <div>IRRF {pIRRF}%: {BRL(retIRRF)}</div>}
               {pOutras > 0 && <div>Outras {pOutras}%: {BRL(retOutras)}</div>}
+              {pRetTecnica > 0 && <div>Ret. Técnica {pRetTecnica}%: {BRL(retTecnica)} *</div>}
             </div>
           )}
         </div>
@@ -1416,6 +1428,12 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
           <div className="text-gray-400 text-[10px]">Valor Líquido</div>
           <div className="font-bold text-blue-700">{BRL(valorLiquido)}</div>
         </div>
+        {pRetTecnica > 0 && (
+          <div className="col-span-5 bg-amber-50 border border-amber-200 rounded p-2 text-[10px] text-amber-700 space-y-0.5">
+            <div className="font-semibold">* Retenção Técnica ({pRetTecnica}%) — liberada somente após a última medição do contrato.</div>
+            <div>Esta medição: {BRL(retTecnica)} | Acumulado aprovado no contrato: <span className="font-bold">{BRL(retTecnicaAcumulada)}</span></div>
+          </div>
+        )}
         {obsRetencao && (
           <div className="col-span-5 text-[10px] text-gray-400">Obs.: {obsRetencao}</div>
         )}

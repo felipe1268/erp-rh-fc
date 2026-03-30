@@ -6482,4 +6482,16 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 00:00:00",
   },
+  {
+    versao: 910,
+    descricao:
+      "Retenção Técnica adicionada ao sistema de retenções de contratos de terceiros. " +
+      "Percentual configurável por contrato (junto com ISS, INSS, IRRF, Outras). " +
+      "Valor retido a cada medição e liberado somente após a última medição do contrato. " +
+      "Exibição com nota explicativa na tela e no PDF gerado.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 00:30:00",
+  },
 ];
