@@ -806,7 +806,15 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, excluirMedicaoMut,
 
                       return (
                         <tr key={item.id} className="hover:bg-blue-50/30">
-                          <td className="px-4 py-2 text-gray-800">{item.descricao}</td>
+                          <td className="px-4 py-2">
+                            {item.origemPath && (
+                              <div className="text-[10px] text-gray-400 leading-tight mb-0.5">{item.origemPath}</div>
+                            )}
+                            <div className="text-gray-800">
+                              {item.eapCodigo && <span className="text-gray-400 text-[10px] mr-1.5 font-mono">{item.eapCodigo}</span>}
+                              {item.descricao}
+                            </div>
+                          </td>
                           <td className="px-4 py-2 text-center text-gray-500">{percAnterior.toFixed(1)}%</td>
                           <td className="px-4 py-2 text-center">
                             {isEditable && isEditingThis ? (

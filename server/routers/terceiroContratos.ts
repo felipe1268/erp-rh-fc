@@ -87,15 +87,7 @@ export const terceiroContratosRouter = router({
         } catch (e) { console.error("[getContrato] medicaoItens query error:", e); }
       }
 
-      const medicoes = medicoesRaw.map(m => ({
-        ...m,
-        itens: allMedicaoItens
-          .filter(i => i.medicaoId === m.id)
-          .map(i => {
-            const ci = itensRaw.find(c => c.id === i.contratoItemId);
-            return { ...i, descricao: ci?.descricao || `Item #${i.contratoItemId}`, eapCodigo: (ci as any)?.eapCodigo || "" };
-          }),
-      }));
+      let medicoes: any[] = [];
 
       const documentos = await db.select().from(terceiroDocumentos)
         .where(eq(terceiroDocumentos.contratoId, input.id))
@@ -236,6 +228,21 @@ export const terceiroContratosRouter = router({
         const divergencia = avancoFisico !== null ? percentualFinanceiro - avancoFisico : null;
         return { ...it, avancoFisicoReal: avancoFisico, percentualFinanceiro, divergencia };
       });
+
+      medicoes = medicoesRaw.map(m => ({
+        ...m,
+        itens: allMedicaoItens
+          .filter(i => i.medicaoId === m.id)
+          .map(i => {
+            const ci = itens.find((c: any) => c.id === i.contratoItemId);
+            return {
+              ...i,
+              descricao: ci?.descricao || `Item #${i.contratoItemId}`,
+              eapCodigo: (ci as any)?.eapCodigo || "",
+              origemPath: (ci as any)?.origemPath || null,
+            };
+          }),
+      }));
 
       const valorMedidoAcumulado = itensRaw.reduce((s, i) => s + n(i.valorMedidoAcumulado), 0);
       const percentualMedidoGlobal = n(contrato.valorTotal) > 0 ? (valorMedidoAcumulado / n(contrato.valorTotal)) * 100 : 0;
