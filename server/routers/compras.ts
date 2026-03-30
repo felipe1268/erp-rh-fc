@@ -7346,15 +7346,21 @@ Retorne APENAS um JSON válido neste formato:
       let insumoAlocMap: Record<string, { mat: number; mdo: number }> = {};
       if (insCodigos.length > 0) {
         try {
+          const compCodigos = [...new Set(Object.values(scToComposicao))];
+          const compInsWhere = compCodigos.length > 0
+            ? and(eq(composicaoInsumos.companyId, input.companyId), inArray(composicaoInsumos.insumoCodigo, insCodigos), inArray(composicaoInsumos.composicaoCodigo, compCodigos))
+            : and(eq(composicaoInsumos.companyId, input.companyId), inArray(composicaoInsumos.insumoCodigo, insCodigos));
           const compIns = await db.select({
+            composicaoCodigo: composicaoInsumos.composicaoCodigo,
             insumoCodigo: composicaoInsumos.insumoCodigo,
             alocacaoMat: composicaoInsumos.alocacaoMat,
             alocacaoMdo: composicaoInsumos.alocacaoMdo,
-          }).from(composicaoInsumos)
-            .where(and(eq(composicaoInsumos.companyId, input.companyId), inArray(composicaoInsumos.insumoCodigo, insCodigos)));
+          }).from(composicaoInsumos).where(compInsWhere);
           for (const ci of compIns) {
+            const key = `${ci.composicaoCodigo}|${ci.insumoCodigo}`;
             const mat = n(ci.alocacaoMat);
             const mdo = n(ci.alocacaoMdo);
+            insumoAlocMap[key] = { mat, mdo };
             if (!insumoAlocMap[ci.insumoCodigo]) {
               insumoAlocMap[ci.insumoCodigo] = { mat, mdo };
             }
@@ -7374,7 +7380,8 @@ Retorne APENAS um JSON válido neste formato:
         const orcId = it.solicitacaoItemId ? scToOrc[it.solicitacaoItemId] : undefined;
         const orc = orcId ? orcMap[orcId] : undefined;
         const insCode = it.solicitacaoItemId ? scToInsumo[it.solicitacaoItemId] : undefined;
-        const alocacao = insCode ? insumoAlocMap[insCode] : undefined;
+        const compCode = it.solicitacaoItemId ? scToComposicao[it.solicitacaoItemId] : undefined;
+        const alocacao = (insCode && compCode ? insumoAlocMap[`${compCode}|${insCode}`] : undefined) ?? (insCode ? insumoAlocMap[insCode] : undefined);
 
         let ratioMat = 1;
         let itemTipo = "material";
@@ -7454,13 +7461,16 @@ Retorne APENAS um JSON válido neste formato:
               id: comprasSolicitacoesItens.id,
               orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
               insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+              composicaoCodigo: comprasSolicitacoesItens.composicaoCodigo,
             }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scFdIds));
           }
           const fdScToOrc: Record<number, number> = {};
           const fdScToInsumo: Record<number, string> = {};
+          const fdScToComp: Record<number, string> = {};
           for (const s of fdScItens) {
             if (s.orcamentoItemId) fdScToOrc[s.id] = s.orcamentoItemId;
             if (s.insumoCodigo) fdScToInsumo[s.id] = s.insumoCodigo;
+            if (s.composicaoCodigo) fdScToComp[s.id] = s.composicaoCodigo;
           }
           const fdOrcIds = [...new Set(Object.values(fdScToOrc))];
           let fdOrcMap: Record<number, { mat: number; mdo: number; total: number }> = {};
@@ -7474,13 +7484,19 @@ Retorne APENAS um JSON válido neste formato:
           let fdInsumoAlocMap: Record<string, { mat: number; mdo: number }> = {};
           if (fdInsCodigos.length > 0) {
             try {
+              const fdCompCodigos = [...new Set(Object.values(fdScToComp))];
+              const fdCompWhere = fdCompCodigos.length > 0
+                ? and(eq(composicaoInsumos.companyId, input.companyId), inArray(composicaoInsumos.insumoCodigo, fdInsCodigos), inArray(composicaoInsumos.composicaoCodigo, fdCompCodigos))
+                : and(eq(composicaoInsumos.companyId, input.companyId), inArray(composicaoInsumos.insumoCodigo, fdInsCodigos));
               const compIns = await db.select({
+                composicaoCodigo: composicaoInsumos.composicaoCodigo,
                 insumoCodigo: composicaoInsumos.insumoCodigo,
                 alocacaoMat: composicaoInsumos.alocacaoMat,
                 alocacaoMdo: composicaoInsumos.alocacaoMdo,
-              }).from(composicaoInsumos)
-                .where(and(eq(composicaoInsumos.companyId, input.companyId), inArray(composicaoInsumos.insumoCodigo, fdInsCodigos)));
+              }).from(composicaoInsumos).where(fdCompWhere);
               for (const ci of compIns) {
+                const key = `${ci.composicaoCodigo}|${ci.insumoCodigo}`;
+                fdInsumoAlocMap[key] = { mat: n(ci.alocacaoMat), mdo: n(ci.alocacaoMdo) };
                 if (!fdInsumoAlocMap[ci.insumoCodigo]) {
                   fdInsumoAlocMap[ci.insumoCodigo] = { mat: n(ci.alocacaoMat), mdo: n(ci.alocacaoMdo) };
                 }
@@ -7506,7 +7522,8 @@ Retorne APENAS um JSON válido neste formato:
             const orcId = it.solicitacaoItemId ? fdScToOrc[it.solicitacaoItemId] : undefined;
             const orc = orcId ? fdOrcMap[orcId] : undefined;
             const insCode = it.solicitacaoItemId ? fdScToInsumo[it.solicitacaoItemId] : undefined;
-            const alocacao = insCode ? fdInsumoAlocMap[insCode] : undefined;
+            const compCode = it.solicitacaoItemId ? fdScToComp[it.solicitacaoItemId] : undefined;
+            const alocacao = (insCode && compCode ? fdInsumoAlocMap[`${compCode}|${insCode}`] : undefined) ?? (insCode ? fdInsumoAlocMap[insCode] : undefined);
 
             let ratioMat = tipoOrigem === "material" || tipoOrigem === "pacote" ? 1 : 0;
             if (orc && orc.total > 0) {
@@ -7531,7 +7548,7 @@ Retorne APENAS um JSON válido neste formato:
           }
         } catch (e: any) {
           if (e instanceof TRPCError) throw e;
-          console.warn("[FD] Erro ao validar split MAT/MDO:", e.message);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao validar split MAT/MDO. Tente novamente." });
         }
       }
 

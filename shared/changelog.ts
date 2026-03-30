@@ -6581,4 +6581,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 03:30:00",
   },
+  {
+    versao: 918,
+    descricao:
+      "FD split MAT/MDO corrigido para cotações tipo Pacote (Mat+MDO). Antes, o cálculo " +
+      "só encontrava preços do fornecedor vencedor e ignorava itens sem resposta, resultando em " +
+      "R$ 0,00. Agora: (1) carrega respostas de TODOS os fornecedores (priorizando vencedor); " +
+      "(2) quando não há resposta, usa meta orçamentária (custoUnitTotal × qtd) como fallback; " +
+      "(3) usa composicaoInsumos (alocacaoMat/alocacaoMdo) como fonte secundária de split " +
+      "quando não há link direto orcamentoItemId; (4) validação backend alinhada com mesma lógica; " +
+      "(5) FD dialog mostra tipo SC (Material/Serviço/Pacote) e diferencia entre 'sem resposta' e 'sem vencedor'.",
+    tipo: "fix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 03:45:00",
+  },
 ];
