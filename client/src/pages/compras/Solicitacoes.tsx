@@ -85,9 +85,6 @@ function UltimaCompraCard({ companyId, descricao, insumoCodigo }: { companyId: n
         </div>
         <div className="text-blue-600 mt-0.5">
           <span className="font-medium">{h.fornecedorNome || "Fornecedor não identificado"}</span>
-          <span className="mx-1">·</span>
-          <span className="font-bold">{h.precoUnitario.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-          <span className="text-blue-400 mx-1">/{h.unidade || "un"}</span>
         </div>
         <div className="text-blue-400 text-[10px] mt-0.5">
           {h.dataOc ? new Date(h.dataOc).toLocaleDateString("pt-BR") : "—"}
@@ -1582,21 +1579,12 @@ export default function Solicitacoes() {
                                             </div>
                                           )}
                                           {(it as any).temAjudante && (it as any).mdoProfissional > 0 && (() => {
-                                            const prof = (it as any).mdoProfissional ?? 0;
-                                            const ajud = (it as any).mdoAjudante ?? 0;
-                                            const total = prof + ajud;
                                             const incAjud = incluirAjudanteOverride[it.id] ?? incluirAjudanteGlobal;
                                             return (
                                               <div className="flex items-center gap-1.5 text-[9px] flex-wrap">
                                                 <span className="text-gray-500">MDO:</span>
-                                                <span className="font-medium text-gray-700">R$ {total.toFixed(2)}</span>
-                                                <span className="text-gray-400">=</span>
                                                 <span className={`font-medium ${!incAjud ? "text-purple-700" : "text-gray-600"}`}>
-                                                  Prof: R$ {prof.toFixed(2)}
-                                                </span>
-                                                <span className="text-gray-400">+</span>
-                                                <span className={`font-medium ${!incAjud ? "text-red-400 line-through" : "text-gray-600"}`}>
-                                                  Ajud: R$ {ajud.toFixed(2)}
+                                                  {incAjud ? "Equipe completa" : "Só profissional"}
                                                 </span>
                                                 <button
                                                   type="button"
@@ -1768,7 +1756,7 @@ export default function Solicitacoes() {
                                                       {insConsolidado?.ocDocs?.length > 0 && <DocLinks docs={insConsolidado.ocDocs} prefix="OC" route="/compras/ordens" navigate={navigate} />}
                                                     </div>
                                                     <div className="text-[10px] text-gray-400 flex items-center gap-1 flex-wrap">
-                                                      Coef: {ins.coeficiente} | Meta: R$ {parseFloat(ins.precoUnitario || "0").toFixed(2)}
+                                                      Coef: {ins.coeficiente}
                                                       {insConsolidado && <span>| Orçado global: <strong className="text-gray-600">{insConsolidado.qtdTotalOrcada.toLocaleString("pt-BR")}</strong> | Solicitado: <strong className="text-blue-600">{insConsolidado.qtdJaSolicitada.toLocaleString("pt-BR")}</strong> | Saldo: <strong className={saldoGlobal != null && saldoGlobal <= 0 ? "text-red-600" : "text-emerald-600"}>{saldoGlobal != null ? saldoGlobal.toLocaleString("pt-BR") : "?"}</strong></span>}
                                                     </div>
                                                   </div>
@@ -1781,7 +1769,7 @@ export default function Solicitacoes() {
                                                     <div>
                                                       <div className={`font-semibold ${isBloqueado ? "text-gray-400 line-through" : isCapado ? "text-yellow-700" : "text-gray-700"}`}>{(isBloqueado ? qtdCalc : qtdEfetiva).toLocaleString("pt-BR")} {ins.unidade}</div>
                                                       {isCapado && <div className="text-[9px] text-yellow-600">de {qtdCalc.toLocaleString("pt-BR")} calculado</div>}
-                                                      {qtdEfetiva > 0 && !isBloqueado && <div className="text-[10px] text-gray-400">R$ {(qtdEfetiva * parseFloat(ins.precoUnitario || "0")).toFixed(2)}</div>}
+                                                      
                                                       {(() => { const c = getConversao(ins.descricao, ins.unidade, qtdEfetiva); return c ? <div className="text-[9px] text-purple-600 bg-purple-50 rounded px-1 py-0.5 mt-0.5 font-medium">{c}</div> : null; })()}
                                                     </div>
                                                   </div>
@@ -1973,17 +1961,6 @@ export default function Solicitacoes() {
                                     )}
                                   </div>
                                   <div className="text-right">
-                                    {qtdVal > 0 && ins.precoMedio > 0 ? (
-                                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 rounded px-1.5 py-0.5">
-                                        R$ {(qtdVal * ins.precoMedio).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                      </span>
-                                    ) : ins.precoMedio > 0 ? (
-                                      <span className="text-[9px] text-gray-400">
-                                        R$ {ins.precoMedio.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/un
-                                      </span>
-                                    ) : (
-                                      <span className="text-[9px] text-gray-300">—</span>
-                                    )}
                                   </div>
                                   <div className="text-center">
                                     {conv && <span className="text-[9px] text-purple-600 bg-purple-50 rounded px-1 py-0.5 font-medium">{conv}</span>}
@@ -2233,7 +2210,7 @@ export default function Solicitacoes() {
                           </div>
                           <div className="text-right shrink-0">
                             <div className="font-semibold text-gray-700">{c.qtdTotal.toLocaleString("pt-BR")} {c.unidade}</div>
-                            {c.precoMeta > 0 && <div className="text-[10px] text-gray-400">Meta: R$ {(c.qtdTotal * c.precoMeta).toFixed(2)}</div>}
+                            
                           </div>
                         </div>
                         <UltimaCompraCard companyId={companyId} descricao={c.descricao} insumoCodigo={c.insumoCodigo} />
