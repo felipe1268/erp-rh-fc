@@ -6434,6 +6434,7 @@ Retorne APENAS um JSON válido neste formato:
       const filtered = input.statusFiltro && input.statusFiltro !== "todos"
         ? result.filter(r => {
             if (input.statusFiltro === "alerta") return r.alertaSaldo;
+            if (input.statusFiltro === "com_orcamento") return r.totalOrcado > 0;
             if (input.statusFiltro === "sem_orcamento") return r.totalOrcado === 0;
             return true;
           })

@@ -442,6 +442,7 @@ export default function DashboardObra() {
             <SelectContent>
               <SelectItem value="todos">Todas as obras</SelectItem>
               <SelectItem value="alerta">Com alerta de saldo</SelectItem>
+              <SelectItem value="com_orcamento">Com orçamento</SelectItem>
               <SelectItem value="sem_orcamento">Sem orçamento</SelectItem>
             </SelectContent>
           </Select>
