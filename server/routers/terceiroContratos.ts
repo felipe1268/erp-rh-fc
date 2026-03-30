@@ -1296,13 +1296,24 @@ export const terceiroContratosRouter = router({
 
       // Build orcamento EAP→nome map for parent context matching
       const orcEapNome: Record<string, string> = {};
-      if (contrato.orcamentoId) {
+      let orcId = contrato.orcamentoId;
+      if (!orcId) {
+        // Derive orcamentoId from contract items
+        const itemWithOrc = itensContrato.find(ic => ic.orcamentoItemId);
+        if (itemWithOrc?.orcamentoItemId) {
+          const [orcItem] = await db.select({ orcamentoId: orcamentoItens.orcamentoId })
+            .from(orcamentoItens).where(sql`${orcamentoItens.id} = ${itemWithOrc.orcamentoItemId}`).limit(1);
+          if (orcItem) orcId = orcItem.orcamentoId;
+        }
+      }
+      if (orcId) {
         try {
-          const orcItens = await db.select({ eapCodigo: orcamentoItens.eapCodigo, descricao: orcamentoItens.descricao })
-            .from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, contrato.orcamentoId));
-          for (const oi of orcItens) orcEapNome[oi.eapCodigo] = oi.descricao;
+          const orcItensData = await db.select({ eapCodigo: orcamentoItens.eapCodigo, descricao: orcamentoItens.descricao })
+            .from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, orcId));
+          for (const oi of orcItensData) orcEapNome[oi.eapCodigo] = oi.descricao;
         } catch {}
       }
+      console.log(`[recalcularMedicao] orcamentoId=${orcId}, orcEapNome: ${Object.keys(orcEapNome).length} itens`);
 
       // Helper: get parent names from EAP hierarchy
       function getParentNames(eap: string, map: Record<string, string>): string[] {
@@ -1374,10 +1385,11 @@ export const terceiroContratosRouter = router({
                 atividadeId = candidates[0].id;
                 usedAtividades.add(atividadeId);
               }
-            } else if (itemEap && Object.keys(orcEapNome).length > 0) {
+            } else if (itemEap) {
               // Multiple candidates — match by parent hierarchy context
               const orcParents = getParentNames(itemEap, orcEapNome);
-              let bestMatch: {id: number; score: number} | null = null;
+              console.log(`[recalcularMedicao] MULTI-MATCH "${itemContrato.descricao}" eap=${itemEap} orcParents=[${orcParents.join(";")}] candidates=${candidates.length}`);
+              let bestMatch: {id: number; score: number; eap: string} | null = null;
               for (const cand of candidates) {
                 if (usedAtividades.has(cand.id)) continue;
                 const cronoParents = getParentNames(cand.eap, cronoEapNome);
@@ -1388,17 +1400,19 @@ export const terceiroContratosRouter = router({
                     else if (op.includes(cp) || cp.includes(op)) score += 1;
                   }
                 }
-                if (!bestMatch || score > bestMatch.score) bestMatch = {id: cand.id, score};
+                console.log(`[recalcularMedicao]   cand eap=${cand.eap} cronoParents=[${cronoParents.join(";")}] score=${score}`);
+                if (!bestMatch || score > bestMatch.score) bestMatch = {id: cand.id, score, eap: cand.eap};
               }
               if (bestMatch && bestMatch.score > 0) {
                 atividadeId = bestMatch.id;
                 usedAtividades.add(atividadeId);
-                console.log(`[recalcularMedicao] Link HIERARQUIA "${itemContrato.descricao}" eap=${itemEap} orcParents=[${orcParents.join(";")}] → ativId ${atividadeId} (score=${bestMatch.score})`);
+                console.log(`[recalcularMedicao] → BEST: eap=${bestMatch.eap} ativId=${atividadeId} score=${bestMatch.score}`);
+              } else {
+                console.log(`[recalcularMedicao] → NO MATCH (best score=0 or no candidates left)`);
               }
             }
-            if (atividadeId && atividadeId !== itemContrato.planejamentoAtividadeId) {
+            if (atividadeId) {
               await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: atividadeId }).where(eq(terceiroContratoItens.id, itemContrato.id));
-              console.log(`[recalcularMedicao] Link NOME "${itemContrato.descricao}" → ativId ${atividadeId}`);
             }
           }
         }
