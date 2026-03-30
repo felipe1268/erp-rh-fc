@@ -2858,21 +2858,32 @@ export default function Solicitacoes() {
                         quantidadeServico: it.quantidadeServico ? parseFloat(it.quantidadeServico) : undefined,
                         coeficiente: it.coeficiente ? parseFloat(it.coeficiente) : undefined,
                         origemEap: it.origemEap ?? undefined,
+                        incluirAjudante: it.incluirAjudante ?? true,
+                        metaMdoProfissional: it.metaMdoProfissional ? parseFloat(it.metaMdoProfissional) : undefined,
+                        metaMdoAjudante: it.metaMdoAjudante ? parseFloat(it.metaMdoAjudante) : undefined,
                       }));
                       setItens(scItens.length > 0 ? scItens : [newItem()]);
                       const eapIds = new Set<number>();
                       const eapQtd: Record<number, string> = {};
+                      const ajudOverrides: Record<number, boolean> = {};
                       for (const it of (detalhe.itens as any[])) {
                         if (it.orcamentoItemId) {
-                          eapIds.add(it.orcamentoItemId);
+                          const orcId = typeof it.orcamentoItemId === "string" ? parseInt(it.orcamentoItemId) : it.orcamentoItemId;
+                          eapIds.add(orcId);
                           if (it.quantidadeServico) {
-                            eapQtd[it.orcamentoItemId] = String(parseFloat(it.quantidadeServico) || "");
+                            eapQtd[orcId] = String(parseFloat(it.quantidadeServico) || "");
+                          }
+                          if (it.incluirAjudante != null) {
+                            ajudOverrides[orcId] = !!it.incluirAjudante;
                           }
                         }
                       }
                       setSelectedEapIds(eapIds);
                       setEapQtdServico(eapQtd);
                       setEditingOriginalEapIds(new Set(eapIds));
+                      setIncluirAjudanteOverride(ajudOverrides);
+                      const allAjud = Object.values(ajudOverrides);
+                      if (allAjud.length > 0) setIncluirAjudanteGlobal(allAjud.every(v => v));
                       const hasEapItems = (detalhe.itens as any[]).some((it: any) => it.origemEap || it.orcamentoItemId);
                       setModoSC(hasEapItems ? "eap" : "manual");
                       setEditingSc({ id: detalhe.id, companyId: detalhe.companyId ?? companyId });

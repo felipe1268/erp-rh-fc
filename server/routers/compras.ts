@@ -1259,6 +1259,7 @@ Responda APENAS com um objeto JSON no formato:
         solicitanteId: sc.solicitanteId,
         departamento: sc.departamento,
         titulo: sc.titulo,
+        tipo: sc.tipo,
         dataNecessidade: sc.dataNecessidade,
         prioridade: sc.prioridade,
         status: sc.status,
