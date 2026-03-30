@@ -6494,4 +6494,16 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 00:30:00",
   },
+  {
+    versao: 911,
+    descricao:
+      "Previsão de Caixa corrigida: Previsto agora distribui valor total do contrato " +
+      "linearmente pelas semanas do cronograma (dataInicio→dataFim da atividade vinculada). " +
+      "Realizado agora usa avanço real semanal do planejamento (percentualSemanal × valor do item), " +
+      "em vez de depender apenas de medições aprovadas/pagas.",
+    tipo: "melhoria",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 01:00:00",
+  },
 ];

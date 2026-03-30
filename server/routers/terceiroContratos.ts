@@ -2249,44 +2249,67 @@ export const terceiroContratosRouter = router({
           .orderBy(asc(planejamentoAvancos.semana));
       }
 
-      // Agrupa previsões por semana
+      // Helper: get Monday of a given date
+      function getMonday(d: Date): string {
+        const day = d.getDay();
+        const diff = (day + 6) % 7;
+        const mon = new Date(d);
+        mon.setDate(mon.getDate() - diff);
+        return mon.toISOString().slice(0, 10);
+      }
+
+      // Load atividades for date info (previsto distribution)
+      const linkedAtivIds = todosItens.filter(i => i.planejamentoAtividadeId).map(i => i.planejamentoAtividadeId!);
+      let atividadesMap: Record<number, { dataInicio: string | null; dataFim: string | null; pesoFinanceiro: number }> = {};
+      if (linkedAtivIds.length) {
+        const ativs = await db.select({
+          id: planejamentoAtividades.id,
+          dataInicio: planejamentoAtividades.dataInicio,
+          dataFim: planejamentoAtividades.dataFim,
+          pesoFinanceiro: planejamentoAtividades.pesoFinanceiro,
+        }).from(planejamentoAtividades).where(inArray(planejamentoAtividades.id, linkedAtivIds));
+        for (const a of ativs) {
+          atividadesMap[a.id] = { dataInicio: a.dataInicio, dataFim: a.dataFim, pesoFinanceiro: n(a.pesoFinanceiro) };
+        }
+      }
+
+      // PREVISTO: distribui valor de cada item pelas semanas entre dataInicio e dataFim da atividade
       const semanasMapPrev: Record<string, number> = {};
+      for (const item of todosItens) {
+        if (!item.planejamentoAtividadeId) continue;
+        const ativ = atividadesMap[item.planejamentoAtividadeId];
+        if (!ativ?.dataInicio || !ativ?.dataFim) continue;
+        const inicio = new Date(ativ.dataInicio + "T12:00:00");
+        const fim = new Date(ativ.dataFim + "T12:00:00");
+        if (fim <= inicio) continue;
+        const semanasPrev: string[] = [];
+        const cur = new Date(inicio);
+        while (cur <= fim) {
+          const mon = getMonday(cur);
+          if (!semanasPrev.includes(mon)) semanasPrev.push(mon);
+          cur.setDate(cur.getDate() + 7);
+        }
+        const lastMon = getMonday(fim);
+        if (!semanasPrev.includes(lastMon)) semanasPrev.push(lastMon);
+        if (semanasPrev.length === 0) continue;
+        const valorPorSemana = n(item.valorTotal) / semanasPrev.length;
+        for (const sem of semanasPrev) {
+          semanasMapPrev[sem] = (semanasMapPrev[sem] || 0) + valorPorSemana;
+        }
+      }
+
+      // REALIZADO: usa avanço real semanal do cronograma × valor do item
+      const semanasMapReal: Record<string, number> = {};
+      let totalRealizado = 0;
       for (const item of todosItens) {
         if (!item.planejamentoAtividadeId) continue;
         const avancosItem = avancos.filter(a => a.atividadeId === item.planejamentoAtividadeId);
         for (const av of avancosItem) {
-          const prevPeriodo = n(av.percentualSemanal ?? 0);
-          const valorSemana = (prevPeriodo / 100) * n(item.valorTotal);
-          semanasMapPrev[av.semana] = (semanasMapPrev[av.semana] ?? 0) + valorSemana;
-        }
-      }
-
-      // Realizado: medições aprovadas/pagas — distribui valor por semana via avanço real
-      const semanasMapReal: Record<string, number> = {};
-      let totalRealizado = 0;
-      const todasMedicoes = await db.select().from(terceiroMedicoes)
-        .where(and(
-          eq(terceiroMedicoes.companyId, input.companyId),
-          inArray(terceiroMedicoes.contratoId, contratosIds),
-        ));
-      const medicoesAprovPaga = todasMedicoes.filter(m => m.status === "aprovada" || m.status === "paga");
-
-      if (medicoesAprovPaga.length > 0) {
-        const medicaoIds = medicoesAprovPaga.map(m => m.id);
-        const itensMedicao = await db.select().from(terceiroMedicaoItens)
-          .where(inArray(terceiroMedicaoItens.medicaoId, medicaoIds));
-
-        for (const med of medicoesAprovPaga) {
-          const itensMed = itensMedicao.filter(im => im.medicaoId === med.id);
-          const valorMed = n(med.valorMedido);
-          totalRealizado += valorMed;
-
-          const approvedDate = med.aprovadoEm ? new Date(med.aprovadoEm) : new Date(med.criadoEm);
-          const dayOfWeek = approvedDate.getDay();
-          const monday = new Date(approvedDate);
-          monday.setDate(monday.getDate() - ((dayOfWeek + 6) % 7));
-          const semanaKey = monday.toISOString().slice(0, 10);
-          semanasMapReal[semanaKey] = (semanasMapReal[semanaKey] || 0) + valorMed;
+          const pctSemanal = n(av.percentualSemanal ?? 0);
+          if (pctSemanal <= 0) continue;
+          const valorSemana = (pctSemanal / 100) * n(item.valorTotal);
+          semanasMapReal[av.semana] = (semanasMapReal[av.semana] || 0) + valorSemana;
+          totalRealizado += valorSemana;
         }
       }
 
