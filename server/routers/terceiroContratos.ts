@@ -963,7 +963,7 @@ export const terceiroContratosRouter = router({
                   cronoEapNomeGen[a.eapCodigo] = a.nome;
                 }
                 if (a.nome && a.eapCodigo) {
-                  const nomeNorm = a.nome.trim().toLowerCase();
+                  const nomeNorm = a.nome.trim().toLowerCase().replace(/[:\s]+$/g, "").replace(/\s+/g, " ");
                   if (!nomeToAtividadesGen[nomeNorm]) nomeToAtividadesGen[nomeNorm] = [];
                   nomeToAtividadesGen[nomeNorm].push({id: a.id, eap: a.eapCodigo});
                 }
@@ -977,20 +977,33 @@ export const terceiroContratosRouter = router({
 
       // Build orcamento EAP→nome map for parent context matching
       const orcEapNomeGen: Record<string, string> = {};
-      if (contrato.orcamentoId) {
+      let orcIdGen = contrato.orcamentoId;
+      if (!orcIdGen) {
+        const itemWithOrc = itensContrato.find((ic: any) => ic.orcamentoItemId);
+        if ((itemWithOrc as any)?.orcamentoItemId) {
+          const [orcItem] = await db.select({ orcamentoId: orcamentoItens.orcamentoId })
+            .from(orcamentoItens).where(sql`${orcamentoItens.id} = ${(itemWithOrc as any).orcamentoItemId}`).limit(1);
+          if (orcItem) orcIdGen = orcItem.orcamentoId;
+        }
+      }
+      if (orcIdGen) {
         try {
           const orcItens = await db.select({ eapCodigo: orcamentoItens.eapCodigo, descricao: orcamentoItens.descricao })
-            .from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, contrato.orcamentoId));
+            .from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, orcIdGen));
           for (const oi of orcItens) orcEapNomeGen[oi.eapCodigo] = oi.descricao;
         } catch {}
       }
+      console.log(`[gerarMedicao] orcamentoId=${orcIdGen}, orcEapNomeGen: ${Object.keys(orcEapNomeGen).length} itens`);
 
+      function normNameGen(s: string): string {
+        return s.trim().toLowerCase().replace(/[:\s]+$/g, "").replace(/\s+/g, " ");
+      }
       function getParentNamesGen(eap: string, map: Record<string, string>): string[] {
         const parts = eap.split(".");
         const names: string[] = [];
         for (let i = 1; i < parts.length; i++) {
           const parentEap = parts.slice(0, i).join(".");
-          if (map[parentEap]) names.push(map[parentEap].trim().toLowerCase());
+          if (map[parentEap]) names.push(normNameGen(map[parentEap]));
         }
         return names;
       }
@@ -1031,7 +1044,7 @@ export const terceiroContratosRouter = router({
 
         // Fallback 2: match by nome + parent hierarchy context
         if (!atividadeIdUsada && item.descricao) {
-          const descNorm = item.descricao.trim().toLowerCase();
+          const descNorm = normNameGen(item.descricao);
           const candidates = nomeToAtividadesGen[descNorm];
           if (candidates && candidates.length > 0) {
             const itemEap = (item as any).eapCodigo as string | null;
@@ -1040,7 +1053,7 @@ export const terceiroContratosRouter = router({
                 atividadeIdUsada = candidates[0].id;
                 usedAtividadesGen.add(atividadeIdUsada);
               }
-            } else if (itemEap && Object.keys(orcEapNomeGen).length > 0) {
+            } else if (itemEap) {
               const orcParents = getParentNamesGen(itemEap, orcEapNomeGen);
               let bestMatch: {id: number; score: number} | null = null;
               for (const cand of candidates) {
@@ -1283,7 +1296,7 @@ export const terceiroContratosRouter = router({
                   cronoEapNome[a.eapCodigo] = a.nome;
                 }
                 if (a.nome && a.eapCodigo) {
-                  const nomeNorm = a.nome.trim().toLowerCase();
+                  const nomeNorm = a.nome.trim().toLowerCase().replace(/[:\s]+$/g, "").replace(/\s+/g, " ");
                   if (!nomeToAtividades[nomeNorm]) nomeToAtividades[nomeNorm] = [];
                   nomeToAtividades[nomeNorm].push({id: a.id, eap: a.eapCodigo});
                 }
@@ -1315,13 +1328,18 @@ export const terceiroContratosRouter = router({
       }
       console.log(`[recalcularMedicao] orcamentoId=${orcId}, orcEapNome: ${Object.keys(orcEapNome).length} itens`);
 
-      // Helper: get parent names from EAP hierarchy
+      // Normalize name: lowercase, strip trailing punctuation/colons, trim
+      function normName(s: string): string {
+        return s.trim().toLowerCase().replace(/[:\s]+$/g, "").replace(/\s+/g, " ");
+      }
+
+      // Helper: get parent names from EAP hierarchy (normalized)
       function getParentNames(eap: string, map: Record<string, string>): string[] {
         const parts = eap.split(".");
         const names: string[] = [];
         for (let i = 1; i < parts.length; i++) {
           const parentEap = parts.slice(0, i).join(".");
-          if (map[parentEap]) names.push(map[parentEap].trim().toLowerCase());
+          if (map[parentEap]) names.push(normName(map[parentEap]));
         }
         return names;
       }
@@ -1376,7 +1394,7 @@ export const terceiroContratosRouter = router({
         }
         // Fallback 2: match by nome + parent hierarchy context
         if (!atividadeId && itemContrato.descricao) {
-          const descNorm = itemContrato.descricao.trim().toLowerCase();
+          const descNorm = normName(itemContrato.descricao);
           const candidates = nomeToAtividades[descNorm];
           if (candidates && candidates.length > 0) {
             const itemEap = (itemContrato as any).eapCodigo as string | null;
