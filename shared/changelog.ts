@@ -6628,4 +6628,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 04:00:00",
   },
+  {
+    versao: 922,
+    descricao:
+      "Correção da segregação MAT/MDO no Mapa de Cotação. " +
+      "Quando a cotação é de Material, o Preço Unit. Meta agora mostra apenas a parcela MAT " +
+      "(metaUnitMat do orçamento), em vez do valor total MAT+MDO somado. " +
+      "Para cotações de Serviço/MDO, mantém o comportamento correto já existente (metaUnitMdo). " +
+      "Para Pacote (Mat+MDO) ou itens sem segregação, usa o valor total como fallback. " +
+      "Também corrigido: botão 'Início' do breadcrumb agora navega para a home do módulo ativo.",
+    tipo: "fix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 05:00:00",
+  },
 ];

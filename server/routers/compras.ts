@@ -2272,6 +2272,8 @@ Responda APENAS com um objeto JSON no formato:
           } else {
             metaUnitario = metaUnitarioMdo;
           }
+        } else if (!isCotacaoMdo && metaUnitarioMat > 0) {
+          metaUnitario = metaUnitarioMat;
         } else {
           metaUnitario = metaUnitarioTotal;
         }

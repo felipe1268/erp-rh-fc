@@ -1427,6 +1427,7 @@ function DashboardLayoutContent({
 
 function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLabel: string }) {
   const { selectedCompanyId, setSelectedCompanyId, companies, selectedCompany, isConstrutoras, construtorasIds } = useCompany();
+  const { activeModule } = useModule();
   const [, setLocation] = useLocation();
   const hasConstrutoras = construtorasIds.length >= 2;
   const logoUrl = selectedCompany?.logoUrl;
