@@ -802,6 +802,10 @@ export default function Cotacoes() {
   });
   const [showFdCotDialog, setShowFdCotDialog] = useState(false);
   const [fdCotForm, setFdCotForm] = useState({ modalidade: "fd_cliente" as "fd_cliente" | "fd_fc", valor: "" });
+  const splitQ = trpc.compras.getCotacaoSplitMatMdo.useQuery(
+    { cotacaoId: showDetalhe!, companyId },
+    { enabled: showDetalhe !== null && showFdCotDialog }
+  );
   const adicionarForn = trpc.compras.adicionarFornecedorMapa.useMutation({
     onSuccess: () => { toast.success("Fornecedor adicionado!"); setMapaFornSelectId(""); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
@@ -3365,70 +3369,137 @@ export default function Cotacoes() {
         </Dialog>
 
         <Dialog open={showFdCotDialog} onOpenChange={setShowFdCotDialog}>
-          <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827', zIndex: 9999 }}>
+          <DialogContent className="border-gray-200 max-w-lg" style={{ background: '#ffffff', color: '#111827', zIndex: 9999 }}>
             <DialogHeader>
               <DialogTitle className="text-gray-900">Definir Faturamento Direto</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div>
-                <label className="text-xs font-medium text-gray-700 mb-1 block">Quem paga?</label>
-                <Select value={fdCotForm.modalidade} onValueChange={v => setFdCotForm(p => ({ ...p, modalidade: v as any }))}>
-                  <SelectTrigger className="bg-white border-gray-300">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fd_cliente">FD Cliente (cliente paga ao fornecedor)</SelectItem>
-                    <SelectItem value="fd_fc">FD FC (a FC paga diretamente)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-gray-400 mt-1">
-                  {fdCotForm.modalidade === "fd_cliente"
-                    ? "O cliente pagará diretamente ao fornecedor. O valor será abatido do saldo de FD orçado."
-                    : "A FC realizará o pagamento direto ao fornecedor. Não consome saldo de FD do orçamento."}
-                </p>
+            {splitQ.isLoading ? (
+              <div className="flex items-center justify-center py-6 gap-2 text-gray-400">
+                <Loader2 className="h-4 w-4 animate-spin" /> Calculando split MAT/MDO...
               </div>
-              <div>
-                <label className="text-xs font-medium text-gray-700 mb-1 block">Valor do FD (R$)</label>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={fdCotForm.valor}
-                  onChange={e => {
-                    let v = e.target.value.replace(/[^\d.,]/g, "");
-                    setFdCotForm(p => ({ ...p, valor: v }));
-                  }}
-                  placeholder="0,00"
-                  className="bg-white border-gray-300"
-                />
-                {fdCotForm.valor && (() => {
-                  const num = parseBRNumber(fdCotForm.valor);
-                  return num > 0 ? (
-                    <p className="text-xs text-emerald-600 mt-1 font-medium">
-                      {num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                    </p>
-                  ) : null;
-                })()}
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowFdCotDialog(false)}>Cancelar</Button>
-              <Button
-                disabled={!fdCotForm.valor || parseBRNumber(fdCotForm.valor) <= 0 || marcarFd.isPending || !showDetalhe}
-                onClick={() => {
-                  if (!showDetalhe) return;
-                  marcarFd.mutate({
-                    cotacaoId: showDetalhe,
-                    companyId,
-                    modalidade: fdCotForm.modalidade,
-                    valor: parseBRNumber(fdCotForm.valor),
-                  });
-                }}
-                className="bg-amber-600 hover:bg-amber-500 text-white gap-2"
-              >
-                {marcarFd.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
-                Confirmar FD
-              </Button>
-            </div>
+            ) : splitQ.data ? (() => {
+              const sp = splitQ.data;
+              const fdVal = parseBRNumber(fdCotForm.valor);
+              const excedeMat = sp.totalMat > 0 ? fdVal > sp.totalMat : false;
+              const semMat = sp.totalMat <= 0;
+              return (
+                <div className="space-y-4 py-2">
+                  <div className="bg-gray-50 rounded-lg border border-gray-200 p-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Composição da Cotação</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-center p-2 bg-white rounded border border-gray-100">
+                        <p className="text-[10px] text-gray-400 uppercase">Total</p>
+                        <p className="text-sm font-bold text-gray-800">{fmt(sp.totalGeral)}</p>
+                      </div>
+                      <div className="text-center p-2 bg-blue-50 rounded border border-blue-200">
+                        <p className="text-[10px] text-blue-500 uppercase font-medium">Material</p>
+                        <p className="text-sm font-bold text-blue-700">{fmt(sp.totalMat)}</p>
+                        {sp.totalGeral > 0 && <p className="text-[10px] text-blue-400">{((sp.totalMat / sp.totalGeral) * 100).toFixed(1)}%</p>}
+                      </div>
+                      <div className="text-center p-2 bg-purple-50 rounded border border-purple-200">
+                        <p className="text-[10px] text-purple-500 uppercase font-medium">Mão de Obra</p>
+                        <p className="text-sm font-bold text-purple-700">{fmt(sp.totalMdo)}</p>
+                        {sp.totalGeral > 0 && <p className="text-[10px] text-purple-400">{((sp.totalMdo / sp.totalGeral) * 100).toFixed(1)}%</p>}
+                      </div>
+                    </div>
+                    {!sp.temVencedor && sp.totalGeral > 0 && (
+                      <p className="text-[10px] text-amber-600 mt-2 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" /> Valores baseados na meta orçamentária (nenhum vencedor selecionado)
+                      </p>
+                    )}
+                    {sp.itens.length > 0 && sp.itens.some(i => i.tipo === "pacote") && (
+                      <div className="mt-2 max-h-28 overflow-y-auto">
+                        <table className="w-full text-[10px]">
+                          <thead><tr className="text-gray-400 border-b"><th className="text-left py-0.5">Item</th><th className="text-right py-0.5">MAT</th><th className="text-right py-0.5">MDO</th></tr></thead>
+                          <tbody>
+                            {sp.itens.filter(i => i.valor > 0).map(i => (
+                              <tr key={i.id} className="border-b border-gray-50">
+                                <td className="py-0.5 text-gray-600 truncate max-w-[200px]">{i.descricao}</td>
+                                <td className="py-0.5 text-right text-blue-600">{fmt(i.valorMat)}</td>
+                                <td className="py-0.5 text-right text-purple-600">{fmt(i.valorMdo)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                  {semMat ? (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                      <p className="text-sm text-red-700 font-medium">{sp.totalMdo > 0 ? "Esta cotação é 100% mão de obra" : "Nenhum valor de material identificado"}</p>
+                      <p className="text-xs text-red-500 mt-1">FD só é permitido para a parcela de material.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="text-xs font-medium text-gray-700 mb-1 block">Quem paga?</label>
+                        <Select value={fdCotForm.modalidade} onValueChange={v => setFdCotForm(p => ({ ...p, modalidade: v as any }))}>
+                          <SelectTrigger className="bg-white border-gray-300">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="fd_cliente">FD Cliente (cliente paga ao fornecedor)</SelectItem>
+                            <SelectItem value="fd_fc">FD FC (a FC paga diretamente)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {fdCotForm.modalidade === "fd_cliente"
+                            ? "O cliente pagará diretamente ao fornecedor. O valor será abatido do saldo de FD orçado."
+                            : "A FC realizará o pagamento direto ao fornecedor. Não consome saldo de FD do orçamento."}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-700 mb-1 block">
+                          Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo MAT: {fmt(sp.totalMat)}</span>
+                        </label>
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          value={fdCotForm.valor}
+                          onChange={e => {
+                            let v = e.target.value.replace(/[^\d.,]/g, "");
+                            setFdCotForm(p => ({ ...p, valor: v }));
+                          }}
+                          placeholder="0,00"
+                          className={`bg-white border-gray-300 ${excedeMat ? "border-red-400 ring-1 ring-red-300" : ""}`}
+                        />
+                        {fdCotForm.valor && (() => {
+                          return fdVal > 0 ? (
+                            <p className={`text-xs mt-1 font-medium ${excedeMat ? "text-red-600" : "text-emerald-600"}`}>
+                              {fmt(fdVal)}
+                              {excedeMat && " — Excede o valor de material!"}
+                            </p>
+                          ) : null;
+                        })()}
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setShowFdCotDialog(false)}>Cancelar</Button>
+                    {!semMat && (
+                      <Button
+                        disabled={!fdCotForm.valor || fdVal <= 0 || excedeMat || marcarFd.isPending || !showDetalhe}
+                        onClick={() => {
+                          if (!showDetalhe) return;
+                          marcarFd.mutate({
+                            cotacaoId: showDetalhe,
+                            companyId,
+                            modalidade: fdCotForm.modalidade,
+                            valor: fdVal,
+                          });
+                        }}
+                        className="bg-amber-600 hover:bg-amber-500 text-white gap-2"
+                      >
+                        {marcarFd.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
+                        Confirmar FD
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })() : (
+              <p className="text-sm text-red-500 py-4">Erro ao calcular split MAT/MDO.</p>
+            )}
           </DialogContent>
         </Dialog>
 
@@ -3934,70 +4005,137 @@ export default function Cotacoes() {
       </Dialog>
 
       <Dialog open={showFdCotDialog} onOpenChange={setShowFdCotDialog}>
-        <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+        <DialogContent className="border-gray-200 max-w-lg" style={{ background: '#ffffff', color: '#111827' }}>
           <DialogHeader>
             <DialogTitle className="text-gray-900">Definir Faturamento Direto</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <label className="text-xs font-medium text-gray-700 mb-1 block">Quem paga?</label>
-              <Select value={fdCotForm.modalidade} onValueChange={v => setFdCotForm(p => ({ ...p, modalidade: v as any }))}>
-                <SelectTrigger className="bg-white border-gray-300">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fd_cliente">FD Cliente (cliente paga ao fornecedor)</SelectItem>
-                  <SelectItem value="fd_fc">FD FC (a FC paga diretamente)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-400 mt-1">
-                {fdCotForm.modalidade === "fd_cliente"
-                  ? "O cliente pagará diretamente ao fornecedor. O valor será abatido do saldo de FD orçado."
-                  : "A FC realizará o pagamento direto ao fornecedor. Não consome saldo de FD do orçamento."}
-              </p>
+          {splitQ.isLoading ? (
+            <div className="flex items-center justify-center py-6 gap-2 text-gray-400">
+              <Loader2 className="h-4 w-4 animate-spin" /> Calculando split MAT/MDO...
             </div>
-            <div>
-              <label className="text-xs font-medium text-gray-700 mb-1 block">Valor do FD (R$)</label>
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={fdCotForm.valor}
-                onChange={e => {
-                  let v = e.target.value.replace(/[^\d.,]/g, "");
-                  setFdCotForm(p => ({ ...p, valor: v }));
-                }}
-                placeholder="0,00"
-                className="bg-white border-gray-300"
-              />
-              {fdCotForm.valor && (() => {
-                const num = parseBRNumber(fdCotForm.valor);
-                return num > 0 ? (
-                  <p className="text-xs text-emerald-600 mt-1 font-medium">
-                    {num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                  </p>
-                ) : null;
-              })()}
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowFdCotDialog(false)}>Cancelar</Button>
-            <Button
-              disabled={!fdCotForm.valor || parseBRNumber(fdCotForm.valor) <= 0 || marcarFd.isPending || !showDetalhe}
-              onClick={() => {
-                if (!showDetalhe) return;
-                marcarFd.mutate({
-                  cotacaoId: showDetalhe,
-                  companyId,
-                  modalidade: fdCotForm.modalidade,
-                  valor: parseBRNumber(fdCotForm.valor),
-                });
-              }}
-              className="bg-amber-600 hover:bg-amber-500 text-white gap-2"
-            >
-              {marcarFd.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
-              Confirmar FD
-            </Button>
-          </div>
+          ) : splitQ.data ? (() => {
+            const sp = splitQ.data;
+            const fdVal = parseBRNumber(fdCotForm.valor);
+            const excedeMat = sp.totalMat > 0 ? fdVal > sp.totalMat : false;
+            const semMat = sp.totalMat <= 0;
+            return (
+              <div className="space-y-4 py-2">
+                <div className="bg-gray-50 rounded-lg border border-gray-200 p-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Composição da Cotação</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-center p-2 bg-white rounded border border-gray-100">
+                      <p className="text-[10px] text-gray-400 uppercase">Total</p>
+                      <p className="text-sm font-bold text-gray-800">{fmt(sp.totalGeral)}</p>
+                    </div>
+                    <div className="text-center p-2 bg-blue-50 rounded border border-blue-200">
+                      <p className="text-[10px] text-blue-500 uppercase font-medium">Material</p>
+                      <p className="text-sm font-bold text-blue-700">{fmt(sp.totalMat)}</p>
+                      {sp.totalGeral > 0 && <p className="text-[10px] text-blue-400">{((sp.totalMat / sp.totalGeral) * 100).toFixed(1)}%</p>}
+                    </div>
+                    <div className="text-center p-2 bg-purple-50 rounded border border-purple-200">
+                      <p className="text-[10px] text-purple-500 uppercase font-medium">Mão de Obra</p>
+                      <p className="text-sm font-bold text-purple-700">{fmt(sp.totalMdo)}</p>
+                      {sp.totalGeral > 0 && <p className="text-[10px] text-purple-400">{((sp.totalMdo / sp.totalGeral) * 100).toFixed(1)}%</p>}
+                    </div>
+                  </div>
+                  {!sp.temVencedor && sp.totalGeral > 0 && (
+                    <p className="text-[10px] text-amber-600 mt-2 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> Valores baseados na meta orçamentária (nenhum vencedor selecionado)
+                    </p>
+                  )}
+                  {sp.itens.length > 0 && sp.itens.some(i => i.tipo === "pacote") && (
+                    <div className="mt-2 max-h-28 overflow-y-auto">
+                      <table className="w-full text-[10px]">
+                        <thead><tr className="text-gray-400 border-b"><th className="text-left py-0.5">Item</th><th className="text-right py-0.5">MAT</th><th className="text-right py-0.5">MDO</th></tr></thead>
+                        <tbody>
+                          {sp.itens.filter(i => i.valor > 0).map(i => (
+                            <tr key={i.id} className="border-b border-gray-50">
+                              <td className="py-0.5 text-gray-600 truncate max-w-[200px]">{i.descricao}</td>
+                              <td className="py-0.5 text-right text-blue-600">{fmt(i.valorMat)}</td>
+                              <td className="py-0.5 text-right text-purple-600">{fmt(i.valorMdo)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                {semMat ? (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                    <p className="text-sm text-red-700 font-medium">{sp.totalMdo > 0 ? "Esta cotação é 100% mão de obra" : "Nenhum valor de material identificado"}</p>
+                    <p className="text-xs text-red-500 mt-1">FD só é permitido para a parcela de material.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-xs font-medium text-gray-700 mb-1 block">Quem paga?</label>
+                      <Select value={fdCotForm.modalidade} onValueChange={v => setFdCotForm(p => ({ ...p, modalidade: v as any }))}>
+                        <SelectTrigger className="bg-white border-gray-300">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fd_cliente">FD Cliente (cliente paga ao fornecedor)</SelectItem>
+                          <SelectItem value="fd_fc">FD FC (a FC paga diretamente)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {fdCotForm.modalidade === "fd_cliente"
+                          ? "O cliente pagará diretamente ao fornecedor. O valor será abatido do saldo de FD orçado."
+                          : "A FC realizará o pagamento direto ao fornecedor. Não consome saldo de FD do orçamento."}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-700 mb-1 block">
+                        Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo MAT: {fmt(sp.totalMat)}</span>
+                      </label>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        value={fdCotForm.valor}
+                        onChange={e => {
+                          let v = e.target.value.replace(/[^\d.,]/g, "");
+                          setFdCotForm(p => ({ ...p, valor: v }));
+                        }}
+                        placeholder="0,00"
+                        className={`bg-white border-gray-300 ${excedeMat ? "border-red-400 ring-1 ring-red-300" : ""}`}
+                      />
+                      {fdCotForm.valor && (() => {
+                        return fdVal > 0 ? (
+                          <p className={`text-xs mt-1 font-medium ${excedeMat ? "text-red-600" : "text-emerald-600"}`}>
+                            {fmt(fdVal)}
+                            {excedeMat && " — Excede o valor de material!"}
+                          </p>
+                        ) : null;
+                      })()}
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setShowFdCotDialog(false)}>Cancelar</Button>
+                  {!semMat && (
+                    <Button
+                      disabled={!fdCotForm.valor || fdVal <= 0 || excedeMat || marcarFd.isPending || !showDetalhe}
+                      onClick={() => {
+                        if (!showDetalhe) return;
+                        marcarFd.mutate({
+                          cotacaoId: showDetalhe,
+                          companyId,
+                          modalidade: fdCotForm.modalidade,
+                          valor: fdVal,
+                        });
+                      }}
+                      className="bg-amber-600 hover:bg-amber-500 text-white gap-2"
+                    >
+                      {marcarFd.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
+                      Confirmar FD
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })() : (
+            <p className="text-sm text-red-500 py-4">Erro ao calcular split MAT/MDO.</p>
+          )}
         </DialogContent>
       </Dialog>
 

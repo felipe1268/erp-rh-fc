@@ -7285,6 +7285,97 @@ Retorne APENAS um JSON válido neste formato:
       };
     }),
 
+  getCotacaoSplitMatMdo: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+
+      let tipoEfetivo = cot.tipo ?? "material";
+      if (cot.solicitacaoId) {
+        const [sc] = await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+        if (sc?.tipo) tipoEfetivo = sc.tipo;
+      }
+
+      const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+
+      let respostas: any[] = [];
+      if (cot.fornecedorId) {
+        respostas = await db.select().from(comprasCotacaoRespostas).where(
+          and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId))
+        );
+      }
+      const respMap: Record<number, any> = {};
+      for (const r of respostas) respMap[r.itemId] = r;
+
+      const scItemIds = itens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
+      let scItens: any[] = [];
+      if (scItemIds.length > 0) {
+        scItens = await db.select({
+          id: comprasSolicitacoesItens.id,
+          orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+        }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+      }
+      const scToOrc: Record<number, number> = {};
+      for (const s of scItens) if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+
+      const orcItemIds = [...new Set(Object.values(scToOrc))];
+      let orcMap: Record<number, { custoUnitMat: number; custoUnitMdo: number; custoUnitTotal: number }> = {};
+      if (orcItemIds.length > 0) {
+        const orcData = await db.select({
+          id: orcamentoItens.id,
+          custoUnitMat: orcamentoItens.custoUnitMat,
+          custoUnitMdo: orcamentoItens.custoUnitMdo,
+          custoUnitTotal: orcamentoItens.custoUnitTotal,
+        }).from(orcamentoItens).where(inArray(orcamentoItens.id, orcItemIds));
+        for (const o of orcData) orcMap[o.id] = { custoUnitMat: n(o.custoUnitMat), custoUnitMdo: n(o.custoUnitMdo), custoUnitTotal: n(o.custoUnitTotal) };
+      }
+
+      let totalMat = 0;
+      let totalMdo = 0;
+      const itensClassificados: { id: number; descricao: string; valor: number; valorMat: number; valorMdo: number; tipo: string }[] = [];
+
+      for (const it of itens) {
+        const resp = respMap[it.id];
+        const valorItem = resp ? n(resp.total) : n(it.total);
+        const qtd = resp ? n(resp.quantidade) : n(it.quantidade);
+        const pu = resp ? n(resp.precoUnitario) : n(it.precoUnitario);
+
+        const orcId = it.solicitacaoItemId ? scToOrc[it.solicitacaoItemId] : undefined;
+        const orc = orcId ? orcMap[orcId] : undefined;
+
+        let ratioMat = 1;
+        let itemTipo = "material";
+
+        if (orc && orc.custoUnitTotal > 0) {
+          ratioMat = orc.custoUnitMat / orc.custoUnitTotal;
+          itemTipo = ratioMat >= 0.99 ? "material" : ratioMat <= 0.01 ? "servico" : "pacote";
+        } else if (tipoEfetivo === "servico") {
+          ratioMat = 0;
+          itemTipo = "servico";
+        } else if (tipoEfetivo === "pacote") {
+          ratioMat = 1;
+          itemTipo = "material";
+        }
+
+        const vMat = valorItem * ratioMat;
+        const vMdo = valorItem * (1 - ratioMat);
+        totalMat += vMat;
+        totalMdo += vMdo;
+        itensClassificados.push({ id: it.id, descricao: it.descricao, valor: valorItem, valorMat: Math.round(vMat * 100) / 100, valorMdo: Math.round(vMdo * 100) / 100, tipo: itemTipo });
+      }
+
+      return {
+        tipoEfetivo,
+        totalGeral: Math.round((totalMat + totalMdo) * 100) / 100,
+        totalMat: Math.round(totalMat * 100) / 100,
+        totalMdo: Math.round(totalMdo * 100) / 100,
+        temVencedor: !!cot.fornecedorId,
+        itens: itensClassificados,
+      };
+    }),
+
   marcarCotacaoFd: protectedProcedure
     .input(z.object({
       cotacaoId: z.number(),
@@ -7299,6 +7390,66 @@ Retorne APENAS um JSON válido neste formato:
         .where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
       if (cot.status !== "pendente") throw new TRPCError({ code: "BAD_REQUEST", message: "FD só pode ser definido em cotações pendentes" });
+
+      {
+        let tipoEfetivo = cot.tipo ?? "material";
+        if (cot.solicitacaoId) {
+          const [sc] = await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+          if (sc?.tipo) tipoEfetivo = sc.tipo;
+        }
+        if (tipoEfetivo === "servico") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "FD não é permitido para cotações 100% mão de obra." });
+        }
+
+        try {
+          const fdItens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+          const scFdIds = fdItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
+          let fdScItens: any[] = [];
+          if (scFdIds.length > 0) {
+            fdScItens = await db.select({ id: comprasSolicitacoesItens.id, orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId })
+              .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scFdIds));
+          }
+          const fdScToOrc: Record<number, number> = {};
+          for (const s of fdScItens) if (s.orcamentoItemId) fdScToOrc[s.id] = s.orcamentoItemId;
+          const fdOrcIds = [...new Set(Object.values(fdScToOrc))];
+          let fdOrcMap: Record<number, { mat: number; total: number }> = {};
+          if (fdOrcIds.length > 0) {
+            const fdOrcData = await db.select({ id: orcamentoItens.id, custoUnitMat: orcamentoItens.custoUnitMat, custoUnitTotal: orcamentoItens.custoUnitTotal })
+              .from(orcamentoItens).where(inArray(orcamentoItens.id, fdOrcIds));
+            for (const o of fdOrcData) fdOrcMap[o.id] = { mat: n(o.custoUnitMat), total: n(o.custoUnitTotal) };
+          }
+
+          let resps: any[] = [];
+          if (cot.fornecedorId) {
+            resps = await db.select().from(comprasCotacaoRespostas).where(
+              and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId))
+            );
+          }
+          const rMap: Record<number, any> = {};
+          for (const r of resps) rMap[r.itemId] = r;
+
+          let totalMatCalc = 0;
+          for (const it of fdItens) {
+            const resp = rMap[it.id];
+            const valorItem = resp ? n(resp.total) : n(it.total);
+            const orcId = it.solicitacaoItemId ? fdScToOrc[it.solicitacaoItemId] : undefined;
+            const orc = orcId ? fdOrcMap[orcId] : undefined;
+            let ratioMat = tipoEfetivo === "material" || tipoEfetivo === "pacote" ? 1 : 0;
+            if (orc && orc.total > 0) ratioMat = orc.mat / orc.total;
+            totalMatCalc += valorItem * ratioMat;
+          }
+          totalMatCalc = Math.round(totalMatCalc * 100) / 100;
+          if (totalMatCalc <= 0 && fdItens.length > 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "FD não é permitido: nenhum valor de material identificado nesta cotação." });
+          }
+          if (totalMatCalc > 0 && input.valor > totalMatCalc * 1.001) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `FD excede o valor de material da cotação. Máximo MAT: R$ ${totalMatCalc.toFixed(2)}. Valor solicitado: R$ ${input.valor.toFixed(2)}.` });
+          }
+        } catch (e: any) {
+          if (e instanceof TRPCError) throw e;
+          console.warn("[FD] Erro ao validar split MAT/MDO:", e.message);
+        }
+      }
 
       if (input.modalidade === "fd_cliente" && cot.obraId) {
         try {

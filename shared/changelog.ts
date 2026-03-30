@@ -6554,4 +6554,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 03:00:00",
   },
+  {
+    versao: 916,
+    descricao:
+      "FD com split MAT/MDO: ao definir Faturamento Direto, o sistema calcula automaticamente " +
+      "a composição Material × Mão de Obra de cada item usando os dados do orçamento " +
+      "(custoUnitMat/custoUnitMdo). Dialog mostra breakdown visual com totais e percentuais " +
+      "de MAT e MDO. FD limitado ao valor de material — cotações 100% MDO bloqueiam FD. " +
+      "Validação dupla: frontend impede valor acima do MAT e backend rejeita com mensagem clara. " +
+      "Para itens pacote (MAT+MDO), tabela detalhada mostra split por item.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 03:15:00",
+  },
 ];
