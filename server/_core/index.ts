@@ -535,6 +535,26 @@ async function startServer() {
           console.log("[ColFix] orcamento_itens meta MAT/MDO já OK Rev.888");
         }
       } catch (e: any) { console.warn("[ColFix] meta MAT/MDO Rev.888:", e?.message ?? e); }
+
+      try {
+        const db2 = await getDb();
+        if (!db2) return;
+        const { sql: sql2 } = await import("drizzle-orm");
+        const fixedTipo = await db2.execute(sql2`
+          UPDATE compras_cotacoes c
+          SET tipo = 'servico'
+          FROM compras_solicitacoes s
+          WHERE c.solicitacao_id = s.id
+            AND s.tipo IN ('servico', 'pacote')
+            AND c.tipo = 'material'
+        `);
+        const fixCount = (fixedTipo as any).rowCount ?? 0;
+        if (fixCount > 0) {
+          console.log(`[ColFix] cotações tipo corrigido: ${fixCount} cotações material→servico Rev.888`);
+        } else {
+          console.log("[ColFix] cotações tipo já OK Rev.888");
+        }
+      } catch (e: any) { console.warn("[ColFix] cotações tipo Rev.888:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Limpeza empresas de teste (Rev.738) — já completada
     // [REMOVIDO Rev.844] Purga de orfanatos/fantasmas — já completada, limpar via deleteObra cascata

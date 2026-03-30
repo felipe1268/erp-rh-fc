@@ -948,7 +948,7 @@ export default function Cotacoes() {
       return;
     }
     const sc = scsQ.data?.find(s => s.id === parseInt(scId)) as any;
-    const scTipo = sc?.tipo === "servico" ? "servico" as const : "material" as const;
+    const scTipo = (sc?.tipo === "servico" || sc?.tipo === "pacote") ? "servico" as const : "material" as const;
     const updates: any = { solicitacaoId: scId, tipo: scTipo };
     if (sc?.obraId && !form.obraId) updates.obraId = String(sc.obraId);
     setForm(p => ({ ...p, ...updates }));
