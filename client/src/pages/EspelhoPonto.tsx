@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Search, RefreshCw, User, ChevronDown, FileText,
-  Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info,
+  Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -316,11 +316,14 @@ export default function EspelhoPonto() {
   }, []);
 
   const [incluirDesligados, setIncluirDesligados] = useState(false);
-  const empListQ = trpc.employees.list.useQuery(
-    { companyId, companyIds, excludeTerminated: !incluirDesligados },
+  const empAllQ = trpc.employees.list.useQuery(
+    { companyId, companyIds },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
-  const empList: any[] = (empListQ.data as any[]) || [];
+  const allEmps: any[] = (empAllQ.data as any[]) || [];
+  const empList: any[] = incluirDesligados
+    ? allEmps
+    : allEmps.filter(e => !["Desligado", "Lista_Negra", "Inativo"].includes(e.status));
 
   const espelhoQ = trpc.horasExtras.getEspelhoPontoRange.useQuery(
     queryParams
@@ -339,9 +342,19 @@ export default function EspelhoPonto() {
     );
   }, [empList, searchQuery]);
 
+  const hiddenDesligados = useMemo(() => {
+    if (incluirDesligados) return 0;
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return 0;
+    return allEmps.filter(e =>
+      ["Desligado", "Lista_Negra", "Inativo"].includes(e.status) &&
+      (String(e.nomeCompleto).toLowerCase().includes(q) || String(e.codigoInterno || "").includes(q))
+    ).length;
+  }, [allEmps, searchQuery, incluirDesligados]);
+
   const selectedEmp = useMemo(
-    () => employeeId ? empList.find(e => Number(e.id) === employeeId) : null,
-    [empList, employeeId]
+    () => employeeId ? allEmps.find(e => Number(e.id) === employeeId) : null,
+    [allEmps, employeeId]
   );
 
   const recordMap: Record<string, any> = (espelhoQ.data?.records as any) || {};
@@ -459,12 +472,12 @@ export default function EspelhoPonto() {
                   onChange={e => { setSearchQuery(e.target.value); setShowDropdown(true); if (!e.target.value) setEmployeeId(null); }}
                   onFocus={() => setShowDropdown(true)}
                   onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-                  placeholder={empListQ.isLoading ? "Carregando…" : "Nome ou matrícula…"}
+                  placeholder={empAllQ.isLoading ? "Carregando…" : "Nome ou matrícula…"}
                   className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
                 />
                 <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300 pointer-events-none" />
               </div>
-              {showDropdown && filteredEmps.length > 0 && (
+              {showDropdown && (filteredEmps.length > 0 || hiddenDesligados > 0) && (
                 <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
                   <div className="max-h-60 overflow-y-auto">
                     {filteredEmps.slice(0,40).map((e: any) => (
@@ -483,6 +496,19 @@ export default function EspelhoPonto() {
                       </button>
                     ))}
                   </div>
+                  {hiddenDesligados > 0 && (
+                    <button
+                      onMouseDown={() => setIncluirDesligados(true)}
+                      className="w-full text-left px-4 py-2.5 bg-amber-50 hover:bg-amber-100 border-t border-amber-200 flex items-center gap-2 text-amber-700"
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      <span className="text-xs">
+                        {hiddenDesligados === 1 ? "1 funcionário desligado encontrado" : `${hiddenDesligados} funcionários desligados encontrados`}
+                        {" — "}
+                        <span className="font-semibold underline">clique para incluir</span>
+                      </span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>

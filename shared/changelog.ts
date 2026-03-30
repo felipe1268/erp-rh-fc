@@ -6568,4 +6568,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 03:15:00",
   },
+  {
+    versao: 917,
+    descricao:
+      "Espelho de Ponto: busca de desligados aprimorada. Agora carrega todos os funcionários " +
+      "e filtra no frontend. Quando o usuário digita um nome que pertence a um funcionário " +
+      "desligado, aparece um aviso amarelo no dropdown: 'X funcionário(s) desligado(s) encontrado(s) " +
+      "— clique para incluir', que ativa automaticamente o filtro. Seleção de desligado persiste " +
+      "mesmo ao alternar o checkbox.",
+    tipo: "melhoria",
+    modulos: "RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 03:30:00",
+  },
 ];
