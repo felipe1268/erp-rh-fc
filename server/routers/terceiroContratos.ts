@@ -1234,6 +1234,7 @@ export const terceiroContratosRouter = router({
         const ci = itensContrato.find(c => c.id === im.contratoItemId);
         return {
           descricao: ci?.descricao || im.descricao || "",
+          eapCodigo: (ci as any)?.eapCodigo || "",
           unidade: ci?.unidade || "-",
           quantidade: n(ci?.quantidade),
           valorUnitario: n(ci?.valorUnitario),
@@ -1245,6 +1246,33 @@ export const terceiroContratosRouter = router({
           valorAcumulado: n(im.valorAcumulado),
         };
       });
+      itensEnriquecidos.sort((a, b) => a.eapCodigo.localeCompare(b.eapCodigo, undefined, { numeric: true }));
+
+      let hierMap = new Map<string, string>();
+      try {
+        const orcamentoId = contrato.orcamentoId || (itensContrato.length > 0 ? (itensContrato[0] as any).orcamentoItemId ? undefined : undefined : undefined);
+        const eapCodes = [...new Set(itensContrato.map((it: any) => it.eapCodigo).filter(Boolean))] as string[];
+        if (eapCodes.length > 0) {
+          const parentEaps = new Set<string>();
+          for (const eap of eapCodes) {
+            const parts = eap.split(".");
+            for (let i = 1; i < parts.length; i++) parentEaps.add(parts.slice(0, i).join("."));
+          }
+          const allEaps = [...new Set([...eapCodes, ...parentEaps])];
+          if (allEaps.length > 0) {
+            const atividadesRows = await db.select({ eapCodigo: planejamentoAtividades.eapCodigo, nome: planejamentoAtividades.nome })
+              .from(planejamentoAtividades)
+              .where(inArray(planejamentoAtividades.eapCodigo, allEaps));
+            for (const a of atividadesRows) { if (a.eapCodigo && a.nome) hierMap.set(a.eapCodigo, a.nome); }
+          }
+          if (hierMap.size === 0 && contrato.orcamentoId) {
+            const orcRows = await db.select({ eapCodigo: orcamentoItens.eapCodigo, descricao: orcamentoItens.descricao })
+              .from(orcamentoItens)
+              .where(and(eq(orcamentoItens.orcamentoId, contrato.orcamentoId), inArray(orcamentoItens.eapCodigo, allEaps)));
+            for (const o of orcRows) { if (o.eapCodigo && o.descricao) hierMap.set(o.eapCodigo, o.descricao); }
+          }
+        }
+      } catch {}
 
       const totalValorContrato = itensEnriquecidos.reduce((s, i) => s + i.valorTotal, 0);
       const totalValorPeriodo = itensEnriquecidos.reduce((s, i) => s + i.valorPeriodo, 0);
@@ -1259,6 +1287,22 @@ export const terceiroContratosRouter = router({
       const valorLiquido = totalValorPeriodo - totalRetencoes - descontos;
 
       const PDFDocument = (await import("pdfkit")).default;
+      const fs = await import("fs");
+      const path = await import("path");
+
+      function resolveLogoSource(logoUrl: string | null | undefined): string | Buffer | null {
+        if (!logoUrl) return null;
+        if (logoUrl.startsWith("data:image")) {
+          const matches = logoUrl.match(/^data:image\/\w+;base64,(.+)$/);
+          if (matches?.[1]) return Buffer.from(matches[1], "base64");
+          return null;
+        }
+        if (logoUrl.startsWith("/uploads/")) {
+          const localPath = path.join(process.cwd(), "server", logoUrl);
+          if (fs.existsSync(localPath)) return localPath;
+        }
+        return null;
+      }
 
       return new Promise<{ base64: string; filename: string }>((resolve, reject) => {
         const doc = new PDFDocument({ size: "A4", margin: 40, bufferPages: true });
@@ -1273,74 +1317,127 @@ export const terceiroContratosRouter = router({
 
         const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
         const PCT = (v: number) => v.toFixed(1) + "%";
-        const pageW = doc.page.width - 80;
+        const mL = 40;
+        const mR = 40;
+        const pageW = doc.page.width - mL - mR;
+        const primary = "#1B3A5C";
+        const accent = "#2980b9";
 
-        doc.fontSize(16).font("Helvetica-Bold").text(company?.name || "FC Engenharia", 40, 40);
-        doc.fontSize(8).font("Helvetica").text(company?.cnpj ? `CNPJ: ${company.cnpj}` : "", 40, 58);
-        doc.moveDown(0.3);
+        const headerH = 75;
+        doc.rect(0, 0, doc.page.width, headerH).fill(primary);
 
-        doc.moveTo(40, 72).lineTo(40 + pageW, 72).stroke("#2563eb");
-        doc.moveTo(40, 73).lineTo(40 + pageW, 73).stroke("#2563eb");
+        const logoSrc = resolveLogoSource((company as any)?.logoUrl);
+        let logoRendered = false;
+        const logoSize = 55;
+        if (logoSrc) {
+          try { doc.image(logoSrc, mL, 10, { fit: [logoSize, logoSize] }); logoRendered = true; } catch { logoRendered = false; }
+        }
 
-        doc.fontSize(13).font("Helvetica-Bold").fillColor("#1e40af")
-          .text(`BOLETIM DE MEDIÇÃO Nº ${String(medicao.numero || 1).padStart(2, "0")}`, 40, 82);
-        doc.fontSize(9).font("Helvetica").fillColor("#333");
+        const nameX = logoRendered ? mL + logoSize + 12 : mL + 10;
+        doc.font("Helvetica-Bold").fontSize(14).fillColor("#ffffff")
+          .text(company?.name || "FC Engenharia", nameX, 16);
+        doc.font("Helvetica").fontSize(8).fillColor("#ccd6e0")
+          .text(company?.cnpj ? `CNPJ: ${company.cnpj}` : "", nameX, 34);
+        doc.font("Helvetica").fontSize(7).fillColor("#ccd6e0")
+          .text(`BOLETIM DE MEDIÇÃO`, nameX, 47);
 
-        let y = 100;
-        const col1 = 40, col2 = 300;
+        const numBox = `Nº ${String(medicao.numero || 1).padStart(2, "0")}`;
+        doc.roundedRect(doc.page.width - mR - 80, 15, 80, 45, 4).fill("#ffffff");
+        doc.font("Helvetica").fontSize(7).fillColor(primary).text("MEDIÇÃO", doc.page.width - mR - 75, 22, { width: 70, align: "center" });
+        doc.font("Helvetica-Bold").fontSize(16).fillColor(primary).text(numBox, doc.page.width - mR - 75, 35, { width: 70, align: "center" });
+
+        let y = headerH + 15;
+
+        doc.fontSize(8).font("Helvetica").fillColor("#333");
+        const col1 = mL, col2 = 310;
         const infoLine = (label: string, value: string, x: number, yy: number) => {
-          doc.font("Helvetica-Bold").text(label, x, yy, { continued: true }).font("Helvetica").text(` ${value}`);
+          doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#666").text(label, x, yy);
+          doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#1a1a2e").text(value, x, yy + 10, { width: 240 });
         };
 
-        infoLine("Contrato:", contrato.descricao || `#${contrato.id}`, col1, y);
-        infoLine("Período:", medicao.periodo || "-", col2, y);
-        y += 14;
-        infoLine("Terceiro:", empresa?.razaoSocial || empresa?.nomeFantasia || "-", col1, y);
-        infoLine("CNPJ:", empresa?.cnpj || "-", col2, y);
-        y += 14;
-        infoLine("Obra:", obraNome || "-", col1, y);
+        infoLine("CONTRATO", contrato.descricao || `#${contrato.id}`, col1, y);
+        infoLine("PERÍODO", medicao.periodo || "-", col2, y);
+        y += 28;
+        infoLine("TERCEIRO", empresa?.razaoSocial || empresa?.nomeFantasia || "-", col1, y);
+        infoLine("CNPJ TERCEIRO", empresa?.cnpj || "-", col2, y);
+        y += 28;
+        infoLine("OBRA", obraNome || "-", col1, y);
         const statusLabels: Record<string, string> = { rascunho: "Rascunho", aguardando_aprovacao: "Aguard. Aprovação", aprovada: "Aprovada", paga: "Paga", rejeitada: "Rejeitada" };
-        infoLine("Status:", statusLabels[medicao.status || "rascunho"] || medicao.status || "-", col2, y);
-        y += 14;
+        infoLine("STATUS", statusLabels[medicao.status || "rascunho"] || medicao.status || "-", col2, y);
+        y += 28;
         if ((medicao as any).dataInicio || (medicao as any).dataFim) {
-          infoLine("Data Início:", (medicao as any).dataInicio || "-", col1, y);
-          infoLine("Data Fim:", (medicao as any).dataFim || "-", col2, y);
-          y += 14;
+          infoLine("DATA INÍCIO", (medicao as any).dataInicio || "-", col1, y);
+          infoLine("DATA FIM", (medicao as any).dataFim || "-", col2, y);
+          y += 28;
         }
-        infoLine("Valor Contrato:", BRL(n(contrato.valorTotal)), col1, y);
-        y += 20;
+        infoLine("VALOR DO CONTRATO", BRL(n(contrato.valorTotal)), col1, y);
+        y += 28;
 
-        // Table header
+        doc.strokeColor("#dde3ea").lineWidth(0.5).moveTo(mL, y).lineTo(mL + pageW, y).stroke();
+        y += 10;
+
         const cols = [
-          { label: "Item", width: 140, align: "left" as const },
-          { label: "Unid.", width: 35, align: "center" as const },
-          { label: "Qtd.", width: 40, align: "right" as const },
-          { label: "V.Unit.", width: 60, align: "right" as const },
-          { label: "V.Total", width: 60, align: "right" as const },
-          { label: "Ant.%", width: 40, align: "right" as const },
-          { label: "Per.%", width: 40, align: "right" as const },
-          { label: "Acum.%", width: 40, align: "right" as const },
-          { label: "V.Período", width: 60, align: "right" as const },
+          { label: "EAP", width: 45, align: "left" as const },
+          { label: "Atividade", width: 130, align: "left" as const },
+          { label: "Unid.", width: 30, align: "center" as const },
+          { label: "Qtd.", width: 45, align: "right" as const },
+          { label: "V.Unit.", width: 55, align: "right" as const },
+          { label: "V.Total", width: 55, align: "right" as const },
+          { label: "Ant.%", width: 35, align: "right" as const },
+          { label: "Per.%", width: 35, align: "right" as const },
+          { label: "Acum.%", width: 35, align: "right" as const },
+          { label: "V.Período", width: 55, align: "right" as const },
         ];
-        let xOff = col1;
-        doc.rect(col1, y, pageW, 16).fill("#1e40af");
-        doc.fillColor("#fff").fontSize(7).font("Helvetica-Bold");
-        for (const c of cols) {
-          const tx = c.align === "right" ? xOff + c.width - 3 : c.align === "center" ? xOff + c.width / 2 : xOff + 3;
-          doc.text(c.label, tx, y + 4, { width: c.width, align: c.align });
-          xOff += c.width;
-        }
-        y += 16;
 
-        doc.fillColor("#333").fontSize(7).font("Helvetica");
-        for (let idx = 0; idx < itensEnriquecidos.length; idx++) {
-          if (y > 760) { doc.addPage(); y = 40; }
-          const item = itensEnriquecidos[idx];
-          if (idx % 2 === 0) doc.rect(col1, y, pageW, 14).fill("#f8fafc");
-          doc.fillColor("#333");
-          xOff = col1;
+        const drawTableHeader = (yPos: number) => {
+          let xOff = mL;
+          doc.rect(mL, yPos, pageW, 16).fill(primary);
+          doc.fillColor("#fff").fontSize(6.5).font("Helvetica-Bold");
+          for (const c of cols) {
+            const tx = c.align === "right" ? xOff + c.width - 3 : c.align === "center" ? xOff + c.width / 2 : xOff + 3;
+            doc.text(c.label, tx, yPos + 4, { width: c.width, align: c.align });
+            xOff += c.width;
+          }
+          return yPos + 16;
+        };
+
+        y = drawTableHeader(y);
+
+        const renderedGroups = new Set<string>();
+        let rowIdx = 0;
+
+        for (const item of itensEnriquecidos) {
+          const eap = item.eapCodigo;
+          if (eap) {
+            const parts = eap.split(".");
+            for (let depth = 1; depth < parts.length; depth++) {
+              const parentEap = parts.slice(0, depth).join(".");
+              if (!renderedGroups.has(parentEap)) {
+                renderedGroups.add(parentEap);
+                if (y > 750) { doc.addPage(); y = 40; y = drawTableHeader(y); }
+                const isTop = depth === 1;
+                const bgColor = isTop ? "#e8edf4" : "#f3f5f8";
+                doc.rect(mL, y, pageW, 14).fill(bgColor);
+                if (isTop) doc.rect(mL, y, 3, 14).fill("#d4a017");
+                doc.fillColor(primary).font("Helvetica-Bold").fontSize(7);
+                doc.text(parentEap, mL + 5, y + 3);
+                const indent = 5 + (depth - 1) * 10;
+                const nome = hierMap.get(parentEap) || `Nível ${parentEap}`;
+                doc.text(`▸ ${nome}`, mL + 45 + indent, y + 3, { width: pageW - 50 - indent });
+                y += 14;
+                rowIdx = 0;
+              }
+            }
+          }
+
+          if (y > 750) { doc.addPage(); y = 40; y = drawTableHeader(y); }
+          if (rowIdx % 2 === 0) doc.rect(mL, y, pageW, 13).fill("#fafbfc");
+          doc.fillColor("#333").font("Helvetica").fontSize(6.5);
+          let xOff = mL;
+          const indent = eap ? Math.max(0, (eap.split(".").length - 1) * 6) : 0;
           const vals = [
-            { v: item.descricao.substring(0, 35), a: "left" as const },
+            { v: eap || "-", a: "left" as const },
+            { v: item.descricao.substring(0, 28), a: "left" as const },
             { v: item.unidade, a: "center" as const },
             { v: item.quantidade.toFixed(2), a: "right" as const },
             { v: BRL(item.valorUnitario), a: "right" as const },
@@ -1352,62 +1449,69 @@ export const terceiroContratosRouter = router({
           ];
           for (let ci = 0; ci < cols.length; ci++) {
             const c = cols[ci];
-            const tx = c.align === "right" ? xOff + c.width - 3 : c.align === "center" ? xOff + c.width / 2 : xOff + 3;
-            doc.text(vals[ci].v, tx, y + 3, { width: c.width, align: vals[ci].a });
+            const cellX = ci === 1 ? xOff + indent : xOff;
+            const cellW = ci === 1 ? c.width - indent : c.width;
+            const tx = c.align === "right" ? cellX + cellW - 3 : c.align === "center" ? cellX + cellW / 2 : cellX + 3;
+            doc.text(vals[ci].v, tx, y + 3, { width: cellW, align: vals[ci].a });
             xOff += c.width;
           }
-          y += 14;
+          doc.strokeColor("#e5e7eb").lineWidth(0.3).moveTo(mL, y + 13).lineTo(mL + pageW, y + 13).stroke();
+          y += 13;
+          rowIdx++;
         }
 
-        // Totals row
-        if (y > 760) { doc.addPage(); y = 40; }
-        doc.rect(col1, y, pageW, 16).fill("#e2e8f0");
+        if (y > 750) { doc.addPage(); y = 40; }
+        doc.rect(mL, y, pageW, 16).fill("#e2e8f0");
         doc.fillColor("#1e293b").font("Helvetica-Bold").fontSize(7);
-        doc.text("TOTAL", col1 + 3, y + 4);
-        const totXStart = col1 + 140 + 35 + 40 + 60;
-        doc.text(BRL(totalValorContrato), totXStart - 3, y + 4, { width: 60, align: "right" });
-        doc.text(BRL(totalValorPeriodo), totXStart + 60 + 40 + 40 + 40 - 3, y + 4, { width: 60, align: "right" });
+        doc.text("TOTAL", mL + 5, y + 4);
+        let totX = mL;
+        for (let i = 0; i < 5; i++) totX += cols[i].width;
+        doc.text(BRL(totalValorContrato), totX - 3, y + 4, { width: cols[5].width, align: "right" });
+        let vPerX = totX + cols[5].width + cols[6].width + cols[7].width + cols[8].width;
+        doc.text(BRL(totalValorPeriodo), vPerX - 3, y + 4, { width: cols[9].width, align: "right" });
         y += 24;
 
-        // Retenções section
         if (totalRetencoes > 0 || descontos > 0) {
-          if (y > 720) { doc.addPage(); y = 40; }
-          doc.fontSize(10).font("Helvetica-Bold").fillColor("#1e40af").text("RETENÇÕES E DESCONTOS", col1, y);
-          y += 16;
+          if (y > 700) { doc.addPage(); y = 40; }
+          doc.font("Helvetica-Bold").fontSize(9).fillColor(primary).text("RETENÇÕES E DESCONTOS", mL, y);
+          y += 14;
+          doc.strokeColor(accent).lineWidth(0.8).moveTo(mL, y).lineTo(mL + 200, y).stroke();
+          y += 8;
           doc.fontSize(8).font("Helvetica").fillColor("#333");
-          const retW = 250;
-          if (retISS > 0) { doc.text("ISS:", col1, y, { continued: true }).text(` ${BRL(retISS)}`, { align: "left" }); y += 13; }
-          if (retINSS > 0) { doc.text("INSS:", col1, y, { continued: true }).text(` ${BRL(retINSS)}`, { align: "left" }); y += 13; }
-          if (retIRRF > 0) { doc.text("IRRF:", col1, y, { continued: true }).text(` ${BRL(retIRRF)}`, { align: "left" }); y += 13; }
-          if (retOutras > 0) { doc.text("Outras Retenções:", col1, y, { continued: true }).text(` ${BRL(retOutras)}`, { align: "left" }); y += 13; }
-          if (descontos > 0) { doc.text("Descontos:", col1, y, { continued: true }).text(` ${BRL(descontos)}`, { align: "left" }); y += 13; }
-          doc.font("Helvetica-Bold").text("Total Retenções:", col1, y, { continued: true }).text(` ${BRL(totalRetencoes)}`); y += 13;
-          if ((medicao as any).observacoesRetencao) { doc.font("Helvetica").fontSize(7).text(`Obs.: ${(medicao as any).observacoesRetencao}`, col1, y); y += 13; }
+          if (retISS > 0) { doc.text(`ISS: ${BRL(retISS)}`, mL, y); y += 13; }
+          if (retINSS > 0) { doc.text(`INSS: ${BRL(retINSS)}`, mL, y); y += 13; }
+          if (retIRRF > 0) { doc.text(`IRRF: ${BRL(retIRRF)}`, mL, y); y += 13; }
+          if (retOutras > 0) { doc.text(`Outras Retenções: ${BRL(retOutras)}`, mL, y); y += 13; }
+          if (descontos > 0) { doc.text(`Descontos: ${BRL(descontos)}`, mL, y); y += 13; }
+          doc.font("Helvetica-Bold").text(`Total Retenções: ${BRL(totalRetencoes)}`, mL, y); y += 13;
+          if ((medicao as any).observacoesRetencao) { doc.font("Helvetica").fontSize(7).text(`Obs.: ${(medicao as any).observacoesRetencao}`, mL, y); y += 13; }
           y += 8;
         }
 
-        // Summary
-        if (y > 720) { doc.addPage(); y = 40; }
-        doc.rect(col1, y, pageW, 50).lineWidth(1).stroke("#2563eb");
-        doc.fontSize(9).font("Helvetica-Bold").fillColor("#1e40af");
-        doc.text("RESUMO FINANCEIRO", col1 + 10, y + 6);
-        doc.fontSize(8).font("Helvetica").fillColor("#333");
-        doc.text(`Valor Bruto Período: ${BRL(totalValorPeriodo)}`, col1 + 10, y + 20);
-        doc.text(`Retenções: ${BRL(totalRetencoes)}`, col1 + 200, y + 20);
-        doc.text(`Descontos: ${BRL(descontos)}`, col1 + 350, y + 20);
-        doc.font("Helvetica-Bold").fontSize(10).fillColor("#1e40af");
-        doc.text(`Valor Líquido: ${BRL(valorLiquido)}`, col1 + 10, y + 35);
-        y += 60;
-
-        // Signature lines
         if (y > 700) { doc.addPage(); y = 40; }
-        y += 30;
+        doc.roundedRect(mL, y, pageW, 55, 4).lineWidth(1.2).stroke(primary);
+        doc.font("Helvetica-Bold").fontSize(9).fillColor(primary).text("RESUMO FINANCEIRO", mL + 12, y + 8);
+        doc.fontSize(8).font("Helvetica").fillColor("#333");
+        const summCol = (pageW - 24) / 3;
+        doc.text(`Valor Bruto Período:`, mL + 12, y + 22);
+        doc.font("Helvetica-Bold").text(BRL(totalValorPeriodo), mL + 12, y + 32);
+        doc.font("Helvetica").text(`Retenções:`, mL + 12 + summCol, y + 22);
+        doc.font("Helvetica-Bold").text(BRL(totalRetencoes), mL + 12 + summCol, y + 32);
+        doc.font("Helvetica").text(`Descontos:`, mL + 12 + summCol * 2, y + 22);
+        doc.font("Helvetica-Bold").text(BRL(descontos), mL + 12 + summCol * 2, y + 32);
+        doc.font("Helvetica-Bold").fontSize(11).fillColor(primary);
+        doc.text(`Valor Líquido: ${BRL(valorLiquido)}`, mL + 12, y + 45);
+        y += 65;
+
+        if (y > 690) { doc.addPage(); y = 40; }
+        y += 35;
         const sigW = 180;
-        doc.moveTo(col1 + 20, y).lineTo(col1 + 20 + sigW, y).stroke("#666");
-        doc.moveTo(col1 + pageW - 20 - sigW, y).lineTo(col1 + pageW - 20, y).stroke("#666");
+        doc.strokeColor("#888").lineWidth(0.5);
+        doc.moveTo(mL + 30, y).lineTo(mL + 30 + sigW, y).stroke();
+        doc.moveTo(mL + pageW - 30 - sigW, y).lineTo(mL + pageW - 30, y).stroke();
         doc.fontSize(7).font("Helvetica").fillColor("#666");
-        doc.text("Contratante", col1 + 20, y + 4, { width: sigW, align: "center" });
-        doc.text("Contratada", col1 + pageW - 20 - sigW, y + 4, { width: sigW, align: "center" });
+        doc.text("Contratante", mL + 30, y + 5, { width: sigW, align: "center" });
+        doc.text("Contratada", mL + pageW - 30 - sigW, y + 5, { width: sigW, align: "center" });
 
         doc.end();
       });
