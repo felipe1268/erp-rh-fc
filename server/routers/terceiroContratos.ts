@@ -2298,18 +2298,25 @@ export const terceiroContratosRouter = router({
         }
       }
 
-      // REALIZADO: usa avanço real semanal do cronograma × valor do item
+      // REALIZADO: usa medições do contrato (todas exceto cancelada/rejeitada)
       const semanasMapReal: Record<string, number> = {};
       let totalRealizado = 0;
-      for (const item of todosItens) {
-        if (!item.planejamentoAtividadeId) continue;
-        const avancosItem = avancos.filter(a => a.atividadeId === item.planejamentoAtividadeId);
-        for (const av of avancosItem) {
-          const pctSemanal = n(av.percentualSemanal ?? 0);
-          if (pctSemanal <= 0) continue;
-          const valorSemana = (pctSemanal / 100) * n(item.valorTotal);
-          semanasMapReal[av.semana] = (semanasMapReal[av.semana] || 0) + valorSemana;
-          totalRealizado += valorSemana;
+      if (contratosIds.length > 0) {
+        const todasMedicoes = await db.select().from(terceiroMedicoes)
+          .where(and(
+            eq(terceiroMedicoes.companyId, input.companyId),
+            inArray(terceiroMedicoes.contratoId, contratosIds),
+          ));
+        const medicoesValidas = todasMedicoes.filter(m => m.status !== "cancelada" && m.status !== "rejeitada");
+
+        for (const med of medicoesValidas) {
+          const valorMed = n(med.valorMedido);
+          if (valorMed <= 0) continue;
+          totalRealizado += valorMed;
+
+          const refDate = med.aprovadoEm ? new Date(med.aprovadoEm) : new Date(med.criadoEm);
+          const semanaKey = getMonday(refDate);
+          semanasMapReal[semanaKey] = (semanasMapReal[semanaKey] || 0) + valorMed;
         }
       }
 
