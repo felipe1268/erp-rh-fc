@@ -864,19 +864,39 @@ export const terceiroContratosRouter = router({
               .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
             console.log(`[gerarMedicao] Revisão aprovada: ${rev ? rev.id : "NÃO ENCONTRADA"}`);
             if (rev) {
-              const atividades = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo })
+              const atividades = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo, nome: planejamentoAtividades.nome })
                 .from(planejamentoAtividades)
                 .where(and(eq(planejamentoAtividades.revisaoId, rev.id), eq(planejamentoAtividades.projetoId, proj.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
               const eapMap: Record<string, number> = {};
-              for (const a of atividades) { if (a.eapCodigo) eapMap[a.eapCodigo] = a.id; }
-              console.log(`[gerarMedicao] ${atividades.length} atividades no planejamento, ${Object.keys(eapMap).length} com EAP`);
+              const nomeMap: Record<string, number> = {};
+              for (const a of atividades) {
+                if (a.eapCodigo) eapMap[a.eapCodigo] = a.id;
+                if (a.nome) {
+                  const nn = a.nome.trim().toLowerCase();
+                  if (!(nn in nomeMap)) nomeMap[nn] = a.id;
+                }
+              }
+              console.log(`[gerarMedicao] ${atividades.length} atividades no planejamento, ${Object.keys(eapMap).length} com EAP, ${Object.keys(nomeMap).length} com nome`);
               for (const item of itensDesvinculados) {
                 const eap = (item as any).eapCodigo;
-                console.log(`[gerarMedicao] Tentando vincular item "${item.descricao}" eapCodigo="${eap}" → match=${eap ? !!eapMap[eap] : false}`);
+                let matched = false;
                 if (eap && eapMap[eap]) {
                   await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: eapMap[eap] }).where(eq(terceiroContratoItens.id, item.id));
                   (item as any).planejamentoAtividadeId = eapMap[eap];
-                  console.log(`[gerarMedicao] Auto-link OK: "${item.descricao}" → atividade ${eapMap[eap]} (EAP ${eap})`);
+                  console.log(`[gerarMedicao] Auto-link EAP: "${item.descricao}" → atividade ${eapMap[eap]} (EAP ${eap})`);
+                  matched = true;
+                }
+                if (!matched && item.descricao) {
+                  const descNorm = item.descricao.trim().toLowerCase();
+                  if (nomeMap[descNorm]) {
+                    await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: nomeMap[descNorm] }).where(eq(terceiroContratoItens.id, item.id));
+                    (item as any).planejamentoAtividadeId = nomeMap[descNorm];
+                    console.log(`[gerarMedicao] Auto-link NOME: "${item.descricao}" → atividade ${nomeMap[descNorm]}`);
+                    matched = true;
+                  }
+                }
+                if (!matched) {
+                  console.log(`[gerarMedicao] Sem match para "${item.descricao}" eap="${eap}"`);
                 }
               }
             }
@@ -918,8 +938,9 @@ export const terceiroContratosRouter = router({
         } catch (e) { console.warn("[gerarMedicao] Erro ao carregar avancoMap:", e); }
       }
 
-      // Also build eapToAtividadeId map for fallback matching
+      // Also build eapToAtividadeId + nomeToAtividadeId maps for fallback matching
       const eapToAtividadeId: Record<string, number> = {};
+      const nomeToAtividadeId: Record<string, number> = {};
       if (contrato.obraId) {
         try {
           const [proj] = await db.select({ id: planejamentoProjetos.id })
@@ -932,17 +953,23 @@ export const terceiroContratosRouter = router({
               .where(eq(planejamentoRevisoes.projetoId, proj.id))
               .orderBy(desc(planejamentoRevisoes.numero));
             for (const rev of revs) {
-              const ativs = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo })
+              const ativs = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo, nome: planejamentoAtividades.nome })
                 .from(planejamentoAtividades)
                 .where(and(eq(planejamentoAtividades.revisaoId, rev.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
               for (const a of ativs) {
                 if (a.eapCodigo && !(a.eapCodigo in eapToAtividadeId)) {
                   eapToAtividadeId[a.eapCodigo] = a.id;
                 }
+                if (a.nome) {
+                  const nomeNorm = a.nome.trim().toLowerCase();
+                  if (!(nomeNorm in nomeToAtividadeId)) nomeToAtividadeId[nomeNorm] = a.id;
+                }
               }
               if (Object.keys(eapToAtividadeId).length > 0) break;
             }
-            console.log(`[gerarMedicao] eapToAtividadeId map: ${Object.keys(eapToAtividadeId).length} EAPs`);
+            console.log(`[gerarMedicao] eapToAtividadeId map: ${Object.keys(eapToAtividadeId).length} EAPs, nomeMap: ${Object.keys(nomeToAtividadeId).length}`);
+            const sampleEaps = Object.keys(eapToAtividadeId).slice(0, 10);
+            console.log(`[gerarMedicao] Sample EAPs from planejamento: ${sampleEaps.join(", ")}`);
           }
         } catch (e) { console.warn("[gerarMedicao] Erro ao carregar eapToAtividadeId:", e); }
       }
@@ -956,13 +983,23 @@ export const terceiroContratosRouter = router({
         let percentualFisico = n(item.percentualMedidoAcumulado);
         let atividadeIdUsada = item.planejamentoAtividadeId;
 
-        // Fallback: if item has no linked activity but has eapCodigo, find via map
+        // Fallback 1: if item has no linked activity but has eapCodigo, find via EAP map
         if (!atividadeIdUsada && (item as any).eapCodigo) {
           const eap = (item as any).eapCodigo;
           if (eapToAtividadeId[eap]) {
             atividadeIdUsada = eapToAtividadeId[eap];
             await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: atividadeIdUsada }).where(eq(terceiroContratoItens.id, item.id));
-            console.log(`[gerarMedicao] Fallback-link: "${item.descricao}" EAP=${eap} → atividade ${atividadeIdUsada}`);
+            console.log(`[gerarMedicao] Fallback-EAP: "${item.descricao}" EAP=${eap} → atividade ${atividadeIdUsada}`);
+          }
+        }
+
+        // Fallback 2: match by nome/descricao (orçamento EAPs differ from cronograma EAPs)
+        if (!atividadeIdUsada && item.descricao) {
+          const descNorm = item.descricao.trim().toLowerCase();
+          if (nomeToAtividadeId[descNorm]) {
+            atividadeIdUsada = nomeToAtividadeId[descNorm];
+            await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: atividadeIdUsada }).where(eq(terceiroContratoItens.id, item.id));
+            console.log(`[gerarMedicao] Fallback-NOME: "${item.descricao}" → atividade ${atividadeIdUsada}`);
           }
         }
 
@@ -1144,9 +1181,10 @@ export const terceiroContratosRouter = router({
       const itensMedicao = await db.select().from(terceiroMedicaoItens)
         .where(eq(terceiroMedicaoItens.medicaoId, input.medicaoId));
 
-      // Build avancoMap + eapToAtividadeId
+      // Build avancoMap + eapToAtividadeId + nomeToAtividadeId
       const avancoMap: Record<number, number> = {};
       const eapToAtividadeId: Record<string, number> = {};
+      const nomeToAtividadeId: Record<string, number> = {};
       if (contrato.obraId) {
         try {
           const [proj] = await db.select({ id: planejamentoProjetos.id })
@@ -1168,18 +1206,22 @@ export const terceiroContratosRouter = router({
               .where(eq(planejamentoRevisoes.projetoId, proj.id))
               .orderBy(desc(planejamentoRevisoes.numero));
             for (const rev of revs) {
-              const ativs = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo })
+              const ativs = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo, nome: planejamentoAtividades.nome })
                 .from(planejamentoAtividades)
                 .where(and(eq(planejamentoAtividades.revisaoId, rev.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
               for (const a of ativs) {
                 if (a.eapCodigo && !(a.eapCodigo in eapToAtividadeId)) eapToAtividadeId[a.eapCodigo] = a.id;
+                if (a.nome) {
+                  const nomeNorm = a.nome.trim().toLowerCase();
+                  if (!(nomeNorm in nomeToAtividadeId)) nomeToAtividadeId[nomeNorm] = a.id;
+                }
               }
               if (Object.keys(eapToAtividadeId).length > 0) break;
             }
           }
         } catch (e) { console.warn("[recalcularMedicao] Erro:", e); }
       }
-      console.log(`[recalcularMedicao] avancoMap: ${Object.keys(avancoMap).length} atividades, eapMap: ${Object.keys(eapToAtividadeId).length} EAPs`);
+      console.log(`[recalcularMedicao] avancoMap: ${Object.keys(avancoMap).length} atividades, eapMap: ${Object.keys(eapToAtividadeId).length} EAPs, nomeMap: ${Object.keys(nomeToAtividadeId).length}`);
 
       let valorMedidoPeriodo = 0;
       const itensResultado: { descricao: string; eapCodigo: string | null; vinculado: boolean; percentual: number }[] = [];
@@ -1188,6 +1230,7 @@ export const terceiroContratosRouter = router({
         if (!itemContrato) continue;
 
         let atividadeId = itemContrato.planejamentoAtividadeId;
+        // Fallback 1: match by EAP code
         if (!atividadeId && (itemContrato as any).eapCodigo) {
           const eap = (itemContrato as any).eapCodigo;
           if (eapToAtividadeId[eap]) {
@@ -1196,8 +1239,19 @@ export const terceiroContratosRouter = router({
             console.log(`[recalcularMedicao] Link EAP "${eap}" → ativId ${atividadeId}`);
           }
         }
+        // Fallback 2: match by nome/descricao (orçamento EAPs differ from cronograma EAPs)
+        if (!atividadeId && itemContrato.descricao) {
+          const descNorm = itemContrato.descricao.trim().toLowerCase();
+          if (nomeToAtividadeId[descNorm]) {
+            atividadeId = nomeToAtividadeId[descNorm];
+            await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: atividadeId }).where(eq(terceiroContratoItens.id, itemContrato.id));
+            console.log(`[recalcularMedicao] Link NOME "${itemContrato.descricao}" → ativId ${atividadeId}`);
+          }
+        }
         if (!atividadeId) {
-          console.log(`[recalcularMedicao] Item sem link: id=${itemContrato.id} eap=${(itemContrato as any).eapCodigo || "NULL"} orcItemId=${itemContrato.orcamentoItemId || "NULL"} desc="${itemContrato.descricao}"`);
+          const descNorm = itemContrato.descricao?.trim().toLowerCase() || "";
+          const sampleNomes = Object.keys(nomeToAtividadeId).filter(n => n.includes("reboco") || n.includes("revest")).slice(0, 5);
+          console.log(`[recalcularMedicao] Item sem link: id=${itemContrato.id} eap=${(itemContrato as any).eapCodigo || "NULL"} desc="${itemContrato.descricao}" descNorm="${descNorm}" sampleNomes=[${sampleNomes.join("; ")}]`);
         }
 
         let percentualFisico = n(itemContrato.percentualMedidoAcumulado);
@@ -1750,6 +1804,7 @@ export const terceiroContratosRouter = router({
         }
 
         let eapToAtividadeId: Record<string, number> = {};
+        let nomeToAtividadeIdLocal: Record<string, number> = {};
         if (cot.obraId) {
           try {
             const [proj] = await db.select({ id: planejamentoProjetos.id })
@@ -1762,11 +1817,15 @@ export const terceiroContratosRouter = router({
                 .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
                 .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
               if (rev) {
-                const atividades = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo })
+                const atividades = await db.select({ id: planejamentoAtividades.id, eapCodigo: planejamentoAtividades.eapCodigo, nome: planejamentoAtividades.nome })
                   .from(planejamentoAtividades)
                   .where(and(eq(planejamentoAtividades.revisaoId, rev.id), eq(planejamentoAtividades.projetoId, proj.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`));
                 for (const a of atividades) {
                   if (a.eapCodigo) eapToAtividadeId[a.eapCodigo] = a.id;
+                  if (a.nome) {
+                    const nn = a.nome.trim().toLowerCase();
+                    if (!(nn in nomeToAtividadeIdLocal)) nomeToAtividadeIdLocal[nn] = a.id;
+                  }
                 }
               }
             }
@@ -1787,7 +1846,7 @@ export const terceiroContratosRouter = router({
               valorTotal: String(it.total || "0"),
               eapCodigo: eap,
               orcamentoItemId: scInfo?.orcamentoItemId ?? null,
-              planejamentoAtividadeId: eap && eapToAtividadeId[eap] ? eapToAtividadeId[eap] : null,
+              planejamentoAtividadeId: eap && eapToAtividadeId[eap] ? eapToAtividadeId[eap] : (it.descricao && nomeToAtividadeIdLocal[it.descricao.trim().toLowerCase()] ? nomeToAtividadeIdLocal[it.descricao.trim().toLowerCase()] : null),
               ordem: idx,
             };
           })
