@@ -1891,11 +1891,9 @@ Responda APENAS com um objeto JSON no formato:
 
   getMapaCotacao: protectedProcedure
     .input(z.object({ cotacaoId: z.number() }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input }) => {
       const db = await getDb();
-      const [cot] = await db.select().from(comprasCotacoes).where(
-        and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, ctx.user!.companyId))
-      );
+      const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
       const participantes = await db.select().from(comprasCotacaoFornecedores).where(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId));
