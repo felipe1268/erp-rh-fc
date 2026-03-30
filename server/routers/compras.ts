@@ -5041,8 +5041,12 @@ Retorne APENAS um JSON válido neste formato:
         const eps = 0.01;
 
         const semVerbaFlag = item.semVerba ?? false;
+        const descTrimmed = (item.descricao || "").trim();
+        const isTitulo = qtdOrcada === 0 && qtdEstaSC <= 1 && (descTrimmed.endsWith(":") || /^\[[\d.]+\]\s.*:$/.test(descTrimmed));
         let situacao: "ok" | "sem_vinculo" | "sem_vinculo_sem_verba" | "verba_esgotada_compras" | "verba_esgotada_solicitacoes" | "saldo_insuficiente" = "ok";
-        if (!vinculado) {
+        if (isTitulo) {
+          situacao = "ok";
+        } else if (!vinculado) {
           situacao = semVerbaFlag ? "sem_vinculo_sem_verba" : "sem_vinculo";
         } else if (saldo < -eps) {
           if (qtdComprada >= qtdOrcada - eps) {
