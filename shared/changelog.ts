@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 921,
+    titulo: "Status da SC auto-corrigido — pendente→cotação quando há cotação/contrato vinculado",
+    descricao: "Ao listar Solicitações de Compra, o sistema agora detecta SCs marcadas como 'Pendente' que possuem cotações ou ordens de compra ativas vinculadas, e corrige automaticamente o status para 'Em Cotação'. Correção é persistida no banco e aplicada imediatamente na listagem.",
+    tipo: "correção",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 23:45:00",
+  },
+  {
     version: 920,
     titulo: "Telemetria — horários corrigidos para fuso de São Paulo (GMT-3)",
     descricao: "Todos os timestamps da telemetria (Ranking de Usuários, Usuários Inativos, Páginas sem Acesso, Analytics de IA) agora exibem horário de Brasília/São Paulo. Conversão feita no backend via to_char com AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'. Frontend detecta strings pré-formatadas e não re-converte.",

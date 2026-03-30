@@ -1127,7 +1127,6 @@ Responda APENAS com um objeto JSON no formato:
           input.aprovacaoStatus ? eq(comprasSolicitacoes.aprovacaoStatus, input.aprovacaoStatus) : undefined,
         ))
         .orderBy(desc(comprasSolicitacoes.criadoEm));
-      // attach item counts
       const ids = rows.map(r => r.id);
       let itensCounts: Record<number, { total: number; atendidos: number }> = {};
       if (ids.length > 0) {
@@ -1139,7 +1138,38 @@ Responda APENAS com um objeto JSON no formato:
           if (n(it.quantidadeAtendida) >= n(it.quantidade)) itensCounts[it.solicitacaoId].atendidos++;
         });
       }
-      let result = rows.map(r => ({ ...r, _itens: itensCounts[r.id] ?? { total: 0, atendidos: 0 } }));
+
+      const pendingIds = rows.filter(r => r.status === "pendente").map(r => r.id);
+      let scWithCotacao = new Set<number>();
+      let scWithOC = new Set<number>();
+      if (pendingIds.length > 0) {
+        const activeCots = await db.select({ solicitacaoId: comprasCotacoes.solicitacaoId }).from(comprasCotacoes)
+          .where(and(
+            sql`${comprasCotacoes.solicitacaoId} = ANY(${sql.raw("ARRAY[" + pendingIds.join(",") + "]::int[]")})`,
+            sql`${comprasCotacoes.status} NOT IN ('cancelada')`,
+          ));
+        activeCots.forEach(c => { if (c.solicitacaoId) scWithCotacao.add(c.solicitacaoId); });
+
+        const activeOrdens = await db.select({ solicitacaoId: comprasOrdens.solicitacaoId }).from(comprasOrdens)
+          .where(and(
+            sql`${comprasOrdens.solicitacaoId} = ANY(${sql.raw("ARRAY[" + pendingIds.join(",") + "]::int[]")})`,
+            sql`${comprasOrdens.status} NOT IN ('cancelada')`,
+          ));
+        activeOrdens.forEach(o => { if (o.solicitacaoId) scWithOC.add(o.solicitacaoId); });
+
+        const toFixIds = pendingIds.filter(id => scWithCotacao.has(id) || scWithOC.has(id));
+        if (toFixIds.length > 0) {
+          await db.update(comprasSolicitacoes)
+            .set({ status: "cotacao", atualizadoEm: new Date().toISOString() })
+            .where(sql`${comprasSolicitacoes.id} = ANY(${sql.raw("ARRAY[" + toFixIds.join(",") + "]::int[]")})`);
+          console.log(`[listarSolicitacoes] auto-heal: ${toFixIds.length} SC(s) corrigida(s) de pendente → cotacao:`, toFixIds);
+        }
+      }
+
+      let result = rows.map(r => {
+        const status = (r.status === "pendente" && (scWithCotacao.has(r.id) || scWithOC.has(r.id))) ? "cotacao" : r.status;
+        return { ...r, status, _itens: itensCounts[r.id] ?? { total: 0, atendidos: 0 } };
+      });
       if (input.busca) {
         const b = input.busca.toLowerCase();
         result = result.filter(r =>
