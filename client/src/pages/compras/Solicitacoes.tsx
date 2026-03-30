@@ -1303,11 +1303,9 @@ export default function Solicitacoes() {
                         </span>
                       )}
                       {sc.numeroSc}
-                      {((sc as any).tipo === "servico" || (sc as any).tipo === "pacote") && (
-                        <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : "bg-indigo-100 text-indigo-700"}`}>
-                          {(sc as any).tipo === "servico" ? "SERV" : "PKT"}
-                        </span>
-                      )}
+                      <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (sc as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>
+                        {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "PKT" : "MAT"}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -2547,7 +2545,7 @@ export default function Solicitacoes() {
                     <DialogTitle className="text-gray-900 text-lg">
                       {detalhe.numeroSc}
                       {((detalhe as any).tipo === "servico" || (detalhe as any).tipo === "pacote") && (
-                        <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${(detalhe as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : "bg-indigo-100 text-indigo-700"}`}>
+                        <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${(detalhe as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : "bg-orange-100 text-orange-700"}`}>
                           {(detalhe as any).tipo === "servico" ? "SERVIÇO" : "PACOTE"}
                         </span>
                       )}

@@ -443,7 +443,7 @@ export default function Ordens() {
                     <div className="flex items-center gap-1.5">
                       {oc.numeroOc}
                       {((oc as any).tipo === "servico" || (oc as any).tipo === "pacote") && (
-                        <span className="px-1.5 py-0.5 text-[9px] font-sans font-semibold rounded bg-purple-100 text-purple-700">
+                        <span className={`px-1.5 py-0.5 text-[9px] font-sans font-semibold rounded ${(oc as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : "bg-purple-100 text-purple-700"}`}>
                           {(oc as any).tipo === "servico" ? "SERVIÇO" : "PACOTE"}
                         </span>
                       )}
@@ -692,7 +692,7 @@ export default function Ordens() {
             <DialogTitle className="text-gray-900">
               {detalhe?.numeroOc} — {((detalhe as any)?.tipo === "servico" || (detalhe as any)?.tipo === "pacote") ? "Ordem de Serviço" : "Ordem de Compra"}
               {((detalhe as any)?.tipo === "servico" || (detalhe as any)?.tipo === "pacote") && (
-                <span className="ml-2 px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-100 text-purple-700">
+                <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${(detalhe as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : "bg-purple-100 text-purple-700"}`}>
                   {(detalhe as any).tipo === "servico" ? "SERVIÇO" : "PACOTE"}
                 </span>
               )}
