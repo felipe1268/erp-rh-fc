@@ -4948,9 +4948,10 @@ Retorne APENAS um JSON válido neste formato:
     .input(z.object({ companyId: z.number(), solicitacaoId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      const [sc] = await db.select({ id: comprasSolicitacoes.id, obraId: comprasSolicitacoes.obraId }).from(comprasSolicitacoes)
+      const [sc] = await db.select({ id: comprasSolicitacoes.id, obraId: comprasSolicitacoes.obraId, tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes)
         .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
       if (!sc) return [];
+      const scTipoGroup = sc.tipo === "servico" || sc.tipo === "pacote" ? "mdo" : "mat";
 
       const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, sc.id));
       if (scItens.length === 0) return [];
@@ -5019,6 +5020,9 @@ Retorne APENAS um JSON válido neste formato:
             AND s.company_id = ${input.companyId} AND s.status NOT IN ('cancelado')
             AND s.obra_id = ${sc.obraId}
             AND s.id != ${sc.id}
+            AND ${scTipoGroup === "mat"
+              ? sql`(s.tipo IS NULL OR s.tipo = 'material')`
+              : sql`s.tipo IN ('servico', 'pacote')`}
           GROUP BY si.insumo_codigo
         `);
         for (const r of (rows as any).rows ?? []) insumoSolicitadoMap[r.insumo_codigo] = n(r.total);
@@ -5034,6 +5038,9 @@ Retorne APENAS um JSON válido neste formato:
           JOIN compras_solicitacoes s ON s.id = si.solicitacao_id AND s.obra_id = ${sc.obraId}
           WHERE si.insumo_codigo IN (${sql.join(insumoCodigos.map(c => sql`${c}`), sql`, `)})
             AND si.orcamento_item_id IS NULL
+            AND ${scTipoGroup === "mat"
+              ? sql`(s.tipo IS NULL OR s.tipo = 'material')`
+              : sql`s.tipo IN ('servico', 'pacote')`}
         `);
         for (const r of (rows as any).rows ?? []) {
           const cod = r.insumo_codigo;
@@ -5052,6 +5059,9 @@ Retorne APENAS um JSON válido neste formato:
           WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
             AND s.company_id = ${input.companyId} AND s.status NOT IN ('cancelado')
             AND s.id != ${sc.id}
+            AND ${scTipoGroup === "mat"
+              ? sql`(s.tipo IS NULL OR s.tipo = 'material')`
+              : sql`s.tipo IN ('servico', 'pacote')`}
           GROUP BY si.orcamento_item_id
         `);
         for (const r of (rows as any).rows ?? []) solicitadoMap[r.orcamento_item_id] = n(r.total);
@@ -5064,7 +5074,11 @@ Retorne APENAS um JSON válido neste formato:
           FROM compras_solicitacoes_itens si
           JOIN compras_ordens_itens oi2 ON oi2.solicitacao_item_id = si.id
           JOIN compras_ordens o ON o.id = oi2.ordem_id AND o.status NOT IN ('cancelada') AND o.company_id = ${input.companyId}
+          JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
           WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
+            AND ${scTipoGroup === "mat"
+              ? sql`(s.tipo IS NULL OR s.tipo = 'material')`
+              : sql`s.tipo IN ('servico', 'pacote')`}
         `);
         for (const r of (rows as any).rows ?? []) {
           const oid = r.orcamento_item_id;
