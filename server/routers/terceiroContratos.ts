@@ -2241,14 +2241,6 @@ export const terceiroContratosRouter = router({
       const todosItens = await db.select().from(terceiroContratoItens)
         .where(inArray(terceiroContratoItens.contratoId, contratosIds));
 
-      const atividadeIds = todosItens.filter(i => i.planejamentoAtividadeId).map(i => i.planejamentoAtividadeId!);
-      let avancos: any[] = [];
-      if (atividadeIds.length) {
-        avancos = await db.select().from(planejamentoAvancos)
-          .where(inArray(planejamentoAvancos.atividadeId, atividadeIds))
-          .orderBy(asc(planejamentoAvancos.semana));
-      }
-
       // Helper: get Monday of a given date
       function getMonday(d: Date): string {
         const day = d.getDay();
@@ -2258,35 +2250,98 @@ export const terceiroContratosRouter = router({
         return mon.toISOString().slice(0, 10);
       }
 
-      // PREVISTO: usa percentualSemanal do cronograma (avanço previsto por semana × valor do item)
-      // Se a atividade tiver avanços registrados no cronograma, usa a diferença semanal do percentualAcumulado
-      // O percentualSemanal em planejamento_avancos representa o avanço planejado para aquela semana
+      // Helper: generate all Monday keys between two dates
+      function getWeeksBetween(start: Date, end: Date): string[] {
+        const weeks: string[] = [];
+        const cur = new Date(start);
+        while (cur <= end) {
+          const mon = getMonday(cur);
+          if (!weeks.includes(mon)) weeks.push(mon);
+          cur.setDate(cur.getDate() + 7);
+        }
+        const lastMon = getMonday(end);
+        if (!weeks.includes(lastMon)) weeks.push(lastMon);
+        return weeks;
+      }
+
+      // Resolve atividades from the LATEST revision of each projeto
+      // Each contrato has planejamentoProjetoId → find latest revision → get atividades with dates
+      const projetoIds = [...new Set(contratos.map(c => c.planejamentoProjetoId).filter(Boolean))] as number[];
+      let atividadesMap: Record<number, { dataInicio: string; dataFim: string }> = {};
+
+      if (projetoIds.length > 0) {
+        // Get latest approved revision per project
+        const allRevs = await db.select({ id: planejamentoRevisoes.id, projetoId: planejamentoRevisoes.projetoId, numero: planejamentoRevisoes.numero })
+          .from(planejamentoRevisoes)
+          .where(and(
+            inArray(planejamentoRevisoes.projetoId, projetoIds),
+            eq(planejamentoRevisoes.status, "aprovada"),
+          ))
+          .orderBy(desc(planejamentoRevisoes.numero));
+
+        const latestRevPerProject: Record<number, number> = {};
+        for (const rev of allRevs) {
+          if (!latestRevPerProject[rev.projetoId]) latestRevPerProject[rev.projetoId] = rev.id;
+        }
+        const revIds = Object.values(latestRevPerProject);
+
+        if (revIds.length > 0) {
+          const atividades = await db.select({
+            id: planejamentoAtividades.id,
+            eapCodigo: planejamentoAtividades.eapCodigo,
+            dataInicio: planejamentoAtividades.dataInicio,
+            dataFim: planejamentoAtividades.dataFim,
+            revisaoId: planejamentoAtividades.revisaoId,
+            isGrupo: planejamentoAtividades.isGrupo,
+            disabled: planejamentoAtividades.disabled,
+          }).from(planejamentoAtividades)
+            .where(and(
+              inArray(planejamentoAtividades.revisaoId, revIds),
+              eq(planejamentoAtividades.disabled, false),
+            ));
+
+          for (const a of atividades) {
+            if (a.dataInicio && a.dataFim && !a.isGrupo) {
+              atividadesMap[a.id] = { dataInicio: a.dataInicio, dataFim: a.dataFim };
+            }
+          }
+        }
+      }
+
+      // Also load atividades directly linked by ID (fallback for items with planejamentoAtividadeId set)
+      const directAtivIds = todosItens.filter(i => i.planejamentoAtividadeId && !atividadesMap[i.planejamentoAtividadeId]).map(i => i.planejamentoAtividadeId!);
+      if (directAtivIds.length > 0) {
+        const directAtivs = await db.select({
+          id: planejamentoAtividades.id,
+          dataInicio: planejamentoAtividades.dataInicio,
+          dataFim: planejamentoAtividades.dataFim,
+          isGrupo: planejamentoAtividades.isGrupo,
+        }).from(planejamentoAtividades)
+          .where(inArray(planejamentoAtividades.id, directAtivIds));
+        for (const a of directAtivs) {
+          if (a.dataInicio && a.dataFim && !a.isGrupo) {
+            atividadesMap[a.id] = { dataInicio: a.dataInicio, dataFim: a.dataFim };
+          }
+        }
+      }
+
+      // PREVISTO: distribute item value across weeks between dataInicio and dataFim of linked atividade
       const semanasMapPrev: Record<string, number> = {};
       for (const item of todosItens) {
         if (!item.planejamentoAtividadeId) continue;
-        const avancosItem = avancos.filter(a => a.atividadeId === item.planejamentoAtividadeId);
-        if (avancosItem.length === 0) continue;
+        const ativ = atividadesMap[item.planejamentoAtividadeId];
+        if (!ativ) continue;
 
-        // Calcular previsto: distribuir o valor total conforme a curva do cronograma
-        // Usa percentualSemanal como peso relativo de cada semana
-        let totalPctPrev = 0;
-        for (const av of avancosItem) {
-          totalPctPrev += n(av.percentualSemanal ?? 0);
-        }
-        if (totalPctPrev <= 0) {
-          // Fallback: distribuição linear pelas semanas com avanço registrado
-          const valorPorSemana = n(item.valorTotal) / avancosItem.length;
-          for (const av of avancosItem) {
-            semanasMapPrev[av.semana] = (semanasMapPrev[av.semana] || 0) + valorPorSemana;
-          }
-        } else {
-          // Distribuir proporcionalmente ao percentualSemanal
-          for (const av of avancosItem) {
-            const pctSem = n(av.percentualSemanal ?? 0);
-            if (pctSem <= 0) continue;
-            const valorSemana = (pctSem / totalPctPrev) * n(item.valorTotal);
-            semanasMapPrev[av.semana] = (semanasMapPrev[av.semana] || 0) + valorSemana;
-          }
+        const inicio = new Date(ativ.dataInicio + "T12:00:00");
+        const fim = new Date(ativ.dataFim + "T12:00:00");
+        if (fim < inicio) continue;
+
+        const weeks = getWeeksBetween(inicio, fim);
+        if (weeks.length === 0) continue;
+
+        const valorPorSemana = n(item.valorTotal) / weeks.length;
+        for (const sem of weeks) {
+          semanasMapPrev[sem] = (semanasMapPrev[sem] || 0) + valorPorSemana;
         }
       }
 
