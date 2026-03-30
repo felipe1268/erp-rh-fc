@@ -836,7 +836,8 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, exc
                 <table className="w-full text-xs min-w-[900px]">
                   <thead>
                     <tr className="bg-gray-50 text-gray-500">
-                      <th className="px-3 py-2 text-left">Item</th>
+                      <th className="px-3 py-2 text-left w-[80px]">EAP</th>
+                      <th className="px-3 py-2 text-left">Atividade</th>
                       <th className="px-2 py-2 text-center w-[45px]">Unid.</th>
                       <th className="px-2 py-2 text-right w-[55px]">Qtd.</th>
                       <th className="px-2 py-2 text-right w-[80px]">V.Unit.</th>
@@ -849,74 +850,112 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, exc
                       {isEditable && <th className="px-2 py-2 text-center w-[35px]"></th>}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {itens.map((item: any) => {
-                      const isEditingThis = editingItem?.id === item.id;
-                      const percAnterior = Number(item.percentualAcumuladoAnterior || 0);
-                      const percPeriodo = Number(item.percentualMedidoPeriodo || 0);
-                      const percAcumulado = Number(item.percentualAvancoFisico || 0);
+                  <tbody>
+                    {(() => {
+                      const hierMap = new Map<string, any>();
+                      (contrato.itensHierarchy || []).forEach((h: any) => hierMap.set(h.eapCodigo, h));
 
-                      return (
-                        <tr key={item.id} className="hover:bg-blue-50/30">
-                          <td className="px-3 py-2">
-                            {item.origemPath && (
-                              <div className="text-[10px] text-gray-400 leading-tight mb-0.5">{item.origemPath}</div>
-                            )}
-                            <div className="text-gray-800">
-                              {item.eapCodigo && <span className="text-gray-400 text-[10px] mr-1.5 font-mono">{item.eapCodigo}</span>}
-                              {item.descricao}
-                            </div>
-                          </td>
-                          <td className="px-2 py-2 text-center text-gray-500">{item.unidade || "-"}</td>
-                          <td className="px-2 py-2 text-right text-gray-500">{Number(item.quantidade || 0).toFixed(2)}</td>
-                          <td className="px-2 py-2 text-right text-gray-500">{BRL(item.valorUnitario)}</td>
-                          <td className="px-2 py-2 text-right text-gray-700 font-medium">{BRL(item.valorTotalItem)}</td>
-                          <td className="px-2 py-2 text-center text-gray-500 border-l border-gray-100">{percAnterior.toFixed(1)}%</td>
-                          <td className="px-2 py-2 text-center">
-                            {isEditable && isEditingThis ? (
-                              <div className="flex items-center gap-1 justify-center">
-                                <input
-                                  type="number" step="0.1" min="0" max={100 - percAnterior}
-                                  className="w-16 text-center border rounded px-1 py-0.5 text-xs"
-                                  value={editingItem.valor}
-                                  onChange={e => setEditingItem({ ...editingItem, valor: e.target.value })}
-                                  onKeyDown={e => {
-                                    if (e.key === "Enter") {
-                                      editarMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id, percentualMedidoPeriodo: parseFloat(editingItem.valor) || 0 });
-                                      setEditingItem(null);
-                                    } else if (e.key === "Escape") setEditingItem(null);
-                                  }}
-                                  autoFocus
-                                />
-                                <span className="text-gray-400">%</span>
+                      const sorted = [...itens].sort((a: any, b: any) => (a.eapCodigo || "").localeCompare(b.eapCodigo || "", undefined, { numeric: true }));
+
+                      const renderedGroups = new Set<string>();
+                      const rows: React.ReactNode[] = [];
+
+                      sorted.forEach((item: any) => {
+                        const eap = item.eapCodigo || "";
+                        if (eap) {
+                          const parts = eap.split(".");
+                          for (let depth = 1; depth < parts.length; depth++) {
+                            const parentEap = parts.slice(0, depth).join(".");
+                            if (!renderedGroups.has(parentEap)) {
+                              renderedGroups.add(parentEap);
+                              const h = hierMap.get(parentEap);
+                              const nivel = depth;
+                              const isTopLevel = nivel === 1;
+                              const colCount = isEditable ? 12 : 11;
+                              rows.push(
+                                <tr key={`grp-${parentEap}`}
+                                  className={`${isTopLevel ? "bg-slate-100 border-l-[3px] border-l-amber-500" : "bg-gray-50/70"} ${isTopLevel && rows.length > 0 ? "border-t-2 border-t-gray-200" : ""}`}>
+                                  <td className="px-3 py-1.5 font-mono text-gray-500 text-[11px]">{parentEap}</td>
+                                  <td colSpan={colCount - 1} className="px-3 py-1.5">
+                                    <div className="flex items-center" style={{ paddingLeft: `${(nivel - 1) * 16}px` }}>
+                                      <ChevronDown className="w-3.5 h-3.5 text-gray-400 mr-1.5 flex-shrink-0" />
+                                      <span className={`font-semibold ${isTopLevel ? "text-gray-800 text-[12px]" : "text-gray-700 text-[11px]"}`}>
+                                        {h?.nome || `Nível ${parentEap}`}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            }
+                          }
+                        }
+
+                        const isEditingThis = editingItem?.id === item.id;
+                        const percAnterior = Number(item.percentualAcumuladoAnterior || 0);
+                        const percPeriodo = Number(item.percentualMedidoPeriodo || 0);
+                        const percAcumulado = Number(item.percentualAvancoFisico || 0);
+                        const itemDepth = eap ? eap.split(".").length : 0;
+
+                        rows.push(
+                          <tr key={item.id} className="hover:bg-blue-50/30 border-b border-gray-50">
+                            <td className="px-3 py-2 font-mono text-[10px] text-gray-400 align-top">{eap}</td>
+                            <td className="px-3 py-2">
+                              <div style={{ paddingLeft: `${Math.max(0, (itemDepth - 1) * 16)}px` }} className="text-gray-800">
+                                {item.descricao}
                               </div>
-                            ) : (
-                              <span
-                                className={`font-semibold ${percPeriodo > 0 ? "text-blue-700" : "text-gray-400"} ${isEditable ? "cursor-pointer hover:underline" : ""}`}
-                                onClick={() => isEditable && setEditingItem({ id: item.id, valor: percPeriodo.toFixed(1) })}
-                              >
-                                +{percPeriodo.toFixed(1)}%
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-2 py-2 text-center font-semibold text-gray-700">{percAcumulado.toFixed(1)}%</td>
-                          <td className="px-2 py-2 text-right text-gray-600">{BRL(item.valorMedidoPeriodo)}</td>
-                          <td className="px-2 py-2 text-right font-semibold text-gray-900">{BRL(item.valorAcumulado)}</td>
-                          {isEditable && (
-                            <td className="px-2 py-2 text-center">
-                              <button onClick={() => { if (confirm("Remover este item da medição?")) removerMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id }); }}
-                                className="text-red-300 hover:text-red-500 p-0.5">
-                                <X className="w-3 h-3" />
-                              </button>
                             </td>
-                          )}
-                        </tr>
-                      );
-                    })}
+                            <td className="px-2 py-2 text-center text-gray-500">{item.unidade || "-"}</td>
+                            <td className="px-2 py-2 text-right text-gray-500">{Number(item.quantidade || 0).toFixed(2)}</td>
+                            <td className="px-2 py-2 text-right text-gray-500">{BRL(item.valorUnitario)}</td>
+                            <td className="px-2 py-2 text-right text-gray-700 font-medium">{BRL(item.valorTotalItem)}</td>
+                            <td className="px-2 py-2 text-center text-gray-500 border-l border-gray-100">{percAnterior.toFixed(1)}%</td>
+                            <td className="px-2 py-2 text-center">
+                              {isEditable && isEditingThis ? (
+                                <div className="flex items-center gap-1 justify-center">
+                                  <input
+                                    type="number" step="0.1" min="0" max={100 - percAnterior}
+                                    className="w-16 text-center border rounded px-1 py-0.5 text-xs"
+                                    value={editingItem.valor}
+                                    onChange={e => setEditingItem({ ...editingItem, valor: e.target.value })}
+                                    onKeyDown={e => {
+                                      if (e.key === "Enter") {
+                                        editarMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id, percentualMedidoPeriodo: parseFloat(editingItem.valor) || 0 });
+                                        setEditingItem(null);
+                                      } else if (e.key === "Escape") setEditingItem(null);
+                                    }}
+                                    autoFocus
+                                  />
+                                  <span className="text-gray-400">%</span>
+                                </div>
+                              ) : (
+                                <span
+                                  className={`font-semibold ${percPeriodo > 0 ? "text-blue-700" : "text-gray-400"} ${isEditable ? "cursor-pointer hover:underline" : ""}`}
+                                  onClick={() => isEditable && setEditingItem({ id: item.id, valor: percPeriodo.toFixed(1) })}
+                                >
+                                  +{percPeriodo.toFixed(1)}%
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-2 py-2 text-center font-semibold text-gray-700">{percAcumulado.toFixed(1)}%</td>
+                            <td className="px-2 py-2 text-right text-gray-600">{BRL(item.valorMedidoPeriodo)}</td>
+                            <td className="px-2 py-2 text-right font-semibold text-gray-900">{BRL(item.valorAcumulado)}</td>
+                            {isEditable && (
+                              <td className="px-2 py-2 text-center">
+                                <button onClick={() => { if (confirm("Remover este item da medição?")) removerMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id }); }}
+                                  className="text-red-300 hover:text-red-500 p-0.5">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      });
+                      return rows;
+                    })()}
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-50 font-semibold text-xs">
-                      <td className="px-3 py-2 text-right text-gray-600" colSpan={8}>Total Período</td>
+                      <td className="px-3 py-2 text-right text-gray-600" colSpan={9}>Total Período</td>
                       <td className="px-2 py-2 text-right text-blue-700">{BRL(m.valorMedido)}</td>
                       <td className="px-2 py-2 text-right text-gray-900">{BRL(m.valorAcumulado)}</td>
                       {isEditable && <td />}
