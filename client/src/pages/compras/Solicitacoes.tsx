@@ -1497,6 +1497,46 @@ export default function Solicitacoes() {
                             value={eapSearch}
                             onChange={e => setEapSearch(e.target.value)}
                           />
+                          {(() => {
+                            const visibleItems = (eapQ.data?.items ?? [])
+                              .filter((it: any) => it.nivel >= 2 && it.tipo !== "grupo")
+                              .filter((it: any) => {
+                                if (form.tipo === "servico") return !!it.servicoCodigo && it.temMdo;
+                                if (!it.servicoCodigo) return true;
+                                if (form.tipo === "material") return it.temMat !== false;
+                                return true;
+                              })
+                              .filter((it: any) => !eapSearch || `${it.eapCodigo} ${it.descricao}`.toLowerCase().includes(eapSearch.toLowerCase()));
+                            const allSelected = visibleItems.length > 0 && visibleItems.every((it: any) => selectedEapIds.has(it.id) || (parseFloat(eapQtdServico[it.id] || "") > 0));
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (allSelected) {
+                                    visibleItems.forEach((it: any) => {
+                                      setSelectedEapIds(prev => { const n = new Set(prev); n.delete(it.id); return n; });
+                                      setEapQtdServico(prev => { const n = { ...prev }; delete n[it.id]; return n; });
+                                    });
+                                    setItens(p => p.filter(x => !visibleItems.some((v: any) => v.id === x.orcamentoItemId)));
+                                  } else {
+                                    visibleItems.forEach((it: any) => {
+                                      if (!selectedEapIds.has(it.id) && !(parseFloat(eapQtdServico[it.id] || "") > 0)) {
+                                        if (form.tipo === "servico") {
+                                          const mdoSaldo = it.mdoSaldo;
+                                          handleEapQtdChange(it.id, mdoSaldo != null && mdoSaldo > 0 ? String(mdoSaldo) : "1", it);
+                                        } else {
+                                          toggleEapItem(it);
+                                        }
+                                      }
+                                    });
+                                  }
+                                }}
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded border whitespace-nowrap transition-colors ${allSelected ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"}`}
+                              >
+                                {allSelected ? "Desmarcar todos" : "Selecionar todos"}
+                              </button>
+                            );
+                          })()}
                         </div>
                         <div className="max-h-[50vh] overflow-y-auto divide-y divide-gray-100">
                           {eapQ.data.items
