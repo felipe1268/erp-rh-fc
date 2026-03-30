@@ -587,7 +587,8 @@ export default function MedicaoDetalhe() {
                       const prevBoletim = posInSorted > 0 ? sortedAll[posInSorted - 1] : null;
                       const fmtDate = (d: string | null) => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "—";
                       return (
-                        <TableRow key={b.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => abrirItens(b)}>
+                        <React.Fragment key={b.id}>
+                        <TableRow className="hover:bg-gray-50 cursor-pointer" onClick={() => abrirItens(b)}>
                           <TableCell className="font-mono text-sm font-semibold">{String(b.numero).padStart(2, "0")}</TableCell>
                           <TableCell className="text-sm">
                             {b.dataInicio ? (
@@ -687,6 +688,7 @@ export default function MedicaoDetalhe() {
                             </TableRow>
                           );
                         })()}
+                        </React.Fragment>
                       );
                     })}
                   </TableBody>
