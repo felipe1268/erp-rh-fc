@@ -1477,6 +1477,7 @@ Responda APENAS com um objeto JSON no formato:
               solicitacaoId: sc.id,
               total: String(totalGeral.toFixed(2)),
               status: "pendente",
+              tipo: sc.tipo ?? "material",
             }).returning();
 
             if (itensMapped.length > 0) {
@@ -2187,7 +2188,12 @@ Responda APENAS com um objeto JSON no formato:
         }
       }
 
-      const isCotacaoMdo = cot.tipo === 'servico' || cot.tipo === 'pacote';
+      let tipoEfetivo = (cot.tipo === "servico" || cot.tipo === "pacote") ? cot.tipo : "material";
+      if (tipoEfetivo === "material" && cot.solicitacaoId) {
+        const [sc] = await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, cot.solicitacaoId), eq(comprasSolicitacoes.companyId, Number(cot.companyId))));
+        if (sc && (sc.tipo === "servico" || sc.tipo === "pacote")) tipoEfetivo = sc.tipo;
+      }
+      const isCotacaoMdo = tipoEfetivo === 'servico' || tipoEfetivo === 'pacote';
       const itensComMeta = itens.map(it => {
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
         const metaFromOrcTotal = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;

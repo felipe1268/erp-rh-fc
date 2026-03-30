@@ -6231,4 +6231,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 10:00:00",
   },
+  {
+    version: 891,
+    titulo: "Fix crítico: Mapa de Cotação — tipo da cotação herda da SC",
+    descricao: "Corrigido bug onde cotação criada a partir de SC tipo=servico ficava com tipo=material (default). " +
+      "Isso fazia o mapa de cotação exibir a coluna meta_unit_total em vez de meta_unit_mdo, " +
+      "mostrando valores de referência inflados. Agora: (1) ao aprovar SC e criar cotação, " +
+      "o tipo da cotação herda o tipo da SC; (2) getMapaCotacao verifica o tipo da SC como fallback " +
+      "caso a cotação tenha tipo incorreto; (3) cotações existentes no banco foram corrigidas via migration.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 11:00:00",
+  },
 ];
