@@ -6371,4 +6371,16 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 18:00:00",
   },
+  {
+    version: 902,
+    titulo: "Itens do Contrato com Hierarquia EAP e Datas do Cronograma",
+    descricao: "Itens do contrato de terceiros agora exibem a estrutura hierárquica (pai/filho) da EAP do orçamento/cronograma. " +
+      "Linhas de grupo (folders azuis) mostram o caminho pai de cada atividade. " +
+      "Colunas 'Início' e 'Término' exibem as datas de cada atividade vindas do planejamento aprovado. " +
+      "Ao gerar contrato via cotação, os itens agora carregam automaticamente o código EAP e orcamentoItemId da solicitação de compra (SC) de origem.",
+    tipo: "feature",
+    modulos: "Terceiros, Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 19:00:00",
+  },
 ];

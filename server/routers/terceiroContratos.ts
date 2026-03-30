@@ -68,7 +68,7 @@ export const terceiroContratosRouter = router({
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.id));
       if (!contrato) return null;
 
-      const itens = await db.select().from(terceiroContratoItens)
+      const itensRaw = await db.select().from(terceiroContratoItens)
         .where(eq(terceiroContratoItens.contratoId, input.id))
         .orderBy(asc(terceiroContratoItens.ordem));
 
@@ -82,7 +82,60 @@ export const terceiroContratosRouter = router({
 
       const [empresa] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, contrato.empresaTerceiraId));
 
-      const valorMedidoAcumulado = itens.reduce((s, i) => s + n(i.valorMedidoAcumulado), 0);
+      let itens: any[] = itensRaw;
+      let itensHierarchy: any[] = [];
+      const eapCodes = [...new Set(itensRaw.map(it => (it as any).eapCodigo).filter(Boolean))] as string[];
+      if (eapCodes.length > 0 && contrato.obraId) {
+        try {
+          const [proj] = await db.select({ id: planejamentoProjetos.id })
+            .from(planejamentoProjetos)
+            .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
+            .orderBy(desc(planejamentoProjetos.id)).limit(1);
+          if (proj) {
+            const [rev] = await db.select({ id: planejamentoRevisoes.id })
+              .from(planejamentoRevisoes)
+              .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+              .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
+            if (rev) {
+              const allAtividades = await db.select({
+                eapCodigo: planejamentoAtividades.eapCodigo,
+                nome: planejamentoAtividades.nome,
+                nivel: planejamentoAtividades.nivel,
+                isGrupo: planejamentoAtividades.isGrupo,
+                dataInicio: planejamentoAtividades.dataInicio,
+                dataFim: planejamentoAtividades.dataFim,
+              }).from(planejamentoAtividades)
+                .where(and(eq(planejamentoAtividades.projetoId, proj.id), eq(planejamentoAtividades.revisaoId, rev.id), sql`${planejamentoAtividades.disabled} IS NOT TRUE`))
+                .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
+
+              const atividadeMap = new Map<string, { nome: string; nivel: number; isGrupo: boolean | null; dataInicio: string | null; dataFim: string | null }>();
+              for (const a of allAtividades) {
+                if (a.eapCodigo) atividadeMap.set(a.eapCodigo, { nome: a.nome, nivel: a.nivel ?? 0, isGrupo: a.isGrupo, dataInicio: a.dataInicio, dataFim: a.dataFim });
+              }
+
+              const parentSet = new Set<string>();
+              for (const eap of eapCodes) {
+                const parts = eap.split(".");
+                for (let i = 1; i < parts.length; i++) parentSet.add(parts.slice(0, i).join("."));
+              }
+              for (const [eap, atv] of atividadeMap) {
+                if (parentSet.has(eap)) {
+                  itensHierarchy.push({ _type: "grupo", eapCodigo: eap, nome: atv.nome, nivel: atv.nivel, dataInicio: atv.dataInicio, dataFim: atv.dataFim });
+                }
+              }
+              itensHierarchy.sort((a: any, b: any) => a.eapCodigo.localeCompare(b.eapCodigo, undefined, { numeric: true }));
+
+              itens = itensRaw.map(it => {
+                const eap = (it as any).eapCodigo;
+                const atv = eap ? atividadeMap.get(eap) : null;
+                return { ...it, atividadeNome: atv?.nome ?? null, atividadeDataInicio: atv?.dataInicio ?? null, atividadeDataFim: atv?.dataFim ?? null, atividadeNivel: atv?.nivel ?? null };
+              });
+            }
+          }
+        } catch {}
+      }
+
+      const valorMedidoAcumulado = itensRaw.reduce((s, i) => s + n(i.valorMedidoAcumulado), 0);
       const percentualMedidoGlobal = n(contrato.valorTotal) > 0 ? (valorMedidoAcumulado / n(contrato.valorTotal)) * 100 : 0;
       const saldoAMedir = n(contrato.valorTotal) - valorMedidoAcumulado;
       const saldoALiberar = valorMedidoAcumulado - n(contrato.valorPago);
@@ -91,6 +144,7 @@ export const terceiroContratosRouter = router({
         ...contrato,
         empresa: empresa || null,
         itens,
+        itensHierarchy,
         medicoes,
         documentos,
         valorMedidoAcumulado,
@@ -318,9 +372,85 @@ export const terceiroContratosRouter = router({
     .input(z.object({ contratoId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      return db.select().from(terceiroContratoItens)
+      const items = await db.select().from(terceiroContratoItens)
         .where(eq(terceiroContratoItens.contratoId, input.contratoId))
         .orderBy(asc(terceiroContratoItens.ordem));
+
+      const eapCodes = [...new Set(items.map(it => (it as any).eapCodigo).filter(Boolean))] as string[];
+      if (eapCodes.length === 0) return { items, hierarchy: [] };
+
+      const [contrato] = await db.select({ obraId: terceiroContratos.obraId, companyId: terceiroContratos.companyId })
+        .from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
+      if (!contrato?.obraId) return { items, hierarchy: [] };
+
+      try {
+        const [proj] = await db.select({ id: planejamentoProjetos.id })
+          .from(planejamentoProjetos)
+          .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
+          .orderBy(desc(planejamentoProjetos.id))
+          .limit(1);
+        if (!proj) return { items, hierarchy: [] };
+
+        const [rev] = await db.select({ id: planejamentoRevisoes.id })
+          .from(planejamentoRevisoes)
+          .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+          .orderBy(desc(planejamentoRevisoes.numero))
+          .limit(1);
+        if (!rev) return { items, hierarchy: [] };
+
+        const allAtividades = await db.select({
+          id: planejamentoAtividades.id,
+          eapCodigo: planejamentoAtividades.eapCodigo,
+          nome: planejamentoAtividades.nome,
+          nivel: planejamentoAtividades.nivel,
+          isGrupo: planejamentoAtividades.isGrupo,
+          dataInicio: planejamentoAtividades.dataInicio,
+          dataFim: planejamentoAtividades.dataFim,
+        }).from(planejamentoAtividades)
+          .where(and(
+            eq(planejamentoAtividades.projetoId, proj.id),
+            eq(planejamentoAtividades.revisaoId, rev.id),
+            sql`${planejamentoAtividades.disabled} IS NOT TRUE`,
+          ))
+          .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
+
+        const atividadeMap = new Map<string, { nome: string; nivel: number; isGrupo: boolean | null; dataInicio: string | null; dataFim: string | null }>();
+        for (const a of allAtividades) {
+          if (a.eapCodigo) atividadeMap.set(a.eapCodigo, { nome: a.nome, nivel: a.nivel ?? 0, isGrupo: a.isGrupo, dataInicio: a.dataInicio, dataFim: a.dataFim });
+        }
+
+        const parentSet = new Set<string>();
+        for (const eap of eapCodes) {
+          const parts = eap.split(".");
+          for (let i = 1; i < parts.length; i++) {
+            parentSet.add(parts.slice(0, i).join("."));
+          }
+        }
+
+        const hierarchy: any[] = [];
+        for (const [eap, atv] of atividadeMap) {
+          if (parentSet.has(eap)) {
+            hierarchy.push({ _type: "grupo", eapCodigo: eap, nome: atv.nome, nivel: atv.nivel, dataInicio: atv.dataInicio, dataFim: atv.dataFim });
+          }
+        }
+        hierarchy.sort((a, b) => a.eapCodigo.localeCompare(b.eapCodigo, undefined, { numeric: true }));
+
+        const enrichedItems = items.map(it => {
+          const eap = (it as any).eapCodigo;
+          const atv = eap ? atividadeMap.get(eap) : null;
+          return {
+            ...it,
+            atividadeNome: atv?.nome ?? null,
+            atividadeDataInicio: atv?.dataInicio ?? null,
+            atividadeDataFim: atv?.dataFim ?? null,
+            atividadeNivel: atv?.nivel ?? null,
+          };
+        });
+
+        return { items: enrichedItems, hierarchy };
+      } catch {
+        return { items, hierarchy: [] };
+      }
     }),
 
   adicionarItem: protectedProcedure
@@ -973,19 +1103,35 @@ export const terceiroContratosRouter = router({
         observacoes: `Gerado automaticamente da cotação ${cot.numeroCotacao}.${cot.condicaoPagamento ? ` Cond. pagamento: ${cot.condicaoPagamento}.` : ""}${(cot as any).modalidadeFd && (cot as any).modalidadeFd !== "normal" ? ` [FD ${(cot as any).fdPagador === "cliente" ? "Cliente" : "FC"}: R$ ${parseFloat((cot as any).fdValor || "0").toFixed(2)}]` : ""}`,
       }).returning();
 
-      // 7. Criar itens do contrato a partir dos itens da cotação
+      // 7. Criar itens do contrato a partir dos itens da cotação (com EAP do SC)
       if (itens.length > 0) {
+        const scItemIds = itens.map(it => it.solicitacaoItemId).filter(Boolean) as number[];
+        let scItemMap: Record<number, { eapCodigo: string | null; orcamentoItemId: number | null }> = {};
+        if (scItemIds.length > 0) {
+          const scItems = await db.select({
+            id: comprasSolicitacoesItens.id,
+            eapCodigo: comprasSolicitacoesItens.eapCodigo,
+            orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+          }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+          for (const si of scItems) scItemMap[si.id] = { eapCodigo: si.eapCodigo, orcamentoItemId: si.orcamentoItemId };
+        }
+
         await db.insert(terceiroContratoItens).values(
-          itens.map((it, idx) => ({
-            contratoId: contrato.id,
-            companyId: input.companyId,
-            descricao: it.descricao,
-            unidade: it.unidade || "vb",
-            quantidade: String(it.quantidade || "1"),
-            valorUnitario: String(it.precoUnitario || "0"),
-            valorTotal: String(it.total || "0"),
-            ordem: idx,
-          }))
+          itens.map((it, idx) => {
+            const scInfo = it.solicitacaoItemId ? scItemMap[it.solicitacaoItemId] : null;
+            return {
+              contratoId: contrato.id,
+              companyId: input.companyId,
+              descricao: it.descricao,
+              unidade: it.unidade || "vb",
+              quantidade: String(it.quantidade || "1"),
+              valorUnitario: String(it.precoUnitario || "0"),
+              valorTotal: String(it.total || "0"),
+              eapCodigo: scInfo?.eapCodigo ?? null,
+              orcamentoItemId: scInfo?.orcamentoItemId ?? null,
+              ordem: idx,
+            };
+          })
         );
       }
 
