@@ -5001,6 +5001,10 @@ export const comprasCotacoes = pgTable("compras_cotacoes", {
   total:            numeric({ precision: 14, scale: 2 }).default("0"),
   tipo:             varchar({ length: 30 }).default("material"),
   contratoTerceiroId: integer("contrato_terceiro_id"),
+  modalidadeFd:     varchar("modalidade_fd", { length: 20 }).default("normal"),
+  fdValor:          numeric("fd_valor", { precision: 14, scale: 2 }),
+  fdPagador:        varchar("fd_pagador", { length: 20 }),
+  fdBdiItemId:      integer("fd_bdi_item_id"),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 

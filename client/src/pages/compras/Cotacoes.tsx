@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -777,6 +777,16 @@ export default function Cotacoes() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const marcarFd = trpc.compras.marcarCotacaoFd.useMutation({
+    onSuccess: () => { toast.success("Faturamento Direto definido!"); detalheQ.refetch(); q.refetch(); setShowFdCotDialog(false); },
+    onError: (e) => toast.error(e.message),
+  });
+  const removerFd = trpc.compras.removerCotacaoFd.useMutation({
+    onSuccess: () => { toast.success("FD removido da cotação."); detalheQ.refetch(); q.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [showFdCotDialog, setShowFdCotDialog] = useState(false);
+  const [fdCotForm, setFdCotForm] = useState({ modalidade: "fd_cliente" as "fd_cliente" | "fd_fc", valor: "" });
   const adicionarForn = trpc.compras.adicionarFornecedorMapa.useMutation({
     onSuccess: () => { toast.success("Fornecedor adicionado!"); setMapaFornSelectId(""); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
@@ -2161,6 +2171,46 @@ export default function Cotacoes() {
                       </div>
                     </div>
                   )}
+                  {detalheFullscreen.status === "pendente" && (
+                    <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-amber-600" />
+                          <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Faturamento Direto (FD)</p>
+                        </div>
+                      </div>
+                      {(detalheFullscreen as any).modalidadeFd && (detalheFullscreen as any).modalidadeFd !== "normal" ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3">
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${(detalheFullscreen as any).fdPagador === "cliente" ? "bg-blue-100 text-blue-700 border border-blue-300" : "bg-orange-100 text-orange-700 border border-orange-300"}`}>
+                              {(detalheFullscreen as any).fdPagador === "cliente" ? "FD Cliente" : "FD FC"}
+                            </span>
+                            <span className="text-sm font-semibold text-gray-900">
+                              {parseFloat((detalheFullscreen as any).fdValor ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {(detalheFullscreen as any).fdPagador === "cliente"
+                              ? "O cliente pagará este valor diretamente ao fornecedor. Saldo de FD do orçamento será consumido."
+                              : "A FC pagará este valor diretamente ao fornecedor (faturamento direto da empresa)."}
+                          </p>
+                          <Button size="sm" variant="outline" onClick={() => removerFd.mutate({ cotacaoId: detalheFullscreen.id, companyId })}
+                            disabled={removerFd.isPending}
+                            className="border-red-200 text-red-600 hover:bg-red-50 text-xs gap-1">
+                            <X className="h-3 w-3" /> Remover FD
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-xs text-gray-500">Nenhum FD definido. Se esta compra será paga diretamente (pelo cliente ou pela FC), defina aqui antes de aprovar.</p>
+                          <Button size="sm" variant="outline" onClick={() => { setFdCotForm({ modalidade: "fd_cliente", valor: "" }); setShowFdCotDialog(true); }}
+                            className="border-amber-300 text-amber-700 hover:bg-amber-50 text-xs gap-1">
+                            <DollarSign className="h-3 w-3" /> Definir FD
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {/* Condições Comerciais do Vencedor */}
                   {(() => {
                     const vencedor = (mapa?.participantes ?? []).find((p: any) => p.selecionado);
@@ -3330,6 +3380,11 @@ export default function Cotacoes() {
                       <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${(cot as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
                         {(cot as any).tipo === "servico" ? "Serviço" : "Material"}
                       </span>
+                      {(cot as any).modalidadeFd && (cot as any).modalidadeFd !== "normal" && (
+                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${(cot as any).fdPagador === "cliente" ? "bg-amber-100 text-amber-700" : "bg-orange-100 text-orange-700"}`}>
+                          FD {(cot as any).fdPagador === "cliente" ? "Cliente" : "FC"}
+                        </span>
+                      )}
                     </div>
                     {cot.solicitacaoId && <div className="text-gray-400 text-xs">SC #{cot.solicitacaoId}</div>}
                   </TableCell>
@@ -3589,6 +3644,14 @@ export default function Cotacoes() {
                   <div><span className="text-gray-400 text-xs">Prazo Entrega</span><p className="text-gray-900 font-medium">{detalhe.prazoEntregaDias ? `${detalhe.prazoEntregaDias} dias` : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Validade</span><p className="text-gray-900 font-medium">{detalhe.dataValidade ? new Date(detalhe.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Total</span><p className="text-emerald-700 font-bold">{parseFloat(detalhe.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p></div>
+                  {(detalhe as any).modalidadeFd && (detalhe as any).modalidadeFd !== "normal" && (
+                    <div><span className="text-gray-400 text-xs">Faturamento Direto</span><p className="text-gray-900 font-medium flex items-center gap-1.5">
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${(detalhe as any).fdPagador === "cliente" ? "bg-amber-100 text-amber-700" : "bg-orange-100 text-orange-700"}`}>
+                        FD {(detalhe as any).fdPagador === "cliente" ? "Cliente" : "FC"}
+                      </span>
+                      {parseFloat((detalhe as any).fdValor ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </p></div>
+                  )}
                 </div>
 
                 <div className="rounded-lg border border-gray-200 overflow-hidden">
@@ -3726,6 +3789,64 @@ export default function Cotacoes() {
             <Button variant="destructive" className="gap-1.5" disabled={excluirLote.isPending} onClick={() => excluirLote.mutate({ ids: [...selectedIds], companyId })}>
               {excluirLote.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               Excluir {selectedIds.size} cotação(ões)
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showFdCotDialog} onOpenChange={setShowFdCotDialog}>
+        <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="text-gray-900">Definir Faturamento Direto</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1 block">Quem paga?</label>
+              <Select value={fdCotForm.modalidade} onValueChange={v => setFdCotForm(p => ({ ...p, modalidade: v as any }))}>
+                <SelectTrigger className="bg-white border-gray-300">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fd_cliente">FD Cliente (cliente paga ao fornecedor)</SelectItem>
+                  <SelectItem value="fd_fc">FD FC (a FC paga diretamente)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-400 mt-1">
+                {fdCotForm.modalidade === "fd_cliente"
+                  ? "O cliente pagará diretamente ao fornecedor. O valor será abatido do saldo de FD orçado."
+                  : "A FC realizará o pagamento direto ao fornecedor. Não consome saldo de FD do orçamento."}
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1 block">Valor do FD (R$)</label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={fdCotForm.valor}
+                onChange={e => setFdCotForm(p => ({ ...p, valor: e.target.value }))}
+                placeholder="0,00"
+                className="bg-white border-gray-300"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setShowFdCotDialog(false)}>Cancelar</Button>
+            <Button
+              disabled={!fdCotForm.valor || parseFloat(fdCotForm.valor) <= 0 || marcarFd.isPending || !showDetalhe}
+              onClick={() => {
+                if (!showDetalhe) return;
+                marcarFd.mutate({
+                  cotacaoId: showDetalhe,
+                  companyId,
+                  modalidade: fdCotForm.modalidade,
+                  valor: parseFloat(fdCotForm.valor),
+                });
+              }}
+              className="bg-amber-600 hover:bg-amber-500 text-white gap-2"
+            >
+              {marcarFd.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
+              Confirmar FD
             </Button>
           </div>
         </DialogContent>

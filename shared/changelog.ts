@@ -6295,4 +6295,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 13:00:00",
   },
+  {
+    version: 896,
+    titulo: "Faturamento Direto (FD) na Cotação",
+    descricao: "Agora é possível definir Faturamento Direto (FD) diretamente na cotação, antes de aprovar. " +
+      "O usuário escolhe quem paga: 'FD Cliente' (abatido do saldo de FD orçado) ou 'FD FC' (a FC paga diretamente). " +
+      "Ao aprovar a cotação e gerar OC ou Contrato de Serviço, os valores de FD são propagados automaticamente. " +
+      "Card de FD com visualização, definição e remoção aparece no mapa de cotação. " +
+      "Badge 'FD Cliente'/'FD FC' visível na listagem de cotações e no painel lateral de detalhe.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 13:30:00",
+  },
 ];

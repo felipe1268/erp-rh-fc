@@ -3766,6 +3766,12 @@ Retorne APENAS um JSON válido neste formato:
         numeroParcelas: fornInfo?.numeroParcelas ?? cot.numeroParcelas ?? 1,
         dataEntregaPrevista: dataEntregaPrevista,
         pendenteCoberturaOrcamentaria: itens.some(it => (it as any).semVerba === true),
+        ...((cot as any).modalidadeFd && (cot as any).modalidadeFd !== "normal" ? {
+          modalidadeFd: (cot as any).modalidadeFd === "fd_fc" ? "fd_terceiro" : (cot as any).modalidadeFd,
+          fdValor: (cot as any).fdValor,
+          fdStatus: "pendente_aprovacao",
+          fdBdiItemId: (cot as any).fdBdiItemId ?? null,
+        } : {}),
         ...(input.autorizacaoSemVerba ? {
           aprovacaoExtraAdminId: input.autorizacaoSemVerba.adminId,
           aprovacaoExtraAdminNome: input.autorizacaoSemVerba.adminNome,
@@ -7229,6 +7235,83 @@ Retorne APENAS um JSON válido neste formato:
           modalidadeFd: (oc as any).modalidadeFd,
         })),
       };
+    }),
+
+  marcarCotacaoFd: protectedProcedure
+    .input(z.object({
+      cotacaoId: z.number(),
+      companyId: z.number(),
+      modalidade: z.enum(["fd_cliente", "fd_fc"]),
+      valor: z.number().positive("Valor do FD deve ser maior que zero"),
+      bdiItemId: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes)
+        .where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      if (cot.status !== "pendente") throw new TRPCError({ code: "BAD_REQUEST", message: "FD só pode ser definido em cotações pendentes" });
+
+      if (input.modalidade === "fd_cliente" && cot.obraId) {
+        const obraRes = await db.execute(sql`SELECT orcamento_id FROM obras WHERE id = ${cot.obraId} AND company_id = ${input.companyId} LIMIT 1`);
+        const orcamentoId = (obraRes as any).rows?.[0]?.orcamento_id;
+        if (orcamentoId) {
+          const itensFd = await db.select().from(bdiFd).where(and(eq(bdiFd.orcamentoId, orcamentoId), eq(bdiFd.companyId, input.companyId)));
+          const totalFdOrcado = itensFd.reduce((s, i) => s + n(i.total), 0);
+
+          const ocsComFd = await db.select({ fdValor: comprasOrdens.fdValor })
+            .from(comprasOrdens)
+            .where(and(
+              eq(comprasOrdens.companyId, input.companyId),
+              eq(comprasOrdens.obraId, cot.obraId!),
+              sql`${comprasOrdens.modalidadeFd} = 'fd_cliente'`,
+              sql`${comprasOrdens.status} != 'cancelada'`,
+            ));
+          const totalFdComprometidoOcs = ocsComFd.reduce((s, o) => s + n(o.fdValor), 0);
+
+          const cotsFd = await db.execute(sql`
+            SELECT fd_valor FROM compras_cotacoes
+            WHERE company_id = ${input.companyId} AND obra_id = ${cot.obraId}
+              AND modalidade_fd = 'fd_cliente' AND status = 'pendente'
+              AND id != ${input.cotacaoId}
+          `);
+          const totalFdComprometidoCots = ((cotsFd as any).rows ?? []).reduce((s: number, r: any) => s + n(r.fd_valor), 0);
+
+          const saldoFd = totalFdOrcado - totalFdComprometidoOcs - totalFdComprometidoCots;
+          if (input.valor > saldoFd) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Saldo de FD insuficiente. Disponível: R$ ${saldoFd.toFixed(2)}. Valor solicitado: R$ ${input.valor.toFixed(2)}.`,
+            });
+          }
+        }
+      }
+
+      await db.update(comprasCotacoes).set({
+        modalidadeFd: input.modalidade,
+        fdValor: String(input.valor.toFixed(2)),
+        fdPagador: input.modalidade === "fd_cliente" ? "cliente" : "fc",
+        fdBdiItemId: input.bdiItemId ?? null,
+      } as any).where(eq(comprasCotacoes.id, input.cotacaoId));
+
+      return { success: true };
+    }),
+
+  removerCotacaoFd: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes)
+        .where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      if (cot.status !== "pendente") throw new TRPCError({ code: "BAD_REQUEST", message: "FD só pode ser removido de cotações pendentes" });
+      await db.update(comprasCotacoes).set({
+        modalidadeFd: "normal",
+        fdValor: null,
+        fdPagador: null,
+        fdBdiItemId: null,
+      } as any).where(eq(comprasCotacoes.id, input.cotacaoId));
+      return { success: true };
     }),
 
   marcarOcComoFd: protectedProcedure

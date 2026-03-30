@@ -217,6 +217,11 @@ async function startServer() {
         const vencCount = (vencResult as any).rowCount || 0;
         if (vencCount > 0) console.log(`[ColFix] vacation_periods: ${vencCount} período(s) expirado(s) marcado(s) como vencida`);
         // [REMOVIDO Rev.844] Recuperação de fotos EPI — já completada, não precisa rodar a cada boot
+        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS modalidade_fd VARCHAR(20) DEFAULT 'normal'`);
+        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_valor NUMERIC(14,2)`);
+        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_pagador VARCHAR(20)`);
+        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_bdi_item_id INTEGER`);
+        console.log("[ColFix] compras_cotacoes FD columns Rev.895 OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Normalização de textos compras — agora feita no momento de salvar/editar
