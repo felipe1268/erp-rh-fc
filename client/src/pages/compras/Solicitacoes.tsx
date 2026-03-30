@@ -472,6 +472,7 @@ export default function Solicitacoes() {
   const [editForm, setEditForm] = useState<{ titulo: string; prioridade: string; dataNecessidade: string; observacoes: string } | null>(null);
   const [editItens, setEditItens] = useState<any[]>([]);
   const [editingSc, setEditingSc] = useState<{ id: number; companyId: number } | null>(null);
+  const [editingOriginalEapIds, setEditingOriginalEapIds] = useState<Set<number>>(new Set());
 
   const q = trpc.compras.listarSolicitacoes.useQuery(
     { companyId, busca: busca || undefined, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -581,7 +582,7 @@ export default function Solicitacoes() {
     onSuccess: () => {
       toast.success("SC atualizada!");
       q.refetch(); detalheQ.refetch(); setEditMode(false);
-      if (editingSc) { setShowNova(false); resetForm(); setEditingSc(null); }
+      if (editingSc) { setShowNova(false); resetForm(); setEditingSc(null); setEditingOriginalEapIds(new Set()); }
     },
     onError: (e) => toast.error(e.message),
   });
@@ -1328,7 +1329,7 @@ export default function Solicitacoes() {
       </div>
 
       {/* ── Dialog Nova SC ─────────────────────────────────────────── */}
-      <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) { resetForm(); setEditingSc(null); } }}>
+      <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) { resetForm(); setEditingSc(null); setEditingOriginalEapIds(new Set()); } }}>
         <DialogContent
           className="border-gray-200 w-[96vw] max-w-[96vw] h-[94vh] max-h-[94vh] flex flex-col p-0 gap-0"
           style={{ background: '#ffffff', color: '#111827' }}
@@ -1603,11 +1604,12 @@ export default function Solicitacoes() {
                               const cobPct = cob && cob.totalInsumos > 0 ? Math.round((cob.insumosCobertos / cob.totalInsumos) * 100) : null;
                               const cobParcial = cob && cob.totalInsumos > 0 && cob.insumosCobertos > 0 && cob.insumosCobertos < cob.totalInsumos;
 
+                              const isOriginalItem = editingSc && editingOriginalEapIds.has(it.id);
                               return (
                                 <div key={it.id} className={`group ${statusColor.bg}`}>
                                   <div
                                     onClick={() => handleEapExpand(it)}
-                                    className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${expanded ? "bg-amber-50 border-l-2 border-l-amber-500" : "hover:bg-gray-50"}`}
+                                    className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${expanded ? "bg-amber-50 border-l-2 border-l-amber-500" : isOriginalItem ? "bg-blue-50/50 border-l-2 border-l-blue-400 hover:bg-blue-50" : "hover:bg-gray-50"}`}
                                   >
                                     <span className={`inline-block w-4 h-4 rounded-full shrink-0 ${form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "bg-purple-500" : ((it as any).mdoSaldo ?? 0) <= 0 ? "bg-red-500" : "bg-emerald-500") : cobParcial && statusColor.label !== "Estouro" ? "bg-orange-500" : statusColor.dot} ring-1 ring-white shadow-sm`} title={form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "100% contratado" : ((it as any).mdoSaldo ?? 0) <= 0 ? "Sem saldo" : "Disponível") : cobParcial ? `Parcial: ${cob.insumosCobertos}/${cob.totalInsumos} insumos` : statusColor.label} />
                                     <input
@@ -1652,6 +1654,11 @@ export default function Solicitacoes() {
                                       <div className="text-xs text-gray-900 truncate">
                                         <span className="font-semibold text-amber-700 mr-1.5">{it.eapCodigo}</span>
                                         {it.descricao}
+                                        {editingSc && editingOriginalEapIds.has(it.id) && (
+                                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                                            Já na SC
+                                          </span>
+                                        )}
                                       </div>
                                       {form.tipo === "servico" ? (
                                         <div className="mt-0.5 ml-0.5 space-y-0.5">
@@ -2351,7 +2358,7 @@ export default function Solicitacoes() {
           {/* Rodapé fixo com botões */}
           <div className="px-5 py-3 border-t border-gray-100 bg-white shrink-0 flex gap-2">
               <button
-                onClick={() => { setShowNova(false); resetForm(); setEditingSc(null); }}
+                onClick={() => { setShowNova(false); resetForm(); setEditingSc(null); setEditingOriginalEapIds(new Set()); }}
                 className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 font-medium transition"
               >
                 Cancelar
@@ -2853,7 +2860,21 @@ export default function Solicitacoes() {
                         origemEap: it.origemEap ?? undefined,
                       }));
                       setItens(scItens.length > 0 ? scItens : [newItem()]);
-                      setModoSC("manual");
+                      const eapIds = new Set<number>();
+                      const eapQtd: Record<number, string> = {};
+                      for (const it of (detalhe.itens as any[])) {
+                        if (it.orcamentoItemId) {
+                          eapIds.add(it.orcamentoItemId);
+                          if (it.quantidadeServico) {
+                            eapQtd[it.orcamentoItemId] = String(parseFloat(it.quantidadeServico) || "");
+                          }
+                        }
+                      }
+                      setSelectedEapIds(eapIds);
+                      setEapQtdServico(eapQtd);
+                      setEditingOriginalEapIds(new Set(eapIds));
+                      const hasEapItems = (detalhe.itens as any[]).some((it: any) => it.origemEap || it.orcamentoItemId);
+                      setModoSC(hasEapItems ? "eap" : "manual");
                       setEditingSc({ id: detalhe.id, companyId: detalhe.companyId ?? companyId });
                       setShowDetalhe(null);
                       setShowNova(true);
