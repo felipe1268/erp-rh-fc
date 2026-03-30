@@ -974,6 +974,19 @@ export const terceiroContratosRouter = router({
         } catch (e) { console.warn("[gerarMedicao] Erro ao carregar eapToAtividadeId:", e); }
       }
 
+      // If all contract items have valorTotal=0, distribute contract total evenly
+      const allItemsZeroGen = itens.every(ic => n(ic.valorTotal) === 0);
+      const contratoTotalGen = n(contrato.valorTotal);
+      if (allItemsZeroGen && contratoTotalGen > 0 && itens.length > 0) {
+        const valorPorItem = contratoTotalGen / itens.length;
+        console.log(`[gerarMedicao] Itens sem valor — distribuindo R$ ${contratoTotalGen.toFixed(2)} entre ${itens.length} itens (R$ ${valorPorItem.toFixed(2)}/item)`);
+        for (const ic of itens) {
+          (ic as any).valorTotal = String(valorPorItem);
+          await db.update(terceiroContratoItens).set({ valorTotal: String(valorPorItem), valorUnitario: String(valorPorItem) } as any)
+            .where(eq(terceiroContratoItens.id, ic.id));
+        }
+      }
+
       let valorMedidoPeriodo = 0;
       const itensMedicao: any[] = [];
       const itensNaoVinculados: string[] = [];
@@ -1223,6 +1236,19 @@ export const terceiroContratosRouter = router({
       }
       console.log(`[recalcularMedicao] avancoMap: ${Object.keys(avancoMap).length} atividades, eapMap: ${Object.keys(eapToAtividadeId).length} EAPs, nomeMap: ${Object.keys(nomeToAtividadeId).length}`);
 
+      // If all contract items have valorTotal=0, distribute contract total evenly
+      const allItemsZero = itensContrato.every(ic => n(ic.valorTotal) === 0);
+      const contratoTotal = n(contrato.valorTotal);
+      if (allItemsZero && contratoTotal > 0 && itensContrato.length > 0) {
+        const valorPorItem = contratoTotal / itensContrato.length;
+        console.log(`[recalcularMedicao] Itens sem valor — distribuindo R$ ${contratoTotal.toFixed(2)} entre ${itensContrato.length} itens (R$ ${valorPorItem.toFixed(2)}/item)`);
+        for (const ic of itensContrato) {
+          (ic as any).valorTotal = String(valorPorItem);
+          await db.update(terceiroContratoItens).set({ valorTotal: String(valorPorItem), valorUnitario: String(valorPorItem) } as any)
+            .where(eq(terceiroContratoItens.id, ic.id));
+        }
+      }
+
       let valorMedidoPeriodo = 0;
       const itensResultado: { descricao: string; eapCodigo: string | null; vinculado: boolean; percentual: number }[] = [];
       for (const itemMed of itensMedicao) {
@@ -1266,7 +1292,7 @@ export const terceiroContratosRouter = router({
             if (av) percentualFisico = n(av.percentualAcumulado);
           }
         }
-        console.log(`[recalcularMedicao] Item "${itemContrato.descricao}" ativId=${atividadeId} → ${percentualFisico}%`);
+        console.log(`[recalcularMedicao] Item "${itemContrato.descricao}" ativId=${atividadeId} → ${percentualFisico}% valorTotal=${itemContrato.valorTotal} valorUnit=${itemContrato.valorUnitario} qtd=${itemContrato.quantidade}`);
 
         const percentualAnterior = n(itemContrato.percentualMedidoAcumulado);
         const percentualPeriodo = Math.max(0, percentualFisico - percentualAnterior);
