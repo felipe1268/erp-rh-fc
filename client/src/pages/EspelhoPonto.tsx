@@ -64,9 +64,10 @@ function getBatidas(r: any): string[] {
   return [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3].filter(Boolean);
 }
 
-type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo";
+type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado";
 
-function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>): DayStatus {
+function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>, dataDesligamento?: string | null): DayStatus {
+  if (dataDesligamento && dateStr > dataDesligamento) return "desligado";
   const { dow, isSun, isSat } = dayInfo(dateStr);
   if (isSun) return "domingo";
   if (isSat) return "sabado";
@@ -88,6 +89,7 @@ const STATUS_STYLE: Record<DayStatus, { row: string; badge: string; label: strin
   atraso:     { row: "bg-amber-50/20",  badge: "bg-amber-100 text-amber-700",   label: "Atraso" },
   sabado:     { row: "bg-slate-50/60",  badge: "bg-slate-100 text-slate-500",   label: "Sábado" },
   domingo:    { row: "bg-slate-50/30",  badge: "",                              label: "Domingo" },
+  desligado:  { row: "bg-gray-100/50",  badge: "bg-gray-200 text-gray-500",    label: "Desligado" },
 };
 
 function initials(name: string) {
@@ -308,7 +310,7 @@ export default function EspelhoPonto() {
   }, []);
 
   const empListQ = trpc.employees.list.useQuery(
-    { companyId, companyIds, excludeTerminated: true },
+    { companyId, companyIds },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const empList: any[] = (empListQ.data as any[]) || [];
@@ -349,16 +351,17 @@ export default function EspelhoPonto() {
     [queryParams]
   );
 
+  const dataDesligamento: string | null = empData?.dataDesligamentoEfetiva ?? null;
+
   const summary = useMemo(() => {
     let trabalhados = 0, diasFalta = 0, diasFerias = 0, totalHEMins = 0, totalAtrasoMins = 0, totalTrabMins = 0;
     for (const d of allDays) {
+      if (dataDesligamento && d > dataDesligamento) continue;
       const { dow } = dayInfo(d);
       const isWeekendDay = dow === 0 || dow === 6;
       const r = recordMap[d];
       const isFerias = feriasDatesSet.has(d);
-      // HE e atrasos somam TODOS os dias (incluindo sábado/domingo), mas não férias
       if (r && !isFerias) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
-      // Dias trabalhados e faltas apenas para dias úteis (seg–sex)
       if (isWeekendDay) continue;
       if (isFerias) { diasFerias++; continue; }
       if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") diasFalta++;
@@ -366,7 +369,7 @@ export default function EspelhoPonto() {
     }
     const saldoHEMins = totalHEMins - totalAtrasoMins;
     return { trabalhados, diasFalta, diasFerias, totalHEMins, totalAtrasoMins, totalTrabMins, saldoHEMins };
-  }, [allDays, recordMap, feriasDatesSet]);
+  }, [allDays, recordMap, feriasDatesSet, dataDesligamento]);
 
   // Hide Ent.3/Saí.3 column when no records have a third shift
   const hasThirdShift = useMemo(
@@ -456,8 +459,11 @@ export default function EspelhoPonto() {
                         <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center shrink-0">
                           <span className="text-white text-[9px] font-bold">{initials(e.nomeCompleto)}</span>
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-800 truncate">{e.nomeCompleto}</p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className={`text-sm font-medium truncate ${e.status === "Desligado" ? "text-slate-400" : "text-slate-800"}`}>{e.nomeCompleto}</p>
+                            {e.status === "Desligado" && <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-gray-200 text-gray-500 shrink-0">DESLIGADO</span>}
+                          </div>
                           <p className="text-xs text-slate-400">{e.funcao}{e.codigoInterno ? ` · Mat. ${e.codigoInterno}` : ""}</p>
                         </div>
                       </button>
@@ -607,7 +613,7 @@ export default function EspelhoPonto() {
               {allDays.map((dateStr) => {
                 const { name, num, monthNum, isSun, isSat } = dayInfo(dateStr);
                 const rec = recordMap[dateStr] || null;
-                const s = getDayStatus(dateStr, rec, feriasDatesSet);
+                const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento);
                 const cfg = STATUS_STYLE[s];
                 const isFerias = s === "ferias";
                 const isWeekend = isSun || isSat;
