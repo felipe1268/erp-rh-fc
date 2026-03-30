@@ -34,13 +34,17 @@ function formatDuracao(segundos: number): string {
 
 function formatDate(d: string | Date): string {
   if (!d) return "-";
+  if (typeof d === "string" && /^\d{2}\/\d{2}\/\d{2}/.test(d)) return d;
   const date = new Date(d);
+  if (isNaN(date.getTime())) return String(d);
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "America/Sao_Paulo" });
 }
 
 function formatDateTime(d: string | Date): string {
   if (!d) return "-";
+  if (typeof d === "string" && /^\d{2}\/\d{2}\/\d{2},\s\d{2}:\d{2}$/.test(d)) return d;
   const date = new Date(d);
+  if (isNaN(date.getTime())) return String(d);
   return date.toLocaleDateString("pt-BR", {
     day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo",
   });
@@ -637,7 +641,7 @@ export default function Telemetria() {
                                 {MODULE_LABELS_MAP[p.modulo] || p.modulo}
                               </Badge>
                               <span className="text-sm font-medium truncate">{p.user_name}</span>
-                              <span className="text-xs text-gray-400 shrink-0">{formatDateTime(p.criado_em)}</span>
+                              <span className="text-xs text-gray-400 shrink-0">{p.criado_em_fmt || formatDateTime(p.criado_em)}</span>
                             </div>
                             {expandedRows.has(p.id) ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                           </div>

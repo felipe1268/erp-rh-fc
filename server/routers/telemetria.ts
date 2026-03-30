@@ -156,7 +156,7 @@ export const telemetriaRouter = router({
                  COUNT(*) FILTER (WHERE tipo = 'action') as total_acoes,
                  COUNT(DISTINCT pagina) as paginas_distintas,
                  COALESCE(SUM(duracao_segundos) FILTER (WHERE duracao_segundos > 0), 0) as tempo_total,
-                 MAX(criado_em) as ultimo_acesso
+                 to_char(MAX(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'DD/MM/YY, HH24:MI') as ultimo_acesso
           FROM user_activity_log
           WHERE company_id = ${cid}
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
@@ -184,23 +184,23 @@ export const telemetriaRouter = router({
           GROUP BY modulo ORDER BY total DESC
         `),
         db.execute(sql`
-          SELECT pagina, MAX(criado_em) as ultimo_acesso,
+          SELECT pagina, to_char(MAX(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'DD/MM/YY, HH24:MI') as ultimo_acesso,
                  COUNT(*) as total_historico
           FROM user_activity_log
           WHERE company_id = ${cid} AND tipo = 'page_visit'
           GROUP BY pagina
           HAVING MAX(criado_em) < NOW() - INTERVAL '30 days'
-          ORDER BY ultimo_acesso ASC LIMIT 20
+          ORDER BY MAX(criado_em) ASC LIMIT 20
         `),
         db.execute(sql`
           SELECT user_id, user_name,
-                 MAX(criado_em) as ultimo_acesso,
+                 to_char(MAX(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'DD/MM/YY, HH24:MI') as ultimo_acesso,
                  COUNT(*) as total_acessos
           FROM user_activity_log
           WHERE company_id = ${cid}
           GROUP BY user_id, user_name
           HAVING MAX(criado_em) < NOW() - INTERVAL '7 days'
-          ORDER BY ultimo_acesso ASC
+          ORDER BY MAX(criado_em) ASC
         `),
         db.execute(sql`
           SELECT EXTRACT(DOW FROM criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::int as dia_semana, COUNT(*) as total
@@ -248,8 +248,8 @@ export const telemetriaRouter = router({
                  COUNT(*) FILTER (WHERE tipo = 'action') as total_acoes,
                  COUNT(DISTINCT pagina) as paginas_distintas,
                  COALESCE(SUM(duracao_segundos) FILTER (WHERE duracao_segundos > 0), 0) as tempo_total,
-                 MIN(criado_em) as primeiro_acesso,
-                 MAX(criado_em) as ultimo_acesso
+                 to_char(MIN(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'DD/MM/YY, HH24:MI') as primeiro_acesso,
+                 to_char(MAX(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'DD/MM/YY, HH24:MI') as ultimo_acesso
           FROM user_activity_log
           WHERE company_id = ${cid} AND user_id = ${input.userId}
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
@@ -325,21 +325,21 @@ export const telemetriaRouter = router({
           GROUP BY modulo ORDER BY total DESC
         `),
         db.execute(sql`
-          SELECT user_name, user_id, COUNT(*) as total, MAX(criado_em) as ultimo_uso
+          SELECT user_name, user_id, COUNT(*) as total, to_char(MAX(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'DD/MM/YY, HH24:MI') as ultimo_uso
           FROM ia_modulo_conversas
           WHERE company_id = ${cid}
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
           GROUP BY user_name, user_id ORDER BY total DESC
         `),
         db.execute(sql`
-          SELECT DATE(criado_em AT TIME ZONE 'America/Sao_Paulo') as dia, COUNT(*) as total
+          SELECT DATE(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') as dia, COUNT(*) as total
           FROM ia_modulo_conversas
           WHERE company_id = ${cid}
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
           GROUP BY dia ORDER BY dia
         `),
         db.execute(sql`
-          SELECT id, user_name, modulo, pergunta, resposta, criado_em
+          SELECT id, user_name, modulo, pergunta, resposta, to_char(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YY, HH24:MI') as criado_em_fmt
           FROM ia_modulo_conversas
           WHERE company_id = ${cid}
             AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)
@@ -372,7 +372,7 @@ export const telemetriaRouter = router({
       const cid = resolveCompanyId(ctx, input.companyId);
 
       let query = sql`
-        SELECT id, user_id, user_name, tipo, pagina, acao, modulo, detalhes, duracao_segundos, criado_em
+        SELECT id, user_id, user_name, tipo, pagina, acao, modulo, detalhes, duracao_segundos, to_char(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YY, HH24:MI') as criado_em, criado_em as criado_em_raw
         FROM user_activity_log
         WHERE company_id = ${cid}
       `;
@@ -380,7 +380,7 @@ export const telemetriaRouter = router({
       if (input.pagina) query = sql`${query} AND pagina ILIKE ${'%' + input.pagina + '%'}`;
       if (input.modulo) query = sql`${query} AND modulo = ${input.modulo}`;
       if (input.tipo !== "all") query = sql`${query} AND tipo = ${input.tipo}`;
-      query = sql`${query} ORDER BY criado_em DESC LIMIT ${input.limite} OFFSET ${input.offset}`;
+      query = sql`${query} ORDER BY criado_em_raw DESC LIMIT ${input.limite} OFFSET ${input.offset}`;
 
       const rows = await db.execute(query);
       return (rows as any).rows ?? [];
@@ -399,9 +399,9 @@ export const telemetriaRouter = router({
             COUNT(*) FILTER (WHERE tipo = 'page_visit') as visitas,
             COUNT(*) FILTER (WHERE tipo = 'action') as acoes,
             COUNT(DISTINCT pagina) as paginas_unicas,
-            COUNT(DISTINCT DATE(criado_em AT TIME ZONE 'America/Sao_Paulo')) as dias_ativos,
+            COUNT(DISTINCT DATE(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')) as dias_ativos,
             COALESCE(SUM(duracao_segundos) FILTER (WHERE duracao_segundos > 0), 0) as tempo_total,
-            MAX(criado_em) as ultimo_acesso
+            to_char(MAX(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'DD/MM/YY, HH24:MI') as ultimo_acesso
           FROM user_activity_log
           WHERE company_id = ${cid}
             AND criado_em >= NOW() - INTERVAL '30 days'
@@ -434,7 +434,7 @@ export const telemetriaRouter = router({
       const interval = input.periodo || "30 days";
       const rows = await db.execute(sql`
         SELECT user_name, user_id, COUNT(*) as total,
-               MAX(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') as ultimo_acesso
+               to_char(MAX(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'DD/MM/YY, HH24:MI') as ultimo_acesso
         FROM user_activity_log
         WHERE company_id = ${cid}
           AND criado_em >= NOW() - CAST(${interval} AS INTERVAL)

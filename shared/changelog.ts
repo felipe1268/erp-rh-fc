@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 920,
+    titulo: "Telemetria — horários corrigidos para fuso de São Paulo (GMT-3)",
+    descricao: "Todos os timestamps da telemetria (Ranking de Usuários, Usuários Inativos, Páginas sem Acesso, Analytics de IA) agora exibem horário de Brasília/São Paulo. Conversão feita no backend via to_char com AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'. Frontend detecta strings pré-formatadas e não re-converte.",
+    tipo: "correção",
+    modulos: "Telemetria",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 23:30:00",
+  },
+  {
     version: 884,
     titulo: "Sistema FD completo — PDF aprovação, medição cliente, adicionar/remover itens, detalhe expandível",
     descricao: "PDF de aprovação FD Cliente com dados da obra, itens, saldo e bloco de assinatura. Auto-criação de registro FD na medição cliente ao aprovar OC. Endpoints para adicionar e remover itens do BDI FD (Admin Master + auditoria). Painel FD com tabela de OCs vinculadas e botão PDF. Detalhe expandível de FD no boletim de medição com breakdown por registro.",
