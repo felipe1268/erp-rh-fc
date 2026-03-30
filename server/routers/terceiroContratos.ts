@@ -1182,6 +1182,7 @@ export const terceiroContratosRouter = router({
       console.log(`[recalcularMedicao] avancoMap: ${Object.keys(avancoMap).length} atividades, eapMap: ${Object.keys(eapToAtividadeId).length} EAPs`);
 
       let valorMedidoPeriodo = 0;
+      const itensResultado: { descricao: string; eapCodigo: string | null; vinculado: boolean; percentual: number }[] = [];
       for (const itemMed of itensMedicao) {
         const itemContrato = itensContrato.find(ic => ic.id === itemMed.contratoItemId);
         if (!itemContrato) continue;
@@ -1192,7 +1193,11 @@ export const terceiroContratosRouter = router({
           if (eapToAtividadeId[eap]) {
             atividadeId = eapToAtividadeId[eap];
             await db.update(terceiroContratoItens).set({ planejamentoAtividadeId: atividadeId }).where(eq(terceiroContratoItens.id, itemContrato.id));
+            console.log(`[recalcularMedicao] Link EAP "${eap}" → ativId ${atividadeId}`);
           }
+        }
+        if (!atividadeId) {
+          console.log(`[recalcularMedicao] Item sem link: id=${itemContrato.id} eap=${(itemContrato as any).eapCodigo || "NULL"} orcItemId=${itemContrato.orcamentoItemId || "NULL"} desc="${itemContrato.descricao}"`);
         }
 
         let percentualFisico = n(itemContrato.percentualMedidoAcumulado);
@@ -1214,6 +1219,12 @@ export const terceiroContratosRouter = router({
         const valorPeriodo = (percentualPeriodo / 100) * n(itemContrato.valorTotal);
         const valorAcumuladoItem = (percentualFisico / 100) * n(itemContrato.valorTotal);
         valorMedidoPeriodo += valorPeriodo;
+        itensResultado.push({
+          descricao: itemContrato.descricao,
+          eapCodigo: (itemContrato as any).eapCodigo || null,
+          vinculado: !!atividadeId,
+          percentual: percentualFisico,
+        });
 
         await db.update(terceiroMedicaoItens).set({
           percentualAvancoFisico: String(percentualFisico),
@@ -1238,7 +1249,9 @@ export const terceiroContratosRouter = router({
         percentualGlobal: String(percentualGlobal),
       } as any).where(eq(terceiroMedicoes.id, input.medicaoId));
 
-      return { ok: true, valorMedido: valorMedidoPeriodo, percentualGlobal };
+      const vinculados = itensResultado.filter(i => i.vinculado).length;
+      const naoVinculados = itensResultado.filter(i => !i.vinculado).length;
+      return { ok: true, valorMedido: valorMedidoPeriodo, percentualGlobal, itens: itensResultado, vinculados, naoVinculados, totalEaps: Object.keys(eapToAtividadeId).length, totalAvancos: Object.keys(avancoMap).length };
     }),
 
   editarMedicao: protectedProcedure

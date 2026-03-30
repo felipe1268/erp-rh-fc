@@ -753,6 +753,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, exc
   const [rejeicaoModal, setRejeicaoModal] = useState<{ id: number; numero: number } | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [editingItem, setEditingItem] = useState<{ id: number; valor: string } | null>(null);
+  const [recalcResult, setRecalcResult] = useState<any>(null);
 
   if (contrato.medicoes.length === 0) {
     return (
@@ -801,7 +802,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, exc
                   {(m.status === "aguardando_aprovacao" || m.status === "rascunho") && (
                     <Button size="sm" variant="outline" className="gap-1 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
                       disabled={recalcularMut.isPending}
-                      onClick={() => recalcularMut.mutate({ medicaoId: m.id, companyId: contrato.companyId })}>
+                      onClick={() => recalcularMut.mutate({ medicaoId: m.id, companyId: contrato.companyId }, { onSuccess: (data: any) => setRecalcResult(data) })}>
                       <RefreshCw className={`w-3 h-3 ${recalcularMut.isPending ? "animate-spin" : ""}`} /> Recalcular
                     </Button>
                   )}
@@ -941,6 +942,61 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, exc
                 onClick={() => { rejeitarMut.mutate({ id: rejeicaoModal.id, motivo: motivoRejeicao, rejeitadoPor: "Responsável" }); setRejeicaoModal(null); }}>
                 Confirmar Rejeição
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {recalcularMut.isPending && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-3">
+              <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+              <h3 className="font-semibold text-gray-900">Recalculando medição...</h3>
+            </div>
+            <p className="text-sm text-gray-500">Buscando avanços do cronograma e vinculando itens ao planejamento.</p>
+            <div className="mt-3 w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+              <div className="h-full bg-blue-600 rounded-full animate-pulse" style={{ width: "70%" }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {recalcResult && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setRecalcResult(null)}>
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600" /> Resultado do Recálculo
+            </h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-blue-50 rounded-lg p-3 text-center">
+                <p className="text-xs text-blue-600 font-medium">Valor Medido</p>
+                <p className="text-lg font-bold text-blue-800">R$ {Number(recalcResult.valorMedido).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-emerald-50 rounded-lg p-3 text-center">
+                <p className="text-xs text-emerald-600 font-medium">% Global</p>
+                <p className="text-lg font-bold text-emerald-800">{Number(recalcResult.percentualGlobal).toFixed(1)}%</p>
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm space-y-1">
+              <div className="flex justify-between"><span className="text-gray-500">Itens vinculados ao cronograma:</span><span className={`font-semibold ${recalcResult.vinculados > 0 ? "text-green-600" : "text-red-600"}`}>{recalcResult.vinculados}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Itens sem vínculo:</span><span className={`font-semibold ${recalcResult.naoVinculados > 0 ? "text-amber-600" : "text-green-600"}`}>{recalcResult.naoVinculados}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">EAPs no planejamento:</span><span className="font-semibold text-gray-700">{recalcResult.totalEaps}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Atividades com avanço:</span><span className="font-semibold text-gray-700">{recalcResult.totalAvancos}</span></div>
+            </div>
+            {recalcResult.naoVinculados > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                <p className="text-xs font-semibold text-amber-700 mb-1">Itens não vinculados (sem EAP correspondente):</p>
+                <ul className="text-xs text-amber-600 space-y-0.5">
+                  {recalcResult.itens.filter((i: any) => !i.vinculado).map((i: any, idx: number) => (
+                    <li key={idx}>• {i.descricao} {i.eapCodigo ? `(EAP: ${i.eapCodigo})` : "(sem código EAP)"}</li>
+                  ))}
+                </ul>
+                <p className="text-xs text-amber-500 mt-2">Vincule esses itens ao cronograma na aba "Itens" usando o botão "Vincular EAP" para que os avanços sejam puxados automaticamente.</p>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button size="sm" onClick={() => setRecalcResult(null)}>Fechar</Button>
             </div>
           </div>
         </div>
