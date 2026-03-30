@@ -597,6 +597,9 @@ export default function Solicitacoes() {
         : "SC desaprovada! Voltou para Pendente.";
       toast.success(msg);
       q.refetch(); detalheQ.refetch();
+      if (data.cotacoesExcluidas > 0) {
+        trpcCtx.compras.listarCotacoes.invalidate();
+      }
     },
     onError: (e) => toast.error(e.message),
   });
