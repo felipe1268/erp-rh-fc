@@ -4797,14 +4797,37 @@ Retorne APENAS um JSON válido neste formato:
         filtered = insumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
       }
 
-      return filtered.map(i => ({
-        insumoCodigo: i.insumoCodigo,
-        descricao: i.insumoDescricao || "",
-        unidade: i.unidade || "un",
-        coeficiente: n(i.quantidade),
-        precoUnitario: n(i.precoUnitario),
-        custoUnitTotal: n(i.custoUnitTotal),
-      }));
+      const tipoSC = input.tipoSC ?? "material";
+      return filtered.map(i => {
+        const pu = n(i.precoUnitario);
+        const mat = n(i.alocacaoMat);
+        const mdo = n(i.alocacaoMdo);
+        const alocTotal = mat + mdo;
+        const ratioMat = alocTotal > 0 ? mat / alocTotal : 1;
+        const puMat = Math.round(pu * ratioMat * 100) / 100;
+        const puMdo = Math.round((pu - puMat) * 100) / 100;
+
+        let puSegregado = pu;
+        if (tipoSC === "material") {
+          puSegregado = puMat;
+        } else if (tipoSC === "servico") {
+          puSegregado = puMdo;
+        }
+
+        return {
+          insumoCodigo: i.insumoCodigo,
+          descricao: i.insumoDescricao || "",
+          unidade: i.unidade || "un",
+          coeficiente: n(i.quantidade),
+          precoUnitario: puSegregado,
+          precoUnitarioOriginal: pu,
+          precoUnitMat: puMat,
+          precoUnitMdo: puMdo,
+          custoUnitTotal: n(i.custoUnitTotal),
+          alocacaoMat: mat,
+          alocacaoMdo: mdo,
+        };
+      });
     }),
 
   getSaldoOrcamentario: protectedProcedure

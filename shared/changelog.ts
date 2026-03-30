@@ -6596,4 +6596,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 03:45:00",
   },
+  {
+    versao: 919,
+    descricao:
+      "Segregação automática MAT/MDO na explosão EAP da Solicitação de Compra. " +
+      "Ao criar uma SC tipo 'Material', o sistema agora retorna apenas a parcela de material de cada " +
+      "insumo (preço unitário proporcional × alocacaoMat). Para tipo 'Serviço/MDO', retorna apenas a " +
+      "parcela de mão de obra (× alocacaoMdo). Para 'Pacote (Mat+MDO)', mantém o preço total original. " +
+      "Insumos 100% MDO são excluídos da lista de Material e vice-versa. " +
+      "Garantia: Material + MDO = Pacote em valor. O precoMeta salvo na SC reflete o valor segregado.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 04:00:00",
+  },
 ];
