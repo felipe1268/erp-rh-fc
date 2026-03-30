@@ -397,7 +397,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
         {/* Tab: Medições */}
         {tab === "medicoes" && (
-          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} />
+          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} />
         )}
 
         {/* Tab: Comparativo */}
@@ -748,7 +748,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   );
 }
 
-function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao }: any) {
+function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao }: any) {
   const [expandedMedicao, setExpandedMedicao] = useState<number | null>(null);
   const [rejeicaoModal, setRejeicaoModal] = useState<{ id: number; numero: number } | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
