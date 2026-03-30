@@ -1139,24 +1139,24 @@ Responda APENAS com um objeto JSON no formato:
         });
       }
 
-      const pendingIds = rows.filter(r => r.status === "pendente").map(r => r.id);
       let scWithCotacao = new Set<number>();
       let scWithOC = new Set<number>();
-      if (pendingIds.length > 0) {
+      if (ids.length > 0) {
         const activeCots = await db.select({ solicitacaoId: comprasCotacoes.solicitacaoId }).from(comprasCotacoes)
           .where(and(
-            sql`${comprasCotacoes.solicitacaoId} = ANY(${sql.raw("ARRAY[" + pendingIds.join(",") + "]::int[]")})`,
+            sql`${comprasCotacoes.solicitacaoId} = ANY(${sql.raw("ARRAY[" + ids.join(",") + "]::int[]")})`,
             sql`${comprasCotacoes.status} NOT IN ('cancelada')`,
           ));
         activeCots.forEach(c => { if (c.solicitacaoId) scWithCotacao.add(c.solicitacaoId); });
 
         const activeOrdens = await db.select({ solicitacaoId: comprasOrdens.solicitacaoId }).from(comprasOrdens)
           .where(and(
-            sql`${comprasOrdens.solicitacaoId} = ANY(${sql.raw("ARRAY[" + pendingIds.join(",") + "]::int[]")})`,
+            sql`${comprasOrdens.solicitacaoId} = ANY(${sql.raw("ARRAY[" + ids.join(",") + "]::int[]")})`,
             sql`${comprasOrdens.status} NOT IN ('cancelada')`,
           ));
         activeOrdens.forEach(o => { if (o.solicitacaoId) scWithOC.add(o.solicitacaoId); });
 
+        const pendingIds = rows.filter(r => r.status === "pendente").map(r => r.id);
         const toFixIds = pendingIds.filter(id => scWithCotacao.has(id) || scWithOC.has(id));
         if (toFixIds.length > 0) {
           await db.update(comprasSolicitacoes)
@@ -1168,7 +1168,7 @@ Responda APENAS com um objeto JSON no formato:
 
       let result = rows.map(r => {
         const status = (r.status === "pendente" && (scWithCotacao.has(r.id) || scWithOC.has(r.id))) ? "cotacao" : r.status;
-        return { ...r, status, _itens: itensCounts[r.id] ?? { total: 0, atendidos: 0 } };
+        return { ...r, status, _hasOC: scWithOC.has(r.id), _itens: itensCounts[r.id] ?? { total: 0, atendidos: 0 } };
       });
       if (input.busca) {
         const b = input.busca.toLowerCase();

@@ -1143,7 +1143,7 @@ export default function Solicitacoes() {
   }, []);
 
   const todasSCs = filtroStatus !== "todos" ? (qTodas.data ?? lista) : lista;
-  const urgentesAtivos = useMemo(() => todasSCs.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(r.status)), [todasSCs]);
+  const urgentesAtivos = useMemo(() => todasSCs.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(r.status) && !r._hasOC), [todasSCs]);
   const kpis = useMemo(() => ({
     pendente: lista.filter(r => r.status === "pendente").length,
     cotacao:  lista.filter(r => r.status === "cotacao").length,
