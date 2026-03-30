@@ -612,62 +612,84 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         {/* Modal Gerar Medição */}
         {showGerarMedicao && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-              <h2 className="text-lg font-bold mb-4">Gerar Medição {String((contrato.medicoes?.length || 0) + 1).padStart(2, "0")} — Automática</h2>
-              <p className="text-sm text-gray-500 mb-4">
-                O sistema vai buscar o avanço físico atual de cada atividade no planejamento e calcular o valor a medir automaticamente.
-              </p>
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-sm">Período de Referência (AAAA-MM)</Label>
-                  <Input className="mt-1" value={periodo} onChange={e => {
-                    const v = e.target.value; setPeriodo(v);
-                    const m = v.match(/^(\d{4})-(\d{2})$/);
-                    if (m) {
-                      const y = parseInt(m[1]), mo = parseInt(m[2]) - 1;
-                      setMedicaoDataInicio(new Date(y, mo, 1).toISOString().slice(0, 10));
-                      setMedicaoDataFim(new Date(y, mo + 1, 0).toISOString().slice(0, 10));
-                    }
-                  }} placeholder="2025-03" />
+            {(() => {
+              const proximoNumero = (contrato.medicoes?.length || 0) + 1;
+              const numStr = String(proximoNumero).padStart(2, "0");
+              const isFirst = proximoNumero === 1;
+              const ultimaMedicao = contrato.medicoes?.length > 0
+                ? [...contrato.medicoes].sort((a: any, b: any) => (b.numero || 0) - (a.numero || 0))[0]
+                : null;
+              const autoInicio = ultimaMedicao?.dataFim
+                ? (() => { const d = new Date(ultimaMedicao.dataFim); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); })()
+                : null;
+              const autoFim = new Date().toISOString().slice(0, 10);
+              const inicioEfetivo = isFirst ? medicaoDataInicio : (autoInicio || medicaoDataInicio);
+              const fimEfetivo = isFirst ? medicaoDataFim : autoFim;
+              const periodoCalc = inicioEfetivo.slice(0, 7);
+              return (
+                <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+                  <h2 className="text-lg font-bold mb-1">Gerar Medição Automática</h2>
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-2xl font-bold text-blue-600">Medição {numStr}</span>
+                    {!isFirst && ultimaMedicao?.dataFim && (
+                      <span className="text-xs text-gray-400">Continuação da Medição {String(ultimaMedicao.numero).padStart(2, "0")}</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 mb-4">
+                    O sistema vai buscar o avanço físico atual de cada atividade no planejamento e calcular o valor a medir automaticamente.
+                  </p>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-sm">Data Início</Label>
+                        {isFirst ? (
+                          <Input className="mt-1" type="date" value={medicaoDataInicio} onChange={e => setMedicaoDataInicio(e.target.value)} />
+                        ) : (
+                          <div className="mt-1 px-3 py-2 bg-gray-100 rounded-md text-sm text-gray-700 border">{inicioEfetivo.split("-").reverse().join("/")}</div>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-sm">Data Fim</Label>
+                        {isFirst ? (
+                          <Input className="mt-1" type="date" value={medicaoDataFim} onChange={e => setMedicaoDataFim(e.target.value)} />
+                        ) : (
+                          <div className="mt-1 px-3 py-2 bg-gray-100 rounded-md text-sm text-gray-700 border">{fimEfetivo.split("-").reverse().join("/")}</div>
+                        )}
+                      </div>
+                    </div>
+                    {!isFirst && (
+                      <p className="text-xs text-gray-400">Período calculado automaticamente: início no dia seguinte à medição anterior, fim na data de hoje.</p>
+                    )}
+                    {contrato.docsComPendencia > 0 && (
+                      <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg text-yellow-700 text-xs">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        Existem {contrato.docsComPendencia} documento(s) pendentes. A medição será gerada mas poderá ser bloqueada para pagamento.
+                      </div>
+                    )}
+                  </div>
+                  {gerarMedicaoMut.isPending && (
+                    <div className="mt-4 space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-blue-600">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Gerando medição...
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                        <div className="bg-blue-600 h-2.5 rounded-full" style={{ animation: "progress-indeterminate 1.5s ease-in-out infinite" }} />
+                      </div>
+                      <p className="text-xs text-gray-400">Vinculando itens ao planejamento e calculando avanço físico...</p>
+                      <style>{`@keyframes progress-indeterminate { 0% { width: 10%; margin-left: 0; } 50% { width: 60%; margin-left: 20%; } 100% { width: 10%; margin-left: 90%; } }`}</style>
+                    </div>
+                  )}
+                  <div className="flex gap-3 mt-5 justify-end">
+                    <Button variant="outline" onClick={() => setShowGerarMedicao(false)} disabled={gerarMedicaoMut.isPending}>Cancelar</Button>
+                    <Button className="bg-blue-600 hover:bg-blue-700" disabled={gerarMedicaoMut.isPending}
+                      onClick={() => gerarMedicaoMut.mutate({ contratoId: id, companyId: contrato.companyId, periodo: periodoCalc, dataInicio: inicioEfetivo, dataFim: fimEfetivo, criadoPor: "Responsável" })}>
+                      <Zap className="w-4 h-4 mr-2" />{gerarMedicaoMut.isPending ? "Gerando..." : "Gerar Medição"}
+                    </Button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-sm">Data Início</Label>
-                    <Input className="mt-1" type="date" value={medicaoDataInicio} onChange={e => setMedicaoDataInicio(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label className="text-sm">Data Fim</Label>
-                    <Input className="mt-1" type="date" value={medicaoDataFim} onChange={e => setMedicaoDataFim(e.target.value)} />
-                  </div>
-                </div>
-                {contrato.docsComPendencia > 0 && (
-                  <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg text-yellow-700 text-xs">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                    Existem {contrato.docsComPendencia} documento(s) pendentes. A medição será gerada mas poderá ser bloqueada para pagamento.
-                  </div>
-                )}
-              </div>
-              {gerarMedicaoMut.isPending && (
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-blue-600">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Gerando medição...
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-                    <div className="bg-blue-600 h-2.5 rounded-full animate-pulse" style={{ width: "100%", animation: "progress-indeterminate 1.5s ease-in-out infinite" }} />
-                  </div>
-                  <p className="text-xs text-gray-400">Vinculando itens ao planejamento e calculando avanço físico...</p>
-                  <style>{`@keyframes progress-indeterminate { 0% { width: 10%; margin-left: 0; } 50% { width: 60%; margin-left: 20%; } 100% { width: 10%; margin-left: 90%; } }`}</style>
-                </div>
-              )}
-              <div className="flex gap-3 mt-5 justify-end">
-                <Button variant="outline" onClick={() => setShowGerarMedicao(false)} disabled={gerarMedicaoMut.isPending}>Cancelar</Button>
-                <Button className="bg-blue-600 hover:bg-blue-700" disabled={gerarMedicaoMut.isPending}
-                  onClick={() => gerarMedicaoMut.mutate({ contratoId: id, companyId: contrato.companyId, periodo, dataInicio: medicaoDataInicio, dataFim: medicaoDataFim, criadoPor: "Responsável" })}>
-                  <Zap className="w-4 h-4 mr-2" />{gerarMedicaoMut.isPending ? "Gerando..." : "Gerar Medição"}
-                </Button>
-              </div>
-            </div>
+              );
+            })()}
           </div>
         )}
 
@@ -751,7 +773,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, excluirMedicaoMut,
                 <div className="flex-1 cursor-pointer" onClick={() => setExpandedMedicao(isExpanded ? null : m.id)}>
                   <div className="flex items-center gap-2 mb-1">
                     {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                    <span className="font-semibold text-gray-900">Medição {String(m.numero).padStart(2, "0")} — {m.periodo}</span>
+                    <span className="font-semibold text-gray-900">Medição {String(m.numero).padStart(2, "0")}{m.dataInicio && m.dataFim ? ` — ${fmtDate(m.dataInicio)} a ${fmtDate(m.dataFim)}` : ` — ${m.periodo}`}</span>
                     <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
                     {m.geradoAutomaticamente && <Badge className="text-xs border bg-purple-100 text-purple-700 border-purple-200"><Zap className="w-3 h-3 mr-1" />Auto</Badge>}
                   </div>

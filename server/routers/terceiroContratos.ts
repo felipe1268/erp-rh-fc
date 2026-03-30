@@ -818,12 +818,27 @@ export const terceiroContratosRouter = router({
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
       if (!contrato) throw new Error("Contrato não encontrado");
 
-      const existentes = await db.select({ id: terceiroMedicoes.id, periodo: terceiroMedicoes.periodo, status: terceiroMedicoes.status })
-        .from(terceiroMedicoes)
-        .where(and(eq(terceiroMedicoes.contratoId, input.contratoId), eq(terceiroMedicoes.periodo, input.periodo)));
-      const ativas = existentes.filter(m => m.status !== "rejeitada");
-      if (ativas.length > 0) {
-        throw new Error(`Já existe uma medição para o período ${input.periodo} neste contrato. Delete ou rejeite a medição existente antes de gerar uma nova.`);
+      if (input.dataInicio && input.dataFim) {
+        const todasMedicoes = await db.select({
+          id: terceiroMedicoes.id,
+          numero: terceiroMedicoes.numero,
+          dataInicio: terceiroMedicoes.dataInicio,
+          dataFim: terceiroMedicoes.dataFim,
+          periodo: terceiroMedicoes.periodo,
+          status: terceiroMedicoes.status,
+        }).from(terceiroMedicoes)
+          .where(eq(terceiroMedicoes.contratoId, input.contratoId));
+        const ativas = todasMedicoes.filter(m => m.status !== "rejeitada");
+        for (const m of ativas) {
+          if (m.dataInicio && m.dataFim) {
+            if (input.dataInicio <= m.dataFim && input.dataFim >= m.dataInicio) {
+              throw new Error(`As datas ${input.dataInicio} a ${input.dataFim} se sobrepõem à Medição ${String(m.numero).padStart(2, "0")} (${m.dataInicio} a ${m.dataFim}). Não é permitido gerar medições com períodos sobrepostos.`);
+            }
+          }
+          if (m.periodo === input.periodo && !m.dataInicio) {
+            throw new Error(`Já existe uma medição para o período ${input.periodo}. Delete ou rejeite a existente antes de gerar uma nova.`);
+          }
+        }
       }
 
       const itens = await db.select().from(terceiroContratoItens)
