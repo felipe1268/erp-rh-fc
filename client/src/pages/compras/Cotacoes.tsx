@@ -1836,7 +1836,23 @@ export default function Cotacoes() {
                 <div className="flex items-center gap-3 flex-wrap justify-end">
 
                   {st && <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium border ${st.cls}`}>{st.label}</span>}
-                  {detalheFullscreen.status === "pendente" && (
+                  {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo === "servico" && (
+                    <>
+                      <Button onClick={() => {
+                        if (!fornParaSaldo) { toast.error("Selecione um fornecedor vencedor antes de aprovar."); return; }
+                        gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId });
+                      }} disabled={gerarContrato.isPending}
+                        className="bg-purple-600 hover:bg-purple-500 text-white gap-2">
+                        {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                        Aprovar e Gerar Contrato de Serviço
+                      </Button>
+                      <Button variant="outline" onClick={() => atualizarStatus.mutate({ id: detalheFullscreen.id, status: "recusada" })}
+                        className="border-red-200 text-red-600 hover:bg-red-50 gap-2">
+                        <XCircle className="h-4 w-4" /> Recusar
+                      </Button>
+                    </>
+                  )}
+                  {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo !== "servico" && (
                     <>
                       <Button onClick={() => handleAprovarGerarOC(detalheFullscreen.id)} disabled={gerarOC.isPending}
                         className={`${temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-500"} text-white gap-2`}>
@@ -1849,16 +1865,10 @@ export default function Cotacoes() {
                       </Button>
                     </>
                   )}
-                  {detalheFullscreen.status === "aprovada" && (detalheFullscreen as any).tipo === "servico" && !(detalheFullscreen as any).contratoTerceiroId && (
-                    <Button onClick={() => gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId })} disabled={gerarContrato.isPending}
-                      className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
-                      {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Gerar Contrato de Serviço
-                    </Button>
-                  )}
                   {detalheFullscreen.status === "aprovada" && (detalheFullscreen as any).contratoTerceiroId && (
                     <Button variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalheFullscreen as any).contratoTerceiroId}`); }}
                       className="border-blue-200 text-blue-600 hover:bg-blue-50 gap-2">
-                      <FileText className="h-4 w-4" /> Ver Contrato
+                      <FileText className="h-4 w-4" /> Ver Contrato de Serviço
                     </Button>
                   )}
                   {detalheFullscreen.status === "aprovada" && isAdminMaster && (
@@ -1962,7 +1972,23 @@ export default function Cotacoes() {
                   </div>
 
                   <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-200">
-                    {detalheFullscreen.status === "pendente" && (
+                    {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo === "servico" && (
+                      <>
+                        <Button onClick={() => {
+                          if (!fornParaSaldo) { toast.error("Selecione um fornecedor vencedor antes de aprovar."); return; }
+                          gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId });
+                        }} disabled={gerarContrato.isPending}
+                          className="bg-purple-600 hover:bg-purple-500 text-white gap-2">
+                          {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                          Aprovar e Gerar Contrato de Serviço
+                        </Button>
+                        <Button variant="outline" onClick={() => atualizarStatus.mutate({ id: detalheFullscreen.id, status: "recusada" })}
+                          className="border-red-200 text-red-600 hover:bg-red-50 gap-2">
+                          <X className="h-4 w-4" /> Recusar
+                        </Button>
+                      </>
+                    )}
+                    {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo !== "servico" && (
                       <>
                         <Button onClick={() => handleAprovarGerarOC(detalheFullscreen.id)} disabled={gerarOC.isPending}
                           className={`${temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-500"} text-white gap-2`}>
@@ -1974,12 +2000,6 @@ export default function Cotacoes() {
                           <X className="h-4 w-4" /> Recusar
                         </Button>
                       </>
-                    )}
-                    {detalheFullscreen.status === "aprovada" && (detalheFullscreen as any).tipo === "servico" && !(detalheFullscreen as any).contratoTerceiroId && (
-                      <Button onClick={() => gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId })} disabled={gerarContrato.isPending}
-                        className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
-                        {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Gerar Contrato de Serviço
-                      </Button>
                     )}
                     {detalheFullscreen.status === "aprovada" && (detalheFullscreen as any).contratoTerceiroId && (
                       <Button variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalheFullscreen as any).contratoTerceiroId}`); }}
@@ -2128,6 +2148,19 @@ export default function Cotacoes() {
                     )}
                   </div>
 
+                  {(detalheFullscreen as any).tipo === "servico" && (
+                    <div className="bg-purple-50 rounded-xl border border-purple-200 shadow-sm p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText className="h-4 w-4 text-purple-600" />
+                        <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider">Fluxo de Mão de Obra</p>
+                      </div>
+                      <div className="space-y-1.5 text-sm text-purple-800">
+                        <p><strong>Forma de Pagamento:</strong> Medição conforme avanço físico</p>
+                        <p><strong>Destino:</strong> Módulo de Terceiros (Contrato de Serviço)</p>
+                        <p className="text-xs text-purple-600 mt-2">Ao aprovar, será gerado automaticamente um contrato no módulo de Terceiros. O pagamento será controlado por medições vinculadas ao avanço do cronograma de Planejamento.</p>
+                      </div>
+                    </div>
+                  )}
                   {/* Condições Comerciais do Vencedor */}
                   {(() => {
                     const vencedor = (mapa?.participantes ?? []).find((p: any) => p.selecionado);
@@ -3587,7 +3620,24 @@ export default function Cotacoes() {
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
-                  {detalhe.status === "pendente" && (
+                  {detalhe.status === "pendente" && (detalhe as any).tipo === "servico" && (
+                    <>
+                      <Button size="sm" onClick={() => {
+                        if (!fornParaSaldo) { toast.error("Selecione um fornecedor vencedor antes de aprovar."); return; }
+                        gerarContrato.mutate({ cotacaoId: detalhe.id, companyId });
+                      }}
+                        disabled={gerarContrato.isPending}
+                        className="bg-purple-600 hover:bg-purple-500 text-white text-xs gap-1">
+                        {gerarContrato.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
+                        Aprovar e Gerar Contrato de Serviço
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => atualizarStatus.mutate({ id: detalhe.id, status: "recusada" })}
+                        className="border-red-200 text-red-600 hover:bg-red-50 text-xs gap-1">
+                        <X className="h-3 w-3" /> Recusar
+                      </Button>
+                    </>
+                  )}
+                  {detalhe.status === "pendente" && (detalhe as any).tipo !== "servico" && (
                     <>
                       <Button size="sm" onClick={() => gerarOC.mutate({ companyId, cotacaoId: detalhe.id, userId: user?.id, userName: user?.name })} disabled={gerarOC.isPending}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1">
@@ -3598,14 +3648,6 @@ export default function Cotacoes() {
                         <X className="h-3 w-3" /> Recusar
                       </Button>
                     </>
-                  )}
-                  {detalhe.status === "aprovada" && (detalhe as any).tipo === "servico" && !(detalhe as any).contratoTerceiroId && (
-                    <Button size="sm" onClick={() => gerarContrato.mutate({ cotacaoId: detalhe.id, companyId })}
-                      disabled={gerarContrato.isPending}
-                      className="bg-blue-600 hover:bg-blue-500 text-white text-xs gap-1">
-                      {gerarContrato.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
-                      Gerar Contrato de Serviço
-                    </Button>
                   )}
                   {detalhe.status === "aprovada" && (detalhe as any).contratoTerceiroId && (
                     <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalhe as any).contratoTerceiroId}`); }}

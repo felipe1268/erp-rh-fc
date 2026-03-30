@@ -6281,4 +6281,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-30 12:30:00",
   },
+  {
+    version: 895,
+    titulo: "Fluxo MDO: Cotação Serviço gera Contrato de Terceiro",
+    descricao: "Para cotações do tipo 'serviço' (Mão de Obra), o botão de aprovação agora é " +
+      "'Aprovar e Gerar Contrato' (roxo) em todos os painéis — fullscreen, compacto e detalhe lateral. " +
+      "Ao aprovar, a cotação é aprovada e um contrato é gerado automaticamente no módulo de Terceiros, " +
+      "com pagamento por 'Medição conforme avanço físico'. Card informativo roxo 'Fluxo de Mão de Obra' " +
+      "exibido no mapa de cotação para orientar o usuário. Cotações do tipo 'material' mantêm o fluxo " +
+      "existente de 'Aprovar e Gerar OC'.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-30 13:00:00",
+  },
 ];

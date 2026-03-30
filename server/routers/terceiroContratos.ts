@@ -15,6 +15,7 @@ import {
   obras,
   comprasCotacoes,
   comprasCotacoesItens,
+  comprasSolicitacoes,
   fornecedores,
   terceiroContratoTemplates,
   terceiroContratoRevisoes,
@@ -631,7 +632,10 @@ export const terceiroContratosRouter = router({
       // 1. Carregar cotação
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new Error("Cotação não encontrada");
+      if ((cot as any).tipo !== "servico") throw new Error("Apenas cotações do tipo 'serviço' podem gerar contratos de terceiros");
       if ((cot as any).contratoTerceiroId) throw new Error("Esta cotação já gerou um contrato de serviço");
+
+      const isPendente = cot.status === "pendente";
 
       // 2. Carregar itens
       const itens = await db.select().from(comprasCotacoesItens)
@@ -724,10 +728,21 @@ export const terceiroContratosRouter = router({
         );
       }
 
-      // 8. Marcar cotação como convertida
+      // 8. Marcar cotação como convertida + aprovar se estava pendente
+      const cotUpdate: any = { contratoTerceiroId: contrato.id };
+      if (isPendente) {
+        cotUpdate.status = "aprovada";
+        cotUpdate.condicaoPagamento = "Medição conforme avanço físico";
+      }
       await db.update(comprasCotacoes)
-        .set({ contratoTerceiroId: contrato.id } as any)
+        .set(cotUpdate)
         .where(eq(comprasCotacoes.id, input.cotacaoId));
+
+      if (isPendente && cot.solicitacaoId) {
+        await db.update(comprasSolicitacoes)
+          .set({ status: "em_cotacao", atualizadoEm: new Date().toISOString() })
+          .where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+      }
 
       return { contratoId: contrato.id, numeroContrato, empresaTerceiraId, isNova };
     }),
