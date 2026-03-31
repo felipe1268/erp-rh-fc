@@ -1642,54 +1642,32 @@ Responda APENAS com um objeto JSON no formato:
       const linkedCots = await db.select({ id: comprasCotacoes.id, numeroCotacao: comprasCotacoes.numeroCotacao, status: comprasCotacoes.status })
         .from(comprasCotacoes)
         .where(eq(comprasCotacoes.solicitacaoId, input.id));
-      const activeCots = linkedCots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
+      const allCotIds = linkedCots.map(c => c.id);
 
-      if (activeCots.length > 0) {
+      if (allCotIds.length > 0) {
         const linkedOCs = await db.select({ id: comprasOrdens.id, numeroOc: comprasOrdens.numeroOc, status: comprasOrdens.status })
           .from(comprasOrdens)
-          .where(inArray(comprasOrdens.cotacaoId, activeCots.map(c => c.id)));
+          .where(inArray(comprasOrdens.cotacaoId, allCotIds));
         const ocsAtivas = linkedOCs.filter(o => !["cancelada", "recebido"].includes(o.status ?? ""));
         if (ocsAtivas.length > 0) {
           throw new Error(`Não é possível excluir: esta SC possui Ordem de Compra em andamento (${ocsAtivas.map(o => o.numeroOc).join(", ")}).`);
         }
-        for (const cot of activeCots) {
-          await db.update(comprasCotacoes)
-            .set({ status: "cancelada" })
-            .where(eq(comprasCotacoes.id, cot.id));
+
+        const ocIds = linkedOCs.map(o => o.id);
+        if (ocIds.length > 0) {
+          await db.delete(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocIds));
+          await db.delete(comprasOrdens).where(inArray(comprasOrdens.id, ocIds));
         }
-      }
 
-      const allCotIds = linkedCots.map(c => c.id);
-      if (allCotIds.length > 0) {
-        await db.update(comprasCotacoesItens)
-          .set({ solicitacaoItemId: null })
-          .where(inArray(comprasCotacoesItens.cotacaoId, allCotIds));
-      }
-
-      const cotItemsRef = await db.select({ id: comprasCotacoesItens.id })
-        .from(comprasCotacoesItens)
-        .innerJoin(comprasSolicitacoesItens, eq(comprasCotacoesItens.solicitacaoItemId, comprasSolicitacoesItens.id))
-        .where(eq(comprasSolicitacoesItens.solicitacaoId, input.id))
-        .limit(1);
-      if (cotItemsRef.length > 0) {
-        await db.update(comprasCotacoesItens)
-          .set({ solicitacaoItemId: null })
-          .where(inArray(comprasCotacoesItens.solicitacaoItemId,
-            db.select({ id: comprasSolicitacoesItens.id }).from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id))
-          ));
-      }
-
-      if (linkedCots.length > 0) {
-        await db.update(comprasCotacoes)
-          .set({ solicitacaoId: null })
-          .where(eq(comprasCotacoes.solicitacaoId, input.id));
-      }
-
-      const solItemIds = (await db.select({ id: comprasSolicitacoesItens.id }).from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id))).map(r => r.id);
-      if (solItemIds.length > 0) {
-        await db.update(comprasOrdensItens)
-          .set({ solicitacaoItemId: null })
-          .where(inArray(comprasOrdensItens.solicitacaoItemId, solItemIds));
+        await db.delete(comprasCotacaoRespostas).where(inArray(comprasCotacaoRespostas.cotacaoId, allCotIds));
+        await db.delete(comprasCotacaoPropostas).where(inArray(comprasCotacaoPropostas.cotacaoId, allCotIds));
+        await db.delete(comprasCotacaoFornecedores).where(inArray(comprasCotacaoFornecedores.cotacaoId, allCotIds));
+        await db.delete(comprasCotacoesItens).where(inArray(comprasCotacoesItens.cotacaoId, allCotIds));
+        await db.execute(sql`DELETE FROM compras_risco_debitos WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+        await db.execute(sql`DELETE FROM purchase_quotation_tokens WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+        await db.execute(sql`DELETE FROM purchase_negotiations WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+        await db.execute(sql`DELETE FROM supplier_price_history WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+        await db.delete(comprasCotacoes).where(inArray(comprasCotacoes.id, allCotIds));
       }
 
       await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
@@ -1713,18 +1691,26 @@ Responda APENAS com um objeto JSON no formato:
       for (const scId of ownedIds) {
         try {
           const linkedCots = await db.select({ id: comprasCotacoes.id, status: comprasCotacoes.status }).from(comprasCotacoes).where(eq(comprasCotacoes.solicitacaoId, scId));
-          const activeCots = linkedCots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
-          if (activeCots.length > 0) {
-            const linkedOCs = await db.select({ id: comprasOrdens.id, status: comprasOrdens.status }).from(comprasOrdens).where(inArray(comprasOrdens.cotacaoId, activeCots.map(c => c.id)));
+          const allCotIds = linkedCots.map(c => c.id);
+          if (allCotIds.length > 0) {
+            const linkedOCs = await db.select({ id: comprasOrdens.id, status: comprasOrdens.status }).from(comprasOrdens).where(inArray(comprasOrdens.cotacaoId, allCotIds));
             const ocsAtivas = linkedOCs.filter(o => !["cancelada", "recebido"].includes(o.status ?? ""));
             if (ocsAtivas.length > 0) { errors.push(`SC #${scId}: possui OC em andamento`); continue; }
-            for (const cot of activeCots) { await db.update(comprasCotacoes).set({ status: "cancelada" }).where(eq(comprasCotacoes.id, cot.id)); }
+            const ocIds = linkedOCs.map(o => o.id);
+            if (ocIds.length > 0) {
+              await db.delete(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocIds));
+              await db.delete(comprasOrdens).where(inArray(comprasOrdens.id, ocIds));
+            }
+            await db.delete(comprasCotacaoRespostas).where(inArray(comprasCotacaoRespostas.cotacaoId, allCotIds));
+            await db.delete(comprasCotacaoPropostas).where(inArray(comprasCotacaoPropostas.cotacaoId, allCotIds));
+            await db.delete(comprasCotacaoFornecedores).where(inArray(comprasCotacaoFornecedores.cotacaoId, allCotIds));
+            await db.delete(comprasCotacoesItens).where(inArray(comprasCotacoesItens.cotacaoId, allCotIds));
+            await db.execute(sql`DELETE FROM compras_risco_debitos WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+            await db.execute(sql`DELETE FROM purchase_quotation_tokens WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+            await db.execute(sql`DELETE FROM purchase_negotiations WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+            await db.execute(sql`DELETE FROM supplier_price_history WHERE cotacao_id IN (${sql.join(allCotIds.map(id => sql`${id}`), sql`, `)})`);
+            await db.delete(comprasCotacoes).where(inArray(comprasCotacoes.id, allCotIds));
           }
-          const allCotIds = linkedCots.map(c => c.id);
-          if (allCotIds.length > 0) { await db.update(comprasCotacoesItens).set({ solicitacaoItemId: null }).where(inArray(comprasCotacoesItens.cotacaoId, allCotIds)); }
-          if (linkedCots.length > 0) { await db.update(comprasCotacoes).set({ solicitacaoId: null }).where(eq(comprasCotacoes.solicitacaoId, scId)); }
-          const solItemIds = (await db.select({ id: comprasSolicitacoesItens.id }).from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, scId))).map(r => r.id);
-          if (solItemIds.length > 0) { await db.update(comprasOrdensItens).set({ solicitacaoItemId: null }).where(inArray(comprasOrdensItens.solicitacaoItemId, solItemIds)); }
           await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, scId));
           await db.delete(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, scId));
           deleted++;
