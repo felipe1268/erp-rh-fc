@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 949,
+    titulo: "Layout de documento: cabeçalho com logo, rodapé com endereço e marca d'água",
+    descricao: "O contrato agora exibe layout completo estilo papel timbrado: cabeçalho com logo da empresa, rodapé com endereço/contato centralizado, e marca d'água translúcida do logo no centro do documento. Estes elementos são configuráveis por empresa (campos doc_rodape_texto, doc_marca_dagua_url e doc_marca_dagua_opacidade). Aparece tanto no editor de template quanto na visualização do contrato.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-03-31 18:15:00",
+  },
+  {
     version: 948,
     titulo: "Testemunhas do contrato: Financeiro e Gestor de Projeto",
     descricao: "O rodapé de assinaturas do contrato agora inclui seção de Testemunhas com dois campos fixos: Responsável Financeiro e Gestor de Projeto. Os nomes são armazenados no contrato (campos testemunha_financeiro e testemunha_gestor_projeto) e substituídos automaticamente no template via variáveis {{TESTEMUNHA_FINANCEIRO}} e {{TESTEMUNHA_GESTOR_PROJETO}}. O gestor de projeto é preenchido automaticamente a partir do responsável da obra quando disponível.",

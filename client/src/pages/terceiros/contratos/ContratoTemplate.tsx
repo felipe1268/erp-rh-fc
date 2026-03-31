@@ -432,18 +432,23 @@ EAP          | Descrição                                             | Un    |
           {/* Document area */}
           <div className="flex-1 overflow-y-auto p-6 flex justify-center">
             {previewMode ? (
-              <div className="w-full max-w-[794px] bg-white shadow-xl rounded-sm border border-gray-300" style={{ minHeight: "1123px" }}>
-                <div className="border-b border-gray-200 px-4 py-2 flex items-center gap-2 bg-gray-50">
+              <div className="w-full max-w-[794px] bg-white shadow-xl rounded-sm border border-gray-300 relative overflow-hidden" style={{ minHeight: "1123px" }}>
+                {companyInfo?.docMarcaDaguaUrl && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                    <img src={companyInfo.docMarcaDaguaUrl} alt="" className="w-[400px] h-auto" style={{ opacity: Number(companyInfo.docMarcaDaguaOpacidade) || 0.06 }} />
+                  </div>
+                )}
+                <div className="border-b border-gray-200 px-4 py-2 flex items-center gap-2 bg-gray-50 relative z-10">
                   <Eye className="w-3.5 h-3.5 text-gray-400" />
                   <span className="text-[11px] text-gray-500">Pré-visualização com dados de exemplo</span>
                 </div>
-                <div className="border-b border-gray-300 px-[72px] py-6 flex items-center justify-between">
-                  {tpl?.companyData?.logoUrl ? (
-                    <img src={tpl.companyData.logoUrl} alt="Logo" className="h-14 object-contain" />
+                <div className="border-b border-gray-300 px-[72px] py-6 flex items-center justify-between relative z-10">
+                  {companyInfo?.logoUrl ? (
+                    <img src={companyInfo.logoUrl} alt="Logo" className="h-14 object-contain" />
                   ) : (
                     <div className="flex items-center gap-2">
                       <Building2 className="w-8 h-8 text-gray-300" />
-                      <p className="text-sm font-bold text-gray-700">{tpl?.companyData?.razaoSocial || "Empresa"}</p>
+                      <p className="text-sm font-bold text-gray-700">{companyInfo?.razaoSocial || "Empresa"}</p>
                     </div>
                   )}
                   <div className="text-right">
@@ -451,7 +456,7 @@ EAP          | Descrição                                             | Un    |
                     <p className="text-base font-bold text-gray-800">CT-2026-0001</p>
                   </div>
                 </div>
-                <div className="px-[72px] py-10" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "13px", lineHeight: "1.8", color: "#1f2937" }}>
+                <div className="px-[72px] py-10 relative z-10" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "13px", lineHeight: "1.8", color: "#1f2937" }}>
                   {previewTexto.split("\n").map((line, idx) => {
                     const trimmed = line.trim();
                     if (!trimmed) return <div key={idx} className="h-3" />;
@@ -462,16 +467,28 @@ EAP          | Descrição                                             | Un    |
                     return <p key={idx} className="mb-1.5 text-justify">{trimmed}</p>;
                   })}
                 </div>
+                {companyInfo?.docRodapeTexto && (
+                  <div className="border-t border-gray-200 px-[72px] py-3 text-center relative z-10 mt-auto">
+                    {companyInfo.docRodapeTexto.split("\n").map((line: string, i: number) => (
+                      <p key={i} className="text-[8px] text-gray-400 leading-tight italic">{line}</p>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="w-full max-w-[794px] bg-white shadow-xl rounded-sm border border-gray-300 cursor-text" style={{ minHeight: "1123px" }}>
-                <div className="border-b border-gray-300 px-[72px] py-6 flex items-center justify-between">
-                  {tpl?.companyData?.logoUrl ? (
-                    <img src={tpl.companyData.logoUrl} alt="Logo" className="h-14 object-contain" />
+              <div className="w-full max-w-[794px] bg-white shadow-xl rounded-sm border border-gray-300 cursor-text relative overflow-hidden" style={{ minHeight: "1123px" }}>
+                {companyInfo?.docMarcaDaguaUrl && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                    <img src={companyInfo.docMarcaDaguaUrl} alt="" className="w-[400px] h-auto" style={{ opacity: Number(companyInfo.docMarcaDaguaOpacidade) || 0.06 }} />
+                  </div>
+                )}
+                <div className="border-b border-gray-300 px-[72px] py-6 flex items-center justify-between relative z-10">
+                  {companyInfo?.logoUrl ? (
+                    <img src={companyInfo.logoUrl} alt="Logo" className="h-14 object-contain" />
                   ) : (
                     <div className="flex items-center gap-2">
                       <Building2 className="w-8 h-8 text-gray-300" />
-                      <p className="text-sm font-bold text-gray-700">{tpl?.companyData?.razaoSocial || "Empresa"}</p>
+                      <p className="text-sm font-bold text-gray-700">{companyInfo?.razaoSocial || "Empresa"}</p>
                     </div>
                   )}
                   <div className="text-right">
@@ -479,7 +496,16 @@ EAP          | Descrição                                             | Un    |
                     <p className="text-xs font-medium text-gray-600">{tpl?.nome || "Contrato Padrão"}</p>
                   </div>
                 </div>
-                <EditorContent editor={editor} />
+                <div className="relative z-10">
+                  <EditorContent editor={editor} />
+                </div>
+                {companyInfo?.docRodapeTexto && (
+                  <div className="border-t border-gray-200 px-[72px] py-3 text-center relative z-10">
+                    {companyInfo.docRodapeTexto.split("\n").map((line: string, i: number) => (
+                      <p key={i} className="text-[8px] text-gray-400 leading-tight italic">{line}</p>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

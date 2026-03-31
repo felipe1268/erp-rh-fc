@@ -413,6 +413,9 @@ export const companies = pgTable("companies", {
         inscricaoEstadual: varchar({ length: 30 }),
         inscricaoMunicipal: varchar({ length: 30 }),
         compartilhaRecursos: smallint().default(0).notNull(),
+        docRodapeTexto: text("doc_rodape_texto"),
+        docMarcaDaguaUrl: text("doc_marca_dagua_url"),
+        docMarcaDaguaOpacidade: numeric("doc_marca_dagua_opacidade", { precision: 3, scale: 2 }).default("0.08"),
 },
 (table) => [
         index("companies_cnpj_unique").on(table.cnpj),

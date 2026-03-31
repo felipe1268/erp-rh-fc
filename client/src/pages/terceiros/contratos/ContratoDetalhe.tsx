@@ -609,9 +609,20 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               <div className="flex justify-center">
                 {/* Folha A4 */}
                 <div className="bg-gray-100 rounded-xl p-8 w-full flex justify-center" style={{ minHeight: "calc(100vh - 320px)" }}>
-                  <div className="w-full max-w-[794px] bg-white shadow-xl rounded-sm border border-gray-300" style={{ minHeight: "1123px" }}>
+                  <div className="w-full max-w-[794px] bg-white shadow-xl rounded-sm border border-gray-300 relative overflow-hidden" style={{ minHeight: "1123px" }}>
+                    {/* Marca d'água */}
+                    {cd?.docMarcaDaguaUrl && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                        <img
+                          src={cd.docMarcaDaguaUrl}
+                          alt=""
+                          className="w-[400px] h-auto"
+                          style={{ opacity: Number(cd.docMarcaDaguaOpacidade) || 0.06 }}
+                        />
+                      </div>
+                    )}
                     {/* Cabeçalho */}
-                    <div className="border-b border-gray-300 px-[72px] py-8 flex items-center justify-between">
+                    <div className="border-b border-gray-300 px-[72px] py-8 flex items-center justify-between relative z-10">
                       {(() => {
                         const showFallback = !cd?.logoUrl || logoError;
                         if (showFallback) {
@@ -642,7 +653,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                     </div>
 
                     {/* Corpo do contrato */}
-                    <div className="px-[72px] py-10" style={{ fontFamily: "'Times New Roman', 'Georgia', serif" }}>
+                    <div className="px-[72px] py-10 relative z-10" style={{ fontFamily: "'Times New Roman', 'Georgia', serif" }}>
                       {(() => {
                         const lines = textoAtual.split("\n");
                         return lines.map((line, idx) => {
@@ -719,7 +730,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                     </div>
 
                     {/* Assinaturas */}
-                    <div className="border-t border-gray-300 px-[72px] py-6 mt-auto">
+                    <div className="border-t border-gray-300 px-[72px] py-6 mt-auto relative z-10">
                       <div className="grid grid-cols-2 gap-20 mt-4">
                         <div className="text-center">
                           <div className="mt-16 pt-2 border-t border-gray-500">
@@ -752,6 +763,15 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                         </div>
                       </div>
                     </div>
+
+                    {/* Rodapé do documento */}
+                    {cd?.docRodapeTexto && (
+                      <div className="border-t border-gray-200 px-[72px] py-3 text-center relative z-10">
+                        {cd.docRodapeTexto.split("\n").map((line: string, i: number) => (
+                          <p key={i} className="text-[8px] text-gray-400 leading-tight italic">{line}</p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -100,6 +100,9 @@ export const terceiroContratosRouter = router({
         nomeFantasia: companies.nomeFantasia,
         cnpj: companies.cnpj,
         logoUrl: companies.logoUrl,
+        docRodapeTexto: companies.docRodapeTexto,
+        docMarcaDaguaUrl: companies.docMarcaDaguaUrl,
+        docMarcaDaguaOpacidade: companies.docMarcaDaguaOpacidade,
       }).from(companies).where(eq(companies.id, contrato.companyId));
 
       let itens: any[] = itensRaw;
@@ -2806,6 +2809,9 @@ export const terceiroContratosRouter = router({
         razaoSocial: companies.razaoSocial,
         cnpj: companies.cnpj,
         logoUrl: companies.logoUrl,
+        docRodapeTexto: companies.docRodapeTexto,
+        docMarcaDaguaUrl: companies.docMarcaDaguaUrl,
+        docMarcaDaguaOpacidade: companies.docMarcaDaguaOpacidade,
       }).from(companies).where(eq(companies.id, input.companyId));
       if (!tpl) return { id: 0, companyId: input.companyId, nome: "Contrato Padrão", texto: "", ativo: true, versao: 0, criadoEm: "", atualizadoEm: "", companyData: comp || null };
       return { ...tpl, companyData: comp || null };
