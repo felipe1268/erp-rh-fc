@@ -235,6 +235,7 @@ const menuSectionsTerceiros: MenuSection[] = [
     title: "Contratos e Assinaturas",
     items: [
       { icon: FileSignature, label: "Contratos de Serviço", path: "/terceiros/contratos" },
+      { icon: Settings2, label: "Template de Contrato", path: "/terceiros/contratos/template" },
       { icon: PenLine, label: "IntegraSign", path: "/integrasign" },
     ],
   },
