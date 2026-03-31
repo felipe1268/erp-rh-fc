@@ -2917,6 +2917,8 @@ export const terceiroContratosRouter = router({
         "DATA_ASSINATURA": fmtDate(new Date().toISOString()),
         "TABELA_ITENS": tabelaItens,
         "QTD_ITENS": String(itensContrato.length),
+        "TESTEMUNHA_FINANCEIRO": contrato.testemunhaFinanceiro ?? "_______________",
+        "TESTEMUNHA_GESTOR_PROJETO": contrato.testemunhaGestorProjeto ?? obra?.responsavel ?? "_______________",
       };
 
       let texto = template.texto;

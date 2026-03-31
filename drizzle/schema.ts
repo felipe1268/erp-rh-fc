@@ -3187,6 +3187,8 @@ export const terceiroContratos = pgTable("terceiro_contratos", {
   percIRRF:          numeric("perc_irrf", { precision: 6, scale: 3 }).default("0"),
   percOutrasRetencoes: numeric("perc_outras_retencoes", { precision: 6, scale: 3 }).default("0"),
   percRetencaoTecnica: numeric("perc_retencao_tecnica", { precision: 6, scale: 3 }).default("0"),
+  testemunhaFinanceiro: varchar("testemunha_financeiro", { length: 255 }),
+  testemunhaGestorProjeto: varchar("testemunha_gestor_projeto", { length: 255 }),
   criadoPor:         varchar("criado_por", { length: 255 }),
   criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:      timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),

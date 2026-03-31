@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 948,
+    titulo: "Testemunhas do contrato: Financeiro e Gestor de Projeto",
+    descricao: "O rodapé de assinaturas do contrato agora inclui seção de Testemunhas com dois campos fixos: Responsável Financeiro e Gestor de Projeto. Os nomes são armazenados no contrato (campos testemunha_financeiro e testemunha_gestor_projeto) e substituídos automaticamente no template via variáveis {{TESTEMUNHA_FINANCEIRO}} e {{TESTEMUNHA_GESTOR_PROJETO}}. O gestor de projeto é preenchido automaticamente a partir do responsável da obra quando disponível.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-03-31 17:55:00",
+  },
+  {
     version: 947,
     titulo: "Tabela EAP com valores unitários incluída automaticamente no contrato",
     descricao: "Ao gerar o contrato, a variável {{TABELA_ITENS}} insere automaticamente o escopo detalhado dos serviços (EAP) com código EAP, descrição, unidade, quantidade, valor unitário e valor total de cada item do contrato. A tabela é renderizada com formatação de colunas alinhadas no visualizador de contrato. Template padrão atualizado com a cláusula do objeto incluindo a tabela. Editor WYSIWYG (TipTap) com toolbar estilo Word na tela de Template de Contrato.",

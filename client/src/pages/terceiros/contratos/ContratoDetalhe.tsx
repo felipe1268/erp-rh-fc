@@ -734,6 +734,23 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                           </div>
                         </div>
                       </div>
+                      <div className="mt-10">
+                        <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide mb-4">Testemunhas</p>
+                        <div className="grid grid-cols-2 gap-20">
+                          <div className="text-center">
+                            <div className="mt-8 pt-2 border-t border-gray-400">
+                              <p className="text-[10px] text-gray-700 font-medium">{(contrato as any).testemunhaFinanceiro || "_______________"}</p>
+                              <p className="text-[9px] text-gray-400 mt-0.5">Responsável Financeiro</p>
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="mt-8 pt-2 border-t border-gray-400">
+                              <p className="text-[10px] text-gray-700 font-medium">{(contrato as any).testemunhaGestorProjeto || "_______________"}</p>
+                              <p className="text-[9px] text-gray-400 mt-0.5">Gestor de Projeto</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

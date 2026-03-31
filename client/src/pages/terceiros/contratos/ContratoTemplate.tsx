@@ -41,6 +41,8 @@ const VARIAVEIS: { chave: string; descricao: string; categoria: string }[] = [
   { chave: "{{CIDADE_ESTADO}}", descricao: "Cidade e estado da contratante (ex: Montes Claros - MG)", categoria: "Localização" },
   { chave: "{{TABELA_ITENS}}", descricao: "Tabela completa da EAP com descrição, unidade, quantidade, valor unitário e total", categoria: "Contrato" },
   { chave: "{{QTD_ITENS}}", descricao: "Quantidade de itens/atividades do contrato", categoria: "Contrato" },
+  { chave: "{{TESTEMUNHA_FINANCEIRO}}", descricao: "Nome do responsável financeiro (testemunha 1)", categoria: "Testemunhas" },
+  { chave: "{{TESTEMUNHA_GESTOR_PROJETO}}", descricao: "Nome do gestor de projeto (testemunha 2)", categoria: "Testemunhas" },
 ];
 
 const TEMPLATE_PADRAO = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS Nº {{NUMERO_CONTRATO}}
@@ -117,12 +119,12 @@ Representante: {{CONTRATADA_REPRESENTANTE}}
 TESTEMUNHAS:
 
 1. _________________________________________
-   Nome:
-   CPF:
+   Nome: {{TESTEMUNHA_FINANCEIRO}}
+   Cargo: Responsável Financeiro
 
 2. _________________________________________
-   Nome:
-   CPF:
+   Nome: {{TESTEMUNHA_GESTOR_PROJETO}}
+   Cargo: Gestor de Projeto
 `;
 
 const categorias = [...new Set(VARIAVEIS.map(v => v.categoria))];
@@ -285,7 +287,9 @@ EAP          | Descrição                                             | Un    |
 09.01.02.01  | Impermeabilização com Manta Asfáltica 3mm             | m²    |    121,85 |      R$ 48,50  |    R$ 5.909,73
 -------------|-------------------------------------------------------|-------|-----------|----------------|----------------
              |                                                       |       |           |         TOTAL: |    R$ 8.955,98`)
-    .replace(/\{\{QTD_ITENS\}\}/g, "2");
+    .replace(/\{\{QTD_ITENS\}\}/g, "2")
+    .replace(/\{\{TESTEMUNHA_FINANCEIRO\}\}/g, "Maria Souza")
+    .replace(/\{\{TESTEMUNHA_GESTOR_PROJETO\}\}/g, "Carlos Oliveira");
 
   return (
     <DashboardLayout noPadding>
