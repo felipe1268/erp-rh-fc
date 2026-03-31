@@ -1209,11 +1209,13 @@ function parsearAbaCPUs(rows: any[][], companyId: number) {
       const alocacaoMdo     = toNum(row[9]);
       const custoUnit       = toNum(row[12]);
       const isEquipByCodigo = /^80\./.test(insumoCodigo);
-      const alocacaoEquip   = isEquipByCodigo
+      const isEquipByUnidade = /^chp$/i.test(unidade);
+      const isEquip = isEquipByCodigo || isEquipByUnidade;
+      const alocacaoEquip   = isEquip
         ? custoUnit
         : (alocacaoMat === 0 && alocacaoMdo === 0 && custoUnit > 0) ? custoUnit : 0;
-      const matFinal = isEquipByCodigo ? 0 : alocacaoMat;
-      const mdoFinal = isEquipByCodigo ? 0 : alocacaoMdo;
+      const matFinal = isEquip ? 0 : alocacaoMat;
+      const mdoFinal = isEquip ? 0 : alocacaoMdo;
       if (!insumoCodigo && !insumoDescricao) continue;
       linhasInsumos.push({
         companyId,

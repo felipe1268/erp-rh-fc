@@ -6710,4 +6710,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 11:00:00",
   },
+  {
+    version: 928,
+    titulo: "Classificação EQUIP por unidade CHP",
+    descricao:
+      "Insumos com unidade CHP (Custo Horário Produtivo) agora são automaticamente classificados como equipamento. " +
+      "Migração reclassificou 42 insumos CHP adicionais (fresadora, motosserra, serra cliper, compactador, martelete etc.). " +
+      "Importação de composições detecta unidade CHP e classifica como EQUIP independente do código do insumo. " +
+      "Critérios de equipamento: código 80.xx OU unidade CHP OU (alocacaoMat=0 E alocacaoMdo=0).",
+    tipo: "melhoria",
+    modulos: "Compras, Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 12:00:00",
+  },
 ];
