@@ -194,6 +194,14 @@ export default function ContratoTemplate() {
   const [layoutMarcaDaguaUrl, setLayoutMarcaDaguaUrl] = useState("");
   const [layoutOpacidade, setLayoutOpacidade] = useState(0.06);
 
+  const utils = trpc.useUtils();
+  const { data: tpl, isLoading } = trpc.terceiroContratos.getTemplate.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+
+  const companyInfo = tpl?.companyData ?? null;
+
   const resetLayoutToSaved = useCallback(() => {
     if (companyInfo) {
       setLayoutLogoUrl(companyInfo.logoUrl || "");
@@ -203,22 +211,9 @@ export default function ContratoTemplate() {
     }
   }, [companyInfo]);
 
-  const utils = trpc.useUtils();
-  const { data: tpl, isLoading } = trpc.terceiroContratos.getTemplate.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
-  );
-
-  const companyInfo = tpl?.companyData ?? null;
-
   useEffect(() => {
-    if (companyInfo) {
-      setLayoutLogoUrl(companyInfo.logoUrl || "");
-      setLayoutRodape(companyInfo.docRodapeTexto || "");
-      setLayoutMarcaDaguaUrl(companyInfo.docMarcaDaguaUrl || "");
-      setLayoutOpacidade(Number(companyInfo.docMarcaDaguaOpacidade) || 0.06);
-    }
-  }, [companyInfo]);
+    resetLayoutToSaved();
+  }, [resetLayoutToSaved]);
 
   const salvarLayoutMut = trpc.terceiroContratos.salvarDocLayout.useMutation({
     onSuccess: () => {
