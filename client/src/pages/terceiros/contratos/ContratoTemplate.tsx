@@ -1,13 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Save, FileText, Info, RefreshCw } from "lucide-react";
+import {
+  ArrowLeft, Save, FileText, Info, RefreshCw, Eye, Pencil,
+  Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify,
+  List, ListOrdered, Undo, Redo, Type, Minus, ChevronDown
+} from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/hooks/useCompany";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import TextAlign from "@tiptap/extension-text-align";
+import UnderlineExt from "@tiptap/extension-underline";
+import Highlight from "@tiptap/extension-highlight";
+import Placeholder from "@tiptap/extension-placeholder";
 
 const VARIAVEIS: { chave: string; descricao: string; categoria: string }[] = [
   { chave: "{{NUMERO_CONTRATO}}", descricao: "Número do contrato (ex: CT-2026-0001)", categoria: "Contrato" },
@@ -113,6 +123,52 @@ TESTEMUNHAS:
 
 const categorias = [...new Set(VARIAVEIS.map(v => v.categoria))];
 
+function plainTextToHtml(text: string): string {
+  const lines = text.split("\n");
+  let html = "";
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      html += "<p></p>";
+      continue;
+    }
+    const escaped = trimmed
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    const withVars = escaped.replace(
+      /\{\{([A-Z_]+)\}\}/g,
+      '<mark data-color="#dbeafe" style="background-color:#dbeafe;padding:1px 3px;border-radius:3px;font-family:monospace;font-size:0.85em">{{$1}}</mark>'
+    );
+    html += `<p>${withVars}</p>`;
+  }
+  return html;
+}
+
+function htmlToPlainText(html: string): string {
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  const paragraphs = div.querySelectorAll("p, h1, h2, h3, li");
+  if (paragraphs.length === 0) return div.textContent || "";
+  const lines: string[] = [];
+  paragraphs.forEach(p => {
+    lines.push(p.textContent || "");
+  });
+  return lines.join("\n");
+}
+
+function ToolbarButton({ active, onClick, children, title }: { active?: boolean; onClick: () => void; children: React.ReactNode; title: string }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`p-1.5 rounded transition-colors ${active ? "bg-blue-100 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function ContratoTemplate() {
   const [, navigate] = useLocation();
   const { companyId } = useCompany();
@@ -124,11 +180,35 @@ export default function ContratoTemplate() {
   const [categoriaFiltro, setCategoriaFiltro] = useState("Contrato");
   const [varBusca, setVarBusca] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
+  const [showVars, setShowVars] = useState(true);
 
   const { data: tpl, isLoading } = trpc.terceiroContratos.getTemplate.useQuery(
     { companyId },
     { enabled: companyId > 0 }
   );
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      UnderlineExt,
+      Highlight.configure({ multicolor: true }),
+      Placeholder.configure({ placeholder: "Digite o texto do contrato aqui..." }),
+    ],
+    content: plainTextToHtml(texto),
+    editorProps: {
+      attributes: {
+        class: "outline-none min-h-[800px] px-[72px] py-10",
+        style: "font-family: 'Georgia', 'Times New Roman', serif; font-size: 13px; line-height: 1.8; color: #1f2937;",
+      },
+    },
+    onUpdate: ({ editor: ed }) => {
+      const plain = htmlToPlainText(ed.getHTML());
+      setTexto(plain);
+    },
+  });
 
   useEffect(() => {
     if (tpl) {
@@ -136,8 +216,11 @@ export default function ContratoTemplate() {
       setTexto(tpl.texto);
       setTemplateId(tpl.id);
       setVersao(tpl.versao ?? 1);
+      if (editor && !editor.isDestroyed) {
+        editor.commands.setContent(plainTextToHtml(tpl.texto));
+      }
     }
-  }, [tpl]);
+  }, [tpl, editor]);
 
   const salvarMut = trpc.terceiroContratos.salvarTemplate.useMutation({
     onSuccess: (r) => {
@@ -148,19 +231,20 @@ export default function ContratoTemplate() {
     onError: (e) => toast.error(e.message),
   });
 
-  const inserirVariavel = (chave: string) => {
-    const ta = document.getElementById("template-textarea") as HTMLTextAreaElement | null;
-    if (ta) {
-      const start = ta.selectionStart ?? texto.length;
-      const end = ta.selectionEnd ?? texto.length;
-      const novo = texto.slice(0, start) + chave + texto.slice(end);
-      setTexto(novo);
-      setTimeout(() => {
-        ta.focus();
-        ta.setSelectionRange(start + chave.length, start + chave.length);
-      }, 0);
-    } else {
-      setTexto(prev => prev + chave);
+  const inserirVariavel = useCallback((chave: string) => {
+    if (editor && !editor.isDestroyed) {
+      editor.chain().focus().insertContent(
+        `<mark data-color="#dbeafe" style="background-color:#dbeafe;padding:1px 3px;border-radius:3px;font-family:monospace;font-size:0.85em">${chave}</mark> `
+      ).run();
+    }
+  }, [editor]);
+
+  const restaurarPadrao = () => {
+    if (confirm("Isso vai restaurar o template padrão. Continuar?")) {
+      setTexto(TEMPLATE_PADRAO);
+      if (editor && !editor.isDestroyed) {
+        editor.commands.setContent(plainTextToHtml(TEMPLATE_PADRAO));
+      }
     }
   };
 
@@ -170,157 +254,236 @@ export default function ContratoTemplate() {
   );
 
   const previewTexto = texto
-    .replace(/{{NUMERO_CONTRATO}}/g, "CT-2026-0001")
-    .replace(/{{ANO_ATUAL}}/g, "2026")
-    .replace(/{{DATA_ASSINATURA}}/g, "16/03/2026")
-    .replace(/{{DATA_INICIO}}/g, "01/04/2026")
-    .replace(/{{DATA_TERMINO}}/g, "30/06/2026")
-    .replace(/{{DESCRICAO_OBJETO}}/g, "execução de alvenaria estrutural")
-    .replace(/{{VALOR_TOTAL}}/g, "R$ 185.000,00")
-    .replace(/{{OBRA_NOME}}/g, "Residencial Exemplo")
-    .replace(/{{CONTRATANTE_NOME}}/g, "FC Engenharia e Construção LTDA")
-    .replace(/{{CONTRATANTE_CNPJ}}/g, "29.353.906/0001-71")
-    .replace(/{{CONTRATANTE_ENDERECO}}/g, "Av. Juscelino Kubitschek, 100, Montes Claros - MG")
-    .replace(/{{CONTRATANTE_REPRESENTANTE}}/g, "Felipe Costa Alves")
-    .replace(/{{CONTRATANTE_CARGO}}/g, "Sócio Administrador")
-    .replace(/{{CONTRATADA_NOME}}/g, "Construções ABC LTDA")
-    .replace(/{{CONTRATADA_CNPJ}}/g, "00.000.000/0001-00")
-    .replace(/{{CONTRATADA_ENDERECO}}/g, "Rua das Flores, 200, Montes Claros - MG")
-    .replace(/{{CONTRATADA_REPRESENTANTE}}/g, "João da Silva")
-    .replace(/{{CONTRATADA_CARGO}}/g, "Sócio Administrador")
-    .replace(/{{CIDADE_ESTADO}}/g, "Montes Claros - MG");
+    .replace(/\{\{NUMERO_CONTRATO\}\}/g, "CT-2026-0001")
+    .replace(/\{\{ANO_ATUAL\}\}/g, "2026")
+    .replace(/\{\{DATA_ASSINATURA\}\}/g, "16/03/2026")
+    .replace(/\{\{DATA_INICIO\}\}/g, "01/04/2026")
+    .replace(/\{\{DATA_TERMINO\}\}/g, "30/06/2026")
+    .replace(/\{\{DESCRICAO_OBJETO\}\}/g, "execução de alvenaria estrutural")
+    .replace(/\{\{VALOR_TOTAL\}\}/g, "R$ 185.000,00")
+    .replace(/\{\{OBRA_NOME\}\}/g, "Residencial Exemplo")
+    .replace(/\{\{CONTRATANTE_NOME\}\}/g, "FC Engenharia e Construção LTDA")
+    .replace(/\{\{CONTRATANTE_CNPJ\}\}/g, "29.353.906/0001-71")
+    .replace(/\{\{CONTRATANTE_ENDERECO\}\}/g, "Av. Juscelino Kubitschek, 100, Montes Claros - MG")
+    .replace(/\{\{CONTRATANTE_REPRESENTANTE\}\}/g, "Felipe Costa Alves")
+    .replace(/\{\{CONTRATANTE_CARGO\}\}/g, "Sócio Administrador")
+    .replace(/\{\{CONTRATADA_NOME\}\}/g, "Construções ABC LTDA")
+    .replace(/\{\{CONTRATADA_CNPJ\}\}/g, "00.000.000/0001-00")
+    .replace(/\{\{CONTRATADA_ENDERECO\}\}/g, "Rua das Flores, 200, Montes Claros - MG")
+    .replace(/\{\{CONTRATADA_REPRESENTANTE\}\}/g, "João da Silva")
+    .replace(/\{\{CONTRATADA_CARGO\}\}/g, "Sócio Administrador")
+    .replace(/\{\{CIDADE_ESTADO\}\}/g, "Montes Claros - MG");
 
   return (
     <DashboardLayout>
-      <div className="p-5 max-w-7xl mx-auto space-y-4">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/terceiros/contratos")} className="p-2 hover:bg-gray-100 rounded-lg">
-            <ArrowLeft className="w-4 h-4" />
+      <div className="h-[calc(100vh-64px)] flex flex-col bg-gray-100">
+        {/* Header bar */}
+        <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
+          <button onClick={() => navigate("/terceiros/contratos")} className="p-1.5 hover:bg-gray-100 rounded-lg">
+            <ArrowLeft className="w-4 h-4 text-gray-500" />
           </button>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-gray-900">Template de Contrato</h1>
-            <p className="text-sm text-gray-500">
+          <div className="flex-1 min-w-0">
+            <Input
+              value={nome}
+              onChange={e => setNome(e.target.value)}
+              className="text-sm font-semibold border-none bg-transparent px-2 py-1 h-auto focus-visible:ring-0 focus-visible:bg-gray-50 rounded"
+              placeholder="Nome do Template"
+            />
+            <p className="text-[10px] text-gray-400 px-2">
               {templateId ? `Versão ${versao} salva` : "Nenhum template salvo"} — Gerado automaticamente ao emitir contratos
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => setPreviewMode(p => !p)}
-          >
-            {previewMode ? "Editar" : "Pré-visualizar"}
-          </Button>
-          <Button
-            size="sm"
-            className="gap-2 bg-blue-600 hover:bg-blue-700"
-            disabled={salvarMut.isPending}
-            onClick={() => salvarMut.mutate({ companyId, nome, texto, id: templateId })}
-          >
-            <Save className="w-4 h-4" />
-            {salvarMut.isPending ? "Salvando..." : "Salvar Template"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-8 text-xs"
+              onClick={() => setPreviewMode(p => !p)}
+            >
+              {previewMode ? <><Pencil className="w-3.5 h-3.5" /> Editar</> : <><Eye className="w-3.5 h-3.5" /> Visualizar</>}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-8 text-xs"
+              onClick={() => setShowVars(v => !v)}
+            >
+              <Type className="w-3.5 h-3.5" />
+              Variáveis
+            </Button>
+            <Button
+              size="sm"
+              className="gap-1.5 h-8 text-xs bg-blue-600 hover:bg-blue-700"
+              disabled={salvarMut.isPending}
+              onClick={() => salvarMut.mutate({ companyId, nome, texto, id: templateId })}
+            >
+              <Save className="w-3.5 h-3.5" />
+              {salvarMut.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </div>
         </div>
 
-        {/* Info */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex gap-3">
-          <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-blue-700">
-            Use as variáveis <code className="bg-blue-100 px-1 rounded text-xs font-mono">{"{{NOME_VARIAVEL}}"}</code> no texto — elas serão substituídas automaticamente pelos dados do contrato ao gerar o documento.
-            Clique em uma variável para inserí-la na posição do cursor.
-          </p>
-        </div>
+        {/* Toolbar (Word-style) */}
+        {!previewMode && editor && (
+          <div className="bg-white border-b border-gray-200 px-4 py-1.5 flex items-center gap-0.5 flex-shrink-0 overflow-x-auto">
+            <ToolbarButton active={false} onClick={() => editor.chain().focus().undo().run()} title="Desfazer">
+              <Undo className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton active={false} onClick={() => editor.chain().focus().redo().run()} title="Refazer">
+              <Redo className="w-4 h-4" />
+            </ToolbarButton>
 
-        <div className="flex gap-4">
-          {/* Editor ou Preview */}
-          <div className="flex-1 space-y-3">
-            <div>
-              <Label className="text-xs text-gray-500">Nome do Template</Label>
-              <Input
-                value={nome}
-                onChange={e => setNome(e.target.value)}
-                className="mt-1 text-sm"
-                placeholder="Ex: Contrato Padrão de Empreitada"
-              />
-            </div>
+            <div className="w-px h-6 bg-gray-200 mx-1.5" />
+
+            <select
+              className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-300 mr-1"
+              value={editor.isActive("heading", { level: 1 }) ? "h1" : editor.isActive("heading", { level: 2 }) ? "h2" : editor.isActive("heading", { level: 3 }) ? "h3" : "p"}
+              onChange={e => {
+                const val = e.target.value;
+                if (val === "p") editor.chain().focus().setParagraph().run();
+                else if (val === "h1") editor.chain().focus().toggleHeading({ level: 1 }).run();
+                else if (val === "h2") editor.chain().focus().toggleHeading({ level: 2 }).run();
+                else if (val === "h3") editor.chain().focus().toggleHeading({ level: 3 }).run();
+              }}
+            >
+              <option value="p">Normal</option>
+              <option value="h1">Título 1</option>
+              <option value="h2">Título 2</option>
+              <option value="h3">Título 3</option>
+            </select>
+
+            <div className="w-px h-6 bg-gray-200 mx-1.5" />
+
+            <ToolbarButton active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} title="Negrito">
+              <Bold className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} title="Itálico">
+              <Italic className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Sublinhado">
+              <UnderlineIcon className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()} title="Tachado">
+              <Minus className="w-4 h-4" />
+            </ToolbarButton>
+
+            <div className="w-px h-6 bg-gray-200 mx-1.5" />
+
+            <ToolbarButton active={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()} title="Alinhar à esquerda">
+              <AlignLeft className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton active={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()} title="Centralizar">
+              <AlignCenter className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()} title="Alinhar à direita">
+              <AlignRight className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton active={editor.isActive({ textAlign: "justify" })} onClick={() => editor.chain().focus().setTextAlign("justify").run()} title="Justificar">
+              <AlignJustify className="w-4 h-4" />
+            </ToolbarButton>
+
+            <div className="w-px h-6 bg-gray-200 mx-1.5" />
+
+            <ToolbarButton active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Lista com marcadores">
+              <List className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Lista numerada">
+              <ListOrdered className="w-4 h-4" />
+            </ToolbarButton>
+
+            <div className="w-px h-6 bg-gray-200 mx-1.5" />
+
+            <ToolbarButton active={false} onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Linha horizontal">
+              <Minus className="w-4 h-4" />
+            </ToolbarButton>
+
+            <div className="flex-1" />
+
+            <button
+              onClick={restaurarPadrao}
+              className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 px-2 py-1"
+            >
+              <RefreshCw className="w-3 h-3" /> Restaurar padrão
+            </button>
+          </div>
+        )}
+
+        {/* Main content area */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Document area */}
+          <div className="flex-1 overflow-y-auto p-6 flex justify-center">
             {previewMode ? (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-                <div className="border-b border-gray-100 px-4 py-2 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  <span className="text-xs text-gray-500">Pré-visualização com dados de exemplo</span>
+              <div className="w-full max-w-[794px] bg-white shadow-xl rounded-sm border border-gray-300" style={{ minHeight: "1123px" }}>
+                <div className="border-b border-gray-200 px-4 py-2 flex items-center gap-2 bg-gray-50">
+                  <Eye className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="text-[11px] text-gray-500">Pré-visualização com dados de exemplo</span>
                 </div>
-                <pre className="p-5 text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed min-h-[600px]">
-                  {previewTexto}
-                </pre>
+                <div className="px-[72px] py-10" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "13px", lineHeight: "1.8", color: "#1f2937" }}>
+                  {previewTexto.split("\n").map((line, idx) => {
+                    const trimmed = line.trim();
+                    if (!trimmed) return <div key={idx} className="h-3" />;
+                    const isClausula = /^CL[ÁA]USULA\s/i.test(trimmed);
+                    const isTitulo = /^CONTRATO\s+DE\s+/i.test(trimmed);
+                    if (isTitulo) return <h1 key={idx} className="text-[15px] font-bold text-center mb-6 uppercase tracking-wider">{trimmed}</h1>;
+                    if (isClausula) return <h2 key={idx} className="text-[13px] font-bold mt-6 mb-2 uppercase tracking-wide">{trimmed}</h2>;
+                    return <p key={idx} className="mb-1.5 text-justify">{trimmed}</p>;
+                  })}
+                </div>
               </div>
             ) : (
-              <div className="space-y-1">
-                <Label className="text-xs text-gray-500">Texto do Contrato</Label>
-                <textarea
-                  id="template-textarea"
-                  value={texto}
-                  onChange={e => setTexto(e.target.value)}
-                  className="w-full h-[600px] rounded-xl border border-gray-200 p-4 text-sm font-mono text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y leading-relaxed"
-                  placeholder="Digite o texto do contrato aqui, usando {{VARIAVEL}} para campos dinâmicos..."
-                  spellCheck={false}
-                />
+              <div className="w-full max-w-[794px] bg-white shadow-xl rounded-sm border border-gray-300 cursor-text" style={{ minHeight: "1123px" }}>
+                <EditorContent editor={editor} />
               </div>
             )}
           </div>
 
-          {/* Painel de variáveis */}
-          <div className="w-72 flex-shrink-0 space-y-3">
-            <div>
-              <Label className="text-xs text-gray-500">Variáveis Disponíveis</Label>
-              <Input
-                className="mt-1 text-xs"
-                placeholder="Buscar variável..."
-                value={varBusca}
-                onChange={e => setVarBusca(e.target.value)}
-              />
+          {/* Variables panel */}
+          {showVars && !previewMode && (
+            <div className="w-64 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
+              <div className="px-3 py-3 border-b border-gray-100">
+                <p className="text-xs font-semibold text-gray-700 mb-2">Variáveis</p>
+                <Input
+                  className="text-[11px] h-7"
+                  placeholder="Buscar variável..."
+                  value={varBusca}
+                  onChange={e => setVarBusca(e.target.value)}
+                />
+                <div className="flex gap-1 flex-wrap mt-2">
+                  <button
+                    onClick={() => setCategoriaFiltro("todas")}
+                    className={`px-1.5 py-0.5 rounded text-[10px] transition-colors ${categoriaFiltro === "todas" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                  >
+                    Todas
+                  </button>
+                  {categorias.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setCategoriaFiltro(cat)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] transition-colors ${categoriaFiltro === cat ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+                <p className="text-[10px] text-gray-400 px-1 mb-1">Clique para inserir no texto</p>
+                {varsFiltradas.map(v => (
+                  <button
+                    key={v.chave}
+                    onClick={() => inserirVariavel(v.chave)}
+                    className="w-full text-left px-2 py-1.5 rounded border border-gray-100 hover:border-blue-300 hover:bg-blue-50 transition-colors group"
+                  >
+                    <div className="font-mono text-[10px] text-blue-600 group-hover:text-blue-800 truncate">{v.chave}</div>
+                    <div className="text-[10px] text-gray-400 leading-snug truncate">{v.descricao}</div>
+                  </button>
+                ))}
+                {varsFiltradas.length === 0 && (
+                  <p className="text-[10px] text-gray-400 text-center py-4">Nenhuma variável encontrada</p>
+                )}
+              </div>
             </div>
-            <div className="flex gap-1 flex-wrap">
-              <button
-                onClick={() => setCategoriaFiltro("todas")}
-                className={`px-2 py-0.5 rounded text-xs transition-colors ${categoriaFiltro === "todas" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-              >
-                Todas
-              </button>
-              {categorias.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setCategoriaFiltro(cat)}
-                  className={`px-2 py-0.5 rounded text-xs transition-colors ${categoriaFiltro === cat ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-            <div className="space-y-1.5 max-h-[550px] overflow-y-auto pr-1">
-              {varsFiltradas.map(v => (
-                <button
-                  key={v.chave}
-                  onClick={() => inserirVariavel(v.chave)}
-                  className="w-full text-left p-2.5 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors group"
-                >
-                  <div className="font-mono text-xs text-blue-700 group-hover:text-blue-800 truncate">{v.chave}</div>
-                  <div className="text-xs text-gray-500 mt-0.5 leading-snug">{v.descricao}</div>
-                </button>
-              ))}
-              {varsFiltradas.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">Nenhuma variável encontrada</p>
-              )}
-            </div>
-            <div className="border-t border-gray-100 pt-3">
-              <button
-                onClick={() => { if (confirm("Isso vai restaurar o template padrão. Continuar?")) setTexto(TEMPLATE_PADRAO); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <RefreshCw className="w-3 h-3" /> Restaurar template padrão
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </DashboardLayout>
