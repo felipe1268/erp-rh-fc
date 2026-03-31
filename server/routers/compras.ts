@@ -2110,6 +2110,18 @@ Responda APENAS com um objeto JSON no formato:
         for (const sc of scs) scMap[sc.id] = sc.numeroSc;
       }
 
+      let tipoEfetivoEarly = (cot.tipo === "servico" || cot.tipo === "pacote") ? cot.tipo : "material";
+      if (tipoEfetivoEarly === "material" && cot.solicitacaoId) {
+        const [scTipoCheck] = await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, cot.solicitacaoId), eq(comprasSolicitacoes.companyId, Number(cot.companyId))));
+        if (scTipoCheck && (scTipoCheck.tipo === "servico" || scTipoCheck.tipo === "pacote")) tipoEfetivoEarly = scTipoCheck.tipo;
+      }
+      const isCotacaoMdoEarly = tipoEfetivoEarly === 'servico' || tipoEfetivoEarly === 'pacote';
+      const scTipoFilter = tipoEfetivoEarly === 'pacote'
+        ? sql`1=1`
+        : tipoEfetivoEarly === 'servico'
+        ? sql`s.tipo IN ('servico', 'pacote')`
+        : sql`(s.tipo IS NULL OR s.tipo = 'material')`;
+
       const insCodigos = scItens.filter(s => !s.orcamentoItemId && s.insumoCodigo).map(s => s.insumoCodigo!);
       const insCodigosUnique = [...new Set(insCodigos)];
       let insumoOrcMap: Record<string, number> = {};
@@ -2159,6 +2171,7 @@ Responda APENAS com um objeto JSON no formato:
               AND si.orcamento_item_id IS NULL
               AND s.company_id = ${cot.companyId} AND s.status NOT IN ('cancelado')
               AND s.obra_id = ${cot.obraId}
+              AND ${scTipoFilter}
             GROUP BY si.insumo_codigo
           `);
           for (const r of (solRows as any).rows ?? []) insumoSolicMap[r.insumo_codigo] = n(r.total);
@@ -2171,6 +2184,7 @@ Responda APENAS com um objeto JSON no formato:
             JOIN compras_solicitacoes s ON s.id = si.solicitacao_id AND s.obra_id = ${cot.obraId}
             WHERE si.insumo_codigo IN (${sql.join(insCodigosUnique.map(c => sql`${c}`), sql`, `)})
               AND si.orcamento_item_id IS NULL
+              AND ${scTipoFilter}
             GROUP BY si.insumo_codigo
           `);
           for (const r of (compRows as any).rows ?? []) insumoCompMap[r.insumo_codigo] = n(r.total);
@@ -2211,16 +2225,6 @@ Responda APENAS com um objeto JSON no formato:
 
       const orcItemToQtdOrcada: Record<number, number> = {};
       for (const o of orcItensData) orcItemToQtdOrcada[o.id] = n(o.quantidade);
-
-      let tipoEfetivoEarly = (cot.tipo === "servico" || cot.tipo === "pacote") ? cot.tipo : "material";
-      if (tipoEfetivoEarly === "material" && cot.solicitacaoId) {
-        const [scTipo] = await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, cot.solicitacaoId), eq(comprasSolicitacoes.companyId, Number(cot.companyId))));
-        if (scTipo && (scTipo.tipo === "servico" || scTipo.tipo === "pacote")) tipoEfetivoEarly = scTipo.tipo;
-      }
-      const isCotacaoMdoEarly = tipoEfetivoEarly === 'servico' || tipoEfetivoEarly === 'pacote';
-      const scTipoFilter = isCotacaoMdoEarly
-        ? sql`s.tipo IN ('servico', 'pacote')`
-        : sql`(s.tipo IS NULL OR s.tipo = 'material')`;
 
       const orcItemToQtdSolicitada: Record<number, number> = {};
       if (orcItemIds.length > 0) {
@@ -2274,7 +2278,9 @@ Responda APENAS com um objeto JSON no formato:
         const metaMdoAjud = it.solicitacaoItemId ? (scItemToMetaMdoAjud[it.solicitacaoItemId] ?? 0) : 0;
 
         let metaUnitario: number;
-        if (isCotacaoMdo && metaUnitarioMdo > 0) {
+        if (tipoEfetivo === 'pacote') {
+          metaUnitario = metaUnitarioTotal > 0 ? metaUnitarioTotal : (metaUnitarioMat + metaUnitarioMdo);
+        } else if (tipoEfetivo === 'servico' && metaUnitarioMdo > 0) {
           if (!incluirAjud && metaMdoProf > 0) {
             const totalMdoCusto = metaMdoProf + metaMdoAjud;
             metaUnitario = totalMdoCusto > 0 ? metaUnitarioMdo * (metaMdoProf / totalMdoCusto) : metaUnitarioMdo;

@@ -2514,9 +2514,11 @@ export default function Cotacoes() {
                               <th rowSpan={2} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-2 min-w-56 max-w-md border-r border-gray-200 bg-gray-50 sticky left-0 z-30">Item</th>
                               <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-2 py-2 w-12 border-r border-gray-200 bg-gray-50">Un.</th>
                               <th colSpan={3} className="text-center text-xs font-semibold text-blue-600 uppercase px-2 py-2 border-r border-blue-100 bg-blue-50/60">
-                                {mapa?.cotacao?.tipo === 'servico' || mapa?.cotacao?.tipo === 'pacote'
+                                {((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'servico'
                                   ? "Meta MDO (Orçamento)"
-                                  : "Meta (Orçamento)"}
+                                  : ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote'
+                                  ? "Meta Total (Orçamento)"
+                                  : "Meta MAT (Orçamento)"}
                               </th>
                               <th rowSpan={2} className="text-center text-xs font-semibold text-orange-600 uppercase px-2 py-2 border-r border-orange-100 bg-orange-50/60 w-24">Saldo<br/>Orç.</th>
                               {(mapa?.participantes ?? []).map((p: any) => {

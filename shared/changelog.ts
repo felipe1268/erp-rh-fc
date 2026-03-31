@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 924,
+    titulo: "Correção meta orçamentária no Mapa de Cotação — Pacote usa total (MAT+MDO)",
+    descricao: "Corrigido bug no Mapa de Cotação para cotações tipo Pacote: o sistema mostrava apenas o valor de MDO (R$ 34,32) ao invés do valor total da composição MAT+MDO (R$ 102,50). Agora: Serviço → usa meta MDO, Material → usa meta MAT, Pacote → usa meta Total (soma de materiais + mão de obra). Header da coluna agora mostra corretamente 'Meta Total (Orçamento)' para pacote, 'Meta MDO' para serviço e 'Meta MAT' para material. Também aplicada segregação por tipo nas queries de saldo orçamentário do mapa, evitando estouro incorreto quando existem SCs de tipos diferentes para o mesmo item do orçamento.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-31 12:00:00",
+  },
+  {
     version: 923,
     titulo: "Explosão de composição na cotação + agrupamento + histórico de preços + alertas de compra recente",
     descricao: "Ao selecionar uma SC na criação de cotação, o sistema agora explode automaticamente os itens de composição em materiais individuais (Opção B). Materiais iguais de composições diferentes são agrupados com quantidade consolidada. Cada item exibe histórico de preços (últimas 3 compras com fornecedor, preço e data). Alertas automáticos avisam quando o mesmo material foi comprado recentemente para outra obra, indicando oportunidade de consolidação. Aprovação de SC mostra materiais da composição filtrados por tipo (MAT/MDO).",
