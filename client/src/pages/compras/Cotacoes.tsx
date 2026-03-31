@@ -2914,7 +2914,7 @@ export default function Cotacoes() {
                                         )}
                                         {(it as any).qtdOrcada > 0 && (() => {
                                           const orcada = (it as any).qtdOrcada;
-                                          const estaSC = metaQtd;
+                                          const estaSC = parseFloat(it.quantidade ?? "0");
                                           const totalSolic = (it as any).qtdTotalSolicitada;
                                           const outrasSC = Math.max(0, totalSolic - estaSC);
                                           const saldoRestanteRaw = orcada - totalSolic;
