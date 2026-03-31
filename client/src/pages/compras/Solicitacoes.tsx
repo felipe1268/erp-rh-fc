@@ -1433,7 +1433,7 @@ export default function Solicitacoes() {
                   { value: "material" as const, label: "Material", icon: "📦" },
                   { value: "servico" as const, label: "Serviço / MDO", icon: "🔧" },
                   { value: "equipamento" as const, label: "Equipamento", icon: "⚙️" },
-                  { value: "pacote" as const, label: "Pacote", icon: "📋" },
+                  { value: "pacote" as const, label: "Pacote (MAT + MO)", icon: "📋" },
                 ].map(opt => (
                   <button
                     key={opt.value}
@@ -1459,14 +1459,16 @@ export default function Solicitacoes() {
                   </button>
                 ))}
                 {form.tipo === "pacote" && (
-                  <label className="flex items-center gap-1.5 ml-2 text-xs text-gray-600 cursor-pointer whitespace-nowrap">
+                  <label className="flex items-center gap-1.5 ml-2 text-xs cursor-pointer whitespace-nowrap">
                     <input
                       type="checkbox"
                       checked={form.incluirEquipamentos}
                       onChange={e => setForm(p => ({ ...p, incluirEquipamentos: e.target.checked }))}
                       className="h-3.5 w-3.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
                     />
-                    Incluir Equipamentos
+                    <span className={form.incluirEquipamentos ? "text-green-700 font-medium" : "text-gray-500"}>
+                      {form.incluirEquipamentos ? "+ EQUIP" : "Sem Equip"}
+                    </span>
                   </label>
                 )}
               </div>
@@ -2892,7 +2894,7 @@ export default function Solicitacoes() {
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
                 {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && detalhe.aprovacaoStatus === "aprovada" && (() => {
                   const scTipo = (detalhe as any).tipo || "material";
-                  const tipoLabel = scTipo === "servico" ? "Mão de Obra" : scTipo === "pacote" ? "Pacote (Material + MDO)" : "Material";
+                  const tipoLabel = scTipo === "servico" ? "Mão de Obra" : scTipo === "pacote" ? "Pacote (MAT + MO)" : scTipo === "equipamento" ? "Equipamento" : "Material";
                   const tipoCor = scTipo === "servico" ? "bg-purple-600 hover:bg-purple-500" : scTipo === "pacote" ? "bg-indigo-600 hover:bg-indigo-500" : "bg-blue-600 hover:bg-blue-500";
                   const tipoIcon = scTipo === "servico" || scTipo === "pacote" ? <Briefcase className="h-3 w-3" /> : <ShoppingCart className="h-3 w-3" />;
                   return (
