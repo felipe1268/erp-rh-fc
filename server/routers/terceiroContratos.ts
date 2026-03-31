@@ -2802,7 +2802,12 @@ export const terceiroContratosRouter = router({
         ))
         .orderBy(desc(terceiroContratoTemplates.versao))
         .limit(1);
-      return tpl ?? null;
+      const [comp] = await db.select({
+        razaoSocial: companies.razaoSocial,
+        cnpj: companies.cnpj,
+        logoUrl: companies.logoUrl,
+      }).from(companies).where(eq(companies.id, input.companyId));
+      return tpl ? { ...tpl, companyData: comp || null } : null;
     }),
 
   salvarTemplate: protectedProcedure

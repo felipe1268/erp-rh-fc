@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   ArrowLeft, Save, FileText, Info, RefreshCw, Eye, Pencil,
   Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  List, ListOrdered, Undo, Redo, Type, Minus, ChevronDown
+  List, ListOrdered, Undo, Redo, Type, Minus, ChevronDown, Building2
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/hooks/useCompany";
@@ -434,6 +434,20 @@ EAP          | Descrição                                             | Un    |
                 <div className="border-b border-gray-200 px-4 py-2 flex items-center gap-2 bg-gray-50">
                   <Eye className="w-3.5 h-3.5 text-gray-400" />
                   <span className="text-[11px] text-gray-500">Pré-visualização com dados de exemplo</span>
+                </div>
+                <div className="border-b border-gray-300 px-[72px] py-6 flex items-center justify-between">
+                  {tpl?.companyData?.logoUrl ? (
+                    <img src={tpl.companyData.logoUrl} alt="Logo" className="h-14 object-contain" />
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-8 h-8 text-gray-300" />
+                      <p className="text-sm font-bold text-gray-700">{tpl?.companyData?.razaoSocial || "Empresa"}</p>
+                    </div>
+                  )}
+                  <div className="text-right">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-semibold">Contrato</p>
+                    <p className="text-base font-bold text-gray-800">CT-2026-0001</p>
+                  </div>
                 </div>
                 <div className="px-[72px] py-10" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "13px", lineHeight: "1.8", color: "#1f2937" }}>
                   {previewTexto.split("\n").map((line, idx) => {
