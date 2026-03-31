@@ -617,31 +617,7 @@ async function startServer() {
         const db4 = await getDb();
         if (!db4) return;
         const { sql: sql4 } = await import("drizzle-orm");
-        const mdoPat = "%(m.o%|%mão de obra%|%mdo%|%pedreiro%|%servente%|%ajudante%|%auxiliar%|%encanador%|%eletricista%|%pintor%|%carpinteiro%|%armador%|%soldador%|%serralheiro%|%gesseiro%|%azulejista%|%marmorista%|%vidraceiro%|%impermeabilizador%|%operador%)";
-        const fixSC = await db4.execute(sql4`
-          UPDATE compras_solicitacoes sc SET tipo = 'servico'
-          WHERE sc.tipo = 'material'
-          AND (
-            LOWER(sc.titulo) SIMILAR TO ${mdoPat}
-            OR EXISTS (
-              SELECT 1 FROM compras_solicitacoes_itens i
-              WHERE i.solicitacao_id = sc.id
-              AND (i.composicao_codigo IS NOT NULL OR LOWER(i.descricao) SIMILAR TO ${mdoPat})
-            )
-          )
-        `);
-        const scFixed = (fixSC as any).rowCount ?? 0;
-        if (scFixed > 0) {
-          const fixCot = await db4.execute(sql4`
-            UPDATE compras_cotacoes c SET tipo = 'servico'
-            FROM compras_solicitacoes s
-            WHERE c.solicitacao_id = s.id AND s.tipo = 'servico' AND c.tipo = 'material'
-          `);
-          const cotFixed = (fixCot as any).rowCount ?? 0;
-          console.log(`[ColFix] Auto-tipo: ${scFixed} SC(s) + ${cotFixed} cotação(ões) corrigidas para 'servico' Rev.889`);
-        } else {
-          console.log("[ColFix] Auto-tipo SC/cotação OK Rev.889");
-        }
+        console.log("[ColFix] Auto-tipo SC/cotação DESATIVADO Rev.930 (tipo agora é definido pelo frontend)");
       } catch (e: any) { console.warn("[ColFix] auto-tipo Rev.889:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Limpeza empresas de teste (Rev.738) — já completada

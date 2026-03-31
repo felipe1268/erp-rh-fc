@@ -1390,19 +1390,7 @@ Responda APENAS com um objeto JSON no formato:
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId));
       const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
       const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
-      let tipoSC = input.tipo ?? "material";
-      if (tipoSC === "material" && input.itens.length > 0) {
-        const mdoPattern = /\bm\.?o\.?\b|mão\s*de\s*obra|mdo|pedreiro|servente|ajudante|auxiliar|encanador|eletricista|pintor|carpinteiro|armador|soldador|serralheiro|gesseiro|azulejista|marmorista|vidraceiro|bombeiro\s*hidr|impermeabilizador|operador/i;
-        const hasMdoItem = input.itens.some(it => mdoPattern.test(it.descricao));
-        const hasComposicao = input.itens.some(it => it.composicaoCodigo);
-        if (hasMdoItem || hasComposicao) {
-          if (input.itens.length > 0 && input.itens.every(it => it.composicaoCodigo)) {
-            tipoSC = "servico";
-          } else if (hasMdoItem && !hasComposicao) {
-            tipoSC = "servico";
-          }
-        }
-      }
+      const tipoSC = input.tipo ?? "material";
       const [sc] = await db.insert(comprasSolicitacoes).values({
         companyId: input.companyId,
         numeroSc,
