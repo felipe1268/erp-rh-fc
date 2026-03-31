@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 931,
+    titulo: "Correção do Preço Unit. e saldo no Mapa de Cotação para insumos de composição",
+    descricao: "Corrigido bug onde o Mapa de Cotação exibia o custo MAT total da composição (ex: R$ 11,79) como 'Preço Unit.' de cada insumo, ao invés do preço individual do insumo (ex: Areia = R$ 3,12, Cimento = R$ 8,20). Também corrigido o cálculo de qtdOrcada (agora usa composição_qty × coeficiente) e qtdSolicitada/qtdComprada (agora usa chaves compostas orcId:insumoCodigo para não somar insumos diferentes).",
+    tipo: 'bugfix',
+    modulos: 'Compras',
+    criadoPor: 'System',
+    dataPublicacao: "2026-03-31 17:00:00",
+  },
+  {
     version: 925,
     titulo: "Visualização da composição completa no Mapa de Cotação",
     descricao: "Agora cada item do mapa de cotação que é vinculado a uma composição do orçamento exibe um botão de expandir (seta). Ao clicar, mostra todos os insumos da composição com código, descrição, unidade, coeficiente, preço unitário, custo e tipo (MAT/MDO). O cabeçalho mostra os subtotais de material, mão de obra e total da composição. Funciona para todos os tipos de SC: material, serviço e pacote.",

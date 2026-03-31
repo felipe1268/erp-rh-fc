@@ -2020,6 +2020,7 @@ Responda APENAS com um objeto JSON no formato:
           origemEap: comprasSolicitacoesItens.origemEap,
           solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
           precoMeta: comprasSolicitacoesItens.precoMeta,
+          coeficiente: comprasSolicitacoesItens.coeficiente,
           semVerba: comprasSolicitacoesItens.semVerba,
           motivoSemVerba: comprasSolicitacoesItens.motivoSemVerba,
           incluirAjudante: comprasSolicitacoesItens.incluirAjudante,
@@ -2129,7 +2130,7 @@ Responda APENAS com um objeto JSON no formato:
       const scItemToIncluirAjudante: Record<number, boolean> = {};
       const scItemToMetaMdoProf: Record<number, number> = {};
       const scItemToMetaMdoAjud: Record<number, number> = {};
-      const scItemToTraceability: Record<number, { eapCodigo?: string; insumoCodigo?: string; composicaoCodigo?: string; origemEap?: boolean; solicitacaoId?: number; semVerba?: boolean; motivoSemVerba?: string }> = {};
+      const scItemToTraceability: Record<number, { eapCodigo?: string; insumoCodigo?: string; composicaoCodigo?: string; origemEap?: boolean; solicitacaoId?: number; semVerba?: boolean; motivoSemVerba?: string; coeficiente?: number }> = {};
       for (const s of scItens) {
         if (s.orcamentoItemId) scItemToOrcItem[s.id] = s.orcamentoItemId;
         const pm = n(s.precoMeta);
@@ -2137,7 +2138,7 @@ Responda APENAS com um objeto JSON no formato:
         scItemToIncluirAjudante[s.id] = s.incluirAjudante ?? true;
         scItemToMetaMdoProf[s.id] = n(s.metaMdoProfissional);
         scItemToMetaMdoAjud[s.id] = n(s.metaMdoAjudante);
-        scItemToTraceability[s.id] = { eapCodigo: s.eapCodigo, insumoCodigo: s.insumoCodigo, composicaoCodigo: s.composicaoCodigo, origemEap: s.origemEap, solicitacaoId: s.solicitacaoId };
+        scItemToTraceability[s.id] = { eapCodigo: s.eapCodigo, insumoCodigo: s.insumoCodigo, composicaoCodigo: s.composicaoCodigo, origemEap: s.origemEap, solicitacaoId: s.solicitacaoId, coeficiente: n(s.coeficiente) };
       }
 
       const scIds = [...new Set(scItens.map(s => s.solicitacaoId).filter(Boolean))] as number[];
@@ -2271,27 +2272,28 @@ Responda APENAS com um objeto JSON no formato:
       const orcItemToQtdOrcada: Record<number, number> = {};
       for (const o of orcItensData) orcItemToQtdOrcada[o.id] = n(o.quantidade);
 
-      const orcItemToQtdSolicitada: Record<number, number> = {};
+      const orcItemToQtdSolicitada: Record<string, number> = {};
       if (orcItemIds.length > 0) {
         const solicitadoRows = await db.execute(sql`
-          SELECT si.orcamento_item_id, COALESCE(SUM(si.quantidade::numeric), 0) as total_solicitado
+          SELECT si.orcamento_item_id, si.insumo_codigo, COALESCE(SUM(si.quantidade::numeric), 0) as total_solicitado
           FROM compras_solicitacoes_itens si
           JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
           WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
             AND s.company_id = ${cot.companyId}
             AND s.status NOT IN ('cancelado')
             AND ${scTipoFilter}
-          GROUP BY si.orcamento_item_id
+          GROUP BY si.orcamento_item_id, si.insumo_codigo
         `);
         for (const r of (solicitadoRows as any).rows ?? []) {
-          orcItemToQtdSolicitada[r.orcamento_item_id] = n(r.total_solicitado);
+          const key = r.insumo_codigo ? `${r.orcamento_item_id}:${r.insumo_codigo}` : String(r.orcamento_item_id);
+          orcItemToQtdSolicitada[key] = n(r.total_solicitado);
         }
       }
 
-      const orcItemToQtdComprada: Record<number, number> = {};
+      const orcItemToQtdComprada: Record<string, number> = {};
       if (orcItemIds.length > 0) {
         const compradoRows = await db.execute(sql`
-          SELECT si.orcamento_item_id,
+          SELECT si.orcamento_item_id, si.insumo_codigo,
                  COALESCE(SUM(oi2.quantidade::numeric), 0) as total_comprado
           FROM compras_solicitacoes_itens si
           JOIN compras_ordens_itens oi2 ON oi2.solicitacao_item_id = si.id
@@ -2299,10 +2301,11 @@ Responda APENAS com um objeto JSON no formato:
           JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
           WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
             AND ${scTipoFilter}
-          GROUP BY si.orcamento_item_id
+          GROUP BY si.orcamento_item_id, si.insumo_codigo
         `);
         for (const r of (compradoRows as any).rows ?? []) {
-          orcItemToQtdComprada[r.orcamento_item_id] = n(r.total_comprado);
+          const key = r.insumo_codigo ? `${r.orcamento_item_id}:${r.insumo_codigo}` : String(r.orcamento_item_id);
+          orcItemToQtdComprada[key] = n(r.total_comprado);
         }
       }
 
@@ -2310,22 +2313,40 @@ Responda APENAS com um objeto JSON no formato:
       const isCotacaoMdo = isCotacaoMdoEarly;
       const itensComMeta = itens.map(it => {
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
-        const metaFromOrcTotal = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
-        const metaFromOrcMat = orcId ? (orcItemToMetaMat[orcId] ?? 0) : 0;
-        const metaFromOrcMdo = orcId ? (orcItemToMetaMdo[orcId] ?? 0) : 0;
-        const metaFromOrcEquip = orcId ? (orcItemToMetaEquip[orcId] ?? 0) : 0;
+        const trace = it.solicitacaoItemId ? scItemToTraceability[it.solicitacaoItemId] : undefined;
+        const insCode = trace?.insumoCodigo ?? "";
+        const isInsumoDeComposicao = !!(insCode && (trace?.coeficiente ?? 0) > 0);
         const metaFromSC = it.solicitacaoItemId ? (scItemToPrecoMeta[it.solicitacaoItemId] ?? 0) : 0;
-        const metaUnitarioTotal = metaFromOrcTotal > 0 ? metaFromOrcTotal : metaFromSC;
-        const metaUnitarioMat = metaFromOrcMat;
-        const metaUnitarioMdo = metaFromOrcMdo;
-        const metaUnitarioEquip = metaFromOrcEquip;
+
+        let metaUnitarioTotal: number;
+        let metaUnitarioMat: number;
+        let metaUnitarioMdo: number;
+        let metaUnitarioEquip: number;
+
+        if (isInsumoDeComposicao && metaFromSC > 0) {
+          metaUnitarioTotal = metaFromSC;
+          metaUnitarioMat = metaFromSC;
+          metaUnitarioMdo = metaFromSC;
+          metaUnitarioEquip = metaFromSC;
+        } else {
+          const metaFromOrcTotal = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
+          const metaFromOrcMat = orcId ? (orcItemToMetaMat[orcId] ?? 0) : 0;
+          const metaFromOrcMdo = orcId ? (orcItemToMetaMdo[orcId] ?? 0) : 0;
+          const metaFromOrcEquip = orcId ? (orcItemToMetaEquip[orcId] ?? 0) : 0;
+          metaUnitarioTotal = metaFromOrcTotal > 0 ? metaFromOrcTotal : metaFromSC;
+          metaUnitarioMat = metaFromOrcMat;
+          metaUnitarioMdo = metaFromOrcMdo;
+          metaUnitarioEquip = metaFromOrcEquip;
+        }
 
         const incluirAjud = it.solicitacaoItemId ? (scItemToIncluirAjudante[it.solicitacaoItemId] ?? true) : true;
         const metaMdoProf = it.solicitacaoItemId ? (scItemToMetaMdoProf[it.solicitacaoItemId] ?? 0) : 0;
         const metaMdoAjud = it.solicitacaoItemId ? (scItemToMetaMdoAjud[it.solicitacaoItemId] ?? 0) : 0;
 
         let metaUnitario: number;
-        if (tipoEfetivo === 'pacote') {
+        if (isInsumoDeComposicao && metaFromSC > 0) {
+          metaUnitario = metaFromSC;
+        } else if (tipoEfetivo === 'pacote') {
           metaUnitario = metaUnitarioTotal > 0 ? metaUnitarioTotal : (metaUnitarioMat + metaUnitarioMdo + metaUnitarioEquip);
         } else if (tipoEfetivo === 'equipamento' && metaUnitarioEquip > 0) {
           metaUnitario = metaUnitarioEquip;
@@ -2343,9 +2364,7 @@ Responda APENAS com um objeto JSON no formato:
         }
 
         const eapPath = orcId ? (orcItemToPath[orcId] ?? "") : "";
-        const trace = it.solicitacaoItemId ? scItemToTraceability[it.solicitacaoItemId] : undefined;
         const scNumero = trace?.solicitacaoId ? (scMap[trace.solicitacaoId] ?? "") : "";
-        const insCode = trace?.insumoCodigo ?? "";
         const qtdEstaSC = n(it.quantidade);
 
         let qtdOrcada = 0;
@@ -2355,9 +2374,20 @@ Responda APENAS com um objeto JSON no formato:
 
         if (orcId) {
           fonteVinculo = "item";
-          qtdOrcada = orcItemToQtdOrcada[orcId] ?? 0;
-          qtdTotalSolicitada = orcItemToQtdSolicitada[orcId] ?? 0;
-          qtdComprada = orcItemToQtdComprada[orcId] ?? 0;
+          const coef = trace?.coeficiente ?? 0;
+          if (isInsumoDeComposicao) {
+            qtdOrcada = (orcItemToQtdOrcada[orcId] ?? 0) * coef;
+          } else {
+            qtdOrcada = orcItemToQtdOrcada[orcId] ?? 0;
+          }
+          const compoundKey = insCode ? `${orcId}:${insCode}` : "";
+          const simpleKey = String(orcId);
+          qtdTotalSolicitada = (compoundKey && orcItemToQtdSolicitada[compoundKey] !== undefined)
+            ? orcItemToQtdSolicitada[compoundKey]
+            : (orcItemToQtdSolicitada[simpleKey] ?? 0);
+          qtdComprada = (compoundKey && orcItemToQtdComprada[compoundKey] !== undefined)
+            ? orcItemToQtdComprada[compoundKey]
+            : (orcItemToQtdComprada[simpleKey] ?? 0);
         } else if (insCode && insumoOrcMap[insCode] !== undefined) {
           fonteVinculo = "insumo";
           qtdOrcada = insumoOrcMap[insCode];
