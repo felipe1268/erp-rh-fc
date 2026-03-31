@@ -5116,10 +5116,10 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
-      const solicitadoMap: Record<number, number> = {};
+      const solicitadoMap: Record<string, number> = {};
       if (orcItemIds.length > 0) {
         const rows = await db.execute(sql`
-          SELECT si.orcamento_item_id, COALESCE(SUM(si.quantidade::numeric), 0) as total
+          SELECT si.orcamento_item_id, si.insumo_codigo, COALESCE(SUM(si.quantidade::numeric), 0) as total
           FROM compras_solicitacoes_itens si
           JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
           WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
@@ -5130,15 +5130,18 @@ Retorne APENAS um JSON válido neste formato:
               : scTipoGroup === "equip"
               ? sql`s.tipo = 'equipamento'`
               : sql`s.tipo IN ('servico', 'pacote')`}
-          GROUP BY si.orcamento_item_id
+          GROUP BY si.orcamento_item_id, si.insumo_codigo
         `);
-        for (const r of (rows as any).rows ?? []) solicitadoMap[r.orcamento_item_id] = n(r.total);
+        for (const r of (rows as any).rows ?? []) {
+          const key = r.insumo_codigo ? `${r.orcamento_item_id}:${r.insumo_codigo}` : String(r.orcamento_item_id);
+          solicitadoMap[key] = n(r.total);
+        }
       }
 
-      const compradoMap: Record<number, { qtd: number; ocs: string[] }> = {};
+      const compradoMap: Record<string, { qtd: number; ocs: string[] }> = {};
       if (orcItemIds.length > 0) {
         const rows = await db.execute(sql`
-          SELECT si.orcamento_item_id, oi2.quantidade::numeric as qtd, o.numero_oc
+          SELECT si.orcamento_item_id, si.insumo_codigo, oi2.quantidade::numeric as qtd, o.numero_oc
           FROM compras_solicitacoes_itens si
           JOIN compras_ordens_itens oi2 ON oi2.solicitacao_item_id = si.id
           JOIN compras_ordens o ON o.id = oi2.ordem_id AND o.status NOT IN ('cancelada') AND o.company_id = ${input.companyId}
@@ -5151,10 +5154,10 @@ Retorne APENAS um JSON válido neste formato:
               : sql`s.tipo IN ('servico', 'pacote')`}
         `);
         for (const r of (rows as any).rows ?? []) {
-          const oid = r.orcamento_item_id;
-          if (!compradoMap[oid]) compradoMap[oid] = { qtd: 0, ocs: [] };
-          compradoMap[oid].qtd += n(r.qtd);
-          if (r.numero_oc && !compradoMap[oid].ocs.includes(r.numero_oc)) compradoMap[oid].ocs.push(r.numero_oc);
+          const key = r.insumo_codigo ? `${r.orcamento_item_id}:${r.insumo_codigo}` : String(r.orcamento_item_id);
+          if (!compradoMap[key]) compradoMap[key] = { qtd: 0, ocs: [] };
+          compradoMap[key].qtd += n(r.qtd);
+          if (r.numero_oc && !compradoMap[key].ocs.includes(r.numero_oc)) compradoMap[key].ocs.push(r.numero_oc);
         }
       }
 
@@ -5202,9 +5205,16 @@ Retorne APENAS um JSON válido neste formato:
         if (orcId && orcData) {
           vinculado = true;
           fonteVinculo = "item";
-          qtdOrcada = n(orcData.quantidade);
-          qtdSolicitada = solicitadoMap[orcId] ?? 0;
-          const comp = compradoMap[orcId];
+          const coef = n(item.coeficiente);
+          const isInsumoDeComposicao = !!(item.insumoCodigo && coef > 0);
+          if (isInsumoDeComposicao) {
+            qtdOrcada = n(orcData.quantidade) * coef;
+          } else {
+            qtdOrcada = n(orcData.quantidade);
+          }
+          const mapKey = item.insumoCodigo ? `${orcId}:${item.insumoCodigo}` : String(orcId);
+          qtdSolicitada = solicitadoMap[mapKey] ?? 0;
+          const comp = compradoMap[mapKey];
           qtdComprada = comp?.qtd ?? 0;
           ocsVinculadas = comp?.ocs ?? [];
         } else if (insCode && insumoOrcData[insCode]) {
