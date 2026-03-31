@@ -41,6 +41,21 @@ export default function BancoHoras() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
 
+  const destinoPadrao = trpc.horasExtras.getHeDestinoPadrao.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const setDestinoPadraoMut = trpc.horasExtras.setHeDestinoPadrao.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.destino === "banco_horas"
+        ? "Configurado: horas extras irão para o Banco de Horas"
+        : "Configurado: horas extras serão pagas na folha");
+      destinoPadrao.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const isBancoAtivo = (destinoPadrao.data ?? "banco_horas") === "banco_horas";
+
   const saldoBanco = trpc.horasExtras.getSaldoBanco.useQuery(
     { companyId },
     { enabled: companyId > 0 }
@@ -117,7 +132,7 @@ export default function BancoHoras() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-5 bg-gray-50 min-h-screen">
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-blue-600 text-white flex items-center justify-center">
               <ArrowLeftRight className="h-5 w-5" />
@@ -129,7 +144,49 @@ export default function BancoHoras() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <Card className={`border-2 ${isBancoAtivo ? "border-blue-400 bg-blue-50/40" : "border-orange-300 bg-orange-50/40"}`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <div className={`h-10 w-10 rounded-full flex items-center justify-center ${isBancoAtivo ? "bg-blue-600 text-white" : "bg-orange-500 text-white"}`}>
+                  {isBancoAtivo ? <ArrowLeftRight className="h-5 w-5" /> : <CreditCard className="h-5 w-5" />}
+                </div>
+                <div>
+                  <p className="font-bold text-base">
+                    {isBancoAtivo ? "Banco de Horas ATIVO" : "Hora Extra (Pagamento) ATIVO"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {isBancoAtivo
+                      ? "As horas extras calculadas serão creditadas no banco para compensação futura"
+                      : "As horas extras calculadas serão pagas na folha de pagamento"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant={isBancoAtivo ? "outline" : "default"}
+                  className={!isBancoAtivo ? "bg-orange-500 hover:bg-orange-600" : ""}
+                  disabled={setDestinoPadraoMut.isPending || !isBancoAtivo}
+                  onClick={() => setDestinoPadraoMut.mutate({ companyId, destino: "pagamento" })}
+                >
+                  <CreditCard className="h-4 w-4 mr-1.5" />
+                  Hora Extra
+                </Button>
+                <Button
+                  variant={isBancoAtivo ? "default" : "outline"}
+                  className={isBancoAtivo ? "bg-blue-600 hover:bg-blue-700" : ""}
+                  disabled={setDestinoPadraoMut.isPending || isBancoAtivo}
+                  onClick={() => setDestinoPadraoMut.mutate({ companyId, destino: "banco_horas" })}
+                >
+                  <ArrowLeftRight className="h-4 w-4 mr-1.5" />
+                  Banco de Horas
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Card className="border-blue-200">
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">Total em Banco</p>
@@ -149,13 +206,6 @@ export default function BancoHoras() {
               <p className="text-xs text-muted-foreground">Alertas de Expiração</p>
               <p className={`text-2xl font-bold mt-1 ${alertas.length > 0 ? "text-amber-600" : "text-gray-400"}`}>{alertas.length}</p>
               <p className="text-xs text-muted-foreground mt-1">créditos a vencer</p>
-            </CardContent>
-          </Card>
-          <Card className="border-gray-200">
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground">Regime Atual</p>
-              <p className="text-lg font-bold text-gray-700 mt-1">Acordo Individual</p>
-              <p className="text-xs text-muted-foreground mt-1">compensação em até 6 meses</p>
             </CardContent>
           </Card>
         </div>

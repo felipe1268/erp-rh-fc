@@ -249,20 +249,24 @@ export const horasExtrasRouter = router({
       const hePeriodId = Number(periodResult[0]?.id);
       if (!hePeriodId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao criar registro de período HE." });
 
-      // Insert employees
+      const destPadraoRows = ((await db.execute(sql`
+        SELECT "heDestinoPadrao" FROM companies WHERE id = ${input.companyId}
+      `)) as any).rows || [];
+      const destinoPadrao = (destPadraoRows[0]?.heDestinoPadrao as string) || "pagamento";
+
       if (empResults.length > 0) {
         const empInsertRows = empResults.map(e => sql`(
           ${hePeriodId}, ${input.companyId}, ${e.empId}, ${e.nome},
           ${e.heUtil}, ${e.heFim}, ${e.heTotal},
           ${e.valorHEUtil}, ${e.valorHEFim}, ${e.valorHETotal},
-          ${e.salarioBruto}, ${e.valorHora}
+          ${e.salarioBruto}, ${e.valorHora}, ${destinoPadrao}
         )`);
         await db.execute(sql`
           INSERT INTO he_period_employees
             ("hePeriodId", "companyId", "employeeId", nome,
              "heUtilMins", "heFimMins", "heTotalMins",
              "valorHEUtil", "valorHEFim", "valorHETotal",
-             "salarioBruto", "valorHora")
+             "salarioBruto", "valorHora", destinacao)
           VALUES ${sql.join(empInsertRows, sql`,`)}
         `);
       }
@@ -696,5 +700,30 @@ export const horasExtrasRouter = router({
         ORDER BY MIN(bhl.data) ASC
       `)) as any).rows || [];
       return rows;
+    }),
+
+  getHeDestinoPadrao: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return "banco_horas";
+      const rows = ((await db.execute(sql`
+        SELECT "heDestinoPadrao" FROM companies WHERE id = ${input.companyId}
+      `)) as any).rows || [];
+      return (rows[0]?.heDestinoPadrao as string) || "banco_horas";
+    }),
+
+  setHeDestinoPadrao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      destino: z.enum(["pagamento", "banco_horas"]),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      await db.execute(sql`
+        UPDATE companies SET "heDestinoPadrao" = ${input.destino} WHERE id = ${input.companyId}
+      `);
+      return { ok: true, destino: input.destino };
     }),
 });

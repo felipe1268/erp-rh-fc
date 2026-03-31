@@ -416,6 +416,7 @@ export const companies = pgTable("companies", {
         docRodapeTexto: text("doc_rodape_texto"),
         docMarcaDaguaUrl: text("doc_marca_dagua_url"),
         docMarcaDaguaOpacidade: numeric("doc_marca_dagua_opacidade", { precision: 3, scale: 2 }).default("0.08"),
+        heDestinoPadrao: text("heDestinoPadrao").default("banco_horas"),
 },
 (table) => [
         index("companies_cnpj_unique").on(table.cnpj),
