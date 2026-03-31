@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -121,6 +121,8 @@ export default function Colaboradores() {
     const params = new URLSearchParams(window.location.search);
     return params.get("status") || "Todos";
   });
+  const [desligDe, setDesligDe] = useState("");
+  const [desligAte, setDesligAte] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -189,10 +191,19 @@ export default function Colaboradores() {
 
   // Apply skill filter to employees
   const displayEmployees = useMemo(() => {
-    if (!employees) return [];
-    if (!skillEmployeeIds) return employees;
-    return employees.filter(e => skillEmployeeIds.has(e.id));
-  }, [employees, skillEmployeeIds]);
+    let list = employees ?? [];
+    if (skillEmployeeIds) list = list.filter(e => skillEmployeeIds.has(e.id));
+    if (statusFilter === "Desligado" && (desligDe || desligAte)) {
+      list = list.filter(e => {
+        const d = (e as any).dataDesligamentoEfetiva;
+        if (!d) return false;
+        if (desligDe && d < desligDe) return false;
+        if (desligAte && d > desligAte) return false;
+        return true;
+      });
+    }
+    return list;
+  }, [employees, skillEmployeeIds, statusFilter, desligDe, desligAte]);
 
   const createMut = trpc.employees.create.useMutation({
     onSuccess: (result: any) => {
@@ -631,7 +642,7 @@ export default function Colaboradores() {
               className="pl-10 bg-card border-border"
             />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); if (v !== "Desligado") { setDesligDe(""); setDesligAte(""); } }}>
             <SelectTrigger className="w-full sm:w-40 bg-card border-border">
               <SelectValue />
             </SelectTrigger>
@@ -644,6 +655,25 @@ export default function Colaboradores() {
           </Select>
           <SkillFilterDropdown value={skillFilter} onChange={setSkillFilter} companyId={queryCompanyId} companyIds={isConstrutoras ? queryCompanyIds : undefined} />
         </div>
+        {statusFilter === "Desligado" && (
+          <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 rounded-lg bg-orange-50 border border-orange-200">
+            <CalendarDays className="h-4 w-4 text-orange-600 flex-shrink-0" />
+            <span className="text-sm font-medium text-orange-800">Período de desligamento:</span>
+            <div className="flex items-center gap-2">
+              <Input type="date" value={desligDe} onChange={e => setDesligDe(e.target.value)} className="h-8 w-40 text-sm bg-white border-orange-300" placeholder="De" />
+              <span className="text-sm text-orange-600">até</span>
+              <Input type="date" value={desligAte} onChange={e => setDesligAte(e.target.value)} className="h-8 w-40 text-sm bg-white border-orange-300" placeholder="Até" />
+            </div>
+            {(desligDe || desligAte) && (
+              <Button variant="ghost" size="sm" onClick={() => { setDesligDe(""); setDesligAte(""); }} className="h-7 px-2 text-orange-600 hover:text-orange-800 hover:bg-orange-100">
+                <XIcon className="h-3 w-3 mr-1" /> Limpar
+              </Button>
+            )}
+            {(desligDe || desligAte) && displayEmployees.length > 0 && (
+              <span className="text-xs text-orange-600 ml-auto">{displayEmployees.length} colaborador{displayEmployees.length !== 1 ? "es" : ""} no período</span>
+            )}
+          </div>
+        )}
 
         {/* Table */}
         {!hasValidSelection ? (

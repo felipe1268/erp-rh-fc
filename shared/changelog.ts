@@ -6895,4 +6895,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 19:00:00",
   },
+  {
+    revisao: 951,
+    descricao:
+      "Colaboradores — Filtro por período de desligamento + Bloqueio de aprovação de cotação MDO com déficit: " +
+      "(1) quando o filtro de status 'Desligado' está ativo, aparece uma barra de filtro por período com campos " +
+      "De/Até para filtrar colaboradores pela data de desligamento efetiva; (2) exibe contador de resultados " +
+      "no período e botão Limpar para resetar os filtros; (3) cotações MDO (serviço) com déficit orçamentário " +
+      "não resolvido agora bloqueiam o botão 'Aprovar e Gerar Contrato de Serviço' com mensagem clara " +
+      "indicando o valor do déficit e orientando a resolver a realocação no Mapa de Cotação.",
+    tipo: "melhoria",
+    modulos: "Colaboradores,Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 22:00:00",
+  },
 ];
