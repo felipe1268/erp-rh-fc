@@ -1875,11 +1875,6 @@ export default function Cotacoes() {
 
     const metaGrandTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
       acc + (parseFloat(it.metaUnitario ?? "0") * parseFloat(it.quantidade ?? "0")), 0);
-    const displayGrandTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) => {
-      const pu = (it as any).metaPUDisplay != null ? parseFloat((it as any).metaPUDisplay) : parseFloat(it.metaUnitario ?? "0");
-      const q = (it as any).metaQtdDisplay != null ? parseFloat((it as any).metaQtdDisplay) : parseFloat(it.quantidade ?? "0");
-      return acc + (pu * q);
-    }, 0);
     // Quantidade total: soma quando todos os itens têm a mesma unidade
     const allItens = mapa?.itens ?? [];
     const unidadesUnicas = [...new Set(allItens.map((it: any) => (it.unidade || "un").toLowerCase()))];
@@ -2869,9 +2864,6 @@ export default function Cotacoes() {
                               const metaUnit = parseFloat(it.metaUnitario ?? "0");
                               const metaQtd = parseFloat(it.quantidade ?? "0");
                               const metaTot = metaUnit * metaQtd;
-                              const displayPU = (it as any).metaPUDisplay != null ? parseFloat((it as any).metaPUDisplay) : metaUnit;
-                              const displayQtd = (it as any).metaQtdDisplay != null ? parseFloat((it as any).metaQtdDisplay) : metaQtd;
-                              const displayTot = displayPU * displayQtd;
                               const { saldo, hasMeta } = getItemSaldo(it);
                               const hasComposicao = !it._grouped && ((it as any).composicaoInsumos ?? []).length > 0;
                               const isExpanded = expandedComposicao[it.id] ?? false;
@@ -2973,14 +2965,14 @@ export default function Cotacoes() {
                                       {(it as any).incluirAjudante === false && (it as any).metaMdoProfissional > 0 && (
                                         <span className="px-1 py-0 text-[8px] font-bold rounded bg-purple-100 text-purple-700 border border-purple-200 whitespace-nowrap" title="Cotação sem ajudante — meta apenas do profissional">Só prof.</span>
                                       )}
-                                      {displayPU > 0 ? displayPU.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                      {metaUnit > 0 ? metaUnit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
                                     </div>
                                   </td>
                                   <td className="px-3 py-2 text-blue-600 text-xs text-right bg-blue-50/30">
-                                    {displayQtd > 0 ? displayQtd.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
+                                    {metaQtd > 0 ? metaQtd.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
                                   </td>
                                   <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold border-r border-blue-100">
-                                    {displayTot > 0 ? displayTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                    {metaTot > 0 ? metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
                                   </td>
                                   {/* Saldo Orçamentário — coluna única condensada */}
                                   {(() => {
@@ -3183,7 +3175,7 @@ export default function Cotacoes() {
                                   : "—"}
                               </td>
                               <td className="px-3 py-3 text-right text-xs text-blue-700 bg-blue-50/40 border-r border-blue-100 font-bold">
-                                {displayGrandTotal > 0 ? displayGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}
+                                {metaGrandTotal > 0 ? metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}
                               </td>
                               <td className="px-2 py-3 text-center text-xs text-orange-600 bg-orange-50/40 border-r border-orange-100 font-bold">
                                 {(() => {

@@ -25,13 +25,13 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
-    version: 935,
-    titulo: "Mapa de Cotação: Preço Unit., QTD e Total corrigidos para TODOS os insumos de composição",
-    descricao: "Para todos os insumos de composição (MAT, MDO e EQUIP), o Mapa de Cotação agora exibe corretamente: Preço Unit. = PU do insumo com meta aplicada (ex: Areia R$ 76,80/m³, Cimento R$ 0,49/kg, Betoneira R$ 2,36/chp), QTD = coeficiente da composição (ex: 0,041, 16,8, 0,200), e Total Meta = PU × coeficiente (a alocação por m² de composição). Antes confundia a alocação por m² como 'Preço Unitário' e a quantidade total da composição como 'QTD'.",
+    version: 936,
+    titulo: "Mapa de Cotação: metaUnitario corrigido como PU por unidade do insumo (não alocação por m²)",
+    descricao: "Correção conceitual fundamental: para insumos de composição (MAT, MDO, EQUIP), o metaUnitario no Mapa de Cotação agora é o Preço Unitário do insumo com meta (ex: Areia R$ 76,80/m³, Cimento R$ 0,49/kg, Betoneira R$ 2,36/chp). Antes calculava como alocação por m² de composição (ex: Areia R$ 3,12), misturando unidades com a quantidade de compra (m³, kg), resultando em totais errados. Agora: PU × QTD compra = Total correto (ex: R$ 76,80 × 4,946 m³ = R$ 379,85). Removidos campos metaPUDisplay/metaQtdDisplay — metaUnitario direto agora contém o valor correto.",
     tipo: 'bugfix',
     modulos: 'Compras',
     criadoPor: 'System',
-    dataPublicacao: "2026-03-31 21:00:00",
+    dataPublicacao: "2026-03-31 22:00:00",
   },
   {
     version: 925,
