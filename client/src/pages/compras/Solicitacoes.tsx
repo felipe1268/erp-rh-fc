@@ -491,7 +491,7 @@ export default function Solicitacoes() {
   );
 
   const insumosConsolidadosQ = trpc.compras.getInsumosConsolidados.useQuery(
-    { companyId, obraId: parseInt(form.obraId), busca: modoSC === "insumo" ? (insumoBusca || undefined) : undefined, tipoSC: form.tipo as "material" | "servico" | "pacote" | "equipamento" },
+    { companyId, obraId: parseInt(form.obraId), busca: modoSC === "insumo" ? (insumoBusca || undefined) : undefined, tipoSC: form.tipo as "material" | "servico" | "pacote" | "equipamento", incluirEquip: form.incluirEquipamentos },
     { enabled: (modoSC === "insumo" || modoSC === "eap") && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 30_000 }
   );
 
@@ -691,7 +691,7 @@ export default function Solicitacoes() {
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 }
   );
   const coberturaQ = trpc.compras.getCoberturaInsumosEAP.useQuery(
-    { companyId, obraId: parseInt(form.obraId || "0"), tipoSC: form.tipo as "material" | "servico" | "pacote" | "equipamento" },
+    { companyId, obraId: parseInt(form.obraId || "0"), tipoSC: form.tipo as "material" | "servico" | "pacote" | "equipamento", incluirEquip: form.incluirEquipamentos },
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 }
   );
   const coberturaMap = Object.fromEntries(
@@ -740,7 +740,7 @@ export default function Solicitacoes() {
     if (!eapInsumos[it.id] && it.servicoCodigo) {
       setLoadingInsumos(it.id);
       try {
-        const insumos = await trpcCtx.compras.getInsumosComposicao.fetch({ companyId, servicoCodigo: it.servicoCodigo, tipoSC: form.tipo });
+        const insumos = await trpcCtx.compras.getInsumosComposicao.fetch({ companyId, servicoCodigo: it.servicoCodigo, tipoSC: form.tipo, incluirEquip: form.incluirEquipamentos });
         setEapInsumos(prev => ({ ...prev, [it.id]: insumos }));
       } catch { setEapInsumos(prev => ({ ...prev, [it.id]: [] })); }
       setLoadingInsumos(null);
@@ -1463,11 +1463,16 @@ export default function Solicitacoes() {
                     <input
                       type="checkbox"
                       checked={form.incluirEquipamentos}
-                      onChange={e => setForm(p => ({ ...p, incluirEquipamentos: e.target.checked }))}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setForm(p => ({ ...p, incluirEquipamentos: checked }));
+                        setEapInsumos({});
+                        setEapExpanded(null);
+                      }}
                       className="h-3.5 w-3.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
                     />
-                    <span className={form.incluirEquipamentos ? "text-green-700 font-medium" : "text-gray-500"}>
-                      {form.incluirEquipamentos ? "+ EQUIP" : "Sem Equip"}
+                    <span className={form.incluirEquipamentos ? "text-green-700 font-semibold" : "text-gray-500 font-medium"}>
+                      {form.incluirEquipamentos ? "MAT + MO + EQUIP" : "MAT + MO (sem equip.)"}
                     </span>
                   </label>
                 )}

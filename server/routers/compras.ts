@@ -4894,7 +4894,7 @@ Retorne APENAS um JSON válido neste formato:
   // SEM custos/metas (blind quotation até equalização)
   // ══════════════════════════════════════════════════════════════
   getInsumosComposicao: protectedProcedure
-    .input(z.object({ companyId: z.number(), servicoCodigo: z.string(), orcamentoItemId: z.number().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional() }))
+    .input(z.object({ companyId: z.number(), servicoCodigo: z.string(), orcamentoItemId: z.number().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional(), incluirEquip: z.boolean().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const insumos = await db.select({
@@ -4914,7 +4914,7 @@ Retorne APENAS um JSON válido neste formato:
         ))
         .orderBy(asc(composicaoInsumos.insumoDescricao));
 
-      const filtered = filterInsumosByTipo(insumos as any[], input.tipoSC ?? "material");
+      const filtered = filterInsumosByTipo(insumos as any[], input.tipoSC ?? "material", input.incluirEquip ?? false);
 
       const tipoSC = input.tipoSC ?? "material";
       return filtered.map(i => {
@@ -5498,7 +5498,7 @@ Retorne APENAS um JSON válido neste formato:
     }),
 
   getInsumosConsolidados: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number(), busca: z.string().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), busca: z.string().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional(), incluirEquip: z.boolean().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
@@ -5535,7 +5535,7 @@ Retorne APENAS um JSON válido neste formato:
         .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
 
       let filteredInsumos: typeof allInsumos;
-      filteredInsumos = filterInsumosByTipo(allInsumos as any[], input.tipoSC ?? "material") as typeof allInsumos;
+      filteredInsumos = filterInsumosByTipo(allInsumos as any[], input.tipoSC ?? "material", input.incluirEquip ?? false) as typeof allInsumos;
 
       const consolidado: Record<string, {
         insumoCodigo: string; descricao: string; unidade: string;
@@ -7002,7 +7002,7 @@ Retorne APENAS um JSON válido neste formato:
     }),
 
   getCoberturaInsumosEAP: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional(), incluirEquip: z.boolean().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
@@ -7025,11 +7025,12 @@ Retorne APENAS um JSON válido neste formato:
         insumoCodigo: composicaoInsumos.insumoCodigo,
         alocacaoMat: composicaoInsumos.alocacaoMat,
         alocacaoMdo: composicaoInsumos.alocacaoMdo,
+        alocacaoEquip: composicaoInsumos.alocacaoEquip,
       }).from(composicaoInsumos)
         .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
 
       let filteredCob: typeof insumos;
-      filteredCob = filterInsumosByTipo(insumos as any[], input.tipoSC ?? "material") as typeof insumos;
+      filteredCob = filterInsumosByTipo(insumos as any[], input.tipoSC ?? "material", input.incluirEquip ?? false) as typeof insumos;
 
       const totalInsumosPorComposicao: Record<string, Set<string>> = {};
       for (const ins of filteredCob) {

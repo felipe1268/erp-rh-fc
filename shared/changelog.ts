@@ -6739,4 +6739,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 13:00:00",
   },
+  {
+    version: 930,
+    titulo: "Correção do checkbox Equipamento no Pacote (MAT + MO)",
+    descricao:
+      "Corrigido o checkbox de equipamento na SC tipo Pacote. Antes, ao marcar/desmarcar o checkbox, " +
+      "os insumos de equipamento não eram adicionados/removidos porque o flag não era enviado ao servidor. " +
+      "Agora: (1) o flag incluirEquip é passado para getInsumosComposicao, getCoberturaInsumosEAP e " +
+      "getInsumosConsolidados; (2) ao trocar o checkbox, o cache de insumos é limpo e as composições " +
+      "são recarregadas com a filtragem correta; (3) o texto do checkbox ficou mais claro — " +
+      "'MAT + MO + EQUIP' quando marcado, 'MAT + MO (sem equip.)' quando desmarcado.",
+    tipo: "correção",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 14:00:00",
+  },
 ];
