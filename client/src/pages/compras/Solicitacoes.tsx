@@ -628,7 +628,7 @@ export default function Solicitacoes() {
     onError: (e) => toast.error(e.message),
   });
 
-  function handleEnviarParaCotacao(tipo: "material" | "servico") {
+  function handleEnviarParaCotacao(tipo: "material" | "servico" | "pacote" | "equipamento") {
     if (!detalhe) return;
     const itens = (detalhe.itens as any[]).map((it: any) => ({
       solicitacaoItemId: it.id,
@@ -2907,7 +2907,7 @@ export default function Solicitacoes() {
                   const tipoIcon = scTipo === "servico" || scTipo === "pacote" ? <Briefcase className="h-3 w-3" /> : <ShoppingCart className="h-3 w-3" />;
                   return (
                     <Button size="sm"
-                      onClick={() => handleEnviarParaCotacao(scTipo === "pacote" ? "material" : scTipo)}
+                      onClick={() => handleEnviarParaCotacao(scTipo as "material" | "servico" | "pacote" | "equipamento")}
                       disabled={criarCotacao.isPending || (detalhe.itens as any[]).length === 0}
                       className={`${tipoCor} text-white text-xs gap-1.5`}>
                       {criarCotacao.isPending

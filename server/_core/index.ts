@@ -617,7 +617,17 @@ async function startServer() {
         const db4 = await getDb();
         if (!db4) return;
         const { sql: sql4 } = await import("drizzle-orm");
-        console.log("[ColFix] Auto-tipo SC/cotação DESATIVADO Rev.930 (tipo agora é definido pelo frontend)");
+        const syncCot = await db4.execute(sql4`
+          UPDATE compras_cotacoes c SET tipo = s.tipo
+          FROM compras_solicitacoes s
+          WHERE c.solicitacao_id = s.id AND s.tipo IS NOT NULL AND c.tipo != s.tipo
+        `);
+        const syncCount = (syncCot as any).rowCount ?? 0;
+        if (syncCount > 0) {
+          console.log(`[ColFix] Sync tipo cotação→SC: ${syncCount} cotação(ões) corrigidas Rev.930`);
+        } else {
+          console.log("[ColFix] Sync tipo cotação→SC OK Rev.930");
+        }
       } catch (e: any) { console.warn("[ColFix] auto-tipo Rev.889:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Limpeza empresas de teste (Rev.738) — já completada

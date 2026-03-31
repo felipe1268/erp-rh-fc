@@ -629,7 +629,7 @@ export default function Cotacoes() {
   const [form, setForm] = useState({
     descricao: "", obraId: "", solicitacaoId: "", fornecedorId: "",
     dataValidade: "", condicaoPagamento: "", tipoPagamento: "", numeroParcelas: "", prazoEntregaDias: "", observacoes: "",
-    tipo: "material" as "material" | "servico",
+    tipo: "material" as "material" | "servico" | "pacote" | "equipamento",
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
   const [scAlertas, setScAlertas] = useState<{ insumoCodigo: string; descricao: string; mensagem: string }[]>([]);
@@ -995,7 +995,7 @@ export default function Cotacoes() {
       return;
     }
     const sc = scsQ.data?.find(s => s.id === parseInt(scId)) as any;
-    const scTipo = sc?.tipo === "pacote" ? "pacote" as const : sc?.tipo === "servico" ? "servico" as const : "material" as const;
+    const scTipo = sc?.tipo === "pacote" ? "pacote" as const : sc?.tipo === "servico" ? "servico" as const : sc?.tipo === "equipamento" ? "equipamento" as const : "material" as const;
     const updates: any = { solicitacaoId: scId, tipo: scTipo };
     if (sc?.obraId) updates.obraId = String(sc.obraId);
     setForm(p => ({ ...p, ...updates }));
@@ -1932,8 +1932,8 @@ export default function Cotacoes() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h1 className="text-2xl font-bold text-gray-900 font-mono">{detalheFullscreen.numeroCotacao}</h1>
-                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(detalheFullscreen as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (detalheFullscreen as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>
-                      {(detalheFullscreen as any).tipo === "servico" ? "Mão de Obra" : (detalheFullscreen as any).tipo === "pacote" ? "Pacote (Mat+MDO)" : "Material"}
+                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(detalheFullscreen as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (detalheFullscreen as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : (detalheFullscreen as any).tipo === "equipamento" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                      {(detalheFullscreen as any).tipo === "servico" ? "Mão de Obra" : (detalheFullscreen as any).tipo === "pacote" ? "Pacote (Mat+MDO)" : (detalheFullscreen as any).tipo === "equipamento" ? "Equipamento" : "Material"}
                     </span>
                   </div>
                   {(detalheFullscreen as any).descricao && <p className="text-gray-500 mt-0.5">{(detalheFullscreen as any).descricao}</p>}
@@ -3718,8 +3718,8 @@ export default function Cotacoes() {
                   <TableCell>
                     <div className="flex items-center gap-1.5">
                       <span className="text-gray-900 text-sm">{(cot as any).descricao || "—"}</span>
-                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${(cot as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (cot as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>
-                        {(cot as any).tipo === "servico" ? "Serviço" : (cot as any).tipo === "pacote" ? "Pacote" : "Material"}
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${(cot as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (cot as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : (cot as any).tipo === "equipamento" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                        {(cot as any).tipo === "servico" ? "Serviço" : (cot as any).tipo === "pacote" ? "Pacote" : (cot as any).tipo === "equipamento" ? "Equipamento" : "Material"}
                       </span>
                       {(cot as any).modalidadeFd && (cot as any).modalidadeFd !== "normal" && (
                         <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${(cot as any).fdPagador === "cliente" ? "bg-amber-100 text-amber-700" : "bg-orange-100 text-orange-700"}`}>

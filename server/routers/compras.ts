@@ -1797,7 +1797,7 @@ Responda APENAS com um objeto JSON no formato:
       companyId: z.number(),
       descricao: z.string().optional(),
       prioridade: z.string().optional(),
-      tipo: z.enum(["material", "servico"]).optional().default("material"),
+      tipo: z.enum(["material", "servico", "pacote", "equipamento"]).optional().default("material"),
       obraId: z.number().nullable().optional(),
       solicitacaoId: z.number().nullable().optional(),
       fornecedorId: z.number().nullable().optional(),
@@ -1827,8 +1827,8 @@ Responda APENAS com um objeto JSON no formato:
         if (sc && sc.aprovacaoStatus !== "aprovada") {
           throw new Error("Esta solicitação ainda não foi aprovada. Só é possível criar cotação após a aprovação da SC.");
         }
-        if (sc?.tipo && (!input.tipo || input.tipo === "material")) {
-          tipoFinal = sc.tipo === "servico" ? "servico" : sc.tipo === "pacote" ? "servico" : "material";
+        if (sc?.tipo) {
+          tipoFinal = sc.tipo as string;
         }
 
         const existingCots = await db.select({ id: comprasCotacoes.id, numeroCotacao: comprasCotacoes.numeroCotacao, status: comprasCotacoes.status })
