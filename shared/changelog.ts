@@ -6880,4 +6880,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 14:00:00",
   },
+  {
+    revisao: 950,
+    descricao:
+      "Terceiros — Controle de Revisões do Template de Contrato: (1) nova tabela terceiro_template_revisoes " +
+      "para armazenar histórico completo de versões do template; (2) ao salvar o template, a versão anterior " +
+      "é automaticamente arquivada com nome, texto, autor e data; (3) botão 'Revisões' na toolbar do editor " +
+      "de template com badge de contagem; (4) modal de histórico mostra versão atual (destacada em azul) e " +
+      "todas as versões anteriores com autor, data e observação; (5) botão 'Restaurar' em cada revisão — " +
+      "salva a versão atual antes de restaurar, com confirmação; (6) endpoints listarTemplateRevisoes e " +
+      "restaurarTemplateRevisao no backend.",
+    tipo: "melhoria",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 19:00:00",
+  },
 ];

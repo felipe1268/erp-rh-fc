@@ -3227,7 +3227,18 @@ export const terceiroContratoTemplates = pgTable("terceiro_contrato_templates", 
   atualizadoEm: timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
 });
 
-// Histórico de revisões do texto de cada contrato
+export const terceiroTemplateRevisoes = pgTable("terceiro_template_revisoes", {
+  id:          serial().primaryKey(),
+  templateId:  integer("template_id").notNull(),
+  companyId:   integer("company_id").notNull(),
+  versao:      integer().notNull(),
+  nome:        varchar({ length: 200 }).notNull(),
+  texto:       text().notNull(),
+  observacao:  varchar({ length: 200 }),
+  criadoPor:   varchar("criado_por", { length: 200 }),
+  criadoEm:    timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
 export const terceiroContratoRevisoes = pgTable("terceiro_contrato_revisoes", {
   id:          serial().primaryKey(),
   contratoId:  integer("contrato_id").notNull(),

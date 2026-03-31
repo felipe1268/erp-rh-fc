@@ -21,6 +21,7 @@ import {
   planejamentoRevisoes,
   fornecedores,
   terceiroContratoTemplates,
+  terceiroTemplateRevisoes,
   terceiroContratoRevisoes,
   companies,
   orcamentos,
@@ -2832,17 +2833,30 @@ export const terceiroContratosRouter = router({
       texto: z.string().min(1),
       id: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (input.id) {
-        const [cur] = await db.select({ versao: terceiroContratoTemplates.versao }).from(terceiroContratoTemplates).where(eq(terceiroContratoTemplates.id, input.id));
-        const novaVersao = (cur?.versao ?? 1) + 1;
+        const [cur] = await db.select().from(terceiroContratoTemplates)
+          .where(and(eq(terceiroContratoTemplates.id, input.id), eq(terceiroContratoTemplates.companyId, input.companyId)));
+        if (!cur) throw new Error("Template não encontrado ou sem permissão");
+        const versaoAtual = cur.versao ?? 1;
+        const novaVersao = versaoAtual + 1;
+        if (cur.texto) {
+          await db.insert(terceiroTemplateRevisoes).values({
+            templateId: input.id,
+            companyId: cur.companyId,
+            versao: versaoAtual,
+            nome: cur.nome,
+            texto: cur.texto,
+            observacao: "Edição manual",
+            criadoPor: ctx.user?.name ?? "sistema",
+          });
+        }
         await db.update(terceiroContratoTemplates)
           .set({ nome: input.nome, texto: input.texto, versao: novaVersao, atualizadoEm: new Date().toISOString() })
-          .where(eq(terceiroContratoTemplates.id, input.id));
+          .where(and(eq(terceiroContratoTemplates.id, input.id), eq(terceiroContratoTemplates.companyId, input.companyId)));
         return { id: input.id, versao: novaVersao };
       }
-      // Desativar template anterior
       await db.update(terceiroContratoTemplates)
         .set({ ativo: false })
         .where(eq(terceiroContratoTemplates.companyId, input.companyId));
@@ -2850,6 +2864,55 @@ export const terceiroContratosRouter = router({
         .values({ companyId: input.companyId, nome: input.nome, texto: input.texto, ativo: true, versao: 1 })
         .returning();
       return { id: novo.id, versao: 1 };
+    }),
+
+  listarTemplateRevisoes: protectedProcedure
+    .input(z.object({ templateId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return db.select().from(terceiroTemplateRevisoes)
+        .where(and(
+          eq(terceiroTemplateRevisoes.templateId, input.templateId),
+          eq(terceiroTemplateRevisoes.companyId, input.companyId)
+        ))
+        .orderBy(desc(terceiroTemplateRevisoes.versao));
+    }),
+
+  restaurarTemplateRevisao: protectedProcedure
+    .input(z.object({ templateId: z.number(), revisaoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [rev] = await db.select().from(terceiroTemplateRevisoes)
+        .where(and(
+          eq(terceiroTemplateRevisoes.id, input.revisaoId),
+          eq(terceiroTemplateRevisoes.companyId, input.companyId),
+          eq(terceiroTemplateRevisoes.templateId, input.templateId)
+        ));
+      if (!rev) throw new Error("Revisão não encontrada ou sem permissão");
+
+      const [cur] = await db.select().from(terceiroContratoTemplates)
+        .where(and(eq(terceiroContratoTemplates.id, input.templateId), eq(terceiroContratoTemplates.companyId, input.companyId)));
+      if (!cur) throw new Error("Template não encontrado ou sem permissão");
+      const versaoAtual = cur.versao ?? 1;
+
+      if (cur.texto) {
+        await db.insert(terceiroTemplateRevisoes).values({
+          templateId: input.templateId,
+          companyId: cur.companyId,
+          versao: versaoAtual,
+          nome: cur.nome,
+          texto: cur.texto,
+          observacao: `Substituído ao restaurar versão ${rev.versao}`,
+          criadoPor: ctx.user?.name ?? "sistema",
+        });
+      }
+
+      const novaVersao = versaoAtual + 1;
+      await db.update(terceiroContratoTemplates)
+        .set({ nome: rev.nome, texto: rev.texto, versao: novaVersao, atualizadoEm: new Date().toISOString() })
+        .where(and(eq(terceiroContratoTemplates.id, input.templateId), eq(terceiroContratoTemplates.companyId, input.companyId)));
+
+      return { versao: novaVersao, texto: rev.texto, nome: rev.nome };
     }),
 
   salvarDocLayout: protectedProcedure

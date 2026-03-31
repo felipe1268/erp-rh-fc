@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import {
   ArrowLeft, Save, FileText, Info, RefreshCw, Eye, Pencil,
   Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  List, ListOrdered, Undo, Redo, Type, Minus, ChevronDown, Building2, Settings, Image, FileDown, Droplets, X
+  List, ListOrdered, Undo, Redo, Type, Minus, ChevronDown, Building2, Settings, Image, FileDown, Droplets, X,
+  History, RotateCcw, Clock, User
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -190,6 +191,7 @@ export default function ContratoTemplate() {
   const [previewMode, setPreviewMode] = useState(false);
   const [showVars, setShowVars] = useState(true);
   const [showLayoutConfig, setShowLayoutConfig] = useState(false);
+  const [showRevisoes, setShowRevisoes] = useState(false);
   const [layoutLogoUrl, setLayoutLogoUrl] = useState("");
   const [layoutRodape, setLayoutRodape] = useState("");
   const [layoutMarcaDaguaUrl, setLayoutMarcaDaguaUrl] = useState("");
@@ -221,6 +223,27 @@ export default function ContratoTemplate() {
       toast.success("Layout do documento salvo!");
       setShowLayoutConfig(false);
       utils.terceiroContratos.getTemplate.invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const { data: revisoes = [] } = trpc.terceiroContratos.listarTemplateRevisoes.useQuery(
+    { templateId: templateId!, companyId },
+    { enabled: !!templateId && companyId > 0 }
+  );
+
+  const restaurarRevMut = trpc.terceiroContratos.restaurarTemplateRevisao.useMutation({
+    onSuccess: (r) => {
+      toast.success(`Template restaurado! Agora na versão ${r.versao}`);
+      setVersao(r.versao);
+      setTexto(r.texto);
+      setNome(r.nome);
+      if (editor && !editor.isDestroyed) {
+        editor.commands.setContent(plainTextToHtml(r.texto));
+      }
+      setShowRevisoes(false);
+      utils.terceiroContratos.getTemplate.invalidate();
+      utils.terceiroContratos.listarTemplateRevisoes.invalidate();
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -265,6 +288,7 @@ export default function ContratoTemplate() {
       toast.success(`Template salvo! Versão ${r.versao}`);
       setTemplateId(r.id);
       setVersao(r.versao);
+      utils.terceiroContratos.listarTemplateRevisoes.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -368,6 +392,16 @@ EAP          | Descrição                                             | Un    |
             >
               <Settings className="w-3.5 h-3.5" />
               Layout
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-8 text-xs"
+              onClick={() => setShowRevisoes(true)}
+              disabled={!templateId}
+            >
+              <History className="w-3.5 h-3.5" />
+              Revisões{revisoes.length > 0 && ` (${revisoes.length})`}
             </Button>
             <Button
               size="sm"
@@ -598,6 +632,87 @@ EAP          | Descrição                                             | Un    |
           )}
         </div>
       </div>
+
+      {showRevisoes && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowRevisoes(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-blue-500" />
+                <h3 className="text-sm font-semibold text-gray-800">Histórico de Revisões</h3>
+                <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{revisoes.length} versões</span>
+              </div>
+              <button onClick={() => setShowRevisoes(false)} className="p-1 hover:bg-gray-100 rounded-lg">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto">
+              {revisoes.length === 0 ? (
+                <div className="px-5 py-12 text-center">
+                  <History className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500 font-medium">Nenhuma revisão anterior</p>
+                  <p className="text-xs text-gray-400 mt-1">As revisões aparecem aqui após cada salvamento do template</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  <div className="px-5 py-3 bg-blue-50/50 border-b border-blue-100">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">v{versao}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-blue-800">Versão atual</p>
+                        <p className="text-[10px] text-blue-600">{nome}</p>
+                      </div>
+                      <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Ativa</span>
+                    </div>
+                  </div>
+                  {revisoes.map((rev: any) => (
+                    <div key={rev.id} className="px-5 py-3 hover:bg-gray-50 transition-colors group">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-[10px] font-bold">v{rev.versao}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-700">{rev.nome}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                              <User className="w-3 h-3" />
+                              {rev.criadoPor || "sistema"}
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                              <Clock className="w-3 h-3" />
+                              {rev.criadoEm ? new Date(rev.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                            </div>
+                          </div>
+                          {rev.observacao && (
+                            <p className="text-[10px] text-gray-400 italic mt-0.5">{rev.observacao}</p>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-[10px] h-7 gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          disabled={restaurarRevMut.isPending}
+                          onClick={() => {
+                            if (confirm(`Restaurar o template para a versão ${rev.versao}? A versão atual será salva no histórico.`)) {
+                              restaurarRevMut.mutate({ templateId: templateId!, revisaoId: rev.id, companyId });
+                            }
+                          }}
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Restaurar
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end">
+              <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => setShowRevisoes(false)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showLayoutConfig && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { resetLayoutToSaved(); setShowLayoutConfig(false); }}>
