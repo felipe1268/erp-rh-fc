@@ -67,6 +67,7 @@ const ContratoPJView = lazy(() => import("./pages/ContratoPJView"));
 const AditivoPJView = lazy(() => import("./pages/AditivoPJView"));
 const Revisoes = lazy(() => import("./pages/Revisoes"));
 const SolicitacaoHE = lazy(() => import("./pages/SolicitacaoHE"));
+const BancoHoras = lazy(() => import("./pages/BancoHoras"));
 const FinanceiroDashboard     = lazy(() => import("./pages/financeiro/FinanceiroDashboard"));
 const FinanceiroLancamentos   = lazy(() => import("./pages/financeiro/FinanceiroLancamentos"));
 const FinanceiroReceitas      = lazy(() => import("./pages/financeiro/FinanceiroReceitas"));
@@ -268,6 +269,7 @@ function Router() {
         <Route path={"/contrato-pj/:contractId/aditivo/:aditivoId"} component={AditivoPJView} />
         <Route path={"/revisoes"} component={Revisoes} />
         <Route path={"/solicitacao-he"} component={SolicitacaoHE} />
+        <Route path={"/banco-horas"} component={BancoHoras} />
         <Route path="/financeiro" component={FinanceiroDashboard} />
         <Route path="/financeiro/lancamentos" component={FinanceiroLancamentos} />
         <Route path="/financeiro/receitas" component={FinanceiroReceitas} />

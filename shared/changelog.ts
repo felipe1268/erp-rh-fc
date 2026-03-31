@@ -6926,4 +6926,22 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 23:30:00",
   },
+  {
+    version: 953,
+    titulo: "Página dedicada de Banco de Horas com adequação legal CLT Art. 59",
+    descricao:
+      "Nova página exclusiva '/banco-horas' para gestão completa do banco de horas, com 4 abas: " +
+      "(1) Saldos — tabela de funcionários com saldo, busca, histórico inline e registro de débitos; " +
+      "(2) Extrato Mensal — geração de extrato por funcionário/mês com área de assinatura para recibo " +
+      "(obrigatório por lei para validade do banco); " +
+      "(3) Alertas — créditos prestes a vencer com indicação de dias no banco; " +
+      "(4) Regras & Orientação — fundamentação legal completa (CLT Art. 59) com detalhamento dos dois " +
+      "regimes (CCT 12 meses / Acordo Individual 6 meses), proporções, restrições de domingos/feriados, " +
+      "e cláusulas-modelo do acordo individual conforme orientação da assessoria jurídica. " +
+      "Link na sidebar atualizado para apontar diretamente para a nova página.",
+    tipo: "feature",
+    modulos: "RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 23:45:00",
+  },
 ];

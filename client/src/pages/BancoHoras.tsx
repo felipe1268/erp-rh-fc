@@ -1,0 +1,692 @@
+import { useState, useMemo } from "react";
+import DashboardLayout from "@/components/DashboardLayout";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { trpc } from "@/lib/trpc";
+import { useCompany } from "@/contexts/CompanyContext";
+import { toast } from "sonner";
+import {
+  ArrowLeftRight, AlertTriangle, Clock, CreditCard, RefreshCw,
+  Users, FileText, Settings, Search, Printer, ChevronDown, ChevronRight,
+  CalendarDays, Scale, Info,
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+function minsToHHMM(mins: number): string {
+  const h = Math.floor(Math.abs(mins) / 60);
+  const m = String(Math.abs(mins) % 60).padStart(2, "0");
+  return `${mins < 0 ? "-" : ""}${h}h${m}`;
+}
+
+type TabView = "saldos" | "extrato" | "alertas" | "configuracao";
+
+export default function BancoHoras() {
+  const { selectedCompanyId } = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const [activeTab, setActiveTab] = useState<TabView>("saldos");
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const [selectedEmpId, setSelectedEmpId] = useState<number | null>(null);
+  const [debitEmpId, setDebitEmpId] = useState<number | null>(null);
+  const [debitHoras, setDebitHoras] = useState(0);
+  const [debitMins, setDebitMins] = useState(0);
+  const [debitData, setDebitData] = useState(new Date().toISOString().slice(0, 10));
+  const [debitDesc, setDebitDesc] = useState("");
+
+  const [extratoEmpId, setExtratoEmpId] = useState<number | null>(null);
+  const [extratoMes, setExtratoMes] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+
+  const saldoBanco = trpc.horasExtras.getSaldoBanco.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const alertasExpiracao = trpc.horasExtras.getAlertasExpiracao.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const lancamentosSaldos = trpc.horasExtras.getLancamentos.useQuery(
+    { employeeId: selectedEmpId ?? 0, companyId },
+    { enabled: !!selectedEmpId && companyId > 0 }
+  );
+  const lancamentosExtrato = trpc.horasExtras.getLancamentos.useQuery(
+    { employeeId: extratoEmpId ?? 0, companyId },
+    { enabled: !!extratoEmpId && companyId > 0 }
+  );
+
+  const debitarBancoMut = trpc.horasExtras.debitarBanco.useMutation({
+    onSuccess: () => {
+      toast.success("Débito registrado com sucesso!");
+      setDebitEmpId(null);
+      setDebitDesc("");
+      setDebitHoras(0);
+      setDebitMins(0);
+      saldoBanco.refetch();
+      lancamentosSaldos.refetch();
+      alertasExpiracao.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const saldos = useMemo(() => (saldoBanco.data ?? []) as any[], [saldoBanco.data]);
+  const alertas = useMemo(() => (alertasExpiracao.data ?? []) as any[], [alertasExpiracao.data]);
+  const lancamentosSaldosList = useMemo(() => (lancamentosSaldos.data ?? []) as any[], [lancamentosSaldos.data]);
+  const lancamentosExtratoList = useMemo(() => (lancamentosExtrato.data ?? []) as any[], [lancamentosExtrato.data]);
+  const totalBancoMins = useMemo(() => saldos.reduce((acc: number, s: any) => acc + Number(s.saldoMinutos || 0), 0), [saldos]);
+
+  const saldoMap = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const s of saldos) m.set(Number(s.employeeId), Number(s.saldoMinutos || 0));
+    return m;
+  }, [saldos]);
+
+  const filteredSaldos = useMemo(() => {
+    if (!searchTerm.trim()) return saldos;
+    const term = searchTerm.toLowerCase();
+    return saldos.filter((s: any) =>
+      s.nomeCompleto?.toLowerCase().includes(term) || s.funcao?.toLowerCase().includes(term)
+    );
+  }, [saldos, searchTerm]);
+
+  const debitarEmpNome = useMemo(() => {
+    if (!debitEmpId) return "";
+    return saldos.find((s: any) => Number(s.employeeId) === debitEmpId)?.nomeCompleto || "";
+  }, [debitEmpId, saldos]);
+
+  const selectedEmpNome = useMemo(() => {
+    if (!selectedEmpId) return "";
+    return saldos.find((s: any) => Number(s.employeeId) === selectedEmpId)?.nomeCompleto || "";
+  }, [selectedEmpId, saldos]);
+
+  const lancamentosFiltradosMes = useMemo(() => {
+    if (!extratoMes) return lancamentosExtratoList;
+    return lancamentosExtratoList.filter((l: any) => String(l.data).slice(0, 7) === extratoMes);
+  }, [lancamentosExtratoList, extratoMes]);
+
+  const tabs: { id: TabView; label: string; icon: any; count?: number }[] = [
+    { id: "saldos", label: "Saldos", icon: Users, count: saldos.length },
+    { id: "extrato", label: "Extrato Mensal", icon: FileText },
+    { id: "alertas", label: "Alertas", icon: AlertTriangle, count: alertas.length },
+    { id: "configuracao", label: "Regras & Orientação", icon: Scale },
+  ];
+
+  return (
+    <DashboardLayout>
+      <div className="p-6 space-y-5 bg-gray-50 min-h-screen">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+              <ArrowLeftRight className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Banco de Horas</h1>
+              <p className="text-xs text-muted-foreground">Gestão de saldos, compensações e adequação legal (CLT Art. 59)</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <Card className="border-blue-200">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Total em Banco</p>
+              <p className="text-2xl font-bold text-blue-700 mt-1">{minsToHHMM(totalBancoMins)}</p>
+              <p className="text-xs text-muted-foreground mt-1">horas acumuladas</p>
+            </CardContent>
+          </Card>
+          <Card className="border-blue-200">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Funcionários com Saldo</p>
+              <p className="text-2xl font-bold text-blue-700 mt-1">{saldos.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">com banco ativo</p>
+            </CardContent>
+          </Card>
+          <Card className={alertas.length > 0 ? "border-amber-300 bg-amber-50/30" : "border-gray-200"}>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Alertas de Expiração</p>
+              <p className={`text-2xl font-bold mt-1 ${alertas.length > 0 ? "text-amber-600" : "text-gray-400"}`}>{alertas.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">créditos a vencer</p>
+            </CardContent>
+          </Card>
+          <Card className="border-gray-200">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Regime Atual</p>
+              <p className="text-lg font-bold text-gray-700 mt-1">Acordo Individual</p>
+              <p className="text-xs text-muted-foreground mt-1">compensação em até 6 meses</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === t.id
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <t.icon className="h-4 w-4" />
+              {t.label}
+              {t.count !== undefined && t.count > 0 && (
+                <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                  t.id === "alertas" && t.count > 0 ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
+                }`}>
+                  {t.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "saldos" && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[250px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar funcionário..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            {saldoBanco.isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Carregando saldos...</div>
+            ) : filteredSaldos.length > 0 ? (
+              <Card>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-gray-200 bg-gray-50/50">
+                          <th className="text-left py-3 px-4 font-semibold">Funcionário</th>
+                          <th className="text-left py-3 px-4 font-semibold">Cargo</th>
+                          <th className="text-right py-3 px-4 font-semibold">Saldo</th>
+                          <th className="text-right py-3 px-4 font-semibold">Última Movimentação</th>
+                          <th className="text-center py-3 px-4 font-semibold no-print">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredSaldos.map((s: any) => {
+                          const isExpiring = alertas.some((a: any) => Number(a.employeeId) === Number(s.employeeId));
+                          const isOpen = selectedEmpId === Number(s.employeeId);
+                          return (
+                            <tr key={s.employeeId}
+                              className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${isExpiring ? "bg-amber-50/30" : ""} ${isOpen ? "bg-blue-50/50" : ""}`}
+                              onClick={() => setSelectedEmpId(isOpen ? null : Number(s.employeeId))}
+                            >
+                              <td className="py-3 px-4 font-medium">
+                                <div className="flex items-center gap-2">
+                                  {isOpen ? <ChevronDown className="h-4 w-4 text-blue-500" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                                  {s.nomeCompleto}
+                                  {isExpiring && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">⚠ VENCENDO</span>}
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 text-xs text-muted-foreground">{s.funcao || "—"}</td>
+                              <td className="text-right py-3 px-4 font-bold text-blue-700 text-base">{minsToHHMM(Number(s.saldoMinutos))}</td>
+                              <td className="text-right py-3 px-4 text-xs text-muted-foreground">
+                                {s.ultimoLancamento ? new Date(s.ultimoLancamento).toLocaleDateString("pt-BR") : "—"}
+                              </td>
+                              <td className="text-center py-3 px-4 no-print" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-center gap-1">
+                                  <Button size="sm" variant="outline" className="h-7 text-xs"
+                                    onClick={(e) => { e.stopPropagation(); setSelectedEmpId(isOpen ? null : Number(s.employeeId)); }}>
+                                    {isOpen ? "Fechar" : "Histórico"}
+                                  </Button>
+                                  <Button size="sm" className="h-7 text-xs bg-orange-500 hover:bg-orange-600"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDebitEmpId(debitEmpId === Number(s.employeeId) ? null : Number(s.employeeId));
+                                      setDebitDesc("");
+                                      setDebitHoras(0);
+                                      setDebitMins(0);
+                                    }}>
+                                    Debitar
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center text-muted-foreground text-sm">
+                <ArrowLeftRight className="h-10 w-10 text-blue-300 mx-auto mb-3" />
+                <p className="font-medium text-blue-700 mb-1">Nenhum funcionário com saldo no banco de horas</p>
+                <p>Saldos aparecem após aprovação de períodos de HE com destinação "Banco de Horas" na tela de Folha de Pagamento.</p>
+              </div>
+            )}
+
+            {selectedEmpId && (
+              <Card className="border-blue-300">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-semibold text-sm flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-blue-600" />
+                      Histórico de Movimentações — {selectedEmpNome}
+                    </p>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedEmpId(null)}>Fechar</Button>
+                  </div>
+                  {lancamentosSaldos.isLoading ? (
+                    <div className="text-center py-4 text-muted-foreground text-sm">Carregando histórico...</div>
+                  ) : lancamentosSaldosList.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200 bg-gray-50/50">
+                            <th className="text-left py-2 px-3">Data</th>
+                            <th className="text-left py-2 px-3">Tipo</th>
+                            <th className="text-right py-2 px-3">Horas</th>
+                            <th className="text-left py-2 px-3">Descrição</th>
+                            <th className="text-left py-2 px-3">Registrado por</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lancamentosSaldosList.map((l: any) => (
+                            <tr key={l.id} className="border-b border-gray-100">
+                              <td className="py-2 px-3 text-xs">{new Date(l.data).toLocaleDateString("pt-BR")}</td>
+                              <td className="py-2 px-3">
+                                <Badge className={`text-[10px] ${l.tipo === "credito" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
+                                  {l.tipo === "credito" ? "+ Crédito" : "− Débito"}
+                                </Badge>
+                              </td>
+                              <td className="text-right py-2 px-3 font-medium">{minsToHHMM(Number(l.minutos))}</td>
+                              <td className="py-2 px-3 text-xs text-muted-foreground">{l.descricao || "—"}</td>
+                              <td className="py-2 px-3 text-xs text-muted-foreground">{l.criadoPor || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground text-sm py-4">Nenhum lançamento encontrado.</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {debitEmpId && (
+              <Card className="border-orange-300 bg-orange-50/20">
+                <CardContent className="p-5">
+                  <p className="font-semibold text-sm mb-4 flex items-center gap-2 text-orange-700">
+                    <CreditCard className="h-4 w-4" /> Registrar Débito (Folga Compensatória) — {debitarEmpNome}
+                    <span className="ml-auto text-xs text-muted-foreground font-normal">
+                      Saldo atual: <strong className="text-blue-700">{minsToHHMM(saldoMap.get(debitEmpId) || 0)}</strong>
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Data da Compensação</label>
+                      <input type="date" value={debitData} onChange={e => setDebitData(e.target.value)}
+                        className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Horas</label>
+                      <input type="number" min="0" max="23" value={debitHoras}
+                        onChange={e => setDebitHoras(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="border rounded px-3 py-1.5 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-orange-300" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Minutos</label>
+                      <input type="number" min="0" max="59" value={debitMins}
+                        onChange={e => setDebitMins(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                        className="border rounded px-3 py-1.5 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-orange-300" />
+                    </div>
+                    <div className="flex-1 min-w-[200px]">
+                      <label className="text-xs text-muted-foreground block mb-1">Motivo</label>
+                      <input type="text" value={debitDesc} onChange={e => setDebitDesc(e.target.value)}
+                        className="border rounded px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        placeholder="Ex: Folga compensatória dia 20/03/2026" />
+                    </div>
+                    <Button className="bg-orange-600 hover:bg-orange-700"
+                      disabled={debitarBancoMut.isPending || (debitHoras === 0 && debitMins === 0) || debitDesc.trim().length < 3}
+                      onClick={() => debitarBancoMut.mutate({
+                        employeeId: debitEmpId,
+                        companyId,
+                        minutos: debitHoras * 60 + debitMins,
+                        descricao: debitDesc,
+                        data: debitData,
+                      })}>
+                      {debitarBancoMut.isPending ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Registrando...</> : "Registrar Débito"}
+                    </Button>
+                    <Button variant="outline" onClick={() => setDebitEmpId(null)}>Cancelar</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {activeTab === "extrato" && (
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-5">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex-1 min-w-[250px]">
+                    <label className="text-xs text-muted-foreground block mb-1">Funcionário</label>
+                    <Select value={extratoEmpId ? String(extratoEmpId) : ""} onValueChange={v => setExtratoEmpId(v ? Number(v) : null)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um funcionário" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {saldos.map((s: any) => (
+                          <SelectItem key={s.employeeId} value={String(s.employeeId)}>
+                            {s.nomeCompleto} — {minsToHHMM(Number(s.saldoMinutos))}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Mês de Referência</label>
+                    <input type="month" value={extratoMes} onChange={e => setExtratoMes(e.target.value)}
+                      className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  </div>
+                  {extratoEmpId && (
+                    <div className="self-end">
+                      <Button variant="outline" className="gap-1.5" onClick={() => window.print()}>
+                        <Printer className="h-4 w-4" /> Imprimir Extrato
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {extratoEmpId ? (
+              <Card className="print:shadow-none print:border-0" id="extrato-print">
+                <CardContent className="p-6">
+                  <div className="text-center mb-6 print:mb-4">
+                    <h2 className="text-lg font-bold">EXTRATO DE BANCO DE HORAS</h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Mês de Referência: {extratoMes ? new Date(extratoMes + "-01").toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "—"}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-6 text-sm border rounded-lg p-4 bg-gray-50/50">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Funcionário</p>
+                      <p className="font-semibold">{saldos.find((s: any) => Number(s.employeeId) === extratoEmpId)?.nomeCompleto || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Cargo</p>
+                      <p className="font-semibold">{saldos.find((s: any) => Number(s.employeeId) === extratoEmpId)?.funcao || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Saldo Atual</p>
+                      <p className="font-bold text-blue-700 text-lg">{minsToHHMM(saldoMap.get(extratoEmpId) || 0)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Regime</p>
+                      <p className="font-semibold">Acordo Individual — 6 meses (CLT Art. 59, §5º)</p>
+                    </div>
+                  </div>
+
+                  {lancamentosExtrato.isLoading ? (
+                    <div className="text-center py-6 text-muted-foreground">Carregando lançamentos...</div>
+                  ) : lancamentosFiltradosMes.length > 0 ? (
+                    <>
+                      <table className="w-full text-sm border">
+                        <thead>
+                          <tr className="bg-gray-100 border-b">
+                            <th className="text-left py-2 px-3 font-semibold">Data</th>
+                            <th className="text-left py-2 px-3 font-semibold">Tipo</th>
+                            <th className="text-right py-2 px-3 font-semibold">Horas</th>
+                            <th className="text-left py-2 px-3 font-semibold">Descrição</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lancamentosFiltradosMes.map((l: any) => (
+                            <tr key={l.id} className="border-b">
+                              <td className="py-2 px-3">{new Date(l.data).toLocaleDateString("pt-BR")}</td>
+                              <td className="py-2 px-3">
+                                <span className={`font-semibold ${l.tipo === "credito" ? "text-green-700" : "text-orange-700"}`}>
+                                  {l.tipo === "credito" ? "CRÉDITO" : "DÉBITO"}
+                                </span>
+                              </td>
+                              <td className="text-right py-2 px-3 font-medium">
+                                {l.tipo === "credito" ? "+" : "−"} {minsToHHMM(Number(l.minutos))}
+                              </td>
+                              <td className="py-2 px-3 text-muted-foreground">{l.descricao || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-50 border-t-2 font-bold">
+                            <td colSpan={2} className="py-2 px-3">TOTAL DO MÊS</td>
+                            <td className="text-right py-2 px-3 text-blue-700">
+                              {(() => {
+                                const totalCredito = lancamentosFiltradosMes.filter((l: any) => l.tipo === "credito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0);
+                                const totalDebito = lancamentosFiltradosMes.filter((l: any) => l.tipo === "debito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0);
+                                return minsToHHMM(totalCredito - totalDebito);
+                              })()}
+                            </td>
+                            <td className="py-2 px-3 text-xs text-muted-foreground">
+                              (+{minsToHHMM(lancamentosFiltradosMes.filter((l: any) => l.tipo === "credito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0))} /
+                              −{minsToHHMM(lancamentosFiltradosMes.filter((l: any) => l.tipo === "debito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0))})
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+
+                      <div className="mt-8 pt-4 border-t text-sm text-muted-foreground print:mt-12">
+                        <p className="mb-6">Declaro ter recebido o extrato detalhado do banco de horas referente ao mês acima indicado.</p>
+                        <div className="grid grid-cols-2 gap-8 mt-6">
+                          <div className="text-center">
+                            <div className="border-t border-gray-400 pt-2 mt-8">Assinatura do Empregado</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="border-t border-gray-400 pt-2 mt-8">Assinatura do Empregador</div>
+                          </div>
+                        </div>
+                        <p className="text-center text-[10px] text-gray-400 mt-6">
+                          Conforme CLT Art. 59, §2º e §5º — extrato mensal obrigatório para validade do banco de horas.
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground text-sm">
+                      Nenhuma movimentação encontrada para este mês.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center text-muted-foreground text-sm">
+                <FileText className="h-10 w-10 text-blue-300 mx-auto mb-3" />
+                <p className="font-medium text-blue-700 mb-1">Selecione um funcionário para gerar o extrato</p>
+                <p>O extrato mensal com créditos e débitos é obrigatório por lei para validade do banco de horas.</p>
+                <p className="text-xs mt-2 text-blue-500">Deve ser entregue mensalmente ao trabalhador mediante recibo de entrega.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "alertas" && (
+          <div className="space-y-4">
+            {alertas.length > 0 ? (
+              <Card className="border-amber-300">
+                <CardContent className="p-5">
+                  <p className="font-semibold text-sm mb-4 flex items-center gap-2 text-amber-700">
+                    <AlertTriangle className="h-4 w-4" /> Créditos Prestes a Vencer
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Os créditos abaixo estão no banco há mais de 6 meses (acordo individual) ou 12 meses (CCT).
+                    Conforme CLT Art. 59, §3º, se não compensados, devem ser pagos como hora extra com acréscimo legal.
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-amber-200 bg-amber-50/50">
+                          <th className="text-left py-2 px-3">Funcionário</th>
+                          <th className="text-right py-2 px-3">Saldo</th>
+                          <th className="text-right py-2 px-3">Crédito Mais Antigo</th>
+                          <th className="text-right py-2 px-3">Dias no Banco</th>
+                          <th className="text-center py-2 px-3 no-print">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {alertas.map((a: any, i: number) => {
+                          const dataAntigo = new Date(a.creditoMaisAntigo);
+                          const diasNoBanco = Math.floor((Date.now() - dataAntigo.getTime()) / (1000 * 60 * 60 * 24));
+                          return (
+                            <tr key={i} className="border-b border-amber-100 hover:bg-amber-50/40">
+                              <td className="py-2.5 px-3 font-medium">{a.nomeCompleto}</td>
+                              <td className="text-right py-2.5 px-3 font-bold text-amber-700">{minsToHHMM(Number(a.saldoMinutos))}</td>
+                              <td className="text-right py-2.5 px-3 text-xs">{dataAntigo.toLocaleDateString("pt-BR")}</td>
+                              <td className="text-right py-2.5 px-3">
+                                <Badge className={`text-[10px] ${diasNoBanco > 365 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                                  {diasNoBanco} dias
+                                </Badge>
+                              </td>
+                              <td className="text-center py-2.5 px-3 no-print">
+                                <Button size="sm" className="h-7 text-xs bg-orange-500 hover:bg-orange-600"
+                                  onClick={() => {
+                                    setDebitEmpId(Number(a.employeeId));
+                                    setDebitDesc("");
+                                    setDebitHoras(0);
+                                    setDebitMins(0);
+                                    setActiveTab("saldos");
+                                  }}>
+                                  Debitar Horas
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center text-sm">
+                <div className="h-10 w-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-3">✓</div>
+                <p className="font-medium text-green-700 mb-1">Nenhum alerta de expiração</p>
+                <p className="text-muted-foreground">Todos os créditos estão dentro do prazo de compensação.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "configuracao" && (
+          <div className="space-y-4">
+            <Card className="border-blue-200">
+              <CardContent className="p-6">
+                <h3 className="font-bold text-base mb-4 flex items-center gap-2">
+                  <Scale className="h-5 w-5 text-blue-600" />
+                  Fundamentação Legal — CLT Art. 59
+                </h3>
+
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-sm text-blue-800 mb-2">Acordo por Convenção Coletiva (CCT)</h4>
+                    <ul className="text-sm text-gray-700 space-y-1">
+                      <li>• Compensação em até <strong>12 meses</strong> (CLT Art. 59, §2º)</li>
+                      <li>• Proporção conforme CCT (ex: 1h trabalhada = 1h30 de descanso)</li>
+                      <li>• Pode incluir domingos e feriados se a CCT permitir</li>
+                      <li>• Verificar sempre a CCT de cada região/obra</li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-sm text-amber-800 mb-2">Acordo Individual Escrito</h4>
+                    <ul className="text-sm text-gray-700 space-y-1">
+                      <li>• Compensação em até <strong>6 meses</strong> (CLT Art. 59, §5º)</li>
+                      <li>• Proporção 1:1 (1h trabalhada = 1h de descanso)</li>
+                      <li>• <strong>Não incluir</strong> horas trabalhadas em feriados ou domingos</li>
+                      <li>• Contrato por escrito obrigatório, assinado pelas partes</li>
+                      <li>• Validade de 6 meses, prorrogável por igual período via aditivo</li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-sm text-gray-800 mb-2">Regras Obrigatórias (ambos os regimes)</h4>
+                    <ul className="text-sm text-gray-700 space-y-1">
+                      <li>• Limite máximo de <strong>10 horas diárias</strong> de trabalho</li>
+                      <li>• Horas não compensadas no prazo → <strong>pagas como hora extra</strong> com adicional legal</li>
+                      <li>• <strong>Extrato mensal</strong> detalhado (créditos e débitos) entregue ao trabalhador com recibo</li>
+                      <li>• Na rescisão, saldo positivo pago pelo valor da remuneração na data (CLT Art. 59, §3º)</li>
+                      <li>• Prestação habitual de HE não descaracteriza o acordo (CLT Art. 59-B, §único)</li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-sm text-green-800 mb-2">Cláusulas do Acordo Individual (modelo)</h4>
+                    <div className="text-sm text-gray-700 space-y-2">
+                      <p><strong>1ª</strong> — Jornada prorrogável até 10h diárias para compensação</p>
+                      <p><strong>2ª</strong> — Compensação em até 6 meses por diminuição de jornada ou folga</p>
+                      <p><strong>3ª</strong> — Não havendo compensação → horas remuneradas como extras</p>
+                      <p><strong>4ª</strong> — Trabalho aos domingos → folga correspondente ou remuneração em dobro</p>
+                      <p><strong>5ª</strong> — HE habitual não descaracteriza o acordo</p>
+                      <p><strong>6ª</strong> — Validade de 6 meses, prorrogável via aditivo</p>
+                      <p><strong>7ª</strong> — Rescisão → saldo positivo pago na remuneração da data</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-gray-200">
+              <CardContent className="p-6">
+                <h3 className="font-bold text-base mb-3 flex items-center gap-2">
+                  <Info className="h-5 w-5 text-gray-500" />
+                  Como funciona no sistema
+                </h3>
+                <div className="text-sm text-gray-700 space-y-3">
+                  <div className="flex gap-3 items-start">
+                    <span className="bg-blue-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5">1</span>
+                    <div>
+                      <p className="font-semibold">Cálculo de HE (Folha de Pagamento)</p>
+                      <p className="text-muted-foreground">Ao calcular as horas extras de um período, defina a destinação de cada funcionário: "Pagamento" ou "Banco de Horas".</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <span className="bg-blue-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5">2</span>
+                    <div>
+                      <p className="font-semibold">Aprovação do Período</p>
+                      <p className="text-muted-foreground">Ao aprovar, os minutos dos funcionários marcados como "Banco de Horas" são creditados automaticamente aqui.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <span className="bg-blue-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5">3</span>
+                    <div>
+                      <p className="font-semibold">Compensação (Débito)</p>
+                      <p className="text-muted-foreground">Registre as folgas compensatórias nesta tela, indicando data, quantidade de horas e motivo.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <span className="bg-blue-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5">4</span>
+                    <div>
+                      <p className="font-semibold">Extrato Mensal</p>
+                      <p className="text-muted-foreground">Gere e imprima o extrato mensal por funcionário. Entregue com recibo de assinatura (obrigatório por lei).</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <span className="bg-amber-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5">!</span>
+                    <div>
+                      <p className="font-semibold">Alertas de Vencimento</p>
+                      <p className="text-muted-foreground">Créditos não compensados dentro do prazo (6 ou 12 meses) geram alertas. Devem ser pagos como hora extra.</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+}
