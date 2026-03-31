@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 938,
+    titulo: "Mapa de Cotação: composição expandida filtra insumos pelo tipo da cotação",
+    descricao: "Ao expandir a composição no Mapa de Cotação, agora os insumos são filtrados pelo tipo da cotação: Material mostra só MAT, Serviço só MDO, Equipamento só EQUIP, e Pacote mostra todos. Mantém consistência com a filtragem já aplicada na SC e no diálogo de aprovação.",
+    tipo: 'bugfix',
+    modulos: 'Compras',
+    criadoPor: 'System',
+    dataPublicacao: "2026-03-31 23:30:00",
+  },
+  {
     version: 937,
     titulo: "Diálogo de aprovação da SC exibe insumos individuais da composição",
     descricao: "No diálogo de aprovação (Controle Orçamentário), cada item vinculado a uma composição agora mostra os insumos individuais que estão sendo cotados. Se a SC é de material, aparecem só os insumos de material; se MDO, só MDO; se equipamento, só equipamento. Exibe código, descrição, unidade e quantidade calculada de cada insumo.",

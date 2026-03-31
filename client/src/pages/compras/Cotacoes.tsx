@@ -3083,7 +3083,19 @@ export default function Cotacoes() {
                                   </td>
                                 </tr>
                                 {isExpanded && hasComposicao && (() => {
-                                  const insumos = (it as any).composicaoInsumos as Array<{ insumoCodigo: string; descricao: string; unidade: string; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number; alocacaoEquip?: number; custoTotal: number }>;
+                                  const allInsumos = (it as any).composicaoInsumos as Array<{ insumoCodigo: string; descricao: string; unidade: string; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number; alocacaoEquip?: number; custoTotal: number }>;
+                                  const cotTipoComp = (mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo ?? "material";
+                                  const insumos = cotTipoComp === "pacote" ? allInsumos : allInsumos.filter(ins => {
+                                    const matA = ins.alocacaoMat ?? 0;
+                                    const mdoA = ins.alocacaoMdo ?? 0;
+                                    const eqA = (ins as any).alocacaoEquip ?? 0;
+                                    const isEquipIns = eqA > 0 || (matA === 0 && mdoA === 0);
+                                    if (cotTipoComp === "material") return matA > 0;
+                                    if (cotTipoComp === "servico") return mdoA > 0;
+                                    if (cotTipoComp === "equipamento") return isEquipIns;
+                                    return true;
+                                  });
+                                  if (insumos.length === 0) return null;
                                   let totalMat = 0, totalMdo = 0, totalEquip = 0, totalGeral = 0;
                                   for (const ins of insumos) {
                                     const custo = ins.coeficiente * ins.precoUnitario;
