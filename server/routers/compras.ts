@@ -2441,7 +2441,16 @@ Responda APENAS com um objeto JSON no formato:
         const qtdSaldo = Math.round(qtdSaldoRaw * 1000) / 1000;
         const svcCode = it.solicitacaoItemId ? scItemToOrcServicoCodigo[it.solicitacaoItemId] : null;
         const composicaoInsumosList = svcCode ? (composicaoMap[svcCode] ?? []) : [];
-        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: svcCode ?? (trace?.composicaoCodigo ?? "") };
+        let metaPUDisplay: number | undefined;
+        let metaQtdDisplay: number | undefined;
+        if (isInsumoDeComposicao && tipoEfetivo === 'equipamento' && coef > 0 && metaFromSC > 0) {
+          const custoTotalComp = orcItemToCustoTotal[orcId!] ?? 0;
+          const metaTotalComp = orcItemToMeta[orcId!] ?? 0;
+          const effMeta = custoTotalComp > 0 ? (1 - metaTotalComp / custoTotalComp) : 0;
+          metaPUDisplay = effMeta > 0 ? Math.round(metaFromSC * (1 - effMeta) * 100) / 100 : Math.round(metaFromSC * 100) / 100;
+          metaQtdDisplay = coef;
+        }
+        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: svcCode ?? (trace?.composicaoCodigo ?? ""), metaPUDisplay, metaQtdDisplay };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};

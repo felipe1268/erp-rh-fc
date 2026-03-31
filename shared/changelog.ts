@@ -25,13 +25,13 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
-    version: 933,
-    titulo: "Correção do Preço Unit. no Mapa de Cotação para equipamento e insumos de composição",
-    descricao: "Corrigido bug onde o Mapa de Cotação mostrava valor bruto (R$ 0,59) para equipamento (Betoneira) ao invés do valor com meta (R$ 0,47). Causa: query de orcItensData não incluía colunas custoUnitEquip/metaUnitEquip, resultando em fallback sem desconto de meta. Também corrigido: custoUnitEquip do orçamento usa redistribuição proporcional (diferente de MAT), então a fórmula de equipamento agora usa meta efetiva do item: alocInsumo × (1 - metaEfetiva). Para MAT mantido cálculo proporcional original (Areia=R$3,12, Cimento=R$8,20).",
+    version: 934,
+    titulo: "Exibição correta do Preço Unit. e QTD de equipamento no Mapa de Cotação",
+    descricao: "Para insumos de equipamento em composição, o Mapa de Cotação agora exibe: Preço Unit. = PU do insumo com meta (R$ 2,36/CHP), QTD = coeficiente da composição (0,200), Total = alocação por m² (R$ 0,47). Antes mostrava a alocação por m² como 'Preço Unit.' e a quantidade total da composição como 'QTD'. Cálculos internos de saldo permanecem inalterados.",
     tipo: 'bugfix',
     modulos: 'Compras',
     criadoPor: 'System',
-    dataPublicacao: "2026-03-31 19:00:00",
+    dataPublicacao: "2026-03-31 20:00:00",
   },
   {
     version: 925,
