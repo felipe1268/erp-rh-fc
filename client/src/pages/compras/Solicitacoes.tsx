@@ -1689,13 +1689,13 @@ export default function Solicitacoes() {
 
                               const isOriginalItem = editingSc && editingOriginalEapIds.has(it.id);
                               return (
-                                <div key={it.id} className={`group ${statusColor.bg}`}>
+                                <div key={it.id} className="group">
                                   <div
                                     onClick={() => handleEapExpand(it)}
                                     onDoubleClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEapDoubleClick(it); }}
                                     className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${expanded ? "bg-amber-50 border-l-2 border-l-amber-500" : isOriginalItem ? "bg-blue-50/50 border-l-2 border-l-blue-400 hover:bg-blue-50" : "hover:bg-gray-50"}`}
                                   >
-                                    <span className={`inline-block w-4 h-4 rounded-full shrink-0 ${form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "bg-purple-500" : ((it as any).mdoSaldo ?? 0) <= 0 ? "bg-red-500" : "bg-emerald-500") : cobParcial && statusColor.label !== "Estouro" ? "bg-orange-500" : statusColor.dot} ring-1 ring-white shadow-sm`} title={form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "100% contratado" : ((it as any).mdoSaldo ?? 0) <= 0 ? "Sem saldo" : "Disponível") : cobParcial ? `Parcial: ${cob.insumosCobertos}/${cob.totalInsumos} insumos` : statusColor.label} />
+                                    <span className={`inline-block w-4 h-4 rounded-full shrink-0 ${form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "bg-purple-500" : ((it as any).mdoSaldo ?? 0) <= 0 ? "bg-red-500" : "bg-emerald-500") : cob && cob.totalInsumos > 0 ? (cob.insumosCobertos >= cob.totalInsumos ? "bg-blue-500" : cob.insumosCobertos > 0 ? "bg-orange-500" : "bg-emerald-500") : "bg-gray-300"} ring-1 ring-white shadow-sm`} title={form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "100% contratado" : ((it as any).mdoSaldo ?? 0) <= 0 ? "Sem saldo" : "Disponível") : cob && cob.totalInsumos > 0 ? (cob.insumosCobertos >= cob.totalInsumos ? `Todos ${cob.totalInsumos} insumos solicitados` : cob.insumosCobertos > 0 ? `Parcial: ${cob.insumosCobertos}/${cob.totalInsumos} insumos` : "Disponível") : "Sem info"} />
                                     <input
                                       type="checkbox"
                                       checked={selectedEapIds.has(it.id) || qtdVal > 0}
