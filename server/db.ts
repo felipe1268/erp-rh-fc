@@ -34,29 +34,39 @@ import { ENV } from './_core/env';
 import { normalizeCidadeInput } from '../shared/normalizeCidade';
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _pool: Pool | null = null;
 
 export async function getDb() {
   const dbUrl = ENV.databaseUrl;
   if (!_db && dbUrl) {
     try {
-      const pool = new Pool({
+      _pool = new Pool({
         connectionString: dbUrl,
-        max: 15,                          // max 15 concurrent connections (jobs + user requests)
-        min: 0,                           // não manter conexões idle (Neon encerra idle automaticamente)
-        idleTimeoutMillis: 30000,         // liberar idle após 30s
-        connectionTimeoutMillis: 30000,   // aguardar até 30s (Neon cold start pode demorar 15-20s)
+        max: 15,
+        min: 0,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 30000,
         allowExitOnIdle: false,
       });
-      pool.on('error', (err) => {
+      _pool.on('error', (err) => {
         console.warn('[Database] Pool error (idle client):', err.message);
       });
-      _db = drizzle(pool);
+      _db = drizzle(_pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
+      _pool = null;
     }
   }
   return _db;
+}
+
+function resetDbPool() {
+  if (_pool) {
+    _pool.end().catch(() => {});
+  }
+  _pool = null;
+  _db = null;
 }
 
 // ============================================================
@@ -120,9 +130,22 @@ export async function updateCompany(id: number, data: Partial<InsertCompany>) {
 }
 
 export async function getCompanies() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(companies).where(isNull(companies.deletedAt)).orderBy(companies.razaoSocial);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const db = await getDb();
+    if (!db) return [];
+    try {
+      return await db.select().from(companies).where(isNull(companies.deletedAt)).orderBy(companies.razaoSocial);
+    } catch (e: any) {
+      const causeMsg = (e as any)?.cause?.message || '';
+      const isTransient = /connection|timeout|socket|ECONNRE|terminating/i.test(causeMsg) ||
+                          /connection|timeout|socket|ECONNRE|terminating/i.test(e.message || '');
+      console.warn(`[getCompanies] Attempt ${attempt}/3 failed (transient=${isTransient}):`, causeMsg || e.message?.slice(0, 120));
+      if (!isTransient || attempt === 3) throw e;
+      resetDbPool();
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
+  }
+  return [];
 }
 
 // Retorna IDs das empresas que compartilham recursos ("Construtoras")
