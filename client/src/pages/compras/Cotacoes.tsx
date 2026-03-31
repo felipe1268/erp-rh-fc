@@ -1746,11 +1746,25 @@ export default function Cotacoes() {
     const itensSemVerba = (mapa?.itens ?? []).filter((it: any) => (it as any).fonteVinculo !== "item" && (it as any).fonteVinculo !== "insumo");
     const temItensSemVerba = itensSemVerba.length > 0;
 
-    function handleAprovarGerarOC(cotacaoId: number) {
+    function validarCondicoesVencedor(): boolean {
       if (!fornParaSaldo) {
         toast.error("Selecione um fornecedor vencedor antes de aprovar.");
-        return;
+        return false;
       }
+      const condPag = (fornParaSaldo as any).condicaoPagamento || (fornParaSaldo as any).formaPagamento;
+      const prazo = (fornParaSaldo as any).prazoEntregaDias;
+      const erros: string[] = [];
+      if (!condPag) erros.push("Forma de Pagamento");
+      if (!prazo || Number(prazo) <= 0) erros.push("Prazo de Entrega");
+      if (erros.length > 0) {
+        toast.error(`Preencha ${erros.join(" e ")} nas condições do vencedor antes de aprovar.`);
+        return false;
+      }
+      return true;
+    }
+
+    function handleAprovarGerarOC(cotacaoId: number) {
+      if (!validarCondicoesVencedor()) return;
       if (temItensSemVerba && !semVerbaAutorizado) {
         setSemVerbaAdminEmail("");
         setSemVerbaAdminSenha("");
@@ -1955,7 +1969,7 @@ export default function Cotacoes() {
                   {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo === "servico" && (
                     <>
                       <Button onClick={() => {
-                        if (!fornParaSaldo) { toast.error("Selecione um fornecedor vencedor antes de aprovar."); return; }
+                        if (!validarCondicoesVencedor()) return;
                         gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId });
                       }} disabled={gerarContrato.isPending}
                         className="bg-purple-600 hover:bg-purple-500 text-white gap-2">
@@ -2102,7 +2116,7 @@ export default function Cotacoes() {
                     {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo === "servico" && (
                       <>
                         <Button onClick={() => {
-                          if (!fornParaSaldo) { toast.error("Selecione um fornecedor vencedor antes de aprovar."); return; }
+                          if (!validarCondicoesVencedor()) return;
                           gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId });
                         }} disabled={gerarContrato.isPending}
                           className="bg-purple-600 hover:bg-purple-500 text-white gap-2">
@@ -4095,7 +4109,7 @@ export default function Cotacoes() {
                   {detalhe.status === "pendente" && (detalhe as any).tipo === "servico" && (
                     <>
                       <Button size="sm" onClick={() => {
-                        if (!fornParaSaldo) { toast.error("Selecione um fornecedor vencedor antes de aprovar."); return; }
+                        if (!validarCondicoesVencedor()) return;
                         gerarContrato.mutate({ cotacaoId: detalhe.id, companyId });
                       }}
                         disabled={gerarContrato.isPending}
@@ -4111,7 +4125,7 @@ export default function Cotacoes() {
                   )}
                   {detalhe.status === "pendente" && (detalhe as any).tipo !== "servico" && (
                     <>
-                      <Button size="sm" onClick={() => gerarOC.mutate({ companyId, cotacaoId: detalhe.id, userId: user?.id, userName: user?.name })} disabled={gerarOC.isPending}
+                      <Button size="sm" onClick={() => { if (!validarCondicoesVencedor()) return; gerarOC.mutate({ companyId, cotacaoId: detalhe.id, userId: user?.id, userName: user?.name }); }} disabled={gerarOC.isPending}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1">
                         <CheckCircle className="h-3 w-3" /> Aprovar e Gerar OC
                       </Button>

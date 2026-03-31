@@ -15,6 +15,7 @@ import {
   obras,
   comprasCotacoes,
   comprasCotacoesItens,
+  comprasCotacaoFornecedores,
   comprasSolicitacoes,
   comprasSolicitacoesItens,
   planejamentoRevisoes,
@@ -2447,6 +2448,16 @@ export const terceiroContratosRouter = router({
       if (!cot.fornecedorId) throw new Error("A cotação não possui fornecedor vinculado");
       const [forn] = await db.select().from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId));
       if (!forn) throw new Error("Fornecedor da cotação não encontrado");
+
+      const fornParts = await db.select().from(comprasCotacaoFornecedores).where(
+        and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, cot.fornecedorId))
+      );
+      const fornInfoCheck = fornParts[0] ?? null;
+      const condPag = (fornInfoCheck as any)?.condicaoPagamento ?? cot.condicaoPagamento;
+      const formaPag = (fornInfoCheck as any)?.formaPagamento ?? (cot as any).formaPagamento;
+      const prazoEntrega = (fornInfoCheck as any)?.prazoEntregaDias;
+      if (!condPag && !formaPag) throw new Error("Defina a Forma de Pagamento antes de aprovar. Edite as condições do vencedor na cotação.");
+      if (!prazoEntrega || Number(prazoEntrega) <= 0) throw new Error("Defina o Prazo de Entrega antes de aprovar. Edite as condições do vencedor na cotação.");
 
       // 4. Find-or-create empresa terceira vinculada ao fornecedor
       const existing = await db.select().from(empresasTerceiras)

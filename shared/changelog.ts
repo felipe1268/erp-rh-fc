@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 943,
+    titulo: "Validação obrigatória: Forma de Pagamento e Prazo de Entrega na aprovação",
+    descricao: "Adicionado alerta ao tentar aprovar OC ou OS quando Forma de Pagamento ou Prazo de Entrega não estão preenchidos nas condições do vencedor. A aprovação só é permitida após preencher ambos os campos. Validação aplicada tanto no frontend (alerta imediato) quanto no backend (segurança adicional) para os fluxos de geração de OC (material) e geração de contrato de serviço (OS).",
+    tipo: 'feature',
+    modulos: 'Compras',
+    criadoPor: 'System',
+    dataPublicacao: "2026-03-31 23:59:00",
+  },
+  {
     version: 942,
     titulo: "Fix: cache de cotação não atualizava após cancelar aprovação",
     descricao: "Corrigido bug onde a tela de cotação mantinha o status 'Aprovada' no cache mesmo após o cancelamento bem-sucedido da aprovação. O usuário via o badge 'Aprovada' e ao tentar cancelar novamente recebia 'status atual: pendente'. Adicionada invalidação de cache das queries getCotacao e listarOrdens no onSuccess do cancelamento.",
