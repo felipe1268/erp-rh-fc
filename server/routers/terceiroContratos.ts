@@ -2840,14 +2840,92 @@ export const terceiroContratosRouter = router({
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
       if (!contrato) throw new Error("Contrato não encontrado");
 
-      const [template] = await db.select().from(terceiroContratoTemplates)
+      let [template] = await db.select().from(terceiroContratoTemplates)
         .where(and(
           eq(terceiroContratoTemplates.companyId, contrato.companyId),
           eq(terceiroContratoTemplates.ativo, true)
         ))
         .orderBy(desc(terceiroContratoTemplates.versao))
         .limit(1);
-      if (!template) throw new Error("Nenhum template de contrato cadastrado. Acesse Configurações > Template de Contrato para criar um.");
+      if (!template) {
+        const defaultText = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS Nº {{NUMERO_CONTRATO}}
+
+Pelo presente instrumento particular de contrato de prestação de serviços, as partes abaixo identificadas:
+
+CONTRATANTE: {{CONTRATANTE_NOME}}, inscrita no CNPJ sob o nº {{CONTRATANTE_CNPJ}}, com sede em {{CONTRATANTE_ENDERECO}}, neste ato representada por {{CONTRATANTE_REPRESENTANTE}}.
+
+CONTRATADA: {{CONTRATADA_NOME}}, inscrita no CNPJ sob o nº {{CONTRATADA_CNPJ}}, com sede em {{CONTRATADA_ENDERECO}}, neste ato representada por {{CONTRATADA_REPRESENTANTE}}, {{CONTRATADA_CARGO}}.
+
+Têm entre si, justo e contratado, o seguinte:
+
+CLÁUSULA PRIMEIRA – DO OBJETO
+
+1.1 O presente contrato tem por objeto a prestação de serviços de {{DESCRICAO_OBJETO}}, a serem executados na obra {{OBRA_NOME}}, conforme escopo detalhado abaixo:
+
+{{TABELA_ITENS}}
+
+CLÁUSULA SEGUNDA – DO PRAZO
+
+2.1 Os serviços deverão ser iniciados em {{DATA_INICIO}} e concluídos até {{DATA_TERMINO}}, salvo prorrogação por acordo escrito entre as partes.
+
+CLÁUSULA TERCEIRA – DO VALOR E FORMA DE PAGAMENTO
+
+3.1 O valor total do presente contrato é de {{VALOR_TOTAL}}, a ser pago conforme medições mensais dos serviços executados, mediante aprovação da CONTRATANTE.
+
+3.2 O pagamento será efetuado até o 10º (décimo) dia útil após a aprovação da medição.
+
+CLÁUSULA QUARTA – DAS OBRIGAÇÕES DA CONTRATADA
+
+4.1 Executar os serviços de acordo com as normas técnicas vigentes e especificações do projeto.
+4.2 Fornecer toda a mão de obra necessária, devidamente registrada e equipada com EPIs.
+4.3 Manter preposto no local da obra para representá-la junto à CONTRATANTE.
+4.4 Responder por todos os encargos trabalhistas, previdenciários e fiscais de seus empregados.
+
+CLÁUSULA QUINTA – DAS OBRIGAÇÕES DA CONTRATANTE
+
+5.1 Efetuar os pagamentos nas condições estabelecidas neste contrato.
+5.2 Fornecer acesso ao local da obra e disponibilizar as informações técnicas necessárias.
+5.3 Designar fiscal para acompanhamento e aprovação dos serviços.
+
+CLÁUSULA SEXTA – DA RESCISÃO
+
+6.1 O presente contrato poderá ser rescindido por qualquer das partes, mediante notificação por escrito com antecedência mínima de 30 (trinta) dias.
+
+CLÁUSULA SÉTIMA – DO FORO
+
+7.1 Fica eleito o foro da Comarca de {{CIDADE_ESTADO}} para dirimir quaisquer dúvidas ou litígios oriundos do presente contrato, com renúncia de qualquer outro, por mais privilegiado que seja.
+
+E por estarem assim justos e contratados, as partes assinam o presente instrumento em 2 (duas) vias de igual teor e forma, juntamente com 2 (duas) testemunhas.
+
+{{CIDADE_ESTADO}}, {{DATA_ASSINATURA}}.
+
+
+_________________________________________
+{{CONTRATANTE_NOME}}
+CNPJ: {{CONTRATANTE_CNPJ}}
+Representante: {{CONTRATANTE_REPRESENTANTE}}
+
+
+_________________________________________
+{{CONTRATADA_NOME}}
+CNPJ: {{CONTRATADA_CNPJ}}
+Representante: {{CONTRATADA_REPRESENTANTE}}
+
+
+TESTEMUNHAS:
+
+1. _________________________________________
+   Nome: {{TESTEMUNHA_FINANCEIRO}}
+   Cargo: Responsável Financeiro
+
+2. _________________________________________
+   Nome: {{TESTEMUNHA_GESTOR_PROJETO}}
+   Cargo: Gestor de Projeto`;
+        const [novo] = await db.insert(terceiroContratoTemplates)
+          .values({ companyId: contrato.companyId, nome: "Contrato Padrão", texto: defaultText, ativo: true, versao: 1 })
+          .returning();
+        template = novo;
+      }
 
       const [empresa] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, contrato.empresaTerceiraId));
       const [company] = await db.select().from(companies).where(eq(companies.id, contrato.companyId));
