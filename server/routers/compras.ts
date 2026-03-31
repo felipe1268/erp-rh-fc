@@ -2199,6 +2199,7 @@ Responda APENAS com um objeto JSON no formato:
               quantidade: composicaoInsumos.quantidade,
               alocacaoMat: composicaoInsumos.alocacaoMat,
               alocacaoMdo: composicaoInsumos.alocacaoMdo,
+              alocacaoEquip: composicaoInsumos.alocacaoEquip,
             }).from(composicaoInsumos)
               .where(and(eq(composicaoInsumos.companyId, Number(cot.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCodigos)));
             const filteredCompIns = filterInsumosByTipo(allCompIns as any[], tipoEfetivoEarly);

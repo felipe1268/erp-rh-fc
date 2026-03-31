@@ -1208,7 +1208,12 @@ function parsearAbaCPUs(rows: any[][], companyId: number) {
       const alocacaoMat     = toNum(row[8]);
       const alocacaoMdo     = toNum(row[9]);
       const custoUnit       = toNum(row[12]);
-      const alocacaoEquip   = (alocacaoMat === 0 && alocacaoMdo === 0 && custoUnit > 0) ? custoUnit : 0;
+      const isEquipByCodigo = /^80\./.test(insumoCodigo);
+      const alocacaoEquip   = isEquipByCodigo
+        ? custoUnit
+        : (alocacaoMat === 0 && alocacaoMdo === 0 && custoUnit > 0) ? custoUnit : 0;
+      const matFinal = isEquipByCodigo ? 0 : alocacaoMat;
+      const mdoFinal = isEquipByCodigo ? 0 : alocacaoMdo;
       if (!insumoCodigo && !insumoDescricao) continue;
       linhasInsumos.push({
         companyId,
@@ -1218,8 +1223,8 @@ function parsearAbaCPUs(rows: any[][], companyId: number) {
         unidade:          unidade.substring(0, 30),
         quantidade:       fix6(quantidade),
         precoUnitario:    fix4(precoUnitario),
-        alocacaoMat:      fix6(alocacaoMat),
-        alocacaoMdo:      fix6(alocacaoMdo),
+        alocacaoMat:      fix6(matFinal),
+        alocacaoMdo:      fix6(mdoFinal),
         alocacaoEquip:    fix6(alocacaoEquip),
         custoUnitTotal:   fix6(custoUnit),
       });

@@ -6696,4 +6696,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 10:00:00",
   },
+  {
+    version: 927,
+    titulo: "Correção: equipamentos (80.xx) aparecendo em SC Material",
+    descricao:
+      "Insumos com código 80.xx (equipamentos SINAPI/DER — betoneiras, caminhões, compressores etc.) " +
+      "estavam classificados como material porque a planilha original colocava toda alocação em MAT. " +
+      "Migração reclassificou 998 insumos: alocacao_mat→alocacao_equip para códigos 80.xx. " +
+      "Importação de composições agora detecta 80.xx pelo código e classifica automaticamente como EQUIP. " +
+      "Query do Mapa de Cotação corrigida para incluir alocacaoEquip na seleção de insumos.",
+    tipo: "bugfix",
+    modulos: "Compras, Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 11:00:00",
+  },
 ];
