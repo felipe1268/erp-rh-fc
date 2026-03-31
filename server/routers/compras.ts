@@ -5316,7 +5316,12 @@ Retorne APENAS um JSON válido neste formato:
         let insumos: { insumoCodigo: string; descricao: string; unidade: string | null; coeficiente: number; qtdCalculada: number }[] = [];
         if (svcCode && composicaoInsumosMap[svcCode]) {
           const allIns = composicaoInsumosMap[svcCode];
-          const filtered = filterInsumosByTipo(allIns, scTipo2, incluirEquip2);
+          let filtered = filterInsumosByTipo(allIns, scTipo2, incluirEquip2);
+          const incAjud = item.incluirAjudante ?? true;
+          if (!incAjud) {
+            const ajudRe = /ajudante|servente|auxiliar/i;
+            filtered = filtered.filter(i => !ajudRe.test(i.descricao || ""));
+          }
           insumos = filtered.map(i => ({
             insumoCodigo: i.insumoCodigo,
             descricao: i.descricao,
@@ -5406,7 +5411,12 @@ Retorne APENAS um JSON válido neste formato:
 
         if (svcCode && composicaoInsumosMap[svcCode]) {
           const allIns = composicaoInsumosMap[svcCode];
-          const filtered = filterInsumosByTipo(allIns, scTipo, incluirEquip);
+          let filtered = filterInsumosByTipo(allIns, scTipo, incluirEquip);
+          const incAjud = item.incluirAjudante ?? true;
+          if (!incAjud) {
+            const ajudRe = /ajudante|servente|auxiliar/i;
+            filtered = filtered.filter(i => !ajudRe.test(i.descricao || ""));
+          }
 
           for (const ins of filtered) {
             const qtdCalculada = Math.round(qtdSC * ins.coeficiente * 1000) / 1000;

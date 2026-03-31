@@ -3085,7 +3085,7 @@ export default function Cotacoes() {
                                 {isExpanded && hasComposicao && (() => {
                                   const allInsumos = (it as any).composicaoInsumos as Array<{ insumoCodigo: string; descricao: string; unidade: string; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number; alocacaoEquip?: number; custoTotal: number }>;
                                   const cotTipoComp = (mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo ?? "material";
-                                  const insumos = cotTipoComp === "pacote" ? allInsumos : allInsumos.filter(ins => {
+                                  let insumos = cotTipoComp === "pacote" ? allInsumos : allInsumos.filter(ins => {
                                     const matA = ins.alocacaoMat ?? 0;
                                     const mdoA = ins.alocacaoMdo ?? 0;
                                     const eqA = (ins as any).alocacaoEquip ?? 0;
@@ -3095,6 +3095,10 @@ export default function Cotacoes() {
                                     if (cotTipoComp === "equipamento") return isEquipIns;
                                     return true;
                                   });
+                                  if ((it as any).incluirAjudante === false) {
+                                    const ajudRe = /ajudante|servente|auxiliar/i;
+                                    insumos = insumos.filter(ins => !ajudRe.test(ins.descricao || ""));
+                                  }
                                   if (insumos.length === 0) return null;
                                   let totalMat = 0, totalMdo = 0, totalEquip = 0, totalGeral = 0;
                                   for (const ins of insumos) {
