@@ -912,6 +912,8 @@ export default function Cotacoes() {
       setCancelarCotacaoId(null);
       setShowDetalhe(null);
       q.refetch();
+      trpcUtils.compras.getCotacao.invalidate();
+      trpcUtils.compras.listarOrdens.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });

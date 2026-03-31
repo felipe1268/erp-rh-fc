@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 942,
+    titulo: "Fix: cache de cotação não atualizava após cancelar aprovação",
+    descricao: "Corrigido bug onde a tela de cotação mantinha o status 'Aprovada' no cache mesmo após o cancelamento bem-sucedido da aprovação. O usuário via o badge 'Aprovada' e ao tentar cancelar novamente recebia 'status atual: pendente'. Adicionada invalidação de cache das queries getCotacao e listarOrdens no onSuccess do cancelamento.",
+    tipo: 'bugfix',
+    modulos: 'Compras',
+    criadoPor: 'System',
+    dataPublicacao: "2026-03-31 23:59:00",
+  },
+  {
     version: 941,
     titulo: "Tags de tipo padronizadas (SC / Cotação / OS / OC)",
     descricao: "Badges de tipo de solicitação e ordem normalizados em todas as telas do módulo Compras. Nomenclatura consistente: MDO (mão de obra), MAT+MDO (pacote material+serviço), EQUIP (equipamento), MAT (material). Cores padronizadas: roxo para MDO, índigo para MAT+MDO, ciano para EQUIP, azul para MAT. Aplicado em Solicitações (lista e detalhe), Cotações (seleção de SC) e Ordens (lista e detalhe).",
