@@ -1901,7 +1901,9 @@ export default function Solicitacoes() {
                                             {insLista.map((ins: any, idx: number) => {
                                               const qtdCalc = qtdVal > 0 ? Math.ceil((qtdVal * ins.coeficiente) * 1000) / 1000 : 0;
                                               const insConsolidado = (insumosConsolidadosQ.data ?? []).find((c: any) => c.insumoCodigo === ins.insumoCodigo);
-                                              const insStatus = insConsolidado?.statusInsumo || "disponivel";
+                                              const insStatusGlobal = insConsolidado?.statusInsumo || "disponivel";
+                                              const solicitadoNestaComposicao = insConsolidado?.scPorComposicao?.includes(it.id) ?? false;
+                                              const insStatusLocal = solicitadoNestaComposicao ? insStatusGlobal : "disponivel";
                                               const insStatusDotColor: Record<string, string> = { disponivel: "bg-emerald-500", solicitado: "bg-blue-500", em_cotacao: "bg-amber-500", comprado: "bg-purple-500", recebido: "bg-rose-500", estouro: "bg-red-700" };
                                               const insStatusLabel: Record<string, string> = { disponivel: "Disponível", solicitado: "Solicitado", em_cotacao: "Em cotação", comprado: "100% comprado", recebido: "Recebido", estouro: "Acima do orçado" };
                                               const saldoGlobal = insConsolidado ? insConsolidado.saldoDisponivel : null;
@@ -1910,17 +1912,18 @@ export default function Solicitacoes() {
                                               const isCapado = saldoReal != null && saldoReal > 0 && saldoReal < qtdCalc && !eapExtraDesbloqueado[ins.insumoCodigo];
                                               const isExtra = eapExtraDesbloqueado[ins.insumoCodigo];
                                               const qtdEfetiva = isBloqueado ? 0 : isCapado ? saldoReal : qtdCalc;
-                                              const insRowBg = isBloqueado ? "bg-gray-100/80 opacity-60" : isExtra ? "bg-amber-50/60" : isCapado ? "bg-yellow-50/50" : insStatus === "estouro" ? "bg-red-50/60" : insStatus === "comprado" ? "bg-purple-50/50" : insStatus === "recebido" ? "bg-rose-50/50" : "";
+                                              const insRowBg = isBloqueado ? "bg-gray-100/80 opacity-60" : isExtra ? "bg-amber-50/60" : isCapado ? "bg-yellow-50/50" : insStatusLocal === "estouro" ? "bg-red-50/60" : insStatusLocal === "comprado" ? "bg-purple-50/50" : insStatusLocal === "recebido" ? "bg-rose-50/50" : "";
                                               return (
                                                 <div key={idx} className={`flex items-center gap-2 px-2.5 py-1.5 text-xs ${insRowBg}`}>
-                                                  <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${isBloqueado ? "bg-gray-400" : insStatusDotColor[insStatus] || "bg-emerald-500"}`} title={isBloqueado ? "Saldo esgotado" : insStatusLabel[insStatus] || "Disponível"} />
+                                                  <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${isBloqueado ? "bg-gray-400" : insStatusDotColor[insStatusLocal] || "bg-emerald-500"}`} title={isBloqueado ? "Saldo esgotado" : solicitadoNestaComposicao ? insStatusLabel[insStatusLocal] : (insStatusGlobal !== "disponivel" ? `Disponível nesta composição (${insStatusLabel[insStatusGlobal]} em outras)` : "Disponível")} />
                                                   <div className="flex-1 min-w-0">
                                                     <div className="text-gray-900 truncate flex items-center gap-1 flex-wrap">
                                                       {ins.descricao}
                                                       {isBloqueado && <span className="text-[8px] px-1 rounded font-bold bg-gray-200 text-gray-600">SALDO ESGOTADO</span>}
                                                       {isCapado && <span className="text-[8px] px-1 rounded font-bold bg-yellow-100 text-yellow-700">LIMITADO AO SALDO</span>}
                                                       {isExtra && <span className="text-[8px] px-1 rounded font-bold bg-amber-100 text-amber-700">EXTRA-ORÇAMENTO</span>}
-                                                      {!isBloqueado && !isCapado && !isExtra && insStatus !== "disponivel" && <span className={`text-[8px] px-1 rounded font-bold ${insStatus === "estouro" ? "bg-red-100 text-red-700" : insStatus === "comprado" ? "bg-purple-100 text-purple-700" : insStatus === "recebido" ? "bg-rose-100 text-rose-700" : insStatus === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{insStatusLabel[insStatus]}</span>}
+                                                      {!isBloqueado && !isCapado && !isExtra && solicitadoNestaComposicao && insStatusLocal !== "disponivel" && <span className={`text-[8px] px-1 rounded font-bold ${insStatusLocal === "estouro" ? "bg-red-100 text-red-700" : insStatusLocal === "comprado" ? "bg-purple-100 text-purple-700" : insStatusLocal === "recebido" ? "bg-rose-100 text-rose-700" : insStatusLocal === "em_cotacao" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{insStatusLabel[insStatusLocal]}</span>}
+                                                      {!isBloqueado && !isCapado && !isExtra && !solicitadoNestaComposicao && insStatusGlobal !== "disponivel" && <span className="text-[8px] px-1 rounded font-medium bg-gray-100 text-gray-500">{insStatusLabel[insStatusGlobal]} em outra comp.</span>}
                                                       {insConsolidado?.scDocs?.length > 0 && <DocLinks docs={insConsolidado.scDocs} prefix="SC" route="/compras/solicitacoes" navigate={navigate} />}
                                                       {insConsolidado?.cotDocs?.length > 0 && <DocLinks docs={insConsolidado.cotDocs} prefix="COT" route="/compras/cotacoes" navigate={navigate} />}
                                                       {insConsolidado?.ocDocs?.length > 0 && <DocLinks docs={insConsolidado.ocDocs} prefix="OC" route="/compras/ordens" navigate={navigate} />}

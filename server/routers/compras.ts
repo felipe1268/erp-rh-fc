@@ -5587,12 +5587,16 @@ Retorne APENAS um JSON válido neste formato:
         .where(and(eq(comprasSolicitacoes.companyId, input.companyId), eq(comprasSolicitacoes.obraId, input.obraId), sql`${comprasSolicitacoes.status} NOT IN ('cancelado')`));
       const scMap: Record<string, number> = {};
       const scDocsMap: Record<string, { id: number; numero: string }[]> = {};
+      const scByOrcItemMap: Record<string, { orcItemIds: number[]; docs: { orcItemId: number; scId: number; scNumero: string }[] }> = {};
       for (const sc of scRows) {
         const key = sc.insumoCodigo || "";
         scMap[key] = (scMap[key] || 0) + n(sc.quantidade);
         if (!scDocsMap[key]) scDocsMap[key] = [];
         const num = sc.scNumero || `SC-${sc.solicitacaoId}`;
         if (!scDocsMap[key].some(d => d.id === sc.solicitacaoId)) scDocsMap[key].push({ id: sc.solicitacaoId, numero: num });
+        if (!scByOrcItemMap[key]) scByOrcItemMap[key] = { orcItemIds: [], docs: [] };
+        if (sc.orcamentoItemId && !scByOrcItemMap[key].orcItemIds.includes(sc.orcamentoItemId)) scByOrcItemMap[key].orcItemIds.push(sc.orcamentoItemId);
+        if (sc.orcamentoItemId) scByOrcItemMap[key].docs.push({ orcItemId: sc.orcamentoItemId, scId: sc.solicitacaoId, scNumero: num });
       }
 
       const ocRows = await db.select({
@@ -5652,6 +5656,7 @@ Retorne APENAS um JSON válido neste formato:
           scDocs: scDocsMap[c.insumoCodigo] || [],
           cotDocs: cotDocsMap[c.insumoCodigo] || [],
           ocDocs: ocDocsMap[c.insumoCodigo] || [],
+          scPorComposicao: scByOrcItemMap[c.insumoCodigo]?.orcItemIds || [],
         };
       }).sort((a, b) => a.descricao.localeCompare(b.descricao));
     }),

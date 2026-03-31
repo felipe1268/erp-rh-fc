@@ -6723,4 +6723,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 12:00:00",
   },
+  {
+    version: 929,
+    titulo: "Farol de insumos local por composição na EAP",
+    descricao:
+      "O farol (bolinha colorida) de cada insumo na explosão EAP agora é local por composição. " +
+      "Se a 'Areia' foi solicitada na composição 09.01, o farol fica azul (Solicitado) apenas nessa composição. " +
+      "Na composição 09.02 que usa o mesmo insumo mas não teve SC, o farol permanece verde (Disponível). " +
+      "O saldo numérico continua global (obra inteira). " +
+      "Badge discreta 'Solicitado em outra comp.' aparece quando o insumo já foi comprado em outra composição. " +
+      "Tooltip mostra 'Disponível nesta composição (Solicitado em outras)' para clareza. " +
+      "Backend: campo scPorComposicao (array de orcamentoItemIds) retornado por getInsumosConsolidados.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 13:00:00",
+  },
 ];
