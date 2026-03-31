@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 939,
+    titulo: "Aditivo Contratual PJ — criação e impressão de aditivos",
+    descricao: "Nova funcionalidade para criar aditivos contratuais a partir do contrato PJ. Ao clicar em 'Criar Aditivo', o sistema lista todas as cláusulas do contrato e permite selecionar quais alterar. O aditivo é gerado com formatação profissional para impressão/PDF, seguindo o modelo padrão da FC Engenharia: identificação das partes, cláusulas alteradas com nova redação, disposições finais, assinaturas e testemunhas.",
+    tipo: 'feature',
+    modulos: 'Módulo PJ',
+    criadoPor: 'System',
+    dataPublicacao: "2026-03-31 23:45:00",
+  },
+  {
     version: 938,
     titulo: "Mapa de Cotação: composição expandida filtra insumos pelo tipo da cotação",
     descricao: "Ao expandir a composição no Mapa de Cotação, agora os insumos são filtrados pelo tipo da cotação: Material mostra só MAT, Serviço só MDO, Equipamento só EQUIP, e Pacote mostra todos. Mantém consistência com a filtragem já aplicada na SC e no diálogo de aprovação.",

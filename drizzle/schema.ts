@@ -2229,6 +2229,24 @@ export const pjContractRevisoes = pgTable("pj_contract_revisoes", {
         index("pjcr_company").on(table.companyId),
 ]);
 
+export const pjContractAditivos = pgTable("pj_contract_aditivos", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        contractId: integer().notNull(),
+        employeeId: integer().notNull(),
+        numeroAditivo: integer().default(1).notNull(),
+        clausulasAlteradas: text().notNull(),
+        dataAditivo: date({ mode: 'string' }).notNull(),
+        observacoes: text(),
+        criadoPor: varchar({ length: 255 }),
+        criadoPorUserId: integer(),
+        criadoEm: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("pjca_contract").on(table.contractId),
+        index("pjca_company").on(table.companyId),
+]);
+
 export const pjMedicoes = pgTable("pj_medicoes", {
         id: serial().notNull(),
         companyId: integer().notNull(),

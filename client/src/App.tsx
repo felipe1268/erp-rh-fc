@@ -64,6 +64,7 @@ const Ferias = lazy(() => import("./pages/Ferias"));
 const CipaCompleta = lazy(() => import("./pages/CipaCompleta"));
 const ModuloPJ = lazy(() => import("./pages/ModuloPJ"));
 const ContratoPJView = lazy(() => import("./pages/ContratoPJView"));
+const AditivoPJView = lazy(() => import("./pages/AditivoPJView"));
 const Revisoes = lazy(() => import("./pages/Revisoes"));
 const SolicitacaoHE = lazy(() => import("./pages/SolicitacaoHE"));
 const FinanceiroDashboard     = lazy(() => import("./pages/financeiro/FinanceiroDashboard"));
@@ -262,6 +263,7 @@ function Router() {
         <Route path={"/cipa"} component={CipaCompleta} />
         <Route path={"/modulo-pj"} component={ModuloPJ} />
         <Route path={"/contrato-pj/:id"} component={ContratoPJView} />
+        <Route path={"/contrato-pj/:contractId/aditivo/:aditivoId"} component={AditivoPJView} />
         <Route path={"/revisoes"} component={Revisoes} />
         <Route path={"/solicitacao-he"} component={SolicitacaoHE} />
         <Route path="/financeiro" component={FinanceiroDashboard} />

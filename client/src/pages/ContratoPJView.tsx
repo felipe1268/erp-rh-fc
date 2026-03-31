@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Loader2 } from "lucide-react";
+import { ArrowLeft, Printer, Loader2, FilePlus2, Check, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
+import { toast } from "sonner";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "___/___/______";
@@ -106,8 +108,29 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
     { enabled: !!contratoId }
   );
 
-  // Template padrão do backend (fallback)
   const { data: modeloPadrao } = trpc.pj.modeloContrato.useQuery();
+
+  const [showAditivoModal, setShowAditivoModal] = useState(false);
+  const [selectedClausulas, setSelectedClausulas] = useState<Record<string, boolean>>({});
+  const [novoTextoClausulas, setNovoTextoClausulas] = useState<Record<string, string>>({});
+  const [dataAditivo, setDataAditivo] = useState(new Date().toISOString().split('T')[0]);
+
+  const clausulasQ = (trpc as any).pj.extrairClausulas.useQuery(
+    { contractId: contratoId, companyId },
+    { enabled: showAditivoModal && companyId > 0 },
+  );
+  const clausulas = clausulasQ.data ?? [];
+
+  const criarAditivo = (trpc as any).pj.aditivos.create.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Aditivo nº ${data.numeroAditivo} criado com sucesso!`);
+      setShowAditivoModal(false);
+      setSelectedClausulas({});
+      setNovoTextoClausulas({});
+      navigate(`/contrato-pj/${contratoId}/aditivo/${data.id}`);
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao criar aditivo"),
+  });
 
   const handlePrint = () => {
     window.print();
@@ -280,6 +303,9 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowAditivoModal(true)} className="text-white hover:bg-white/20 gap-1.5 border border-amber-300/50 text-amber-200">
+            <FilePlus2 className="h-4 w-4" /> Criar Aditivo
+          </Button>
           <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
             <Printer className="h-4 w-4" /> Imprimir / Salvar PDF
           </Button>
@@ -344,6 +370,125 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
 
         </div>
       </div>
+
+      {/* MODAL CRIAR ADITIVO */}
+      <Dialog open={showAditivoModal} onOpenChange={setShowAditivoModal}>
+        <DialogContent className="max-w-2xl w-[90vw] max-h-[85vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg text-gray-900">
+              <FilePlus2 className="h-5 w-5 text-amber-600" />
+              Criar Aditivo Contratual
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border-2 border-amber-200 bg-amber-50 p-3">
+              <p className="text-sm text-amber-800">
+                Selecione as cláusulas que deseja alterar e informe a nova redação para cada uma. As demais cláusulas do contrato original serão mantidas automaticamente.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-600 mb-1 block">Data do Aditivo</label>
+              <input
+                type="date"
+                value={dataAditivo}
+                onChange={e => setDataAditivo(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-48 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Cláusulas do Contrato</p>
+              {clausulasQ.isLoading ? (
+                <div className="flex items-center gap-2 py-6 justify-center text-gray-400">
+                  <Loader2 className="h-5 w-5 animate-spin" /> Extraindo cláusulas...
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {clausulas.map((cl: any) => {
+                    const isSelected = selectedClausulas[cl.numero] ?? false;
+                    return (
+                      <div key={cl.numero} className={`rounded-lg border-2 transition-all ${isSelected ? "border-blue-400 bg-blue-50/50" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedClausulas(prev => ({ ...prev, [cl.numero]: !prev[cl.numero] }))}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+                        >
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${isSelected ? "bg-blue-600 border-blue-600 text-white" : "border-gray-300 bg-white"}`}>
+                            {isSelected && <Check className="h-3 w-3" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-xs font-bold text-gray-700">Cláusula {cl.numero}</span>
+                            <span className="text-xs text-gray-500 ml-2">{cl.titulo}</span>
+                          </div>
+                        </button>
+                        {isSelected && (
+                          <div className="px-3 pb-3">
+                            <label className="text-[10px] font-semibold text-blue-700 uppercase tracking-wider mb-1 block">
+                              Nova redação da cláusula
+                            </label>
+                            <textarea
+                              value={novoTextoClausulas[cl.numero] ?? ""}
+                              onChange={e => setNovoTextoClausulas(prev => ({ ...prev, [cl.numero]: e.target.value }))}
+                              rows={4}
+                              placeholder={`Informe a nova redação para a Cláusula ${cl.numero} — ${cl.titulo}...`}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+              <span className="text-xs text-gray-400">
+                {Object.values(selectedClausulas).filter(Boolean).length} cláusula(s) selecionada(s)
+              </span>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setShowAditivoModal(false)} className="text-gray-600 px-6">
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => {
+                    const selecionadas = Object.entries(selectedClausulas).filter(([, v]) => v).map(([num]) => num);
+                    if (selecionadas.length === 0) {
+                      toast.error("Selecione pelo menos uma cláusula para alterar.");
+                      return;
+                    }
+                    const semTexto = selecionadas.filter(num => !novoTextoClausulas[num]?.trim());
+                    if (semTexto.length > 0) {
+                      toast.error(`Preencha a nova redação para a(s) cláusula(s): ${semTexto.join(", ")}`);
+                      return;
+                    }
+                    const clausulasPayload = selecionadas.map(num => {
+                      const cl = clausulas.find((c: any) => c.numero === num);
+                      return {
+                        clausulaNum: num,
+                        clausulaTitulo: cl?.titulo || "",
+                        novoTexto: novoTextoClausulas[num]?.trim() || "",
+                      };
+                    });
+                    criarAditivo.mutate({
+                      companyId,
+                      contractId: contratoId,
+                      clausulasAlteradas: JSON.stringify(clausulasPayload),
+                      dataAditivo,
+                    });
+                  }}
+                  disabled={criarAditivo.isPending}
+                  className="bg-amber-600 hover:bg-amber-500 text-white gap-1.5 px-6"
+                >
+                  {criarAditivo.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FilePlus2 className="h-4 w-4" />}
+                  Gerar Aditivo
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* CSS DE IMPRESSÃO */}
       <style>{`
