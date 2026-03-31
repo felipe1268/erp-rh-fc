@@ -1940,8 +1940,8 @@ export default function Cotacoes() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h1 className="text-2xl font-bold text-gray-900 font-mono">{detalheFullscreen.numeroCotacao}</h1>
-                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(detalheFullscreen as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (detalheFullscreen as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : (detalheFullscreen as any).tipo === "equipamento" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
-                      {(detalheFullscreen as any).tipo === "servico" ? "Mão de Obra" : (detalheFullscreen as any).tipo === "pacote" ? "Pacote (Mat+MDO)" : (detalheFullscreen as any).tipo === "equipamento" ? "Equipamento" : "Material"}
+                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(detalheFullscreen as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (detalheFullscreen as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : (detalheFullscreen as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : "bg-blue-100 text-blue-700"}`}>
+                      {(detalheFullscreen as any).tipo === "servico" ? "MDO" : (detalheFullscreen as any).tipo === "pacote" ? "MAT+MDO" : (detalheFullscreen as any).tipo === "equipamento" ? "EQUIP" : "MAT"}
                     </span>
                   </div>
                   {(detalheFullscreen as any).descricao && <p className="text-gray-500 mt-0.5">{(detalheFullscreen as any).descricao}</p>}
@@ -3746,8 +3746,8 @@ export default function Cotacoes() {
                   <TableCell>
                     <div className="flex items-center gap-1.5">
                       <span className="text-gray-900 text-sm">{(cot as any).descricao || "—"}</span>
-                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${(cot as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (cot as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : (cot as any).tipo === "equipamento" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
-                        {(cot as any).tipo === "servico" ? "Serviço" : (cot as any).tipo === "pacote" ? "Pacote" : (cot as any).tipo === "equipamento" ? "Equipamento" : "Material"}
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${(cot as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (cot as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : (cot as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : "bg-blue-100 text-blue-700"}`}>
+                        {(cot as any).tipo === "servico" ? "MDO" : (cot as any).tipo === "pacote" ? "MAT+MDO" : (cot as any).tipo === "equipamento" ? "EQUIP" : "MAT"}
                       </span>
                       {(cot as any).modalidadeFd && (cot as any).modalidadeFd !== "normal" && (
                         <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${(cot as any).fdPagador === "cliente" ? "bg-amber-100 text-amber-700" : "bg-orange-100 text-orange-700"}`}>
@@ -3828,14 +3828,14 @@ export default function Cotacoes() {
                     {(scsQ.data ?? []).filter(s => s.status === "pendente" && (s as any).aprovacaoStatus === "aprovada").map(s => (
                       <SelectItem key={s.id} value={String(s.id)}>
                         {s.numeroSc}{(s as any).titulo ? ` — ${(s as any).titulo}` : s.departamento ? ` — ${s.departamento}` : ""}
-                        {(s as any).tipo === "servico" ? " [MDO]" : (s as any).tipo === "pacote" ? " [PACOTE]" : ""}
+                        {(s as any).tipo === "servico" ? " [MDO]" : (s as any).tipo === "pacote" ? " [MAT+MDO]" : (s as any).tipo === "equipamento" ? " [EQUIP]" : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {form.solicitacaoId && form.solicitacaoId !== "none" && (
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase mt-1 ${form.tipo === "servico" ? "bg-purple-100 text-purple-700" : form.tipo === "pacote" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>
-                    {form.tipo === "servico" ? "Mão de Obra" : form.tipo === "pacote" ? "Pacote (Mat+MDO)" : "Material"}
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase mt-1 ${form.tipo === "servico" ? "bg-purple-100 text-purple-700" : form.tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : form.tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : "bg-blue-100 text-blue-700"}`}>
+                    {form.tipo === "servico" ? "MDO" : form.tipo === "pacote" ? "MAT+MDO" : form.tipo === "equipamento" ? "EQUIP" : "MAT"}
                   </span>
                 )}
               </div>

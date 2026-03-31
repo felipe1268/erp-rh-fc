@@ -442,9 +442,14 @@ export default function Ordens() {
                   <TableCell className={`font-mono font-semibold text-sm ${oc.status === "entregue" ? "text-emerald-700" : oc.status === "cancelada" ? "text-gray-400 line-through" : "text-gray-900"}`}>
                     <div className="flex items-center gap-1.5">
                       {oc.numeroOc}
-                      {((oc as any).tipo === "servico" || (oc as any).tipo === "pacote") && (
-                        <span className={`px-1.5 py-0.5 text-[9px] font-sans font-semibold rounded ${(oc as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : "bg-purple-100 text-purple-700"}`}>
-                          {(oc as any).tipo === "servico" ? "SERVIÇO" : "PACOTE"}
+                      {(oc as any).tipo && (oc as any).tipo !== "compra" && (
+                        <span className={`px-1.5 py-0.5 text-[9px] font-sans font-semibold rounded ${
+                          (oc as any).tipo === "servico" ? "bg-purple-100 text-purple-700"
+                          : (oc as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700"
+                          : (oc as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700"
+                          : "bg-blue-100 text-blue-700"
+                        }`}>
+                          {(oc as any).tipo === "servico" ? "MDO" : (oc as any).tipo === "pacote" ? "MAT+MDO" : (oc as any).tipo === "equipamento" ? "EQUIP" : (oc as any).tipo?.toUpperCase()}
                         </span>
                       )}
                     </div>
@@ -691,9 +696,14 @@ export default function Ordens() {
           <DialogHeader>
             <DialogTitle className="text-gray-900">
               {detalhe?.numeroOc} — {((detalhe as any)?.tipo === "servico" || (detalhe as any)?.tipo === "pacote") ? "Ordem de Serviço" : "Ordem de Compra"}
-              {((detalhe as any)?.tipo === "servico" || (detalhe as any)?.tipo === "pacote") && (
-                <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${(detalhe as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : "bg-purple-100 text-purple-700"}`}>
-                  {(detalhe as any).tipo === "servico" ? "SERVIÇO" : "PACOTE"}
+              {(detalhe as any)?.tipo && (detalhe as any)?.tipo !== "compra" && (
+                <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${
+                  (detalhe as any).tipo === "servico" ? "bg-purple-100 text-purple-700"
+                  : (detalhe as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700"
+                  : (detalhe as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700"
+                  : "bg-blue-100 text-blue-700"
+                }`}>
+                  {(detalhe as any).tipo === "servico" ? "MDO" : (detalhe as any).tipo === "pacote" ? "MAT+MDO" : (detalhe as any).tipo === "equipamento" ? "EQUIP" : (detalhe as any).tipo?.toUpperCase()}
                 </span>
               )}
             </DialogTitle>

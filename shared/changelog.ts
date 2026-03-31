@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 941,
+    titulo: "Tags de tipo padronizadas (SC / Cotação / OS / OC)",
+    descricao: "Badges de tipo de solicitação e ordem normalizados em todas as telas do módulo Compras. Nomenclatura consistente: MDO (mão de obra), MAT+MDO (pacote material+serviço), EQUIP (equipamento), MAT (material). Cores padronizadas: roxo para MDO, índigo para MAT+MDO, ciano para EQUIP, azul para MAT. Aplicado em Solicitações (lista e detalhe), Cotações (seleção de SC) e Ordens (lista e detalhe).",
+    tipo: 'melhoria',
+    modulos: 'Compras',
+    criadoPor: 'System',
+    dataPublicacao: "2026-03-31 23:59:00",
+  },
+  {
     version: 940,
     titulo: "IntegraSign — Módulo de Assinatura Eletrônica de Contratos",
     descricao: "Novo módulo IntegraSign para assinatura eletrônica interna de contratos de serviço. Fluxo sequencial com 4 signatários obrigatórios (Fornecedor→Gestor→Financeiro→Diretor) + testemunhas opcionais. Criação automática de envelope ao aprovar OC de serviço. Página pública de assinatura com captura de rubrica, assinatura manuscrita digital, geolocalização e hash SHA-256. Dashboard com progresso, auditoria, recusa com justificativa, versionamento e reenvio de lembretes. Notificações por e-mail em cada etapa. Em conformidade com MP 2.200-2/2001 e Lei 14.063/2020.",
