@@ -1728,6 +1728,8 @@ export const bancoHorasLancamentos = pgTable("banco_horas_lancamentos", {
   hePeriodId:  integer("hePeriodId"),
   tipo:        text().notNull(),
   minutos:     integer().notNull(),
+  minutosBase: integer("minutosBase").default(0),
+  minutosAcrescimo: integer("minutosAcrescimo").default(0),
   descricao:   text().notNull(),
   data:        date({ mode: "string" }).notNull(),
   criadoPor:   text("criadoPor"),

@@ -565,17 +565,21 @@ export const horasExtrasRouter = router({
         if (emp.destinacao === "banco_horas") {
           const mins = Number(emp.heTotalMins || 0);
           if (mins <= 0) continue;
+          const minutosBase = mins;
+          const minutosAcrescimo = 0;
+          const totalComAcrescimo = minutosBase + minutosAcrescimo;
           await db.execute(sql`
             INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
-            VALUES (${emp.employeeId}, ${input.companyId}, ${mins}, NOW())
+            VALUES (${emp.employeeId}, ${input.companyId}, ${totalComAcrescimo}, NOW())
             ON CONFLICT ("employeeId", "companyId") DO UPDATE SET
               "saldoMinutos" = banco_horas_saldo."saldoMinutos" + EXCLUDED."saldoMinutos",
               "atualizadoEm" = NOW()
           `);
           const descricao = `Crédito HE ${dataInicioStr} → ${dataFimStr}`;
           await db.execute(sql`
-            INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", "hePeriodId", tipo, minutos, descricao, data, "criadoPor")
-            VALUES (${emp.employeeId}, ${input.companyId}, ${input.hePeriodId}, 'credito', ${mins},
+            INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", "hePeriodId", tipo, minutos, "minutosBase", "minutosAcrescimo", descricao, data, "criadoPor")
+            VALUES (${emp.employeeId}, ${input.companyId}, ${input.hePeriodId}, 'credito', ${totalComAcrescimo},
+              ${minutosBase}, ${minutosAcrescimo},
               ${descricao}, ${dataFimStr}::date, ${ctx.user.name || "Sistema"})
           `);
           bancoCreditados++;

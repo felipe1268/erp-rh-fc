@@ -443,39 +443,79 @@ export default function BancoHoras() {
                           <tr className="bg-gray-100 border-b">
                             <th className="text-left py-2 px-3 font-semibold">Data</th>
                             <th className="text-left py-2 px-3 font-semibold">Tipo</th>
-                            <th className="text-right py-2 px-3 font-semibold">Horas</th>
+                            <th className="text-right py-2 px-3 font-semibold">Horas Trabalhadas</th>
+                            <th className="text-right py-2 px-3 font-semibold">Acréscimo Legal</th>
+                            <th className="text-right py-2 px-3 font-semibold">Total</th>
+                            <th className="text-right py-2 px-3 font-semibold">Saldo Acumulado</th>
                             <th className="text-left py-2 px-3 font-semibold">Descrição</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {lancamentosFiltradosMes.map((l: any) => (
-                            <tr key={l.id} className="border-b">
-                              <td className="py-2 px-3">{new Date(l.data).toLocaleDateString("pt-BR")}</td>
-                              <td className="py-2 px-3">
-                                <span className={`font-semibold ${l.tipo === "credito" ? "text-green-700" : "text-orange-700"}`}>
-                                  {l.tipo === "credito" ? "CRÉDITO" : "DÉBITO"}
-                                </span>
-                              </td>
-                              <td className="text-right py-2 px-3 font-medium">
-                                {l.tipo === "credito" ? "+" : "−"} {minsToHHMM(Number(l.minutos))}
-                              </td>
-                              <td className="py-2 px-3 text-muted-foreground">{l.descricao || "—"}</td>
-                            </tr>
-                          ))}
+                          {(() => {
+                            let saldoAcumulado = 0;
+                            const sortedLancs = [...lancamentosFiltradosMes].sort((a: any, b: any) =>
+                              new Date(a.data).getTime() - new Date(b.data).getTime() || Number(a.id) - Number(b.id)
+                            );
+                            return sortedLancs.map((l: any) => {
+                              const base = Number(l.minutosBase || l.minutos || 0);
+                              const acrescimo = Number(l.minutosAcrescimo || 0);
+                              const total = Number(l.minutos || 0);
+                              if (l.tipo === "credito") {
+                                saldoAcumulado += total;
+                              } else {
+                                saldoAcumulado -= total;
+                              }
+                              return (
+                                <tr key={l.id} className="border-b">
+                                  <td className="py-2 px-3">{new Date(l.data).toLocaleDateString("pt-BR")}</td>
+                                  <td className="py-2 px-3">
+                                    <span className={`font-semibold text-xs px-2 py-0.5 rounded ${l.tipo === "credito" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
+                                      {l.tipo === "credito" ? "CRÉDITO" : "DÉBITO"}
+                                    </span>
+                                  </td>
+                                  <td className="text-right py-2 px-3 font-medium">
+                                    {l.tipo === "credito" ? minsToHHMM(base) : "—"}
+                                  </td>
+                                  <td className="text-right py-2 px-3 text-muted-foreground">
+                                    {l.tipo === "credito" ? (acrescimo > 0 ? `+${minsToHHMM(acrescimo)}` : "0h00") : "—"}
+                                  </td>
+                                  <td className="text-right py-2 px-3 font-bold">
+                                    <span className={l.tipo === "credito" ? "text-green-700" : "text-orange-700"}>
+                                      {l.tipo === "credito" ? "+" : "−"}{minsToHHMM(total)}
+                                    </span>
+                                  </td>
+                                  <td className={`text-right py-2 px-3 font-bold ${saldoAcumulado >= 0 ? "text-blue-700" : "text-red-600"}`}>
+                                    {saldoAcumulado >= 0 ? "+" : ""}{minsToHHMM(saldoAcumulado)}
+                                  </td>
+                                  <td className="py-2 px-3 text-xs text-muted-foreground">{l.descricao || "—"}</td>
+                                </tr>
+                              );
+                            });
+                          })()}
                         </tbody>
                         <tfoot>
                           <tr className="bg-gray-50 border-t-2 font-bold">
-                            <td colSpan={2} className="py-2 px-3">TOTAL DO MÊS</td>
+                            <td colSpan={2} className="py-2 px-3">TOTAIS DO MÊS</td>
+                            <td className="text-right py-2 px-3 text-green-700">
+                              {minsToHHMM(lancamentosFiltradosMes.filter((l: any) => l.tipo === "credito").reduce((acc: number, l: any) => acc + Number(l.minutosBase || l.minutos || 0), 0))}
+                            </td>
+                            <td className="text-right py-2 px-3 text-muted-foreground">
+                              {minsToHHMM(lancamentosFiltradosMes.filter((l: any) => l.tipo === "credito").reduce((acc: number, l: any) => acc + Number(l.minutosAcrescimo || 0), 0))}
+                            </td>
                             <td className="text-right py-2 px-3 text-blue-700">
                               {(() => {
                                 const totalCredito = lancamentosFiltradosMes.filter((l: any) => l.tipo === "credito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0);
                                 const totalDebito = lancamentosFiltradosMes.filter((l: any) => l.tipo === "debito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0);
-                                return minsToHHMM(totalCredito - totalDebito);
+                                const saldo = totalCredito - totalDebito;
+                                return `${saldo >= 0 ? "+" : ""}${minsToHHMM(saldo)}`;
                               })()}
                             </td>
+                            <td className="text-right py-2 px-3 text-blue-700 font-bold">
+                              {minsToHHMM(saldoMap.get(extratoEmpId!) || 0)}
+                            </td>
                             <td className="py-2 px-3 text-xs text-muted-foreground">
-                              (+{minsToHHMM(lancamentosFiltradosMes.filter((l: any) => l.tipo === "credito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0))} /
-                              −{minsToHHMM(lancamentosFiltradosMes.filter((l: any) => l.tipo === "debito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0))})
+                              (+{minsToHHMM(lancamentosFiltradosMes.filter((l: any) => l.tipo === "credito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0))} créditos /
+                              −{minsToHHMM(lancamentosFiltradosMes.filter((l: any) => l.tipo === "debito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0))} débitos)
                             </td>
                           </tr>
                         </tfoot>
