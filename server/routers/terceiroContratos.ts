@@ -2844,6 +2844,28 @@ export const terceiroContratosRouter = router({
       return { id: novo.id, versao: 1 };
     }),
 
+  salvarDocLayout: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      logoUrl: z.string().nullable().optional(),
+      docRodapeTexto: z.string().nullable().optional(),
+      docMarcaDaguaUrl: z.string().nullable().optional(),
+      docMarcaDaguaOpacidade: z.number().min(0).max(1).nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const setClauses: any[] = [];
+      if (input.logoUrl !== undefined) setClauses.push(sql`"logoUrl" = ${input.logoUrl}`);
+      if (input.docRodapeTexto !== undefined) setClauses.push(sql`"doc_rodape_texto" = ${input.docRodapeTexto}`);
+      if (input.docMarcaDaguaUrl !== undefined) setClauses.push(sql`"doc_marca_dagua_url" = ${input.docMarcaDaguaUrl}`);
+      if (input.docMarcaDaguaOpacidade !== undefined) setClauses.push(sql`"doc_marca_dagua_opacidade" = ${input.docMarcaDaguaOpacidade}`);
+      if (setClauses.length > 0) {
+        const setFragment = sql.join(setClauses, sql`, `);
+        await db.execute(sql`UPDATE companies SET ${setFragment} WHERE id = ${input.companyId}`);
+      }
+      return { ok: true };
+    }),
+
   gerarTextoContrato: protectedProcedure
     .input(z.object({ contratoId: z.number() }))
     .mutation(async ({ input, ctx }) => {

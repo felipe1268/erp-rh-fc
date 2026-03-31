@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import {
   ArrowLeft, Save, FileText, Info, RefreshCw, Eye, Pencil,
   Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  List, ListOrdered, Undo, Redo, Type, Minus, ChevronDown, Building2
+  List, ListOrdered, Undo, Redo, Type, Minus, ChevronDown, Building2, Settings, Image, FileDown, Droplets, X
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useCompany } from "@/hooks/useCompany";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -187,13 +188,46 @@ export default function ContratoTemplate() {
   const [varBusca, setVarBusca] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
   const [showVars, setShowVars] = useState(true);
+  const [showLayoutConfig, setShowLayoutConfig] = useState(false);
+  const [layoutLogoUrl, setLayoutLogoUrl] = useState("");
+  const [layoutRodape, setLayoutRodape] = useState("");
+  const [layoutMarcaDaguaUrl, setLayoutMarcaDaguaUrl] = useState("");
+  const [layoutOpacidade, setLayoutOpacidade] = useState(0.06);
 
+  const resetLayoutToSaved = useCallback(() => {
+    if (companyInfo) {
+      setLayoutLogoUrl(companyInfo.logoUrl || "");
+      setLayoutRodape(companyInfo.docRodapeTexto || "");
+      setLayoutMarcaDaguaUrl(companyInfo.docMarcaDaguaUrl || "");
+      setLayoutOpacidade(Number(companyInfo.docMarcaDaguaOpacidade) || 0.06);
+    }
+  }, [companyInfo]);
+
+  const utils = trpc.useUtils();
   const { data: tpl, isLoading } = trpc.terceiroContratos.getTemplate.useQuery(
     { companyId },
     { enabled: companyId > 0 }
   );
 
   const companyInfo = tpl?.companyData ?? null;
+
+  useEffect(() => {
+    if (companyInfo) {
+      setLayoutLogoUrl(companyInfo.logoUrl || "");
+      setLayoutRodape(companyInfo.docRodapeTexto || "");
+      setLayoutMarcaDaguaUrl(companyInfo.docMarcaDaguaUrl || "");
+      setLayoutOpacidade(Number(companyInfo.docMarcaDaguaOpacidade) || 0.06);
+    }
+  }, [companyInfo]);
+
+  const salvarLayoutMut = trpc.terceiroContratos.salvarDocLayout.useMutation({
+    onSuccess: () => {
+      toast.success("Layout do documento salvo!");
+      setShowLayoutConfig(false);
+      utils.terceiroContratos.getTemplate.invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const editor = useEditor({
     extensions: [
@@ -329,6 +363,15 @@ EAP          | Descrição                                             | Un    |
             >
               <Type className="w-3.5 h-3.5" />
               Variáveis
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-8 text-xs"
+              onClick={() => { resetLayoutToSaved(); setShowLayoutConfig(true); }}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              Layout
             </Button>
             <Button
               size="sm"
@@ -559,6 +602,107 @@ EAP          | Descrição                                             | Un    |
           )}
         </div>
       </div>
+
+      {showLayoutConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { resetLayoutToSaved(); setShowLayoutConfig(false); }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Settings className="w-4 h-4 text-gray-500" />
+                <h3 className="text-sm font-semibold text-gray-800">Layout do Documento</h3>
+              </div>
+              <button onClick={() => { resetLayoutToSaved(); setShowLayoutConfig(false); }} className="p-1 hover:bg-gray-100 rounded-lg">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-5 max-h-[70vh] overflow-y-auto">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Image className="w-3.5 h-3.5 text-blue-500" />
+                  <Label className="text-xs font-semibold text-gray-700">Cabeçalho — Logo da Empresa</Label>
+                </div>
+                <Input
+                  value={layoutLogoUrl}
+                  onChange={e => setLayoutLogoUrl(e.target.value)}
+                  placeholder="URL do logo (ex: /logo-fc.jpg)"
+                  className="text-xs h-8"
+                />
+                {layoutLogoUrl && (
+                  <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100 flex items-center gap-3">
+                    <img src={layoutLogoUrl} alt="Preview" className="h-10 object-contain" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <span className="text-[10px] text-gray-400">Preview do logo</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <FileDown className="w-3.5 h-3.5 text-green-500" />
+                  <Label className="text-xs font-semibold text-gray-700">Rodapé — Texto (endereço, contato)</Label>
+                </div>
+                <Textarea
+                  value={layoutRodape}
+                  onChange={e => setLayoutRodape(e.target.value)}
+                  placeholder="Ex: Av. Principal, 100, Sala 10 &#10;Cidade-UF – Tel: (11) 1234-5678"
+                  className="text-xs min-h-[60px] resize-none"
+                  rows={3}
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Use Enter para quebrar linha. Aparece centralizado no rodapé.</p>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Droplets className="w-3.5 h-3.5 text-purple-500" />
+                  <Label className="text-xs font-semibold text-gray-700">Marca d'Água</Label>
+                </div>
+                <Input
+                  value={layoutMarcaDaguaUrl}
+                  onChange={e => setLayoutMarcaDaguaUrl(e.target.value)}
+                  placeholder="URL da imagem (ex: /logo-fc.jpg)"
+                  className="text-xs h-8 mb-2"
+                />
+                <div className="flex items-center gap-3">
+                  <Label className="text-[10px] text-gray-500 whitespace-nowrap">Opacidade: {Math.round(layoutOpacidade * 100)}%</Label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="0.3"
+                    step="0.01"
+                    value={layoutOpacidade}
+                    onChange={e => setLayoutOpacidade(parseFloat(e.target.value))}
+                    className="flex-1 h-1.5 accent-purple-500"
+                  />
+                </div>
+                {layoutMarcaDaguaUrl && (
+                  <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-center">
+                    <img src={layoutMarcaDaguaUrl} alt="Marca d'água" className="h-16 object-contain" style={{ opacity: layoutOpacidade }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 bg-gray-50">
+              <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => { resetLayoutToSaved(); setShowLayoutConfig(false); }}>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                className="text-xs h-8 bg-blue-600 hover:bg-blue-700 gap-1.5"
+                disabled={salvarLayoutMut.isPending}
+                onClick={() => salvarLayoutMut.mutate({
+                  companyId,
+                  logoUrl: layoutLogoUrl || null,
+                  docRodapeTexto: layoutRodape || null,
+                  docMarcaDaguaUrl: layoutMarcaDaguaUrl || null,
+                  docMarcaDaguaOpacidade: layoutOpacidade,
+                })}
+              >
+                <Save className="w-3.5 h-3.5" />
+                {salvarLayoutMut.isPending ? "Salvando..." : "Salvar Layout"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
