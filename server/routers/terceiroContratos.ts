@@ -2853,14 +2853,47 @@ export const terceiroContratosRouter = router({
       const [company] = await db.select().from(companies).where(eq(companies.id, contrato.companyId));
       const [obra] = contrato.obraId ? await db.select().from(obras).where(eq(obras.id, contrato.obraId)) : [null];
 
+      const itensContrato = await db.select().from(terceiroContratoItens)
+        .where(eq(terceiroContratoItens.contratoId, input.contratoId))
+        .orderBy(asc(terceiroContratoItens.ordem), asc(terceiroContratoItens.eapCodigo));
+
       const fmtDate = (d: string | null | undefined) => {
         if (!d) return "___/___/______";
         const [y, m, day] = d.slice(0, 10).split("-");
         return `${day}/${m}/${y}`;
       };
       const fmtMoney = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
+      const fmtNum = (v: any) => new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(Number(v) || 0);
       const endEmpresa = [empresa?.logradouro, empresa?.numero, empresa?.bairro, empresa?.cidade, empresa?.estado].filter(Boolean).join(", ");
       const endCompany = company?.endereco ?? [company?.cidade, company?.estado].filter(Boolean).join(" - ") ?? "";
+
+      let tabelaItens = "";
+      if (itensContrato.length > 0) {
+        const linhaHeader = "EAP          | Descrição                                          | Un    | Qtd       | Vlr Unit.      | Total";
+        const linhaSep =    "-------------|-------------------------------------------------------|-------|-----------|----------------|----------------";
+        const sanitize = (s: string) => s.replace(/\|/g, "/").replace(/[\r\n]+/g, " ").trim();
+        const linhasItens = itensContrato.map(it => {
+          const eap = sanitize(it.eapCodigo || "—").padEnd(12);
+          const desc = sanitize(it.descricao || "").padEnd(55);
+          const un = sanitize(it.unidade || "—").padEnd(5);
+          const qtd = fmtNum(it.quantidade).padStart(9);
+          const vUnit = fmtMoney(it.valorUnitario).padStart(14);
+          const vTotal = fmtMoney(it.valorTotal).padStart(14);
+          return `${eap} | ${desc} | ${un} | ${qtd} | ${vUnit} | ${vTotal}`;
+        });
+        const totalGeral = itensContrato.reduce((s, it) => s + Number(it.valorTotal || 0), 0);
+        tabelaItens = [
+          "",
+          "ESCOPO DETALHADO DOS SERVIÇOS (EAP):",
+          "",
+          linhaHeader,
+          linhaSep,
+          ...linhasItens,
+          linhaSep,
+          `${"".padEnd(12)} | ${"".padEnd(55)} | ${"".padEnd(5)} | ${"".padEnd(9)} | ${"TOTAL:".padStart(14)} | ${fmtMoney(totalGeral).padStart(14)}`,
+          "",
+        ].join("\n");
+      }
 
       const vars: Record<string, string> = {
         "NUMERO_CONTRATO": contrato.numeroContrato ?? "_______________",
@@ -2882,6 +2915,8 @@ export const terceiroContratosRouter = router({
         "DATA_TERMINO": fmtDate(contrato.dataTermino ?? undefined),
         "CIDADE_ESTADO": [company?.cidade, company?.estado].filter(Boolean).join(" - ") || "Montes Claros - MG",
         "DATA_ASSINATURA": fmtDate(new Date().toISOString()),
+        "TABELA_ITENS": tabelaItens,
+        "QTD_ITENS": String(itensContrato.length),
       };
 
       let texto = template.texto;

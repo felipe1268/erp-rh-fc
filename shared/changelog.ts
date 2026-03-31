@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 947,
+    titulo: "Tabela EAP com valores unitários incluída automaticamente no contrato",
+    descricao: "Ao gerar o contrato, a variável {{TABELA_ITENS}} insere automaticamente o escopo detalhado dos serviços (EAP) com código EAP, descrição, unidade, quantidade, valor unitário e valor total de cada item do contrato. A tabela é renderizada com formatação de colunas alinhadas no visualizador de contrato. Template padrão atualizado com a cláusula do objeto incluindo a tabela. Editor WYSIWYG (TipTap) com toolbar estilo Word na tela de Template de Contrato.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-03-31 17:45:00",
+  },
+  {
     version: 946,
     titulo: "Visualizador de contrato estilo Word com destaque de dados automáticos",
     descricao: "A aba Contrato do módulo Terceiros foi redesenhada com visualização estilo documento Word (folha A4 com margens, fonte serifada, cabeçalho com logo da empresa, rodapé com assinaturas CONTRATANTE/CONTRATADA). Dados preenchidos automaticamente pelo sistema (nomes, CNPJs, valores, datas) são destacados em azul no documento. Editor de texto movido para modal separado acessível pela barra de ferramentas. Histórico de revisões também em modal. Cláusulas formatadas automaticamente (títulos centralizados, cláusulas em negrito, subitens indentados).",

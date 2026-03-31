@@ -653,6 +653,9 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                           const isTitulo = /^CONTRATO\s+DE\s+/i.test(trimmed);
                           const isSubItem = /^\d+\.\d+[\s.]/.test(trimmed) || /^[a-z]\)\s/.test(trimmed);
                           const isNumericItem = /^\d+\.\s/.test(trimmed);
+                          const isSeparator = /^[-|]+$/.test(trimmed.replace(/\s/g, ""));
+                          const isTableRow = trimmed.includes(" | ") && !isSeparator;
+                          const isSectionHeader = /^ESCOPO DETALHADO|^QUADRO|^TABELA/i.test(trimmed);
 
                           if (isTitulo) {
                             return (
@@ -666,6 +669,30 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                               <h2 key={idx} className="text-[13px] font-bold text-gray-900 mt-8 mb-3 uppercase tracking-wide">
                                 {highlightAutoFilled(trimmed)}
                               </h2>
+                            );
+                          }
+                          if (isSectionHeader) {
+                            return (
+                              <p key={idx} className="text-[12px] font-bold text-gray-700 mt-6 mb-2 uppercase tracking-wide">
+                                {trimmed}
+                              </p>
+                            );
+                          }
+                          if (isSeparator) {
+                            return <div key={idx} className="border-t border-gray-300 my-0.5" />;
+                          }
+                          if (isTableRow) {
+                            const cells = trimmed.split("|").map(c => c.trim());
+                            const isHeader = /^EAP|^Item|^Código/i.test(cells[0] || "");
+                            return (
+                              <div key={idx} className={`flex text-[10px] font-mono py-0.5 ${isHeader ? "font-bold text-gray-700 bg-gray-50 border-b border-gray-300" : "text-gray-600"}`}>
+                                <span className="w-[80px] flex-shrink-0 px-1">{cells[0] || ""}</span>
+                                <span className="flex-1 min-w-0 px-1 break-words">{highlightAutoFilled(cells[1] || "")}</span>
+                                <span className="w-[40px] flex-shrink-0 px-1 text-center">{cells[2] || ""}</span>
+                                <span className="w-[65px] flex-shrink-0 px-1 text-right">{highlightAutoFilled(cells[3] || "")}</span>
+                                <span className="w-[90px] flex-shrink-0 px-1 text-right">{highlightAutoFilled(cells[4] || "")}</span>
+                                <span className="w-[90px] flex-shrink-0 px-1 text-right font-medium">{highlightAutoFilled(cells[5] || "")}</span>
+                              </div>
                             );
                           }
                           if (isSubItem) {

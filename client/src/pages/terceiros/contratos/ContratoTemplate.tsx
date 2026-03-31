@@ -39,6 +39,8 @@ const VARIAVEIS: { chave: string; descricao: string; categoria: string }[] = [
   { chave: "{{CONTRATADA_REPRESENTANTE}}", descricao: "Nome do representante legal da contratada", categoria: "Contratada" },
   { chave: "{{CONTRATADA_CARGO}}", descricao: "Cargo do representante da contratada", categoria: "Contratada" },
   { chave: "{{CIDADE_ESTADO}}", descricao: "Cidade e estado da contratante (ex: Montes Claros - MG)", categoria: "Localização" },
+  { chave: "{{TABELA_ITENS}}", descricao: "Tabela completa da EAP com descrição, unidade, quantidade, valor unitário e total", categoria: "Contrato" },
+  { chave: "{{QTD_ITENS}}", descricao: "Quantidade de itens/atividades do contrato", categoria: "Contrato" },
 ];
 
 const TEMPLATE_PADRAO = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS Nº {{NUMERO_CONTRATO}}
@@ -53,7 +55,9 @@ Têm entre si, justo e contratado, o seguinte:
 
 CLÁUSULA PRIMEIRA – DO OBJETO
 
-1.1 O presente contrato tem por objeto a prestação de serviços de {{DESCRICAO_OBJETO}}, a serem executados na obra {{OBRA_NOME}}.
+1.1 O presente contrato tem por objeto a prestação de serviços de {{DESCRICAO_OBJETO}}, a serem executados na obra {{OBRA_NOME}}, conforme escopo detalhado abaixo:
+
+{{TABELA_ITENS}}
 
 CLÁUSULA SEGUNDA – DO PRAZO
 
@@ -272,7 +276,16 @@ export default function ContratoTemplate() {
     .replace(/\{\{CONTRATADA_ENDERECO\}\}/g, "Rua das Flores, 200, Montes Claros - MG")
     .replace(/\{\{CONTRATADA_REPRESENTANTE\}\}/g, "João da Silva")
     .replace(/\{\{CONTRATADA_CARGO\}\}/g, "Sócio Administrador")
-    .replace(/\{\{CIDADE_ESTADO\}\}/g, "Montes Claros - MG");
+    .replace(/\{\{CIDADE_ESTADO\}\}/g, "Montes Claros - MG")
+    .replace(/\{\{TABELA_ITENS\}\}/g, `ESCOPO DETALHADO DOS SERVIÇOS (EAP):
+
+EAP          | Descrição                                             | Un    | Qtd       | Vlr Unit.      | Total
+-------------|-------------------------------------------------------|-------|-----------|----------------|----------------
+09.01.01.01  | Argamassa de Regularização e/ou Proteção e=4cm 1:6    | m²    |    121,85 |      R$ 25,00  |    R$ 3.046,25
+09.01.02.01  | Impermeabilização com Manta Asfáltica 3mm             | m²    |    121,85 |      R$ 48,50  |    R$ 5.909,73
+-------------|-------------------------------------------------------|-------|-----------|----------------|----------------
+             |                                                       |       |           |         TOTAL: |    R$ 8.955,98`)
+    .replace(/\{\{QTD_ITENS\}\}/g, "2");
 
   return (
     <DashboardLayout noPadding>
