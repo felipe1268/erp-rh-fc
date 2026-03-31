@@ -2443,9 +2443,9 @@ Responda APENAS com um objeto JSON no formato:
         const composicaoInsumosList = svcCode ? (composicaoMap[svcCode] ?? []) : [];
         let metaPUDisplay: number | undefined;
         let metaQtdDisplay: number | undefined;
-        if (isInsumoDeComposicao && tipoEfetivo === 'equipamento' && coef > 0 && metaFromSC > 0) {
-          const custoTotalComp = orcItemToCustoTotal[orcId!] ?? 0;
-          const metaTotalComp = orcItemToMeta[orcId!] ?? 0;
+        if (isInsumoDeComposicao && coef > 0 && metaFromSC > 0 && orcId) {
+          const custoTotalComp = orcItemToCustoTotal[orcId] ?? 0;
+          const metaTotalComp = orcItemToMeta[orcId] ?? 0;
           const effMeta = custoTotalComp > 0 ? (1 - metaTotalComp / custoTotalComp) : 0;
           metaPUDisplay = effMeta > 0 ? Math.round(metaFromSC * (1 - effMeta) * 100) / 100 : Math.round(metaFromSC * 100) / 100;
           metaQtdDisplay = coef;

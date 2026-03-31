@@ -25,13 +25,13 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
-    version: 934,
-    titulo: "Exibição correta do Preço Unit. e QTD de equipamento no Mapa de Cotação",
-    descricao: "Para insumos de equipamento em composição, o Mapa de Cotação agora exibe: Preço Unit. = PU do insumo com meta (R$ 2,36/CHP), QTD = coeficiente da composição (0,200), Total = alocação por m² (R$ 0,47). Antes mostrava a alocação por m² como 'Preço Unit.' e a quantidade total da composição como 'QTD'. Cálculos internos de saldo permanecem inalterados.",
+    version: 935,
+    titulo: "Mapa de Cotação: Preço Unit., QTD e Total corrigidos para TODOS os insumos de composição",
+    descricao: "Para todos os insumos de composição (MAT, MDO e EQUIP), o Mapa de Cotação agora exibe corretamente: Preço Unit. = PU do insumo com meta aplicada (ex: Areia R$ 76,80/m³, Cimento R$ 0,49/kg, Betoneira R$ 2,36/chp), QTD = coeficiente da composição (ex: 0,041, 16,8, 0,200), e Total Meta = PU × coeficiente (a alocação por m² de composição). Antes confundia a alocação por m² como 'Preço Unitário' e a quantidade total da composição como 'QTD'.",
     tipo: 'bugfix',
     modulos: 'Compras',
     criadoPor: 'System',
-    dataPublicacao: "2026-03-31 20:00:00",
+    dataPublicacao: "2026-03-31 21:00:00",
   },
   {
     version: 925,
