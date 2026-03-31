@@ -56,7 +56,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [tab, setTab] = useState<Tab>(
     tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl
     : medicaoIdFromUrl ? "medicoes"
-    : "itens"
+    : "documento"
   );
   const [showAddItem, setShowAddItem] = useState(false);
   const [showGerarMedicao, setShowGerarMedicao] = useState(false);
@@ -162,12 +162,12 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   });
 
   const gerarTextoMut = trpc.terceiroContratos.gerarTextoContrato.useMutation({
-    onSuccess: (r) => { toast.success(`Documento gerado — v${r.versao}`); setTextoEditado(r.texto); utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarRevisoes.invalidate({ contratoId: id }); },
+    onSuccess: (r) => { toast.success(`Contrato gerado — v${r.versao}`); setTextoEditado(r.texto); utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarRevisoes.invalidate({ contratoId: id }); },
     onError: (e) => toast.error(e.message),
   });
 
   const salvarTextoMut = trpc.terceiroContratos.salvarTextoContrato.useMutation({
-    onSuccess: (r) => { toast.success(`Documento salvo — v${r.versao}`); setShowObsModal(false); setObsRevisao(""); utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarRevisoes.invalidate({ contratoId: id }); },
+    onSuccess: (r) => { toast.success(`Contrato salvo — v${r.versao}`); setShowObsModal(false); setObsRevisao(""); utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarRevisoes.invalidate({ contratoId: id }); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -346,14 +346,14 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200">
-          {(["itens", "medicoes", "comparativo", "documentos", "documento"] as Tab[]).map(t => (
+          {(["documento", "itens", "medicoes", "comparativo", "documentos"] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${tab === t ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500 hover:text-gray-700"}`}>
               {t === "itens" ? `Itens (${contrato.itens.length})` :
                t === "medicoes" ? `Medições (${contrato.medicoes.length})` :
                t === "comparativo" ? <span className="flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" />Comparativo</span> :
                t === "documentos" ? `Docs (${contrato.documentos.length})` :
-               <span className="flex items-center gap-1.5"><FileEdit className="w-3.5 h-3.5" />Documento</span>}
+               <span className="flex items-center gap-1.5"><FileEdit className="w-3.5 h-3.5" />Contrato</span>}
             </button>
           ))}
         </div>
@@ -509,7 +509,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                 onClick={() => gerarTextoMut.mutate({ contratoId: id })}
               >
                 <RefreshCw className={`w-4 h-4 ${gerarTextoMut.isPending ? "animate-spin" : ""}`} />
-                {textoAtual ? "Regenerar documento" : "Gerar documento"}
+                {textoAtual ? "Regenerar contrato" : "Gerar contrato"}
               </Button>
               {textoAtual && (
                 <Button
@@ -552,8 +552,8 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             {!textoAtual ? (
               <div className="py-16 text-center border-2 border-dashed border-gray-200 rounded-xl">
                 <FileEdit className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-                <p className="text-gray-400 text-sm mb-1">Nenhum documento gerado ainda</p>
-                <p className="text-gray-400 text-xs mb-4">Clique em "Gerar documento" para preencher o template com os dados deste contrato</p>
+                <p className="text-gray-400 text-sm mb-1">Nenhum contrato gerado ainda</p>
+                <p className="text-gray-400 text-xs mb-4">Clique em "Gerar contrato" para preencher o template com os dados deste contrato</p>
                 <Button size="sm" variant="outline" onClick={() => navigate("/terceiros/contratos/template")}>
                   <ExternalLink className="w-3.5 h-3.5 mr-2" />
                   Configurar template padrão
@@ -606,7 +606,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         {showObsModal && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-              <h2 className="text-lg font-bold mb-1">Salvar Documento</h2>
+              <h2 className="text-lg font-bold mb-1">Salvar Contrato</h2>
               <p className="text-sm text-gray-500 mb-4">Adicione uma observação sobre esta revisão (opcional)</p>
               <Input
                 placeholder="Ex: Ajustado prazo da Cláusula 2"

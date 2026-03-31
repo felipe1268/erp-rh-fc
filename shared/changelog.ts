@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 945,
+    titulo: "Aba 'Documento' renomeada para 'Contrato' e movida para primeira posição",
+    descricao: "Na tela de detalhe do contrato de Terceiros, a aba 'Documento' foi renomeada para 'Contrato' e posicionada como primeira aba (à esquerda). O botão 'Gerar documento' agora é 'Gerar contrato', e todas as mensagens relacionadas foram atualizadas. A aba Contrato agora abre por padrão ao entrar no detalhe do contrato.",
+    tipo: 'melhoria',
+    modulos: 'Terceiros',
+    criadoPor: 'System',
+    dataPublicacao: "2026-03-31 23:59:00",
+  },
+  {
     version: 944,
     titulo: "MDO com Medição: Prazo de Entrega → Início da Mobilização",
     descricao: "Para cotações de mão de obra (serviço/pacote) com pagamento por medição, os campos de 'Prazo de Entrega' e 'Data Prevista Entrega' agora são exibidos como 'Prazo para Mobilização' e 'Data Início Mobilização'. A seção 'Entrega & Frete' muda para 'Mobilização & Frete'. A validação obrigatória de prazo de entrega é dispensada para este tipo de cotação, já que o pagamento é por medição. Aplicado no modal de condições, nos detalhes da cotação e nas validações de aprovação (frontend e backend).",
