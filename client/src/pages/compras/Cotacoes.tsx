@@ -1976,14 +1976,24 @@ export default function Cotacoes() {
                   {st && <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium border ${st.cls}`}>{st.label}</span>}
                   {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo === "servico" && (
                     <>
-                      <Button onClick={() => {
-                        if (!validarCondicoesVencedor()) return;
-                        gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId });
-                      }} disabled={gerarContrato.isPending}
-                        className="bg-purple-600 hover:bg-purple-500 text-white gap-2">
-                        {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                        Aprovar e Gerar Contrato de Serviço
-                      </Button>
+                      {deficit > 0 && !cobertoPorRisco && !semVerbaAutorizado ? (
+                        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-red-50 border border-red-200">
+                          <ShieldAlert className="h-5 w-5 text-red-600 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-red-800">Não é possível aprovar — déficit orçamentário de {deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                            <p className="text-xs text-red-600 mt-0.5">Resolva a realocação de custo no Mapa de Cotação antes de gerar o contrato.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button onClick={() => {
+                          if (!validarCondicoesVencedor()) return;
+                          gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId });
+                        }} disabled={gerarContrato.isPending}
+                          className="bg-purple-600 hover:bg-purple-500 text-white gap-2">
+                          {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                          Aprovar e Gerar Contrato de Serviço
+                        </Button>
+                      )}
                       <Button variant="outline" onClick={() => atualizarStatus.mutate({ id: detalheFullscreen.id, status: "recusada" })}
                         className="border-red-200 text-red-600 hover:bg-red-50 gap-2">
                         <XCircle className="h-4 w-4" /> Recusar
@@ -2123,14 +2133,24 @@ export default function Cotacoes() {
                   <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-200">
                     {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo === "servico" && (
                       <>
-                        <Button onClick={() => {
-                          if (!validarCondicoesVencedor()) return;
-                          gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId });
-                        }} disabled={gerarContrato.isPending}
-                          className="bg-purple-600 hover:bg-purple-500 text-white gap-2">
-                          {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                          Aprovar e Gerar Contrato de Serviço
-                        </Button>
+                        {deficit > 0 && !cobertoPorRisco && !semVerbaAutorizado ? (
+                          <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-red-50 border border-red-200">
+                            <ShieldAlert className="h-5 w-5 text-red-600 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-semibold text-red-800">Não é possível aprovar — déficit orçamentário de {deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                              <p className="text-xs text-red-600 mt-0.5">Resolva a realocação de custo no Mapa de Cotação antes de gerar o contrato.</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <Button onClick={() => {
+                            if (!validarCondicoesVencedor()) return;
+                            gerarContrato.mutate({ cotacaoId: detalheFullscreen.id, companyId });
+                          }} disabled={gerarContrato.isPending}
+                            className="bg-purple-600 hover:bg-purple-500 text-white gap-2">
+                            {gerarContrato.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                            Aprovar e Gerar Contrato de Serviço
+                          </Button>
+                        )}
                         <Button variant="outline" onClick={() => atualizarStatus.mutate({ id: detalheFullscreen.id, status: "recusada" })}
                           className="border-red-200 text-red-600 hover:bg-red-50 gap-2">
                           <X className="h-4 w-4" /> Recusar
@@ -4116,15 +4136,24 @@ export default function Cotacoes() {
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
                   {detalhe.status === "pendente" && (detalhe as any).tipo === "servico" && (
                     <>
-                      <Button size="sm" onClick={() => {
-                        if (!validarCondicoesVencedor()) return;
-                        gerarContrato.mutate({ cotacaoId: detalhe.id, companyId });
-                      }}
-                        disabled={gerarContrato.isPending}
-                        className="bg-purple-600 hover:bg-purple-500 text-white text-xs gap-1">
-                        {gerarContrato.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
-                        Aprovar e Gerar Contrato de Serviço
-                      </Button>
+                      {deficit > 0 && !cobertoPorRisco && !semVerbaAutorizado ? (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200">
+                          <ShieldAlert className="h-4 w-4 text-red-600 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs font-semibold text-red-800">Déficit de {deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} — resolva antes de aprovar</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button size="sm" onClick={() => {
+                          if (!validarCondicoesVencedor()) return;
+                          gerarContrato.mutate({ cotacaoId: detalhe.id, companyId });
+                        }}
+                          disabled={gerarContrato.isPending}
+                          className="bg-purple-600 hover:bg-purple-500 text-white text-xs gap-1">
+                          {gerarContrato.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
+                          Aprovar e Gerar Contrato de Serviço
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => atualizarStatus.mutate({ id: detalhe.id, status: "recusada" })}
                         className="border-red-200 text-red-600 hover:bg-red-50 text-xs gap-1">
                         <X className="h-3 w-3" /> Recusar
