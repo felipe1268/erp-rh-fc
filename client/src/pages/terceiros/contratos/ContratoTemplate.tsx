@@ -178,7 +178,8 @@ function ToolbarButton({ active, onClick, children, title }: { active?: boolean;
 
 export default function ContratoTemplate() {
   const [, navigate] = useLocation();
-  const { companyId } = useCompany();
+  const { companyId: rawCompanyId, isConstrutoras, getCompanyIds } = useCompany();
+  const companyId = rawCompanyId > 0 ? rawCompanyId : (isConstrutoras ? (getCompanyIds()[0] || 0) : 0);
 
   const [nome, setNome] = useState("Contrato Padrão de Prestação de Serviços");
   const [texto, setTexto] = useState(TEMPLATE_PADRAO);

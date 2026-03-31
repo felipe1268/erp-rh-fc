@@ -2805,16 +2805,24 @@ export const terceiroContratosRouter = router({
         ))
         .orderBy(desc(terceiroContratoTemplates.versao))
         .limit(1);
-      const [comp] = await db.select({
-        razaoSocial: companies.razaoSocial,
-        cnpj: companies.cnpj,
-        logoUrl: companies.logoUrl,
-        docRodapeTexto: companies.docRodapeTexto,
-        docMarcaDaguaUrl: companies.docMarcaDaguaUrl,
-        docMarcaDaguaOpacidade: companies.docMarcaDaguaOpacidade,
-      }).from(companies).where(eq(companies.id, input.companyId));
-      if (!tpl) return { id: 0, companyId: input.companyId, nome: "Contrato Padrão", texto: "", ativo: true, versao: 0, criadoEm: "", atualizadoEm: "", companyData: comp || null };
-      return { ...tpl, companyData: comp || null };
+      let comp: any = null;
+      try {
+        const rows = await db.select({
+          razaoSocial: companies.razaoSocial,
+          cnpj: companies.cnpj,
+          logoUrl: companies.logoUrl,
+          docRodapeTexto: companies.docRodapeTexto,
+          docMarcaDaguaUrl: companies.docMarcaDaguaUrl,
+          docMarcaDaguaOpacidade: companies.docMarcaDaguaOpacidade,
+        }).from(companies).where(eq(companies.id, input.companyId));
+        comp = rows[0] || null;
+      } catch (e: any) {
+        console.error("[getTemplate] Error fetching company:", e.message);
+        const fallback = await db.execute(sql`SELECT "razaoSocial", "cnpj", "logoUrl", "doc_rodape_texto" as "docRodapeTexto", "doc_marca_dagua_url" as "docMarcaDaguaUrl", "doc_marca_dagua_opacidade" as "docMarcaDaguaOpacidade" FROM companies WHERE id = ${input.companyId} LIMIT 1`);
+        comp = (fallback as any).rows?.[0] || null;
+      }
+      if (!tpl) return { id: 0, companyId: input.companyId, nome: "Contrato Padrão", texto: "", ativo: true, versao: 0, criadoEm: "", atualizadoEm: "", companyData: comp };
+      return { ...tpl, companyData: comp };
     }),
 
   salvarTemplate: protectedProcedure
