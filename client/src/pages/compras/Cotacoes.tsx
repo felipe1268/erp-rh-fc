@@ -1749,7 +1749,7 @@ export default function Cotacoes() {
       }
       const fornTotal = parseFloat(fornParaSaldo.totalOrcado ?? "0");
       const metaTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
-        acc + (parseFloat(it.metaUnitario ?? "0") * parseFloat(it.quantidade ?? "0")), 0);
+        acc + (Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100 * parseFloat(it.quantidade ?? "0")), 0);
       if (metaTotal > 0 && fornTotal > metaTotal && !cobertoPorRisco && !semVerbaAutorizado) {
         const defVal = (fornTotal - metaTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
         const fornNome = fornParaSaldo.fornecedor?.nomeFantasia || fornParaSaldo.fornecedor?.razaoSocial || "Fornecedor";
@@ -1844,7 +1844,7 @@ export default function Cotacoes() {
     }
 
     function getItemSaldo(it: any): { saldo: number; hasMeta: boolean } {
-      const metaUnit = parseFloat(it.metaUnitario ?? "0");
+      const metaUnit = Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100;
       const qtdItem = parseFloat(it.quantidade ?? "0");
       const fonteV = (it as any).fonteVinculo;
       if (!fonteV && metaUnit === 0) {
@@ -1874,7 +1874,7 @@ export default function Cotacoes() {
     }
 
     const metaGrandTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
-      acc + (parseFloat(it.metaUnitario ?? "0") * parseFloat(it.quantidade ?? "0")), 0);
+      acc + (Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100 * parseFloat(it.quantidade ?? "0")), 0);
     // Quantidade total: soma quando todos os itens têm a mesma unidade
     const allItens = mapa?.itens ?? [];
     const unidadesUnicas = [...new Set(allItens.map((it: any) => (it.unidade || "un").toLowerCase()))];
@@ -2861,9 +2861,10 @@ export default function Cotacoes() {
                               return itensParaRenderizar;
                             })().map((it: any) => {
                               const melhorPreco = getMelhorPrecoItem(it.id);
-                              const metaUnit = parseFloat(it.metaUnitario ?? "0");
+                              const metaUnitRaw = parseFloat(it.metaUnitario ?? "0");
+                              const metaUnit = Math.round(metaUnitRaw * 100) / 100;
                               const metaQtd = parseFloat(it.quantidade ?? "0");
-                              const metaTot = metaUnit * metaQtd;
+                              const metaTot = Math.round(metaUnit * metaQtd * 100) / 100;
                               const { saldo, hasMeta } = getItemSaldo(it);
                               const hasComposicao = !it._grouped && ((it as any).composicaoInsumos ?? []).length > 0;
                               const isExpanded = expandedComposicao[it.id] ?? false;
