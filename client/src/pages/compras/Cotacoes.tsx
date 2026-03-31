@@ -914,6 +914,7 @@ export default function Cotacoes() {
       q.refetch();
       trpcUtils.compras.getCotacao.invalidate();
       trpcUtils.compras.listarOrdens.invalidate();
+      trpcUtils.compras.getTimelineCompra.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
