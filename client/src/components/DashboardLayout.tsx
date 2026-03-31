@@ -232,20 +232,25 @@ const menuSectionsAvaliacao: MenuSection[] = [
 
 const menuSectionsTerceiros: MenuSection[] = [
   {
-    title: "Terceiros",
+    title: "Contratos e Assinaturas",
+    items: [
+      { icon: FileSignature, label: "Contratos de Serviço", path: "/terceiros/contratos" },
+      { icon: PenLine, label: "IntegraSign", path: "/integrasign" },
+    ],
+  },
+  {
+    title: "Medições e Financeiro",
+    items: [
+      { icon: Receipt, label: "Medições", path: "/terceiros/medicoes" },
+      { icon: TrendingUp, label: "Previsão de Caixa", path: "/terceiros/previsao-caixa" },
+    ],
+  },
+  {
+    title: "Cadastro de Terceiros",
     items: [
       { icon: LayoutDashboard, label: "Painel Terceiros", path: "/terceiros/painel" },
       { icon: Building2, label: "Empresas Terceiras", path: "/terceiros/empresas" },
       { icon: Users, label: "Funcionários Terceiros", path: "/terceiros/funcionarios" },
-    ],
-  },
-  {
-    title: "Contratos e Medições",
-    items: [
-      { icon: FileSignature, label: "Contratos de Serviço", path: "/terceiros/contratos" },
-      { icon: PenLine, label: "IntegraSign", path: "/integrasign" },
-      { icon: Receipt, label: "Medições", path: "/terceiros/medicoes" },
-      { icon: TrendingUp, label: "Previsão de Caixa", path: "/terceiros/previsao-caixa" },
     ],
   },
   {

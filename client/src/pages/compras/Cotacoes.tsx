@@ -764,7 +764,15 @@ export default function Cotacoes() {
     onError: (e) => toast.error(e.message),
   });
   const gerarOC = trpc.compras.criarOrdemDeCotacao.useMutation({
-    onSuccess: () => { toast.success("Ordem de Compra gerada!"); q.refetch(); detalheQ.refetch(); setSemVerbaAutorizado(null); },
+    onSuccess: (data: any) => {
+      q.refetch(); detalheQ.refetch(); setSemVerbaAutorizado(null);
+      if (data?.terceiroContratoGeradoId) {
+        toast.success("OS aprovada! Redirecionando para o contrato de serviço...");
+        setTimeout(() => navigate(`/terceiros/contratos/${data.terceiroContratoGeradoId}?tab=documento`), 800);
+      } else {
+        toast.success("Ordem de Compra gerada!");
+      }
+    },
     onError: (e) => toast.error(e.message),
   });
   const autorizarSemVerba = trpc.compras.autorizarCompraSemVerba.useMutation({

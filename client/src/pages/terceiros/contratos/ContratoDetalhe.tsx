@@ -51,7 +51,13 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const id = routeId;
   const urlParams = new URLSearchParams(window.location.search);
   const medicaoIdFromUrl = urlParams.get("medicao") ? parseInt(urlParams.get("medicao")!) : null;
-  const [tab, setTab] = useState<Tab>(medicaoIdFromUrl ? "medicoes" : "itens");
+  const tabFromUrl = urlParams.get("tab") as Tab | null;
+  const validTabs: Tab[] = ["itens", "medicoes", "comparativo", "documentos", "documento"];
+  const [tab, setTab] = useState<Tab>(
+    tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl
+    : medicaoIdFromUrl ? "medicoes"
+    : "itens"
+  );
   const [showAddItem, setShowAddItem] = useState(false);
   const [showGerarMedicao, setShowGerarMedicao] = useState(false);
   const [showAddDoc, setShowAddDoc] = useState(false);

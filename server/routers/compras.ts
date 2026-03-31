@@ -32,6 +32,7 @@ import {
   budgetReallocations,
   ocNumberConfig, pjContracts, pjDocumentos, bdiFd, fdAjustes, medicaoFdRegistros, medicaoContratos,
   integrasignEnvelopes, integrasignSignatarios, integrasignAuditLog,
+  terceiroContratos, terceiroContratoItens, empresasTerceiras,
 } from "../../drizzle/schema";
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -151,8 +152,64 @@ async function gerarContratoPJDeOS(params: {
       atualizadoEm: new Date().toISOString(),
     } as any).where(eq(comprasOrdens.id, params.ocId));
 
+    let terceiroContratoId: number | null = null;
+    try {
+      let empTerceiraId: number | null = null;
+      if (cnpj) {
+        const [existEmp] = await db.select({ id: empresasTerceiras.id }).from(empresasTerceiras)
+          .where(and(eq(empresasTerceiras.companyId, params.companyId), eq(empresasTerceiras.cnpj, cnpj))).limit(1);
+        if (existEmp) {
+          empTerceiraId = existEmp.id;
+        } else {
+          const [novaEmp] = await db.insert(empresasTerceiras).values({
+            companyId: params.companyId,
+            razaoSocial: razaoSocial || params.fornecedorNome || "Empresa Terceira",
+            cnpj,
+            responsavelNome: razaoSocial || params.fornecedorNome || "",
+            status: "ativa",
+          } as any).returning();
+          empTerceiraId = novaEmp.id;
+        }
+      }
+      if (empTerceiraId) {
+        const obraNome = params.obraId ? (await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, params.obraId)).limit(1))?.[0]?.nome ?? null : null;
+        const itensDescr = params.itensOS.map(it => `${it.descricao} — ${it.quantidade} ${it.unidade || "un"}`).join("; ");
+        const [tc] = await db.insert(terceiroContratos).values({
+          companyId: params.companyId,
+          empresaTerceiraId: empTerceiraId,
+          obraId: params.obraId,
+          obraNome: obraNome,
+          numeroContrato: numContrato,
+          descricao: `Prestação de serviços — OS ${params.ocId}: ${itensDescr}`.slice(0, 500),
+          valorTotal: String(params.total.toFixed(2)),
+          dataInicio: hoje,
+          dataTermino: dataFim,
+          status: "ativo",
+          criadoPor: params.userName,
+        }).returning();
+        terceiroContratoId = tc.id;
+
+        for (let i = 0; i < params.itensOS.length; i++) {
+          const it = params.itensOS[i];
+          await db.insert(terceiroContratoItens).values({
+            contratoId: tc.id,
+            companyId: params.companyId,
+            descricao: it.descricao,
+            unidade: it.unidade || "un",
+            quantidade: it.quantidade,
+            valorUnitario: it.precoUnitario,
+            valorTotal: it.total,
+            ordem: i + 1,
+          });
+        }
+        console.log(`[gerarContratoPJDeOS] Terceiro Contrato #${tc.id} (${numContrato}) criado para empresa #${empTerceiraId}`);
+      }
+    } catch (tcErr: any) {
+      console.error(`[gerarContratoPJDeOS] Erro ao criar terceiro contrato:`, tcErr?.message);
+    }
+
     console.log(`[gerarContratoPJDeOS] Contrato ${numContrato} gerado para OS #${params.ocId} → PJ Contract #${contrato.id}`);
-    return contrato;
+    return { ...contrato, terceiroContratoId };
   } catch (err: any) {
     console.error(`[gerarContratoPJDeOS] Erro:`, err?.message);
     return null;
@@ -4093,6 +4150,9 @@ Retorne APENAS um JSON válido neste formato:
         await db.update(comprasSolicitacoes).set({ status: "aprovado", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
       }
 
+      let contratoGeradoId: number | null = null;
+      let terceiroContratoGeradoId: number | null = null;
+
       if (isServico && !extraAprovacaoRequerida && cot.fornecedorId) {
         const ocItensForContract = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
         const contratoPJ = await gerarContratoPJDeOS({
@@ -4115,6 +4175,8 @@ Retorne APENAS um JSON válido neste formato:
         });
 
         if (contratoPJ) {
+          contratoGeradoId = contratoPJ.id;
+          terceiroContratoGeradoId = (contratoPJ as any).terceiroContratoId ?? null;
           const [fornForSign] = await db.select().from(fornecedores)
             .where(and(eq(fornecedores.id, cot.fornecedorId), eq(fornecedores.companyId, input.companyId)));
 
@@ -4137,7 +4199,7 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
-      return oc;
+      return { ...oc, contratoGeradoId, terceiroContratoGeradoId };
     }),
 
   cancelarAprovacaoCotacao: protectedProcedure
