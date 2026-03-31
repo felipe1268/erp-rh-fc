@@ -2807,7 +2807,8 @@ export const terceiroContratosRouter = router({
         cnpj: companies.cnpj,
         logoUrl: companies.logoUrl,
       }).from(companies).where(eq(companies.id, input.companyId));
-      return tpl ? { ...tpl, companyData: comp || null } : null;
+      if (!tpl) return { id: 0, companyId: input.companyId, nome: "Contrato Padrão", texto: "", ativo: true, versao: 0, criadoEm: "", atualizadoEm: "", companyData: comp || null };
+      return { ...tpl, companyData: comp || null };
     }),
 
   salvarTemplate: protectedProcedure

@@ -193,6 +193,8 @@ export default function ContratoTemplate() {
     { enabled: companyId > 0 }
   );
 
+  const companyInfo = tpl?.companyData ?? null;
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -217,7 +219,7 @@ export default function ContratoTemplate() {
   });
 
   useEffect(() => {
-    if (tpl) {
+    if (tpl && tpl.id > 0 && tpl.texto) {
       setNome(tpl.nome);
       setTexto(tpl.texto);
       setTemplateId(tpl.id);
@@ -463,6 +465,20 @@ EAP          | Descrição                                             | Un    |
               </div>
             ) : (
               <div className="w-full max-w-[794px] bg-white shadow-xl rounded-sm border border-gray-300 cursor-text" style={{ minHeight: "1123px" }}>
+                <div className="border-b border-gray-300 px-[72px] py-6 flex items-center justify-between">
+                  {tpl?.companyData?.logoUrl ? (
+                    <img src={tpl.companyData.logoUrl} alt="Logo" className="h-14 object-contain" />
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-8 h-8 text-gray-300" />
+                      <p className="text-sm font-bold text-gray-700">{tpl?.companyData?.razaoSocial || "Empresa"}</p>
+                    </div>
+                  )}
+                  <div className="text-right">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-semibold">Template</p>
+                    <p className="text-xs font-medium text-gray-600">{tpl?.nome || "Contrato Padrão"}</p>
+                  </div>
+                </div>
                 <EditorContent editor={editor} />
               </div>
             )}
