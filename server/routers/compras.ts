@@ -2209,9 +2209,18 @@ Responda APENAS com um objeto JSON no formato:
         }
       }
 
-      // Buscar qtd total já solicitada por orcamentoItemId (todas as SCs da mesma obra)
       const orcItemToQtdOrcada: Record<number, number> = {};
       for (const o of orcItensData) orcItemToQtdOrcada[o.id] = n(o.quantidade);
+
+      let tipoEfetivoEarly = (cot.tipo === "servico" || cot.tipo === "pacote") ? cot.tipo : "material";
+      if (tipoEfetivoEarly === "material" && cot.solicitacaoId) {
+        const [scTipo] = await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, cot.solicitacaoId), eq(comprasSolicitacoes.companyId, Number(cot.companyId))));
+        if (scTipo && (scTipo.tipo === "servico" || scTipo.tipo === "pacote")) tipoEfetivoEarly = scTipo.tipo;
+      }
+      const isCotacaoMdoEarly = tipoEfetivoEarly === 'servico' || tipoEfetivoEarly === 'pacote';
+      const scTipoFilter = isCotacaoMdoEarly
+        ? sql`s.tipo IN ('servico', 'pacote')`
+        : sql`(s.tipo IS NULL OR s.tipo = 'material')`;
 
       const orcItemToQtdSolicitada: Record<number, number> = {};
       if (orcItemIds.length > 0) {
@@ -2221,6 +2230,8 @@ Responda APENAS com um objeto JSON no formato:
           JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
           WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
             AND s.company_id = ${cot.companyId}
+            AND s.status NOT IN ('cancelado')
+            AND ${scTipoFilter}
           GROUP BY si.orcamento_item_id
         `);
         for (const r of (solicitadoRows as any).rows ?? []) {
@@ -2236,7 +2247,9 @@ Responda APENAS com um objeto JSON no formato:
           FROM compras_solicitacoes_itens si
           JOIN compras_ordens_itens oi2 ON oi2.solicitacao_item_id = si.id
           JOIN compras_ordens o ON o.id = oi2.ordem_id AND o.status NOT IN ('cancelada')
+          JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
           WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
+            AND ${scTipoFilter}
           GROUP BY si.orcamento_item_id
         `);
         for (const r of (compradoRows as any).rows ?? []) {
@@ -2244,12 +2257,8 @@ Responda APENAS com um objeto JSON no formato:
         }
       }
 
-      let tipoEfetivo = (cot.tipo === "servico" || cot.tipo === "pacote") ? cot.tipo : "material";
-      if (tipoEfetivo === "material" && cot.solicitacaoId) {
-        const [sc] = await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, cot.solicitacaoId), eq(comprasSolicitacoes.companyId, Number(cot.companyId))));
-        if (sc && (sc.tipo === "servico" || sc.tipo === "pacote")) tipoEfetivo = sc.tipo;
-      }
-      const isCotacaoMdo = tipoEfetivo === 'servico' || tipoEfetivo === 'pacote';
+      const tipoEfetivo = tipoEfetivoEarly;
+      const isCotacaoMdo = isCotacaoMdoEarly;
       const itensComMeta = itens.map(it => {
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
         const metaFromOrcTotal = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
