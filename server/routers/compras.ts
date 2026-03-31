@@ -2040,6 +2040,8 @@ Responda APENAS com um objeto JSON no formato:
           metaUnitTotal: orcamentoItens.metaUnitTotal,
           metaUnitMat: orcamentoItens.metaUnitMat,
           metaUnitMdo: orcamentoItens.metaUnitMdo,
+          custoUnitEquip: orcamentoItens.custoUnitEquip,
+          metaUnitEquip: orcamentoItens.metaUnitEquip,
           quantidade: orcamentoItens.quantidade,
           eapCodigo: orcamentoItens.eapCodigo,
           servicoCodigo: orcamentoItens.servicoCodigo,
@@ -2252,10 +2254,10 @@ Responda APENAS com um objeto JSON no formato:
         orcItemToMetaMdo[o.id] = metaMdoDireta > 0
           ? metaMdoDireta
           : n(o.custoUnitMdo) * (1 - metaPerc);
-        const metaEquipDireta = n((o as any).metaUnitEquip);
+        const metaEquipDireta = n(o.metaUnitEquip);
         orcItemToMetaEquip[o.id] = metaEquipDireta > 0
           ? metaEquipDireta
-          : n((o as any).custoUnitEquip) * (1 - metaPerc);
+          : n(o.custoUnitEquip) * (1 - metaPerc);
         // Montar breadcrumb com até 3 níveis intermediários
         if (o.eapCodigo) {
           const parts = String(o.eapCodigo).split(".");
@@ -2272,10 +2274,12 @@ Responda APENAS com um objeto JSON no formato:
       const orcItemToCustoMat: Record<number, number> = {};
       const orcItemToCustoMdo: Record<number, number> = {};
       const orcItemToCustoEquip: Record<number, number> = {};
+      const orcItemToCustoTotal: Record<number, number> = {};
       for (const o of orcItensData) {
         orcItemToCustoMat[o.id] = n(o.custoUnitMat);
         orcItemToCustoMdo[o.id] = n(o.custoUnitMdo);
-        orcItemToCustoEquip[o.id] = n((o as any).custoUnitEquip);
+        orcItemToCustoEquip[o.id] = n(o.custoUnitEquip);
+        orcItemToCustoTotal[o.id] = n(o.custoUnitTotal);
       }
 
       const orcItemToQtdOrcada: Record<number, number> = {};
@@ -2351,8 +2355,11 @@ Responda APENAS com um objeto JSON no formato:
           } else if (tipoEfetivo === 'equipamento') {
             metaUnitarioMat = 0;
             metaUnitarioMdo = 0;
-            metaUnitarioEquip = custoEquipComp > 0
-              ? Math.round(metaEquipComp * (alocInsumo / custoEquipComp) * 100) / 100
+            const custoTotalComp = orcItemToCustoTotal[orcId] ?? 0;
+            const metaTotalComp = orcItemToMeta[orcId] ?? 0;
+            const effectiveMetaRate = custoTotalComp > 0 ? (1 - metaTotalComp / custoTotalComp) : 0;
+            metaUnitarioEquip = effectiveMetaRate > 0
+              ? Math.round(alocInsumo * (1 - effectiveMetaRate) * 100) / 100
               : Math.round(alocInsumo * 100) / 100;
           } else {
             metaUnitarioMat = custoMatComp > 0
