@@ -25,6 +25,24 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 923,
+    titulo: "Explosão de composição na cotação + agrupamento + histórico de preços + alertas de compra recente",
+    descricao: "Ao selecionar uma SC na criação de cotação, o sistema agora explode automaticamente os itens de composição em materiais individuais (Opção B). Materiais iguais de composições diferentes são agrupados com quantidade consolidada. Cada item exibe histórico de preços (últimas 3 compras com fornecedor, preço e data). Alertas automáticos avisam quando o mesmo material foi comprado recentemente para outra obra, indicando oportunidade de consolidação. Aprovação de SC mostra materiais da composição filtrados por tipo (MAT/MDO).",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 23:55:00",
+  },
+  {
+    version: 922,
+    titulo: "Saldo segregado por tipo de SC + Mapa de cotação MAT/MDO corrigido",
+    descricao: "Controle de saldo orçamentário agora segrega por tipo de SC: SCs de material competem apenas com outras SCs de material, e SCs de serviço/pacote competem apenas com serviço/pacote. Mapa de cotação corrigido para usar metaUnitarioMat para cotações de material e metaUnitarioMdo para serviço. Breadcrumb 'Início' usa MODULE_HOME_ROUTES com useModule().",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "System",
+    dataPublicacao: "2026-03-30 23:50:00",
+  },
+  {
     version: 921,
     titulo: "Status da SC auto-corrigido — pendente→cotação quando há cotação/contrato vinculado",
     descricao: "Ao listar Solicitações de Compra, o sistema agora detecta SCs marcadas como 'Pendente' que possuem cotações ou ordens de compra ativas vinculadas, e corrige automaticamente o status para 'Em Cotação'. Correção é persistida no banco e aplicada imediatamente na listagem.",

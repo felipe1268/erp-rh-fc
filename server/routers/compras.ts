@@ -5206,6 +5206,180 @@ Retorne APENAS um JSON válido neste formato:
       });
     }),
 
+  getItensCotacaoFromSC: protectedProcedure
+    .input(z.object({ companyId: z.number(), solicitacaoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [sc] = await db.select().from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
+      if (!sc) throw new Error("SC não encontrada");
+
+      const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, sc.id));
+      if (scItens.length === 0) return { itens: [], alertas: [] };
+
+      const scTipoGroup = sc.tipo === "servico" || sc.tipo === "pacote" ? "mdo" : "mat";
+
+      const orcItemIds = scItens.map(i => i.orcamentoItemId).filter(Boolean) as number[];
+      let orcItensData: Record<number, { servicoCodigo: string | null; quantidade: string }> = {};
+      if (orcItemIds.length > 0) {
+        const rows = await db.select({ id: orcamentoItens.id, servicoCodigo: orcamentoItens.servicoCodigo, quantidade: orcamentoItens.quantidade })
+          .from(orcamentoItens).where(and(inArray(orcamentoItens.id, orcItemIds), eq(orcamentoItens.companyId, input.companyId)));
+        for (const r of rows) orcItensData[r.id] = { servicoCodigo: r.servicoCodigo ?? null, quantidade: r.quantidade ?? "0" };
+      }
+
+      const svcCodigos = [...new Set(Object.values(orcItensData).map(o => o.servicoCodigo).filter(Boolean))] as string[];
+      let composicaoInsumosMap: Record<string, { insumoCodigo: string; descricao: string; unidade: string | null; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number }[]> = {};
+      if (svcCodigos.length > 0) {
+        const compIns = await db.select({
+          composicaoCodigo: composicaoInsumos.composicaoCodigo,
+          insumoCodigo: composicaoInsumos.insumoCodigo,
+          descricao: composicaoInsumos.insumoDescricao,
+          unidade: composicaoInsumos.unidade,
+          coeficiente: composicaoInsumos.quantidade,
+          precoUnitario: composicaoInsumos.precoUnitario,
+          alocacaoMat: composicaoInsumos.alocacaoMat,
+          alocacaoMdo: composicaoInsumos.alocacaoMdo,
+        }).from(composicaoInsumos)
+          .where(and(eq(composicaoInsumos.companyId, Number(input.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCodigos)));
+        for (const ins of compIns) {
+          const key = ins.composicaoCodigo;
+          if (!composicaoInsumosMap[key]) composicaoInsumosMap[key] = [];
+          composicaoInsumosMap[key].push({
+            insumoCodigo: ins.insumoCodigo || "",
+            descricao: ins.descricao || "",
+            unidade: ins.unidade,
+            coeficiente: n(ins.coeficiente),
+            precoUnitario: n(ins.precoUnitario),
+            alocacaoMat: n(ins.alocacaoMat),
+            alocacaoMdo: n(ins.alocacaoMdo),
+          });
+        }
+      }
+
+      const agrupado: Record<string, { insumoCodigo: string; descricao: string; unidade: string; quantidade: number; precoUnitario: number; origemSCItemIds: number[] }> = {};
+
+      for (const item of scItens) {
+        const orcId = item.orcamentoItemId;
+        const orcData = orcId ? orcItensData[orcId] : null;
+        const svcCode = orcData?.servicoCodigo;
+        const qtdSC = n(item.quantidade);
+
+        if (svcCode && composicaoInsumosMap[svcCode]) {
+          const allIns = composicaoInsumosMap[svcCode];
+          const filtered = scTipoGroup === "mat"
+            ? allIns.filter(i => i.alocacaoMat > 0 || (i.alocacaoMdo === 0 && i.alocacaoMat === 0))
+            : scTipoGroup === "mdo"
+              ? allIns.filter(i => i.alocacaoMdo > 0)
+              : allIns;
+
+          for (const ins of filtered) {
+            const qtdCalculada = Math.round(qtdSC * ins.coeficiente * 1000) / 1000;
+            const key = ins.insumoCodigo || `comp_${svcCode}_${ins.descricao}_${ins.unidade}`;
+            if (agrupado[key]) {
+              agrupado[key].quantidade = Math.round((agrupado[key].quantidade + qtdCalculada) * 1000) / 1000;
+              if (!agrupado[key].origemSCItemIds.includes(item.id)) agrupado[key].origemSCItemIds.push(item.id);
+            } else {
+              agrupado[key] = {
+                insumoCodigo: ins.insumoCodigo,
+                descricao: ins.descricao,
+                unidade: ins.unidade ?? "un",
+                quantidade: qtdCalculada,
+                precoUnitario: ins.precoUnitario,
+                origemSCItemIds: [item.id],
+              };
+            }
+          }
+        } else {
+          const key = `direct_${item.id}`;
+          agrupado[key] = {
+            insumoCodigo: item.insumoCodigo ?? "",
+            descricao: item.descricao ?? "",
+            unidade: item.unidade ?? "un",
+            quantidade: qtdSC,
+            precoUnitario: 0,
+            origemSCItemIds: [item.id],
+          };
+        }
+      }
+
+      const agrupadoEntries = Object.entries(agrupado).sort((a, b) => a[1].descricao.localeCompare(b[1].descricao));
+      const itensCotacao = agrupadoEntries.map(([, v]) => v);
+      const itensCotacaoKeys = agrupadoEntries.map(([k]) => k);
+
+      const descToKey: Record<string, string> = {};
+      for (const [key, item] of Object.entries(agrupado)) {
+        if (item.descricao) {
+          const normalizedDesc = item.descricao.toLowerCase().trim().substring(0, 40);
+          descToKey[normalizedDesc] = key;
+        }
+      }
+
+      let historico: Record<string, { fornecedorNome: string; precoUnitario: number; data: string; numeroOc: string; obraId: number | null }[]> = {};
+      if (Object.keys(agrupado).length > 0) {
+        const histRows = await db.select({
+          descricaoItem: comprasOrdensItens.descricao,
+          precoUnitario: comprasOrdensItens.precoUnitario,
+          fornecedorNome: comprasOrdens.fornecedorNome,
+          data: comprasOrdens.criadoEm,
+          numeroOc: comprasOrdens.numeroOc,
+          obraId: comprasOrdens.obraId,
+          status: comprasOrdens.status,
+        })
+        .from(comprasOrdensItens)
+        .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          sql`${comprasOrdens.status} NOT IN ('cancelada', 'recusada')`,
+        ))
+        .orderBy(desc(comprasOrdens.criadoEm))
+        .limit(200);
+
+        for (const row of histRows) {
+          const descLower = (row.descricaoItem ?? "").toLowerCase().trim();
+          const descPrefix = descLower.substring(0, 40);
+
+          const matchedKey = descToKey[descPrefix];
+          if (matchedKey) {
+            if (!historico[matchedKey]) historico[matchedKey] = [];
+            if (historico[matchedKey].length < 3) {
+              historico[matchedKey].push({
+                fornecedorNome: row.fornecedorNome ?? "",
+                precoUnitario: n(row.precoUnitario),
+                data: row.data ? new Date(row.data).toISOString() : "",
+                numeroOc: row.numeroOc ?? "",
+                obraId: row.obraId ?? null,
+              });
+            }
+          }
+        }
+      }
+
+      const alertas: { insumoCodigo: string; descricao: string; mensagem: string }[] = [];
+      for (let idx = 0; idx < itensCotacao.length; idx++) {
+        const item = itensCotacao[idx];
+        const key = itensCotacaoKeys[idx];
+        const hist = historico[key];
+        if (hist && hist.length > 0) {
+          const recente = hist[0];
+          const diasAtras = Math.floor((Date.now() - new Date(recente.data).getTime()) / (1000 * 60 * 60 * 24));
+          if (diasAtras <= 30 && recente.obraId && recente.obraId !== sc.obraId) {
+            alertas.push({
+              insumoCodigo: item.insumoCodigo,
+              descricao: item.descricao,
+              mensagem: `Comprado há ${diasAtras} dia(s) para outra obra (${recente.numeroOc}) por R$ ${recente.precoUnitario.toFixed(2)} — fornecedor: ${recente.fornecedorNome}`,
+            });
+          }
+        }
+      }
+
+      return {
+        itens: itensCotacao.map((item, idx) => ({
+          ...item,
+          historico: historico[itensCotacaoKeys[idx]] ?? [],
+        })),
+        alertas,
+      };
+    }),
+
   getHistoricoPrecos: protectedProcedure
     .input(z.object({ companyId: z.number(), insumoCodigo: z.string().optional(), descricao: z.string().optional(), descricaoInsumo: z.string().optional() }))
     .query(async ({ input }) => {

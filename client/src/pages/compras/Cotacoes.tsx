@@ -590,7 +590,7 @@ function FornecedorContatoPopover({ fornecedor, children }: { fornecedor: Fornec
   );
 }
 
-interface ItemForm { descricao: string; unidade: string; quantidade: string; precoUnitario: string; descontoPct: string; solicitacaoItemId?: number | null; }
+interface ItemForm { descricao: string; unidade: string; quantidade: string; precoUnitario: string; descontoPct: string; solicitacaoItemId?: number | null; insumoCodigo?: string; historico?: { fornecedorNome: string; precoUnitario: number; data: string; numeroOc: string }[]; }
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", precoUnitario: "", descontoPct: "0" });
 const calcTotal = (it: ItemForm) => {
   const tot = (parseFloat(it.quantidade) || 0) * (parseFloat(it.precoUnitario) || 0);
@@ -632,6 +632,8 @@ export default function Cotacoes() {
     tipo: "material" as "material" | "servico",
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
+  const [scAlertas, setScAlertas] = useState<{ insumoCodigo: string; descricao: string; mensagem: string }[]>([]);
+  const [loadingSCItens, setLoadingSCItens] = useState(false);
 
   const [mapaFornSelectId, setMapaFornSelectId] = useState("");
   const [mapaFornSearch, setMapaFornSearch] = useState("");
@@ -982,17 +984,44 @@ export default function Cotacoes() {
     setItens([newItem()]);
   }
 
-  function handleScChange(scId: string) {
+  const trpcUtils = trpc.useUtils();
+  async function handleScChange(scId: string) {
     setForm(p => ({ ...p, solicitacaoId: scId }));
+    setScAlertas([]);
     if (!scId || scId === "none") {
       setForm(p => ({ ...p, solicitacaoId: scId, tipo: "material" }));
+      setItens([newItem()]);
       return;
     }
     const sc = scsQ.data?.find(s => s.id === parseInt(scId)) as any;
     const scTipo = sc?.tipo === "pacote" ? "pacote" as const : sc?.tipo === "servico" ? "servico" as const : "material" as const;
     const updates: any = { solicitacaoId: scId, tipo: scTipo };
-    if (sc?.obraId && !form.obraId) updates.obraId = String(sc.obraId);
+    if (sc?.obraId) updates.obraId = String(sc.obraId);
     setForm(p => ({ ...p, ...updates }));
+
+    setLoadingSCItens(true);
+    try {
+      const result = await trpcUtils.compras.getItensCotacaoFromSC.fetch({ companyId, solicitacaoId: parseInt(scId) });
+      if (result.itens.length > 0) {
+        setItens(result.itens.map(i => ({
+          descricao: i.descricao,
+          unidade: i.unidade,
+          quantidade: String(i.quantidade),
+          precoUnitario: String(i.precoUnitario || ""),
+          descontoPct: "0",
+          insumoCodigo: i.insumoCodigo,
+          historico: i.historico,
+        })));
+      } else {
+        setItens([newItem()]);
+      }
+      setScAlertas(result.alertas ?? []);
+    } catch (err) {
+      console.error("Erro ao explodir itens da SC:", err);
+      setItens([newItem()]);
+    } finally {
+      setLoadingSCItens(false);
+    }
   }
 
   function handleSalvar() {
@@ -3785,11 +3814,36 @@ export default function Cotacoes() {
                   <Plus className="h-3 w-3" /> Adicionar
                 </Button>
               </div>
+
+              {loadingSCItens && (
+                <div className="flex items-center gap-2 text-sm text-blue-600 py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Carregando materiais da composição...
+                </div>
+              )}
+
+              {scAlertas.length > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-1.5">
+                  <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5" /> Alertas de compra recente
+                  </p>
+                  {scAlertas.map((a, i) => (
+                    <p key={i} className="text-[11px] text-amber-700">
+                      <span className="font-medium">{a.descricao}:</span> {a.mensagem}
+                    </p>
+                  ))}
+                </div>
+              )}
+
               <div className="space-y-2">
                 {itens.map((it, idx) => (
                   <div key={idx} className="p-3 rounded-lg bg-gray-50 border border-gray-200 space-y-2">
                     <div className="flex gap-2">
-                      <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm" placeholder="Descrição *" value={it.descricao} onChange={e => updateItem(idx, "descricao", e.target.value)} onBlur={e => updateItem(idx, "descricao", normalizarTexto(e.target.value))} />
+                      <div className="flex-1">
+                        <Input className="bg-white border-gray-300 text-gray-900 text-sm w-full" placeholder="Descrição *" value={it.descricao} onChange={e => updateItem(idx, "descricao", e.target.value)} onBlur={e => updateItem(idx, "descricao", normalizarTexto(e.target.value))} />
+                        {it.insumoCodigo && (
+                          <span className="text-[9px] text-gray-400 font-mono mt-0.5 block">{it.insumoCodigo}</span>
+                        )}
+                      </div>
                       {itens.length > 1 && (
                         <button onClick={() => removeItem(idx)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
                       )}
@@ -3808,6 +3862,18 @@ export default function Cotacoes() {
                         {calcTotal(it).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                       </div>
                     </div>
+                    {it.historico && it.historico.length > 0 && (
+                      <div className="pl-2 border-l-2 border-emerald-200 mt-1 space-y-0.5">
+                        <p className="text-[9px] font-semibold text-emerald-600 uppercase tracking-wider flex items-center gap-1">
+                          <Sparkles className="h-2.5 w-2.5" /> Histórico de preços:
+                        </p>
+                        {it.historico.map((h, j) => (
+                          <p key={j} className="text-[10px] text-gray-600">
+                            R$ {h.precoUnitario.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} — {h.fornecedorNome} ({h.numeroOc}, {new Date(h.data).toLocaleDateString("pt-BR")})
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
