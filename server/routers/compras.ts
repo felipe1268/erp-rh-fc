@@ -2151,9 +2151,13 @@ Responda APENAS com um objeto JSON no formato:
       }
 
       let tipoEfetivoEarly = (cot.tipo === "servico" || cot.tipo === "pacote" || cot.tipo === "equipamento") ? cot.tipo : "material";
-      if (tipoEfetivoEarly === "material" && cot.solicitacaoId) {
-        const [scTipoCheck] = await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, cot.solicitacaoId), eq(comprasSolicitacoes.companyId, Number(cot.companyId))));
-        if (scTipoCheck && (scTipoCheck.tipo === "servico" || scTipoCheck.tipo === "pacote" || scTipoCheck.tipo === "equipamento")) tipoEfetivoEarly = scTipoCheck.tipo;
+      let incluirEquipamentosMapa = false;
+      if (cot.solicitacaoId) {
+        const [scTipoCheck] = await db.select({ tipo: comprasSolicitacoes.tipo, incluirEquipamentos: comprasSolicitacoes.incluirEquipamentos }).from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, cot.solicitacaoId), eq(comprasSolicitacoes.companyId, Number(cot.companyId))));
+        if (scTipoCheck) {
+          if (tipoEfetivoEarly === "material" && (scTipoCheck.tipo === "servico" || scTipoCheck.tipo === "pacote" || scTipoCheck.tipo === "equipamento")) tipoEfetivoEarly = scTipoCheck.tipo;
+          incluirEquipamentosMapa = scTipoCheck.incluirEquipamentos ?? false;
+        }
       }
       const isCotacaoMdoEarly = tipoEfetivoEarly === 'servico' || tipoEfetivoEarly === 'pacote';
       const scTipoFilter = tipoEfetivoEarly === 'pacote'
@@ -2193,7 +2197,7 @@ Responda APENAS com um objeto JSON no formato:
               alocacaoEquip: composicaoInsumos.alocacaoEquip,
             }).from(composicaoInsumos)
               .where(and(eq(composicaoInsumos.companyId, Number(cot.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCodigos)));
-            const filteredCompIns = filterInsumosByTipo(allCompIns as any[], tipoEfetivoEarly);
+            const filteredCompIns = filterInsumosByTipo(allCompIns as any[], tipoEfetivoEarly, incluirEquipamentosMapa);
             for (const ins of filteredCompIns) {
               const code = ins.insumoCodigo;
               if (!code || !insCodigosUnique.includes(code)) continue;
@@ -2378,7 +2382,11 @@ Responda APENAS com um objeto JSON no formato:
         if (isInsumoDeComposicao && metaFromSC > 0 && orcId) {
           metaUnitario = metaUnitarioTotal;
         } else if (tipoEfetivo === 'pacote') {
-          metaUnitario = metaUnitarioTotal > 0 ? metaUnitarioTotal : (metaUnitarioMat + metaUnitarioMdo + metaUnitarioEquip);
+          if (!incluirEquipamentosMapa && metaUnitarioEquip > 0) {
+            metaUnitario = metaUnitarioTotal > 0 ? (metaUnitarioTotal - metaUnitarioEquip) : (metaUnitarioMat + metaUnitarioMdo);
+          } else {
+            metaUnitario = metaUnitarioTotal > 0 ? metaUnitarioTotal : (metaUnitarioMat + metaUnitarioMdo + metaUnitarioEquip);
+          }
         } else if (tipoEfetivo === 'equipamento' && metaUnitarioEquip > 0) {
           metaUnitario = metaUnitarioEquip;
         } else if (tipoEfetivo === 'servico' && metaUnitarioMdo > 0) {
@@ -2449,7 +2457,7 @@ Responda APENAS com um objeto JSON no formato:
         const pValorFrete = pFreteTipo === "fob" ? n((p as any).valorFrete) : 0;
         totaisPorFornecedor[p.fornecedorId] = totalItens + pValorFrete;
       }
-      return { cotacao: cot, tipoEfetivo, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor };
+      return { cotacao: cot, tipoEfetivo, incluirEquipamentos: incluirEquipamentosMapa, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor };
     }),
 
   adicionarFornecedorMapa: protectedProcedure

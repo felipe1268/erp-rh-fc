@@ -3086,7 +3086,8 @@ export default function Cotacoes() {
                                 {isExpanded && hasComposicao && (() => {
                                   const allInsumos = (it as any).composicaoInsumos as Array<{ insumoCodigo: string; descricao: string; unidade: string; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number; alocacaoEquip?: number; custoTotal: number }>;
                                   const cotTipoComp = (mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo ?? "material";
-                                  let insumos = cotTipoComp === "pacote" ? allInsumos : allInsumos.filter(ins => {
+                                  const inclEquipComp = (mapa as any)?.incluirEquipamentos ?? false;
+                                  let insumos = allInsumos.filter(ins => {
                                     const matA = ins.alocacaoMat ?? 0;
                                     const mdoA = ins.alocacaoMdo ?? 0;
                                     const eqA = (ins as any).alocacaoEquip ?? 0;
@@ -3094,6 +3095,7 @@ export default function Cotacoes() {
                                     if (cotTipoComp === "material") return matA > 0;
                                     if (cotTipoComp === "servico") return mdoA > 0;
                                     if (cotTipoComp === "equipamento") return isEquipIns;
+                                    if (cotTipoComp === "pacote") return inclEquipComp ? true : !isEquipIns;
                                     return true;
                                   });
                                   if ((it as any).incluirAjudante === false) {
