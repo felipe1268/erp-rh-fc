@@ -275,8 +275,8 @@ export default function ContratoTemplate() {
     .replace(/\{\{CIDADE_ESTADO\}\}/g, "Montes Claros - MG");
 
   return (
-    <DashboardLayout>
-      <div className="h-[calc(100vh-64px)] flex flex-col bg-gray-100">
+    <DashboardLayout noPadding>
+      <div className="h-full flex flex-col bg-gray-100 overflow-hidden">
         {/* Header bar */}
         <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
           <button onClick={() => navigate("/terceiros/contratos")} className="p-1.5 hover:bg-gray-100 rounded-lg">
