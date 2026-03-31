@@ -710,14 +710,17 @@ function DashboardLayoutContent({
   const dragOverSection = useRef<string | null>(null);
   const [dragActiveSection, setDragActiveSection] = useState<string | null>(null);
   const [dragTargetSection, setDragTargetSection] = useState<string | null>(null);
+  const sectionDidDrag = useRef(false);
 
   function handleSectionDragStart(title: string) {
     if (title === PINNED_LAST) return;
     draggingSection.current = title;
+    sectionDidDrag.current = false;
     setDragActiveSection(title);
   }
   function handleSectionDragOver(e: React.DragEvent, title: string) {
     e.preventDefault();
+    sectionDidDrag.current = true;
     if (!draggingSection.current || title === PINNED_LAST || draggingSection.current === title) return;
     dragOverSection.current = title;
     setDragTargetSection(title);
@@ -741,6 +744,7 @@ function DashboardLayoutContent({
     dragOverSection.current = null;
     setDragActiveSection(null);
     setDragTargetSection(null);
+    setTimeout(() => { sectionDidDrag.current = false; }, 0);
   }
 
   // ── Drag-and-drop de itens do menu lateral ─────────────────────────────────
@@ -770,13 +774,17 @@ function DashboardLayoutContent({
     });
   }
 
+  const itemDidDrag = useRef(false);
+
   function handleSidebarDragStart(sectionTitle: string, path: string) {
     draggingItem.current = { sectionTitle, path };
+    itemDidDrag.current = false;
     setDragActiveItem(path);
   }
 
   function handleSidebarDragOver(e: React.DragEvent, sectionTitle: string, path: string) {
     e.preventDefault();
+    itemDidDrag.current = true;
     if (draggingItem.current?.sectionTitle !== sectionTitle) return;
     dragOverItem.current = { sectionTitle, path };
     setDragTargetItem(path);
@@ -811,6 +819,7 @@ function DashboardLayoutContent({
     dragOverItem.current = null;
     setDragActiveItem(null);
     setDragTargetItem(null);
+    setTimeout(() => { itemDidDrag.current = false; }, 0);
   }
   const [sidebarActiveParam, setSidebarActiveParam] = useState<string>(() => {
     const s = window.location.search;
@@ -1321,6 +1330,7 @@ function DashboardLayoutContent({
                           onDragOver={(e: React.DragEvent) => handleSidebarDragOver(e, section.title, item.path)}
                           onDrop={() => handleSidebarDrop(section.title)}
                           onDragEnd={handleSidebarDragEnd}
+                          onClickCapture={(e: React.MouseEvent) => { if (itemDidDrag.current) { e.stopPropagation(); e.preventDefault(); } }}
                           style={{ cursor: isCollapsed ? undefined : "grab", opacity: isDragging ? 0.4 : 1 }}
                           className={`transition-all ${isDropTarget && !isDragging ? "ring-1 ring-[#D4A843]/60 rounded-lg bg-sidebar-accent/30" : ""}`}
                         >

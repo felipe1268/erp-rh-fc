@@ -24,6 +24,7 @@ export function DraggableCommandBar({ barId, items, className }: DraggableComman
   });
 
   const dragging = useRef<string | null>(null);
+  const didDrag = useRef(false);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
   const orderedItems = (() => {
@@ -36,10 +37,12 @@ export function DraggableCommandBar({ barId, items, className }: DraggableComman
 
   function handleDragStart(id: string) {
     dragging.current = id;
+    didDrag.current = false;
   }
 
   function handleDragOver(e: React.DragEvent, id: string) {
     e.preventDefault();
+    didDrag.current = true;
     setDragOver(id);
   }
 
@@ -65,6 +68,7 @@ export function DraggableCommandBar({ barId, items, className }: DraggableComman
   function handleDragEnd() {
     dragging.current = null;
     setDragOver(null);
+    setTimeout(() => { didDrag.current = false; }, 0);
   }
 
   return (
@@ -77,6 +81,7 @@ export function DraggableCommandBar({ barId, items, className }: DraggableComman
           onDragOver={e => handleDragOver(e, item.id)}
           onDrop={() => handleDrop(item.id)}
           onDragEnd={handleDragEnd}
+          onClickCapture={e => { if (didDrag.current) { e.stopPropagation(); e.preventDefault(); } }}
           title="Arraste para reordenar"
           className={`group relative flex items-center transition-all select-none ${
             dragOver === item.id

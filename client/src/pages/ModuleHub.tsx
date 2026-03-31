@@ -421,6 +421,7 @@ export default function ModuleHub() {
     setDragTarget(null);
     draggingId.current = null;
     dragOverId.current = null;
+    setTimeout(() => { didDrag.current = false; }, 0);
   }
   const disabledModules = MODULES.filter(m => m.active && !isModuleEnabled(hubToConfigKey[m.id] ?? m.id));
   const futureModules = [...MODULES.filter(m => !m.active), ...disabledModules.map(m => ({ ...m, active: false }))];
