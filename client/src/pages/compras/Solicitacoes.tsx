@@ -439,7 +439,8 @@ export default function Solicitacoes() {
 
   const [form, setForm] = useState({
     titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "",
-    tipo: "material" as "material" | "servico" | "pacote",
+    tipo: "material" as "material" | "servico" | "pacote" | "equipamento",
+    incluirEquipamentos: false,
   });
   const [obraSearch, setObraSearch] = useState("");
   const [obraOpen, setObraOpen] = useState(false);
@@ -490,7 +491,7 @@ export default function Solicitacoes() {
   );
 
   const insumosConsolidadosQ = trpc.compras.getInsumosConsolidados.useQuery(
-    { companyId, obraId: parseInt(form.obraId), busca: modoSC === "insumo" ? (insumoBusca || undefined) : undefined, tipoSC: form.tipo as "material" | "servico" | "pacote" },
+    { companyId, obraId: parseInt(form.obraId), busca: modoSC === "insumo" ? (insumoBusca || undefined) : undefined, tipoSC: form.tipo as "material" | "servico" | "pacote" | "equipamento" },
     { enabled: (modoSC === "insumo" || modoSC === "eap") && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 30_000 }
   );
 
@@ -690,7 +691,7 @@ export default function Solicitacoes() {
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 }
   );
   const coberturaQ = trpc.compras.getCoberturaInsumosEAP.useQuery(
-    { companyId, obraId: parseInt(form.obraId || "0"), tipoSC: form.tipo as "material" | "servico" | "pacote" },
+    { companyId, obraId: parseInt(form.obraId || "0"), tipoSC: form.tipo as "material" | "servico" | "pacote" | "equipamento" },
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 }
   );
   const coberturaMap = Object.fromEntries(
@@ -881,6 +882,7 @@ export default function Solicitacoes() {
     const childItems = allVisible
       .filter((it: any) => {
         if (form.tipo === "servico") return !!it.servicoCodigo && (it as any).temMdo;
+        if (form.tipo === "equipamento") return !!it.servicoCodigo && (it as any).temEquip;
         if (!it.servicoCodigo) return true;
         if (form.tipo === "material") return (it as any).temMat !== false;
         return true;
@@ -1087,6 +1089,7 @@ export default function Solicitacoes() {
         prioridade: form.prioridade,
         observacoes: form.observacoes || undefined,
         tipo: form.tipo,
+        incluirEquipamentos: form.incluirEquipamentos || undefined,
         itens: itensPayload,
       });
     } else {
@@ -1100,6 +1103,7 @@ export default function Solicitacoes() {
         observacoes: form.observacoes || undefined,
         imagemReferenciaUrl: imgUrl,
         tipo: form.tipo,
+        incluirEquipamentos: form.incluirEquipamentos || undefined,
         itens: itensPayload,
       });
     }
@@ -1303,8 +1307,8 @@ export default function Solicitacoes() {
                         </span>
                       )}
                       {sc.numeroSc}
-                      <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (sc as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>
-                        {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "PKT" : "MAT"}
+                      <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (sc as any).tipo === "pacote" ? "bg-orange-100 text-orange-700" : (sc as any).tipo === "equipamento" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                        {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "PKT" : (sc as any).tipo === "equipamento" ? "EQUIP" : "MAT"}
                       </span>
                     </div>
                   </TableCell>
@@ -1428,7 +1432,8 @@ export default function Solicitacoes() {
                 {[
                   { value: "material" as const, label: "Material", icon: "📦" },
                   { value: "servico" as const, label: "Serviço / MDO", icon: "🔧" },
-                  { value: "pacote" as const, label: "Pacote (Mat+MDO)", icon: "📋" },
+                  { value: "equipamento" as const, label: "Equipamento", icon: "⚙️" },
+                  { value: "pacote" as const, label: "Pacote", icon: "📋" },
                 ].map(opt => (
                   <button
                     key={opt.value}
@@ -1439,7 +1444,7 @@ export default function Solicitacoes() {
                         : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
                     }`}
                     onClick={() => {
-                      setForm(p => ({ ...p, tipo: opt.value }));
+                      setForm(p => ({ ...p, tipo: opt.value, incluirEquipamentos: false }));
                       setSelectedEapIds(new Set());
                       setItens([newItem()]);
                       setEapInsumos({});
@@ -1447,12 +1452,23 @@ export default function Solicitacoes() {
                       setEapExpanded(null);
                       setSaldoData({});
                       setEapExtraDesbloqueado({});
-                      if (opt.value === "servico" && modoSC === "insumo") setModoSC("eap");
+                      if ((opt.value === "servico" || opt.value === "equipamento") && modoSC === "insumo") setModoSC("eap");
                     }}
                   >
                     <span className="mr-1">{opt.icon}</span> {opt.label}
                   </button>
                 ))}
+                {form.tipo === "pacote" && (
+                  <label className="flex items-center gap-1.5 ml-2 text-xs text-gray-600 cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={form.incluirEquipamentos}
+                      onChange={e => setForm(p => ({ ...p, incluirEquipamentos: e.target.checked }))}
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                    />
+                    Incluir Equipamentos
+                  </label>
+                )}
               </div>
             </div>
 
@@ -1536,7 +1552,7 @@ export default function Solicitacoes() {
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
                         <ListTree className="h-3.5 w-3.5 text-amber-600" />
-                        {form.tipo === "servico" ? "Composições da EAP — selecione os serviços para contratar" : form.tipo === "pacote" ? "Serviços da EAP — clique para explodir insumos e mão de obra" : "Serviços da EAP — clique para explodir insumos"}
+                        {form.tipo === "servico" ? "Composições da EAP — selecione os serviços para contratar" : form.tipo === "equipamento" ? "Serviços da EAP — clique para explodir equipamentos" : form.tipo === "pacote" ? "Serviços da EAP — clique para explodir insumos e mão de obra" : "Serviços da EAP — clique para explodir insumos"}
                       </label>
                       {selectedEapIds.size > 0 && (
                         <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
@@ -1605,6 +1621,7 @@ export default function Solicitacoes() {
                               .filter((it: any) => it.nivel >= 2 && it.tipo !== "grupo")
                               .filter((it: any) => {
                                 if (form.tipo === "servico") return !!it.servicoCodigo && it.temMdo;
+                                if (form.tipo === "equipamento") return !!it.servicoCodigo && it.temEquip;
                                 if (!it.servicoCodigo) return true;
                                 if (form.tipo === "material") return it.temMat !== false;
                                 return true;
@@ -1646,6 +1663,7 @@ export default function Solicitacoes() {
                             .filter(it => it.nivel >= 2 && it.tipo !== "grupo")
                             .filter(it => {
                               if (form.tipo === "servico") return !!it.servicoCodigo && (it as any).temMdo;
+                              if (form.tipo === "equipamento") return !!it.servicoCodigo && (it as any).temEquip;
                               if (!it.servicoCodigo) return true;
                               if (form.tipo === "material") return (it as any).temMat !== false;
                               return true;

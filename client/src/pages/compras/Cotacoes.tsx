@@ -2519,6 +2519,8 @@ export default function Cotacoes() {
                                   ? "Meta MDO (Orçamento)"
                                   : ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote'
                                   ? "Meta Total (Orçamento)"
+                                  : ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'equipamento'
+                                  ? "Meta EQUIP (Orçamento)"
                                   : "Meta MAT (Orçamento)"}
                               </th>
                               <th rowSpan={2} className="text-center text-xs font-semibold text-orange-600 uppercase px-2 py-2 border-r border-orange-100 bg-orange-50/60 w-24">Saldo<br/>Orç.</th>
@@ -3080,14 +3082,18 @@ export default function Cotacoes() {
                                   </td>
                                 </tr>
                                 {isExpanded && hasComposicao && (() => {
-                                  const insumos = (it as any).composicaoInsumos as Array<{ insumoCodigo: string; descricao: string; unidade: string; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number; custoTotal: number }>;
-                                  let totalMat = 0, totalMdo = 0, totalGeral = 0;
+                                  const insumos = (it as any).composicaoInsumos as Array<{ insumoCodigo: string; descricao: string; unidade: string; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number; alocacaoEquip?: number; custoTotal: number }>;
+                                  let totalMat = 0, totalMdo = 0, totalEquip = 0, totalGeral = 0;
                                   for (const ins of insumos) {
                                     const custo = ins.coeficiente * ins.precoUnitario;
                                     totalGeral += custo;
                                     const matAlloc = ins.alocacaoMat ?? 0;
                                     const mdoAlloc = ins.alocacaoMdo ?? 0;
-                                    if (matAlloc > 0 && mdoAlloc > 0) {
+                                    const equipAlloc = (ins as any).alocacaoEquip ?? 0;
+                                    const isEquip = equipAlloc > 0 || (matAlloc === 0 && mdoAlloc === 0);
+                                    if (isEquip) {
+                                      totalEquip += custo;
+                                    } else if (matAlloc > 0 && mdoAlloc > 0) {
                                       const totalAlloc = matAlloc + mdoAlloc;
                                       totalMat += custo * (matAlloc / totalAlloc);
                                       totalMdo += custo * (mdoAlloc / totalAlloc);
@@ -3108,6 +3114,7 @@ export default function Cotacoes() {
                                             <div className="flex items-center gap-3 text-[10px]">
                                               {totalMat > 0 && <span className="text-blue-600 font-semibold">MAT: {totalMat.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
                                               {totalMdo > 0 && <span className="text-purple-600 font-semibold">MDO: {totalMdo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
+                                              {totalEquip > 0 && <span className="text-green-600 font-semibold">EQUIP: {totalEquip.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
                                               <span className="text-slate-700 font-bold">Total: {totalGeral.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
                                             </div>
                                           </div>
@@ -3127,6 +3134,7 @@ export default function Cotacoes() {
                                               {insumos.map((ins, idx) => {
                                                 const isMat = ins.alocacaoMat > 0;
                                                 const isMdo = ins.alocacaoMdo > 0;
+                                                const isEquipIns = ((ins as any).alocacaoEquip ?? 0) > 0 || (!isMat && !isMdo);
                                                 const custo = ins.coeficiente * ins.precoUnitario;
                                                 return (
                                                   <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/80">
@@ -3137,8 +3145,8 @@ export default function Cotacoes() {
                                                     <td className="px-2 py-1 text-right text-slate-600">{ins.precoUnitario.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
                                                     <td className="px-2 py-1 text-right text-slate-700 font-semibold">{custo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
                                                     <td className="px-2 py-1 text-center">
-                                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${isMat ? "bg-blue-100 text-blue-700" : isMdo ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-500"}`}>
-                                                        {isMat ? "MAT" : isMdo ? "MDO" : "—"}
+                                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${isMat ? "bg-blue-100 text-blue-700" : isMdo ? "bg-purple-100 text-purple-700" : isEquipIns ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                                                        {isMat ? "MAT" : isMdo ? "MDO" : isEquipIns ? "EQUIP" : "—"}
                                                       </span>
                                                     </td>
                                                   </tr>

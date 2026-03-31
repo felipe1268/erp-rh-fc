@@ -32,6 +32,21 @@ import {
 } from "../../drizzle/schema";
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
+type InsumoWithAlloc = { alocacaoMat?: any; alocacaoMdo?: any; alocacaoEquip?: any; [k: string]: any };
+function filterInsumosByTipo(insumos: InsumoWithAlloc[], scTipo: string, incluirEquip = false): InsumoWithAlloc[] {
+  return insumos.filter(i => {
+    const mat = n(i.alocacaoMat);
+    const mdo = n(i.alocacaoMdo);
+    const equip = n(i.alocacaoEquip);
+    const isEquip = equip > 0 || (mat === 0 && mdo === 0);
+    if (scTipo === 'material') return mat > 0;
+    if (scTipo === 'servico') return mdo > 0;
+    if (scTipo === 'equipamento') return isEquip;
+    if (scTipo === 'pacote') return incluirEquip ? true : !isEquip;
+    return mat > 0;
+  });
+}
+
 const iaExtractionJobs = new Map<string, { status: string; startedAt: number; result?: any; error?: string }>();
 setInterval(() => {
   const now = Date.now();
@@ -1348,7 +1363,8 @@ Responda APENAS com um objeto JSON no formato:
       dataNecessidade: z.string().optional(),
       observacoes: z.string().optional(),
       imagemReferenciaUrl: z.string().optional(),
-      tipo: z.enum(["material", "servico", "pacote"]).optional(),
+      tipo: z.enum(["material", "servico", "pacote", "equipamento"]).optional(),
+      incluirEquipamentos: z.boolean().optional(),
       itens: z.array(z.object({
         descricao: z.string(),
         unidade: z.string().optional(),
@@ -1400,6 +1416,7 @@ Responda APENAS com um objeto JSON no formato:
         observacoes: input.observacoes,
         imagemReferenciaUrl: input.imagemReferenciaUrl ?? null,
         tipo: tipoSC,
+        incluirEquipamentos: input.incluirEquipamentos ?? false,
         status: "pendente",
         aprovacaoStatus: "aguardando",
       } as any).returning();
@@ -2068,6 +2085,7 @@ Responda APENAS com um objeto JSON no formato:
             precoUnitario: composicaoInsumos.precoUnitario,
             alocacaoMat: composicaoInsumos.alocacaoMat,
             alocacaoMdo: composicaoInsumos.alocacaoMdo,
+            alocacaoEquip: composicaoInsumos.alocacaoEquip,
             custoUnitTotal: composicaoInsumos.custoUnitTotal,
           }).from(composicaoInsumos)
             .where(and(eq(composicaoInsumos.companyId, Number(cot.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCodigos)));
@@ -2083,6 +2101,7 @@ Responda APENAS com um objeto JSON no formato:
               precoUnitario: preco,
               alocacaoMat: n(ins.alocacaoMat),
               alocacaoMdo: n(ins.alocacaoMdo),
+              alocacaoEquip: n(ins.alocacaoEquip),
               custoTotal: n(ins.custoUnitTotal),
             });
           }
@@ -2154,16 +2173,18 @@ Responda APENAS com um objeto JSON no formato:
         for (const sc of scs) scMap[sc.id] = sc.numeroSc;
       }
 
-      let tipoEfetivoEarly = (cot.tipo === "servico" || cot.tipo === "pacote") ? cot.tipo : "material";
+      let tipoEfetivoEarly = (cot.tipo === "servico" || cot.tipo === "pacote" || cot.tipo === "equipamento") ? cot.tipo : "material";
       if (tipoEfetivoEarly === "material" && cot.solicitacaoId) {
         const [scTipoCheck] = await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, cot.solicitacaoId), eq(comprasSolicitacoes.companyId, Number(cot.companyId))));
-        if (scTipoCheck && (scTipoCheck.tipo === "servico" || scTipoCheck.tipo === "pacote")) tipoEfetivoEarly = scTipoCheck.tipo;
+        if (scTipoCheck && (scTipoCheck.tipo === "servico" || scTipoCheck.tipo === "pacote" || scTipoCheck.tipo === "equipamento")) tipoEfetivoEarly = scTipoCheck.tipo;
       }
       const isCotacaoMdoEarly = tipoEfetivoEarly === 'servico' || tipoEfetivoEarly === 'pacote';
       const scTipoFilter = tipoEfetivoEarly === 'pacote'
         ? sql`1=1`
         : tipoEfetivoEarly === 'servico'
         ? sql`s.tipo IN ('servico', 'pacote')`
+        : tipoEfetivoEarly === 'equipamento'
+        ? sql`s.tipo = 'equipamento'`
         : sql`(s.tipo IS NULL OR s.tipo = 'material')`;
 
       const insCodigos = scItens.filter(s => !s.orcamentoItemId && s.insumoCodigo).map(s => s.insumoCodigo!);
@@ -2194,8 +2215,8 @@ Responda APENAS com um objeto JSON no formato:
               alocacaoMdo: composicaoInsumos.alocacaoMdo,
             }).from(composicaoInsumos)
               .where(and(eq(composicaoInsumos.companyId, Number(cot.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCodigos)));
-            const matsOnly = allCompIns.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
-            for (const ins of matsOnly) {
+            const filteredCompIns = filterInsumosByTipo(allCompIns as any[], tipoEfetivoEarly);
+            for (const ins of filteredCompIns) {
               const code = ins.insumoCodigo;
               if (!code || !insCodigosUnique.includes(code)) continue;
               const coef = n(ins.quantidade);
@@ -2239,6 +2260,7 @@ Responda APENAS com um objeto JSON no formato:
       const orcItemToMeta: Record<number, number> = {};
       const orcItemToMetaMat: Record<number, number> = {};
       const orcItemToMetaMdo: Record<number, number> = {};
+      const orcItemToMetaEquip: Record<number, number> = {};
       const orcItemToPath: Record<number, string> = {};
       for (const o of orcItensData) {
         const metaPerc = orcToMetaPerc[o.orcamentoId] ?? 0;
@@ -2254,6 +2276,10 @@ Responda APENAS com um objeto JSON no formato:
         orcItemToMetaMdo[o.id] = metaMdoDireta > 0
           ? metaMdoDireta
           : n(o.custoUnitMdo) * (1 - metaPerc);
+        const metaEquipDireta = n((o as any).metaUnitEquip);
+        orcItemToMetaEquip[o.id] = metaEquipDireta > 0
+          ? metaEquipDireta
+          : n((o as any).custoUnitEquip) * (1 - metaPerc);
         // Montar breadcrumb com até 3 níveis intermediários
         if (o.eapCodigo) {
           const parts = String(o.eapCodigo).split(".");
@@ -2312,10 +2338,12 @@ Responda APENAS com um objeto JSON no formato:
         const metaFromOrcTotal = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
         const metaFromOrcMat = orcId ? (orcItemToMetaMat[orcId] ?? 0) : 0;
         const metaFromOrcMdo = orcId ? (orcItemToMetaMdo[orcId] ?? 0) : 0;
+        const metaFromOrcEquip = orcId ? (orcItemToMetaEquip[orcId] ?? 0) : 0;
         const metaFromSC = it.solicitacaoItemId ? (scItemToPrecoMeta[it.solicitacaoItemId] ?? 0) : 0;
         const metaUnitarioTotal = metaFromOrcTotal > 0 ? metaFromOrcTotal : metaFromSC;
         const metaUnitarioMat = metaFromOrcMat;
         const metaUnitarioMdo = metaFromOrcMdo;
+        const metaUnitarioEquip = metaFromOrcEquip;
 
         const incluirAjud = it.solicitacaoItemId ? (scItemToIncluirAjudante[it.solicitacaoItemId] ?? true) : true;
         const metaMdoProf = it.solicitacaoItemId ? (scItemToMetaMdoProf[it.solicitacaoItemId] ?? 0) : 0;
@@ -2323,7 +2351,9 @@ Responda APENAS com um objeto JSON no formato:
 
         let metaUnitario: number;
         if (tipoEfetivo === 'pacote') {
-          metaUnitario = metaUnitarioTotal > 0 ? metaUnitarioTotal : (metaUnitarioMat + metaUnitarioMdo);
+          metaUnitario = metaUnitarioTotal > 0 ? metaUnitarioTotal : (metaUnitarioMat + metaUnitarioMdo + metaUnitarioEquip);
+        } else if (tipoEfetivo === 'equipamento' && metaUnitarioEquip > 0) {
+          metaUnitario = metaUnitarioEquip;
         } else if (tipoEfetivo === 'servico' && metaUnitarioMdo > 0) {
           if (!incluirAjud && metaMdoProf > 0) {
             const totalMdoCusto = metaMdoProf + metaMdoAjud;
@@ -2331,7 +2361,7 @@ Responda APENAS com um objeto JSON no formato:
           } else {
             metaUnitario = metaUnitarioMdo;
           }
-        } else if (!isCotacaoMdo && metaUnitarioMat > 0) {
+        } else if (!isCotacaoMdo && tipoEfetivo !== 'equipamento' && metaUnitarioMat > 0) {
           metaUnitario = metaUnitarioMat;
         } else {
           metaUnitario = metaUnitarioTotal;
@@ -2366,7 +2396,7 @@ Responda APENAS com um objeto JSON no formato:
         const qtdSaldo = Math.round(qtdSaldoRaw * 1000) / 1000;
         const svcCode = it.solicitacaoItemId ? scItemToOrcServicoCodigo[it.solicitacaoItemId] : null;
         const composicaoInsumosList = svcCode ? (composicaoMap[svcCode] ?? []) : [];
-        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: svcCode ?? (trace?.composicaoCodigo ?? "") };
+        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: svcCode ?? (trace?.composicaoCodigo ?? "") };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};
@@ -3004,7 +3034,7 @@ Retorne APENAS um JSON válido neste formato:
               alocacaoMdo: composicaoInsumos.alocacaoMdo,
             }).from(composicaoInsumos)
               .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCods)));
-            const matOnly = allInsumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+            const matOnly = allInsumos.filter(i => n(i.alocacaoMat) > 0);
             const obraMap: Record<string, number> = {};
             for (const ins of matOnly) {
               if (ins.insumoCodigo && n(ins.precoUnitario) > 0) obraMap[ins.insumoCodigo] = n(ins.precoUnitario);
@@ -3139,7 +3169,7 @@ Retorne APENAS um JSON válido neste formato:
               alocacaoMdo: composicaoInsumos.alocacaoMdo,
             }).from(composicaoInsumos)
               .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCods)));
-            const matOnly = allIns.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+            const matOnly = allIns.filter(i => n(i.alocacaoMat) > 0);
             const obraMap: Record<string, number> = {};
             for (const ins of matOnly) {
               if (ins.insumoCodigo && n(ins.precoUnitario) > 0) obraMap[ins.insumoCodigo] = n(ins.precoUnitario);
@@ -3342,7 +3372,7 @@ Retorne APENAS um JSON válido neste formato:
             alocacaoMdo: composicaoInsumos.alocacaoMdo,
           }).from(composicaoInsumos)
             .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCods)));
-          for (const ins of allIns.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0))) {
+          for (const ins of allIns.filter(i => n(i.alocacaoMat) > 0)) {
             if (ins.insumoCodigo && n(ins.precoUnitario) > 0) insPriceMap[ins.insumoCodigo] = n(ins.precoUnitario);
           }
         }
@@ -3811,7 +3841,7 @@ Retorne APENAS um JSON válido neste formato:
                 if (svcCods.length > 0) {
                   const insCheck = await db.select({ composicaoCodigo: composicaoInsumos.composicaoCodigo, insumoCodigo: composicaoInsumos.insumoCodigo, quantidade: composicaoInsumos.quantidade, alocacaoMat: composicaoInsumos.alocacaoMat, alocacaoMdo: composicaoInsumos.alocacaoMdo })
                     .from(composicaoInsumos).where(and(eq(composicaoInsumos.companyId, Number(orcCheck.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCods)));
-                  const matOnly = insCheck.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+                  const matOnly = insCheck.filter(i => n(i.alocacaoMat) > 0);
                   const qtdOrcMap: Record<string, number> = {};
                   for (const ins of matOnly) {
                     if (!insCodigos.includes(ins.insumoCodigo || "")) continue;
@@ -4877,7 +4907,7 @@ Retorne APENAS um JSON válido neste formato:
   // SEM custos/metas (blind quotation até equalização)
   // ══════════════════════════════════════════════════════════════
   getInsumosComposicao: protectedProcedure
-    .input(z.object({ companyId: z.number(), servicoCodigo: z.string(), orcamentoItemId: z.number().optional(), tipoSC: z.enum(["material", "servico", "pacote"]).optional() }))
+    .input(z.object({ companyId: z.number(), servicoCodigo: z.string(), orcamentoItemId: z.number().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const insumos = await db.select({
@@ -4889,6 +4919,7 @@ Retorne APENAS um JSON válido neste formato:
         custoUnitTotal: composicaoInsumos.custoUnitTotal,
         alocacaoMat: composicaoInsumos.alocacaoMat,
         alocacaoMdo: composicaoInsumos.alocacaoMdo,
+        alocacaoEquip: composicaoInsumos.alocacaoEquip,
       }).from(composicaoInsumos)
         .where(and(
           eq(composicaoInsumos.companyId, input.companyId),
@@ -4896,14 +4927,7 @@ Retorne APENAS um JSON válido neste formato:
         ))
         .orderBy(asc(composicaoInsumos.insumoDescricao));
 
-      let filtered: typeof insumos;
-      if (input.tipoSC === "servico") {
-        filtered = insumos.filter(i => n(i.alocacaoMdo) > 0);
-      } else if (input.tipoSC === "pacote") {
-        filtered = insumos;
-      } else {
-        filtered = insumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
-      }
+      const filtered = filterInsumosByTipo(insumos as any[], input.tipoSC ?? "material");
 
       const tipoSC = input.tipoSC ?? "material";
       return filtered.map(i => {
@@ -5009,10 +5033,12 @@ Retorne APENAS um JSON válido neste formato:
     .input(z.object({ companyId: z.number(), solicitacaoId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      const [sc] = await db.select({ id: comprasSolicitacoes.id, obraId: comprasSolicitacoes.obraId, tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes)
+      const [sc] = await db.select({ id: comprasSolicitacoes.id, obraId: comprasSolicitacoes.obraId, tipo: comprasSolicitacoes.tipo, incluirEquipamentos: comprasSolicitacoes.incluirEquipamentos }).from(comprasSolicitacoes)
         .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
       if (!sc) return [];
-      const scTipoGroup = sc.tipo === "servico" || sc.tipo === "pacote" ? "mdo" : "mat";
+      const scTipo2 = sc.tipo ?? "material";
+      const incluirEquip2 = sc.incluirEquipamentos ?? false;
+      const scTipoGroup = sc.tipo === "servico" || sc.tipo === "pacote" ? "mdo" : sc.tipo === "equipamento" ? "equip" : "mat";
 
       const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, sc.id));
       if (scItens.length === 0) return [];
@@ -5052,7 +5078,7 @@ Retorne APENAS um JSON válido neste formato:
               alocacaoMdo: composicaoInsumos.alocacaoMdo,
             }).from(composicaoInsumos)
               .where(and(eq(composicaoInsumos.companyId, Number(input.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
-            const materiaisOnly = allCompInsumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+            const materiaisOnly = allCompInsumos.filter(i => n(i.alocacaoMat) > 0);
             for (const ins of materiaisOnly) {
               const code = ins.insumoCodigo;
               if (!code || !insumoCodigos.includes(code)) continue;
@@ -5083,6 +5109,8 @@ Retorne APENAS um JSON válido neste formato:
             AND s.id != ${sc.id}
             AND ${scTipoGroup === "mat"
               ? sql`(s.tipo IS NULL OR s.tipo = 'material')`
+              : scTipoGroup === "equip"
+              ? sql`s.tipo = 'equipamento'`
               : sql`s.tipo IN ('servico', 'pacote')`}
           GROUP BY si.insumo_codigo
         `);
@@ -5101,6 +5129,8 @@ Retorne APENAS um JSON válido neste formato:
             AND si.orcamento_item_id IS NULL
             AND ${scTipoGroup === "mat"
               ? sql`(s.tipo IS NULL OR s.tipo = 'material')`
+              : scTipoGroup === "equip"
+              ? sql`s.tipo = 'equipamento'`
               : sql`s.tipo IN ('servico', 'pacote')`}
         `);
         for (const r of (rows as any).rows ?? []) {
@@ -5122,6 +5152,8 @@ Retorne APENAS um JSON válido neste formato:
             AND s.id != ${sc.id}
             AND ${scTipoGroup === "mat"
               ? sql`(s.tipo IS NULL OR s.tipo = 'material')`
+              : scTipoGroup === "equip"
+              ? sql`s.tipo = 'equipamento'`
               : sql`s.tipo IN ('servico', 'pacote')`}
           GROUP BY si.orcamento_item_id
         `);
@@ -5139,6 +5171,8 @@ Retorne APENAS um JSON válido neste formato:
           WHERE si.orcamento_item_id IN (${sql.join(orcItemIds.map(id => sql`${id}`), sql`, `)})
             AND ${scTipoGroup === "mat"
               ? sql`(s.tipo IS NULL OR s.tipo = 'material')`
+              : scTipoGroup === "equip"
+              ? sql`s.tipo = 'equipamento'`
               : sql`s.tipo IN ('servico', 'pacote')`}
         `);
         for (const r of (rows as any).rows ?? []) {
@@ -5160,6 +5194,7 @@ Retorne APENAS um JSON válido neste formato:
           coeficiente: composicaoInsumos.quantidade,
           alocacaoMat: composicaoInsumos.alocacaoMat,
           alocacaoMdo: composicaoInsumos.alocacaoMdo,
+          alocacaoEquip: composicaoInsumos.alocacaoEquip,
         }).from(composicaoInsumos)
           .where(and(eq(composicaoInsumos.companyId, Number(input.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCodigos)));
         for (const ins of compIns) {
@@ -5172,6 +5207,7 @@ Retorne APENAS um JSON válido neste formato:
             coeficiente: n(ins.coeficiente),
             alocacaoMat: n(ins.alocacaoMat),
             alocacaoMdo: n(ins.alocacaoMdo),
+            alocacaoEquip: n(ins.alocacaoEquip),
           });
         }
       }
@@ -5235,11 +5271,7 @@ Retorne APENAS um JSON válido neste formato:
         let insumos: { insumoCodigo: string; descricao: string; unidade: string | null; coeficiente: number; qtdCalculada: number }[] = [];
         if (svcCode && composicaoInsumosMap[svcCode]) {
           const allIns = composicaoInsumosMap[svcCode];
-          const filtered = scTipoGroup === "mat"
-            ? allIns.filter(i => i.alocacaoMat > 0 || (i.alocacaoMdo === 0 && i.alocacaoMat === 0))
-            : scTipoGroup === "mdo"
-              ? allIns.filter(i => i.alocacaoMdo > 0)
-              : allIns;
+          const filtered = filterInsumosByTipo(allIns, scTipo2, incluirEquip2);
           insumos = filtered.map(i => ({
             insumoCodigo: i.insumoCodigo,
             descricao: i.descricao,
@@ -5277,7 +5309,8 @@ Retorne APENAS um JSON válido neste formato:
       const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, sc.id));
       if (scItens.length === 0) return { itens: [], alertas: [] };
 
-      const scTipoGroup = sc.tipo === "servico" || sc.tipo === "pacote" ? "mdo" : "mat";
+      const scTipo = sc.tipo ?? "material";
+      const incluirEquip = (sc as any).incluirEquipamentos ?? false;
 
       const orcItemIds = scItens.map(i => i.orcamentoItemId).filter(Boolean) as number[];
       let orcItensData: Record<number, { servicoCodigo: string | null; quantidade: string }> = {};
@@ -5288,7 +5321,7 @@ Retorne APENAS um JSON válido neste formato:
       }
 
       const svcCodigos = [...new Set(Object.values(orcItensData).map(o => o.servicoCodigo).filter(Boolean))] as string[];
-      let composicaoInsumosMap: Record<string, { insumoCodigo: string; descricao: string; unidade: string | null; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number }[]> = {};
+      let composicaoInsumosMap: Record<string, { insumoCodigo: string; descricao: string; unidade: string | null; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number; alocacaoEquip: number }[]> = {};
       if (svcCodigos.length > 0) {
         const compIns = await db.select({
           composicaoCodigo: composicaoInsumos.composicaoCodigo,
@@ -5299,6 +5332,7 @@ Retorne APENAS um JSON válido neste formato:
           precoUnitario: composicaoInsumos.precoUnitario,
           alocacaoMat: composicaoInsumos.alocacaoMat,
           alocacaoMdo: composicaoInsumos.alocacaoMdo,
+          alocacaoEquip: composicaoInsumos.alocacaoEquip,
         }).from(composicaoInsumos)
           .where(and(eq(composicaoInsumos.companyId, Number(input.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCodigos)));
         for (const ins of compIns) {
@@ -5312,6 +5346,7 @@ Retorne APENAS um JSON válido neste formato:
             precoUnitario: n(ins.precoUnitario),
             alocacaoMat: n(ins.alocacaoMat),
             alocacaoMdo: n(ins.alocacaoMdo),
+            alocacaoEquip: n(ins.alocacaoEquip),
           });
         }
       }
@@ -5326,11 +5361,7 @@ Retorne APENAS um JSON válido neste formato:
 
         if (svcCode && composicaoInsumosMap[svcCode]) {
           const allIns = composicaoInsumosMap[svcCode];
-          const filtered = scTipoGroup === "mat"
-            ? allIns.filter(i => i.alocacaoMat > 0 || (i.alocacaoMdo === 0 && i.alocacaoMat === 0))
-            : scTipoGroup === "mdo"
-              ? allIns.filter(i => i.alocacaoMdo > 0)
-              : allIns;
+          const filtered = filterInsumosByTipo(allIns, scTipo, incluirEquip);
 
           for (const ins of filtered) {
             const qtdCalculada = Math.round(qtdSC * ins.coeficiente * 1000) / 1000;
@@ -5480,7 +5511,7 @@ Retorne APENAS um JSON válido neste formato:
     }),
 
   getInsumosConsolidados: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number(), busca: z.string().optional(), tipoSC: z.enum(["material", "servico", "pacote"]).optional() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), busca: z.string().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
@@ -5512,17 +5543,12 @@ Retorne APENAS um JSON válido neste formato:
         precoUnitario: composicaoInsumos.precoUnitario,
         alocacaoMat: composicaoInsumos.alocacaoMat,
         alocacaoMdo: composicaoInsumos.alocacaoMdo,
+        alocacaoEquip: composicaoInsumos.alocacaoEquip,
       }).from(composicaoInsumos)
         .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
 
       let filteredInsumos: typeof allInsumos;
-      if (input.tipoSC === "servico") {
-        filteredInsumos = allInsumos.filter(i => n(i.alocacaoMdo) > 0);
-      } else if (input.tipoSC === "pacote") {
-        filteredInsumos = allInsumos;
-      } else {
-        filteredInsumos = allInsumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
-      }
+      filteredInsumos = filterInsumosByTipo(allInsumos as any[], input.tipoSC ?? "material") as typeof allInsumos;
 
       const consolidado: Record<string, {
         insumoCodigo: string; descricao: string; unidade: string;
@@ -5711,7 +5737,7 @@ Retorne APENAS um JSON válido neste formato:
       }).from(composicaoInsumos)
         .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
 
-      const materiaisOnly = insumosDb.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+      const materiaisOnly = insumosDb.filter(i => n(i.alocacaoMat) > 0);
 
       const sugestoes: Record<string, { insumoCodigo: string; descricao: string; unidade: string; qtdNecessaria: number; atividades: string[] }> = {};
       for (const ins of materiaisOnly) {
@@ -5883,13 +5909,14 @@ Retorne APENAS um JSON válido neste formato:
       }
 
       const servicoCodigosEap = [...new Set(orcItems.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
-      const mdoMatMap: Record<string, { temMat: boolean; temMdo: boolean }> = {};
+      const mdoMatMap: Record<string, { temMat: boolean; temMdo: boolean; temEquip: boolean }> = {};
       const mdoDecompMap: Record<string, { profissional: number; ajudante: number; temAjudante: boolean }> = {};
       if (servicoCodigosEap.length > 0) {
         const insFlags = await db.select({
           composicaoCodigo: composicaoInsumos.composicaoCodigo,
           alocacaoMat: composicaoInsumos.alocacaoMat,
           alocacaoMdo: composicaoInsumos.alocacaoMdo,
+          alocacaoEquip: composicaoInsumos.alocacaoEquip,
           insumoDescricao: composicaoInsumos.insumoDescricao,
           insumoCodigo: composicaoInsumos.insumoCodigo,
         }).from(composicaoInsumos)
@@ -5899,8 +5926,10 @@ Retorne APENAS um JSON válido neste formato:
         const seenInsumosPerComp: Record<string, Set<string>> = {};
 
         for (const f of insFlags) {
-          if (!mdoMatMap[f.composicaoCodigo]) mdoMatMap[f.composicaoCodigo] = { temMat: false, temMdo: false };
-          if (n(f.alocacaoMat) > 0 || (n(f.alocacaoMdo) === 0 && n(f.alocacaoMat) === 0)) mdoMatMap[f.composicaoCodigo].temMat = true;
+          if (!mdoMatMap[f.composicaoCodigo]) mdoMatMap[f.composicaoCodigo] = { temMat: false, temMdo: false, temEquip: false };
+          if (n(f.alocacaoMat) > 0) mdoMatMap[f.composicaoCodigo].temMat = true;
+          const isEquip = n(f.alocacaoEquip) > 0 || (n(f.alocacaoMat) === 0 && n(f.alocacaoMdo) === 0);
+          if (isEquip) mdoMatMap[f.composicaoCodigo].temEquip = true;
           if (n(f.alocacaoMdo) > 0) mdoMatMap[f.composicaoCodigo].temMdo = true;
 
           if (n(f.alocacaoMdo) > 0) {
@@ -5950,6 +5979,7 @@ Retorne APENAS um JSON válido neste formato:
           duracaoDias: atividadesMap[it.eapCodigo]?.duracaoDias ?? null,
           temMat: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMat ?? false) : true,
           temMdo: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMdo ?? false) : false,
+          temEquip: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temEquip ?? false) : false,
           mdoContratado: mdoContratadoMap[it.id] || 0,
           mdoSaldo: n(it.quantidade) - (mdoContratadoMap[it.id] || 0),
           mdoProfissional: decomp?.profissional ?? 0,
@@ -6980,7 +7010,7 @@ Retorne APENAS um JSON válido neste formato:
     }),
 
   getCoberturaInsumosEAP: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number(), tipoSC: z.enum(["material", "servico", "pacote"]).optional() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
@@ -7007,13 +7037,7 @@ Retorne APENAS um JSON válido neste formato:
         .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
 
       let filteredCob: typeof insumos;
-      if (input.tipoSC === "servico") {
-        filteredCob = insumos.filter(i => n(i.alocacaoMdo) > 0);
-      } else if (input.tipoSC === "pacote") {
-        filteredCob = insumos;
-      } else {
-        filteredCob = insumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
-      }
+      filteredCob = filterInsumosByTipo(insumos as any[], input.tipoSC ?? "material") as typeof insumos;
 
       const totalInsumosPorComposicao: Record<string, Set<string>> = {};
       for (const ins of filteredCob) {
@@ -7372,7 +7396,7 @@ Retorne APENAS um JSON válido neste formato:
       }).from(composicaoInsumos)
         .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
 
-      const materiaisOnly = allInsumos.filter(i => n(i.alocacaoMat) > 0 || (n(i.alocacaoMdo) === 0 && n(i.alocacaoMat) === 0));
+      const materiaisOnly = allInsumos.filter(i => n(i.alocacaoMat) > 0);
 
       const qtdOrcadaMap: Record<string, number> = {};
       for (const ins of materiaisOnly) {

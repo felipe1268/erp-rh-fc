@@ -450,6 +450,8 @@ const COL_ALIASES: Record<string, string[]> = {
                    'valorunitmat', 'valorunitariomaterial', 'custounitariomaterial'],
   cuUnitMdo:      ['precounitmo', 'punitmo', 'pumo', 'cunitmo', 'custounitmo',
                    'valorunitmo', 'valorunitariomo', 'custounitariomo'],
+  cuUnitEquip:    ['precounitequip', 'punitequip', 'puequip', 'cunitequip', 'custounitequip',
+                   'valorunitequip', 'valorunitarioequipamento', 'custounitarioequipamento'],
   // Custo total por item — "Preço Total" (FC/Sinapi) ou "P.Total Mat" (padrão clássico)
   // ATENÇÃO: aliases genéricos como "precototal/preototal" casam via startsWith em ambas as colunas.
   // Usar apenas aliases suficientemente específicos para evitar falso-positivo.
@@ -467,6 +469,10 @@ const COL_ALIASES: Record<string, string[]> = {
                    'mdo',                   // sub-label standalone "MDO"
                    // NÃO usar 'precototal'/'preototal' aqui: são prefixo de "...material" → falso-positivo
                    'valortotalmo', 'valortotalmaodeobra'],
+  cuTotalEquip:   ['ptotalequip', 'pttotalequip', 'ctequip', 'custototalequip', 'totalequip',
+                   'totalequipamento', 'precototalequip', 'precototalequipamento',
+                   'preototalequip', 'valortotalequip', 'valortotalequipamento',
+                   'equipamento'],
   // Custo total do serviço — "Custo" sozinho (col final de totais)
   // IMPORTANTE: "custo" e "total" são aliases CURTOS → só casam por igualdade exata
   custoTotal:     ['custototal', 'totalcusto', 'custogeral', 'totalgeral', 'custo', 'total', 'ct'],
@@ -636,10 +642,12 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     const quantidade     = toNum(col(row, 'quantidade'));
     const custoUnitMat   = toNum(col(row, 'cuUnitMat'));
     const custoUnitMdo   = toNum(col(row, 'cuUnitMdo'));
-    const custoUnitTotal = custoUnitMat + custoUnitMdo;
+    const custoUnitEquipRaw = toNum(col(row, 'cuUnitEquip'));
+    const custoUnitTotal = custoUnitMat + custoUnitMdo + custoUnitEquipRaw;
 
     let custoTotalMat  = toNum(col(row, 'cuTotalMat'));
     let custoTotalMdo  = toNum(col(row, 'cuTotalMdo'));
+    let custoTotalEquip = toNum(col(row, 'cuTotalEquip'));
     let   custoTotal     = toNum(col(row, 'custoTotal'));
 
     // Fallbacks para custoTotal: soma das partes → qty × custo unitário
@@ -666,13 +674,14 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     // Cobre casos onde colunas de unit cost não foram detectadas mas total foi
     let custoUnitMatFinal = custoUnitMat;
     let custoUnitMdoFinal = custoUnitMdo;
+    let custoUnitEquipFinal = custoUnitEquipRaw;
     let custoUnitTotalFinal = custoUnitTotal;
     if (custoUnitTotalFinal === 0 && quantidade > 0 && custoTotal > 0) {
       custoUnitTotalFinal = custoTotal / quantidade;
-      // Distribuir entre mat e mdo proporcional ao total, ou tudo em mdo se mat=0
       if (custoTotalMat > 0 && custoTotalMdo >= 0) {
         custoUnitMatFinal = custoTotal > 0 ? (custoTotalMat / custoTotal) * custoUnitTotalFinal : 0;
-        custoUnitMdoFinal = custoUnitTotalFinal - custoUnitMatFinal;
+        custoUnitEquipFinal = custoTotal > 0 && custoTotalEquip > 0 ? (custoTotalEquip / custoTotal) * custoUnitTotalFinal : 0;
+        custoUnitMdoFinal = custoUnitTotalFinal - custoUnitMatFinal - custoUnitEquipFinal;
       } else {
         custoUnitMdoFinal = custoUnitTotalFinal;
       }
@@ -686,8 +695,10 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     const metaUnitTotal  = custoUnitTotalFinal * (1 - metaPerc);
     const metaUnitMat    = custoUnitMatFinal   * (1 - metaPerc);
     const metaUnitMdo    = custoUnitMdoFinal   * (1 - metaPerc);
+    const metaUnitEquip  = custoUnitEquipFinal * (1 - metaPerc);
     const metaTotalMat   = custoTotalMat       * (1 - metaPerc);
     const metaTotalMdo   = custoTotalMdo       * (1 - metaPerc);
+    const metaTotalEquip = custoTotalEquip     * (1 - metaPerc);
     const abcServico     = String(col(row, 'abc') ?? '').trim().substring(0, 5);
 
     // Log do primeiro item para diagnóstico
@@ -706,18 +717,22 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
       quantidade:     fix4(quantidade),
       custoUnitMat:   fix4(custoUnitMatFinal),
       custoUnitMdo:   fix4(custoUnitMdoFinal),
+      custoUnitEquip: fix4(custoUnitEquipFinal),
       custoUnitTotal: fix4(custoUnitTotalFinal),
       vendaUnitTotal: fix4(vendaUnitTotal),
       metaUnitTotal:  fix4(metaUnitTotal),
       metaUnitMat:    fix4(metaUnitMat),
       metaUnitMdo:    fix4(metaUnitMdo),
+      metaUnitEquip:  fix4(metaUnitEquip),
       custoTotalMat:  fix2(custoTotalMat),
       custoTotalMdo:  fix2(custoTotalMdo),
+      custoTotalEquip: fix2(custoTotalEquip),
       custoTotal:     fix2(custoTotal),
       vendaTotal:     fix2(vendaTotal),
       metaTotal:      fix2(metaTotal),
       metaTotalMat:   fix2(metaTotalMat),
       metaTotalMdo:   fix2(metaTotalMdo),
+      metaTotalEquip: fix2(metaTotalEquip),
       abcServico,
       ordem,
     });
@@ -1158,7 +1173,7 @@ function parsearAbaCPUs(rows: any[][], companyId: number) {
     companyId: number; composicaoCodigo: string; insumoCodigo: string;
     insumoDescricao: string; unidade: string; quantidade: string;
     precoUnitario: string; alocacaoMat: string; alocacaoMdo: string;
-    custoUnitTotal: string;
+    alocacaoEquip: string; custoUnitTotal: string;
   }[] = [];
 
   let currentCod = '';
@@ -1193,6 +1208,7 @@ function parsearAbaCPUs(rows: any[][], companyId: number) {
       const alocacaoMat     = toNum(row[8]);
       const alocacaoMdo     = toNum(row[9]);
       const custoUnit       = toNum(row[12]);
+      const alocacaoEquip   = (alocacaoMat === 0 && alocacaoMdo === 0 && custoUnit > 0) ? custoUnit : 0;
       if (!insumoCodigo && !insumoDescricao) continue;
       linhasInsumos.push({
         companyId,
@@ -1204,6 +1220,7 @@ function parsearAbaCPUs(rows: any[][], companyId: number) {
         precoUnitario:    fix4(precoUnitario),
         alocacaoMat:      fix6(alocacaoMat),
         alocacaoMdo:      fix6(alocacaoMdo),
+        alocacaoEquip:    fix6(alocacaoEquip),
         custoUnitTotal:   fix6(custoUnit),
       });
     }
@@ -1500,6 +1517,7 @@ async function processarImportacaoComposicoesBackground(
           precoUnitario:    fix4(toNum(ins.precoUnitario)),
           alocacaoMat:      fix6(toNum(ins.alocacaoMat)),
           alocacaoMdo:      fix6(toNum(ins.alocacaoMdo)),
+          alocacaoEquip:    fix6(toNum(ins.alocacaoEquip)),
           custoUnitTotal:   fix6(toNum(ins.custoUnitTotal)),
         });
       }
@@ -1915,8 +1933,10 @@ export const orcamentoRouter = router({
           metaUnitTotal: sql`CASE WHEN COALESCE(${orcamentoItens.quantidade}::numeric, 0) > 0 THEN ROUND(COALESCE(${orcamentoItens.custoTotal}::numeric, 0) * ${metaFator} / COALESCE(${orcamentoItens.quantidade}::numeric, 1), 4) ELSE 0 END`,
           metaUnitMat:   sql`ROUND(COALESCE(${orcamentoItens.custoUnitMat}::numeric, 0) * ${metaFator}, 4)`,
           metaUnitMdo:   sql`ROUND(COALESCE(${orcamentoItens.custoUnitMdo}::numeric, 0) * ${metaFator}, 4)`,
+          metaUnitEquip: sql`ROUND(COALESCE(${orcamentoItens.custoUnitEquip}::numeric, 0) * ${metaFator}, 4)`,
           metaTotalMat:  sql`ROUND(COALESCE(${orcamentoItens.custoTotalMat}::numeric, 0) * ${metaFator}, 2)`,
           metaTotalMdo:  sql`ROUND(COALESCE(${orcamentoItens.custoTotalMdo}::numeric, 0) * ${metaFator}, 2)`,
+          metaTotalEquip: sql`ROUND(COALESCE(${orcamentoItens.custoTotalEquip}::numeric, 0) * ${metaFator}, 2)`,
         }).where(eq(orcamentoItens.orcamentoId, input.id));
       }
 

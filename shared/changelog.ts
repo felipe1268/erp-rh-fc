@@ -6678,4 +6678,22 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 05:00:00",
   },
+  {
+    version: 926,
+    titulo: "Equipamento (EQUIP) como 3ª categoria de custo",
+    descricao:
+      "Adicionada a categoria Equipamento (EQUIP) no módulo de Compras. " +
+      "Insumos com alocação MAT=0 e MDO=0 são agora classificados como equipamento. " +
+      "SC pode ser do tipo Equipamento (4º botão, badge verde EQUIP). " +
+      "Pacote ganha toggle 'Incluir Equipamentos'. " +
+      "Mapa de Cotação exibe 'Meta EQUIP (Orçamento)' para cotações de equipamento. " +
+      "Composição expandida mostra subtotal EQUIP e badge verde por insumo. " +
+      "Saldo segregado por tipo inclui equipamento. " +
+      "Schema: alocacao_equip em composicao_insumos, custo/meta_unit_equip em orcamento_itens, " +
+      "incluir_equipamentos em compras_solicitacoes.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 10:00:00",
+  },
 ];
