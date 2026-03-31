@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 937,
+    titulo: "Diálogo de aprovação da SC exibe insumos individuais da composição",
+    descricao: "No diálogo de aprovação (Controle Orçamentário), cada item vinculado a uma composição agora mostra os insumos individuais que estão sendo cotados. Se a SC é de material, aparecem só os insumos de material; se MDO, só MDO; se equipamento, só equipamento. Exibe código, descrição, unidade e quantidade calculada de cada insumo.",
+    tipo: 'feature',
+    modulos: 'Compras',
+    criadoPor: 'System',
+    dataPublicacao: "2026-03-31 23:00:00",
+  },
+  {
     version: 936,
     titulo: "Mapa de Cotação: metaUnitario corrigido como PU por unidade do insumo (não alocação por m²)",
     descricao: "Correção conceitual fundamental: para insumos de composição (MAT, MDO, EQUIP), o metaUnitario no Mapa de Cotação agora é o Preço Unitário do insumo com meta (ex: Areia R$ 76,80/m³, Cimento R$ 0,49/kg, Betoneira R$ 2,36/chp). Antes calculava como alocação por m² de composição (ex: Areia R$ 3,12), misturando unidades com a quantidade de compra (m³, kg), resultando em totais errados. Agora: PU × QTD compra = Total correto (ex: R$ 76,80 × 4,946 m³ = R$ 379,85). Removidos campos metaPUDisplay/metaQtdDisplay — metaUnitario direto agora contém o valor correto.",

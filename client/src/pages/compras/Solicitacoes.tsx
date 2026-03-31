@@ -292,8 +292,11 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar
                         const saldoTooltip = linked
                           ? `Orçado: ${fmt(item.qtdOrcada)} ${item.unidade}\nSolicitado: ${fmt(item.qtdSolicitada)} ${item.unidade}\nComprado: ${fmt(item.qtdComprada)} ${item.unidade}${item.ocsVinculadas.length > 0 ? ` (${item.ocsVinculadas.join(", ")})` : ""}\nSaldo: ${fmt(item.saldo)} ${item.unidade}`
                           : "Sem vínculo ao orçamento";
+                        const insumosComp = (item as any).insumos as Array<{ insumoCodigo: string; descricao: string; unidade: string | null; coeficiente: number; qtdCalculada: number }> | undefined;
+                        const hasInsumos = insumosComp && insumosComp.length > 0;
                         return (
-                          <tr key={item.id} className={`border-b border-gray-100 hover:bg-gray-50/80 transition-colors ${rowBg}`}>
+                          <React.Fragment key={item.id}>
+                          <tr className={`border-b border-gray-100 hover:bg-gray-50/80 transition-colors ${rowBg}`}>
                             <td className="px-2 py-2 text-[10px] text-gray-400 font-mono">{idx + 1}</td>
                             <td className="px-2 py-2">
                               <p className={`text-xs font-medium truncate ${isRed ? "text-red-800" : "text-gray-800"}`} title={item.descricao}>
@@ -344,6 +347,30 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar
                               )}
                             </td>
                           </tr>
+                          {hasInsumos && (
+                            <tr className="border-b border-gray-100">
+                              <td colSpan={6} className="px-0 py-0">
+                                <div className="ml-6 mr-2 my-1.5 rounded border border-gray-200 bg-gray-50/80 overflow-hidden">
+                                  <div className="px-2 py-1 bg-gray-100 border-b border-gray-200">
+                                    <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Insumos da composição nesta SC</span>
+                                  </div>
+                                  <table className="w-full">
+                                    <tbody>
+                                      {insumosComp!.map(ins => (
+                                        <tr key={ins.insumoCodigo} className="border-b border-gray-100 last:border-b-0">
+                                          <td className="px-2 py-1 text-[10px] text-gray-400 font-mono w-20">{ins.insumoCodigo}</td>
+                                          <td className="px-2 py-1 text-[10px] text-gray-700">{ins.descricao}</td>
+                                          <td className="px-1 py-1 text-[10px] text-gray-500 text-center w-10">{ins.unidade ?? "—"}</td>
+                                          <td className="px-1 py-1 text-[10px] text-gray-500 text-right w-14 tabular-nums" title={`Coef: ${ins.coeficiente}`}>{fmt(ins.qtdCalculada)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          </React.Fragment>
                         );
                       })}
                     </tbody>
