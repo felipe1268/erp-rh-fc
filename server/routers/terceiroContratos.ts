@@ -95,6 +95,12 @@ export const terceiroContratosRouter = router({
         .orderBy(desc(terceiroDocumentos.criadoEm));
 
       const [empresa] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, contrato.empresaTerceiraId));
+      const [companyData] = await db.select({
+        razaoSocial: companies.razaoSocial,
+        nomeFantasia: companies.nomeFantasia,
+        cnpj: companies.cnpj,
+        logoUrl: companies.logoUrl,
+      }).from(companies).where(eq(companies.id, contrato.companyId));
 
       let itens: any[] = itensRaw;
       let itensHierarchy: any[] = [];
@@ -257,6 +263,7 @@ export const terceiroContratosRouter = router({
       return {
         ...contrato,
         empresa: empresa || null,
+        companyData: companyData || null,
         itens,
         itensHierarchy,
         medicoes,

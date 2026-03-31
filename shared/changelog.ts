@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 946,
+    titulo: "Editor de contrato estilo Word com logo da empresa",
+    descricao: "A aba Contrato do módulo Terceiros foi redesenhada com visualização estilo documento (folha A4 com margens, cabeçalho com logo da empresa ou nome/CNPJ, rodapé com campos de assinatura CONTRATANTE/CONTRATADA). Cláusulas são formatadas automaticamente (títulos centralizados, cláusulas em negrito, subitens indentados). Barra de ferramentas compacta estilo Word. Painel lateral com editor de texto e histórico de revisões. Dados da empresa (razão social, CNPJ, logoUrl) incluídos na resposta do getContrato.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-03-31 17:20:00",
+  },
+  {
     version: 945,
     titulo: "Aba 'Documento' renomeada para 'Contrato' e movida para primeira posição",
     descricao: "Na tela de detalhe do contrato de Terceiros, a aba 'Documento' foi renomeada para 'Contrato' e posicionada como primeira aba (à esquerda). O botão 'Gerar documento' agora é 'Gerar contrato', e todas as mensagens relacionadas foram atualizadas. A aba Contrato agora abre por padrão ao entrar no detalhe do contrato.",
