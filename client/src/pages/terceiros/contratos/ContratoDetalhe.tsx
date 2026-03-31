@@ -77,6 +77,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [obsRevisao, setObsRevisao] = useState("");
   const [showRevisoes, setShowRevisoes] = useState(false);
   const [showObsModal, setShowObsModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
   const utils = trpc.useUtils();
@@ -498,92 +499,128 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         )}
 
         {/* Tab: Contrato */}
-        {tab === "documento" && (
+        {tab === "documento" && (() => {
+          const cd = (contrato as any).companyData;
+          const autoFilledValues = new Set<string>();
+          if (cd?.razaoSocial) autoFilledValues.add(cd.razaoSocial);
+          if (cd?.cnpj) autoFilledValues.add(cd.cnpj);
+          if (contrato.empresa?.razaoSocial) autoFilledValues.add(contrato.empresa.razaoSocial);
+          if (contrato.empresa?.cnpj) autoFilledValues.add(contrato.empresa.cnpj);
+          if (contrato.numeroContrato) autoFilledValues.add(contrato.numeroContrato);
+          if (contrato.descricao) autoFilledValues.add(contrato.descricao);
+          if (contrato.valorTotal && Number(contrato.valorTotal) > 0) autoFilledValues.add(BRL(contrato.valorTotal));
+          if (contrato.dataInicio) autoFilledValues.add(fmtDate(contrato.dataInicio));
+          if (contrato.dataTermino) autoFilledValues.add(fmtDate(contrato.dataTermino));
+          if (contrato.empresa?.logradouro) {
+            const endEmpresa = [contrato.empresa.logradouro, contrato.empresa.numero, contrato.empresa.bairro, contrato.empresa.cidade, contrato.empresa.estado].filter(Boolean).join(", ");
+            if (endEmpresa) autoFilledValues.add(endEmpresa);
+          }
+          if (contrato.empresa?.responsavelNome) autoFilledValues.add(contrato.empresa.responsavelNome);
+          if ((contrato as any).obraNome) autoFilledValues.add((contrato as any).obraNome);
+
+          const highlightAutoFilled = (text: string) => {
+            if (autoFilledValues.size === 0) return text;
+            const escaped = [...autoFilledValues].filter(v => v && v.length > 2).map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+            if (escaped.length === 0) return text;
+            const regex = new RegExp(`(${escaped.join("|")})`, "g");
+            const parts = text.split(regex);
+            if (parts.length === 1) return text;
+            return parts.map((part, i) =>
+              autoFilledValues.has(part)
+                ? <span key={i} className="bg-blue-50 text-blue-700 border-b-2 border-blue-300 px-0.5 rounded-sm font-medium" title="Preenchido automaticamente">{part}</span>
+                : part
+            );
+          };
+
+          return (
           <div className="space-y-4">
             {/* Toolbar estilo Word */}
-            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 flex-wrap">
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm flex-wrap">
               <Button
                 size="sm"
                 variant="outline"
-                className="gap-2 bg-white"
+                className="gap-2 h-8 text-xs"
                 disabled={gerarTextoMut.isPending}
                 onClick={() => gerarTextoMut.mutate({ contratoId: id })}
               >
-                <RefreshCw className={`w-4 h-4 ${gerarTextoMut.isPending ? "animate-spin" : ""}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${gerarTextoMut.isPending ? "animate-spin" : ""}`} />
                 {textoAtual ? "Regenerar" : "Gerar contrato"}
               </Button>
               {textoAtual && (
-                <Button
-                  size="sm"
-                  className="gap-2 bg-blue-600 hover:bg-blue-700"
-                  disabled={salvarTextoMut.isPending || textoEditado === null}
-                  onClick={() => setShowObsModal(true)}
-                >
-                  <Save className="w-4 h-4" />
-                  Salvar
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 h-8 text-xs"
+                    onClick={() => setShowEditModal(true)}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    Editar texto
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-2 h-8 text-xs bg-blue-600 hover:bg-blue-700"
+                    disabled={salvarTextoMut.isPending || textoEditado === null}
+                    onClick={() => setShowObsModal(true)}
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    Salvar
+                  </Button>
+                </>
               )}
-              <div className="h-6 w-px bg-gray-300 mx-1" />
+              <div className="h-5 w-px bg-gray-200 mx-1" />
               {(contrato as any).versaoTexto > 0 && (
-                <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" />
+                <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
                   v{(contrato as any).versaoTexto}
-                  {textoEditado !== null && <span className="text-orange-500 font-medium">● não salvo</span>}
+                  {textoEditado !== null && <span className="text-orange-500 font-medium ml-1">● não salvo</span>}
                 </span>
               )}
               {revisoes.length > 0 && (
                 <button
                   onClick={() => setShowRevisoes(r => !r)}
-                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+                  className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-gray-600"
                 >
-                  <History className="w-3.5 h-3.5" />
-                  {revisoes.length} revisão(ões)
+                  <History className="w-3 h-3" />
+                  {revisoes.length} rev.
                 </button>
               )}
               <div className="ml-auto flex items-center gap-2">
-                <button
-                  onClick={() => navigate("/terceiros/contratos/template")}
-                  className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600"
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                  Template
-                </button>
+                <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-50 border border-blue-300" />
+                  Dados automáticos
+                </div>
               </div>
             </div>
 
             {!textoAtual ? (
-              <div className="py-16 text-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-                <FileEdit className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p className="text-gray-500 text-sm font-medium mb-1">Nenhum contrato gerado ainda</p>
-                <p className="text-gray-400 text-xs mb-5">Clique em "Gerar contrato" para preencher o template com os dados deste contrato</p>
+              <div className="py-20 text-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                <FileEdit className="w-14 h-14 mx-auto mb-4 text-gray-300" />
+                <p className="text-gray-500 text-base font-medium mb-1">Nenhum contrato gerado</p>
+                <p className="text-gray-400 text-sm mb-6">Clique para preencher o template com os dados deste contrato</p>
                 <div className="flex justify-center gap-3">
-                  <Button size="sm" onClick={() => gerarTextoMut.mutate({ contratoId: id })} disabled={gerarTextoMut.isPending} className="gap-2 bg-blue-600 hover:bg-blue-700">
+                  <Button onClick={() => gerarTextoMut.mutate({ contratoId: id })} disabled={gerarTextoMut.isPending} className="gap-2 bg-blue-600 hover:bg-blue-700">
                     <FileText className="w-4 h-4" />
                     Gerar contrato
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => navigate("/terceiros/contratos/template")}>
-                    <Settings className="w-3.5 h-3.5 mr-2" />
-                    Configurar template
                   </Button>
                 </div>
               </div>
             ) : (
-              <div className="flex gap-4">
-                {/* Document viewer estilo Word */}
-                <div className="flex-1 flex justify-center">
-                  <div className="w-full max-w-[816px] bg-white shadow-lg border border-gray-200 rounded-sm" style={{ minHeight: "1056px" }}>
-                    {/* Cabeçalho com logo */}
-                    <div className="border-b border-gray-200 px-16 py-6 flex items-center justify-between">
+              <div className="flex justify-center">
+                {/* Folha A4 */}
+                <div className="bg-gray-100 rounded-xl p-8 w-full flex justify-center" style={{ minHeight: "calc(100vh - 320px)" }}>
+                  <div className="w-full max-w-[794px] bg-white shadow-xl rounded-sm border border-gray-300" style={{ minHeight: "1123px" }}>
+                    {/* Cabeçalho */}
+                    <div className="border-b border-gray-300 px-[72px] py-8 flex items-center justify-between">
                       {(() => {
-                        const cd = (contrato as any).companyData;
                         const showFallback = !cd?.logoUrl || logoError;
                         if (showFallback) {
                           return (
-                            <div className="flex items-center gap-2 text-gray-400">
-                              <Building2 className="w-8 h-8" />
+                            <div className="flex items-center gap-3">
+                              <Building2 className="w-10 h-10 text-gray-300" />
                               <div>
-                                <p className="text-sm font-semibold text-gray-600">{cd?.razaoSocial || cd?.nomeFantasia || "Empresa"}</p>
-                                {cd?.cnpj && <p className="text-[10px] text-gray-400">{cd.cnpj}</p>}
+                                <p className="text-sm font-bold text-gray-700">{cd?.razaoSocial || cd?.nomeFantasia || "Empresa"}</p>
+                                {cd?.cnpj && <p className="text-[10px] text-gray-400 font-mono">{cd.cnpj}</p>}
                               </div>
                             </div>
                           );
@@ -592,129 +629,162 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                           <img
                             src={cd.logoUrl}
                             alt="Logo"
-                            className="h-14 object-contain"
+                            className="h-16 object-contain"
                             onError={() => setLogoError(true)}
                           />
                         );
                       })()}
                       <div className="text-right">
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Contrato</p>
-                        <p className="text-sm font-bold text-gray-700">{contrato.numeroContrato}</p>
-                        {(contrato as any).versaoTexto > 0 && <p className="text-[10px] text-gray-400">Versão {(contrato as any).versaoTexto}</p>}
+                        <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-semibold">Contrato</p>
+                        <p className="text-base font-bold text-gray-800">{contrato.numeroContrato}</p>
+                        {(contrato as any).versaoTexto > 0 && <p className="text-[10px] text-gray-400 mt-0.5">Versão {(contrato as any).versaoTexto}</p>}
                       </div>
                     </div>
 
-                    {/* Conteúdo do contrato */}
-                    <div className="px-16 py-8">
+                    {/* Corpo do contrato */}
+                    <div className="px-[72px] py-10" style={{ fontFamily: "'Times New Roman', 'Georgia', serif" }}>
                       {(() => {
                         const lines = textoAtual.split("\n");
                         return lines.map((line, idx) => {
                           const trimmed = line.trim();
-                          if (!trimmed) return <div key={idx} className="h-4" />;
+                          if (!trimmed) return <div key={idx} className="h-3" />;
 
-                          const isClausula = /^CLÁUSULA\s/i.test(trimmed);
+                          const isClausula = /^CL[ÁA]USULA\s/i.test(trimmed);
                           const isTitulo = /^CONTRATO\s+DE\s+/i.test(trimmed);
-                          const isSubItem = /^\d+\.\d+\s/.test(trimmed) || /^[a-z]\)\s/.test(trimmed);
+                          const isSubItem = /^\d+\.\d+[\s.]/.test(trimmed) || /^[a-z]\)\s/.test(trimmed);
+                          const isNumericItem = /^\d+\.\s/.test(trimmed);
 
                           if (isTitulo) {
                             return (
-                              <h1 key={idx} className="text-base font-bold text-gray-900 text-center mb-6 uppercase tracking-wide">
-                                {trimmed}
+                              <h1 key={idx} className="text-[15px] font-bold text-gray-900 text-center mb-8 uppercase tracking-wider leading-tight">
+                                {highlightAutoFilled(trimmed)}
                               </h1>
                             );
                           }
                           if (isClausula) {
                             return (
-                              <h2 key={idx} className="text-sm font-bold text-gray-800 mt-6 mb-2 uppercase tracking-wide border-b border-gray-100 pb-1">
-                                {trimmed}
+                              <h2 key={idx} className="text-[13px] font-bold text-gray-900 mt-8 mb-3 uppercase tracking-wide">
+                                {highlightAutoFilled(trimmed)}
                               </h2>
                             );
                           }
                           if (isSubItem) {
                             return (
-                              <p key={idx} className="text-[13px] text-gray-700 leading-relaxed mb-1.5 pl-4">
-                                {trimmed}
+                              <p key={idx} className="text-[12.5px] text-gray-800 leading-[1.8] mb-1 pl-6">
+                                {highlightAutoFilled(trimmed)}
+                              </p>
+                            );
+                          }
+                          if (isNumericItem) {
+                            return (
+                              <p key={idx} className="text-[12.5px] text-gray-800 leading-[1.8] mb-1.5 pl-3">
+                                {highlightAutoFilled(trimmed)}
                               </p>
                             );
                           }
                           return (
-                            <p key={idx} className="text-[13px] text-gray-700 leading-relaxed mb-2">
-                              {trimmed}
+                            <p key={idx} className="text-[12.5px] text-gray-800 leading-[1.8] mb-2 text-justify">
+                              {highlightAutoFilled(trimmed)}
                             </p>
                           );
                         });
                       })()}
                     </div>
 
-                    {/* Rodapé */}
-                    <div className="border-t border-gray-200 px-16 py-4 mt-8">
-                      <div className="grid grid-cols-2 gap-16">
+                    {/* Assinaturas */}
+                    <div className="border-t border-gray-300 px-[72px] py-6 mt-auto">
+                      <div className="grid grid-cols-2 gap-20 mt-4">
                         <div className="text-center">
-                          <div className="border-t border-gray-400 pt-2 mt-12">
-                            <p className="text-[11px] text-gray-600 font-medium">CONTRATANTE</p>
-                            <p className="text-[10px] text-gray-400">{(contrato as any).companyData?.razaoSocial || "—"}</p>
+                          <div className="mt-16 pt-2 border-t border-gray-500">
+                            <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">Contratante</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{cd?.razaoSocial || "—"}</p>
                           </div>
                         </div>
                         <div className="text-center">
-                          <div className="border-t border-gray-400 pt-2 mt-12">
-                            <p className="text-[11px] text-gray-600 font-medium">CONTRATADA</p>
-                            <p className="text-[10px] text-gray-400">{contrato.empresa?.razaoSocial || "—"}</p>
+                          <div className="mt-16 pt-2 border-t border-gray-500">
+                            <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">Contratada</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{contrato.empresa?.razaoSocial || "—"}</p>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Painel lateral: edição + revisões */}
-                <div className="w-72 flex-shrink-0 space-y-4">
-                  {/* Edição de texto */}
-                  <div className="bg-white rounded-xl border border-gray-200 p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center gap-1.5">
-                        <FileEdit className="w-3.5 h-3.5" /> Editar texto
-                      </p>
-                    </div>
-                    <textarea
-                      value={textoAtual}
-                      onChange={e => setTextoEditado(e.target.value)}
-                      className="w-full h-[500px] rounded-lg border border-gray-200 p-3 text-[11px] font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none leading-relaxed bg-gray-50"
-                      spellCheck={false}
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1.5">Edite o texto e clique em "Salvar" na barra de ferramentas.</p>
-                  </div>
-
-                  {/* Histórico de revisões */}
-                  {showRevisoes && revisoes.length > 0 && (
-                    <div className="bg-white rounded-xl border border-gray-200 p-3">
-                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                        <History className="w-3.5 h-3.5" /> Revisões
-                      </p>
-                      <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
-                        {revisoes.map((rev: any) => (
-                          <div key={rev.id} className="bg-gray-50 rounded-lg border border-gray-100 p-2.5">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-mono font-semibold text-blue-600">v{rev.versao}</span>
-                              <button
-                                onClick={() => { if (confirm(`Restaurar versão v${rev.versao}?`)) restaurarMut.mutate({ contratoId: id, revisaoId: rev.id }); }}
-                                className="text-[10px] text-gray-400 hover:text-blue-600 transition-colors flex items-center gap-1"
-                              >
-                                <Undo2 className="w-3 h-3" /> Restaurar
-                              </button>
-                            </div>
-                            {rev.observacao && <p className="text-[10px] text-gray-500 leading-snug">{rev.observacao}</p>}
-                            {rev.criadoPor && <p className="text-[10px] text-gray-400 mt-0.5">por {rev.criadoPor}</p>}
-                            <p className="text-[10px] text-gray-300 mt-0.5">
-                              {rev.criadoEm ? new Date(rev.criadoEm).toLocaleString("pt-BR") : ""}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
+          </div>
+          );
+        })()}
+
+        {/* Modal: Editar texto do contrato */}
+        {showEditModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-800">Editar texto do contrato</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Edite o texto e clique em "Aplicar" para visualizar as alterações no documento</p>
+                </div>
+                <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden p-6">
+                <textarea
+                  value={textoAtual ?? ""}
+                  onChange={e => setTextoEditado(e.target.value)}
+                  className="w-full h-[60vh] rounded-lg border border-gray-200 p-5 text-[12px] font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none leading-relaxed bg-gray-50"
+                  spellCheck={false}
+                />
+              </div>
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+                <p className="text-[10px] text-gray-400">As alterações serão refletidas na visualização. Para salvar permanentemente, use o botão "Salvar" na barra de ferramentas.</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowEditModal(false)}>Fechar</Button>
+                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => setShowEditModal(false)}>Aplicar</Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Histórico de revisões */}
+        {showRevisoes && revisoes.length > 0 && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                  <History className="w-5 h-5 text-gray-500" />
+                  Histórico de Revisões
+                </h2>
+                <button onClick={() => setShowRevisoes(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {revisoes.map((rev: any) => (
+                  <div key={rev.id} className="bg-gray-50 rounded-lg border border-gray-100 p-3 hover:bg-gray-100 transition-colors">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-mono font-bold text-blue-600">v{rev.versao}</span>
+                      <button
+                        onClick={() => { if (confirm(`Restaurar versão v${rev.versao}?`)) { restaurarMut.mutate({ contratoId: id, revisaoId: rev.id }); setShowRevisoes(false); } }}
+                        className="text-[11px] text-gray-400 hover:text-blue-600 transition-colors flex items-center gap-1"
+                      >
+                        <Undo2 className="w-3 h-3" /> Restaurar
+                      </button>
+                    </div>
+                    {rev.observacao && <p className="text-[11px] text-gray-600 leading-snug">{rev.observacao}</p>}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {rev.criadoPor && <span className="text-[10px] text-gray-400">por {rev.criadoPor}</span>}
+                      <span className="text-[10px] text-gray-300">{rev.criadoEm ? new Date(rev.criadoEm).toLocaleString("pt-BR") : ""}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setShowRevisoes(false)}>Fechar</Button>
+              </div>
+            </div>
           </div>
         )}
 

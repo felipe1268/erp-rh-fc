@@ -26,8 +26,8 @@ export type RevisionEntry = {
 export const CHANGELOG: RevisionEntry[] = [
   {
     version: 946,
-    titulo: "Editor de contrato estilo Word com logo da empresa",
-    descricao: "A aba Contrato do módulo Terceiros foi redesenhada com visualização estilo documento (folha A4 com margens, cabeçalho com logo da empresa ou nome/CNPJ, rodapé com campos de assinatura CONTRATANTE/CONTRATADA). Cláusulas são formatadas automaticamente (títulos centralizados, cláusulas em negrito, subitens indentados). Barra de ferramentas compacta estilo Word. Painel lateral com editor de texto e histórico de revisões. Dados da empresa (razão social, CNPJ, logoUrl) incluídos na resposta do getContrato.",
+    titulo: "Visualizador de contrato estilo Word com destaque de dados automáticos",
+    descricao: "A aba Contrato do módulo Terceiros foi redesenhada com visualização estilo documento Word (folha A4 com margens, fonte serifada, cabeçalho com logo da empresa, rodapé com assinaturas CONTRATANTE/CONTRATADA). Dados preenchidos automaticamente pelo sistema (nomes, CNPJs, valores, datas) são destacados em azul no documento. Editor de texto movido para modal separado acessível pela barra de ferramentas. Histórico de revisões também em modal. Cláusulas formatadas automaticamente (títulos centralizados, cláusulas em negrito, subitens indentados).",
     tipo: "feature",
     modulos: "Terceiros",
     criadoPor: "Assistente",
