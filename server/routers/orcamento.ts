@@ -2146,6 +2146,34 @@ export const orcamentoRouter = router({
             cpusParsedReimp.linhasInsumos.slice(i, i + BATCH)
           );
         }
+        await db.execute(sql`
+          WITH equip_sums AS (
+            SELECT ci.composicao_codigo,
+                   ci.company_id,
+                   SUM(COALESCE(ci.alocacao_equip::numeric, 0)) AS total_equip
+            FROM composicao_insumos ci
+            WHERE ci.company_id = ${input.companyId}
+              AND COALESCE(ci.alocacao_equip::numeric, 0) > 0
+            GROUP BY ci.composicao_codigo, ci.company_id
+          )
+          UPDATE orcamento_itens oi
+          SET custo_unit_equip = ROUND(COALESCE(es.total_equip, 0), 4),
+              meta_unit_equip = ROUND(COALESCE(es.total_equip, 0) * (1 - COALESCE(
+                (SELECT o."metaPercentual"::numeric FROM orcamentos o WHERE o.id = oi."orcamentoId" LIMIT 1), 0
+              )), 4),
+              custo_total_equip = ROUND(COALESCE(es.total_equip, 0) * COALESCE(oi.quantidade::numeric, 0), 2),
+              meta_total_equip = ROUND(COALESCE(es.total_equip, 0) * COALESCE(oi.quantidade::numeric, 0) * (1 - COALESCE(
+                (SELECT o."metaPercentual"::numeric FROM orcamentos o WHERE o.id = oi."orcamentoId" LIMIT 1), 0
+              )), 2)
+          FROM (SELECT DISTINCT oi2.id, oi2."servicoCodigo", oi2."companyId"
+                FROM orcamento_itens oi2
+                WHERE oi2."orcamentoId" = ${input.orcamentoId}
+                  AND oi2."servicoCodigo" IS NOT NULL) sub
+          LEFT JOIN equip_sums es
+            ON es.composicao_codigo = sub."servicoCodigo"
+            AND es.company_id = sub."companyId"
+          WHERE oi.id = sub.id
+        `);
       }
 
       return {
@@ -2291,6 +2319,36 @@ export const orcamentoRouter = router({
             }
             insumosCount = totalIns;
           }
+
+          job.etapa = 'equip'; job.progresso = 98; job.mensagem = 'Recalculando custos de equipamento...';
+          await db.execute(sql`
+            WITH equip_sums AS (
+              SELECT ci.composicao_codigo,
+                     ci.company_id,
+                     SUM(COALESCE(ci.alocacao_equip::numeric, 0)) AS total_equip
+              FROM composicao_insumos ci
+              WHERE ci.company_id = ${input.companyId}
+                AND COALESCE(ci.alocacao_equip::numeric, 0) > 0
+              GROUP BY ci.composicao_codigo, ci.company_id
+            )
+            UPDATE orcamento_itens oi
+            SET custo_unit_equip = ROUND(COALESCE(es.total_equip, 0), 4),
+                meta_unit_equip = ROUND(COALESCE(es.total_equip, 0) * (1 - COALESCE(
+                  (SELECT o."metaPercentual"::numeric FROM orcamentos o WHERE o.id = oi."orcamentoId" LIMIT 1), 0
+                )), 4),
+                custo_total_equip = ROUND(COALESCE(es.total_equip, 0) * COALESCE(oi.quantidade::numeric, 0), 2),
+                meta_total_equip = ROUND(COALESCE(es.total_equip, 0) * COALESCE(oi.quantidade::numeric, 0) * (1 - COALESCE(
+                  (SELECT o."metaPercentual"::numeric FROM orcamentos o WHERE o.id = oi."orcamentoId" LIMIT 1), 0
+                )), 2)
+            FROM (SELECT DISTINCT oi2.id, oi2."servicoCodigo", oi2."companyId"
+                  FROM orcamento_itens oi2
+                  WHERE oi2."orcamentoId" = ${input.orcamentoId}
+                    AND oi2."servicoCodigo" IS NOT NULL) sub
+            LEFT JOIN equip_sums es
+              ON es.composicao_codigo = sub."servicoCodigo"
+              AND es.company_id = sub."companyId"
+            WHERE oi.id = sub.id
+          `);
 
           job.status = 'done'; job.etapa = 'concluido'; job.progresso = 100;
           job.mensagem = `Concluído! ${updated} itens vinculados, ${composicoesCount} composições, ${insumosCount} insumos.`;

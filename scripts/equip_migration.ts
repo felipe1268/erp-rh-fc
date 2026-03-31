@@ -19,7 +19,7 @@ async function main() {
     WITH equip_sums AS (
       SELECT ci.composicao_codigo,
              ci.company_id,
-             SUM(COALESCE(ci.alocacao_equip::numeric, 0) * COALESCE(ci.quantidade::numeric, 0)) AS total_equip
+             SUM(COALESCE(ci.alocacao_equip::numeric, 0)) AS total_equip
       FROM composicao_insumos ci
       WHERE COALESCE(ci.alocacao_equip::numeric, 0) > 0
       GROUP BY ci.composicao_codigo, ci.company_id
@@ -36,7 +36,7 @@ async function main() {
     FROM equip_sums es
     WHERE oi."servicoCodigo" = es.composicao_codigo
       AND oi."companyId" = es.company_id
-      AND COALESCE(oi.custo_unit_equip::numeric, 0) = 0
+      AND oi."servicoCodigo" IS NOT NULL
   `);
   console.log('[T002b] Updated orcamento_itens equip costs:', (r2 as any).rowCount ?? 0, 'rows');
   
