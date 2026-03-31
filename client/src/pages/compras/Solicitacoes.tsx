@@ -496,6 +496,7 @@ export default function Solicitacoes() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [selectedSCIds, setSelectedSCIds] = useState<Set<number>>(new Set());
   const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
+  const [excluirProgress, setExcluirProgress] = useState<{ total: number; done: number; errors: string[]; running: boolean } | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState<{ titulo: string; prioridade: string; dataNecessidade: string; observacoes: string } | null>(null);
   const [editItens, setEditItens] = useState<any[]>([]);
@@ -594,18 +595,30 @@ export default function Solicitacoes() {
     onSuccess: () => { toast.success("Recebimento registrado!"); detalheQ.refetch(); q.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const excluirBatchRef = useRef(false);
   const excluir = trpc.compras.excluirSolicitacao.useMutation({
-    onSuccess: () => { toast.success("SC excluída!"); q.refetch(); setShowDetalhe(null); },
-    onError: (e) => toast.error(e.message),
+    onSuccess: () => { if (!excluirBatchRef.current) { toast.success("SC excluída!"); q.refetch(); setShowDetalhe(null); } },
+    onError: (e) => { if (!excluirBatchRef.current) toast.error(e.message); },
   });
-  const excluirLote = trpc.compras.excluirSolicitacoesEmLote.useMutation({
-    onSuccess: (res) => {
-      if (res.errors && res.errors.length > 0) { toast.warning(`${res.count} SC(s) excluída(s). ${res.errors.length} não puderam ser excluídas.`); }
-      else { toast.success(`${res.count} SC(s) excluída(s)!`); }
-      q.refetch(); setSelectedSCIds(new Set()); setConfirmExcluirLote(false);
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  const excluirLoteSeq = async (ids: number[]) => {
+    const total = ids.length;
+    const errors: string[] = [];
+    excluirBatchRef.current = true;
+    setExcluirProgress({ total, done: 0, errors: [], running: true });
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await excluir.mutateAsync({ id: ids[i] });
+      } catch (e: any) {
+        errors.push(e?.message ?? `Erro ao excluir SC #${ids[i]}`);
+      }
+      setExcluirProgress({ total, done: i + 1, errors: [...errors], running: i + 1 < total });
+    }
+    excluirBatchRef.current = false;
+    if (errors.length > 0) { toast.warning(`${total - errors.length} SC(s) excluída(s). ${errors.length} não puderam ser excluídas.`); }
+    else { toast.success(`${total} SC(s) excluída(s)!`); }
+    q.refetch(); setSelectedSCIds(new Set());
+    setTimeout(() => { setExcluirProgress(null); setConfirmExcluirLote(false); }, 800);
+  };
   const editar = trpc.compras.editarSolicitacao.useMutation({
     onSuccess: () => {
       toast.success("SC atualizada!");
@@ -1248,7 +1261,7 @@ export default function Solicitacoes() {
             </Button>
           )}
           <Button size="sm" variant="destructive" className="text-xs gap-1"
-            disabled={excluirLote.isPending}
+            disabled={!!excluirProgress?.running}
             onClick={() => setConfirmExcluirLote(true)}>
             <Trash2 className="h-3 w-3" /> Excluir Selecionadas
           </Button>
@@ -3043,21 +3056,40 @@ export default function Solicitacoes() {
           )}
         </DialogContent>
       </Dialog>
-      <Dialog open={confirmExcluirLote} onOpenChange={setConfirmExcluirLote}>
+      <Dialog open={confirmExcluirLote} onOpenChange={(v) => { if (!excluirProgress?.running) setConfirmExcluirLote(v); }}>
         <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
           <DialogHeader>
             <DialogTitle className="text-gray-900">Confirmar Exclusão</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-600 py-2">
-            Tem certeza que deseja excluir <strong>{selectedSCIds.size}</strong> solicitação(ões)? Cotações vinculadas serão canceladas. SCs com OC em andamento não serão excluídas.
-          </p>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setConfirmExcluirLote(false)}>Cancelar</Button>
-            <Button variant="destructive" className="gap-1.5" disabled={excluirLote.isPending} onClick={() => excluirLote.mutate({ ids: [...selectedSCIds], companyId })}>
-              {excluirLote.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              Excluir {selectedSCIds.size} SC(s)
-            </Button>
-          </div>
+          {excluirProgress ? (
+            <div className="py-3 space-y-3">
+              <div className="flex items-center justify-between text-sm text-gray-700">
+                <span>{excluirProgress.running ? "Excluindo..." : "Concluído!"}</span>
+                <span className="font-medium">{excluirProgress.done}/{excluirProgress.total}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-300 ease-out" style={{ width: `${(excluirProgress.done / excluirProgress.total) * 100}%`, backgroundColor: excluirProgress.errors.length > 0 ? '#f59e0b' : excluirProgress.running ? '#3b82f6' : '#22c55e' }} />
+              </div>
+              {excluirProgress.errors.length > 0 && (
+                <div className="text-xs text-amber-600 space-y-0.5 max-h-20 overflow-y-auto">
+                  {excluirProgress.errors.map((err, i) => <p key={i}>• {err}</p>)}
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600 py-2">
+                Tem certeza que deseja excluir <strong>{selectedSCIds.size}</strong> solicitação(ões)? Cotações vinculadas serão canceladas. SCs com OC em andamento não serão excluídas.
+              </p>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setConfirmExcluirLote(false)}>Cancelar</Button>
+                <Button variant="destructive" className="gap-1.5" onClick={() => excluirLoteSeq([...selectedSCIds])}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir {selectedSCIds.size} SC(s)
+                </Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
       <ConfirmAprovDialog confirmAprov={confirmAprov} setConfirmAprov={setConfirmAprov} aprovar={aprovar} desaprovar={desaprovar} user={user} companyId={companyId} />
