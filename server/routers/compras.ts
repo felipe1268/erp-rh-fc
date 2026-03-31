@@ -2269,6 +2269,15 @@ Responda APENAS com um objeto JSON no formato:
         }
       }
 
+      const orcItemToCustoMat: Record<number, number> = {};
+      const orcItemToCustoMdo: Record<number, number> = {};
+      const orcItemToCustoEquip: Record<number, number> = {};
+      for (const o of orcItensData) {
+        orcItemToCustoMat[o.id] = n(o.custoUnitMat);
+        orcItemToCustoMdo[o.id] = n(o.custoUnitMdo);
+        orcItemToCustoEquip[o.id] = n((o as any).custoUnitEquip);
+      }
+
       const orcItemToQtdOrcada: Record<number, number> = {};
       for (const o of orcItensData) orcItemToQtdOrcada[o.id] = n(o.quantidade);
 
@@ -2315,7 +2324,8 @@ Responda APENAS com um objeto JSON no formato:
         const orcId = it.solicitacaoItemId ? scItemToOrcItem[it.solicitacaoItemId] : undefined;
         const trace = it.solicitacaoItemId ? scItemToTraceability[it.solicitacaoItemId] : undefined;
         const insCode = trace?.insumoCodigo ?? "";
-        const isInsumoDeComposicao = !!(insCode && (trace?.coeficiente ?? 0) > 0);
+        const coef = trace?.coeficiente ?? 0;
+        const isInsumoDeComposicao = !!(insCode && coef > 0);
         const metaFromSC = it.solicitacaoItemId ? (scItemToPrecoMeta[it.solicitacaoItemId] ?? 0) : 0;
 
         let metaUnitarioTotal: number;
@@ -2323,11 +2333,35 @@ Responda APENAS com um objeto JSON no formato:
         let metaUnitarioMdo: number;
         let metaUnitarioEquip: number;
 
-        if (isInsumoDeComposicao && metaFromSC > 0) {
-          metaUnitarioTotal = metaFromSC;
-          metaUnitarioMat = metaFromSC;
-          metaUnitarioMdo = metaFromSC;
-          metaUnitarioEquip = metaFromSC;
+        if (isInsumoDeComposicao && metaFromSC > 0 && orcId) {
+          const alocInsumo = coef * metaFromSC;
+          const custoMatComp = orcItemToCustoMat[orcId] ?? 0;
+          const custoMdoComp = orcItemToCustoMdo[orcId] ?? 0;
+          const custoEquipComp = orcItemToCustoEquip[orcId] ?? 0;
+          const metaMatComp = orcItemToMetaMat[orcId] ?? 0;
+          const metaMdoComp = orcItemToMetaMdo[orcId] ?? 0;
+          const metaEquipComp = orcItemToMetaEquip[orcId] ?? 0;
+
+          if (tipoEfetivo === 'servico') {
+            metaUnitarioMat = 0;
+            metaUnitarioMdo = custoMdoComp > 0
+              ? Math.round(metaMdoComp * (alocInsumo / custoMdoComp) * 100) / 100
+              : Math.round(alocInsumo * 100) / 100;
+            metaUnitarioEquip = 0;
+          } else if (tipoEfetivo === 'equipamento') {
+            metaUnitarioMat = 0;
+            metaUnitarioMdo = 0;
+            metaUnitarioEquip = custoEquipComp > 0
+              ? Math.round(metaEquipComp * (alocInsumo / custoEquipComp) * 100) / 100
+              : Math.round(alocInsumo * 100) / 100;
+          } else {
+            metaUnitarioMat = custoMatComp > 0
+              ? Math.round(metaMatComp * (alocInsumo / custoMatComp) * 100) / 100
+              : Math.round(alocInsumo * 100) / 100;
+            metaUnitarioMdo = 0;
+            metaUnitarioEquip = 0;
+          }
+          metaUnitarioTotal = metaUnitarioMat + metaUnitarioMdo + metaUnitarioEquip;
         } else {
           const metaFromOrcTotal = orcId ? (orcItemToMeta[orcId] ?? 0) : 0;
           const metaFromOrcMat = orcId ? (orcItemToMetaMat[orcId] ?? 0) : 0;
@@ -2344,8 +2378,8 @@ Responda APENAS com um objeto JSON no formato:
         const metaMdoAjud = it.solicitacaoItemId ? (scItemToMetaMdoAjud[it.solicitacaoItemId] ?? 0) : 0;
 
         let metaUnitario: number;
-        if (isInsumoDeComposicao && metaFromSC > 0) {
-          metaUnitario = metaFromSC;
+        if (isInsumoDeComposicao && metaFromSC > 0 && orcId) {
+          metaUnitario = metaUnitarioTotal;
         } else if (tipoEfetivo === 'pacote') {
           metaUnitario = metaUnitarioTotal > 0 ? metaUnitarioTotal : (metaUnitarioMat + metaUnitarioMdo + metaUnitarioEquip);
         } else if (tipoEfetivo === 'equipamento' && metaUnitarioEquip > 0) {
@@ -2374,7 +2408,6 @@ Responda APENAS com um objeto JSON no formato:
 
         if (orcId) {
           fonteVinculo = "item";
-          const coef = trace?.coeficiente ?? 0;
           if (isInsumoDeComposicao) {
             qtdOrcada = (orcItemToQtdOrcada[orcId] ?? 0) * coef;
           } else {

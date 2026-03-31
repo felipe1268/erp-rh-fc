@@ -2916,15 +2916,16 @@ export default function Cotacoes() {
                                           const estaSC = metaQtd;
                                           const totalSolic = (it as any).qtdTotalSolicitada;
                                           const outrasSC = Math.max(0, totalSolic - estaSC);
-                                          const saldoRestante = orcada - totalSolic;
+                                          const saldoRestanteRaw = orcada - totalSolic;
+                                          const saldoRestante = Math.abs(saldoRestanteRaw) < 0.01 ? 0 : saldoRestanteRaw;
                                           const rawPctEsta = (estaSC / orcada) * 100;
                                           const rawPctOutras = (outrasSC / orcada) * 100;
                                           const rawTotal = rawPctEsta + rawPctOutras;
                                           const scale = rawTotal > 100 ? 100 / rawTotal : 1;
                                           const pctEsta = rawPctEsta * scale;
                                           const pctOutras = rawPctOutras * scale;
-                                          const isTotal = totalSolic >= orcada;
-                                          const isEstouro = totalSolic > orcada;
+                                          const isTotal = totalSolic >= orcada - 0.01;
+                                          const isEstouro = totalSolic > orcada + 0.01;
                                           return (
                                             <div className="mt-1.5 space-y-0.5">
                                               <div className="flex items-center gap-1.5">

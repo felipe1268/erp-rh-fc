@@ -25,13 +25,13 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
-    version: 931,
+    version: 932,
     titulo: "Correção do Preço Unit. e saldo no Mapa de Cotação para insumos de composição",
-    descricao: "Corrigido bug onde o Mapa de Cotação exibia o custo MAT total da composição (ex: R$ 11,79) como 'Preço Unit.' de cada insumo, ao invés do preço individual do insumo (ex: Areia = R$ 3,12, Cimento = R$ 8,20). Também corrigido o cálculo de qtdOrcada (agora usa composição_qty × coeficiente) e qtdSolicitada/qtdComprada (agora usa chaves compostas orcId:insumoCodigo para não somar insumos diferentes).",
+    descricao: "Corrigido bug onde o Mapa de Cotação exibia o custo MAT total da composição (ex: R$ 11,79) como 'Preço Unit.' de cada insumo. Agora usa cálculo proporcional: metaUnitMat × (alocação_insumo / custoUnitMat), resultando nos valores corretos por m² de composição (Areia = R$ 3,12, Cimento = R$ 8,20). Também corrigidos: qtdOrcada (composição_qty × coeficiente), qtdSolicitada/qtdComprada com chaves compostas, e tolerância de precisão no indicador de saldo para evitar falso 'estouro de 0.0'.",
     tipo: 'bugfix',
     modulos: 'Compras',
     criadoPor: 'System',
-    dataPublicacao: "2026-03-31 17:00:00",
+    dataPublicacao: "2026-03-31 18:00:00",
   },
   {
     version: 925,
