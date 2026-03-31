@@ -263,6 +263,12 @@ export default function FolhaPagamento() {
     onSuccess: () => { toast.success("Período cancelado. Você pode recalcular agora."); hePeriods.refetch(); if (heViewPeriodId) setHeViewPeriodId(null); },
     onError: (err) => toast.error(`Erro: ${err.message}`),
   });
+  const heDestinoPadrao = trpc.horasExtras.getHeDestinoPadrao.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const heDestinoIsBanco = (heDestinoPadrao.data ?? "banco_horas") === "banco_horas";
+
   // Banco de Horas queries
   const saldoBanco = trpc.horasExtras.getSaldoBanco.useQuery(
     { companyId },
@@ -2849,7 +2855,10 @@ export default function FolhaPagamento() {
                   <TrendingUp className="h-4 w-4 text-purple-700" />
                   <span className="font-semibold text-sm">Hora Extra</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3 flex-1">Período configurável com detecção de duplicidade</p>
+                <p className="text-xs text-muted-foreground mb-1 flex-1">Período configurável com detecção de duplicidade</p>
+                <div className={`text-[10px] font-bold px-2 py-1 rounded mb-2 text-center ${heDestinoIsBanco ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
+                  Destino: {heDestinoIsBanco ? "Banco de Horas" : "Pagamento em Folha"}
+                </div>
                 <div className="mt-auto">
                   {(() => {
                     const activePeriods = (hePeriods.data as any[] || []).filter((p: any) => p.status !== 'cancelado');
