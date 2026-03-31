@@ -16,26 +16,35 @@ async function main() {
   console.log('[T002a] Updated composicao_insumos alocacao_equip:', (r1 as any).rowCount ?? 0, 'rows');
 
   const r2 = await db.execute(sql`
-    WITH equip_sums AS (
+    WITH comp_ratios AS (
       SELECT ci.composicao_codigo,
              ci.company_id,
-             SUM(COALESCE(ci.alocacao_equip::numeric, 0)) AS total_equip
+             SUM(COALESCE(ci.alocacao_equip::numeric, 0)) AS sum_equip,
+             SUM(COALESCE(ci.custo_unit_total::numeric, 0)) AS sum_total
       FROM composicao_insumos ci
-      WHERE COALESCE(ci.alocacao_equip::numeric, 0) > 0
       GROUP BY ci.composicao_codigo, ci.company_id
+      HAVING SUM(COALESCE(ci.alocacao_equip::numeric, 0)) > 0
     )
     UPDATE orcamento_itens oi
-    SET custo_unit_equip = ROUND(es.total_equip, 4),
-        meta_unit_equip = ROUND(es.total_equip * (1 - COALESCE(
-          (SELECT o."metaPercentual"::numeric FROM orcamentos o WHERE o.id = oi."orcamentoId" LIMIT 1), 0
-        )), 4),
-        custo_total_equip = ROUND(es.total_equip * COALESCE(oi.quantidade::numeric, 0), 2),
-        meta_total_equip = ROUND(es.total_equip * COALESCE(oi.quantidade::numeric, 0) * (1 - COALESCE(
-          (SELECT o."metaPercentual"::numeric FROM orcamentos o WHERE o.id = oi."orcamentoId" LIMIT 1), 0
-        )), 2)
-    FROM equip_sums es
-    WHERE oi."servicoCodigo" = es.composicao_codigo
-      AND oi."companyId" = es.company_id
+    SET custo_unit_equip = CASE
+          WHEN COALESCE(cr.sum_total, 0) > 0 THEN
+            ROUND(COALESCE(oi."custoTotal"::numeric, 0) / NULLIF(oi.quantidade::numeric, 0) * cr.sum_equip / cr.sum_total, 4)
+          ELSE 0 END,
+        meta_unit_equip = CASE
+          WHEN COALESCE(cr.sum_total, 0) > 0 THEN
+            ROUND(oi."metaUnitTotal"::numeric * cr.sum_equip / cr.sum_total, 4)
+          ELSE 0 END,
+        custo_total_equip = CASE
+          WHEN COALESCE(cr.sum_total, 0) > 0 THEN
+            ROUND(COALESCE(oi."custoTotal"::numeric, 0) * cr.sum_equip / cr.sum_total, 2)
+          ELSE 0 END,
+        meta_total_equip = CASE
+          WHEN COALESCE(cr.sum_total, 0) > 0 THEN
+            ROUND(oi."metaUnitTotal"::numeric * COALESCE(oi.quantidade::numeric, 0) * cr.sum_equip / cr.sum_total, 2)
+          ELSE 0 END
+    FROM comp_ratios cr
+    WHERE oi."servicoCodigo" = cr.composicao_codigo
+      AND oi."companyId" = cr.company_id
       AND oi."servicoCodigo" IS NOT NULL
   `);
   console.log('[T002b] Updated orcamento_itens equip costs:', (r2 as any).rowCount ?? 0, 'rows');
