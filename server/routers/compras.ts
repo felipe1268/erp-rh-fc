@@ -2301,7 +2301,7 @@ Responda APENAS com um objeto JSON no formato:
         ? sql`s.tipo = 'equipamento'`
         : sql`(s.tipo IS NULL OR s.tipo = 'material')`;
 
-      const insCodigos = scItens.filter(s => !s.orcamentoItemId && s.insumoCodigo).map(s => s.insumoCodigo!);
+      const insCodigos = scItens.filter(s => s.insumoCodigo).map(s => s.insumoCodigo!);
       const insCodigosUnique = [...new Set(insCodigos)];
       let insumoOrcMap: Record<string, number> = {};
       let insumoSolicMap: Record<string, number> = {};
@@ -2348,7 +2348,6 @@ Responda APENAS com um objeto JSON no formato:
             FROM compras_solicitacoes_itens si
             JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
             WHERE si.insumo_codigo IN (${sql.join(insCodigosUnique.map(c => sql`${c}`), sql`, `)})
-              AND si.orcamento_item_id IS NULL
               AND s.company_id = ${cot.companyId} AND s.status NOT IN ('cancelado')
               AND s.obra_id = ${cot.obraId}
               AND ${scTipoFilter}
@@ -2363,7 +2362,6 @@ Responda APENAS com um objeto JSON no formato:
             JOIN compras_ordens o ON o.id = oi2.ordem_id AND o.status NOT IN ('cancelada') AND o.company_id = ${cot.companyId}
             JOIN compras_solicitacoes s ON s.id = si.solicitacao_id AND s.obra_id = ${cot.obraId}
             WHERE si.insumo_codigo IN (${sql.join(insCodigosUnique.map(c => sql`${c}`), sql`, `)})
-              AND si.orcamento_item_id IS NULL
               AND ${scTipoFilter}
             GROUP BY si.insumo_codigo
           `);
@@ -2551,7 +2549,12 @@ Responda APENAS com um objeto JSON no formato:
         let qtdComprada = 0;
         let fonteVinculo: "item" | "insumo" | null = null;
 
-        if (orcId) {
+        if (isInsumoDeComposicao && insCode && insumoOrcMap[insCode] !== undefined) {
+          fonteVinculo = "insumo";
+          qtdOrcada = insumoOrcMap[insCode];
+          qtdTotalSolicitada = insumoSolicMap[insCode] ?? 0;
+          qtdComprada = insumoCompMap[insCode] ?? 0;
+        } else if (orcId) {
           fonteVinculo = "item";
           if (isInsumoDeComposicao) {
             qtdOrcada = (orcItemToQtdOrcada[orcId] ?? 0) * coef;
@@ -5264,7 +5267,7 @@ Retorne APENAS um JSON válido neste formato:
       }
 
       let insumoOrcData: Record<string, { quantidadeTotal: number; descricao: string; unidade: string | null }> = {};
-      const insumoCodigos = scItens.filter(i => !i.orcamentoItemId && i.insumoCodigo).map(i => i.insumoCodigo!);
+      const insumoCodigos = scItens.filter(i => i.insumoCodigo).map(i => i.insumoCodigo!);
       if (insumoCodigos.length > 0 && sc.obraId) {
         const orcRows = await db.select({ id: orcamentos.id }).from(orcamentos)
           .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, sc.obraId), isNull(orcamentos.deletedAt)))
@@ -5290,8 +5293,9 @@ Retorne APENAS um JSON válido neste formato:
               alocacaoMdo: composicaoInsumos.alocacaoMdo,
             }).from(composicaoInsumos)
               .where(and(eq(composicaoInsumos.companyId, Number(input.companyId)), inArray(composicaoInsumos.composicaoCodigo, servicoCodigos)));
-            const materiaisOnly = allCompInsumos.filter(i => n(i.alocacaoMat) > 0);
-            for (const ins of materiaisOnly) {
+            const scTipo2 = sc.tipo || "material";
+            const filteredCompInsumos = filterInsumosByTipo(allCompInsumos as any[], scTipo2, false);
+            for (const ins of filteredCompInsumos) {
               const code = ins.insumoCodigo;
               if (!code || !insumoCodigos.includes(code)) continue;
               const coef = n(ins.quantidade);
@@ -5315,7 +5319,6 @@ Retorne APENAS um JSON válido neste formato:
           FROM compras_solicitacoes_itens si
           JOIN compras_solicitacoes s ON s.id = si.solicitacao_id
           WHERE si.insumo_codigo IN (${sql.join(insumoCodigos.map(c => sql`${c}`), sql`, `)})
-            AND si.orcamento_item_id IS NULL
             AND s.company_id = ${input.companyId} AND s.status NOT IN ('cancelado')
             AND s.obra_id = ${sc.obraId}
             AND s.id != ${sc.id}
@@ -5338,7 +5341,6 @@ Retorne APENAS um JSON válido neste formato:
           JOIN compras_ordens o ON o.id = oi2.ordem_id AND o.status NOT IN ('cancelada') AND o.company_id = ${input.companyId}
           JOIN compras_solicitacoes s ON s.id = si.solicitacao_id AND s.obra_id = ${sc.obraId}
           WHERE si.insumo_codigo IN (${sql.join(insumoCodigos.map(c => sql`${c}`), sql`, `)})
-            AND si.orcamento_item_id IS NULL
             AND ${scTipoGroup === "mat"
               ? sql`(s.tipo IS NULL OR s.tipo = 'material')`
               : scTipoGroup === "equip"
@@ -5439,11 +5441,20 @@ Retorne APENAS um JSON válido neste formato:
         let ocsVinculadas: string[] = [];
         let fonteVinculo: "item" | "insumo" | null = null;
 
-        if (orcId && orcData) {
+        const coef = n(item.coeficiente);
+        const isInsumoDeComposicao = !!(item.insumoCodigo && coef > 0);
+
+        if (isInsumoDeComposicao && insCode && insumoOrcData[insCode]) {
+          vinculado = true;
+          fonteVinculo = "insumo";
+          qtdOrcada = insumoOrcData[insCode].quantidadeTotal;
+          qtdSolicitada = insumoSolicitadoMap[insCode] ?? 0;
+          const comp = insumoCompradoMap[insCode];
+          qtdComprada = comp?.qtd ?? 0;
+          ocsVinculadas = comp?.ocs ?? [];
+        } else if (orcId && orcData) {
           vinculado = true;
           fonteVinculo = "item";
-          const coef = n(item.coeficiente);
-          const isInsumoDeComposicao = !!(item.insumoCodigo && coef > 0);
           if (isInsumoDeComposicao) {
             qtdOrcada = n(orcData.quantidade) * coef;
           } else {

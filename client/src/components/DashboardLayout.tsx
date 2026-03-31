@@ -86,6 +86,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: Clock, label: "Solicitação de Hora Extra", path: "/solicitacao-he" },
+      { icon: ArrowLeftRight, label: "Banco de Horas", path: "/folha-pagamento?tab=he&sub=banco_horas" },
       { icon: ClipboardList, label: "Apontamentos de Campo", path: "/apontamentos-campo" },
       { icon: CreditCard, label: "Crachás", path: "/crachas" },
       { icon: ClipboardPlus, label: "Lançar Atestados", path: "/controle-documentos?tab=atestados" },

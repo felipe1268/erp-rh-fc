@@ -70,7 +70,10 @@ export default function FolhaPagamento() {
   const [showConferencia, setShowConferencia] = useState(false);
 
   // Views
-  const [viewMode, setViewMode] = useState<ViewMode>("resumo");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tab") === "he" ? "he_modulo" : "resumo";
+  });
   const [viewLancId, setViewLancId] = useState<number | null>(null);
   const [viewTipo, setViewTipo] = useState<string>("");
 
@@ -101,8 +104,11 @@ export default function FolhaPagamento() {
   const [vinculacaoJustificativa, setVinculacaoJustificativa] = useState("");
   const [showVinculacaoPanel, setShowVinculacaoPanel] = useState(false);
   const [heObraFilter, setHeObraFilter] = useState<string>("all");
-  // Banco de Horas
-  const [heSubView, setHeSubView] = useState<"periodos" | "banco_horas">("periodos");
+  // Banco de Horas — auto-abrir via URL (?tab=he&sub=banco_horas)
+  const [heSubView, setHeSubView] = useState<"periodos" | "banco_horas">(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("sub") === "banco_horas" ? "banco_horas" : "periodos";
+  });
   const [destinacaoMap, setDestinacaoMap] = useState<Record<number, "pagamento" | "banco_horas">>({});
   const [heLancamentosEmpId, setHeLancamentosEmpId] = useState<number | null>(null);
   const [heDebitarEmpId, setHeDebitarEmpId] = useState<number | null>(null);

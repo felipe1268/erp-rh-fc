@@ -6896,7 +6896,8 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-03-31 19:00:00",
   },
   {
-    revisao: 951,
+    version: 951,
+    titulo: "Filtro de desligamento + Bloqueio de cotação MDO com déficit",
     descricao:
       "Colaboradores — Filtro por período de desligamento + Bloqueio de aprovação de cotação MDO com déficit: " +
       "(1) quando o filtro de status 'Desligado' está ativo, aparece uma barra de filtro por período com campos " +
@@ -6908,5 +6909,21 @@ export const CHANGELOG: RevisionEntry[] = [
     modulos: "Colaboradores,Compras",
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 22:00:00",
+  },
+  {
+    version: 952,
+    titulo: "Correção de estouros falsos em insumos de composição + Banco de Horas na sidebar",
+    descricao:
+      "Compras — Correção de bug que mostrava falsos estouros de orçamento em insumos de composição " +
+      "(materiais, MDO e equipamentos de composições de serviço). O problema ocorria porque o cálculo " +
+      "comparava a quantidade total solicitada do insumo contra o orçamento de apenas UMA instância da " +
+      "composição, quando o correto é somar todas as instâncias (todos os EAPs que usam aquele serviço). " +
+      "Correção aplicada no Mapa de Cotação e no detalhe da Solicitação de Compra. " +
+      "RH — Adicionado link direto 'Banco de Horas' na barra lateral do módulo RH & DP, " +
+      "que abre a Folha de Pagamento diretamente na sub-aba de Banco de Horas.",
+    tipo: "bugfix",
+    modulos: "Compras,RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-31 23:30:00",
   },
 ];
