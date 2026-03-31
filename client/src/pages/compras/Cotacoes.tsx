@@ -1749,7 +1749,7 @@ export default function Cotacoes() {
       }
       const fornTotal = parseFloat(fornParaSaldo.totalOrcado ?? "0");
       const metaTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
-        acc + (Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100 * parseFloat(it.quantidade ?? "0")), 0);
+        acc + (Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100 * parseFloat(it.metaQtd ?? it.quantidade ?? "0")), 0);
       if (metaTotal > 0 && fornTotal > metaTotal && !cobertoPorRisco && !semVerbaAutorizado) {
         const defVal = (fornTotal - metaTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
         const fornNome = fornParaSaldo.fornecedor?.nomeFantasia || fornParaSaldo.fornecedor?.razaoSocial || "Fornecedor";
@@ -1845,7 +1845,7 @@ export default function Cotacoes() {
 
     function getItemSaldo(it: any): { saldo: number; hasMeta: boolean } {
       const metaUnit = Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100;
-      const qtdItem = parseFloat(it.quantidade ?? "0");
+      const qtdItem = parseFloat(it.metaQtd ?? it.quantidade ?? "0");
       const fonteV = (it as any).fonteVinculo;
       if (!fonteV && metaUnit === 0) {
         if (!fornParaSaldo) return { saldo: 0, hasMeta: false };
@@ -1874,12 +1874,12 @@ export default function Cotacoes() {
     }
 
     const metaGrandTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
-      acc + (Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100 * parseFloat(it.quantidade ?? "0")), 0);
+      acc + (Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100 * parseFloat(it.metaQtd ?? it.quantidade ?? "0")), 0);
     // Quantidade total: soma quando todos os itens têm a mesma unidade
     const allItens = mapa?.itens ?? [];
     const unidadesUnicas = [...new Set(allItens.map((it: any) => (it.unidade || "un").toLowerCase()))];
     const qtdGrandTotal = unidadesUnicas.length === 1
-      ? allItens.reduce((acc: number, it: any) => acc + parseFloat(it.quantidade ?? "0"), 0)
+      ? allItens.reduce((acc: number, it: any) => acc + parseFloat(it.metaQtd ?? it.quantidade ?? "0"), 0)
       : null;
     const qtdUnidade = unidadesUnicas.length === 1 ? unidadesUnicas[0] : null;
     const winnerGrandTotal = fornParaSaldo ? parseFloat(fornParaSaldo.totalOrcado ?? "0") : 0;
@@ -2863,8 +2863,8 @@ export default function Cotacoes() {
                               const melhorPreco = getMelhorPrecoItem(it.id);
                               const metaUnitRaw = parseFloat(it.metaUnitario ?? "0");
                               const metaUnit = Math.round(metaUnitRaw * 100) / 100;
-                              const metaQtd = parseFloat(it.quantidade ?? "0");
-                              const metaTot = Math.round(metaUnit * metaQtd * 100) / 100;
+                              const metaQtdVal = parseFloat(it.metaQtd ?? it.quantidade ?? "0");
+                              const metaTot = Math.round(metaUnit * metaQtdVal * 100) / 100;
                               const { saldo, hasMeta } = getItemSaldo(it);
                               const hasComposicao = !it._grouped && ((it as any).composicaoInsumos ?? []).length > 0;
                               const isExpanded = expandedComposicao[it.id] ?? false;
@@ -2970,7 +2970,7 @@ export default function Cotacoes() {
                                     </div>
                                   </td>
                                   <td className="px-3 py-2 text-blue-600 text-xs text-right bg-blue-50/30">
-                                    {metaQtd > 0 ? metaQtd.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
+                                    {metaQtdVal > 0 ? metaQtdVal.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
                                   </td>
                                   <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold border-r border-blue-100">
                                     {metaTot > 0 ? metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}

@@ -2341,7 +2341,13 @@ Responda APENAS com um objeto JSON no formato:
         let metaUnitarioMdo: number;
         let metaUnitarioEquip: number;
 
-        if (isInsumoDeComposicao && metaFromSC > 0 && orcId) {
+        if (isInsumoDeComposicao && tipoEfetivo === 'equipamento' && orcId) {
+          const metaFromOrcEquip = orcItemToMetaEquip[orcId] ?? 0;
+          metaUnitarioMat = 0;
+          metaUnitarioMdo = 0;
+          metaUnitarioEquip = metaFromOrcEquip;
+          metaUnitarioTotal = metaFromOrcEquip;
+        } else if (isInsumoDeComposicao && metaFromSC > 0 && orcId) {
           const custoTotalComp = orcItemToCustoTotal[orcId] ?? 0;
           const metaTotalComp = orcItemToMeta[orcId] ?? 0;
           const effectiveMetaRate = custoTotalComp > 0 ? (1 - metaTotalComp / custoTotalComp) : 0;
@@ -2353,10 +2359,6 @@ Responda APENAS com um objeto JSON no formato:
             metaUnitarioMat = 0;
             metaUnitarioMdo = puComMeta;
             metaUnitarioEquip = 0;
-          } else if (tipoEfetivo === 'equipamento') {
-            metaUnitarioMat = 0;
-            metaUnitarioMdo = 0;
-            metaUnitarioEquip = puComMeta;
           } else {
             metaUnitarioMat = puComMeta;
             metaUnitarioMdo = 0;
@@ -2379,7 +2381,9 @@ Responda APENAS com um objeto JSON no formato:
         const metaMdoAjud = it.solicitacaoItemId ? (scItemToMetaMdoAjud[it.solicitacaoItemId] ?? 0) : 0;
 
         let metaUnitario: number;
-        if (isInsumoDeComposicao && metaFromSC > 0 && orcId) {
+        if (isInsumoDeComposicao && tipoEfetivo === 'equipamento' && orcId) {
+          metaUnitario = metaUnitarioEquip;
+        } else if (isInsumoDeComposicao && metaFromSC > 0 && orcId) {
           metaUnitario = metaUnitarioTotal;
         } else if (tipoEfetivo === 'pacote') {
           if (!incluirEquipamentosMapa && metaUnitarioEquip > 0) {
@@ -2405,6 +2409,9 @@ Responda APENAS com um objeto JSON no formato:
         const eapPath = orcId ? (orcItemToPath[orcId] ?? "") : "";
         const scNumero = trace?.solicitacaoId ? (scMap[trace.solicitacaoId] ?? "") : "";
         const qtdEstaSC = n(it.quantidade);
+        const metaQtd = (isInsumoDeComposicao && tipoEfetivo === 'equipamento' && orcId)
+          ? (orcItemToQtdOrcada[orcId] ?? 0)
+          : null;
 
         let qtdOrcada = 0;
         let qtdTotalSolicitada = 0;
@@ -2439,7 +2446,7 @@ Responda APENAS com um objeto JSON no formato:
         const qtdSaldo = Math.round(qtdSaldoRaw * 1000) / 1000;
         const svcCode = it.solicitacaoItemId ? scItemToOrcServicoCodigo[it.solicitacaoItemId] : null;
         const composicaoInsumosList = svcCode ? (composicaoMap[svcCode] ?? []) : [];
-        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: svcCode ?? (trace?.composicaoCodigo ?? "") };
+        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, metaQtd, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: svcCode ?? (trace?.composicaoCodigo ?? "") };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};
