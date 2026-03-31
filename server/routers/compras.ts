@@ -2050,8 +2050,52 @@ Responda APENAS com um objeto JSON no formato:
           metaUnitMdo: orcamentoItens.metaUnitMdo,
           quantidade: orcamentoItens.quantidade,
           eapCodigo: orcamentoItens.eapCodigo,
+          servicoCodigo: orcamentoItens.servicoCodigo,
+          descricao: orcamentoItens.descricao,
         }).from(orcamentoItens).where(inArray(orcamentoItens.id, orcItemIds));
       }
+
+      const composicaoMap: Record<string, Array<{ insumoCodigo: string; descricao: string; unidade: string; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number; custoTotal: number }>> = {};
+      {
+        const svcCodigos = [...new Set(orcItensData.filter((o: any) => o.servicoCodigo).map((o: any) => o.servicoCodigo!))] as string[];
+        if (svcCodigos.length > 0 && cot.companyId) {
+          const compInsumos = await db.select({
+            composicaoCodigo: composicaoInsumos.composicaoCodigo,
+            insumoCodigo: composicaoInsumos.insumoCodigo,
+            insumoDescricao: composicaoInsumos.insumoDescricao,
+            unidade: composicaoInsumos.unidade,
+            quantidade: composicaoInsumos.quantidade,
+            precoUnitario: composicaoInsumos.precoUnitario,
+            alocacaoMat: composicaoInsumos.alocacaoMat,
+            alocacaoMdo: composicaoInsumos.alocacaoMdo,
+            custoUnitTotal: composicaoInsumos.custoUnitTotal,
+          }).from(composicaoInsumos)
+            .where(and(eq(composicaoInsumos.companyId, Number(cot.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCodigos)));
+          for (const ins of compInsumos) {
+            if (!composicaoMap[ins.composicaoCodigo]) composicaoMap[ins.composicaoCodigo] = [];
+            const coef = n(ins.quantidade);
+            const preco = n(ins.precoUnitario);
+            composicaoMap[ins.composicaoCodigo].push({
+              insumoCodigo: ins.insumoCodigo ?? "",
+              descricao: ins.insumoDescricao ?? "",
+              unidade: ins.unidade ?? "un",
+              coeficiente: coef,
+              precoUnitario: preco,
+              alocacaoMat: n(ins.alocacaoMat),
+              alocacaoMdo: n(ins.alocacaoMdo),
+              custoTotal: n(ins.custoUnitTotal),
+            });
+          }
+        }
+      }
+      const scItemToOrcServicoCodigo: Record<number, string | null> = {};
+      for (const s of scItens) {
+        if (s.orcamentoItemId) {
+          const orc = orcItensData.find((o: any) => o.id === s.orcamentoItemId);
+          scItemToOrcServicoCodigo[s.id] = orc?.servicoCodigo ?? null;
+        }
+      }
+
       // Buscar metaPercentual de cada orçamento vinculado
       const orcIds = [...new Set(orcItensData.map((o: any) => o.orcamentoId).filter(Boolean))] as number[];
       let orcData: any[] = [];
@@ -2320,7 +2364,9 @@ Responda APENAS com um objeto JSON no formato:
         const consumido = Math.max(qtdTotalSolicitada, qtdComprada);
         const qtdSaldoRaw = vinculado ? qtdOrcada - consumido : -qtdEstaSC;
         const qtdSaldo = Math.round(qtdSaldoRaw * 1000) / 1000;
-        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud };
+        const svcCode = it.solicitacaoItemId ? scItemToOrcServicoCodigo[it.solicitacaoItemId] : null;
+        const composicaoInsumosList = svcCode ? (composicaoMap[svcCode] ?? []) : [];
+        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: svcCode ?? (trace?.composicaoCodigo ?? "") };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};

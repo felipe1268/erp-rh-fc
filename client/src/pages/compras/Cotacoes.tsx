@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -665,6 +665,7 @@ export default function Cotacoes() {
   const [showRealocacao, setShowRealocacao] = useState(false);
   const [cobertoPorRisco, setCobertoPorRisco] = useState(false);
   const [agruparItens, setAgruparItens] = useState(false);
+  const [expandedComposicao, setExpandedComposicao] = useState<Record<number, boolean>>({});
   const [showSemVerbaDialog, setShowSemVerbaDialog] = useState(false);
   const [semVerbaAdminEmail, setSemVerbaAdminEmail] = useState("");
   const [semVerbaAdminSenha, setSemVerbaAdminSenha] = useState("");
@@ -2862,10 +2863,23 @@ export default function Cotacoes() {
                               const metaQtd = parseFloat(it.quantidade ?? "0");
                               const metaTot = metaUnit * metaQtd;
                               const { saldo, hasMeta } = getItemSaldo(it);
+                              const hasComposicao = !it._grouped && ((it as any).composicaoInsumos ?? []).length > 0;
+                              const isExpanded = expandedComposicao[it.id] ?? false;
+                              const numFornCols = (mapa?.participantes ?? []).length * 3;
                               return (
-                                <tr key={it.id} className="border-b border-gray-100 hover:bg-gray-50/60">
+                                <React.Fragment key={it.id}>
+                                <tr className="border-b border-gray-100 hover:bg-gray-50/60">
                                   <td className="px-4 py-2 border-r border-gray-100 bg-white sticky left-0 z-10 max-w-md">
                                     <div className="flex items-start gap-1.5">
+                                      {hasComposicao && (
+                                        <button
+                                          onClick={() => setExpandedComposicao(prev => ({ ...prev, [it.id]: !prev[it.id] }))}
+                                          className="mt-0.5 p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 shrink-0"
+                                          title="Ver composição"
+                                        >
+                                          {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                        </button>
+                                      )}
                                       <div className="flex-1 min-w-0">
                                         <span className="text-gray-900 text-xs font-medium">{it.descricao}</span>
                                         {it._grouped && (
@@ -3065,6 +3079,79 @@ export default function Cotacoes() {
                                     ) : <span className="text-gray-300 text-xs">—</span>}
                                   </td>
                                 </tr>
+                                {isExpanded && hasComposicao && (() => {
+                                  const insumos = (it as any).composicaoInsumos as Array<{ insumoCodigo: string; descricao: string; unidade: string; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number; custoTotal: number }>;
+                                  let totalMat = 0, totalMdo = 0, totalGeral = 0;
+                                  for (const ins of insumos) {
+                                    const custo = ins.coeficiente * ins.precoUnitario;
+                                    totalGeral += custo;
+                                    const matAlloc = ins.alocacaoMat ?? 0;
+                                    const mdoAlloc = ins.alocacaoMdo ?? 0;
+                                    if (matAlloc > 0 && mdoAlloc > 0) {
+                                      const totalAlloc = matAlloc + mdoAlloc;
+                                      totalMat += custo * (matAlloc / totalAlloc);
+                                      totalMdo += custo * (mdoAlloc / totalAlloc);
+                                    } else if (matAlloc > 0) {
+                                      totalMat += custo;
+                                    } else if (mdoAlloc > 0) {
+                                      totalMdo += custo;
+                                    }
+                                  }
+                                  return (
+                                    <tr className="bg-slate-50/80">
+                                      <td colSpan={6 + numFornCols + 1} className="px-0 py-0 sticky left-0 z-10">
+                                        <div className="ml-8 mr-4 my-2 border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                                          <div className="px-3 py-1.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+                                            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                                              Composição: {(it as any).composicaoCodigo || it.descricao}
+                                            </span>
+                                            <div className="flex items-center gap-3 text-[10px]">
+                                              {totalMat > 0 && <span className="text-blue-600 font-semibold">MAT: {totalMat.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
+                                              {totalMdo > 0 && <span className="text-purple-600 font-semibold">MDO: {totalMdo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
+                                              <span className="text-slate-700 font-bold">Total: {totalGeral.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                                            </div>
+                                          </div>
+                                          <table className="w-full text-[11px]">
+                                            <thead>
+                                              <tr className="border-b border-slate-100 bg-slate-50/50">
+                                                <th className="text-left px-3 py-1 text-slate-500 font-semibold w-16">Código</th>
+                                                <th className="text-left px-3 py-1 text-slate-500 font-semibold">Descrição</th>
+                                                <th className="text-center px-2 py-1 text-slate-500 font-semibold w-12">Un.</th>
+                                                <th className="text-right px-2 py-1 text-slate-500 font-semibold w-16">Coef.</th>
+                                                <th className="text-right px-2 py-1 text-slate-500 font-semibold w-20">Preço Un.</th>
+                                                <th className="text-right px-2 py-1 text-slate-500 font-semibold w-20">Custo</th>
+                                                <th className="text-center px-2 py-1 text-slate-500 font-semibold w-14">Tipo</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {insumos.map((ins, idx) => {
+                                                const isMat = ins.alocacaoMat > 0;
+                                                const isMdo = ins.alocacaoMdo > 0;
+                                                const custo = ins.coeficiente * ins.precoUnitario;
+                                                return (
+                                                  <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/80">
+                                                    <td className="px-3 py-1 text-slate-500 font-mono">{ins.insumoCodigo || "—"}</td>
+                                                    <td className="px-3 py-1 text-slate-700">{ins.descricao}</td>
+                                                    <td className="px-2 py-1 text-center text-slate-500">{ins.unidade}</td>
+                                                    <td className="px-2 py-1 text-right text-slate-600 font-medium">{ins.coeficiente.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</td>
+                                                    <td className="px-2 py-1 text-right text-slate-600">{ins.precoUnitario.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                                                    <td className="px-2 py-1 text-right text-slate-700 font-semibold">{custo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                                                    <td className="px-2 py-1 text-center">
+                                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${isMat ? "bg-blue-100 text-blue-700" : isMdo ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-500"}`}>
+                                                        {isMat ? "MAT" : isMdo ? "MDO" : "—"}
+                                                      </span>
+                                                    </td>
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })()}
+                                </React.Fragment>
                               );
                             })}
                           </tbody>
