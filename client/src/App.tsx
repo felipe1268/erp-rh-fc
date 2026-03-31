@@ -187,6 +187,8 @@ const ComprasConfiguracoes = lazy(() => import("./pages/compras/Configuracoes"))
 const DashboardObra = lazy(() => import("./pages/compras/DashboardObra"));
 const PainelFd = lazy(() => import("./pages/compras/PainelFd"));
 const PortalCotacaoPage = lazy(() => import("./pages/PortalCotacao"));
+const IntegraSignAssinar = lazy(() => import("./pages/IntegraSignAssinar"));
+const IntegraSignDashboard = lazy(() => import("./pages/IntegraSignDashboard"));
 const PortalServicoPage = lazy(() => import("./pages/PortalServico"));
 const MedicoesServicoPage = lazy(() => import("./pages/compras/MedicoesServico"));
 const PortalOCEntregaPage = lazy(() => import("./pages/PortalOCEntrega"));
@@ -380,6 +382,8 @@ function Router() {
         <Route path="/compras/configuracoes"     component={ComprasConfiguracoes} />
         <Route path="/compras/dashboard-obra"    component={DashboardObra} />
         <Route path="/compras/painel-fd"         component={PainelFd} />
+        <Route path="/integrasign" component={IntegraSignDashboard} />
+        <Route path="/integrasign/assinar/:token" component={IntegraSignAssinar} />
         <Route path="/portal/cotacao/:token"     component={PortalCotacaoPage} />
         <Route path="/portal/servico/:token"    component={PortalServicoPage} />
         <Route path="/compras/medicoes-servico" component={MedicoesServicoPage} />

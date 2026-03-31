@@ -7,6 +7,8 @@ import { getTipoPagamentoInfo } from "../../shared/paymentConditions";
 import { normalizarTexto } from "../../shared/textNormalization";
 import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { storagePut } from "../storage";
+import { enviarConviteAssinatura } from "../services/integrasignEmail";
+import crypto from "crypto";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 import {
   fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
@@ -29,6 +31,7 @@ import {
   purchaseOrders, purchaseRequests, purchaseQuotations,
   budgetReallocations,
   ocNumberConfig, pjContracts, pjDocumentos, bdiFd, fdAjustes, medicaoFdRegistros, medicaoContratos,
+  integrasignEnvelopes, integrasignSignatarios, integrasignAuditLog,
 } from "../../drizzle/schema";
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -152,6 +155,79 @@ async function gerarContratoPJDeOS(params: {
     return contrato;
   } catch (err: any) {
     console.error(`[gerarContratoPJDeOS] Erro:`, err?.message);
+    return null;
+  }
+}
+
+async function criarEnvelopeIntegraSign(params: {
+  companyId: number;
+  ocId: number;
+  contratoId: number;
+  obraId: number | null;
+  titulo: string;
+  textoContrato: string;
+  fornecedorNome: string;
+  fornecedorEmail: string;
+  fornecedorCnpj: string;
+  userId: number;
+  userName: string;
+}) {
+  const db = await getDb();
+  try {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const [envelope] = await db.insert(integrasignEnvelopes).values({
+      companyId: params.companyId,
+      contratoTerceiroId: params.contratoId,
+      ordemCompraId: params.ocId,
+      obraId: params.obraId,
+      titulo: params.titulo,
+      descricao: `Contrato de serviço gerado automaticamente via OC — ${params.fornecedorNome}`,
+      textoContrato: params.textoContrato,
+      status: "rascunho",
+      totalSignatariosObrigatorios: 4,
+      criadoPorId: params.userId,
+      criadoPorNome: params.userName,
+    }).returning();
+
+    const signatarios = [
+      { papel: "fornecedor", ordem: 1, nome: params.fornecedorNome, email: params.fornecedorEmail, cpfCnpj: params.fornecedorCnpj, cargo: "Representante Legal", empresaNome: params.fornecedorNome },
+      { papel: "gestor_projeto", ordem: 2, nome: params.userName, email: "", cpfCnpj: null, cargo: "Gestor do Projeto", empresaNome: "FC Engenharia" },
+      { papel: "financeiro", ordem: 3, nome: "Financeiro", email: "", cpfCnpj: null, cargo: "Departamento Financeiro", empresaNome: "FC Engenharia" },
+      { papel: "diretor", ordem: 4, nome: "Diretor", email: "", cpfCnpj: null, cargo: "Diretor", empresaNome: "FC Engenharia" },
+    ];
+
+    for (const sig of signatarios) {
+      await db.insert(integrasignSignatarios).values({
+        companyId: params.companyId,
+        envelopeId: envelope.id,
+        papel: sig.papel,
+        ordemAssinatura: sig.ordem,
+        nome: sig.nome,
+        email: sig.email,
+        cpfCnpj: sig.cpfCnpj ?? null,
+        cargo: sig.cargo,
+        empresaNome: sig.empresaNome,
+        token: crypto.randomBytes(48).toString("hex"),
+        tokenExpiraEm: expiresAt.toISOString(),
+        status: "pendente",
+      });
+    }
+
+    await db.insert(integrasignAuditLog).values({
+      companyId: params.companyId,
+      envelopeId: envelope.id,
+      acao: "envelope_criado_auto",
+      detalhes: `Envelope criado automaticamente a partir da aprovação da OC. Contrato #${params.contratoId}`,
+      userId: params.userId,
+      userName: params.userName,
+    });
+
+    console.log(`[IntegraSign] Envelope #${envelope.id} criado automaticamente para OC #${params.ocId} → Contrato #${params.contratoId}`);
+    return envelope;
+  } catch (err: any) {
+    console.error(`[IntegraSign] Erro ao criar envelope automático:`, err?.message);
     return null;
   }
 }
@@ -4019,7 +4095,7 @@ Retorne APENAS um JSON válido neste formato:
 
       if (isServico && !extraAprovacaoRequerida && cot.fornecedorId) {
         const ocItensForContract = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
-        await gerarContratoPJDeOS({
+        const contratoPJ = await gerarContratoPJDeOS({
           ocId: oc.id,
           companyId: input.companyId,
           obraId: cot.obraId ?? null,
@@ -4037,6 +4113,28 @@ Retorne APENAS um JSON válido neste formato:
           userId: input.userId ?? 0,
           userName: input.userName ?? "Sistema",
         });
+
+        if (contratoPJ) {
+          const [fornForSign] = await db.select().from(fornecedores)
+            .where(and(eq(fornecedores.id, cot.fornecedorId), eq(fornecedores.companyId, input.companyId)));
+
+          const itensDesc = ocItensForContract.map(it => `• ${it.descricao} — ${it.quantidade} ${it.unidade || "un"} × R$ ${n(it.precoUnitario).toFixed(2)}`).join("\n");
+          const textoContrato = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS\n\nContrato nº: ${(contratoPJ as any).numeroContrato || "N/A"}\nOC: ${oc.numeroOc}\n\nCONTRATANTE: FC Engenharia\nCONTRATADA: ${oc.fornecedorNome || "N/A"}\nCNPJ: ${fornForSign?.cnpj || "N/A"}\n\nOBJETO DO CONTRATO:\nPrestação de serviços conforme especificações abaixo:\n\n${itensDesc}\n\nVALOR TOTAL: R$ ${n(oc.total).toFixed(2)}\n\nAs partes concordam com os termos acima descritos e assinam eletronicamente este contrato.`;
+
+          criarEnvelopeIntegraSign({
+            companyId: input.companyId,
+            ocId: oc.id,
+            contratoId: contratoPJ.id,
+            obraId: cot.obraId ?? null,
+            titulo: `Contrato de Serviço — OC ${oc.numeroOc} — ${oc.fornecedorNome || "Fornecedor"}`,
+            textoContrato,
+            fornecedorNome: oc.fornecedorNome || "Fornecedor",
+            fornecedorEmail: fornForSign?.email || "",
+            fornecedorCnpj: fornForSign?.cnpj || "",
+            userId: input.userId ?? 0,
+            userName: input.userName ?? "Sistema",
+          }).catch(err => console.error(`[IntegraSign] Erro auto-trigger:`, err?.message));
+        }
       }
 
       return oc;

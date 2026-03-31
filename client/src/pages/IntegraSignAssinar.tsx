@@ -1,0 +1,494 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useRoute } from "wouter";
+import { trpc } from "../lib/trpc";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, CheckCircle2, XCircle, FileText, PenLine, AlertTriangle, Shield } from "lucide-react";
+
+function papelLabel(p: string) {
+  const m: Record<string, string> = {
+    fornecedor: "Fornecedor / Contratada",
+    gestor_projeto: "Gestor do Projeto",
+    financeiro: "Financeiro",
+    diretor: "Diretor",
+    testemunha: "Testemunha",
+  };
+  return m[p] || p;
+}
+
+function statusBadge(s: string) {
+  switch (s) {
+    case "assinado": return <Badge className="bg-green-600 text-white">Assinado</Badge>;
+    case "notificado": return <Badge className="bg-blue-600 text-white">Aguardando</Badge>;
+    case "visualizado": return <Badge className="bg-amber-600 text-white">Visualizado</Badge>;
+    case "pendente": return <Badge variant="secondary">Pendente</Badge>;
+    case "recusado": return <Badge className="bg-red-600 text-white">Recusado</Badge>;
+    default: return <Badge variant="secondary">{s}</Badge>;
+  }
+}
+
+export default function IntegraSignAssinar() {
+  const [, params] = useRoute("/integrasign/assinar/:token");
+  const token = params?.token || "";
+
+  const [termoAceito, setTermoAceito] = useState(false);
+  const [nomeConfirmado, setNomeConfirmado] = useState("");
+  const [cpfCnpjConfirmado, setCpfCnpjConfirmado] = useState("");
+  const [recusando, setRecusando] = useState(false);
+  const [motivoRecusa, setMotivoRecusa] = useState("");
+  const [assinando, setAssinando] = useState(false);
+  const [sucesso, setSucesso] = useState(false);
+  const [sucessoMsg, setSucessoMsg] = useState("");
+  const [geo, setGeo] = useState<{ lat?: number; lng?: number; acc?: number }>({});
+
+  const sigCanvasRef = useRef<HTMLCanvasElement>(null);
+  const rubCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [sigDrawing, setSigDrawing] = useState(false);
+  const [rubDrawing, setRubDrawing] = useState(false);
+  const [sigHasContent, setSigHasContent] = useState(false);
+  const [rubHasContent, setRubHasContent] = useState(false);
+
+  const doc = trpc.integrasign.getDocumentoPublico.useQuery(
+    { token },
+    { enabled: !!token, retry: false }
+  );
+
+  const assinarMut = trpc.integrasign.assinarDocumento.useMutation();
+  const recusarMut = trpc.integrasign.recusarDocumento.useMutation();
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy }),
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  }, []);
+
+  const initCanvas = useCallback((canvas: HTMLCanvasElement | null, type: "sig" | "rub") => {
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.strokeStyle = "#ccc";
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    const y = type === "sig" ? rect.height - 30 : rect.height - 15;
+    ctx.moveTo(20, y);
+    ctx.lineTo(rect.width - 20, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#999";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(type === "sig" ? "Assine acima da linha" : "Rubrica", rect.width / 2, y + 15);
+  }, []);
+
+  useEffect(() => {
+    if (doc.data) {
+      setTimeout(() => {
+        initCanvas(sigCanvasRef.current, "sig");
+        initCanvas(rubCanvasRef.current, "rub");
+      }, 100);
+    }
+  }, [doc.data, initCanvas]);
+
+  function getPos(e: any, canvas: HTMLCanvasElement) {
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+    }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  function startDraw(e: any, canvas: HTMLCanvasElement, setDrawing: (v: boolean) => void) {
+    setDrawing(true);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const pos = getPos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+  }
+
+  function draw(e: any, canvas: HTMLCanvasElement, drawing: boolean, setHasContent: (v: boolean) => void) {
+    if (!drawing) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const pos = getPos(e, canvas);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    setHasContent(true);
+  }
+
+  function stopDraw(setDrawing: (v: boolean) => void) {
+    setDrawing(false);
+  }
+
+  function clearCanvas(canvas: HTMLCanvasElement | null, type: "sig" | "rub", setHasContent: (v: boolean) => void) {
+    setHasContent(false);
+    initCanvas(canvas, type);
+  }
+
+  async function handleAssinar() {
+    if (!sigCanvasRef.current || !rubCanvasRef.current) return;
+    if (!sigHasContent || !rubHasContent) return;
+    if (!termoAceito || !nomeConfirmado) return;
+
+    setAssinando(true);
+    try {
+      const sigData = sigCanvasRef.current.toDataURL("image/png");
+      const rubData = rubCanvasRef.current.toDataURL("image/png");
+
+      const result = await assinarMut.mutateAsync({
+        token,
+        assinaturaImagem: sigData,
+        rubricaImagem: rubData,
+        nomeConfirmado,
+        cpfCnpjConfirmado: cpfCnpjConfirmado || undefined,
+        termoAceito: true,
+        latitude: geo.lat,
+        longitude: geo.lng,
+        geoAccuracy: geo.acc,
+        ipAddress: undefined,
+        userAgent: navigator.userAgent,
+        dispositivoInfo: JSON.stringify({
+          platform: navigator.platform,
+          language: navigator.language,
+          screen: `${screen.width}x${screen.height}`,
+          dpr: window.devicePixelRatio,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
+      });
+
+      setSucesso(true);
+      setSucessoMsg(result.concluido
+        ? "Todas as assinaturas foram concluídas! O contrato está ativo."
+        : "Sua assinatura foi registrada com sucesso. O próximo signatário será notificado."
+      );
+    } catch (err: any) {
+      alert(err.message || "Erro ao assinar");
+    } finally {
+      setAssinando(false);
+    }
+  }
+
+  async function handleRecusar() {
+    if (!motivoRecusa.trim()) return;
+    setAssinando(true);
+    try {
+      await recusarMut.mutateAsync({
+        token,
+        motivoRecusa: motivoRecusa.trim(),
+        userAgent: navigator.userAgent,
+      });
+      setSucesso(true);
+      setSucessoMsg("Documento recusado. O remetente será notificado sobre sua decisão.");
+    } catch (err: any) {
+      alert(err.message || "Erro ao recusar");
+    } finally {
+      setAssinando(false);
+    }
+  }
+
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="max-w-md"><CardContent className="p-8 text-center">
+          <AlertTriangle className="mx-auto h-12 w-12 text-red-500 mb-4" />
+          <h2 className="text-xl font-bold mb-2">Link Inválido</h2>
+          <p className="text-gray-600">Este link de assinatura não é válido.</p>
+        </CardContent></Card>
+      </div>
+    );
+  }
+
+  if (doc.isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <span className="ml-3 text-gray-600">Carregando documento...</span>
+      </div>
+    );
+  }
+
+  if (doc.error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="max-w-md"><CardContent className="p-8 text-center">
+          <XCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
+          <h2 className="text-xl font-bold mb-2">Erro</h2>
+          <p className="text-gray-600">{doc.error.message}</p>
+        </CardContent></Card>
+      </div>
+    );
+  }
+
+  if (sucesso) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="max-w-lg"><CardContent className="p-8 text-center">
+          <CheckCircle2 className="mx-auto h-16 w-16 text-green-600 mb-4" />
+          <h2 className="text-2xl font-bold mb-3">Concluído!</h2>
+          <p className="text-gray-600">{sucessoMsg}</p>
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-500">
+            <Shield className="inline h-4 w-4 mr-1" />
+            Registro protegido por criptografia SHA-256
+          </div>
+        </CardContent></Card>
+      </div>
+    );
+  }
+
+  const data = doc.data!;
+  const { envelope, signatario, todosSignatarios, termoLegal } = data;
+  const podeAssinar = signatario.podeAssinar;
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-6 px-4">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="text-center mb-6">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <PenLine className="h-8 w-8 text-blue-600" />
+            <h1 className="text-2xl font-bold text-gray-800">IntegraSign</h1>
+          </div>
+          <p className="text-gray-500">Assinatura Eletrônica de Contratos</p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              {envelope.titulo}
+            </CardTitle>
+            {envelope.descricao && (
+              <p className="text-sm text-gray-600">{envelope.descricao}</p>
+            )}
+            {envelope.versao > 1 && (
+              <Badge variant="outline">Versão {envelope.versao}</Badge>
+            )}
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Signatários</CardTitle></CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {todosSignatarios.map((s: any) => (
+                <div key={s.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50">
+                  <div>
+                    <span className="font-medium">{s.nome}</span>
+                    <span className="text-sm text-gray-500 ml-2">({papelLabel(s.papel)})</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {s.dataAssinatura && (
+                      <span className="text-xs text-gray-400">
+                        {new Date(s.dataAssinatura).toLocaleDateString("pt-BR")}
+                      </span>
+                    )}
+                    {statusBadge(s.status)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3">
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-green-600 h-2 rounded-full transition-all"
+                  style={{
+                    width: `${(todosSignatarios.filter((s: any) => s.status === "assinado").length / todosSignatarios.filter((s: any) => s.papel !== "testemunha").length) * 100}%`,
+                  }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1 text-center">
+                {todosSignatarios.filter((s: any) => s.status === "assinado" && s.papel !== "testemunha").length} de{" "}
+                {todosSignatarios.filter((s: any) => s.papel !== "testemunha").length} assinaturas obrigatórias
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {envelope.textoContrato && (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Contrato</CardTitle></CardHeader>
+            <CardContent>
+              <div
+                className="max-h-[500px] overflow-y-auto border rounded-lg p-6 bg-white text-sm leading-relaxed whitespace-pre-wrap"
+                style={{ fontFamily: "Georgia, serif" }}
+              >
+                {envelope.textoContrato}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {podeAssinar && !recusando && (
+          <Card className="border-blue-200 bg-blue-50/30">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <PenLine className="h-5 w-5 text-blue-600" />
+                Sua Assinatura — {signatario.nome} ({papelLabel(signatario.papel)})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="p-4 border rounded-lg bg-amber-50 text-sm text-gray-700">
+                <Shield className="inline h-4 w-4 mr-1 text-amber-600" />
+                {termoLegal}
+              </div>
+
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="termo"
+                  checked={termoAceito}
+                  onCheckedChange={(v) => setTermoAceito(v === true)}
+                />
+                <Label htmlFor="termo" className="text-sm cursor-pointer">
+                  Li e concordo com todos os termos do contrato acima
+                </Label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Nome Completo *</Label>
+                  <Input
+                    value={nomeConfirmado}
+                    onChange={(e) => setNomeConfirmado(e.target.value)}
+                    placeholder="Digite seu nome completo"
+                  />
+                </div>
+                <div>
+                  <Label>CPF / CNPJ</Label>
+                  <Input
+                    value={cpfCnpjConfirmado}
+                    onChange={(e) => setCpfCnpjConfirmado(e.target.value)}
+                    placeholder="000.000.000-00"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Rubrica (para todas as páginas) *</Label>
+                  <Button variant="ghost" size="sm" onClick={() => clearCanvas(rubCanvasRef.current, "rub", setRubHasContent)}>
+                    Limpar
+                  </Button>
+                </div>
+                <canvas
+                  ref={rubCanvasRef}
+                  className="w-full border rounded-lg cursor-crosshair touch-none"
+                  style={{ height: 80 }}
+                  onMouseDown={(e) => startDraw(e, rubCanvasRef.current!, setRubDrawing)}
+                  onMouseMove={(e) => draw(e, rubCanvasRef.current!, rubDrawing, setRubHasContent)}
+                  onMouseUp={() => stopDraw(setRubDrawing)}
+                  onMouseLeave={() => stopDraw(setRubDrawing)}
+                  onTouchStart={(e) => { e.preventDefault(); startDraw(e, rubCanvasRef.current!, setRubDrawing); }}
+                  onTouchMove={(e) => { e.preventDefault(); draw(e, rubCanvasRef.current!, rubDrawing, setRubHasContent); }}
+                  onTouchEnd={() => stopDraw(setRubDrawing)}
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Assinatura Completa *</Label>
+                  <Button variant="ghost" size="sm" onClick={() => clearCanvas(sigCanvasRef.current, "sig", setSigHasContent)}>
+                    Limpar
+                  </Button>
+                </div>
+                <canvas
+                  ref={sigCanvasRef}
+                  className="w-full border rounded-lg cursor-crosshair touch-none"
+                  style={{ height: 160 }}
+                  onMouseDown={(e) => startDraw(e, sigCanvasRef.current!, setSigDrawing)}
+                  onMouseMove={(e) => draw(e, sigCanvasRef.current!, sigDrawing, setSigHasContent)}
+                  onMouseUp={() => stopDraw(setSigDrawing)}
+                  onMouseLeave={() => stopDraw(setSigDrawing)}
+                  onTouchStart={(e) => { e.preventDefault(); startDraw(e, sigCanvasRef.current!, setSigDrawing); }}
+                  onTouchMove={(e) => { e.preventDefault(); draw(e, sigCanvasRef.current!, sigDrawing, setSigHasContent); }}
+                  onTouchEnd={() => stopDraw(setSigDrawing)}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  disabled={!termoAceito || !nomeConfirmado || !sigHasContent || !rubHasContent || assinando}
+                  onClick={handleAssinar}
+                >
+                  {assinando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PenLine className="h-4 w-4 mr-2" />}
+                  Assinar Documento
+                </Button>
+                <Button variant="outline" className="text-red-600 border-red-200" onClick={() => setRecusando(true)}>
+                  Recusar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!podeAssinar && signatario.status !== "assinado" && !recusando && (
+          <Card className="border-amber-200 bg-amber-50/30">
+            <CardContent className="p-6 text-center">
+              <AlertTriangle className="mx-auto h-8 w-8 text-amber-500 mb-3" />
+              <h3 className="font-semibold mb-2">Aguardando assinaturas anteriores</h3>
+              <p className="text-sm text-gray-600">
+                Você poderá assinar assim que os signatários anteriores concluírem suas assinaturas.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {recusando && (
+          <Card className="border-red-200 bg-red-50/30">
+            <CardHeader>
+              <CardTitle className="text-base text-red-700">Recusar Documento</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Motivo da Recusa *</Label>
+                <Textarea
+                  value={motivoRecusa}
+                  onChange={(e) => setMotivoRecusa(e.target.value)}
+                  placeholder="Descreva o motivo da recusa..."
+                  rows={4}
+                />
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  disabled={!motivoRecusa.trim() || assinando}
+                  onClick={handleRecusar}
+                >
+                  {assinando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Confirmar Recusa
+                </Button>
+                <Button variant="outline" onClick={() => { setRecusando(false); setMotivoRecusa(""); }}>
+                  Voltar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="text-center text-xs text-gray-400 pb-6">
+          <Shield className="inline h-3 w-3 mr-1" />
+          IntegraSign — Assinatura eletrônica em conformidade com MP 2.200-2/2001 e Lei 14.063/2020
+        </div>
+      </div>
+    </div>
+  );
+}

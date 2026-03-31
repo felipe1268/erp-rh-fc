@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 940,
+    titulo: "IntegraSign — Módulo de Assinatura Eletrônica de Contratos",
+    descricao: "Novo módulo IntegraSign para assinatura eletrônica interna de contratos de serviço. Fluxo sequencial com 4 signatários obrigatórios (Fornecedor→Gestor→Financeiro→Diretor) + testemunhas opcionais. Criação automática de envelope ao aprovar OC de serviço. Página pública de assinatura com captura de rubrica, assinatura manuscrita digital, geolocalização e hash SHA-256. Dashboard com progresso, auditoria, recusa com justificativa, versionamento e reenvio de lembretes. Notificações por e-mail em cada etapa. Em conformidade com MP 2.200-2/2001 e Lei 14.063/2020.",
+    tipo: 'feature',
+    modulos: 'Terceiros, Compras',
+    criadoPor: 'System',
+    dataPublicacao: "2026-03-31 23:59:00",
+  },
+  {
     version: 939,
     titulo: "Aditivo Contratual PJ — criação e impressão de aditivos",
     descricao: "Nova funcionalidade para criar aditivos contratuais a partir do contrato PJ. Ao clicar em 'Criar Aditivo', o sistema lista todas as cláusulas do contrato e permite selecionar quais alterar. O aditivo é gerado com formatação profissional para impressão/PDF, seguindo o modelo padrão da FC Engenharia: identificação das partes, cláusulas alteradas com nova redação, disposições finais, assinaturas e testemunhas.",

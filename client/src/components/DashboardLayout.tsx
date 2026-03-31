@@ -36,7 +36,7 @@ import {
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft,
-  Home, Tag, GripVertical, Network, ScanFace, PackageCheck,
+  Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -243,6 +243,7 @@ const menuSectionsTerceiros: MenuSection[] = [
     title: "Contratos e Medições",
     items: [
       { icon: FileSignature, label: "Contratos de Serviço", path: "/terceiros/contratos" },
+      { icon: PenLine, label: "IntegraSign", path: "/integrasign" },
       { icon: Receipt, label: "Medições", path: "/terceiros/medicoes" },
       { icon: TrendingUp, label: "Previsão de Caixa", path: "/terceiros/previsao-caixa" },
     ],
