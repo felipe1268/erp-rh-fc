@@ -2456,8 +2456,10 @@ export const terceiroContratosRouter = router({
       const condPag = (fornInfoCheck as any)?.condicaoPagamento ?? cot.condicaoPagamento;
       const formaPag = (fornInfoCheck as any)?.formaPagamento ?? (cot as any).formaPagamento;
       const prazoEntrega = (fornInfoCheck as any)?.prazoEntregaDias;
+      const tipoPagCheck = (fornInfoCheck as any)?.tipoPagamento ?? "";
+      const isMdoMedicao = (tipoPagCheck === "medicao" || (condPag ?? "").toLowerCase().includes("medição"));
       if (!condPag && !formaPag) throw new Error("Defina a Forma de Pagamento antes de aprovar. Edite as condições do vencedor na cotação.");
-      if (!prazoEntrega || Number(prazoEntrega) <= 0) throw new Error("Defina o Prazo de Entrega antes de aprovar. Edite as condições do vencedor na cotação.");
+      if (!isMdoMedicao && (!prazoEntrega || Number(prazoEntrega) <= 0)) throw new Error("Defina o Prazo de Entrega antes de aprovar. Edite as condições do vencedor na cotação.");
 
       // 4. Find-or-create empresa terceira vinculada ao fornecedor
       const existing = await db.select().from(empresasTerceiras)

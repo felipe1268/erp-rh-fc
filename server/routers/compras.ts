@@ -3937,8 +3937,10 @@ Retorne APENAS um JSON válido neste formato:
       const condPag = (fornInfoCheck as any)?.condicaoPagamento ?? cot.condicaoPagamento;
       const formaPag = (fornInfoCheck as any)?.formaPagamento ?? (cot as any).formaPagamento;
       const prazoEntrega = (fornInfoCheck as any)?.prazoEntregaDias;
+      const tipoPagCheck = (fornInfoCheck as any)?.tipoPagamento ?? "";
+      const isMdoMedicao = ((cot as any).tipo === "servico" || (cot as any).tipo === "pacote") && (tipoPagCheck === "medicao" || (condPag ?? "").toLowerCase().includes("medição"));
       if (!condPag && !formaPag) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina a Condição de Pagamento antes de gerar a OC. Edite as condições do vencedor na cotação." });
-      if (!prazoEntrega || Number(prazoEntrega) <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina o Prazo de Entrega antes de gerar a OC. Edite as condições do vencedor na cotação." });
+      if (!isMdoMedicao && (!prazoEntrega || Number(prazoEntrega) <= 0)) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina o Prazo de Entrega antes de gerar a OC. Edite as condições do vencedor na cotação." });
 
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
 

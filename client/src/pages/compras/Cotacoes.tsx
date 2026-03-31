@@ -1596,13 +1596,17 @@ export default function Cotacoes() {
               )}
             </div>
 
+            {(() => {
+              const cotTipoEntrega = (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
+              const isMdoMedicao = (cotTipoEntrega === "servico" || cotTipoEntrega === "pacote") && (editTipoPag[fId] === "medicao" || (editCondPag[fId] ?? "").toLowerCase().includes("medição"));
+              return (
             <div>
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Entrega & Frete</p>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">{isMdoMedicao ? "Mobilização & Frete" : "Entrega & Frete"}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] text-gray-500 mb-1 block">Prazo de Entrega</label>
+                  <label className="text-[11px] text-gray-500 mb-1 block">{isMdoMedicao ? "Prazo para Mobilização" : "Prazo de Entrega"}</label>
                   <div className="relative">
-                    <input type="number" placeholder="Ex: 15" value={editPrazo[fId] ?? ""} onChange={e => {
+                    <input type="number" placeholder={isMdoMedicao ? "Ex: 7" : "Ex: 15"} value={editPrazo[fId] ?? ""} onChange={e => {
                         const dias = e.target.value;
                         setEditPrazo(prev => ({ ...prev, [fId]: dias }));
                         if (dias && parseInt(dias) > 0) {
@@ -1616,7 +1620,7 @@ export default function Cotacoes() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] text-gray-500 mb-1 block">Data Prevista Entrega</label>
+                  <label className="text-[11px] text-gray-500 mb-1 block">{isMdoMedicao ? "Data Início Mobilização" : "Data Prevista Entrega"}</label>
                   <input type="date" value={editDataEntrega[fId] ?? ""} onChange={e => {
                       const dataStr = e.target.value;
                       setEditDataEntrega(prev => ({ ...prev, [fId]: dataStr }));
@@ -1655,6 +1659,7 @@ export default function Cotacoes() {
                 </div>
               )}
             </div>
+              ); })()}
 
             {(() => {
               const cotTipo = (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
@@ -1753,9 +1758,12 @@ export default function Cotacoes() {
       }
       const condPag = (fornParaSaldo as any).condicaoPagamento || (fornParaSaldo as any).formaPagamento;
       const prazo = (fornParaSaldo as any).prazoEntregaDias;
+      const tipoPag = (fornParaSaldo as any).tipoPagamento ?? "";
+      const cotTipoVal = (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
+      const isMdoMedicao = (cotTipoVal === "servico" || cotTipoVal === "pacote") && (tipoPag === "medicao" || (condPag ?? "").toLowerCase().includes("medição"));
       const erros: string[] = [];
       if (!condPag) erros.push("Forma de Pagamento");
-      if (!prazo || Number(prazo) <= 0) erros.push("Prazo de Entrega");
+      if (!isMdoMedicao && (!prazo || Number(prazo) <= 0)) erros.push("Prazo de Entrega");
       if (erros.length > 0) {
         toast.error(`Preencha ${erros.join(" e ")} nas condições do vencedor antes de aprovar.`);
         return false;
@@ -2060,7 +2068,7 @@ export default function Cotacoes() {
                       { label: "Obra", value: nomeObra((detalheFullscreen as any).obraId) ?? "—" },
                       { label: "Fornecedor Vencedor", value: forn?.nomeFantasia || forn?.razaoSocial || "—" },
                       { label: "Cond. Pagamento", value: (() => { const info = getTipoPagamentoInfo((detalheFullscreen as any).tipoPagamento); return info ? info.label : detalheFullscreen.condicaoPagamento || "—"; })() },
-                      { label: "Prazo Entrega", value: detalheFullscreen.prazoEntregaDias ? `${detalheFullscreen.prazoEntregaDias} dias` : "—" },
+                      { label: (() => { const tp = (detalheFullscreen as any).tipoPagamento ?? ""; const cp = detalheFullscreen.condicaoPagamento ?? ""; const t = (detalheFullscreen as any).tipo; return ((t === "servico" || t === "pacote") && (tp === "medicao" || cp.toLowerCase().includes("medição"))) ? "Mobilização" : "Prazo Entrega"; })(), value: detalheFullscreen.prazoEntregaDias ? `${detalheFullscreen.prazoEntregaDias} dias` : "—" },
                       { label: "Validade", value: detalheFullscreen.dataValidade ? new Date(detalheFullscreen.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—" },
                       { label: "SC Vinculada", value: detalheFullscreen.solicitacaoId ? `SC #${detalheFullscreen.solicitacaoId}` : "—" },
                     ].map(f => (
@@ -2426,7 +2434,7 @@ export default function Cotacoes() {
                           </div>
 
                           <div className="flex items-center justify-between">
-                            <span className="text-[11px] text-gray-500">Prazo de Entrega</span>
+                            <span className="text-[11px] text-gray-500">{(() => { const ct = (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo; return ((ct === "servico" || ct === "pacote") && (vTipoPag === "medicao" || (vCondPag ?? "").toLowerCase().includes("medição"))) ? "Início da Mobilização" : "Prazo de Entrega"; })()}</span>
                             {vPrazo ? (
                               <span className="text-xs font-medium text-gray-700">{vPrazo} dias</span>
                             ) : (
@@ -4064,7 +4072,7 @@ export default function Cotacoes() {
                   <div><span className="text-gray-400 text-xs">Status</span><p><span className={`inline-flex px-2 py-0.5 rounded text-xs border ${st.cls}`}>{st.label}</span></p></div>
                   <div><span className="text-gray-400 text-xs">Fornecedor</span><p className="text-gray-900 font-medium">{forn?.nomeFantasia || forn?.razaoSocial || "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Cond. Pagamento</span><p className="text-gray-900 font-medium">{(() => { const info = getTipoPagamentoInfo((detalhe as any).tipoPagamento); return info ? info.label : detalhe.condicaoPagamento || "—"; })()}</p></div>
-                  <div><span className="text-gray-400 text-xs">Prazo Entrega</span><p className="text-gray-900 font-medium">{detalhe.prazoEntregaDias ? `${detalhe.prazoEntregaDias} dias` : "—"}</p></div>
+                  <div><span className="text-gray-400 text-xs">{(() => { const tp = (detalhe as any).tipoPagamento ?? ""; const cp = detalhe.condicaoPagamento ?? ""; const t = (detalhe as any).tipo; return ((t === "servico" || t === "pacote") && (tp === "medicao" || cp.toLowerCase().includes("medição"))) ? "Mobilização" : "Prazo Entrega"; })()}</span><p className="text-gray-900 font-medium">{detalhe.prazoEntregaDias ? `${detalhe.prazoEntregaDias} dias` : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Validade</span><p className="text-gray-900 font-medium">{detalhe.dataValidade ? new Date(detalhe.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Total</span><p className="text-emerald-700 font-bold">{parseFloat(detalhe.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p></div>
                   {(detalhe as any).modalidadeFd && (detalhe as any).modalidadeFd !== "normal" && (
