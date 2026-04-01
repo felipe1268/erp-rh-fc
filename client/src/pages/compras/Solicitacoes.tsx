@@ -2647,22 +2647,24 @@ export default function Solicitacoes() {
               </DialogHeader>
 
               {/* Abas: Detalhes / Cotação / OC */}
-              <div className="flex gap-1 border-b border-gray-200 -mx-1">
-                {[
-                  { key: "detalhes" as const, label: "Detalhes", icon: <ClipboardList className="h-3.5 w-3.5" /> },
-                  ...(scCotacaoId ? [{ key: "cotacao" as const, label: `Cotação ${(detalhe.rastreio?.cotacoes as any[])?.[0]?.numeroCotacao ?? ""}`, icon: <FileSearch className="h-3.5 w-3.5" /> }] : []),
-                  ...(scOcId ? [{ key: "oc" as const, label: `OC ${(detalhe.rastreio?.ordens as any[])?.[0]?.numeroOc ?? ""}`, icon: <ShoppingCart className="h-3.5 w-3.5" /> }] : []),
-                ].map(tab => (
+              {(scCotacaoId || scOcId) && (
+              <div className="flex items-center gap-0 bg-gray-100 rounded-xl p-1 mt-1">
+                {([
+                  { key: "detalhes" as const, label: "Detalhes", icon: <ClipboardList className="h-4 w-4" /> },
+                  ...(scCotacaoId ? [{ key: "cotacao" as const, label: `Cotação ${(detalhe.rastreio?.cotacoes as any[])?.[0]?.numeroCotacao ?? ""}`, icon: <FileSearch className="h-4 w-4" /> }] : []),
+                  ...(scOcId ? [{ key: "oc" as const, label: `OC ${(detalhe.rastreio?.ordens as any[])?.[0]?.numeroOc ?? ""}`, icon: <ShoppingCart className="h-4 w-4" /> }] : []),
+                ] as { key: "detalhes" | "cotacao" | "oc"; label: string; icon: React.ReactNode }[]).map(tab => (
                   <button key={tab.key} type="button" onClick={() => setAbaScDetalhe(tab.key)}
-                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-all ${
+                    className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition-all flex-1 justify-center ${
                       abaScDetalhe === tab.key
-                        ? "border-blue-600 text-blue-700 bg-blue-50/50"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                        ? "bg-white text-blue-700 shadow-sm ring-1 ring-gray-200"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                     }`}>
                     {tab.icon} {tab.label}
                   </button>
                 ))}
               </div>
+              )}
 
               {abaScDetalhe === "detalhes" && (<>
               {/* Info grid */}
