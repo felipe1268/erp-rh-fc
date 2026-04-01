@@ -772,12 +772,13 @@ export default function Cotacoes() {
     },
     onSuccess: (data: any) => {
       q.refetch(); detalheQ.refetch(); setSemVerbaAutorizado(null);
-      if (data?.terceiroContratoGeradoId) {
-        setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 3 } : p), 400);
-        setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 4, redirectTo: `/terceiros/contratos/${data.terceiroContratoGeradoId}?tab=documento` } : p), 1000);
-        setTimeout(() => { setAprovacaoProgress(null); navigate(`/terceiros/contratos/${data.terceiroContratoGeradoId}?tab=documento`); }, 2500);
+      const tcId = data?.terceiroContratoGeradoId;
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 3 } : p), 400);
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 4, redirectTo: tcId ? `/terceiros/contratos/${tcId}?tab=documento` : undefined } : p), 1000);
+      if (tcId) {
+        setTimeout(() => { setAprovacaoProgress(null); navigate(`/terceiros/contratos/${tcId}?tab=documento`); }, 2800);
       } else {
-        setTimeout(() => { setAprovacaoProgress(null); toast.success("Ordem de Compra gerada!"); }, 800);
+        setTimeout(() => { setAprovacaoProgress(null); toast.success("Ordem de Compra gerada com sucesso!"); }, 2200);
       }
     },
     onError: (e) => { setAprovacaoProgress(null); toast.error(e.message); },
@@ -803,12 +804,17 @@ export default function Cotacoes() {
     onError: (e) => toast.error(e.message),
   });
   const gerarContrato = trpc.terceiroContratos.gerarContratoFromCotacao.useMutation({
-    onSuccess: (data) => {
-      toast.success(`Contrato ${data.numeroContrato} criado!${data.isNova ? " Empresa terceira cadastrada automaticamente." : ""}`);
-      setShowDetalhe(null);
-      navigate(`/terceiros/contratos/${data.contratoId}`);
+    onMutate: () => {
+      setAprovacaoProgress({ step: 0 });
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 1 } : p), 600);
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 2 } : p), 1200);
     },
-    onError: (e) => toast.error(e.message),
+    onSuccess: (data) => {
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 3 } : p), 400);
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 4, redirectTo: `/terceiros/contratos/${data.contratoId}` } : p), 1000);
+      setTimeout(() => { setAprovacaoProgress(null); setShowDetalhe(null); navigate(`/terceiros/contratos/${data.contratoId}`); }, 2500);
+    },
+    onError: (e) => { setAprovacaoProgress(null); toast.error(e.message); },
   });
   const marcarFd = trpc.compras.marcarCotacaoFd.useMutation({
     onSuccess: () => { toast.success("Faturamento Direto definido!"); detalheQ.refetch(); q.refetch(); setShowFdCotDialog(false); },
@@ -4688,10 +4694,14 @@ export default function Cotacoes() {
                 );
               })}
             </div>
-            {aprovacaoProgress.step >= 4 && aprovacaoProgress.redirectTo && (
+            {aprovacaoProgress.step >= 4 && (
               <div className="text-center space-y-3 animate-in fade-in duration-500">
-                <p className="text-sm text-emerald-700 font-semibold">Contrato criado com sucesso!</p>
-                <p className="text-xs text-gray-500">Redirecionando para o módulo Terceiros...</p>
+                <p className="text-sm text-emerald-700 font-semibold">
+                  {aprovacaoProgress.redirectTo ? "Contrato criado com sucesso!" : "Ordem de Compra gerada com sucesso!"}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {aprovacaoProgress.redirectTo ? "Redirecionando para o módulo Terceiros..." : "Finalizando..."}
+                </p>
               </div>
             )}
             {aprovacaoProgress.step < 4 && (
