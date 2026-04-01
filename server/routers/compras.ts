@@ -81,7 +81,8 @@ async function gerarContratoPJDeOS(params: {
     const diaPag = config ? (config as any).diaPagamento ?? 10 : 10;
 
     const [forn] = await db.select().from(fornecedores).where(and(eq(fornecedores.id, params.fornecedorId), eq(fornecedores.companyId, params.companyId)));
-    const cnpj = forn?.cnpj?.trim() || "";
+    const cnpjRaw = forn?.cnpj?.trim() || "";
+    const cnpj = cnpjRaw.replace(/\D/g, "").length >= 11 ? cnpjRaw : "";
     const razaoSocial = forn?.razaoSocial ?? params.fornecedorNome ?? "";
 
     let employeeId: number;
