@@ -6987,4 +6987,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-01 10:00:00",
   },
+  {
+    version: 957,
+    titulo: "Solicitação com abas: Detalhes, Cotação e OC na mesma tela",
+    descricao:
+      "A tela de detalhe da Solicitação de Compra agora possui abas navegáveis: " +
+      "Detalhes (dados da SC, aprovação, rastreabilidade, itens), Cotação (resumo da cotação vinculada " +
+      "com fornecedores participantes, vencedor, itens e preços do mapa) e Ordem de Compra (dados da OC, " +
+      "fornecedor, total, recebimentos). As abas só aparecem quando o documento correspondente existe. " +
+      "Botão 'Abrir Cotação Completa' e 'Abrir OC Completa' permitem navegar para a tela dedicada. " +
+      "Módulo de Medição agora disponível para todos os tipos de cotação (não apenas serviço/pacote).",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-01 12:00:00",
+  },
 ];

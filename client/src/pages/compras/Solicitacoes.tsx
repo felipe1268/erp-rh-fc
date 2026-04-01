@@ -444,6 +444,7 @@ export default function Solicitacoes() {
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [showNova, setShowNova] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
+  const [abaScDetalhe, setAbaScDetalhe] = useState<"detalhes" | "cotacao" | "oc">("detalhes");
   const [destaqueId, setDestaqueId] = useState<number | null>(null);
   const [confirmAprov, setConfirmAprov] = useState<{ id: number; key: string; titulo: string; descricao: string; cor: string; icone: "aprovar" | "recusar" | "voltar" } | null>(null);
   const [showSemVerba, setShowSemVerba] = useState<{
@@ -512,6 +513,15 @@ export default function Solicitacoes() {
     { enabled: companyId > 0 && filtroStatus !== "todos" }
   );
   const detalheQ = trpc.compras.getSolicitacao.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
+  const detalhe = detalheQ.data;
+  const scCotacaoId = (detalhe?.rastreio?.cotacoes as any[])?.[0]?.id ?? null;
+  const scOcId = (detalhe?.rastreio?.ordens as any[])?.[0]?.id ?? null;
+  const scCotacaoQ = trpc.compras.getCotacao.useQuery({ id: scCotacaoId! }, { enabled: scCotacaoId !== null && abaScDetalhe === "cotacao" });
+  const scMapaQ = trpc.compras.getMapaCotacao.useQuery({ cotacaoId: scCotacaoId! }, { enabled: scCotacaoId !== null && abaScDetalhe === "cotacao" });
+  useEffect(() => {
+    if (abaScDetalhe === "cotacao" && !scCotacaoId) setAbaScDetalhe("detalhes");
+    if (abaScDetalhe === "oc" && !scOcId) setAbaScDetalhe("detalhes");
+  }, [abaScDetalhe, scCotacaoId, scOcId]);
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
   const eapQ = trpc.compras.getEapParaObra.useQuery(
     { obraId: parseInt(form.obraId), companyId },
@@ -1172,7 +1182,6 @@ export default function Solicitacoes() {
   }
 
   const lista = q.data ?? [];
-  const detalhe = detalheQ.data;
   const obras = obrasQ.data ?? [];
   const obrasFiltradas = obras.filter((o: any) =>
     `${o.codigo ?? ""} ${o.nome}`.toLowerCase().includes(obraSearch.toLowerCase())
@@ -2591,7 +2600,7 @@ export default function Solicitacoes() {
       </Dialog>
 
       {/* ── Dialog Detalhe SC ─────────────────────────────────────── */}
-      <Dialog open={showDetalhe !== null} onOpenChange={v => { if (!v) { setShowDetalhe(null); setRecebQtd({}); setEditMode(false); setEditForm(null); setEditItens([]); } }}>
+      <Dialog open={showDetalhe !== null} onOpenChange={v => { if (!v) { setShowDetalhe(null); setRecebQtd({}); setEditMode(false); setEditForm(null); setEditItens([]); setAbaScDetalhe("detalhes"); } }}>
         <DialogContent className="border-gray-200 w-[96vw] max-w-[96vw] h-[94vh] max-h-[94vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
           {detalheQ.isLoading ? (
             <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
@@ -2637,6 +2646,25 @@ export default function Solicitacoes() {
                 )}
               </DialogHeader>
 
+              {/* Abas: Detalhes / Cotação / OC */}
+              <div className="flex gap-1 border-b border-gray-200 -mx-1">
+                {[
+                  { key: "detalhes" as const, label: "Detalhes", icon: <ClipboardList className="h-3.5 w-3.5" /> },
+                  ...(scCotacaoId ? [{ key: "cotacao" as const, label: `Cotação ${(detalhe.rastreio?.cotacoes as any[])?.[0]?.numeroCotacao ?? ""}`, icon: <FileSearch className="h-3.5 w-3.5" /> }] : []),
+                  ...(scOcId ? [{ key: "oc" as const, label: `OC ${(detalhe.rastreio?.ordens as any[])?.[0]?.numeroOc ?? ""}`, icon: <ShoppingCart className="h-3.5 w-3.5" /> }] : []),
+                ].map(tab => (
+                  <button key={tab.key} type="button" onClick={() => setAbaScDetalhe(tab.key)}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-all ${
+                      abaScDetalhe === tab.key
+                        ? "border-blue-600 text-blue-700 bg-blue-50/50"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                    }`}>
+                    {tab.icon} {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {abaScDetalhe === "detalhes" && (<>
               {/* Info grid */}
               <div className="grid grid-cols-3 gap-3 text-xs bg-gray-50 rounded-lg p-3 border border-gray-200">
                 {[
@@ -3047,6 +3075,268 @@ export default function Solicitacoes() {
                   <Trash2 className="h-3 w-3" /> Excluir
                 </Button>
               </div>
+              </>)}
+
+              {/* ── Aba Cotação ── */}
+              {abaScDetalhe === "cotacao" && scCotacaoId && (
+                <div className="space-y-4">
+                  {scCotacaoQ.isLoading || scMapaQ.isLoading ? (
+                    <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                  ) : scCotacaoQ.data ? (() => {
+                    const cot = scCotacaoQ.data;
+                    const mapa = scMapaQ.data;
+                    const participantes = mapa?.participantes ?? [];
+                    const mapaItens = mapa?.itens ?? [];
+                    const vencedor = participantes.find((p: any) => p.selecionado);
+                    const cotStatus = (cot as any).status;
+                    const statusCfg: Record<string, { label: string; cls: string }> = {
+                      pendente: { label: "Pendente", cls: "bg-amber-100 text-amber-700 border-amber-200" },
+                      em_andamento: { label: "Em Andamento", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+                      aprovada: { label: "Aprovada", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+                      concluida: { label: "Concluída", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+                      cancelada: { label: "Cancelada", cls: "bg-red-100 text-red-700 border-red-200" },
+                      recusada: { label: "Recusada", cls: "bg-red-100 text-red-700 border-red-200" },
+                    };
+                    const stCfg = statusCfg[cotStatus] ?? statusCfg.pendente;
+                    const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                    const n = (v: any) => parseFloat(String(v ?? "0")) || 0;
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-sm font-bold text-gray-900">{(cot as any).numeroCotacao}</h3>
+                            <p className="text-xs text-gray-500">{(cot as any).descricao || "Sem descrição"}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${stCfg.cls}`}>{stCfg.label}</span>
+                            <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); setAbaScDetalhe("detalhes"); navigate(`/compras/cotacoes?destaque=${scCotacaoId}`); }}
+                              className="text-xs border-blue-200 text-blue-600 hover:bg-blue-50 gap-1">
+                              <FileText className="h-3 w-3" /> Abrir Cotação Completa
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-3 text-xs bg-gray-50 rounded-lg p-3 border border-gray-200">
+                          {[
+                            { label: "Tipo", value: (cot as any).tipo === "pacote" ? "Pacote (MAT+MDO)" : (cot as any).tipo === "servico" ? "Serviço (MDO)" : (cot as any).tipo === "equipamento" ? "Equipamento" : "Material" },
+                            { label: "Fornecedores", value: `${participantes.length} participante(s)` },
+                            { label: "Total", value: vencedor ? fmt(n(vencedor.totalOrcado)) : (cot as any).total ? fmt(n((cot as any).total)) : "—" },
+                            { label: "Validade", value: (cot as any).dataValidade ? new Date((cot as any).dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—" },
+                          ].map(f => (
+                            <div key={f.label}>
+                              <span className="text-gray-400">{f.label}</span>
+                              <p className="text-gray-900 mt-0.5 font-medium">{f.value}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {vencedor && (
+                          <div className="border border-emerald-200 rounded-lg p-3 bg-emerald-50/50">
+                            <div className="flex items-center gap-2 mb-2">
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                              <span className="text-xs font-semibold text-emerald-700 uppercase tracking-widest">Fornecedor Vencedor</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-3 text-xs">
+                              <div>
+                                <span className="text-gray-400">Fornecedor</span>
+                                <p className="text-gray-900 font-medium">{(vencedor as any).fornecedor?.nomeFantasia || (vencedor as any).fornecedor?.razaoSocial || "—"}</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Total</span>
+                                <p className="text-gray-900 font-medium">{fmt(n(vencedor.totalOrcado))}</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Medição</span>
+                                <p className="text-gray-900 font-medium">
+                                  {(vencedor as any).moduloMedicao === "medicao_mensal" ? "Medição Mensal"
+                                    : (vencedor as any).moduloMedicao === "medicao_avanco" ? "Medição por Avanço"
+                                    : (vencedor as any).moduloMedicao === "medicao_etapa" ? "Medição por Etapa"
+                                    : (vencedor as any).moduloMedicao === "empreitada" ? "Empreitada Global"
+                                    : (vencedor as any).moduloMedicao === "administracao" ? "Administração"
+                                    : "—"}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {participantes.length > 0 && (
+                          <div className="border border-gray-200 rounded-lg overflow-hidden">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="bg-gray-50 border-b border-gray-200">
+                                  <th className="px-3 py-2 text-left text-gray-500 font-semibold">Fornecedor</th>
+                                  <th className="px-3 py-2 text-right text-gray-500 font-semibold">Total</th>
+                                  <th className="px-3 py-2 text-center text-gray-500 font-semibold">Prazo</th>
+                                  <th className="px-3 py-2 text-center text-gray-500 font-semibold">Medição</th>
+                                  <th className="px-3 py-2 text-center text-gray-500 font-semibold">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {participantes.map((p: any) => {
+                                  const isVenc = p.selecionado;
+                                  return (
+                                    <tr key={p.fornecedorId} className={`border-b border-gray-100 ${isVenc ? "bg-emerald-50/50" : ""}`}>
+                                      <td className="px-3 py-2 font-medium text-gray-900">
+                                        {p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`}
+                                        {isVenc && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold">VENCEDOR</span>}
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-medium">{fmt(n(p.totalOrcado))}</td>
+                                      <td className="px-3 py-2 text-center">{p.prazoEntregaDias ? `${p.prazoEntregaDias} dias` : "—"}</td>
+                                      <td className="px-3 py-2 text-center">
+                                        {p.moduloMedicao ? (
+                                          <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-purple-100 text-purple-700 border border-purple-200">
+                                            {p.moduloMedicao === "medicao_mensal" ? "Mensal" : p.moduloMedicao === "medicao_avanco" ? "Avanço" : p.moduloMedicao === "medicao_etapa" ? "Etapa" : p.moduloMedicao === "empreitada" ? "Empreitada" : p.moduloMedicao === "administracao" ? "Admin" : p.moduloMedicao}
+                                          </span>
+                                        ) : "—"}
+                                      </td>
+                                      <td className="px-3 py-2 text-center">
+                                        {isVenc ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 mx-auto" /> : <span className="text-gray-400">—</span>}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+
+                        {mapaItens.length > 0 && (
+                          <div className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+                              <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Itens da Cotação ({mapaItens.length})</span>
+                            </div>
+                            <div className="max-h-64 overflow-y-auto">
+                              <table className="w-full text-xs">
+                                <thead className="sticky top-0 bg-white">
+                                  <tr className="border-b border-gray-200">
+                                    <th className="px-3 py-1.5 text-left text-gray-500 font-semibold">Descrição</th>
+                                    <th className="px-3 py-1.5 text-center text-gray-500 font-semibold">Un</th>
+                                    <th className="px-3 py-1.5 text-right text-gray-500 font-semibold">Qtd</th>
+                                    <th className="px-3 py-1.5 text-right text-gray-500 font-semibold">Meta Unit.</th>
+                                    {vencedor && <th className="px-3 py-1.5 text-right text-emerald-600 font-semibold">Preço Venc.</th>}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {mapaItens.map((it: any) => {
+                                    const vKey = vencedor ? `${it.id}_${vencedor.fornecedorId}` : null;
+                                    const vResp = vKey ? mapa?.respostaMap?.[vKey] : null;
+                                    return (
+                                      <tr key={it.id} className="border-b border-gray-100">
+                                        <td className="px-3 py-1.5 text-gray-900">{it.descricao}</td>
+                                        <td className="px-3 py-1.5 text-center text-gray-500">{it.unidade || "un"}</td>
+                                        <td className="px-3 py-1.5 text-right">{n(it.quantidade).toLocaleString("pt-BR")}</td>
+                                        <td className="px-3 py-1.5 text-right text-blue-700">{n(it.metaUnitario) > 0 ? fmt(n(it.metaUnitario)) : "—"}</td>
+                                        {vencedor && <td className="px-3 py-1.5 text-right text-emerald-700 font-medium">{vResp ? fmt(n((vResp as any).precoUnitario)) : "—"}</td>}
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {(cot as any).contratoTerceiroId && (
+                          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                            <FileText className="h-4 w-4 text-blue-600" />
+                            <span className="text-xs text-blue-700 font-medium">Contrato de Serviço vinculado ao módulo Terceiros</span>
+                            <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); setAbaScDetalhe("detalhes"); navigate(`/terceiros/contratos/${(cot as any).contratoTerceiroId}`); }}
+                              className="ml-auto text-xs border-blue-200 text-blue-600 hover:bg-blue-50 gap-1">
+                              <FileText className="h-3 w-3" /> Ver Contrato
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })() : (
+                    <div className="py-10 text-center text-sm text-gray-500">Cotação não encontrada</div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Aba OC ── */}
+              {abaScDetalhe === "oc" && scOcId && (
+                <div className="space-y-4">
+                  {(() => {
+                    const ordens = (detalhe.rastreio?.ordens as any[]) ?? [];
+                    const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                    const n = (v: any) => parseFloat(String(v ?? "0")) || 0;
+                    return (
+                      <div className="space-y-4">
+                        {ordens.map((oc: any) => {
+                          const ocStatusCfg: Record<string, { label: string; cls: string }> = {
+                            pendente: { label: "Pendente", cls: "bg-amber-100 text-amber-700 border-amber-200" },
+                            aprovada: { label: "Aprovada", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+                            entregue: { label: "Entregue", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+                            parcial: { label: "Entrega Parcial", cls: "bg-amber-100 text-amber-700 border-amber-200" },
+                            cancelada: { label: "Cancelada", cls: "bg-red-100 text-red-700 border-red-200" },
+                          };
+                          const stCfg = ocStatusCfg[oc.status] ?? ocStatusCfg.pendente;
+                          return (
+                            <div key={oc.id} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h3 className="text-sm font-bold text-gray-900">OC {oc.numeroOc}</h3>
+                                  <p className="text-xs text-gray-500">{new Date(oc.criadoEm).toLocaleString("pt-BR")}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${stCfg.cls}`}>{stCfg.label}</span>
+                                  <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); setAbaScDetalhe("detalhes"); navigate(`/compras/ordens-compra?destaque=${oc.id}`); }}
+                                    className="text-xs border-blue-200 text-blue-600 hover:bg-blue-50 gap-1">
+                                    <ShoppingCart className="h-3 w-3" /> Abrir OC Completa
+                                  </Button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-4 gap-3 text-xs bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                <div>
+                                  <span className="text-gray-400">Fornecedor</span>
+                                  <p className="text-gray-900 mt-0.5 font-medium">{oc.fornecedorNome || "—"}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400">Total</span>
+                                  <p className="text-gray-900 mt-0.5 font-medium">{oc.total > 0 ? fmt(oc.total) : "—"}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400">Aprovação</span>
+                                  <p className="text-gray-900 mt-0.5 font-medium">
+                                    {oc.aprovadorNome ? <span className="text-emerald-700">Aprovada por {oc.aprovadorNome}</span> : <span className="text-amber-600">Pendente</span>}
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400">Status</span>
+                                  <p className="text-gray-900 mt-0.5 font-medium">{stCfg.label}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {(detalhe.rastreio?.recebimentos ?? []).length > 0 && (
+                          <div className="border border-gray-200 rounded-lg p-3">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Recebimentos</div>
+                            <div className="space-y-2">
+                              {(detalhe.rastreio.recebimentos as any[]).map((rec: any) => (
+                                <div key={rec.id} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+                                  <Truck className="h-4 w-4 text-teal-600 shrink-0" />
+                                  <div className="flex-1">
+                                    <span className="text-xs font-medium text-gray-900">Recebimento {rec.numeroNf ? `· NF ${rec.numeroNf}` : ""}</span>
+                                    <span className="text-[10px] text-gray-500 ml-2">{new Date(rec.criadoEm).toLocaleString("pt-BR")}</span>
+                                  </div>
+                                  <span className={`px-1.5 py-0.5 text-[9px] font-medium rounded border ${rec.status === "conferido" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-teal-50 text-teal-700 border-teal-200"}`}>
+                                    {rec.status === "conferido" ? "Conferido" : rec.status === "divergencia" ? "Divergência" : rec.status}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </>
           ) : (
             <div className="py-10 text-center space-y-2">
