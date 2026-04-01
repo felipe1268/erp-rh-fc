@@ -187,14 +187,12 @@ async function gerarContratoPJDeOS(params: {
         if ((existEmpByName as any).rows?.length > 0) {
           empTerceiraId = (existEmpByName as any).rows[0].id;
         } else {
-          const [novaEmp] = await db.insert(empresasTerceiras).values({
-            companyId: params.companyId,
-            razaoSocial: nomeEmpresa,
-            cnpj: null,
-            responsavelNome: nomeEmpresa,
-            status: "ativa",
-          } as any).returning();
-          empTerceiraId = novaEmp.id;
+          const insertEmpRes = await db.execute(sql`
+            INSERT INTO empresas_terceiras ("companyId", razao_social, cnpj, responsavel_nome, status, created_at, updated_at)
+            VALUES (${params.companyId}, ${nomeEmpresa}, '', ${nomeEmpresa}, 'ativa', NOW(), NOW())
+            RETURNING id
+          `);
+          empTerceiraId = (insertEmpRes as any).rows[0].id;
         }
       }
       if (empTerceiraId) {
