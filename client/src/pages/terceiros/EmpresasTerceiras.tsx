@@ -422,10 +422,10 @@ export default function EmpresasTerceiras() {
       )}
       {/* Dialog Gerar Acesso */}
       <Dialog open={acessoDialogOpen} onOpenChange={setAcessoDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent resizable={false} className="sm:max-w-md w-[calc(100vw-2rem)]">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><KeyRound className="w-5 h-5 text-amber-500" /> Gerar Acesso ao Portal</DialogTitle></DialogHeader>
           {!acessoResult ? (
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-hidden">
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                 <p className="text-sm text-amber-800 font-bold">{acessoEmpresa?.razaoSocial}</p>
                 <p className="text-xs text-amber-600">CNPJ: {formatCNPJ(acessoEmpresa?.cnpj)}</p>
@@ -439,30 +439,30 @@ export default function EmpresasTerceiras() {
               </DialogFooter>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-hidden">
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
                 <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
                 <p className="font-semibold text-emerald-800">Acesso gerado com sucesso!</p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3 overflow-hidden">
                 <div>
-                  <p className="text-xs text-gray-500">Login (CNPJ/CPF)</p>
+                  <p className="text-xs text-gray-500 mb-1">Login (CNPJ/CPF)</p>
                   <div className="flex items-center gap-2">
-                    <code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1 min-w-0 break-all">{acessoResult.cnpj || acessoEmpresa?.cnpj || "—"}</code>
-                    <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(acessoResult.cnpj || acessoEmpresa?.cnpj || ""); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button>
+                    <code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap block">{acessoResult.cnpj || acessoEmpresa?.cnpj || "—"}</code>
+                    <Button size="sm" variant="outline" className="shrink-0" onClick={() => { navigator.clipboard.writeText(acessoResult.cnpj || acessoEmpresa?.cnpj || ""); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button>
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Senha Temporária</p>
+                  <p className="text-xs text-gray-500 mb-1">Senha Temporária</p>
                   <div className="flex items-center gap-2">
-                    <code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1 text-amber-600 font-bold">{acessoResult.senhaTemporaria}</code>
-                    <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(acessoResult.senhaTemporaria); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button>
+                    <code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1 min-w-0 text-amber-600 font-bold">{acessoResult.senhaTemporaria}</code>
+                    <Button size="sm" variant="outline" className="shrink-0" onClick={() => { navigator.clipboard.writeText(acessoResult.senhaTemporaria); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button>
                   </div>
                 </div>
                 <div className="pt-2 border-t">
                   <p className="text-xs text-gray-500 mb-1">Link do Portal</p>
                   <div className="flex items-center gap-2">
-                    <code className="bg-white border rounded px-2 py-1 text-xs flex-1 min-w-0 truncate">{window.location.origin}/portal/login</code>
+                    <code className="bg-white border rounded px-2 py-1 text-xs flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap block">{window.location.origin}/portal/login</code>
                     <Button size="sm" variant="outline" className="shrink-0" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/login`); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button>
                   </div>
                 </div>
