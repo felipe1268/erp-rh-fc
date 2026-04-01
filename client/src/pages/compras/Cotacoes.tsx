@@ -1962,15 +1962,39 @@ export default function Cotacoes() {
       return { saldo: metaTot - custoCompra, hasMeta: true };
     }
 
-    const metaGrandTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
-      acc + (Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100 * parseFloat(it.metaQtd ?? it.quantidade ?? "0")), 0);
-    // Quantidade total: soma quando todos os itens têm a mesma unidade
-    const allItens = mapa?.itens ?? [];
-    const unidadesUnicas = [...new Set(allItens.map((it: any) => (it.unidade || "un").toLowerCase()))];
+    const isPacoteTotals = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
+    const pacoteCompItens = (() => {
+      if (!isPacoteTotals) return null;
+      const rawIt = mapa?.itens ?? [];
+      const compGroups: Record<string, any[]> = {};
+      const noComp: any[] = [];
+      for (const it of rawIt) {
+        const cc = (it as any).composicaoCodigo ?? "";
+        if (cc) {
+          if (!compGroups[cc]) compGroups[cc] = [];
+          compGroups[cc].push(it);
+        } else {
+          noComp.push(it);
+        }
+      }
+      const grouped = Object.entries(compGroups).map(([_cc, items]) => {
+        const first = items[0];
+        const compQtd = (first as any).composicaoQtdOrcada || 0;
+        const compMeta = (first as any).composicaoMetaTotal || 0;
+        const compUn = (first as any).composicaoUnidade || first.unidade;
+        return { quantidade: compQtd, metaUnitario: compMeta, metaQtd: compQtd, unidade: compUn };
+      });
+      return [...grouped, ...noComp.map((it: any) => ({ quantidade: parseFloat(it.quantidade ?? "0"), metaUnitario: parseFloat(it.metaUnitario ?? "0"), metaQtd: parseFloat(it.metaQtd ?? it.quantidade ?? "0"), unidade: it.unidade || "un" }))];
+    })();
+    const itensParaTotais = pacoteCompItens ?? (mapa?.itens ?? []).map((it: any) => ({ quantidade: parseFloat(it.quantidade ?? "0"), metaUnitario: parseFloat(it.metaUnitario ?? "0"), metaQtd: parseFloat(it.metaQtd ?? it.quantidade ?? "0"), unidade: it.unidade || "un" }));
+    const metaGrandTotal = itensParaTotais.reduce((acc: number, it: any) =>
+      acc + (Math.round(it.metaUnitario * 100) / 100 * it.metaQtd), 0);
+    const unidadesUnicas = [...new Set(itensParaTotais.map((it: any) => (it.unidade || "un").toLowerCase()))];
     const qtdGrandTotal = unidadesUnicas.length === 1
-      ? allItens.reduce((acc: number, it: any) => acc + parseFloat(it.metaQtd ?? it.quantidade ?? "0"), 0)
+      ? itensParaTotais.reduce((acc: number, it: any) => acc + it.metaQtd, 0)
       : null;
     const qtdUnidade = unidadesUnicas.length === 1 ? unidadesUnicas[0] : null;
+    const allItens = mapa?.itens ?? [];
     const winnerGrandTotal = fornParaSaldo ? parseFloat(fornParaSaldo.totalOrcado ?? "0") : 0;
     const saldoTotal = fornParaSaldo ? allItens.reduce((acc: number, it: any) => {
       const { saldo, hasMeta } = getItemSaldo(it);

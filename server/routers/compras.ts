@@ -2421,13 +2421,42 @@ Responda APENAS com um objeto JSON no formato:
           const metaPerc = orcToMetaPerc[o.orcamentoId] ?? 0;
           const metaDireta = n(o.metaUnitTotal);
           const metaVal = metaDireta > 0 ? metaDireta : n(o.custoUnitTotal) * (1 - metaPerc);
-          svcCodeToCompInfo[o.servicoCodigo] = {
-            descricao: o.descricao ?? "",
-            unidade: o.unidade ?? "un",
-            qtdOrcada: n(o.quantidade),
-            metaTotal: metaVal,
-            eapCodigo: o.eapCodigo ?? "",
-          };
+          const existing = svcCodeToCompInfo[o.servicoCodigo];
+          if (existing) {
+            existing.qtdOrcada += n(o.quantidade);
+          } else {
+            svcCodeToCompInfo[o.servicoCodigo] = {
+              descricao: o.descricao ?? "",
+              unidade: o.unidade ?? "un",
+              qtdOrcada: n(o.quantidade),
+              metaTotal: metaVal,
+              eapCodigo: o.eapCodigo ?? "",
+            };
+          }
+        }
+      }
+
+      if (cot.obraId && Object.keys(svcCodeToCompInfo).length > 0) {
+        const svcCodes = Object.keys(svcCodeToCompInfo);
+        const allOrcRows = await db.select({ id: orcamentos.id }).from(orcamentos)
+          .where(and(eq(orcamentos.companyId, cot.companyId), eq(orcamentos.obraId, cot.obraId), isNull(orcamentos.deletedAt)))
+          .orderBy(desc(orcamentos.createdAt)).limit(1);
+        if (allOrcRows.length > 0) {
+          const fullOrcItems = await db.select({
+            servicoCodigo: orcamentoItens.servicoCodigo,
+            quantidade: orcamentoItens.quantidade,
+          }).from(orcamentoItens)
+            .where(and(
+              inArray(orcamentoItens.orcamentoId, allOrcRows.map(r => r.id)),
+              eq(orcamentoItens.companyId, Number(cot.companyId)),
+              inArray(orcamentoItens.servicoCodigo, svcCodes),
+            ));
+          for (const code of svcCodes) {
+            const matching = fullOrcItems.filter(it => it.servicoCodigo === code);
+            if (matching.length > 0) {
+              svcCodeToCompInfo[code].qtdOrcada = matching.reduce((s, it) => s + n(it.quantidade), 0);
+            }
+          }
         }
       }
 

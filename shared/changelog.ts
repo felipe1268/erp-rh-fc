@@ -6959,4 +6959,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-01 00:05:00",
   },
+  {
+    version: 955,
+    titulo: "Mapa de Cotação Pacote — Quantidade orçada soma todos os locais da EAP",
+    descricao:
+      "Corrigido: no Mapa de Cotação do tipo Pacote, a quantidade orçada (QTD na coluna Meta Total) " +
+      "agora soma corretamente todas as ocorrências da mesma composição em diferentes locais da EAP " +
+      "(ex: vários pavimentos). Antes mostrava apenas a quantidade de um único local. O total do rodapé " +
+      "também foi corrigido para refletir as composições agrupadas em vez dos insumos individuais.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-01 09:00:00",
+  },
 ];
