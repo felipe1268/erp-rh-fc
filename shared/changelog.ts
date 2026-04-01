@@ -7062,4 +7062,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-01 17:00:00",
   },
+  {
+    version: 962,
+    titulo: "Download do contrato assinado no FcSign",
+    descricao:
+      "Após assinar o documento no FcSign, o terceiro agora vê uma tela de confirmação com o botão " +
+      "'Baixar Contrato Assinado' em vez da mensagem de erro 'Você já assinou'. A página exibe o status " +
+      "de todos os signatários, data da assinatura e permite download do contrato completo com registro " +
+      "das assinaturas e hash SHA-256. O download também está disponível logo após concluir a assinatura.",
+    tipo: "melhoria",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-01 18:00:00",
+  },
 ];

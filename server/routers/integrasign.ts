@@ -345,10 +345,6 @@ export const integrasignRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Link expirado. Solicite um novo link ao remetente." });
       }
 
-      if (signatario.status === "assinado") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Você já assinou este documento." });
-      }
-
       if (signatario.status === "recusado") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Este documento foi recusado." });
       }
@@ -356,14 +352,48 @@ export const integrasignRouter = router({
       const [envelope] = await db.select().from(integrasignEnvelopes)
         .where(eq(integrasignEnvelopes.id, signatario.envelopeId));
 
-      if (!envelope || ["cancelado", "expirado", "recusado", "concluido"].includes(envelope.status)) {
+      if (!envelope || ["cancelado", "expirado", "recusado"].includes(envelope.status)) {
         const msgs: Record<string, string> = {
           cancelado: "Este envelope foi cancelado.",
           expirado: "Este envelope expirou.",
           recusado: "Este envelope foi recusado.",
-          concluido: "Este envelope já foi concluído.",
         };
         throw new TRPCError({ code: "BAD_REQUEST", message: msgs[envelope?.status || ""] || "Envelope indisponível." });
+      }
+
+      if (signatario.status === "assinado" || envelope.status === "concluido") {
+        const todosSignatarios = await db.select({
+          id: integrasignSignatarios.id,
+          papel: integrasignSignatarios.papel,
+          nome: integrasignSignatarios.nome,
+          status: integrasignSignatarios.status,
+          ordemAssinatura: integrasignSignatarios.ordemAssinatura,
+          dataAssinatura: integrasignSignatarios.dataAssinatura,
+        }).from(integrasignSignatarios)
+          .where(eq(integrasignSignatarios.envelopeId, envelope.id))
+          .orderBy(asc(integrasignSignatarios.ordemAssinatura));
+
+        return {
+          jaAssinado: true,
+          envelope: {
+            id: envelope.id,
+            titulo: envelope.titulo,
+            descricao: envelope.descricao,
+            textoContrato: envelope.textoContrato,
+            hashDocumento: envelope.hashDocumento,
+            versao: envelope.versao,
+            status: envelope.status,
+          },
+          signatario: {
+            id: signatario.id,
+            nome: signatario.nome,
+            papel: signatario.papel,
+            status: signatario.status,
+            dataAssinatura: signatario.dataAssinatura,
+          },
+          todosSignatarios,
+          podeAssinar: false,
+        };
       }
 
       if (signatario.status === "notificado" || signatario.status === "pendente") {

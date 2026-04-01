@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, XCircle, FileText, PenLine, AlertTriangle, Shield } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, FileText, PenLine, AlertTriangle, Shield, Download } from "lucide-react";
 
 function papelLabel(p: string) {
   const m: Record<string, string> = {
@@ -238,7 +238,147 @@ export default function IntegraSignAssinar() {
     );
   }
 
+  if (doc.data && (doc.data as any).jaAssinado) {
+    const d = doc.data as any;
+    const handleDownload = () => {
+      const textoContrato = d.envelope.textoContrato || "";
+      const titulo = d.envelope.titulo || "Contrato";
+      const hash = d.envelope.hashDocumento || "";
+      const signatarios = (d.todosSignatarios || []).map((s: any) =>
+        `${s.nome} (${papelLabel(s.papel)}) — ${s.status === "assinado" ? `Assinado em ${new Date(s.dataAssinatura).toLocaleString("pt-BR")}` : s.status}`
+      ).join("\n");
+
+      const conteudo = [
+        `═══════════════════════════════════════`,
+        `  ${titulo}`,
+        `═══════════════════════════════════════`,
+        ``,
+        textoContrato,
+        ``,
+        `───────────────────────────────────────`,
+        `  REGISTRO DE ASSINATURAS ELETRÔNICAS`,
+        `───────────────────────────────────────`,
+        ``,
+        signatarios,
+        ``,
+        `Hash SHA-256: ${hash}`,
+        `Documento gerado via FcSign — FC Engenharia`,
+        `Data de download: ${new Date().toLocaleString("pt-BR")}`,
+      ].join("\n");
+
+      const blob = new Blob([conteudo], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${titulo.replace(/[^a-zA-Z0-9À-ú ]/g, "").trim()}_assinado.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    return (
+      <div className="min-h-screen bg-gray-50 py-6 px-4">
+        <div className="max-w-2xl mx-auto space-y-6">
+          <div className="text-center mb-6">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <PenLine className="h-8 w-8 text-blue-600" />
+              <h1 className="text-2xl font-bold text-gray-800">FcSign</h1>
+            </div>
+            <p className="text-gray-500">Assinatura Eletrônica de Contratos</p>
+          </div>
+
+          <Card>
+            <CardContent className="p-8 text-center">
+              <CheckCircle2 className="mx-auto h-16 w-16 text-green-600 mb-4" />
+              <h2 className="text-2xl font-bold mb-2 text-green-700">Documento Assinado</h2>
+              <p className="text-gray-600 mb-1">
+                {d.signatario.nome}, sua assinatura foi registrada com sucesso
+                {d.signatario.dataAssinatura ? ` em ${new Date(d.signatario.dataAssinatura).toLocaleString("pt-BR")}` : ""}.
+              </p>
+              {d.envelope.status === "concluido" && (
+                <p className="text-sm text-green-600 font-medium mt-1">
+                  Todas as assinaturas foram coletadas — contrato concluído.
+                </p>
+              )}
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-500 flex items-center justify-center gap-2">
+                <Shield className="h-4 w-4" />
+                Registro protegido por criptografia SHA-256
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Signatários</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {(d.todosSignatarios || []).map((s: any) => (
+                  <div key={s.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50">
+                    <div>
+                      <span className="font-medium">{s.nome}</span>
+                      <span className="text-sm text-gray-500 ml-2">({papelLabel(s.papel)})</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {s.dataAssinatura && (
+                        <span className="text-xs text-gray-400">
+                          {new Date(s.dataAssinatura).toLocaleString("pt-BR")}
+                        </span>
+                      )}
+                      {statusBadge(s.status)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex justify-center">
+            <Button onClick={handleDownload} className="gap-2 bg-blue-600 hover:bg-blue-700 px-6 py-3 text-base">
+              <Download className="w-5 h-5" />
+              Baixar Contrato Assinado
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (sucesso) {
+    const handleSuccessDownload = () => {
+      const d = doc.data as any;
+      if (!d) return;
+      const textoContrato = d.envelope?.textoContrato || "";
+      const titulo = d.envelope?.titulo || "Contrato";
+      const hash = d.envelope?.hashDocumento || "";
+      const sigs = (d.todosSignatarios || []).map((s: any) =>
+        `${s.nome} (${papelLabel(s.papel)}) — ${s.status === "assinado" ? `Assinado em ${new Date(s.dataAssinatura).toLocaleString("pt-BR")}` : s.status}`
+      ).join("\n");
+
+      const conteudo = [
+        `═══════════════════════════════════════`,
+        `  ${titulo}`,
+        `═══════════════════════════════════════`,
+        ``,
+        textoContrato,
+        ``,
+        `───────────────────────────────────────`,
+        `  REGISTRO DE ASSINATURAS ELETRÔNICAS`,
+        `───────────────────────────────────────`,
+        ``,
+        sigs,
+        ``,
+        `Hash SHA-256: ${hash}`,
+        `Documento gerado via FcSign — FC Engenharia`,
+        `Data de download: ${new Date().toLocaleString("pt-BR")}`,
+      ].join("\n");
+
+      const blob = new Blob([conteudo], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${titulo.replace(/[^a-zA-Z0-9À-ú ]/g, "").trim()}_assinado.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="max-w-lg"><CardContent className="p-8 text-center">
@@ -249,6 +389,12 @@ export default function IntegraSignAssinar() {
             <Shield className="inline h-4 w-4 mr-1" />
             Registro protegido por criptografia SHA-256
           </div>
+          {doc.data && (
+            <Button onClick={handleSuccessDownload} className="mt-6 gap-2 bg-blue-600 hover:bg-blue-700">
+              <Download className="w-4 h-4" />
+              Baixar Contrato Assinado
+            </Button>
+          )}
         </CardContent></Card>
       </div>
     );
