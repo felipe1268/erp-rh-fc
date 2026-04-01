@@ -7002,4 +7002,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-01 12:00:00",
   },
+  {
+    version: 958,
+    titulo: "Barra de progresso ao aprovar cotação e gerar contrato",
+    descricao:
+      "Ao clicar em 'Aprovar e Gerar Contrato', uma barra de evolução animada aparece em overlay " +
+      "mostrando 4 etapas: Aprovando Cotação → Gerando OS → Criando Contrato PJ → Contrato Terceiros. " +
+      "Cada etapa mostra ícone pulsante (ativo), check verde (concluída) e linha de conexão colorida. " +
+      "Ao finalizar, exibe mensagem de sucesso e redireciona automaticamente para o contrato no módulo Terceiros. " +
+      "Botão 'Ir para Contrato de Serviço' em azul destacado permite retornar ao contrato depois. " +
+      "Correção do bug de cpf NOT NULL ao criar employee PJ (CNPJ vazio agora é string vazia).",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-01 14:00:00",
+  },
 ];

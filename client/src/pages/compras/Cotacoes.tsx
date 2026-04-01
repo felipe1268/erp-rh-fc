@@ -667,6 +667,7 @@ export default function Cotacoes() {
   const [agruparItens, setAgruparItens] = useState(false);
   const [expandedComposicao, setExpandedComposicao] = useState<Record<number, boolean>>({});
   const [showSemVerbaDialog, setShowSemVerbaDialog] = useState(false);
+  const [aprovacaoProgress, setAprovacaoProgress] = useState<{ step: number; redirectTo?: string } | null>(null);
   const [semVerbaAdminEmail, setSemVerbaAdminEmail] = useState("");
   const [semVerbaAdminSenha, setSemVerbaAdminSenha] = useState("");
   const [semVerbaJustificativa, setSemVerbaJustificativa] = useState("");
@@ -764,18 +765,22 @@ export default function Cotacoes() {
     onError: (e) => toast.error(e.message),
   });
   const gerarOC = trpc.compras.criarOrdemDeCotacao.useMutation({
+    onMutate: () => {
+      setAprovacaoProgress({ step: 0 });
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 1 } : p), 600);
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 2 } : p), 1200);
+    },
     onSuccess: (data: any) => {
       q.refetch(); detalheQ.refetch(); setSemVerbaAutorizado(null);
       if (data?.terceiroContratoGeradoId) {
-        toast.success("OS aprovada! Redirecionando para o contrato de serviço...");
-        setTimeout(() => navigate(`/terceiros/contratos/${data.terceiroContratoGeradoId}?tab=documento`), 800);
-      } else if (data?.contratoGeradoId) {
-        toast.success("OS aprovada! Contrato PJ gerado.");
+        setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 3 } : p), 400);
+        setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 4, redirectTo: `/terceiros/contratos/${data.terceiroContratoGeradoId}?tab=documento` } : p), 1000);
+        setTimeout(() => { setAprovacaoProgress(null); navigate(`/terceiros/contratos/${data.terceiroContratoGeradoId}?tab=documento`); }, 2500);
       } else {
-        toast.success("Ordem de Compra gerada!");
+        setTimeout(() => { setAprovacaoProgress(null); toast.success("Ordem de Compra gerada!"); }, 800);
       }
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { setAprovacaoProgress(null); toast.error(e.message); },
   });
   const autorizarSemVerba = trpc.compras.autorizarCompraSemVerba.useMutation({
     onSuccess: (data) => {
@@ -4648,6 +4653,53 @@ export default function Cotacoes() {
           )}
         </DialogContent>
       </Dialog>
+
+      {aprovacaoProgress !== null && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4 space-y-6">
+            <h3 className="text-lg font-bold text-gray-900 text-center">Processando aprovação...</h3>
+            <div className="flex items-center gap-0 w-full py-4">
+              {[
+                { label: "Aprovando Cotação", icon: <FileSearch className="h-5 w-5" /> },
+                { label: "Gerando OS", icon: <ShoppingCart className="h-5 w-5" /> },
+                { label: "Criando Contrato PJ", icon: <FileText className="h-5 w-5" /> },
+                { label: "Contrato Terceiros", icon: <ExternalLink className="h-5 w-5" /> },
+              ].map((step, i) => {
+                const isDone = aprovacaoProgress.step > i;
+                const isActive = aprovacaoProgress.step === i;
+                return (
+                  <div key={i} className="flex items-center flex-1">
+                    <div className="flex flex-col items-center flex-1">
+                      <div className={`flex items-center justify-center w-11 h-11 rounded-full border-2 transition-all duration-500 ${
+                        isDone ? "bg-emerald-500 border-emerald-500 text-white scale-100" :
+                        isActive ? "bg-white border-blue-500 text-blue-600 ring-4 ring-blue-100 animate-pulse" :
+                        "bg-gray-100 border-gray-300 text-gray-400"
+                      }`}>
+                        {isDone ? <Check className="h-5 w-5" /> : step.icon}
+                      </div>
+                      <span className={`text-xs mt-2 font-medium text-center leading-tight transition-colors duration-500 ${
+                        isDone ? "text-emerald-700" : isActive ? "text-blue-700 font-semibold" : "text-gray-400"
+                      }`}>{step.label}</span>
+                    </div>
+                    {i < 3 && (
+                      <div className={`h-0.5 flex-1 -mt-5 mx-1.5 rounded transition-colors duration-500 ${isDone ? "bg-emerald-400" : "bg-gray-200"}`} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {aprovacaoProgress.step >= 4 && aprovacaoProgress.redirectTo && (
+              <div className="text-center space-y-3 animate-in fade-in duration-500">
+                <p className="text-sm text-emerald-700 font-semibold">Contrato criado com sucesso!</p>
+                <p className="text-xs text-gray-500">Redirecionando para o módulo Terceiros...</p>
+              </div>
+            )}
+            {aprovacaoProgress.step < 4 && (
+              <p className="text-xs text-gray-400 text-center">Aguarde, não feche esta página...</p>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
     </DashboardLayout>
