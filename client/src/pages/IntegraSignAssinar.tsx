@@ -175,6 +175,7 @@ export default function IntegraSignAssinar() {
         }),
       });
 
+      doc.refetch();
       setSucesso(true);
       setSucessoMsg(result.concluido
         ? "Todas as assinaturas foram concluídas! O contrato está ativo."
@@ -289,10 +290,14 @@ export default function IntegraSignAssinar() {
           <Card>
             <CardContent className="p-8 text-center">
               <CheckCircle2 className="mx-auto h-16 w-16 text-green-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-2 text-green-700">Documento Assinado</h2>
+              <h2 className="text-2xl font-bold mb-2 text-green-700">
+                {d.signatario.status === "assinado" ? "Documento Assinado" : "Contrato Concluído"}
+              </h2>
               <p className="text-gray-600 mb-1">
-                {d.signatario.nome}, sua assinatura foi registrada com sucesso
-                {d.signatario.dataAssinatura ? ` em ${new Date(d.signatario.dataAssinatura).toLocaleString("pt-BR")}` : ""}.
+                {d.signatario.status === "assinado"
+                  ? <>{d.signatario.nome}, sua assinatura foi registrada com sucesso{d.signatario.dataAssinatura ? ` em ${new Date(d.signatario.dataAssinatura).toLocaleString("pt-BR")}` : ""}.</>
+                  : <>Todas as assinaturas obrigatórias foram coletadas. Este contrato está concluído.</>
+                }
               </p>
               {d.envelope.status === "concluido" && (
                 <p className="text-sm text-green-600 font-medium mt-1">

@@ -330,6 +330,7 @@ export default function ContratosList() {
               <Button className="bg-blue-600 hover:bg-blue-700 gap-2" disabled={atualizarMut.isPending}
                 onClick={() => atualizarMut.mutate({
                   id: editContrato.id,
+                  companyId,
                   descricao: editContrato.descricao,
                   numeroContrato: editContrato.numeroContrato || undefined,
                   status: editContrato.status,

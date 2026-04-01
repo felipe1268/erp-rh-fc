@@ -7088,4 +7088,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-01 19:00:00",
   },
+  {
+    version: 964,
+    titulo: "Revisão geral de segurança e correção de bugs",
+    descricao:
+      "Auditoria completa do sistema com múltiplas correções:\n" +
+      "• Segurança: atualizarContrato, aprovarMedicao e rejeitarMedicao agora exigem companyId no WHERE (multi-tenancy)\n" +
+      "• FcSign: status 'em_andamento' agora é setado corretamente quando a primeira assinatura é registrada\n" +
+      "• FcSign: reenviarNotificação bloqueia reenvio se envelope estiver cancelado/expirado/concluído\n" +
+      "• FcSign: ativar contrato terceiro com companyId no WHERE\n" +
+      "• Assinatura: download pós-assinatura agora busca dados atualizados (refetch)\n" +
+      "• Assinatura: mensagem na tela 'já assinado' diferencia corretamente se o signatário assinou ou se o envelope foi concluído",
+    tipo: "bugfix",
+    modulos: "Terceiros, FcSign",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-01 20:00:00",
+  },
 ];

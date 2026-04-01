@@ -548,10 +548,14 @@ export const integrasignRouter = router({
       const obrigatorios = todosSignatarios.filter((s: any) => s.papel !== "testemunha");
       const assinadosObrig = obrigatorios.filter((s: any) => s.status === "assinado");
 
-      await db.update(integrasignEnvelopes).set({
+      const envelopeUpdate: any = {
         totalAssinaturasRealizadas: assinadosObrig.length,
         atualizadoEm: new Date().toISOString(),
-      }).where(eq(integrasignEnvelopes.id, envelope.id));
+      };
+      if (assinadosObrig.length > 0 && assinadosObrig.length < envelope.totalSignatariosObrigatorios && envelope.status === "enviado") {
+        envelopeUpdate.status = "em_andamento";
+      }
+      await db.update(integrasignEnvelopes).set(envelopeUpdate).where(eq(integrasignEnvelopes.id, envelope.id));
 
       if (assinadosObrig.length >= envelope.totalSignatariosObrigatorios) {
         await db.update(integrasignEnvelopes).set({
@@ -563,7 +567,7 @@ export const integrasignRouter = router({
         if (envelope.contratoTerceiroId) {
           await db.update(terceiroContratos).set({
             status: "ativo",
-          }).where(eq(terceiroContratos.id, envelope.contratoTerceiroId));
+          }).where(and(eq(terceiroContratos.id, envelope.contratoTerceiroId), eq(terceiroContratos.companyId, envelope.companyId)));
         }
 
         await logAudit(db, {
@@ -709,6 +713,12 @@ export const integrasignRouter = router({
       if (!signatario) throw new TRPCError({ code: "NOT_FOUND" });
       if (signatario.status === "assinado") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Já assinado" });
+      }
+
+      const [envelopeCheck] = await db.select({ status: integrasignEnvelopes.status })
+        .from(integrasignEnvelopes).where(eq(integrasignEnvelopes.id, signatario.envelopeId));
+      if (envelopeCheck && ["cancelado", "expirado", "recusado", "concluido"].includes(envelopeCheck.status)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Envelope ${envelopeCheck.status} — não é possível reenviar.` });
       }
 
       const newExpiry = new Date();

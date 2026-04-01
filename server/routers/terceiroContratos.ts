@@ -371,6 +371,7 @@ export const terceiroContratosRouter = router({
   atualizarContrato: protectedProcedure
     .input(z.object({
       id: z.number(),
+      companyId: z.number(),
       descricao: z.string().optional(),
       numeroContrato: z.string().optional(),
       valorOrcamento: z.number().optional(),
@@ -382,7 +383,7 @@ export const terceiroContratosRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const { id, ...rest } = input;
+      const { id, companyId, ...rest } = input;
       const upd: any = { atualizadoEm: new Date().toISOString() };
       if (rest.descricao !== undefined) upd.descricao = rest.descricao;
       if (rest.numeroContrato !== undefined) upd.numeroContrato = rest.numeroContrato;
@@ -392,7 +393,8 @@ export const terceiroContratosRouter = router({
       if (rest.dataTermino !== undefined) upd.dataTermino = rest.dataTermino;
       if (rest.status !== undefined) upd.status = rest.status;
       if (rest.observacoes !== undefined) upd.observacoes = rest.observacoes;
-      const [c] = await db.update(terceiroContratos).set(upd).where(eq(terceiroContratos.id, id)).returning();
+      const [c] = await db.update(terceiroContratos).set(upd).where(and(eq(terceiroContratos.id, id), eq(terceiroContratos.companyId, companyId))).returning();
+      if (!c) throw new Error("Contrato não encontrado");
       return c;
     }),
 
@@ -1194,10 +1196,10 @@ export const terceiroContratosRouter = router({
     }),
 
   aprovarMedicao: protectedProcedure
-    .input(z.object({ id: z.number(), aprovadoPor: z.string() }))
+    .input(z.object({ id: z.number(), companyId: z.number(), aprovadoPor: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const [existing] = await db.select().from(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.id));
+      const [existing] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
       if (!existing) throw new Error("Medição não encontrada");
       if (existing.status !== "aguardando_aprovacao") throw new Error(`Medição não pode ser aprovada (status: ${existing.status})`);
       const [medicao] = await db.update(terceiroMedicoes)
@@ -1272,10 +1274,10 @@ export const terceiroContratosRouter = router({
     }),
 
   rejeitarMedicao: protectedProcedure
-    .input(z.object({ id: z.number(), motivo: z.string(), rejeitadoPor: z.string().optional() }))
+    .input(z.object({ id: z.number(), companyId: z.number(), motivo: z.string(), rejeitadoPor: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const [existing] = await db.select().from(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.id));
+      const [existing] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
       if (!existing) throw new Error("Medição não encontrada");
       if (existing.status !== "aguardando_aprovacao") throw new Error(`Medição não pode ser rejeitada (status: ${existing.status})`);
       const [medicao] = await db.update(terceiroMedicoes)

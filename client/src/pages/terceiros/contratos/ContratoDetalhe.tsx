@@ -1191,7 +1191,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                 <div className="flex gap-2 flex-shrink-0">
                   {m.status === "aguardando_aprovacao" && (
                     <>
-                      <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs" onClick={() => aprovarMut.mutate({ id: m.id, aprovadoPor: "Responsável" })}>
+                      <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs" onClick={() => aprovarMut.mutate({ id: m.id, companyId, aprovadoPor: "Responsável" })}>
                         <CheckCircle className="w-3 h-3" /> Aprovar
                       </Button>
                       <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
@@ -1402,7 +1402,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={() => setRejeicaoModal(null)}>Cancelar</Button>
               <Button size="sm" className="bg-red-600 hover:bg-red-700" disabled={!motivoRejeicao.trim() || rejeitarMut.isPending}
-                onClick={() => { rejeitarMut.mutate({ id: rejeicaoModal.id, motivo: motivoRejeicao, rejeitadoPor: "Responsável" }); setRejeicaoModal(null); }}>
+                onClick={() => { rejeitarMut.mutate({ id: rejeicaoModal.id, companyId, motivo: motivoRejeicao, rejeitadoPor: "Responsável" }); setRejeicaoModal(null); }}>
                 Confirmar Rejeição
               </Button>
             </div>

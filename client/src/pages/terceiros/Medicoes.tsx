@@ -129,7 +129,7 @@ export default function Medicoes() {
                       {m.status === "aguardando_aprovacao" && (
                         <>
                           <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs"
-                            onClick={() => aprovarMut.mutate({ id: m.id, aprovadoPor: "Responsável" })}
+                            onClick={() => aprovarMut.mutate({ id: m.id, companyId, aprovadoPor: "Responsável" })}
                             disabled={aprovarMut.isPending}>
                             <CheckCircle className="w-3 h-3" /> Aprovar
                           </Button>
@@ -156,7 +156,7 @@ export default function Medicoes() {
                         <Button size="sm" variant="outline" onClick={() => setRejeitandoId(null)}>Cancelar</Button>
                         <Button size="sm" className="bg-red-600 hover:bg-red-700 text-xs"
                           disabled={!motivoRejeicao.trim() || rejeitarMut.isPending}
-                          onClick={() => rejeitarMut.mutate({ id: m.id, motivo: motivoRejeicao })}>
+                          onClick={() => rejeitarMut.mutate({ id: m.id, companyId, motivo: motivoRejeicao })}>
                           Confirmar Rejeição
                         </Button>
                       </div>
