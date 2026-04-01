@@ -88,18 +88,18 @@ async function gerarContratoPJDeOS(params: {
     let existingEmp: any;
     if (cnpj) {
       existingEmp = await db.execute(sql`
-        SELECT id FROM employees WHERE company_id = ${params.companyId} AND tipo = 'pj' AND cnpj = ${cnpj} AND deleted_at IS NULL LIMIT 1
+        SELECT id FROM employees WHERE "companyId" = ${params.companyId} AND "tipoContrato" = 'pj' AND cpf = ${cnpj} AND "deletedAt" IS NULL LIMIT 1
       `);
     } else {
       existingEmp = await db.execute(sql`
-        SELECT id FROM employees WHERE company_id = ${params.companyId} AND tipo = 'pj' AND nome = ${razaoSocial} AND (cnpj IS NULL OR cnpj = '') AND deleted_at IS NULL LIMIT 1
+        SELECT id FROM employees WHERE "companyId" = ${params.companyId} AND "tipoContrato" = 'pj' AND "nomeCompleto" = ${razaoSocial} AND (cpf IS NULL OR cpf = '') AND "deletedAt" IS NULL LIMIT 1
       `);
     }
     if ((existingEmp as any).rows?.length > 0) {
       employeeId = (existingEmp as any).rows[0].id;
     } else {
       const insertRes = await db.execute(sql`
-        INSERT INTO employees (company_id, nome, tipo, cnpj, status, created_at, updated_at)
+        INSERT INTO employees ("companyId", "nomeCompleto", "tipoContrato", cpf, status, "createdAt", "updatedAt")
         VALUES (${params.companyId}, ${razaoSocial}, 'pj', ${cnpj || null}, 'ativo', NOW(), NOW())
         RETURNING id
       `);
@@ -108,7 +108,7 @@ async function gerarContratoPJDeOS(params: {
 
     const ano = new Date().getFullYear();
     const countContratos = await db.execute(sql`
-      SELECT COUNT(*) as c FROM pj_contracts WHERE company_id = ${params.companyId}
+      SELECT COUNT(*) as c FROM pj_contracts WHERE "companyId" = ${params.companyId}
     `);
     const seqC = (parseInt(String((countContratos as any).rows?.[0]?.c ?? "0")) + 1).toString().padStart(4, "0");
     const numContrato = `CT-${ano}-${seqC}`;
@@ -181,7 +181,7 @@ async function gerarContratoPJDeOS(params: {
       } else {
         const nomeEmpresa = razaoSocial || params.fornecedorNome || "Empresa Terceira";
         const existEmpByName = await db.execute(sql`
-          SELECT id FROM empresas_terceiras WHERE company_id = ${params.companyId} AND razao_social = ${nomeEmpresa} AND (cnpj IS NULL OR cnpj = '') LIMIT 1
+          SELECT id FROM empresas_terceiras WHERE "companyId" = ${params.companyId} AND razao_social = ${nomeEmpresa} AND (cnpj IS NULL OR cnpj = '') LIMIT 1
         `);
         if ((existEmpByName as any).rows?.length > 0) {
           empTerceiraId = (existEmpByName as any).rows[0].id;
