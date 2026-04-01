@@ -1996,10 +1996,13 @@ export default function Cotacoes() {
     const qtdUnidade = unidadesUnicas.length === 1 ? unidadesUnicas[0] : null;
     const allItens = mapa?.itens ?? [];
     const winnerGrandTotal = fornParaSaldo ? parseFloat(fornParaSaldo.totalOrcado ?? "0") : 0;
-    const saldoTotal = fornParaSaldo ? allItens.reduce((acc: number, it: any) => {
-      const { saldo, hasMeta } = getItemSaldo(it);
-      return acc + (hasMeta ? saldo : 0);
-    }, 0) : 0;
+    const saldoTotal = fornParaSaldo ? (isPacoteTotals
+      ? metaGrandTotal - winnerGrandTotal
+      : allItens.reduce((acc: number, it: any) => {
+          const { saldo, hasMeta } = getItemSaldo(it);
+          return acc + (hasMeta ? saldo : 0);
+        }, 0)
+    ) : 0;
     const deficit = saldoTotal < 0 ? Math.abs(saldoTotal) : 0;
 
     const cobertura = (() => {
