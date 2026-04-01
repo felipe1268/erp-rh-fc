@@ -231,9 +231,25 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               {contrato.obraNome && <span>📍 {contrato.obraNome}</span>}
             </div>
           </div>
-          <Button onClick={() => setShowGerarMedicao(true)} className="gap-2 bg-blue-600 hover:bg-blue-700">
-            <Zap className="w-4 h-4" /> Gerar Medição
-          </Button>
+          {(contrato as any).assinaturaStatus === "concluido" ? (
+            <Button onClick={() => setShowGerarMedicao(true)} className="gap-2 bg-blue-600 hover:bg-blue-700">
+              <Zap className="w-4 h-4" /> Gerar Medição
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2">
+              {(contrato as any).assinaturaStatus ? (
+                <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />
+                  Assinatura {(contrato as any).assinaturaStatus === "em_andamento" ? "em andamento" : (contrato as any).assinaturaStatus === "rascunho" ? "pendente de envio" : (contrato as any).assinaturaStatus}
+                </span>
+              ) : (
+                <span className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5" />
+                  Envie para assinatura antes de gerar medições
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Vigência do Contrato — destaque */}

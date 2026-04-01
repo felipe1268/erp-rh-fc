@@ -7048,4 +7048,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-01 16:00:00",
   },
+  {
+    version: 961,
+    titulo: "Medição só após contrato 100% assinado no FcSign",
+    descricao:
+      "O botão 'Gerar Medição' na tela de detalhe do contrato de terceiros agora só aparece quando " +
+      "o contrato possui um envelope no FcSign com status 'concluído' (todas assinaturas coletadas). " +
+      "Enquanto o envelope estiver em rascunho ou em andamento, exibe badge informativo com o status atual. " +
+      "Se nenhum envelope existir, mostra aviso 'Envie para assinatura antes de gerar medições'. " +
+      "O backend getContrato agora retorna o campo assinaturaStatus do envelope mais recente vinculado.",
+    tipo: "melhoria",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-01 17:00:00",
+  },
 ];

@@ -264,6 +264,19 @@ export const terceiroContratosRouter = router({
       const saldoAMedir = n(contrato.valorTotal) - valorMedidoAcumulado;
       const saldoALiberar = valorMedidoAcumulado - n(contrato.valorPago);
 
+      let assinaturaStatus: string | null = null;
+      try {
+        const [envelope] = await db.select({ status: integrasignEnvelopes.status })
+          .from(integrasignEnvelopes)
+          .where(and(
+            eq(integrasignEnvelopes.contratoTerceiroId, input.id),
+            eq(integrasignEnvelopes.companyId, contrato.companyId),
+          ))
+          .orderBy(desc(integrasignEnvelopes.criadoEm))
+          .limit(1);
+        assinaturaStatus = envelope?.status ?? null;
+      } catch {}
+
       return {
         ...contrato,
         empresa: empresa || null,
@@ -277,6 +290,7 @@ export const terceiroContratosRouter = router({
         saldoAMedir,
         saldoALiberar,
         docsComPendencia: documentos.filter(d => d.status === "pendente" && d.bloqueiaPagemento).length,
+        assinaturaStatus,
       };
       } catch (err: any) { console.error("[getContrato] ERRO:", err?.message || err); throw err; }
     }),
