@@ -100,7 +100,7 @@ async function gerarContratoPJDeOS(params: {
     } else {
       const insertRes = await db.execute(sql`
         INSERT INTO employees ("companyId", "nomeCompleto", "tipoContrato", cpf, status, "createdAt", "updatedAt")
-        VALUES (${params.companyId}, ${razaoSocial}, 'pj', ${cnpj || null}, 'ativo', NOW(), NOW())
+        VALUES (${params.companyId}, ${razaoSocial}, 'pj', ${cnpj || ""}, 'ativo', NOW(), NOW())
         RETURNING id
       `);
       employeeId = (insertRes as any).rows[0].id;

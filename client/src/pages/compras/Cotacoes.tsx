@@ -2104,9 +2104,9 @@ export default function Cotacoes() {
                     </>
                   )}
                   {(detalheFullscreen.status === "aprovada" || detalheFullscreen.status === "concluida") && (detalheFullscreen as any).contratoTerceiroId && (
-                    <Button variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalheFullscreen as any).contratoTerceiroId}`); }}
-                      className="border-blue-200 text-blue-600 hover:bg-blue-50 gap-2">
-                      <FileText className="h-4 w-4" /> Ver Contrato de Serviço
+                    <Button onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalheFullscreen as any).contratoTerceiroId}`); }}
+                      className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
+                      <ExternalLink className="h-4 w-4" /> Ir para Contrato de Serviço
                     </Button>
                   )}
                   {detalheFullscreen.status === "concluida" && (detalheFullscreen as any).contratoTerceiroId && isAdminMaster && (
