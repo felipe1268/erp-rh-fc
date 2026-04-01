@@ -6691,10 +6691,11 @@ Retorne APENAS um JSON válido neste formato:
       }
 
       if (oc) {
+        const hasTerceiroContrato = !!(oc as any).contratoTerceiroId || !!(cot as any)?.contratoTerceiroId;
         const dias = daysBetween(prevDate, oc.criadoEm);
         etapas.push({
           key: "oc_emitida",
-          label: "OC Emitida",
+          label: hasTerceiroContrato ? "OS Emitida" : "OC Emitida",
           status: "concluida",
           data: oc.criadoEm,
           tempoDesdeAnterior: dias,
@@ -6702,73 +6703,84 @@ Retorne APENAS um JSON válido neste formato:
         });
         prevDate = oc.criadoEm;
 
-        if (oc.dataEntregaPrevista) {
-          const isDelivered = ["entregue", "entregue_parcial"].includes(oc.status);
-          const isOverdue = !isDelivered && oc.dataEntregaPrevista < today;
-          const diasEntrega = daysBetween(prevDate, oc.dataEntregaPrevista);
-          const diasAtraso = isOverdue ? daysBetween(oc.dataEntregaPrevista, today) : null;
+        if (hasTerceiroContrato) {
           etapas.push({
-            key: "entrega_prevista",
-            label: isOverdue ? "Entrega Atrasada" : (isDelivered ? "Entrega Prevista" : "Aguardando Entrega"),
-            status: isDelivered ? "concluida" : (isOverdue ? "atrasada" : "atual"),
-            data: oc.dataEntregaPrevista,
-            tempoDesdeAnterior: isOverdue ? diasAtraso : diasEntrega,
-            detalhe: isOverdue ? "Prazo excedido" : null,
-          });
-        }
-
-        if (oc.status === "entregue" || oc.status === "entregue_parcial") {
-          const diasReceb = daysBetween(oc.dataEntregaPrevista || prevDate, oc.dataEntregaReal || oc.atualizadoEm);
-          etapas.push({
-            key: "material_recebido",
-            label: oc.status === "entregue_parcial" ? "Recebimento Parcial" : "Material Recebido",
+            key: "contrato_gerado",
+            label: "Contrato Terceiro Gerado",
             status: "concluida",
-            data: oc.dataEntregaReal || oc.atualizadoEm,
-            tempoDesdeAnterior: diasReceb,
-            detalhe: null,
-          });
-          prevDate = oc.dataEntregaReal || oc.atualizadoEm;
-        } else if (!oc.dataEntregaPrevista) {
-          etapas.push({
-            key: "material_recebido",
-            label: "Aguardando Recebimento",
-            status: "atual",
-            data: null,
-            tempoDesdeAnterior: null,
-            detalhe: null,
+            data: oc.criadoEm,
+            tempoDesdeAnterior: 0,
+            detalhe: "Gerenciado no módulo Terceiros",
           });
         } else {
-          etapas.push({
-            key: "material_recebido",
-            label: "Recebimento",
-            status: "pendente",
-            data: null,
-            tempoDesdeAnterior: null,
-            detalhe: null,
-          });
-        }
+          if (oc.dataEntregaPrevista) {
+            const isDelivered = ["entregue", "entregue_parcial"].includes(oc.status);
+            const isOverdue = !isDelivered && oc.dataEntregaPrevista < today;
+            const diasEntrega = daysBetween(prevDate, oc.dataEntregaPrevista);
+            const diasAtraso = isOverdue ? daysBetween(oc.dataEntregaPrevista, today) : null;
+            etapas.push({
+              key: "entrega_prevista",
+              label: isOverdue ? "Entrega Atrasada" : (isDelivered ? "Entrega Prevista" : "Aguardando Entrega"),
+              status: isDelivered ? "concluida" : (isOverdue ? "atrasada" : "atual"),
+              data: oc.dataEntregaPrevista,
+              tempoDesdeAnterior: isOverdue ? diasAtraso : diasEntrega,
+              detalhe: isOverdue ? "Prazo excedido" : null,
+            });
+          }
 
-        if (financialEntry) {
-          const isPaid = financialEntry.status === "pago" || financialEntry.status === "confirmado";
-          const diasPag = isPaid && financialEntry.dataPagamento
-            ? daysBetween(prevDate, financialEntry.dataPagamento) : null;
-          etapas.push({
-            key: "pagamento",
-            label: isPaid ? "Pagamento Realizado" : "Pagamento Pendente",
-            status: isPaid ? "concluida" : (oc.status === "entregue" ? "atual" : "pendente"),
-            data: isPaid ? financialEntry.dataPagamento : financialEntry.dataVencimento,
-            tempoDesdeAnterior: diasPag,
-            detalhe: isPaid ? null : (financialEntry.dataVencimento ? `Venc. ${financialEntry.dataVencimento}` : null),
-          });
-        } else {
-          etapas.push({
-            key: "pagamento",
-            label: "Pagamento",
-            status: "pendente",
-            data: null,
-            tempoDesdeAnterior: null,
-            detalhe: null,
-          });
+          if (oc.status === "entregue" || oc.status === "entregue_parcial") {
+            const diasReceb = daysBetween(oc.dataEntregaPrevista || prevDate, oc.dataEntregaReal || oc.atualizadoEm);
+            etapas.push({
+              key: "material_recebido",
+              label: oc.status === "entregue_parcial" ? "Recebimento Parcial" : "Material Recebido",
+              status: "concluida",
+              data: oc.dataEntregaReal || oc.atualizadoEm,
+              tempoDesdeAnterior: diasReceb,
+              detalhe: null,
+            });
+            prevDate = oc.dataEntregaReal || oc.atualizadoEm;
+          } else if (!oc.dataEntregaPrevista) {
+            etapas.push({
+              key: "material_recebido",
+              label: "Aguardando Recebimento",
+              status: "atual",
+              data: null,
+              tempoDesdeAnterior: null,
+              detalhe: null,
+            });
+          } else {
+            etapas.push({
+              key: "material_recebido",
+              label: "Recebimento",
+              status: "pendente",
+              data: null,
+              tempoDesdeAnterior: null,
+              detalhe: null,
+            });
+          }
+
+          if (financialEntry) {
+            const isPaid = financialEntry.status === "pago" || financialEntry.status === "confirmado";
+            const diasPag = isPaid && financialEntry.dataPagamento
+              ? daysBetween(prevDate, financialEntry.dataPagamento) : null;
+            etapas.push({
+              key: "pagamento",
+              label: isPaid ? "Pagamento Realizado" : "Pagamento Pendente",
+              status: isPaid ? "concluida" : (oc.status === "entregue" ? "atual" : "pendente"),
+              data: isPaid ? financialEntry.dataPagamento : financialEntry.dataVencimento,
+              tempoDesdeAnterior: diasPag,
+              detalhe: isPaid ? null : (financialEntry.dataVencimento ? `Venc. ${financialEntry.dataVencimento}` : null),
+            });
+          } else {
+            etapas.push({
+              key: "pagamento",
+              label: "Pagamento",
+              status: "pendente",
+              data: null,
+              tempoDesdeAnterior: null,
+              detalhe: null,
+            });
+          }
         }
       } else {
         if (cot) {

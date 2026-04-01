@@ -16,6 +16,7 @@ const STEP_ICONS: Record<string, LucideIcon> = {
   cotacao_aberta: Search,
   cotacao_aprovada: CheckCircle,
   oc_emitida: ShoppingCart,
+  contrato_gerado: FileText,
   entrega_prevista: Clock,
   material_recebido: Package,
   pagamento: CreditCard,
