@@ -66,9 +66,10 @@ async function gerarContratoPJDeOS(params: {
   fornecedorId: number;
   fornecedorNome: string | null;
   total: number;
-  itensOS: Array<{ descricao: string; unidade?: string | null; quantidade: string; precoUnitario: string; total: string; insumoCodigo?: string | null }>;
+  itensOS: Array<{ descricao: string; unidade?: string | null; quantidade: string; precoUnitario: string; total: string; insumoCodigo?: string | null; eapCodigo?: string | null }>;
   userId: number;
   userName: string;
+  moduloMedicao?: string | null;
 }) {
   const db = await getDb();
   try {
@@ -174,6 +175,14 @@ async function gerarContratoPJDeOS(params: {
       if (empTerceiraId) {
         const obraNome = params.obraId ? (await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, params.obraId)).limit(1))?.[0]?.nome ?? null : null;
         const itensDescr = params.itensOS.map(it => `${it.descricao} — ${it.quantidade} ${it.unidade || "un"}`).join("; ");
+        const tipoContratoMap: Record<string, string> = {
+          medicao_mensal: "preco_unitario",
+          medicao_avanco: "preco_unitario",
+          medicao_etapa: "preco_unitario",
+          empreitada: "empreitada_global",
+          administracao: "administracao",
+        };
+        const tipoContratoTC = tipoContratoMap[params.moduloMedicao ?? ""] ?? "empreitada_global";
         const [tc] = await db.insert(terceiroContratos).values({
           companyId: params.companyId,
           empresaTerceiraId: empTerceiraId,
@@ -181,6 +190,7 @@ async function gerarContratoPJDeOS(params: {
           obraNome: obraNome,
           numeroContrato: numContrato,
           descricao: `Prestação de serviços — OS ${params.ocId}: ${itensDescr}`.slice(0, 500),
+          tipoContrato: tipoContratoTC,
           valorTotal: String(params.total.toFixed(2)),
           dataInicio: hoje,
           dataTermino: dataFim,
@@ -194,6 +204,7 @@ async function gerarContratoPJDeOS(params: {
           await db.insert(terceiroContratoItens).values({
             contratoId: tc.id,
             companyId: params.companyId,
+            eapCodigo: (it as any).eapCodigo ?? null,
             descricao: it.descricao,
             unidade: it.unidade || "un",
             quantidade: it.quantidade,
@@ -4180,25 +4191,81 @@ Retorne APENAS um JSON válido neste formato:
       let contratoGeradoId: number | null = null;
       let terceiroContratoGeradoId: number | null = null;
 
-      if (isServico && !extraAprovacaoRequerida && cot.fornecedorId) {
+      const moduloMedicaoForn = (fornInfoCheck as any)?.moduloMedicao ?? null;
+      const isMedicaoPagamento = ["medicao_mensal", "medicao_avanco", "medicao_etapa", "empreitada"].includes(moduloMedicaoForn ?? "");
+      const deveCriarContrato = (isServico || isMedicaoPagamento) && !extraAprovacaoRequerida && cot.fornecedorId;
+
+      if (deveCriarContrato) {
         const ocItensForContract = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+
+        let itensContrato: Array<{ descricao: string; unidade?: string | null; quantidade: string; precoUnitario: string; total: string; insumoCodigo?: string | null; eapCodigo?: string | null }>;
+
+        const isPacote = (cot as any).tipo === "pacote" || scTipo === "pacote";
+        if (isPacote && cot.obraId) {
+          const cotItensRaw = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+          const scItemIds = cotItensRaw.map(ci => ci.solicitacaoItemId).filter(Boolean) as number[];
+          const scItensForComp = scItemIds.length > 0
+            ? await db.select({ id: comprasSolicitacoesItens.id, orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds))
+            : [];
+          const orcItemIdsComp = [...new Set(scItensForComp.map(s => s.orcamentoItemId).filter(Boolean))] as number[];
+          const orcItensComp = orcItemIdsComp.length > 0
+            ? await db.select({ id: orcamentoItens.id, servicoCodigo: orcamentoItens.servicoCodigo, descricao: orcamentoItens.descricao, unidade: orcamentoItens.unidade, quantidade: orcamentoItens.quantidade, eapCodigo: orcamentoItens.eapCodigo }).from(orcamentoItens).where(inArray(orcamentoItens.id, orcItemIdsComp))
+            : [];
+          const compGroups: Record<string, { descricao: string; unidade: string; qtd: number; eapCodigo: string }> = {};
+          for (const oi of orcItensComp) {
+            if (!oi.servicoCodigo) continue;
+            if (compGroups[oi.servicoCodigo]) {
+              compGroups[oi.servicoCodigo].qtd += n(oi.quantidade);
+            } else {
+              compGroups[oi.servicoCodigo] = { descricao: oi.descricao ?? "", unidade: oi.unidade ?? "un", qtd: n(oi.quantidade), eapCodigo: oi.eapCodigo ?? "" };
+            }
+          }
+          const compKeys = Object.keys(compGroups);
+          if (compKeys.length > 0) {
+            const fornResps = cot.fornecedorId
+              ? await db.select().from(comprasCotacaoRespostas).where(and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId)))
+              : [];
+            const respMap = new Map(fornResps.map(r => [r.itemId, r]));
+            const cotItemToSvcCode: Record<number, string> = {};
+            for (const ci of cotItensRaw) {
+              const scItem = scItensForComp.find(s => s.id === ci.solicitacaoItemId);
+              if (scItem?.orcamentoItemId) {
+                const oi = orcItensComp.find(o => o.id === scItem.orcamentoItemId);
+                if (oi?.servicoCodigo) cotItemToSvcCode[ci.id] = oi.servicoCodigo;
+              }
+            }
+            const compPrices: Record<string, number> = {};
+            for (const ci of cotItensRaw) {
+              const resp = respMap.get(ci.id);
+              if (resp && n(resp.precoUnitario) > 0 && cotItemToSvcCode[ci.id]) {
+                const svc = cotItemToSvcCode[ci.id];
+                if (!compPrices[svc]) compPrices[svc] = n(resp.precoUnitario);
+              }
+            }
+            itensContrato = compKeys.map(svc => {
+              const g = compGroups[svc];
+              const pu = compPrices[svc] ?? 0;
+              const tot = pu * g.qtd;
+              return { descricao: g.descricao, unidade: g.unidade, quantidade: String(g.qtd), precoUnitario: String(pu.toFixed(4)), total: String(tot.toFixed(2)), insumoCodigo: svc, eapCodigo: g.eapCodigo };
+            });
+          } else {
+            itensContrato = ocItensForContract.map(it => ({ descricao: it.descricao, unidade: it.unidade, quantidade: String(it.quantidade), precoUnitario: String(it.precoUnitario), total: String(it.total), insumoCodigo: (it as any).insumoCodigo ?? null }));
+          }
+        } else {
+          itensContrato = ocItensForContract.map(it => ({ descricao: it.descricao, unidade: it.unidade, quantidade: String(it.quantidade), precoUnitario: String(it.precoUnitario), total: String(it.total), insumoCodigo: (it as any).insumoCodigo ?? null }));
+        }
+
         const contratoPJ = await gerarContratoPJDeOS({
           ocId: oc.id,
           companyId: input.companyId,
           obraId: cot.obraId ?? null,
-          fornecedorId: cot.fornecedorId,
+          fornecedorId: cot.fornecedorId!,
           fornecedorNome: oc.fornecedorNome ?? null,
           total: n(oc.total),
-          itensOS: ocItensForContract.map(it => ({
-            descricao: it.descricao,
-            unidade: it.unidade,
-            quantidade: String(it.quantidade),
-            precoUnitario: String(it.precoUnitario),
-            total: String(it.total),
-            insumoCodigo: (it as any).insumoCodigo ?? null,
-          })),
+          itensOS: itensContrato,
           userId: input.userId ?? 0,
           userName: input.userName ?? "Sistema",
+          moduloMedicao: moduloMedicaoForn,
         });
 
         if (contratoPJ) {

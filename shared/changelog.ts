@@ -6972,4 +6972,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-01 09:00:00",
   },
+  {
+    version: 956,
+    titulo: "Compras → Terceiros: contrato automático para pagamento por medição",
+    descricao:
+      "Quando a forma de pagamento da cotação for por medição (Medição Mensal, Medição por Avanço, " +
+      "Medição por Etapa ou Empreitada Global), ao gerar a OC o sistema cria automaticamente um " +
+      "contrato no módulo de Terceiros com os itens agrupados por composição (para cotações pacote) " +
+      "e redireciona o usuário para o contrato criado. O tipo do contrato (preço unitário ou " +
+      "empreitada global) é definido automaticamente conforme a modalidade de medição escolhida. " +
+      "Itens do contrato incluem código EAP para rastreabilidade orçamentária.",
+    tipo: "feature",
+    modulos: "Compras,Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-01 10:00:00",
+  },
 ];
