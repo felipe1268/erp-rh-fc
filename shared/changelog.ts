@@ -6944,4 +6944,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-31 23:45:00",
   },
+  {
+    version: 954,
+    titulo: "Mapa de Cotação — Pacote agrupa itens por composição",
+    descricao:
+      "Quando a cotação é do tipo Pacote (MAT+MDO), os itens do Mapa de Cotação são automaticamente " +
+      "agrupados por composição: uma única linha por composição mostrando nome, unidade e quantidade " +
+      "orçada. O fornecedor informa um preço único por unidade do pacote (ex: R$/m² de gesso liso) — " +
+      "não é necessário detalhar cada insumo individualmente. Os insumos ficam acessíveis como detalhe " +
+      "expansível para referência. Badge 'PACOTE' e indicador visual na área da matriz. Salvar preços " +
+      "grava corretamente contra o item representativo com a quantidade da composição.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-01 00:05:00",
+  },
 ];

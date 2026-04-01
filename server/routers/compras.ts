@@ -2176,6 +2176,7 @@ Responda APENAS com um objeto JSON no formato:
           custoUnitEquip: orcamentoItens.custoUnitEquip,
           metaUnitEquip: orcamentoItens.metaUnitEquip,
           quantidade: orcamentoItens.quantidade,
+          unidade: orcamentoItens.unidade,
           eapCodigo: orcamentoItens.eapCodigo,
           servicoCodigo: orcamentoItens.servicoCodigo,
           descricao: orcamentoItens.descricao,
@@ -2410,11 +2411,24 @@ Responda APENAS com um objeto JSON no formato:
       const orcItemToCustoMdo: Record<number, number> = {};
       const orcItemToCustoEquip: Record<number, number> = {};
       const orcItemToCustoTotal: Record<number, number> = {};
+      const svcCodeToCompInfo: Record<string, { descricao: string; unidade: string; qtdOrcada: number; metaTotal: number; eapCodigo: string }> = {};
       for (const o of orcItensData) {
         orcItemToCustoMat[o.id] = n(o.custoUnitMat);
         orcItemToCustoMdo[o.id] = n(o.custoUnitMdo);
         orcItemToCustoEquip[o.id] = n(o.custoUnitEquip);
         orcItemToCustoTotal[o.id] = n(o.custoUnitTotal);
+        if (o.servicoCodigo) {
+          const metaPerc = orcToMetaPerc[o.orcamentoId] ?? 0;
+          const metaDireta = n(o.metaUnitTotal);
+          const metaVal = metaDireta > 0 ? metaDireta : n(o.custoUnitTotal) * (1 - metaPerc);
+          svcCodeToCompInfo[o.servicoCodigo] = {
+            descricao: o.descricao ?? "",
+            unidade: o.unidade ?? "un",
+            qtdOrcada: n(o.quantidade),
+            metaTotal: metaVal,
+            eapCodigo: o.eapCodigo ?? "",
+          };
+        }
       }
 
       const orcItemToQtdOrcada: Record<number, number> = {};
@@ -2582,7 +2596,9 @@ Responda APENAS com um objeto JSON no formato:
         const qtdSaldo = Math.round(qtdSaldoRaw * 1000) / 1000;
         const svcCode = it.solicitacaoItemId ? scItemToOrcServicoCodigo[it.solicitacaoItemId] : null;
         const composicaoInsumosList = svcCode ? (composicaoMap[svcCode] ?? []) : [];
-        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, metaQtd, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: svcCode ?? (trace?.composicaoCodigo ?? "") };
+        const compCode = svcCode ?? (trace?.composicaoCodigo ?? "");
+        const compInfo = compCode ? svcCodeToCompInfo[compCode] : undefined;
+        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, metaQtd, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: compCode, composicaoDescricao: compInfo?.descricao ?? "", composicaoUnidade: compInfo?.unidade ?? "", composicaoQtdOrcada: compInfo?.qtdOrcada ?? 0, composicaoMetaTotal: compInfo?.metaTotal ?? 0, composicaoEapCodigo: compInfo?.eapCodigo ?? "" };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};
@@ -2652,7 +2668,8 @@ Responda APENAS com um objeto JSON no formato:
         if (!validItemIds.has(r.itemId)) continue;
         const desc = r.descontoPct ?? 0;
         let qty = r.quantidade ?? 0;
-        if (qty <= 0) {
+        const isPacoteChildZero = r.precoUnitario === 0 && qty === 0;
+        if (qty <= 0 && !isPacoteChildZero) {
           const itRow = await db.select({ quantidade: comprasCotacoesItens.quantidade }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, r.itemId));
           qty = n(itRow[0]?.quantidade ?? 1);
         }

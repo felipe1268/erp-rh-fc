@@ -1826,17 +1826,50 @@ export default function Cotacoes() {
 
     function handleSalvarPrecos(fornecedorId: number) {
       if (!mapa || !showDetalhe) return;
-      const respostas = mapa.itens.map((it: any) => {
-        const key = `${it.id}_${fornecedorId}`;
-        const qtyStr = editQtds[key];
-        const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
-        return {
-          itemId: it.id,
-          precoUnitario: parseFloat(editPrecos[key] ?? "0") || 0,
-          descontoPct: 0,
-          quantidade: qty,
-        };
-      });
+      const isPacote = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
+      let respostas: Array<{ itemId: number; precoUnitario: number; descontoPct: number; quantidade: number }>;
+      if (isPacote) {
+        const compGroups: Record<string, any[]> = {};
+        const noComp: any[] = [];
+        for (const it of mapa.itens) {
+          const cc = (it as any).composicaoCodigo ?? "";
+          if (cc) {
+            if (!compGroups[cc]) compGroups[cc] = [];
+            compGroups[cc].push(it);
+          } else {
+            noComp.push(it);
+          }
+        }
+        respostas = [];
+        for (const [_cc, items] of Object.entries(compGroups)) {
+          const first = items[0];
+          const compQtd = (first as any).composicaoQtdOrcada || parseFloat(first.quantidade ?? "0");
+          const firstKey = `${first.id}_${fornecedorId}`;
+          const precoComp = parseFloat(editPrecos[firstKey] ?? "0") || 0;
+          respostas.push({ itemId: first.id, precoUnitario: precoComp, descontoPct: 0, quantidade: compQtd });
+          for (let i = 1; i < items.length; i++) {
+            respostas.push({ itemId: items[i].id, precoUnitario: 0, descontoPct: 0, quantidade: 0 });
+          }
+        }
+        for (const it of noComp) {
+          const key = `${it.id}_${fornecedorId}`;
+          const qtyStr = editQtds[key];
+          const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
+          respostas.push({ itemId: it.id, precoUnitario: parseFloat(editPrecos[key] ?? "0") || 0, descontoPct: 0, quantidade: qty });
+        }
+      } else {
+        respostas = mapa.itens.map((it: any) => {
+          const key = `${it.id}_${fornecedorId}`;
+          const qtyStr = editQtds[key];
+          const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
+          return {
+            itemId: it.id,
+            precoUnitario: parseFloat(editPrecos[key] ?? "0") || 0,
+            descontoPct: 0,
+            quantidade: qty,
+          };
+        });
+      }
       const tipoPag = editCondPag[fornecedorId] || undefined;
       salvarRespostas.mutate({
         cotacaoId: showDetalhe,
@@ -1855,13 +1888,36 @@ export default function Cotacoes() {
 
     function getFornTotal(p: any): number {
       if (editingFornId === p.fornecedorId) {
-        const totalItens = (mapa?.itens ?? []).reduce((acc: number, it: any) => {
-          const key = `${it.id}_${p.fornecedorId}`;
-          const preco = parseFloat(editPrecos[key] ?? "0") || 0;
-          const qtyStr = editQtds[key];
-          const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
-          return acc + preco * qty;
-        }, 0);
+        const isPacote = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
+        let totalItens = 0;
+        if (isPacote) {
+          const seen = new Set<string>();
+          for (const it of (mapa?.itens ?? [])) {
+            const cc = (it as any).composicaoCodigo ?? "";
+            if (cc) {
+              if (seen.has(cc)) continue;
+              seen.add(cc);
+              const firstKey = `${it.id}_${p.fornecedorId}`;
+              const preco = parseFloat(editPrecos[firstKey] ?? "0") || 0;
+              const compQtd = (it as any).composicaoQtdOrcada || parseFloat(it.quantidade ?? "0");
+              totalItens += preco * compQtd;
+            } else {
+              const key = `${it.id}_${p.fornecedorId}`;
+              const preco = parseFloat(editPrecos[key] ?? "0") || 0;
+              const qtyStr = editQtds[key];
+              const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
+              totalItens += preco * qty;
+            }
+          }
+        } else {
+          totalItens = (mapa?.itens ?? []).reduce((acc: number, it: any) => {
+            const key = `${it.id}_${p.fornecedorId}`;
+            const preco = parseFloat(editPrecos[key] ?? "0") || 0;
+            const qtyStr = editQtds[key];
+            const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
+            return acc + preco * qty;
+          }, 0);
+        }
         const isFob = (editFreteTipo[p.fornecedorId] ?? "cif") === "fob";
         const frete = isFob ? (parseFloat(editValorFrete[p.fornecedorId] ?? "0") || 0) : 0;
         return totalItens + frete;
@@ -2554,11 +2610,18 @@ export default function Cotacoes() {
                   ) : (mapa?.participantes ?? []).length === 0 ? null : (
                     <div className="space-y-4">
                       <div className="flex items-center justify-end gap-2 px-1">
-                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                          <input type="checkbox" checked={agruparItens} onChange={e => setAgruparItens(e.target.checked)}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5" />
-                          <span className="text-xs text-gray-500">Agrupar itens iguais</span>
-                        </label>
+                        {((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                            <Package className="h-3.5 w-3.5" />
+                            Cotação por Pacote — itens agrupados por composição
+                          </span>
+                        ) : (
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input type="checkbox" checked={agruparItens} onChange={e => setAgruparItens(e.target.checked)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5" />
+                            <span className="text-xs text-gray-500">Agrupar itens iguais</span>
+                          </label>
+                        )}
                       </div>
                       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
                         <table className="text-sm border-collapse" style={{ minWidth: "max-content" }}>
@@ -2881,7 +2944,46 @@ export default function Cotacoes() {
                           <tbody>
                             {(() => {
                               const rawItens = mapa?.itens ?? [];
-                              const itensParaRenderizar: any[] = agruparItens ? (() => {
+                              const isPacote = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
+                              const itensParaRenderizar: any[] = isPacote ? (() => {
+                                const compGroups: Record<string, any[]> = {};
+                                const noComp: any[] = [];
+                                for (const it of rawItens) {
+                                  const cc = (it as any).composicaoCodigo ?? "";
+                                  if (cc) {
+                                    if (!compGroups[cc]) compGroups[cc] = [];
+                                    compGroups[cc].push(it);
+                                  } else {
+                                    noComp.push(it);
+                                  }
+                                }
+                                const grouped = Object.entries(compGroups).map(([cc, items]) => {
+                                  const first = items[0];
+                                  const compDesc = (first as any).composicaoDescricao || first.descricao;
+                                  const compUn = (first as any).composicaoUnidade || first.unidade;
+                                  const compQtd = (first as any).composicaoQtdOrcada || 0;
+                                  const compMeta = (first as any).composicaoMetaTotal || 0;
+                                  const compEap = (first as any).composicaoEapCodigo || "";
+                                  return {
+                                    ...first,
+                                    id: first.id,
+                                    descricao: compDesc,
+                                    unidade: compUn,
+                                    quantidade: String(compQtd),
+                                    metaUnitario: compMeta,
+                                    metaQtd: compQtd,
+                                    qtdOrcada: compQtd,
+                                    eapPath: first.eapPath,
+                                    _grouped: true,
+                                    _isPacoteGroup: true,
+                                    _childIds: items.map((i: any) => i.id),
+                                    _childItems: items,
+                                    _groupCount: items.length,
+                                    _composicaoCodigo: cc,
+                                  };
+                                });
+                                return [...grouped, ...noComp];
+                              })() : agruparItens ? (() => {
                                 const groups: Record<string, any[]> = {};
                                 for (const it of rawItens) {
                                   const key = (it.descricao ?? "") + "|" + (it.unidade ?? "un");
@@ -2920,25 +3022,31 @@ export default function Cotacoes() {
                               const metaTot = Math.round(metaUnit * metaQtdVal * 100) / 100;
                               const { saldo, hasMeta } = getItemSaldo(it);
                               const hasComposicao = !it._grouped && ((it as any).composicaoInsumos ?? []).length > 0;
+                              const hasPacoteExpand = it._isPacoteGroup && (it._childItems ?? []).length > 0;
                               const isExpanded = expandedComposicao[it.id] ?? false;
                               const numFornCols = (mapa?.participantes ?? []).length * 3;
                               return (
                                 <React.Fragment key={it.id}>
-                                <tr className="border-b border-gray-100 hover:bg-gray-50/60">
-                                  <td className="px-4 py-2 border-r border-gray-100 bg-white sticky left-0 z-10 max-w-md">
+                                <tr className={`border-b border-gray-100 hover:bg-gray-50/60 ${it._isPacoteGroup ? "bg-indigo-50/30" : ""}`}>
+                                  <td className={`px-4 py-2 border-r border-gray-100 sticky left-0 z-10 max-w-md ${it._isPacoteGroup ? "bg-indigo-50/30" : "bg-white"}`}>
                                     <div className="flex items-start gap-1.5">
-                                      {hasComposicao && (
+                                      {(hasComposicao || hasPacoteExpand) && (
                                         <button
                                           onClick={() => setExpandedComposicao(prev => ({ ...prev, [it.id]: !prev[it.id] }))}
                                           className="mt-0.5 p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 shrink-0"
-                                          title="Ver composição"
+                                          title={hasPacoteExpand ? "Ver insumos do pacote" : "Ver composição"}
                                         >
                                           {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                                         </button>
                                       )}
                                       <div className="flex-1 min-w-0">
-                                        <span className="text-gray-900 text-xs font-medium">{it.descricao}</span>
-                                        {it._grouped && (
+                                        <span className="text-gray-900 text-xs font-medium">{it._isPacoteGroup && (it as any).composicaoEapCodigo ? `[${(it as any).composicaoEapCodigo}] ${it.descricao}` : it.descricao}</span>
+                                        {it._isPacoteGroup && (
+                                          <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                            PACOTE · {it._groupCount} insumos
+                                          </span>
+                                        )}
+                                        {it._grouped && !it._isPacoteGroup && (
                                           <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
                                             {it._groupCount} composições
                                           </span>
@@ -3064,7 +3172,15 @@ export default function Cotacoes() {
                                     const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
 
                                     let savedPreco: number, savedQty: number, displayPreco: number, displayQty: number, displayTotal: number;
-                                    if (it._grouped) {
+                                    if (it._isPacoteGroup) {
+                                      const childItems = it._childItems as any[];
+                                      savedPreco = parseFloat(mapa?.respostaMap?.[`${childItems[0].id}_${p.fornecedorId}`]?.precoUnitario ?? "0");
+                                      const compQtd = (childItems[0] as any).composicaoQtdOrcada || parseFloat(it.quantidade ?? "0");
+                                      savedQty = compQtd;
+                                      displayPreco = isEditing ? parseFloat(editPrecos[key] ?? String(savedPreco)) : savedPreco;
+                                      displayQty = compQtd;
+                                      displayTotal = displayPreco * displayQty;
+                                    } else if (it._grouped) {
                                       const childItems = it._childItems as any[];
                                       savedPreco = parseFloat(mapa?.respostaMap?.[`${childItems[0].id}_${p.fornecedorId}`]?.precoUnitario ?? "0");
                                       savedQty = childItems.reduce((s: number, ci: any) => s + parseFloat(mapa?.respostaMap?.[`${ci.id}_${p.fornecedorId}`]?.quantidade ?? ci.quantidade ?? "0"), 0);
@@ -3222,6 +3338,48 @@ export default function Cotacoes() {
                                                         {isMat ? "MAT" : isMdo ? "MDO" : isEquipIns ? "EQUIP" : "—"}
                                                       </span>
                                                     </td>
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })()}
+                                {isExpanded && hasPacoteExpand && (() => {
+                                  const childItems = it._childItems as any[];
+                                  return (
+                                    <tr className="bg-indigo-50/20">
+                                      <td colSpan={6 + numFornCols + 1} className="px-0 py-0 sticky left-0 z-10">
+                                        <div className="ml-8 mr-4 my-2 border border-indigo-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                                          <div className="px-3 py-1.5 bg-indigo-50 border-b border-indigo-200">
+                                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
+                                              Insumos do Pacote (referência)
+                                            </span>
+                                          </div>
+                                          <table className="w-full text-[11px]">
+                                            <thead>
+                                              <tr className="border-b border-indigo-100 bg-indigo-50/30">
+                                                <th className="text-left px-3 py-1 text-indigo-500 font-semibold">Descrição</th>
+                                                <th className="text-center px-2 py-1 text-indigo-500 font-semibold w-12">Un.</th>
+                                                <th className="text-right px-2 py-1 text-indigo-500 font-semibold w-20">Qtd SC</th>
+                                                <th className="text-right px-2 py-1 text-indigo-500 font-semibold w-24">Meta Unit.</th>
+                                                <th className="text-right px-2 py-1 text-indigo-500 font-semibold w-24">Meta Total</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {childItems.map((ci: any, idx: number) => {
+                                                const ciQtd = parseFloat(ci.quantidade ?? "0");
+                                                const ciMeta = parseFloat(ci.metaUnitario ?? "0");
+                                                return (
+                                                  <tr key={idx} className="border-b border-indigo-50 hover:bg-indigo-50/30">
+                                                    <td className="px-3 py-1 text-gray-700">{ci.descricao}</td>
+                                                    <td className="px-2 py-1 text-center text-gray-500">{ci.unidade}</td>
+                                                    <td className="px-2 py-1 text-right text-gray-600">{ciQtd.toLocaleString("pt-BR")}</td>
+                                                    <td className="px-2 py-1 text-right text-gray-600">{ciMeta > 0 ? ciMeta.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}</td>
+                                                    <td className="px-2 py-1 text-right text-gray-700 font-medium">{ciMeta > 0 && ciQtd > 0 ? (ciMeta * ciQtd).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}</td>
                                                   </tr>
                                                 );
                                               })}
