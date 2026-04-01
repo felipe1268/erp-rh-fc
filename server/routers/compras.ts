@@ -73,6 +73,17 @@ async function gerarContratoPJDeOS(params: {
 }) {
   const db = await getDb();
   try {
+    const [existingPJ] = await db.execute(sql`
+      SELECT pc.id, pc."numeroContrato" FROM pj_contracts pc
+      JOIN compras_ordens co ON co.contrato_id = pc.id
+      WHERE co.id = ${params.ocId} AND pc."companyId" = ${params.companyId}
+      LIMIT 1
+    `).then((r: any) => r.rows || []);
+    if (existingPJ) {
+      console.log(`[gerarContratoPJDeOS] Contrato PJ #${existingPJ.id} já existe para OC #${params.ocId}, ignorando duplicata`);
+      return existingPJ as any;
+    }
+
     const configRows = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, params.companyId)).limit(1);
     const config = configRows[0];
     const retPerc = config ? n((config as any).retencaoTecnicaPerc) : 5;
@@ -314,6 +325,19 @@ async function criarEnvelopeIntegraSign(params: {
 }) {
   const db = await getDb();
   try {
+    const [existing] = await db.select({ id: integrasignEnvelopes.id })
+      .from(integrasignEnvelopes)
+      .where(and(
+        eq(integrasignEnvelopes.companyId, params.companyId),
+        eq(integrasignEnvelopes.ordemCompraId, params.ocId),
+        sql`${integrasignEnvelopes.status} NOT IN ('cancelado', 'expirado', 'recusado')`,
+      ))
+      .limit(1);
+    if (existing) {
+      console.log(`[IntegraSign] Envelope já existe para OC #${params.ocId}, ignorando duplicata`);
+      return existing;
+    }
+
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, RotateCcw } from "lucide-react";
+import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 function papelLabel(p: string) {
@@ -68,8 +68,10 @@ export default function IntegraSignDashboard() {
 
   const enviarMut = trpc.integrasign.enviarParaAssinatura.useMutation();
   const cancelarMut = trpc.integrasign.cancelarEnvelope.useMutation();
+  const excluirMut = trpc.integrasign.excluirEnvelope.useMutation();
   const reenviarMut = trpc.integrasign.reenviarNotificacao.useMutation();
   const novaVersaoMut = trpc.integrasign.criarNovaVersao.useMutation();
+  const [deleteDialog, setDeleteDialog] = useState<number | null>(null);
 
   async function handleEnviar(envelopeId: number) {
     try {
@@ -93,6 +95,19 @@ export default function IntegraSignDashboard() {
       if (selectedEnvelope === cancelDialog) envelopeDetail.refetch();
     } catch (err: any) {
       toast.error(err.message || "Erro ao cancelar");
+    }
+  }
+
+  async function handleExcluir() {
+    if (!deleteDialog) return;
+    try {
+      await excluirMut.mutateAsync({ companyId, envelopeId: deleteDialog });
+      toast.success("Envelope excluído");
+      setDeleteDialog(null);
+      if (selectedEnvelope === deleteDialog) setSelectedEnvelope(null);
+      envelopes.refetch();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao excluir");
     }
   }
 
@@ -336,6 +351,12 @@ export default function IntegraSignDashboard() {
                         Nova Versão
                       </Button>
                     )}
+                    {["rascunho", "cancelado"].includes(env.status) && (
+                      <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setDeleteDialog(env.id)}>
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Excluir
+                      </Button>
+                    )}
                   </div>
 
                   {env.auditLog && env.auditLog.length > 0 && (
@@ -385,6 +406,26 @@ export default function IntegraSignDashboard() {
             <Button variant="destructive" onClick={handleCancelar} disabled={!motivoCancelamento.trim() || cancelarMut.isPending}>
               {cancelarMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Confirmar Cancelamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteDialog} onOpenChange={() => setDeleteDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir Envelope</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">
+            Tem certeza que deseja excluir este envelope permanentemente? Esta ação não pode ser desfeita.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialog(null)}>
+              Voltar
+            </Button>
+            <Button variant="destructive" onClick={handleExcluir} disabled={excluirMut.isPending}>
+              {excluirMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Confirmar Exclusão
             </Button>
           </DialogFooter>
         </DialogContent>

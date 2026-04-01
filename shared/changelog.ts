@@ -7075,4 +7075,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-01 18:00:00",
   },
+  {
+    version: 963,
+    titulo: "Bloqueio de contratos duplicados + Excluir envelopes FcSign",
+    descricao:
+      "Corrigido bug que permitia gerar múltiplos contratos/envelopes da mesma Ordem de Serviço. " +
+      "Agora o sistema verifica se já existe contrato PJ e envelope FcSign ativo antes de criar novos. " +
+      "Adicionado botão 'Excluir' no painel FcSign para remover envelopes em rascunho ou cancelados, " +
+      "com confirmação de exclusão permanente.",
+    tipo: "bugfix",
+    modulos: "Compras, Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-01 19:00:00",
+  },
 ];

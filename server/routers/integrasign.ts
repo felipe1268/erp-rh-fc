@@ -786,6 +786,34 @@ export const integrasignRouter = router({
       return { success: true };
     }),
 
+  excluirEnvelope: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      envelopeId: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const userName = (ctx as any).session?.name || "Sistema";
+
+      const [envelope] = await db.select().from(integrasignEnvelopes)
+        .where(and(
+          eq(integrasignEnvelopes.id, input.envelopeId),
+          eq(integrasignEnvelopes.companyId, input.companyId),
+        ));
+
+      if (!envelope) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!["rascunho", "cancelado"].includes(envelope.status)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Só é possível excluir envelopes em rascunho ou cancelados." });
+      }
+
+      await db.delete(integrasignAuditLog).where(eq(integrasignAuditLog.envelopeId, input.envelopeId));
+      await db.delete(integrasignSignatarios).where(eq(integrasignSignatarios.envelopeId, input.envelopeId));
+      await db.delete(integrasignEnvelopes).where(eq(integrasignEnvelopes.id, input.envelopeId));
+
+      console.log(`[IntegraSign] Envelope #${input.envelopeId} excluído por ${userName}`);
+      return { success: true };
+    }),
+
   criarNovaVersao: protectedProcedure
     .input(z.object({
       companyId: z.number(),
