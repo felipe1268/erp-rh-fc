@@ -445,11 +445,29 @@ export default function EmpresasTerceiras() {
                 <p className="font-semibold text-emerald-800">Acesso gerado com sucesso!</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                <div><p className="text-xs text-gray-500">Login (CNPJ)</p><div className="flex items-center gap-2"><code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1">{acessoResult.cnpj}</code><Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(acessoResult.cnpj); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button></div></div>
-                <div><p className="text-xs text-gray-500">Senha Temporária</p><div className="flex items-center gap-2"><code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1 text-amber-600 font-bold">{acessoResult.senhaTemporaria}</code><Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(acessoResult.senhaTemporaria); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button></div></div>
-                <div className="pt-2 border-t"><p className="text-xs text-gray-500 mb-1">Link do Portal</p><div className="flex items-center gap-2"><code className="bg-white border rounded px-2 py-1 text-xs flex-1 truncate">{window.location.origin}/portal/login</code><Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/login`); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button></div></div>
+                <div>
+                  <p className="text-xs text-gray-500">Login (CNPJ/CPF)</p>
+                  <div className="flex items-center gap-2">
+                    <code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1 min-w-0 break-all">{acessoResult.cnpj || acessoEmpresa?.cnpj || "—"}</code>
+                    <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(acessoResult.cnpj || acessoEmpresa?.cnpj || ""); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Senha Temporária</p>
+                  <div className="flex items-center gap-2">
+                    <code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1 text-amber-600 font-bold">{acessoResult.senhaTemporaria}</code>
+                    <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(acessoResult.senhaTemporaria); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button>
+                  </div>
+                </div>
+                <div className="pt-2 border-t">
+                  <p className="text-xs text-gray-500 mb-1">Link do Portal</p>
+                  <div className="flex items-center gap-2">
+                    <code className="bg-white border rounded px-2 py-1 text-xs flex-1 min-w-0 truncate">{window.location.origin}/portal/login</code>
+                    <Button size="sm" variant="outline" className="shrink-0" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/login`); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button>
+                  </div>
+                </div>
               </div>
-              <Button className="w-full" onClick={() => { const msg = `Portal do Terceiro - FC Gestão Integrada\n\nOlá ${nomeResp},\n\nSeu acesso ao portal foi criado:\n\nLink: ${window.location.origin}/portal/login\nLogin (CNPJ): ${acessoResult.cnpj}\nSenha: ${acessoResult.senhaTemporaria}\n\nNo primeiro acesso, você será solicitado a trocar a senha.`; navigator.clipboard.writeText(msg); toast.success("Mensagem copiada!"); }}><Copy className="w-4 h-4 mr-2" /> Copiar Mensagem Completa</Button>
+              <Button className="w-full" onClick={() => { const loginCnpj = acessoResult.cnpj || acessoEmpresa?.cnpj || ""; const msg = `Portal do Terceiro - FC Gestão Integrada\n\nOlá ${nomeResp},\n\nSeu acesso ao portal foi criado:\n\nLink: ${window.location.origin}/portal/login\nLogin (CNPJ): ${loginCnpj}\nSenha: ${acessoResult.senhaTemporaria}\n\nNo primeiro acesso, você será solicitado a trocar a senha.`; navigator.clipboard.writeText(msg); toast.success("Mensagem copiada!"); }}><Copy className="w-4 h-4 mr-2" /> Copiar Mensagem Completa</Button>
               <Button variant="outline" className="w-full" onClick={() => setAcessoDialogOpen(false)}>Fechar</Button>
             </div>
           )}
