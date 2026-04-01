@@ -7033,4 +7033,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-01 15:00:00",
   },
+  {
+    version: 960,
+    titulo: "Contrato Terceiros: salvar com nome automático + botão Enviar para FcSign",
+    descricao:
+      "Ao clicar 'Salvar' no documento do contrato, o campo de observação agora é pré-preenchido automaticamente " +
+      "com o número do contrato e o nome da empresa terceira (ex: 'CT-2026-0013 — RF Gesso'). " +
+      "Novo botão 'Enviar p/ FcSign' na barra de ferramentas do documento — abre modal para configurar " +
+      "signatários (Fornecedor, Gestor, Testemunha), pré-preenche dados da empresa terceira, " +
+      "e cria um envelope no módulo IntegraSign para fluxo de assinaturas eletrônicas. " +
+      "Após criar o envelope, redireciona automaticamente para o painel FcSign.",
+    tipo: "feature",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-01 16:00:00",
+  },
 ];

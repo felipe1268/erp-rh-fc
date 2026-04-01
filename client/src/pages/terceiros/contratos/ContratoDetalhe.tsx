@@ -12,7 +12,7 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2
+  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -170,6 +170,17 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
   const salvarTextoMut = trpc.terceiroContratos.salvarTextoContrato.useMutation({
     onSuccess: (r) => { toast.success(`Contrato salvo — v${r.versao}`); setShowObsModal(false); setObsRevisao(""); setTextoEditado(null); utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarRevisoes.invalidate({ contratoId: id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [showFcSignModal, setShowFcSignModal] = useState(false);
+  const [fcSignSignatarios, setFcSignSignatarios] = useState([
+    { papel: "fornecedor" as const, ordemAssinatura: 1, nome: "", email: "", cpfCnpj: "", cargo: "Representante Legal", empresaNome: "" },
+    { papel: "gestor_projeto" as const, ordemAssinatura: 2, nome: "", email: "", cpfCnpj: "", cargo: "Gestor de Projeto", empresaNome: "FC Engenharia" },
+  ]);
+
+  const criarEnvelopeMut = trpc.integrasign.criarEnvelope.useMutation({
+    onSuccess: (r) => { toast.success("Envelope criado no FcSign!"); setShowFcSignModal(false); navigate(`/integrasign?envelope=${r.id}`); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -561,10 +572,32 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                     size="sm"
                     className="gap-2 h-8 text-xs bg-blue-600 hover:bg-blue-700"
                     disabled={salvarTextoMut.isPending || textoEditado === null}
-                    onClick={() => setShowObsModal(true)}
+                    onClick={() => {
+                      const empNome = (contrato as any).empresa?.razaoSocial || (contrato as any).empresa?.nomeFantasia || "";
+                      const nomeAuto = [contrato.numeroContrato, empNome].filter(Boolean).join(" — ").slice(0, 200);
+                      setObsRevisao(nomeAuto);
+                      setShowObsModal(true);
+                    }}
                   >
                     <Save className="w-3.5 h-3.5" />
                     Salvar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 h-8 text-xs border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                    disabled={!textoAtual || criarEnvelopeMut.isPending}
+                    onClick={() => {
+                      const emp = (contrato as any).empresa;
+                      setFcSignSignatarios([
+                        { papel: "fornecedor", ordemAssinatura: 1, nome: emp?.responsavelNome || emp?.razaoSocial || "", email: emp?.email || "", cpfCnpj: emp?.cnpj || "", cargo: "Representante Legal", empresaNome: emp?.razaoSocial || "" },
+                        { papel: "gestor_projeto", ordemAssinatura: 2, nome: "", email: "", cpfCnpj: "", cargo: "Gestor de Projeto", empresaNome: "FC Engenharia" },
+                      ]);
+                      setShowFcSignModal(true);
+                    }}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    Enviar p/ FcSign
                   </Button>
                 </>
               )}
@@ -871,6 +904,87 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                   onClick={() => salvarTextoMut.mutate({ contratoId: id, texto: textoAtual!, observacao: obsRevisao || undefined })}
                 >
                   {salvarTextoMut.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Enviar para FcSign */}
+        {showFcSignModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl">
+              <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
+                <Send className="w-5 h-5 text-indigo-600" />
+                Enviar para FcSign
+              </h2>
+              <p className="text-sm text-gray-500 mb-4">
+                O contrato <span className="font-semibold text-gray-700">{contrato.numeroContrato}</span> será enviado para assinatura eletrônica.
+                Configure os signatários abaixo.
+              </p>
+
+              <div className="space-y-4 max-h-[50vh] overflow-y-auto">
+                {fcSignSignatarios.map((sig, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        {idx + 1}º Signatário — {sig.papel === "fornecedor" ? "Fornecedor" : sig.papel === "gestor_projeto" ? "Gestor" : sig.papel === "financeiro" ? "Financeiro" : sig.papel === "diretor" ? "Diretor" : "Testemunha"}
+                      </span>
+                      {fcSignSignatarios.length > 2 && (
+                        <button className="text-red-400 hover:text-red-600 text-xs" onClick={() => setFcSignSignatarios(prev => prev.filter((_, i) => i !== idx))}>
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-[10px] text-gray-400">Nome</Label>
+                        <Input className="h-8 text-xs" value={sig.nome} onChange={e => { const arr = [...fcSignSignatarios]; arr[idx] = { ...arr[idx], nome: e.target.value }; setFcSignSignatarios(arr); }} />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] text-gray-400">Email</Label>
+                        <Input className="h-8 text-xs" type="email" value={sig.email} onChange={e => { const arr = [...fcSignSignatarios]; arr[idx] = { ...arr[idx], email: e.target.value }; setFcSignSignatarios(arr); }} />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] text-gray-400">CPF/CNPJ</Label>
+                        <Input className="h-8 text-xs" value={sig.cpfCnpj} onChange={e => { const arr = [...fcSignSignatarios]; arr[idx] = { ...arr[idx], cpfCnpj: e.target.value }; setFcSignSignatarios(arr); }} />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] text-gray-400">Cargo</Label>
+                        <Input className="h-8 text-xs" value={sig.cargo} onChange={e => { const arr = [...fcSignSignatarios]; arr[idx] = { ...arr[idx], cargo: e.target.value }; setFcSignSignatarios(arr); }} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                className="mt-3 text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                onClick={() => setFcSignSignatarios(prev => [...prev, { papel: "testemunha" as const, ordemAssinatura: prev.length + 1, nome: "", email: "", cpfCnpj: "", cargo: "Testemunha", empresaNome: "" }])}
+              >
+                <Plus className="w-3 h-3" /> Adicionar signatário
+              </button>
+
+              <div className="flex gap-3 mt-5 justify-end">
+                <Button variant="outline" onClick={() => setShowFcSignModal(false)}>Cancelar</Button>
+                <Button
+                  className="bg-indigo-600 hover:bg-indigo-700 gap-2"
+                  disabled={criarEnvelopeMut.isPending || fcSignSignatarios.some(s => !s.nome || !s.email)}
+                  onClick={() => {
+                    const empNome = (contrato as any).empresa?.razaoSocial || "";
+                    criarEnvelopeMut.mutate({
+                      companyId: contrato.companyId,
+                      contratoTerceiroId: id,
+                      obraId: contrato.obraId || undefined,
+                      titulo: `${contrato.numeroContrato} — ${empNome}`.trim(),
+                      descricao: contrato.descricao || undefined,
+                      textoContrato: textoAtual || undefined,
+                      signatarios: fcSignSignatarios.map((s, i) => ({ ...s, ordemAssinatura: i + 1, empresaNome: s.empresaNome || empNome })),
+                    });
+                  }}
+                >
+                  {criarEnvelopeMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Criar Envelope
                 </Button>
               </div>
             </div>
