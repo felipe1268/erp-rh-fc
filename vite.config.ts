@@ -27,26 +27,8 @@ export default defineConfig({
     cssMinify: 'esbuild',
     reportCompressedSize: false,
     cssCodeSplit: true,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
-            if (id.includes('@radix-ui')) return 'vendor-radix';
-            if (id.includes('react-dom')) return 'vendor-react-dom';
-            if (id.includes('three') || id.includes('web-ifc')) return 'vendor-3d';
-            if (id.includes('@trpc') || id.includes('@tanstack')) return 'vendor-data';
-            return 'vendor';
-          }
-          if (id.includes('/pages/planejamento/')) return 'page-planejamento';
-          if (id.includes('/pages/compras/')) return 'page-compras';
-          if (id.includes('/pages/terceiros/')) return 'page-terceiros';
-          if (id.includes('/pages/medicao/')) return 'page-medicao';
-          if (id.includes('/pages/rh/') || id.includes('/pages/dp/')) return 'page-rh';
-        },
-      },
-    },
-    chunkSizeWarningLimit: 1200,
+    rollupOptions: {},
+    chunkSizeWarningLimit: 3000,
   },
   optimizeDeps: {
     exclude: ["web-ifc"],
