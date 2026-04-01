@@ -251,7 +251,7 @@ const menuSectionsTerceiros: MenuSection[] = [
     title: "Cadastro de Terceiros",
     items: [
       { icon: LayoutDashboard, label: "Painel Terceiros", path: "/terceiros/painel" },
-      { icon: Building2, label: "Empresas Terceiras", path: "/terceiros/empresas" },
+      { icon: Building2, label: "Fornecedores / Terceiros", path: "/compras/fornecedores" },
       { icon: Users, label: "Funcionários Terceiros", path: "/terceiros/funcionarios" },
     ],
   },

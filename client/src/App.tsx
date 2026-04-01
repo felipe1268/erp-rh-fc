@@ -318,7 +318,7 @@ function Router() {
         <Route path={"/dashboards/habilidades"} component={DashHabilidades} />
         {/* Terceiros */}
         <Route path="/terceiros" component={PainelTerceiros} />
-        <Route path="/terceiros/empresas" component={EmpresasTerceiras} />
+        <Route path="/terceiros/empresas">{() => { window.location.href = "/compras/fornecedores"; return null; }}</Route>
         <Route path="/terceiros/funcionarios" component={FuncionariosTerceiros} />
         <Route path="/terceiros/obrigacoes-mensais" component={ObrigacoesMensais} />
         <Route path="/terceiros/obrigacoes" component={ObrigacoesMensais} />

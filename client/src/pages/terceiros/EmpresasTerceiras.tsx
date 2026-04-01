@@ -54,7 +54,9 @@ export default function EmpresasTerceiras() {
   };
   const confirmarGerarAcesso = () => {
     if (!acessoEmpresa || !companyId) return;
-    gerarAcessoMut.mutate({ tipo: "terceiro", empresaTerceiraId: acessoEmpresa.id, companyId, cnpj: acessoEmpresa.cnpj, emailResponsavel: emailResp, nomeResponsavel: nomeResp, nomeEmpresa: acessoEmpresa.razaoSocial });
+    const cnpjLimpo = (acessoEmpresa.cnpj || "").replace(/\D/g, "");
+    if (!cnpjLimpo) { toast.error("Esta empresa não possui CNPJ/CPF cadastrado. Cadastre antes de gerar acesso."); return; }
+    gerarAcessoMut.mutate({ tipo: "terceiro", empresaTerceiraId: acessoEmpresa.id, companyId, cnpj: cnpjLimpo, emailResponsavel: emailResp, nomeResponsavel: nomeResp, nomeEmpresa: acessoEmpresa.razaoSocial });
   };
 
   const buscarCNPJ = async (cnpj: string) => {
@@ -428,8 +430,13 @@ export default function EmpresasTerceiras() {
             <div className="space-y-4 overflow-hidden">
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                 <p className="text-sm text-amber-800 font-bold">{acessoEmpresa?.razaoSocial}</p>
-                <p className="text-xs text-amber-600">CNPJ: {formatCNPJ(acessoEmpresa?.cnpj)}</p>
+                <p className="text-xs text-amber-600">CNPJ: {formatCNPJ(acessoEmpresa?.cnpj) || "Não cadastrado"}</p>
               </div>
+              {!(acessoEmpresa?.cnpj?.replace(/\D/g, "")) && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-xs text-red-700 font-semibold">Esta empresa não possui CNPJ/CPF cadastrado. Cadastre o CNPJ antes de gerar o acesso ao portal.</p>
+                </div>
+              )}
               <div><Label>Nome do Responsável</Label><Input value={nomeResp} onChange={(e) => setNomeResp(e.target.value)} placeholder="Nome" /></div>
               <div><Label>E-mail do Responsável</Label><Input value={emailResp} onChange={(e) => setEmailResp(e.target.value)} placeholder="email@empresa.com" /></div>
               <p className="text-xs text-gray-500">Uma senha temporária será gerada. No primeiro acesso, o terceiro será obrigado a trocar a senha.</p>

@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { DialogFooter } from "@/components/ui/dialog";
+import { Copy } from "lucide-react";
 import {
   Search, Plus, Pencil, Building2, Phone, Mail, MapPin,
   CheckCircle2, XCircle, AlertTriangle, Loader2, X, ChevronDown, ChevronUp, Users,
@@ -270,6 +272,12 @@ export default function Fornecedores() {
   const [erroCNPJ, setErroCNPJ]       = useState<string | null>(null);
   const [detalheId, setDetalheId]     = useState<number | null>(null);
 
+  const [acessoDialogOpen, setAcessoDialogOpen] = useState(false);
+  const [acessoFornecedor, setAcessoFornecedor] = useState<any>(null);
+  const [acessoResult, setAcessoResult] = useState<{ senhaTemporaria: string; cnpj: string; nomeEmpresa: string } | null>(null);
+  const [nomeResp, setNomeResp] = useState("");
+  const [emailResp, setEmailResp] = useState("");
+
   const buscarCNPJQuery = trpc.compras.buscarCNPJ.useQuery(
     { cnpj: form.cnpj.replace(/\D/g, "") },
     { enabled: false, retry: false }
@@ -296,6 +304,26 @@ export default function Fornecedores() {
     { fornecedorId: verAvalId ?? 0, companyId },
     { enabled: !!verAvalId && !!companyId }
   );
+
+  const gerarAcessoMut = trpc.portalExterno.admin.gerarAcesso.useMutation({
+    onSuccess: (data) => setAcessoResult(data),
+    onError: (e) => toast.error(e.message),
+  });
+
+  function handleGerarAcesso(f: any) {
+    setAcessoFornecedor(f);
+    setEmailResp(f.contatoEmail || f.email || "");
+    setNomeResp(f.contatoNome || "");
+    setAcessoResult(null);
+    setAcessoDialogOpen(true);
+  }
+
+  function confirmarGerarAcesso() {
+    if (!acessoFornecedor || !companyId) return;
+    const cnpjLimpo = (acessoFornecedor.cnpj || "").replace(/\D/g, "");
+    if (!cnpjLimpo) { toast.error("Este fornecedor não possui CNPJ cadastrado. Cadastre antes de gerar acesso."); return; }
+    gerarAcessoMut.mutate({ tipo: "terceiro", companyId, cnpj: cnpjLimpo, emailResponsavel: emailResp, nomeResponsavel: nomeResp, nomeEmpresa: acessoFornecedor.razaoSocial });
+  }
 
   function abrirAvaliacao(id: number, nome: string) {
     setModalAvalId(id);
@@ -582,7 +610,14 @@ export default function Fornecedores() {
                     )}
                   </div>
                   <div className="flex gap-2 shrink-0 items-center">
-                    {/* Botão avaliar */}
+                    <Button
+                      size="sm" variant="outline"
+                      className="h-8 gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50"
+                      onClick={() => handleGerarAcesso(f)}
+                    >
+                      <KeyRound className="h-3.5 w-3.5" />
+                      Portal
+                    </Button>
                     <Button
                       size="sm" variant="outline"
                       className="h-8 gap-1.5 text-amber-600 border-amber-200 hover:bg-amber-50"
@@ -1034,6 +1069,63 @@ export default function Fornecedores() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={acessoDialogOpen} onOpenChange={setAcessoDialogOpen}>
+        <DialogContent resizable={false} className="sm:max-w-md w-[calc(100vw-2rem)]">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><KeyRound className="w-5 h-5 text-blue-500" /> Gerar Acesso ao Portal</DialogTitle></DialogHeader>
+          {!acessoResult ? (
+            <div className="space-y-4 overflow-hidden">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800 font-bold">{acessoFornecedor?.nomeFantasia || acessoFornecedor?.razaoSocial}</p>
+                <p className="text-xs text-blue-600">CNPJ: {acessoFornecedor?.cnpj ? formatCNPJ(acessoFornecedor.cnpj) : "Não cadastrado"}</p>
+              </div>
+              {!(acessoFornecedor?.cnpj?.replace(/\D/g, "")) && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-xs text-red-700 font-semibold">Este fornecedor não possui CNPJ cadastrado. Cadastre o CNPJ antes de gerar o acesso ao portal.</p>
+                </div>
+              )}
+              <div><Label>Nome do Responsável</Label><Input value={nomeResp} onChange={(e) => setNomeResp(e.target.value)} placeholder="Nome" /></div>
+              <div><Label>E-mail do Responsável</Label><Input value={emailResp} onChange={(e) => setEmailResp(e.target.value)} placeholder="email@empresa.com" /></div>
+              <p className="text-xs text-gray-500">Uma senha temporária será gerada. No primeiro acesso, o fornecedor será obrigado a trocar a senha.</p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAcessoDialogOpen(false)}>Cancelar</Button>
+                <Button onClick={confirmarGerarAcesso} disabled={gerarAcessoMut.isPending || !(acessoFornecedor?.cnpj?.replace(/\D/g, ""))} className="bg-blue-600 hover:bg-blue-700">{gerarAcessoMut.isPending ? "Gerando..." : "Gerar Acesso"}</Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 overflow-hidden">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
+                <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                <p className="font-semibold text-emerald-800">Acesso gerado com sucesso!</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3 overflow-hidden">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Login (CNPJ)</p>
+                  <div className="flex items-center gap-2">
+                    <code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap block">{acessoResult.cnpj || acessoFornecedor?.cnpj || "—"}</code>
+                    <Button size="sm" variant="outline" className="shrink-0" onClick={() => { navigator.clipboard.writeText(acessoResult.cnpj || acessoFornecedor?.cnpj || ""); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Senha Temporária</p>
+                  <div className="flex items-center gap-2">
+                    <code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1 min-w-0 text-amber-600 font-bold">{acessoResult.senhaTemporaria}</code>
+                    <Button size="sm" variant="outline" className="shrink-0" onClick={() => { navigator.clipboard.writeText(acessoResult.senhaTemporaria); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button>
+                  </div>
+                </div>
+                <div className="pt-2 border-t">
+                  <p className="text-xs text-gray-500 mb-1">Link do Portal</p>
+                  <div className="flex items-center gap-2">
+                    <code className="bg-white border rounded px-2 py-1 text-xs flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap block">{window.location.origin}/portal/login</code>
+                    <Button size="sm" variant="outline" className="shrink-0" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/login`); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button>
+                  </div>
+                </div>
+              </div>
+              <Button className="w-full" onClick={() => { const loginCnpj = acessoResult.cnpj || acessoFornecedor?.cnpj || ""; const msg = `Portal do Fornecedor - FC Gestão Integrada\n\nOlá ${nomeResp},\n\nSeu acesso ao portal foi criado:\n\nLink: ${window.location.origin}/portal/login\nLogin (CNPJ): ${loginCnpj}\nSenha: ${acessoResult.senhaTemporaria}\n\nNo primeiro acesso, você será solicitado a trocar a senha.`; navigator.clipboard.writeText(msg); toast.success("Mensagem copiada!"); }}><Copy className="w-4 h-4 mr-2" /> Copiar Mensagem Completa</Button>
+              <Button variant="outline" className="w-full" onClick={() => setAcessoDialogOpen(false)}>Fechar</Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
