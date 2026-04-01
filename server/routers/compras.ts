@@ -803,9 +803,10 @@ export const comprasRouter = router({
     .query(async ({ input }) => {
       const cnpjLimpo = input.cnpj.replace(/\D/g, "");
       if (cnpjLimpo.length !== 14) throw new TRPCError({ code: "BAD_REQUEST", message: "CNPJ inválido" });
-      try {
-        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
-        if (!res.ok) throw new TRPCError({ code: "NOT_FOUND", message: "CNPJ não encontrado na Receita Federal" });
+
+      async function tentarBrasilAPI() {
+        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return null;
         const data = await res.json() as any;
         return {
           cnpj:            cnpjLimpo,
@@ -823,9 +824,42 @@ export const comprasRouter = router({
           telefone:        data.ddd_telefone_1 ?? "",
           email:           data.email ?? "",
         };
+      }
+
+      async function tentarReceitaWS() {
+        const res = await fetch(`https://receitaws.com.br/v1/cnpj/${cnpjLimpo}`, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) return null;
+        const d = await res.json() as any;
+        if (d.status === "ERROR") return null;
+        return {
+          cnpj:            cnpjLimpo,
+          razaoSocial:     d.nome ?? "",
+          nomeFantasia:    d.fantasia ?? "",
+          situacaoReceita: d.situacao ?? "",
+          situacaoCodigo:  d.situacao === "ATIVA" ? 2 : 0,
+          endereco:        d.logradouro ?? "",
+          numero:          d.numero ?? "",
+          complemento:     d.complemento ?? "",
+          bairro:          d.bairro ?? "",
+          cidade:          d.municipio ?? "",
+          estado:          d.uf ?? "",
+          cep:             (d.cep ?? "").replace(/[.\-]/g, ""),
+          telefone:        d.telefone ?? "",
+          email:           d.email ?? "",
+        };
+      }
+
+      try {
+        const resultado = await tentarBrasilAPI() || await tentarReceitaWS();
+        if (!resultado) throw new TRPCError({ code: "NOT_FOUND", message: "CNPJ não encontrado na Receita Federal. Verifique se o CNPJ está correto." });
+        return resultado;
       } catch (e: any) {
         if (e instanceof TRPCError) throw e;
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao consultar a Receita Federal" });
+        console.error("[buscarCNPJ] Erro:", e.message);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao consultar a Receita Federal. Tente novamente em alguns segundos." });
       }
     }),
 
