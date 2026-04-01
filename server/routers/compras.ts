@@ -243,11 +243,11 @@ async function gerarContratoPJDeOS(params: {
       console.error(`[gerarContratoPJDeOS] Erro ao criar terceiro contrato:`, tcErr?.message);
     }
 
-    console.log(`[gerarContratoPJDeOS] Contrato ${numContrato} gerado para OS #${params.ocId} → PJ Contract #${contrato.id}`);
+    console.log(`[gerarContratoPJDeOS] Contrato ${numContrato} gerado para OS #${params.ocId} → PJ Contract #${contrato.id}, terceiroContratoId=${terceiroContratoId}`);
     return { ...contrato, terceiroContratoId };
   } catch (err: any) {
-    console.error(`[gerarContratoPJDeOS] Erro:`, err?.message);
-    return null;
+    console.error(`[gerarContratoPJDeOS] Erro:`, err?.message, err?.stack);
+    throw err;
   }
 }
 
@@ -4279,6 +4279,7 @@ Retorne APENAS um JSON válido neste formato:
           itensContrato = ocItensForContract.map(it => ({ descricao: it.descricao, unidade: it.unidade, quantidade: String(it.quantidade), precoUnitario: String(it.precoUnitario), total: String(it.total), insumoCodigo: (it as any).insumoCodigo ?? null }));
         }
 
+        console.log(`[criarOrdemDeCotacao] Criando contrato PJ para OC #${oc.id}, fornecedorId=${cot.fornecedorId}, moduloMedicao=${moduloMedicaoForn}, itens=${itensContrato.length}`);
         const contratoPJ = await gerarContratoPJDeOS({
           ocId: oc.id,
           companyId: input.companyId,
@@ -4291,6 +4292,7 @@ Retorne APENAS um JSON válido neste formato:
           userName: input.userName ?? "Sistema",
           moduloMedicao: moduloMedicaoForn,
         });
+        console.log(`[criarOrdemDeCotacao] Resultado gerarContratoPJDeOS:`, contratoPJ ? `PJ #${contratoPJ.id}, terceiroContratoId=${(contratoPJ as any).terceiroContratoId}` : "null");
 
         if (contratoPJ) {
           contratoGeradoId = contratoPJ.id;
