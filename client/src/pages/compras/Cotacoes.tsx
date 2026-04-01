@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -2137,6 +2137,57 @@ export default function Cotacoes() {
                   )}
                 </div>
               </div>
+
+              {/* Barra de evolução */}
+              {(() => {
+                const df = detalheFullscreen as any;
+                const isServicoOuPacote = df.tipo === "servico" || df.tipo === "pacote";
+                const hasOC = df.status === "aprovada" || df.status === "concluida";
+                const hasContrato = !!df.contratoTerceiroId;
+                const steps = isServicoOuPacote
+                  ? [
+                      { label: "Solicitação", done: true, icon: <ClipboardList className="h-4 w-4" /> },
+                      { label: "Cotação", done: true, icon: <FileSearch className="h-4 w-4" /> },
+                      { label: "Ordem de Serviço", done: hasOC, icon: <ShoppingCart className="h-4 w-4" /> },
+                      { label: "Contrato", done: hasContrato, icon: <FileText className="h-4 w-4" /> },
+                    ]
+                  : [
+                      { label: "Solicitação", done: true, icon: <ClipboardList className="h-4 w-4" /> },
+                      { label: "Cotação", done: true, icon: <FileSearch className="h-4 w-4" /> },
+                      { label: "Ordem de Compra", done: hasOC, icon: <ShoppingCart className="h-4 w-4" /> },
+                      { label: "Entrega", done: df.status === "concluida", icon: <CheckCircle className="h-4 w-4" /> },
+                    ];
+                const currentIdx = steps.reduce((acc, s, i) => (s.done ? i : acc), 0);
+                const isCancelada = df.status === "cancelada" || df.status === "recusada";
+                return (
+                  <div className="flex items-center gap-0 w-full py-2">
+                    {steps.map((step, i) => {
+                      const isActive = i === currentIdx + (steps[currentIdx + 1] && !steps[currentIdx + 1].done ? 1 : 0) && !isCancelada;
+                      const isDone = step.done && !isCancelada;
+                      return (
+                        <div key={i} className="flex items-center flex-1">
+                          <div className="flex flex-col items-center flex-1">
+                            <div className={`flex items-center justify-center w-9 h-9 rounded-full border-2 transition-all ${
+                              isDone ? "bg-emerald-500 border-emerald-500 text-white" :
+                              isActive && !isDone ? "bg-white border-blue-500 text-blue-600 ring-4 ring-blue-100" :
+                              isCancelada ? "bg-gray-100 border-gray-300 text-gray-400" :
+                              "bg-gray-100 border-gray-300 text-gray-400"
+                            }`}>
+                              {isDone ? <Check className="h-4 w-4" /> : step.icon}
+                            </div>
+                            <span className={`text-[11px] mt-1.5 font-medium text-center leading-tight ${
+                              isDone ? "text-emerald-700" : isActive && !isDone ? "text-blue-700" : "text-gray-400"
+                            }`}>{step.label}</span>
+                          </div>
+                          {i < steps.length - 1 && (
+                            <div className={`h-0.5 flex-1 -mt-5 mx-1 rounded ${isDone ? "bg-emerald-400" : "bg-gray-200"}`} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {(detalheFullscreen as any)?.itens?.some((it: any) => it.semVerba) && (
                 <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
