@@ -725,7 +725,7 @@ export default function Cotacoes() {
     { enabled: companyId > 0 }
   );
   const detalheQ = trpc.compras.getCotacao.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
-  const mapaQ = trpc.compras.getMapaCotacao.useQuery({ cotacaoId: showDetalhe! }, { enabled: showDetalhe !== null && abaAtiva === "mapa" });
+  const mapaQ = trpc.compras.getMapaCotacao.useQuery({ cotacaoId: showDetalhe! }, { enabled: showDetalhe !== null });
   const mapaItens = mapaQ.data?.itens ?? [];
   const mapaDescricoes = mapaItens.map((it: any) => it.descricao as string).filter(Boolean);
   const mapaInsumoCodigos = mapaItens.map((it: any) => it.insumoCodigo as string).filter(Boolean);
