@@ -239,38 +239,51 @@ export const portalExternoRouter = router({
     })).mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const cnpjClean = input.cnpj.replace(/\D/g, "");
-      // Check if already exists
-      const existing = await db.select().from(portalCredentials).where(
-        and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.tipo, input.tipo))
-      );
-      const senhaTemp = generateTempPassword();
-      const senhaHash = await bcrypt.hash(senhaTemp, 10);
-      if (existing.length > 0) {
-        // Update existing credential with new password
-        await db.update(portalCredentials).set({
-          senhaHash,
-          primeiroAcesso: 1,
-          ativo: 1,
-          emailResponsavel: input.emailResponsavel || existing[0].emailResponsavel,
-          nomeResponsavel: input.nomeResponsavel || existing[0].nomeResponsavel,
-          nomeEmpresa: input.nomeEmpresa || existing[0].nomeEmpresa,
-        }).where(eq(portalCredentials.id, existing[0].id));
-      } else {
-        await db.insert(portalCredentials).values({
-          tipo: input.tipo,
-          empresaTerceiraId: input.empresaTerceiraId || null,
-          parceiroId: input.parceiroId || null,
-          companyId: input.companyId,
-          cnpj: cnpjClean,
-          senhaHash,
-          nomeEmpresa: input.nomeEmpresa || null,
-          emailResponsavel: input.emailResponsavel || null,
-          nomeResponsavel: input.nomeResponsavel || null,
-          primeiroAcesso: 1,
-          ativo: 1,
+      try {
+        const existing = await db.select().from(portalCredentials).where(
+          and(
+            eq(portalCredentials.cnpj, cnpjClean),
+            eq(portalCredentials.tipo, input.tipo),
+            eq(portalCredentials.companyId, input.companyId),
+          )
+        );
+        const senhaTemp = generateTempPassword();
+        const senhaHash = await bcrypt.hash(senhaTemp, 10);
+        if (existing.length > 0) {
+          await db.update(portalCredentials).set({
+            senhaHash,
+            primeiroAcesso: 1,
+            ativo: 1,
+            empresaTerceiraId: input.empresaTerceiraId ?? existing[0].empresaTerceiraId,
+            parceiroId: input.parceiroId ?? existing[0].parceiroId,
+            emailResponsavel: input.emailResponsavel || existing[0].emailResponsavel,
+            nomeResponsavel: input.nomeResponsavel || existing[0].nomeResponsavel,
+            nomeEmpresa: input.nomeEmpresa || existing[0].nomeEmpresa,
+            updatedAt: new Date().toISOString(),
+          }).where(eq(portalCredentials.id, existing[0].id));
+        } else {
+          await db.insert(portalCredentials).values({
+            tipo: input.tipo,
+            empresaTerceiraId: input.empresaTerceiraId ?? null,
+            parceiroId: input.parceiroId ?? null,
+            companyId: input.companyId,
+            cnpj: cnpjClean,
+            senhaHash,
+            nomeEmpresa: input.nomeEmpresa ?? null,
+            emailResponsavel: input.emailResponsavel ?? null,
+            nomeResponsavel: input.nomeResponsavel ?? null,
+            primeiroAcesso: 1,
+            ativo: 1,
+          });
+        }
+        return { senhaTemporaria: senhaTemp, cnpj: cnpjClean, nomeEmpresa: input.nomeEmpresa || "" };
+      } catch (err: any) {
+        console.error("[gerarAcesso] Erro:", err);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Erro ao gerar acesso para CNPJ ${cnpjClean}: ${err?.detail || err?.message || "erro desconhecido"}`,
         });
       }
-      return { senhaTemporaria: "mudar123", cnpj: cnpjClean, nomeEmpresa: input.nomeEmpresa || "" };
     }),
 
     listarAcessos: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), tipo: z.enum(["terceiro", "parceiro"]).optional(),
