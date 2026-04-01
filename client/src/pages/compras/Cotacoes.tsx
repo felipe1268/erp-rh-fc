@@ -769,6 +769,8 @@ export default function Cotacoes() {
       if (data?.terceiroContratoGeradoId) {
         toast.success("OS aprovada! Redirecionando para o contrato de serviço...");
         setTimeout(() => navigate(`/terceiros/contratos/${data.terceiroContratoGeradoId}?tab=documento`), 800);
+      } else if (data?.contratoGeradoId) {
+        toast.success("OS aprovada! Contrato PJ gerado.");
       } else {
         toast.success("Ordem de Compra gerada!");
       }

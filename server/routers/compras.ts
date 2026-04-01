@@ -246,8 +246,8 @@ async function gerarContratoPJDeOS(params: {
     console.log(`[gerarContratoPJDeOS] Contrato ${numContrato} gerado para OS #${params.ocId} → PJ Contract #${contrato.id}, terceiroContratoId=${terceiroContratoId}`);
     return { ...contrato, terceiroContratoId };
   } catch (err: any) {
-    console.error(`[gerarContratoPJDeOS] Erro:`, err?.message, err?.stack);
-    throw err;
+    console.error(`[gerarContratoPJDeOS] Erro FATAL:`, err?.message);
+    return null;
   }
 }
 
