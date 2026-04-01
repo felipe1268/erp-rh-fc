@@ -1750,6 +1750,9 @@ export default function Cotacoes() {
 
     const itensSemVerba = (mapa?.itens ?? []).filter((it: any) => (it as any).fonteVinculo !== "item" && (it as any).fonteVinculo !== "insumo");
     const temItensSemVerba = itensSemVerba.length > 0;
+    const vencedorFornId = fornParaSaldo?.fornecedorId;
+    const vencedorModuloMedicao = vencedorFornId ? (editModuloMedicao[vencedorFornId] || (fornParaSaldo as any)?.moduloMedicao || "") : "";
+    const isMedicaoVencedor = ["medicao_mensal", "medicao_avanco", "medicao_etapa", "empreitada"].includes(vencedorModuloMedicao);
 
     function validarCondicoesVencedor(): boolean {
       if (!fornParaSaldo) {
@@ -2086,17 +2089,22 @@ export default function Cotacoes() {
                   {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo !== "servico" && (
                     <>
                       <Button onClick={() => handleAprovarGerarOC(detalheFullscreen.id)} disabled={gerarOC.isPending}
-                        className={`${temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-500"} text-white gap-2`}>
+                        className={`${temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : isMedicaoVencedor ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"} text-white gap-2`}>
                         {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : temItensSemVerba && !semVerbaAutorizado ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-                        {temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : "Aprovar e Gerar OC"}
+                        {temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : isMedicaoVencedor ? "Aprovar e Gerar Contrato" : "Aprovar e Gerar OC"}
                       </Button>
+                      {isMedicaoVencedor && (
+                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full flex items-center gap-1">
+                          <FileText className="h-3 w-3" /> Contrato será gerado no módulo Terceiros
+                        </span>
+                      )}
                       <Button variant="outline" onClick={() => atualizarStatus.mutate({ id: detalheFullscreen.id, status: "recusada" })}
                         className="border-red-200 text-red-600 hover:bg-red-50 gap-2">
                         <XCircle className="h-4 w-4" /> Recusar
                       </Button>
                     </>
                   )}
-                  {detalheFullscreen.status === "concluida" && (detalheFullscreen as any).contratoTerceiroId && (
+                  {(detalheFullscreen.status === "aprovada" || detalheFullscreen.status === "concluida") && (detalheFullscreen as any).contratoTerceiroId && (
                     <Button variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalheFullscreen as any).contratoTerceiroId}`); }}
                       className="border-blue-200 text-blue-600 hover:bg-blue-50 gap-2">
                       <FileText className="h-4 w-4" /> Ver Contrato de Serviço
@@ -2243,17 +2251,22 @@ export default function Cotacoes() {
                     {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo !== "servico" && (
                       <>
                         <Button onClick={() => handleAprovarGerarOC(detalheFullscreen.id)} disabled={gerarOC.isPending}
-                          className={`${temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-500"} text-white gap-2`}>
+                          className={`${temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : isMedicaoVencedor ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"} text-white gap-2`}>
                           {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : temItensSemVerba && !semVerbaAutorizado ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-                          {temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : "Aprovar e Gerar OC"}
+                          {temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : isMedicaoVencedor ? "Aprovar e Gerar Contrato" : "Aprovar e Gerar OC"}
                         </Button>
+                        {isMedicaoVencedor && (
+                          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full flex items-center gap-1">
+                            <FileText className="h-3 w-3" /> Contrato será gerado no módulo Terceiros
+                          </span>
+                        )}
                         <Button variant="outline" onClick={() => atualizarStatus.mutate({ id: detalheFullscreen.id, status: "recusada" })}
                           className="border-red-200 text-red-600 hover:bg-red-50 gap-2">
                           <X className="h-4 w-4" /> Recusar
                         </Button>
                       </>
                     )}
-                    {detalheFullscreen.status === "concluida" && (detalheFullscreen as any).contratoTerceiroId && (
+                    {(detalheFullscreen.status === "aprovada" || detalheFullscreen.status === "concluida") && (detalheFullscreen as any).contratoTerceiroId && (
                       <Button variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalheFullscreen as any).contratoTerceiroId}`); }}
                         className="border-blue-200 text-blue-600 hover:bg-blue-50 gap-2">
                         <FileText className="h-4 w-4" /> Ver Contrato de Serviço

@@ -4271,6 +4271,10 @@ Retorne APENAS um JSON válido neste formato:
         if (contratoPJ) {
           contratoGeradoId = contratoPJ.id;
           terceiroContratoGeradoId = (contratoPJ as any).terceiroContratoId ?? null;
+          if (terceiroContratoGeradoId) {
+            await db.update(comprasOrdens).set({ contratoTerceiroId: terceiroContratoGeradoId, atualizadoEm: new Date().toISOString() } as any).where(eq(comprasOrdens.id, oc.id));
+            await db.update(comprasCotacoes).set({ contratoTerceiroId: terceiroContratoGeradoId } as any).where(eq(comprasCotacoes.id, input.cotacaoId));
+          }
           const [fornForSign] = await db.select().from(fornecedores)
             .where(and(eq(fornecedores.id, cot.fornecedorId), eq(fornecedores.companyId, input.companyId)));
 
