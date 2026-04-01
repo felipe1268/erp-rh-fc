@@ -716,30 +716,38 @@ export default function Ordens() {
             const semaforoDetalhe = calcularSemaforo(detalhe.dataEntregaPrevista, detalhe.dataEntregaReal, detalhe.status, detalhe.proximaEntregaProgramada);
             return (
               <div className="space-y-5 pt-2">
-                {semaforoDetalhe.status === "atrasado" && (
+                {semaforoDetalhe.status === "atrasado" && (() => {
+                  const isTerceiro = ["servico", "pacote"].includes((detalhe as any)?.tipo);
+                  const termoEntrega = isTerceiro ? "Mobilização" : "Entrega";
+                  return (
                   <div className="flex items-center gap-3 rounded-lg border border-red-300 bg-red-50 p-3">
                     <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold text-red-800">Entrega atrasada</p>
+                      <p className="text-sm font-semibold text-red-800">{termoEntrega} atrasada</p>
                       <p className="text-xs text-red-600">
                         {semaforoDetalhe.dias} dia{semaforoDetalhe.dias !== 1 ? "s" : ""} de atraso
                         {semaforoDetalhe.dataReferencia && ` — prevista para ${new Date(semaforoDetalhe.dataReferencia + "T00:00:00").toLocaleDateString("pt-BR")}`}
                       </p>
                     </div>
                   </div>
-                )}
-                {semaforoDetalhe.status === "proximo" && (
+                  );
+                })()}
+                {semaforoDetalhe.status === "proximo" && (() => {
+                  const isTerceiro = ["servico", "pacote"].includes((detalhe as any)?.tipo);
+                  const termoEntrega = isTerceiro ? "Mobilização" : "Entrega";
+                  return (
                   <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
                     <Clock className="h-5 w-5 text-amber-500 flex-shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold text-amber-800">Entrega próxima</p>
+                      <p className="text-sm font-semibold text-amber-800">{termoEntrega} próxima</p>
                       <p className="text-xs text-amber-600">
-                        {semaforoDetalhe.dias === 0 ? "Entrega prevista para hoje" : `Faltam ${semaforoDetalhe.dias} dia${semaforoDetalhe.dias !== 1 ? "s" : ""} para a entrega`}
+                        {semaforoDetalhe.dias === 0 ? `${termoEntrega} prevista para hoje` : `Faltam ${semaforoDetalhe.dias} dia${semaforoDetalhe.dias !== 1 ? "s" : ""} para a ${termoEntrega.toLowerCase()}`}
                         {semaforoDetalhe.dataReferencia && ` — ${new Date(semaforoDetalhe.dataReferencia + "T00:00:00").toLocaleDateString("pt-BR")}`}
                       </p>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
                 {(detalhe as any).pendenteCoberturaOrcamentaria && (
                   <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
                     <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
@@ -773,8 +781,8 @@ export default function Ordens() {
                   <div><span className="text-gray-400 text-xs">Obra</span><p className="text-gray-900 font-medium flex items-center gap-1"><Building2 className="h-3 w-3 text-gray-400" />{nomeObra((detalhe as any).obraId) ?? "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Status</span><p><span className={`inline-flex px-2 py-0.5 rounded text-xs border ${st.cls}`}>{st.label}</span></p></div>
                   <div><span className="text-gray-400 text-xs">Fornecedor</span><p className="text-gray-900 font-medium">{(detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor?.nomeFantasia || (detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor?.razaoSocial || "—"}</p></div>
-                  <div><span className="text-gray-400 text-xs">Entrega prevista</span><p className="text-gray-900 font-medium">{detalhe.dataEntregaPrevista ? new Date(detalhe.dataEntregaPrevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
-                  <div><span className="text-gray-400 text-xs">Entrega real</span><p className="text-gray-900 font-medium">{detalhe.dataEntregaReal ? new Date(detalhe.dataEntregaReal + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
+                  <div><span className="text-gray-400 text-xs">{["servico", "pacote"].includes((detalhe as any)?.tipo) ? "Mobilização prevista" : "Entrega prevista"}</span><p className="text-gray-900 font-medium">{detalhe.dataEntregaPrevista ? new Date(detalhe.dataEntregaPrevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
+                  <div><span className="text-gray-400 text-xs">{["servico", "pacote"].includes((detalhe as any)?.tipo) ? "Mobilização real" : "Entrega real"}</span><p className="text-gray-900 font-medium">{detalhe.dataEntregaReal ? new Date(detalhe.dataEntregaReal + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Origem</span><p className="text-gray-900 font-medium">{detalhe.cotacaoId ? `Cotação #${detalhe.cotacaoId}` : "Manual"}</p></div>
                   <div><span className="text-gray-400 text-xs">Criado em</span><p className="text-gray-900 font-medium">{new Date(detalhe.criadoEm).toLocaleDateString("pt-BR")}</p></div>
                   {((detalhe as any).freteTipo || (detalhe as any).transportadora || (detalhe as any).codigoRastreamento) && (
