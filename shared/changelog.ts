@@ -7017,4 +7017,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-01 14:00:00",
   },
+  {
+    version: 959,
+    titulo: "Contrato Terceiros: datas baseadas nas atividades contratadas do cronograma",
+    descricao:
+      "O contrato PJ gerado a partir da cotação agora busca as datas de início e fim " +
+      "especificamente das atividades contratadas no planejamento da obra, usando correspondência por nome. " +
+      "Exemplo: se a cotação contrata 'Revestimento em Gesso Liso Desempenado', o sistema encontra todas as " +
+      "ocorrências dessa atividade no cronograma (pavimentos 3 a 8) e usa a primeira data de início (11/03/2026) " +
+      "e a última data de fim (06/10/2026) como período do contrato. " +
+      "Caso nenhuma atividade correspondente seja encontrada, usa fallback com o período total da obra. " +
+      "Labels de 'Entrega' nos detalhes de OS de serviço/pacote agora mostram 'Mobilização prevista' e 'Mobilização real'.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-01 15:00:00",
+  },
 ];

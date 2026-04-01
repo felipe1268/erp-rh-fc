@@ -119,16 +119,53 @@ async function gerarContratoPJDeOS(params: {
 
     if (params.obraId) {
       try {
-        const cronoDates = await db.execute(sql`
-          SELECT MIN(pa.data_inicio) as primeiro_inicio, MAX(pa.data_fim) as ultimo_termino
-          FROM planejamento_projetos pp
-          JOIN planejamento_atividades pa ON pa.projeto_id = pp.id
-          WHERE pp.obra_id = ${params.obraId} AND pa.data_inicio IS NOT NULL
-        `);
-        const row = (cronoDates as any).rows?.[0];
-        if (row?.primeiro_inicio) hoje = String(row.primeiro_inicio).slice(0, 10);
-        if (row?.ultimo_termino) dataFim = String(row.ultimo_termino).slice(0, 10);
-      } catch {}
+        const descricoes = params.itensOS
+          .map(it => {
+            let d = it.descricao || "";
+            d = d.replace(/^\[[^\]]+\]\s*/, "").trim().toLowerCase();
+            return d;
+          })
+          .filter(d => d.length > 5);
+
+        let found = false;
+        if (descricoes.length > 0) {
+          const escapeLike = (s: string) => s.replace(/[%_\\]/g, c => "\\" + c);
+          const likeClauses = descricoes.map(d => sql`LOWER(pa.nome) LIKE ${"%" + escapeLike(d.slice(0, 40)) + "%"} ESCAPE '\\'`);
+          const cronoDates = await db.execute(sql`
+            SELECT MIN(pa.data_inicio) as primeiro_inicio, MAX(pa.data_fim) as ultimo_termino
+            FROM planejamento_projetos pp
+            JOIN planejamento_atividades pa ON pa.projeto_id = pp.id
+            WHERE pp.obra_id = ${params.obraId}
+              AND pa.data_inicio IS NOT NULL
+              AND (${sql.join(likeClauses, sql` OR `)})
+          `);
+          const row = (cronoDates as any).rows?.[0];
+          if (row?.primeiro_inicio) {
+            hoje = String(row.primeiro_inicio).slice(0, 10);
+            found = true;
+          }
+          if (row?.ultimo_termino) {
+            dataFim = String(row.ultimo_termino).slice(0, 10);
+            found = true;
+          }
+          if (found) console.log(`[gerarContratoPJDeOS] Datas do cronograma (por nome): ${hoje} a ${dataFim}`);
+        }
+
+        if (!found) {
+          const fallback = await db.execute(sql`
+            SELECT MIN(pa.data_inicio) as primeiro_inicio, MAX(pa.data_fim) as ultimo_termino
+            FROM planejamento_projetos pp
+            JOIN planejamento_atividades pa ON pa.projeto_id = pp.id
+            WHERE pp.obra_id = ${params.obraId} AND pa.data_inicio IS NOT NULL
+          `);
+          const fbRow = (fallback as any).rows?.[0];
+          if (fbRow?.primeiro_inicio) hoje = String(fbRow.primeiro_inicio).slice(0, 10);
+          if (fbRow?.ultimo_termino) dataFim = String(fbRow.ultimo_termino).slice(0, 10);
+          console.log(`[gerarContratoPJDeOS] Datas do cronograma (fallback obra): ${hoje} a ${dataFim}`);
+        }
+      } catch (e: any) {
+        console.error(`[gerarContratoPJDeOS] Erro ao buscar datas cronograma:`, e?.message);
+      }
     }
 
     const eapItensJson = JSON.stringify(params.itensOS.map(it => ({
