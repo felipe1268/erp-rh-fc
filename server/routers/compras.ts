@@ -81,19 +81,26 @@ async function gerarContratoPJDeOS(params: {
     const diaPag = config ? (config as any).diaPagamento ?? 10 : 10;
 
     const [forn] = await db.select().from(fornecedores).where(and(eq(fornecedores.id, params.fornecedorId), eq(fornecedores.companyId, params.companyId)));
-    const cnpj = forn?.cnpj ?? "";
+    const cnpj = forn?.cnpj?.trim() || "";
     const razaoSocial = forn?.razaoSocial ?? params.fornecedorNome ?? "";
 
     let employeeId: number;
-    const existingEmp = await db.execute(sql`
-      SELECT id FROM employees WHERE company_id = ${params.companyId} AND tipo = 'pj' AND cnpj = ${cnpj} AND deleted_at IS NULL LIMIT 1
-    `);
+    let existingEmp: any;
+    if (cnpj) {
+      existingEmp = await db.execute(sql`
+        SELECT id FROM employees WHERE company_id = ${params.companyId} AND tipo = 'pj' AND cnpj = ${cnpj} AND deleted_at IS NULL LIMIT 1
+      `);
+    } else {
+      existingEmp = await db.execute(sql`
+        SELECT id FROM employees WHERE company_id = ${params.companyId} AND tipo = 'pj' AND nome = ${razaoSocial} AND (cnpj IS NULL OR cnpj = '') AND deleted_at IS NULL LIMIT 1
+      `);
+    }
     if ((existingEmp as any).rows?.length > 0) {
       employeeId = (existingEmp as any).rows[0].id;
     } else {
       const insertRes = await db.execute(sql`
         INSERT INTO employees (company_id, nome, tipo, cnpj, status, created_at, updated_at)
-        VALUES (${params.companyId}, ${razaoSocial}, 'pj', ${cnpj}, 'ativo', NOW(), NOW())
+        VALUES (${params.companyId}, ${razaoSocial}, 'pj', ${cnpj || null}, 'ativo', NOW(), NOW())
         RETURNING id
       `);
       employeeId = (insertRes as any).rows[0].id;
@@ -167,6 +174,23 @@ async function gerarContratoPJDeOS(params: {
             razaoSocial: razaoSocial || params.fornecedorNome || "Empresa Terceira",
             cnpj,
             responsavelNome: razaoSocial || params.fornecedorNome || "",
+            status: "ativa",
+          } as any).returning();
+          empTerceiraId = novaEmp.id;
+        }
+      } else {
+        const nomeEmpresa = razaoSocial || params.fornecedorNome || "Empresa Terceira";
+        const existEmpByName = await db.execute(sql`
+          SELECT id FROM empresas_terceiras WHERE company_id = ${params.companyId} AND razao_social = ${nomeEmpresa} AND (cnpj IS NULL OR cnpj = '') LIMIT 1
+        `);
+        if ((existEmpByName as any).rows?.length > 0) {
+          empTerceiraId = (existEmpByName as any).rows[0].id;
+        } else {
+          const [novaEmp] = await db.insert(empresasTerceiras).values({
+            companyId: params.companyId,
+            razaoSocial: nomeEmpresa,
+            cnpj: null,
+            responsavelNome: nomeEmpresa,
             status: "ativa",
           } as any).returning();
           empTerceiraId = novaEmp.id;
