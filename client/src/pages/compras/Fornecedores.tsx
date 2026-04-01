@@ -357,11 +357,18 @@ export default function Fornecedores() {
     try {
       const res = await buscarCNPJQuery.refetch();
       const d = res.data;
-      if (!d) { setErroCNPJ("CNPJ não encontrado na Receita Federal."); return; }
+      if (!d) {
+        if (res.error) {
+          setErroCNPJ("Não foi possível consultar a Receita Federal no momento. Preencha os dados manualmente.");
+        } else {
+          setErroCNPJ("CNPJ não encontrado na Receita Federal. Verifique o número e tente novamente.");
+        }
+        return;
+      }
 
       const situacaoCod = d.situacaoCodigo ?? 0;
       if (situacaoCod !== 2) {
-        setErroCNPJ(`Atenção: situação na Receita é "${d.situacaoReceita}". Cadastro bloqueado para situações irregulares.`);
+        setErroCNPJ(`Atenção: situação na Receita é "${d.situacaoReceita}".`);
         if ([3, 4, 8].includes(situacaoCod)) return;
       }
 
@@ -383,7 +390,7 @@ export default function Fornecedores() {
       }));
       toast.success("Dados do CNPJ carregados com sucesso!");
     } catch {
-      setErroCNPJ("Erro ao consultar a Receita Federal. Verifique o CNPJ e tente novamente.");
+      setErroCNPJ("Não foi possível consultar a Receita Federal no momento. Preencha os dados manualmente.");
     } finally {
       setBuscandoCNPJ(false);
     }
