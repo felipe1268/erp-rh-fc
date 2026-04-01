@@ -114,10 +114,22 @@ async function gerarContratoPJDeOS(params: {
     const seqC = (parseInt(String((countContratos as any).rows?.[0]?.c ?? "0")) + 1).toString().padStart(4, "0");
     const numContrato = `CT-${ano}-${seqC}`;
 
-    const hoje = new Date().toISOString().slice(0, 10);
-    const fim = new Date();
-    fim.setFullYear(fim.getFullYear() + 1);
-    const dataFim = fim.toISOString().slice(0, 10);
+    let hoje = new Date().toISOString().slice(0, 10);
+    let dataFim = new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10);
+
+    if (params.obraId) {
+      try {
+        const cronoDates = await db.execute(sql`
+          SELECT MIN(pa.data_inicio) as primeiro_inicio, MAX(pa.data_fim) as ultimo_termino
+          FROM planejamento_projetos pp
+          JOIN planejamento_atividades pa ON pa.projeto_id = pp.id
+          WHERE pp.obra_id = ${params.obraId} AND pa.data_inicio IS NOT NULL
+        `);
+        const row = (cronoDates as any).rows?.[0];
+        if (row?.primeiro_inicio) hoje = String(row.primeiro_inicio).slice(0, 10);
+        if (row?.ultimo_termino) dataFim = String(row.ultimo_termino).slice(0, 10);
+      } catch {}
+    }
 
     const eapItensJson = JSON.stringify(params.itensOS.map(it => ({
       descricao: it.descricao,
