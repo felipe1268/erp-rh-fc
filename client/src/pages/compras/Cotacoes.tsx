@@ -3455,6 +3455,7 @@ export default function Cotacoes() {
                               </td>
                               <td className="px-2 py-3 text-center text-xs text-orange-600 bg-orange-50/40 border-r border-orange-100 font-bold">
                                 {(() => {
+                                  if (isPacoteTotals) return "—";
                                   const allItensArr = mapa?.itens ?? [];
                                   const totalSaldo = allItensArr.reduce((s: number, i: any) => s + ((i as any).qtdSaldo ?? 0), 0);
                                   const temSemVinculo = allItensArr.some((i: any) => !(i as any).fonteVinculo);
