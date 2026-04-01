@@ -1662,9 +1662,6 @@ export default function Cotacoes() {
               ); })()}
 
             {(() => {
-              const cotTipo = (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
-              const isMdo = cotTipo === "servico" || cotTipo === "pacote";
-              if (!isMdo) return null;
               const MODULOS = [
                 { v: "medicao_mensal", l: "Medição Mensal", desc: "Pagamento mensal por medição de serviço executado", icon: "📅", sel: "bg-purple-100 text-purple-700 border-purple-300 ring-purple-200" },
                 { v: "medicao_avanco", l: "Medição por Avanço", desc: "Pagamento baseado no % de avanço físico", icon: "📊", sel: "bg-blue-100 text-blue-700 border-blue-300 ring-blue-200" },
