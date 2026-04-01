@@ -755,6 +755,7 @@ export const comprasRouter = router({
   atualizarFornecedor: protectedProcedure
     .input(z.object({
       id:              z.number(),
+      cnpj:            z.string().optional(),
       razaoSocial:     z.string().min(1).optional(),
       nomeFantasia:    z.string().optional(),
       situacaoReceita: z.string().optional(),
