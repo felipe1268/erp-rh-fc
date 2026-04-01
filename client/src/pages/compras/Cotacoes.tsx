@@ -2964,6 +2964,7 @@ export default function Cotacoes() {
                                   const compQtd = (first as any).composicaoQtdOrcada || 0;
                                   const compMeta = (first as any).composicaoMetaTotal || 0;
                                   const compEap = (first as any).composicaoEapCodigo || "";
+                                  const compEstaSC = compQtd;
                                   return {
                                     ...first,
                                     id: first.id,
@@ -2973,6 +2974,11 @@ export default function Cotacoes() {
                                     metaUnitario: compMeta,
                                     metaQtd: compQtd,
                                     qtdOrcada: compQtd,
+                                    qtdTotalSolicitada: compEstaSC,
+                                    qtdComprada: 0,
+                                    qtdEstaSC: compEstaSC,
+                                    qtdSaldo: 0,
+                                    fonteVinculo: "item",
                                     eapPath: first.eapPath,
                                     _grouped: true,
                                     _isPacoteGroup: true,
