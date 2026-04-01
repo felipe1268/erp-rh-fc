@@ -2436,30 +2436,6 @@ Responda APENAS com um objeto JSON no formato:
         }
       }
 
-      if (cot.obraId && Object.keys(svcCodeToCompInfo).length > 0) {
-        const svcCodes = Object.keys(svcCodeToCompInfo);
-        const allOrcRows = await db.select({ id: orcamentos.id }).from(orcamentos)
-          .where(and(eq(orcamentos.companyId, cot.companyId), eq(orcamentos.obraId, cot.obraId), isNull(orcamentos.deletedAt)))
-          .orderBy(desc(orcamentos.createdAt)).limit(1);
-        if (allOrcRows.length > 0) {
-          const fullOrcItems = await db.select({
-            servicoCodigo: orcamentoItens.servicoCodigo,
-            quantidade: orcamentoItens.quantidade,
-          }).from(orcamentoItens)
-            .where(and(
-              inArray(orcamentoItens.orcamentoId, allOrcRows.map(r => r.id)),
-              eq(orcamentoItens.companyId, Number(cot.companyId)),
-              inArray(orcamentoItens.servicoCodigo, svcCodes),
-            ));
-          for (const code of svcCodes) {
-            const matching = fullOrcItems.filter(it => it.servicoCodigo === code);
-            if (matching.length > 0) {
-              svcCodeToCompInfo[code].qtdOrcada = matching.reduce((s, it) => s + n(it.quantidade), 0);
-            }
-          }
-        }
-      }
-
       const orcItemToQtdOrcada: Record<number, number> = {};
       for (const o of orcItensData) orcItemToQtdOrcada[o.id] = n(o.quantidade);
 
