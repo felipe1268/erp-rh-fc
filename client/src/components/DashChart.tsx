@@ -229,13 +229,14 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
 }
 
 // KPI Card for dashboards
-export function DashKpi({ label, value, color = "blue", icon: Icon, sub, active, onClick }: {
+export function DashKpi({ label, value, color = "blue", icon: Icon, sub, active, dimmed, onClick }: {
   label: string;
   value: string | number;
   color?: string;
   icon?: any;
   sub?: string;
   active?: boolean;
+  dimmed?: boolean;
   onClick?: () => void;
 }) {
   const colorMap: Record<string, string> = {
@@ -260,7 +261,7 @@ export function DashKpi({ label, value, color = "blue", icon: Icon, sub, active,
   })();
   return (
     <Card
-      className={`border-l-4 ${borderColor} transition-all ${onClick ? 'cursor-pointer hover:shadow-md hover:scale-[1.01]' : ''} ${active ? 'ring-2 ring-offset-1 ring-blue-400 shadow-md scale-[1.02]' : 'hover:shadow-sm'}`}
+      className={`border-l-4 ${borderColor} transition-all duration-200 ${onClick ? 'cursor-pointer hover:shadow-md hover:scale-[1.01]' : ''} ${active ? 'ring-2 ring-offset-1 ring-blue-400 shadow-md scale-[1.02]' : 'hover:shadow-sm'} ${dimmed ? 'opacity-45 grayscale-[40%] scale-[0.98]' : ''}`}
       onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}

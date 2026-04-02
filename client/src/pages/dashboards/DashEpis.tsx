@@ -268,20 +268,20 @@ export default function DashEpis() {
             {/* KPIs PRINCIPAIS */}
             {/* ============================================================ */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-              <DashKpi label="Itens Cadastrados" value={data.resumo.totalItens} icon={HardHat} color="blue" onClick={() => handleKpiClick("itens")} active={activeKpi === "itens"} />
-              <DashKpi label="Estoque Total" value={data.resumo.estoqueTotal} icon={Package} color="green" sub="unidades em estoque" onClick={() => handleKpiClick("estoque")} active={activeKpi === "estoque"} />
-              <DashKpi label="Valor Inventário" value={fmtBRL(data.resumo.valorTotalInventario || 0)} icon={DollarSign} color="teal" onClick={() => handleKpiClick("inventario")} active={activeKpi === "inventario"} />
-              <DashKpi label="Entregas (30d)" value={data.resumo.entregasMes || 0} icon={ClipboardList} color="purple" sub="últimos 30 dias" onClick={() => handleKpiClick("entregas30d")} active={activeKpi === "entregas30d"} />
-              <DashKpi label="Custo Total Entregas" value={fmtBRL(data.custoTotalEntregas || 0)} icon={DollarSign} color="indigo" sub="valor total distribuído" onClick={() => handleKpiClick("custoEntregas")} active={activeKpi === "custoEntregas"} />
+              <DashKpi label="Itens Cadastrados" value={data.resumo.totalItens} icon={HardHat} color="blue" onClick={() => handleKpiClick("itens")} active={activeKpi === "itens"} dimmed={!!activeKpi && activeKpi !== "itens"} />
+              <DashKpi label="Estoque Total" value={data.resumo.estoqueTotal} icon={Package} color="green" sub="unidades em estoque" onClick={() => handleKpiClick("estoque")} active={activeKpi === "estoque"} dimmed={!!activeKpi && activeKpi !== "estoque"} />
+              <DashKpi label="Valor Inventário" value={fmtBRL(data.resumo.valorTotalInventario || 0)} icon={DollarSign} color="teal" onClick={() => handleKpiClick("inventario")} active={activeKpi === "inventario"} dimmed={!!activeKpi && activeKpi !== "inventario"} />
+              <DashKpi label="Entregas (30d)" value={data.resumo.entregasMes || 0} icon={ClipboardList} color="purple" sub="últimos 30 dias" onClick={() => handleKpiClick("entregas30d")} active={activeKpi === "entregas30d"} dimmed={!!activeKpi && activeKpi !== "entregas30d"} />
+              <DashKpi label="Custo Total Entregas" value={fmtBRL(data.custoTotalEntregas || 0)} icon={DollarSign} color="indigo" sub="valor total distribuído" onClick={() => handleKpiClick("custoEntregas")} active={activeKpi === "custoEntregas"} dimmed={!!activeKpi && activeKpi !== "custoEntregas"} />
             </div>
 
             {/* KPIs ALERTAS */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-              <DashKpi label="Estoque Baixo" value={data.resumo.estoqueBaixo} icon={AlertTriangle} color="red" sub="≤ 5 unidades" onClick={() => handleKpiClick("estoqueBaixo")} active={activeKpi === "estoqueBaixo"} />
-              <DashKpi label="CA Vencido" value={data.resumo.caVencido} icon={ShieldAlert} color="orange" onClick={() => handleKpiClick("caVencido")} active={activeKpi === "caVencido"} />
-              <DashKpi label="CA Vencendo (90d)" value={data.resumo.casVencendoCount || 0} icon={Calendar} color="yellow" sub="próximos 90 dias" onClick={() => handleKpiClick("caVencendo")} active={activeKpi === "caVencendo"} />
-              <DashKpi label="Total Entregas" value={data.resumo.totalEntregas} icon={TrendingUp} color="indigo" onClick={() => handleKpiClick("totalEntregas")} active={activeKpi === "totalEntregas"} />
-              <DashKpi label="Func. Atendidos" value={data.resumo.funcUnicos || 0} icon={Users} color="slate" onClick={() => handleKpiClick("funcAtendidos")} active={activeKpi === "funcAtendidos"} />
+              <DashKpi label="Estoque Baixo" value={data.resumo.estoqueBaixo} icon={AlertTriangle} color="red" sub="≤ 5 unidades" onClick={() => handleKpiClick("estoqueBaixo")} active={activeKpi === "estoqueBaixo"} dimmed={!!activeKpi && activeKpi !== "estoqueBaixo"} />
+              <DashKpi label="CA Vencido" value={data.resumo.caVencido} icon={ShieldAlert} color="orange" onClick={() => handleKpiClick("caVencido")} active={activeKpi === "caVencido"} dimmed={!!activeKpi && activeKpi !== "caVencido"} />
+              <DashKpi label="CA Vencendo (90d)" value={data.resumo.casVencendoCount || 0} icon={Calendar} color="yellow" sub="próximos 90 dias" onClick={() => handleKpiClick("caVencendo")} active={activeKpi === "caVencendo"} dimmed={!!activeKpi && activeKpi !== "caVencendo"} />
+              <DashKpi label="Total Entregas" value={data.resumo.totalEntregas} icon={TrendingUp} color="indigo" onClick={() => handleKpiClick("totalEntregas")} active={activeKpi === "totalEntregas"} dimmed={!!activeKpi && activeKpi !== "totalEntregas"} />
+              <DashKpi label="Func. Atendidos" value={data.resumo.funcUnicos || 0} icon={Users} color="slate" onClick={() => handleKpiClick("funcAtendidos")} active={activeKpi === "funcAtendidos"} dimmed={!!activeKpi && activeKpi !== "funcAtendidos"} />
             </div>
 
             {activeKpi && (
