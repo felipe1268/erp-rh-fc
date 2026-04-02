@@ -741,6 +741,157 @@ export default function DashEpis() {
             )}
 
             {/* ============================================================ */}
+            {/* ANÁLISE: Vida Útil Esperada vs. Tempo Real de Troca */}
+            {/* ============================================================ */}
+            {data.vidaUtilAnalise?.length > 0 && (() => {
+              const analise = (data.vidaUtilAnalise as any[]).sort((a: any, b: any) => a.percentual - b.percentual);
+              const criticos = analise.filter((a: any) => a.status === 'critico');
+              const atencao = analise.filter((a: any) => a.status === 'atencao');
+              return (
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-orange-600" />
+                        Vida Útil Esperada vs. Tempo Real de Troca
+                        <span className="text-xs text-muted-foreground font-normal ml-2">
+                          (baseado nos intervalos entre entregas do mesmo EPI ao mesmo funcionário)
+                        </span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {criticos.length > 0 && (
+                        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-sm font-semibold text-red-700 flex items-center gap-1.5">
+                            <AlertTriangle className="h-4 w-4" />
+                            {criticos.length} EPI(s) com desgaste antecipado crítico — durando menos da metade da vida útil esperada
+                          </p>
+                          <p className="text-xs text-red-600 mt-1">
+                            Possíveis causas: mau uso pelos funcionários, qualidade inferior do EPI, ou condições de trabalho adversas.
+                          </p>
+                        </div>
+                      )}
+                      {atencao.length > 0 && criticos.length === 0 && (
+                        <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <p className="text-sm font-semibold text-yellow-700 flex items-center gap-1.5">
+                            <AlertTriangle className="h-4 w-4" />
+                            {atencao.length} EPI(s) com desgaste acima do esperado — atenção recomendada
+                          </p>
+                        </div>
+                      )}
+                      <DashChart
+                        title=""
+                        type="horizontalBar"
+                        labels={analise.map((a: any) => a.nome.length > 25 ? a.nome.slice(0, 25) + "..." : a.nome)}
+                        datasets={[
+                          {
+                            label: "Vida Útil Esperada (dias)",
+                            data: analise.map((a: any) => a.esperado),
+                            backgroundColor: "rgba(34, 197, 94, 0.6)",
+                          },
+                          {
+                            label: "Tempo Médio Real (dias)",
+                            data: analise.map((a: any) => a.mediaReal),
+                            backgroundColor: analise.map((a: any) =>
+                              a.status === 'critico' ? "rgba(239, 68, 68, 0.7)" :
+                              a.status === 'atencao' ? "rgba(234, 179, 8, 0.7)" :
+                              "rgba(59, 130, 246, 0.6)"
+                            ),
+                          },
+                        ]}
+                        height={Math.max(250, analise.length * 40)}
+                      />
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Target className="h-4 w-4 text-red-600" />
+                        Detalhamento — Análise de Durabilidade por EPI
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b text-left">
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">EPI</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">Categoria</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Esperado</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Real Médio</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Diferença</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">Status</th>
+                              <th className="py-2 font-medium text-muted-foreground text-right">Entregas</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {analise.map((a: any, i: number) => (
+                              <tr key={i} className={`border-b border-border/50 ${a.status === 'critico' ? 'bg-red-50/50' : a.status === 'atencao' ? 'bg-yellow-50/30' : ''}`}>
+                                <td className="py-2 pr-3 font-medium">{a.nome}</td>
+                                <td className="py-2 pr-3 text-xs text-muted-foreground">{a.categoria}</td>
+                                <td className="py-2 pr-3 text-right text-green-700 font-semibold">{a.esperado}d</td>
+                                <td className={`py-2 pr-3 text-right font-bold ${a.status === 'critico' ? 'text-red-600' : a.status === 'atencao' ? 'text-yellow-700' : 'text-blue-600'}`}>
+                                  {a.mediaReal}d
+                                </td>
+                                <td className="py-2 pr-3 text-right">
+                                  {a.mediaReal < a.esperado ? (
+                                    <span className="text-red-600 flex items-center justify-end gap-0.5">
+                                      <ArrowDown className="h-3 w-3" />
+                                      {a.esperado - a.mediaReal}d antes
+                                    </span>
+                                  ) : (
+                                    <span className="text-green-600 flex items-center justify-end gap-0.5">
+                                      <ArrowUp className="h-3 w-3" />
+                                      +{a.mediaReal - a.esperado}d
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2 pr-3">
+                                  <Badge variant={a.status === 'critico' ? 'destructive' : a.status === 'atencao' ? 'outline' : 'default'}
+                                    className={`text-[10px] ${a.status === 'atencao' ? 'border-yellow-500 text-yellow-700 bg-yellow-50' : a.status === 'ok' ? 'bg-green-100 text-green-700 border-green-300' : ''}`}>
+                                    {a.status === 'critico' ? 'CRÍTICO' : a.status === 'atencao' ? 'ATENÇÃO' : 'OK'}
+                                  </Badge>
+                                </td>
+                                <td className="py-2 text-right text-muted-foreground">{a.totalEntregas}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {analise.filter((a: any) => a.status === 'critico' && a.funcDetalhe?.length > 0).length > 0 && (
+                        <div className="mt-4 space-y-3">
+                          <h4 className="text-xs font-semibold text-red-700 uppercase tracking-wide flex items-center gap-1.5">
+                            <Flame className="h-3.5 w-3.5" />
+                            Funcionários com troca mais rápida (EPIs críticos)
+                          </h4>
+                          {analise.filter((a: any) => a.status === 'critico').map((a: any, idx: number) => (
+                            a.funcDetalhe?.length > 0 && (
+                              <div key={idx} className="bg-red-50/50 rounded-lg p-3 border border-red-100">
+                                <p className="text-xs font-semibold text-red-800 mb-2">{a.nome} (esperado: {a.esperado}d)</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                                  {a.funcDetalhe.map((f: any, fi: number) => (
+                                    <div key={fi} className="flex items-center justify-between text-xs px-2 py-1 bg-white rounded border border-red-50">
+                                      <span className="font-medium">{f.nome} <span className="text-muted-foreground">({f.funcao})</span></span>
+                                      <span className={`font-bold ${f.diasReal < a.esperado * 0.5 ? 'text-red-600' : 'text-yellow-600'}`}>
+                                        {f.diasReal}d ({f.entregas} entregas)
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })()}
+
+            {/* ============================================================ */}
             {/* GRÁFICO: Entregas por Motivo */}
             {/* ============================================================ */}
             {data.porMotivo && Object.keys(data.porMotivo).length > 0 && (

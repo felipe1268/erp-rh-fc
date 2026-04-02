@@ -1083,6 +1083,82 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
     mediaConsumo3m,
     mediaEntregas3m,
     custoTotalEntregas,
+
+    vidaUtilAnalise: (() => {
+      const episComVidaUtil = allEpis.filter(e => e.tempoMinimoTroca && e.tempoMinimoTroca > 0);
+      if (episComVidaUtil.length === 0) return [];
+
+      return episComVidaUtil.map(epi => {
+        const entregas = allDel
+          .filter(d => d.epiId === epi.id)
+          .sort((a, b) => (a.dataEntrega || '').localeCompare(b.dataEntrega || ''));
+
+        const porFunc: Record<number, string[]> = {};
+        for (const d of entregas) {
+          if (!d.employeeId) continue;
+          if (!porFunc[d.employeeId]) porFunc[d.employeeId] = [];
+          if (d.dataEntrega) porFunc[d.employeeId].push(d.dataEntrega);
+        }
+
+        const intervalos: number[] = [];
+        const funcDetalhe: { nome: string; funcao: string; diasReal: number; entregas: number }[] = [];
+
+        for (const [empIdStr, datas] of Object.entries(porFunc)) {
+          if (datas.length < 2) continue;
+          const empId = Number(empIdStr);
+          const emp = empMap.get(empId);
+          let somaIntervalo = 0;
+          let count = 0;
+          for (let i = 1; i < datas.length; i++) {
+            const d1 = new Date(datas[i - 1]);
+            const d2 = new Date(datas[i]);
+            const diff = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+            if (diff > 0 && diff < 365) {
+              intervalos.push(diff);
+              somaIntervalo += diff;
+              count++;
+            }
+          }
+          if (count > 0) {
+            funcDetalhe.push({
+              nome: emp?.nome || `#${empId}`,
+              funcao: emp?.funcao || '-',
+              diasReal: Math.round(somaIntervalo / count),
+              entregas: datas.length,
+            });
+          }
+        }
+
+        if (intervalos.length === 0) return null;
+
+        const mediaReal = Math.round(intervalos.reduce((s, v) => s + v, 0) / intervalos.length);
+        const esperado = epi.tempoMinimoTroca!;
+        const percentual = Math.round((mediaReal / esperado) * 100);
+        const status = percentual >= 80 ? 'ok' : percentual >= 50 ? 'atencao' : 'critico';
+
+        const motivosTroca: Record<string, number> = {};
+        for (const d of entregas) {
+          const m = d.motivoTroca || d.motivo || 'regular';
+          motivosTroca[m] = (motivosTroca[m] || 0) + 1;
+        }
+
+        return {
+          epiId: epi.id,
+          nome: epi.nome,
+          ca: epi.ca,
+          categoria: epi.categoria === 'Calcado' ? 'Calçado' : (epi.categoria || 'EPI'),
+          esperado,
+          mediaReal,
+          percentual,
+          status,
+          totalEntregas: entregas.length,
+          funcComTroca: funcDetalhe.length,
+          funcDetalhe: funcDetalhe.sort((a, b) => a.diasReal - b.diasReal).slice(0, 10),
+          motivosTroca,
+        };
+      }).filter(Boolean);
+    })(),
+
     // Legacy compat
     evolucaoMensal: consumoMensal.map(c => ({ mes: c.mesKey, qtd: c.unidades })),
   };

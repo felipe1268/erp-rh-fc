@@ -7175,4 +7175,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-02 23:30:00",
   },
+  {
+    version: 970,
+    titulo: "Dashboard EPI — Análise de Vida Útil vs. Tempo Real de Troca",
+    descricao:
+      "Novo gráfico e tabela de análise comparando a vida útil esperada de cada EPI com o tempo médio real de troca:\n" +
+      "• Gráfico de barras horizontais comparando Esperado (verde) vs. Real (vermelho/amarelo/azul conforme status)\n" +
+      "• Tabela detalhada com status: CRÍTICO (< 50%), ATENÇÃO (50-80%), OK (> 80%)\n" +
+      "• Alertas automáticos quando EPIs estão durando muito menos que o esperado\n" +
+      "• Detalhamento por funcionário nos EPIs críticos — identifica mau uso vs. qualidade inferior\n" +
+      "• Campo 'Vida Útil (dias)' agora é obrigatório no cadastro de EPIs (com indicação visual * e borda vermelha)\n" +
+      "• IA continua sugerindo vida útil automaticamente baseada no nome/fabricante do EPI",
+    tipo: "feature",
+    modulos: "EPIs, Dashboard",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-02 23:50:00",
+  },
 ];

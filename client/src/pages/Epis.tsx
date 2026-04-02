@@ -891,12 +891,12 @@ export default function Epis() {
                 <div>
                   <Label className="flex items-center gap-1">
                     <Clock className="h-3 w-3 text-blue-600" />
-                    Vida Útil (dias)
+                    Vida Útil (dias) <span className="text-red-500">*</span>
                     {aiSuggestionLoading && <span className="text-xs text-blue-500 animate-pulse ml-1">🧠 IA analisando...</span>}
                   </Label>
-                  <Input type="number" min={0} value={epiForm.tempoMinimoTroca}
+                  <Input type="number" min={1} value={epiForm.tempoMinimoTroca}
                     onChange={e => { setEpiForm(f => ({ ...f, tempoMinimoTroca: e.target.value })); if (aiSuggestion) setAiSuggestion(null); }}
-                    placeholder="Ex: 180" />
+                    placeholder="Ex: 180" className={!epiForm.tempoMinimoTroca ? "border-red-300" : ""} />
                   {aiSuggestion && (
                     <div className="mt-1 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1">
                       <span className="font-semibold">🧠 Sugestão IA:</span> {aiSuggestion.vidaUtilDias} dias
@@ -910,6 +910,7 @@ export default function Epis() {
                 <Button variant="outline" onClick={() => { setViewMode("catalogo"); setEditingEpi(null); resetEpiForm(); }}>Cancelar</Button>
                 <Button onClick={() => {
                   if (!epiForm.nome.trim()) return toast.error("Nome do EPI é obrigatório");
+                  if (!epiForm.tempoMinimoTroca || parseInt(epiForm.tempoMinimoTroca) <= 0) return toast.error("Vida Útil (dias) é obrigatório para análise de durabilidade");
                   updateEpiMut.mutate({
                     id: editingEpi.id,
                     nome: epiForm.nome,
@@ -1127,12 +1128,12 @@ export default function Epis() {
                 <div>
                   <Label className="flex items-center gap-1">
                     <Clock className="h-3 w-3 text-blue-600" />
-                    Vida Útil (dias)
+                    Vida Útil (dias) <span className="text-red-500">*</span>
                     {aiSuggestionLoading && <span className="text-xs text-blue-500 animate-pulse ml-1">🧠 IA analisando...</span>}
                   </Label>
-                  <Input type="number" min={0} value={epiForm.tempoMinimoTroca}
+                  <Input type="number" min={1} value={epiForm.tempoMinimoTroca}
                     onChange={e => { setEpiForm(f => ({ ...f, tempoMinimoTroca: e.target.value })); if (aiSuggestion) setAiSuggestion(null); }}
-                    placeholder="Ex: 180" />
+                    placeholder="Ex: 180" className={!epiForm.tempoMinimoTroca ? "border-red-300" : ""} />
                   {aiSuggestion && (
                     <div className="mt-1 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1">
                       <span className="font-semibold">🧠 Sugestão IA:</span> {aiSuggestion.vidaUtilDias} dias
@@ -1146,6 +1147,7 @@ export default function Epis() {
                 <Button variant="outline" onClick={() => { setViewMode("catalogo"); resetEpiForm(); }}>Cancelar</Button>
                 <Button onClick={() => {
                   if (!epiForm.nome.trim()) return toast.error("Nome do EPI é obrigatório");
+                  if (!epiForm.tempoMinimoTroca || parseInt(epiForm.tempoMinimoTroca) <= 0) return toast.error("Vida Útil (dias) é obrigatório para análise de durabilidade");
                   createEpiMut.mutate({
                     companyId: queryCompanyId, nome: epiForm.nome,
                     ca: epiForm.ca || undefined, validadeCa: epiForm.validadeCa || undefined,
