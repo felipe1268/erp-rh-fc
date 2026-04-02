@@ -42,10 +42,7 @@ export default function SolicitacaoHE() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>("solicitar");
   const [filterStatus, setFilterStatus] = useState<string>("todas");
-  const [filterMes, setFilterMes] = useState<string>(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [filterMes, setFilterMes] = useState<string>("");
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [heHistoryEmployeeId, setHeHistoryEmployeeId] = useState<number | null>(null);
   const [heHistoryEmployeeName, setHeHistoryEmployeeName] = useState<string>("");
@@ -738,13 +735,19 @@ export default function SolicitacaoHE() {
                     </Badge>
                   )}
                 </h2>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <Input
-                    type="month"
-                    value={filterMes}
-                    onChange={e => setFilterMes(e.target.value)}
-                    className="w-full sm:w-40"
-                  />
+                <div className="flex gap-2 w-full sm:w-auto items-center">
+                  <div className="relative">
+                    <Input
+                      type="month"
+                      value={filterMes}
+                      onChange={e => setFilterMes(e.target.value)}
+                      className="w-full sm:w-44"
+                      placeholder="Todos os meses"
+                    />
+                    {filterMes && (
+                      <button onClick={() => setFilterMes("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm" title="Limpar filtro de mês">×</button>
+                    )}
+                  </div>
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
                     <SelectTrigger className="w-full sm:w-36"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -923,13 +926,19 @@ export default function SolicitacaoHE() {
                   <FileText className="h-5 w-5 text-blue-600" />
                   Histórico de Solicitações
                 </h2>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <Input
-                    type="month"
-                    value={filterMes}
-                    onChange={e => setFilterMes(e.target.value)}
-                    className="w-full sm:w-40"
-                  />
+                <div className="flex gap-2 w-full sm:w-auto items-center">
+                  <div className="relative">
+                    <Input
+                      type="month"
+                      value={filterMes}
+                      onChange={e => setFilterMes(e.target.value)}
+                      className="w-full sm:w-44"
+                      placeholder="Todos os meses"
+                    />
+                    {filterMes && (
+                      <button onClick={() => setFilterMes("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm" title="Limpar filtro de mês">×</button>
+                    )}
+                  </div>
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
                     <SelectTrigger className="w-full sm:w-36"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -943,12 +952,19 @@ export default function SolicitacaoHE() {
                 </div>
               </div>
 
+              {!filterMes && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+                  <Calendar className="h-3.5 w-3.5 shrink-0" />
+                  Mostrando <strong>todo o histórico</strong>. Use o filtro de mês para limitar o período.
+                </div>
+              )}
+
               {listQuery.isLoading ? (
                 <div className="text-center py-12"><Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" /></div>
               ) : (listQuery.data || []).length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Calendar className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>Nenhuma solicitação encontrada para o período</p>
+                  <p>Nenhuma solicitação encontrada{filterMes ? " para o período" : ""}</p>
                 </div>
               ) : (
                 <div className="space-y-3">

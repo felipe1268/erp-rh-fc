@@ -7119,4 +7119,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-02 10:00:00",
   },
+  {
+    version: 966,
+    titulo: "Hora Extra — Histórico mostra todas as solicitações",
+    descricao:
+      "Correção no histórico de Horas Extras:\n" +
+      "• Aba Histórico agora inicia sem filtro de mês, mostrando TODAS as solicitações (aprovadas, rejeitadas, etc.)\n" +
+      "• Antes, o filtro padrão era o mês atual, fazendo solicitações de meses anteriores 'sumirem' após aprovação\n" +
+      "• Botão de limpar filtro de mês (×) adicionado nas abas Aprovações e Histórico\n" +
+      "• Banner informativo quando o histórico está mostrando todos os meses",
+    tipo: "bugfix",
+    modulos: "Hora Extra",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-02 11:00:00",
+  },
 ];
