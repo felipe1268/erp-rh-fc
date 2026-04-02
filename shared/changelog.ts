@@ -7158,4 +7158,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-02 13:00:00",
   },
+  {
+    version: 969,
+    titulo: "Dashboard EPI — KPIs clicáveis com painel de detalhes",
+    descricao:
+      "Todos os 10 cards KPI do Dashboard de EPIs agora são clicáveis:\n" +
+      "• Itens Cadastrados / Estoque Total / Valor Inventário: mostra tabela de EPIs com estoque\n" +
+      "• Entregas (30d) / Total Entregas: ranking dos EPIs mais entregues\n" +
+      "• Custo Total Entregas / Func. Atendidos: tabela de funcionários com entregas (clicável para ver EPIs individuais)\n" +
+      "• Estoque Baixo: lista de itens com ≤ 5 unidades em estoque\n" +
+      "• CA Vencido: lista de EPIs com Certificado de Aprovação vencido\n" +
+      "• CA Vencendo (90d): EPIs cujo CA vence nos próximos 90 dias\n" +
+      "• KPI ativo recebe destaque visual (anel azul); clicar novamente fecha o painel",
+    tipo: "feature",
+    modulos: "EPIs, Dashboard",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-02 23:30:00",
+  },
 ];

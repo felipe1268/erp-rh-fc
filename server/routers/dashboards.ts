@@ -807,6 +807,31 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
   const allEpiStats = Object.values(porEpi);
   const topEpis = [...allEpiStats].sort((a, b) => b.qtd - a.qtd).slice(0, 10);
 
+  const todosEpisResumo = allEpis.map(e => ({
+    nome: e.nome,
+    ca: e.ca,
+    estoque: e.quantidadeEstoque || 0,
+    valorUnit: e.valorProduto ? parseFloat(String(e.valorProduto)) : 0,
+    validadeCa: e.validadeCa,
+    categoria: e.categoria === 'Calcado' ? 'Calçado' : (e.categoria || 'EPI'),
+  }));
+
+  const ha30dias30 = new Date();
+  ha30dias30.setDate(ha30dias30.getDate() - 30);
+  const ha30dStr = ha30dias30.toISOString().split("T")[0];
+  const entregas30dPorEpi: Record<number, { nome: string; ca: string; qtd: number; entregas: number }> = {};
+  for (const d of allDel) {
+    if (d.dataEntrega >= ha30dStr) {
+      if (!entregas30dPorEpi[d.epiId]) {
+        const ep = allEpis.find(e => e.id === d.epiId);
+        entregas30dPorEpi[d.epiId] = { nome: ep?.nome || "EPI #" + d.epiId, ca: ep?.ca || '-', qtd: 0, entregas: 0 };
+      }
+      entregas30dPorEpi[d.epiId].qtd += d.quantidade;
+      entregas30dPorEpi[d.epiId].entregas++;
+    }
+  }
+  const topEpis30d = Object.values(entregas30dPorEpi).sort((a, b) => b.qtd - a.qtd).slice(0, 15);
+
   // ===== NOVAS ANÁLISES =====
 
   // Item MAIS utilizado (maior quantidade de entregas)
@@ -1014,6 +1039,8 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
     consumoMensal,
     custoMensal,
     topEpis,
+    topEpis30d,
+    todosEpisResumo,
     topFuncionarios,
     estoqueCritico,
     caVencidos: caVencido.map(e => ({ nome: e.nome, ca: e.ca, validadeCa: e.validadeCa })),

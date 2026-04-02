@@ -93,6 +93,16 @@ export default function DashEpis() {
   const [selectedEmpId, setSelectedEmpId] = useState<number | null>(null);
   const [selectedEmpName, setSelectedEmpName] = useState<string>("");
   const motivoDetailRef = useRef<HTMLDivElement>(null);
+  const kpiDetailRef = useRef<HTMLDivElement>(null);
+  const [activeKpi, setActiveKpi] = useState<string | null>(null);
+
+  function handleKpiClick(kpi: string) {
+    const newVal = activeKpi === kpi ? null : kpi;
+    setActiveKpi(newVal);
+    if (newVal) {
+      setTimeout(() => kpiDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+    }
+  }
 
   const empDeliveriesQuery = trpc.epis.listDeliveries.useQuery(
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), employeeId: selectedEmpId! },
@@ -258,21 +268,229 @@ export default function DashEpis() {
             {/* KPIs PRINCIPAIS */}
             {/* ============================================================ */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-              <DashKpi label="Itens Cadastrados" value={data.resumo.totalItens} icon={HardHat} color="blue" />
-              <DashKpi label="Estoque Total" value={data.resumo.estoqueTotal} icon={Package} color="green" sub="unidades em estoque" />
-              <DashKpi label="Valor Inventário" value={fmtBRL(data.resumo.valorTotalInventario || 0)} icon={DollarSign} color="teal" />
-              <DashKpi label="Entregas (30d)" value={data.resumo.entregasMes || 0} icon={ClipboardList} color="purple" sub="últimos 30 dias" />
-              <DashKpi label="Custo Total Entregas" value={fmtBRL(data.custoTotalEntregas || 0)} icon={DollarSign} color="indigo" sub="valor total distribuído" />
+              <DashKpi label="Itens Cadastrados" value={data.resumo.totalItens} icon={HardHat} color="blue" onClick={() => handleKpiClick("itens")} active={activeKpi === "itens"} />
+              <DashKpi label="Estoque Total" value={data.resumo.estoqueTotal} icon={Package} color="green" sub="unidades em estoque" onClick={() => handleKpiClick("estoque")} active={activeKpi === "estoque"} />
+              <DashKpi label="Valor Inventário" value={fmtBRL(data.resumo.valorTotalInventario || 0)} icon={DollarSign} color="teal" onClick={() => handleKpiClick("inventario")} active={activeKpi === "inventario"} />
+              <DashKpi label="Entregas (30d)" value={data.resumo.entregasMes || 0} icon={ClipboardList} color="purple" sub="últimos 30 dias" onClick={() => handleKpiClick("entregas30d")} active={activeKpi === "entregas30d"} />
+              <DashKpi label="Custo Total Entregas" value={fmtBRL(data.custoTotalEntregas || 0)} icon={DollarSign} color="indigo" sub="valor total distribuído" onClick={() => handleKpiClick("custoEntregas")} active={activeKpi === "custoEntregas"} />
             </div>
 
             {/* KPIs ALERTAS */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-              <DashKpi label="Estoque Baixo" value={data.resumo.estoqueBaixo} icon={AlertTriangle} color="red" sub="≤ 5 unidades" />
-              <DashKpi label="CA Vencido" value={data.resumo.caVencido} icon={ShieldAlert} color="orange" />
-              <DashKpi label="CA Vencendo (90d)" value={data.resumo.casVencendoCount || 0} icon={Calendar} color="yellow" sub="próximos 90 dias" />
-              <DashKpi label="Total Entregas" value={data.resumo.totalEntregas} icon={TrendingUp} color="indigo" />
-              <DashKpi label="Func. Atendidos" value={data.resumo.funcUnicos || 0} icon={Users} color="slate" />
+              <DashKpi label="Estoque Baixo" value={data.resumo.estoqueBaixo} icon={AlertTriangle} color="red" sub="≤ 5 unidades" onClick={() => handleKpiClick("estoqueBaixo")} active={activeKpi === "estoqueBaixo"} />
+              <DashKpi label="CA Vencido" value={data.resumo.caVencido} icon={ShieldAlert} color="orange" onClick={() => handleKpiClick("caVencido")} active={activeKpi === "caVencido"} />
+              <DashKpi label="CA Vencendo (90d)" value={data.resumo.casVencendoCount || 0} icon={Calendar} color="yellow" sub="próximos 90 dias" onClick={() => handleKpiClick("caVencendo")} active={activeKpi === "caVencendo"} />
+              <DashKpi label="Total Entregas" value={data.resumo.totalEntregas} icon={TrendingUp} color="indigo" onClick={() => handleKpiClick("totalEntregas")} active={activeKpi === "totalEntregas"} />
+              <DashKpi label="Func. Atendidos" value={data.resumo.funcUnicos || 0} icon={Users} color="slate" onClick={() => handleKpiClick("funcAtendidos")} active={activeKpi === "funcAtendidos"} />
             </div>
+
+            {activeKpi && (
+              <div ref={kpiDetailRef}>
+                <Card className="border-blue-300 bg-blue-50/30 shadow-lg ring-2 ring-blue-300 ring-offset-2">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2">
+                        <ClipboardList className="h-4 w-4 text-blue-600" />
+                        {activeKpi === "itens" && "Todos os EPIs Cadastrados"}
+                        {activeKpi === "estoque" && "Estoque por Item"}
+                        {activeKpi === "inventario" && "Valor do Inventário por Item"}
+                        {activeKpi === "entregas30d" && "Entregas nos Últimos 30 Dias"}
+                        {activeKpi === "custoEntregas" && "Custo das Entregas por Funcionário"}
+                        {activeKpi === "estoqueBaixo" && "Itens com Estoque Crítico (≤ 5 unidades)"}
+                        {activeKpi === "caVencido" && "EPIs com CA Vencido"}
+                        {activeKpi === "caVencendo" && "EPIs com CA Vencendo nos Próximos 90 Dias"}
+                        {activeKpi === "totalEntregas" && "Ranking de EPIs Mais Entregues"}
+                        {activeKpi === "funcAtendidos" && "Funcionários que Mais Receberam EPIs"}
+                      </span>
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setActiveKpi(null)}>
+                        <X className="h-3 w-3 mr-1" /> Fechar
+                      </Button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                      {(activeKpi === "itens" || activeKpi === "estoque" || activeKpi === "inventario") && (
+                        <table className="w-full text-sm">
+                          <thead className="sticky top-0 bg-white">
+                            <tr className="border-b text-left">
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">#</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">EPI</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">CA</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">Categoria</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Estoque</th>
+                              {activeKpi === "inventario" && <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Valor Unit.</th>}
+                              {activeKpi === "inventario" && <th className="py-2 font-medium text-muted-foreground text-right">Valor Total</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(data.todosEpisResumo || [])
+                              .sort((a: any, b: any) => activeKpi === "inventario"
+                                ? (b.valorUnit * b.estoque) - (a.valorUnit * a.estoque)
+                                : activeKpi === "estoque" ? b.estoque - a.estoque : a.nome.localeCompare(b.nome))
+                              .map((e: any, i: number) => (
+                                <tr key={i} className={`border-b border-border/50 ${e.estoque <= 5 ? "bg-red-50/50" : ""}`}>
+                                  <td className="py-2 pr-3 text-muted-foreground">{i + 1}</td>
+                                  <td className="py-2 pr-3 font-medium">{e.nome}</td>
+                                  <td className="py-2 pr-3"><Badge variant="outline" className="text-xs">{e.ca || "-"}</Badge></td>
+                                  <td className="py-2 pr-3 text-muted-foreground text-xs">{e.categoria}</td>
+                                  <td className={`py-2 pr-3 text-right font-bold ${e.estoque <= 5 ? "text-red-600" : "text-green-700"}`}>{e.estoque}</td>
+                                  {activeKpi === "inventario" && <td className="py-2 pr-3 text-right text-muted-foreground">{e.valorUnit > 0 ? fmtBRL(e.valorUnit) : "-"}</td>}
+                                  {activeKpi === "inventario" && <td className="py-2 text-right font-medium text-teal-700">{e.valorUnit > 0 ? fmtBRL(e.valorUnit * e.estoque) : "-"}</td>}
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {activeKpi === "estoqueBaixo" && (
+                        <table className="w-full text-sm">
+                          <thead className="sticky top-0 bg-white">
+                            <tr className="border-b text-left">
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">#</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">EPI</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">CA</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Estoque</th>
+                              <th className="py-2 font-medium text-muted-foreground">Validade CA</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(data.todosEpisResumo || []).filter((e: any) => e.estoque <= 5).sort((a: any, b: any) => a.estoque - b.estoque).map((e: any, i: number) => (
+                              <tr key={i} className="border-b border-border/50 bg-red-50/30">
+                                <td className="py-2 pr-3 text-muted-foreground">{i + 1}</td>
+                                <td className="py-2 pr-3 font-medium">{e.nome}</td>
+                                <td className="py-2 pr-3"><Badge variant="outline" className="text-xs">{e.ca || "-"}</Badge></td>
+                                <td className="py-2 pr-3 text-right font-bold text-red-600">{e.estoque}</td>
+                                <td className="py-2 text-muted-foreground">{e.validadeCa ? fmtDate(e.validadeCa) : "-"}</td>
+                              </tr>
+                            ))}
+                            {(data.todosEpisResumo || []).filter((e: any) => e.estoque <= 5).length === 0 && (
+                              <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">Nenhum item com estoque baixo</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {activeKpi === "caVencido" && (
+                        <table className="w-full text-sm">
+                          <thead className="sticky top-0 bg-white">
+                            <tr className="border-b text-left">
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">#</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">EPI</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">CA</th>
+                              <th className="py-2 font-medium text-muted-foreground">Validade</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(data.caVencidos || []).map((e: any, i: number) => (
+                              <tr key={i} className="border-b border-border/50">
+                                <td className="py-2 pr-3 text-muted-foreground">{i + 1}</td>
+                                <td className="py-2 pr-3 font-medium">{e.nome}</td>
+                                <td className="py-2 pr-3"><Badge variant="outline" className="text-xs">{e.ca || "-"}</Badge></td>
+                                <td className="py-2 text-red-600 font-semibold">{e.validadeCa ? fmtDate(e.validadeCa) : "-"}</td>
+                              </tr>
+                            ))}
+                            {(data.caVencidos || []).length === 0 && (
+                              <tr><td colSpan={4} className="py-4 text-center text-muted-foreground">Nenhum CA vencido</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {activeKpi === "caVencendo" && (
+                        <table className="w-full text-sm">
+                          <thead className="sticky top-0 bg-white">
+                            <tr className="border-b text-left">
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">#</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">EPI</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">CA</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Estoque</th>
+                              <th className="py-2 font-medium text-muted-foreground">Vence em</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(data.casVencendo || []).map((e: any, i: number) => (
+                              <tr key={i} className="border-b border-border/50">
+                                <td className="py-2 pr-3 text-muted-foreground">{i + 1}</td>
+                                <td className="py-2 pr-3 font-medium">{e.nome}</td>
+                                <td className="py-2 pr-3"><Badge variant="outline" className="text-xs">{e.ca || "-"}</Badge></td>
+                                <td className="py-2 pr-3 text-right">{e.estoque}</td>
+                                <td className="py-2 text-yellow-700 font-semibold">{e.validadeCa ? fmtDate(e.validadeCa) : "-"}</td>
+                              </tr>
+                            ))}
+                            {(data.casVencendo || []).length === 0 && (
+                              <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">Nenhum CA vencendo nos próximos 90 dias</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {(activeKpi === "totalEntregas" || activeKpi === "entregas30d") && (
+                        <table className="w-full text-sm">
+                          <thead className="sticky top-0 bg-white">
+                            <tr className="border-b text-left">
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">#</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">EPI</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">CA</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Entregas</th>
+                              <th className="py-2 font-medium text-muted-foreground text-right">Unidades</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(activeKpi === "entregas30d" ? (data.topEpis30d || []) : (data.topEpis || [])).map((e: any, i: number) => (
+                              <tr key={i} className="border-b border-border/50">
+                                <td className="py-2 pr-3 text-muted-foreground">{i + 1}</td>
+                                <td className="py-2 pr-3 font-medium">{e.nome}</td>
+                                <td className="py-2 pr-3"><Badge variant="outline" className="text-xs">{e.ca || "-"}</Badge></td>
+                                <td className="py-2 pr-3 text-right font-bold text-purple-700">{e.entregas}</td>
+                                <td className="py-2 text-right">{e.qtd}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {(activeKpi === "custoEntregas" || activeKpi === "funcAtendidos") && (
+                        <table className="w-full text-sm">
+                          <thead className="sticky top-0 bg-white">
+                            <tr className="border-b text-left">
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">#</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">Funcionário</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground">Função</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Entregas</th>
+                              <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Unidades</th>
+                              {activeKpi === "custoEntregas" && <th className="py-2 font-medium text-muted-foreground text-right">Custo</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(activeKpi === "custoEntregas" ? (data.custoPorFuncionario || []) : (data.topFuncionarios || []))
+                              .map((f: any, i: number) => (
+                                <tr
+                                  key={i}
+                                  className="border-b border-border/50 cursor-pointer hover:bg-purple-50 transition-colors"
+                                  onClick={() => { setSelectedEmpId(f.id); setSelectedEmpName(f.nome); }}
+                                  title="Clique para ver EPIs entregues"
+                                >
+                                  <td className="py-2 pr-3 text-muted-foreground">{i + 1}</td>
+                                  <td className="py-2 pr-3 font-medium text-blue-700 hover:underline flex items-center gap-1.5">
+                                    <ChevronRight className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                                    {f.nome}
+                                  </td>
+                                  <td className="py-2 pr-3 text-muted-foreground">{f.funcao}</td>
+                                  <td className="py-2 pr-3 text-right">{f.entregas}</td>
+                                  <td className="py-2 pr-3 text-right">{f.qtd}</td>
+                                  {activeKpi === "custoEntregas" && (
+                                    <td className="py-2 text-right font-bold text-amber-700">{fmtBRL(f.custo)}</td>
+                                  )}
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
             {/* Descontos de EPI foram movidos para Folha de Pagamento > Descontos EPI */}
 

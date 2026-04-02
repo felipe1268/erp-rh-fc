@@ -229,13 +229,14 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
 }
 
 // KPI Card for dashboards
-export function DashKpi({ label, value, color = "blue", icon: Icon, sub, active }: {
+export function DashKpi({ label, value, color = "blue", icon: Icon, sub, active, onClick }: {
   label: string;
   value: string | number;
   color?: string;
   icon?: any;
   sub?: string;
   active?: boolean;
+  onClick?: () => void;
 }) {
   const colorMap: Record<string, string> = {
     blue: "text-blue-600 bg-blue-50 border-l-blue-500",
@@ -258,7 +259,13 @@ export function DashKpi({ label, value, color = "blue", icon: Icon, sub, active 
     return value;
   })();
   return (
-    <Card className={`border-l-4 ${borderColor} transition-all ${active ? 'ring-2 ring-offset-1 ring-blue-400 shadow-md scale-[1.02]' : 'hover:shadow-sm'}`}>
+    <Card
+      className={`border-l-4 ${borderColor} transition-all ${onClick ? 'cursor-pointer hover:shadow-md hover:scale-[1.01]' : ''} ${active ? 'ring-2 ring-offset-1 ring-blue-400 shadow-md scale-[1.02]' : 'hover:shadow-sm'}`}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+    >
       <CardContent className="p-3 sm:p-4">
         <div className="flex items-center gap-2 sm:gap-3">
           {Icon && (
