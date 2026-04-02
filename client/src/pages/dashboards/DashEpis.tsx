@@ -90,6 +90,13 @@ export default function DashEpis() {
   const [obraFiltro, setObraFiltro] = useState<string>("todos");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedMotivo, setSelectedMotivo] = useState<string | null>(null);
+  const [selectedEmpId, setSelectedEmpId] = useState<number | null>(null);
+  const [selectedEmpName, setSelectedEmpName] = useState<string>("");
+
+  const empDeliveriesQuery = trpc.epis.listDeliveries.useQuery(
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), employeeId: selectedEmpId! },
+    { enabled: !!selectedEmpId }
+  );
 
 
   const monthOptions = useMemo(() => getMonthOptions(), []);
@@ -717,9 +724,17 @@ export default function DashEpis() {
                       </thead>
                       <tbody>
                         {data.custoPorFuncionario.map((f: any, i: number) => (
-                          <tr key={i} className="border-b border-border/50">
+                          <tr
+                            key={i}
+                            className="border-b border-border/50 cursor-pointer hover:bg-purple-50 transition-colors"
+                            onClick={() => { setSelectedEmpId(f.id); setSelectedEmpName(f.nome); }}
+                            title="Clique para ver os EPIs entregues"
+                          >
                             <td className="py-2 pr-3 text-muted-foreground">{i + 1}</td>
-                            <td className="py-2 pr-3 font-medium">{f.nome}</td>
+                            <td className="py-2 pr-3 font-medium text-blue-700 hover:underline flex items-center gap-1.5">
+                              <ChevronRight className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                              {f.nome}
+                            </td>
                             <td className="py-2 pr-3 text-muted-foreground">{f.funcao}</td>
                             <td className="py-2 pr-3 text-right">{f.entregas}</td>
                             <td className="py-2 pr-3 text-right">{f.qtd}</td>
@@ -896,6 +911,95 @@ export default function DashEpis() {
         )}
       </div>
           <PrintFooterLGPD />
+
+        {selectedEmpId && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedEmpId(null)}>
+            <div
+              className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-4 border-b">
+                <div>
+                  <h3 className="text-base font-bold flex items-center gap-2">
+                    <HardHat className="h-5 w-5 text-purple-600" />
+                    EPIs Entregues — {selectedEmpName}
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {empDeliveriesQuery.data?.length || 0} entrega(s) registrada(s)
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedEmpId(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 p-4">
+                {empDeliveriesQuery.isLoading ? (
+                  <div className="text-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-purple-600" />
+                  </div>
+                ) : !empDeliveriesQuery.data?.length ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p>Nenhuma entrega registrada</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-3 mb-4">
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-purple-700">{empDeliveriesQuery.data.length}</p>
+                        <p className="text-[10px] text-muted-foreground">Entregas</p>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-blue-700">
+                          {empDeliveriesQuery.data.reduce((s: number, d: any) => s + (d.quantidade || 1), 0)}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">Unidades</p>
+                      </div>
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-amber-700">
+                          {fmtBRL(empDeliveriesQuery.data.reduce((s: number, d: any) => s + parseFloat(String(d.valorCobrado || d.valorProdutoEpi || 0)) * (d.quantidade || 1), 0))}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">Custo Total</p>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left bg-gray-50">
+                            <th className="py-2 px-3 font-medium text-muted-foreground">EPI</th>
+                            <th className="py-2 px-3 font-medium text-muted-foreground">CA</th>
+                            <th className="py-2 px-3 font-medium text-muted-foreground">Data</th>
+                            <th className="py-2 px-3 font-medium text-muted-foreground text-right">Qtd</th>
+                            <th className="py-2 px-3 font-medium text-muted-foreground text-right">Valor</th>
+                            <th className="py-2 px-3 font-medium text-muted-foreground">Motivo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {empDeliveriesQuery.data.map((d: any) => (
+                            <tr key={d.id} className="border-b border-border/50 hover:bg-gray-50">
+                              <td className="py-2 px-3 font-medium">{d.nomeEpi || "-"}</td>
+                              <td className="py-2 px-3">
+                                <Badge variant="outline" className="text-xs">{d.caEpi || "-"}</Badge>
+                              </td>
+                              <td className="py-2 px-3 text-muted-foreground">{fmtDate(d.dataEntrega)}</td>
+                              <td className="py-2 px-3 text-right">{d.quantidade || 1}</td>
+                              <td className="py-2 px-3 text-right font-medium text-amber-700">
+                                {fmtBRL(parseFloat(String(d.valorCobrado || d.valorProdutoEpi || 0)) * (d.quantidade || 1))}
+                              </td>
+                              <td className="py-2 px-3 text-muted-foreground text-xs">{d.motivo || d.motivoTroca || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
     </DashboardLayout>
   );
 }

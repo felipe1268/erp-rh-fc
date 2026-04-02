@@ -7133,4 +7133,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-02 11:00:00",
   },
+  {
+    version: 967,
+    titulo: "Dashboard EPI — Detalhes de EPIs por funcionário",
+    descricao:
+      "Nova funcionalidade no Dashboard de EPIs:\n" +
+      "• Tabela 'Custo de EPI por Funcionário' agora é clicável — ao clicar no nome, abre um painel com todos os EPIs entregues ao funcionário\n" +
+      "• Painel mostra: nome do EPI, CA, data de entrega, quantidade, valor cobrado e motivo\n" +
+      "• Resumo com total de entregas, unidades e custo total no topo do painel",
+    tipo: "feature",
+    modulos: "EPIs, Dashboard",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-02 12:00:00",
+  },
 ];
