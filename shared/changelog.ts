@@ -7104,4 +7104,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-01 20:00:00",
   },
+  {
+    version: 965,
+    titulo: "Hora Extra — Seleção multi-obra de funcionários",
+    descricao:
+      "Nova funcionalidade na solicitação de Hora Extra:\n" +
+      "• Botão 'Todas as obras' permite visualizar funcionários de TODAS as obras da empresa, não apenas os alocados na obra selecionada\n" +
+      "• Funcionários de outras obras são destacados com badge 'OUTRA OBRA' e fundo roxo sutil\n" +
+      "• Coluna 'Obra Atual' exibida quando o modo multi-obra está ativo\n" +
+      "• Busca por nome agora também filtra por função\n" +
+      "• Toggle reseta automaticamente ao trocar de obra",
+    tipo: "feature",
+    modulos: "Hora Extra",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-02 10:00:00",
+  },
 ];

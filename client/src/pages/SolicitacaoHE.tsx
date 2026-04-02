@@ -173,6 +173,7 @@ export default function SolicitacaoHE() {
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [buscaFunc, setBuscaFunc] = useState("");
+  const [verTodosFuncionarios, setVerTodosFuncionarios] = useState(false);
 
   const activeEmployees = useMemo(() => {
     return (employeesQuery.data || []).filter((e: any) => e.status === "Ativo" && !e.deletedAt);
@@ -192,14 +193,23 @@ export default function SolicitacaoHE() {
 
   const obraEmployees = useMemo(() => {
     if (!formData.obraId) return activeEmployees;
-    // Primeiro: buscar pela tabela obraFuncionarios (alocações ativas)
     const alocadosIds = new Set((obraFuncsQuery.data || []).map((f: any) => f.employeeId || f.id));
-    // Segundo: fallback pelo campo obraAtualId do funcionário
     const filtered = activeEmployees.filter((e: any) => 
       alocadosIds.has(e.id) || String(e.obraAtualId) === formData.obraId
     );
     return filtered;
   }, [activeEmployees, formData.obraId, obraFuncsQuery.data]);
+
+  const displayEmployees = useMemo(() => {
+    if (verTodosFuncionarios || !formData.obraId) return activeEmployees;
+    return obraEmployees;
+  }, [verTodosFuncionarios, formData.obraId, activeEmployees, obraEmployees]);
+
+  const obrasMap = useMemo(() => {
+    const m: Record<number, string> = {};
+    (obrasQuery.data || []).forEach((o: any) => { m[o.id] = o.nome; });
+    return m;
+  }, [obrasQuery.data]);
 
   // Usa a query dedicada sem filtro de mês para mostrar TODAS as pendentes
   const pendentes = useMemo(() => {
@@ -266,7 +276,7 @@ export default function SolicitacaoHE() {
   }
 
   function selectAllEmployees() {
-    const allIds = obraEmployees.filter((e: any) => !avisoPrevioSet.has(e.id)).map((e: any) => e.id);
+    const allIds = displayEmployees.filter((e: any) => !avisoPrevioSet.has(e.id)).map((e: any) => e.id);
     setFormData(prev => ({ ...prev, funcionarioIds: allIds }));
   }
 
@@ -359,7 +369,7 @@ export default function SolicitacaoHE() {
                 {/* Obra */}
                 <div className="space-y-1.5">
                   <Label>Obra (opcional)</Label>
-                  <Select value={formData.obraId} onValueChange={v => { setFormData(p => ({ ...p, obraId: v, planejamentoAtividadeIds: [], funcionarioIds: [] })); setBuscaAtividade(""); }}>
+                  <Select value={formData.obraId} onValueChange={v => { setFormData(p => ({ ...p, obraId: v, planejamentoAtividadeIds: [], funcionarioIds: [] })); setBuscaAtividade(""); setVerTodosFuncionarios(false); }}>
                     <SelectTrigger><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
                     <SelectContent>
                       {(obrasQuery.data || []).map((o: any) => (
@@ -542,21 +552,46 @@ export default function SolicitacaoHE() {
                     <Users className="h-4 w-4" />
                     Funcionários ({formData.funcionarioIds.length} selecionados)
                   </Label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    {formData.obraId && (
+                      <Button
+                        variant={verTodosFuncionarios ? "default" : "outline"}
+                        size="sm"
+                        className={`text-xs md:text-sm gap-1.5 ${verTodosFuncionarios ? "bg-purple-600 hover:bg-purple-700 text-white" : "text-purple-700 border-purple-200 hover:bg-purple-50"}`}
+                        onClick={() => {
+                          setVerTodosFuncionarios(v => {
+                            if (v) {
+                              const obraIds = new Set(obraEmployees.map((e: any) => e.id));
+                              setFormData(p => ({ ...p, funcionarioIds: p.funcionarioIds.filter(id => obraIds.has(id)) }));
+                            }
+                            return !v;
+                          });
+                        }}
+                      >
+                        <Building2 className="h-3.5 w-3.5" />
+                        {verTodosFuncionarios ? "Apenas desta obra" : "Todas as obras"}
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" className="text-xs md:text-sm" onClick={selectAllEmployees}>
-                      Selecionar Todos ({obraEmployees.filter((e: any) => !avisoPrevioSet.has(e.id)).length})
+                      Selecionar Todos ({displayEmployees.filter((e: any) => !avisoPrevioSet.has(e.id)).length})
                     </Button>
                     <Button variant="outline" size="sm" className="text-xs md:text-sm" onClick={deselectAllEmployees}>
                       Limpar Seleção
                     </Button>
                   </div>
                 </div>
+                {verTodosFuncionarios && formData.obraId && (
+                  <div className="flex items-center gap-2 p-2.5 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-700">
+                    <Building2 className="h-3.5 w-3.5 shrink-0" />
+                    Mostrando funcionários de <strong>todas as obras</strong>. Os que não são desta obra aparecerão com a obra de origem indicada.
+                  </div>
+                )}
 
                 {/* Busca por nome */}
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
                   <Input
-                    placeholder="Buscar funcionário pelo nome..."
+                    placeholder="Buscar por nome ou função..."
                     value={buscaFunc}
                     onChange={e => setBuscaFunc(e.target.value)}
                     className="pl-9 text-sm"
@@ -570,9 +605,9 @@ export default function SolicitacaoHE() {
                 </div>
 
                 <div className="border rounded-lg max-h-[300px] overflow-y-auto">
-                  {obraEmployees.length === 0 ? (
+                  {displayEmployees.length === 0 ? (
                     <div className="p-4 text-center text-muted-foreground text-sm">
-                      Nenhum funcionário ativo encontrado{formData.obraId ? " nesta obra" : ""}
+                      Nenhum funcionário ativo encontrado{formData.obraId && !verTodosFuncionarios ? " nesta obra" : ""}
                     </div>
                   ) : (
                     <div className="overflow-x-auto"><table className="w-full text-sm">
@@ -581,18 +616,21 @@ export default function SolicitacaoHE() {
                           <th className="p-2 text-left w-10"></th>
                           <th className="p-2 text-left">Nome</th>
                           <th className="p-2 text-left">Função</th>
+                          {verTodosFuncionarios && formData.obraId && <th className="p-2 text-left">Obra Atual</th>}
                           <th className="p-2 text-left">CPF</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {obraEmployees
+                        {displayEmployees
                           .filter((emp: any) =>
                             !buscaFunc ||
-                            emp.nomeCompleto?.toLowerCase().includes(buscaFunc.toLowerCase())
+                            emp.nomeCompleto?.toLowerCase().includes(buscaFunc.toLowerCase()) ||
+                            emp.funcao?.toLowerCase().includes(buscaFunc.toLowerCase())
                           )
                           .map((emp: any) => {
                             const isAviso = avisoPrevioSet.has(emp.id);
                             const isSelected = formData.funcionarioIds.includes(emp.id);
+                            const isOutraObra = verTodosFuncionarios && formData.obraId && !obraEmployees.some((o: any) => o.id === emp.id);
                             return (
                               <tr
                                 key={emp.id}
@@ -601,7 +639,9 @@ export default function SolicitacaoHE() {
                                     ? "bg-orange-50 cursor-not-allowed"
                                     : isSelected
                                       ? "bg-blue-50 cursor-pointer hover:bg-blue-100"
-                                      : "cursor-pointer hover:bg-blue-50"
+                                      : isOutraObra
+                                        ? "bg-purple-50/30 cursor-pointer hover:bg-purple-50"
+                                        : "cursor-pointer hover:bg-blue-50"
                                 }`}
                                 onClick={() => { if (!isAviso) toggleEmployee(emp.id); }}
                               >
@@ -629,17 +669,28 @@ export default function SolicitacaoHE() {
                                       AVISO PRÉVIO
                                     </span>
                                   )}
+                                  {isOutraObra && (
+                                    <span className="ml-1 text-[10px] font-semibold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                      OUTRA OBRA
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="p-2 text-muted-foreground">{emp.funcao || "-"}</td>
+                                {verTodosFuncionarios && formData.obraId && (
+                                  <td className="p-2 text-muted-foreground text-xs">
+                                    {emp.obraAtualId ? (obrasMap[emp.obraAtualId] || `Obra #${emp.obraAtualId}`) : "Sem obra"}
+                                  </td>
+                                )}
                                 <td className="p-2 text-muted-foreground">{emp.cpf || "-"}</td>
                               </tr>
                             );
                           })}
-                        {buscaFunc && obraEmployees.filter((emp: any) =>
-                          emp.nomeCompleto?.toLowerCase().includes(buscaFunc.toLowerCase())
+                        {buscaFunc && displayEmployees.filter((emp: any) =>
+                          emp.nomeCompleto?.toLowerCase().includes(buscaFunc.toLowerCase()) ||
+                          emp.funcao?.toLowerCase().includes(buscaFunc.toLowerCase())
                         ).length === 0 && (
                           <tr>
-                            <td colSpan={4} className="p-4 text-center text-sm text-gray-400">
+                            <td colSpan={verTodosFuncionarios && formData.obraId ? 5 : 4} className="p-4 text-center text-sm text-gray-400">
                               Nenhum funcionário encontrado para "{buscaFunc}"
                             </td>
                           </tr>
