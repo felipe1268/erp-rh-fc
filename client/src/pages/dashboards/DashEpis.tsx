@@ -1,5 +1,5 @@
 import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL } from "@/lib/chartColors";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
@@ -92,6 +92,7 @@ export default function DashEpis() {
   const [selectedMotivo, setSelectedMotivo] = useState<string | null>(null);
   const [selectedEmpId, setSelectedEmpId] = useState<number | null>(null);
   const [selectedEmpName, setSelectedEmpName] = useState<string>("");
+  const motivoDetailRef = useRef<HTMLDivElement>(null);
 
   const empDeliveriesQuery = trpc.epis.listDeliveries.useQuery(
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), employeeId: selectedEmpId! },
@@ -535,9 +536,13 @@ export default function DashEpis() {
                   backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[3], CHART_PALETTE[2], CHART_PALETTE[1], CHART_PALETTE[4], CHART_PALETTE[6]],
                 }]}
                 height={260}
-                onChartClick={(info: ChartClickInfo) =>
-                  setSelectedMotivo(prev => prev === info.label ? null : info.label)
-                }
+                onChartClick={(info: ChartClickInfo) => {
+                  const newVal = selectedMotivo === info.label ? null : info.label;
+                  setSelectedMotivo(newVal);
+                  if (newVal) {
+                    setTimeout(() => motivoDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
+                  }
+                }}
               />
             )}
 
@@ -549,7 +554,8 @@ export default function DashEpis() {
               const totalQtd = rows.reduce((s: number, r: any) => s + r.quantidade, 0);
               const totalVal = rows.reduce((s: number, r: any) => s + (r.valorCobrado || 0), 0);
               return (
-                <Card className="border-blue-200 bg-blue-50/30">
+                <div ref={motivoDetailRef}>
+                <Card className="border-blue-300 bg-blue-50/50 shadow-lg ring-2 ring-blue-300 ring-offset-2">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
                       <ClipboardList className="h-4 w-4 text-blue-500 shrink-0" />
@@ -601,6 +607,7 @@ export default function DashEpis() {
                     )}
                   </CardContent>
                 </Card>
+                </div>
               );
             })()}
 

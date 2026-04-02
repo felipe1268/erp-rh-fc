@@ -7146,4 +7146,16 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-02 12:00:00",
   },
+  {
+    version: 968,
+    titulo: "Dashboard EPI — Destaque visual ao clicar no gráfico de motivos",
+    descricao:
+      "Melhoria na interação do gráfico de pizza 'Entregas por Motivo':\n" +
+      "• Ao clicar numa fatia do gráfico, o painel de detalhes agora rola automaticamente para ficar visível\n" +
+      "• Painel de detalhes recebeu destaque visual (borda azul, sombra e anel de foco) para facilitar identificação",
+    tipo: "melhoria",
+    modulos: "EPIs, Dashboard",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-02 13:00:00",
+  },
 ];
