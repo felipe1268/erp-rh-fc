@@ -229,28 +229,28 @@ export default function FolhaPagamento() {
     onError: (err) => { resetProgress('pagamento'); setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao simular pagamento: ${err.message}`); },
   });
 
-  const [resultsLoaded, setResultsLoaded] = useState(false);
+  const lastLoadedPeriodId = useRef<number | null>(null);
   useEffect(() => {
     const pd = payrollPeriod.data as any;
-    if (!pd || resultsLoaded) return;
-    let loaded = false;
+    if (!pd?.id) return;
+    if (lastLoadedPeriodId.current === pd.id) return;
+    lastLoadedPeriodId.current = pd.id;
     if (pd.afericaoResultJson && !afericaoResult) {
-      try { setAfericaoResult(JSON.parse(pd.afericaoResultJson)); loaded = true; } catch { /* ignore */ }
+      try { setAfericaoResult(JSON.parse(pd.afericaoResultJson)); } catch { /* ignore */ }
     }
     if (pd.valeResultJson && !valeResult) {
-      try { setValeResult(JSON.parse(pd.valeResultJson)); loaded = true; } catch { /* ignore */ }
+      try { setValeResult(JSON.parse(pd.valeResultJson)); } catch { /* ignore */ }
     }
     if (pd.pagamentoResultJson && !pagamentoResult) {
-      try { setPagamentoResult(JSON.parse(pd.pagamentoResultJson)); loaded = true; } catch { /* ignore */ }
+      try { setPagamentoResult(JSON.parse(pd.pagamentoResultJson)); } catch { /* ignore */ }
     }
-    if (loaded || pd) setResultsLoaded(true);
-  }, [payrollPeriod.data, resultsLoaded]);
+  }, [payrollPeriod.data]);
 
   useEffect(() => {
     setAfericaoResult(null);
     setValeResult(null);
     setPagamentoResult(null);
-    setResultsLoaded(false);
+    lastLoadedPeriodId.current = null;
   }, [mesAno]);
 
   useEffect(() => {
