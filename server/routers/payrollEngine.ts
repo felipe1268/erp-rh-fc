@@ -493,11 +493,11 @@ export const payrollEngineRouter = router({
           await db.execute(sql`
             INSERT INTO timecard_daily (companyId, employeeId, data, mesCompetencia, statusDia, 
               entrada1, saida1, entrada2, saida2, entrada3, saida3,
-              horasTrabalhadas, horasExtras, horasNoturnas,
-              isFalta, isAtraso, isSaidaAntecipada, minutosAtraso, minutosSaidaAntecipada,
-              tipoDia, timeRecordId, obraId,
-              origem_registro, num_batidas, is_inconsistente, inconsistencia_tipo,
-              obra_secundaria_id, rateio_percentual)
+              "horasTrabalhadas", "horasExtras", "horasNoturnas",
+              "isFalta", "isAtraso", "isSaidaAntecipada", "minutosAtraso", "minutosSaidaAntecipada",
+              "tipoDia", "timeRecordId", "obraId",
+              "origemRegistro", "numBatidas", "isInconsistente", "inconsistenciaTipo",
+              "obraSecundariaId", "rateioPercentual")
             VALUES (${input.companyId}, ${emp.id}, ${dateStr}, ${input.mesReferencia}, 'registrado',
               ${recs[0]?.entrada1 || null}, ${recs[0]?.saida1 || null}, ${recs[0]?.entrada2 || null}, ${recs[0]?.saida2 || null}, ${recs[0]?.entrada3 || null}, ${recs[0]?.saida3 || null},
               ${horasTrabalhadas}, ${horasExtras}, ${horasNoturnas},
@@ -518,10 +518,10 @@ export const payrollEngineRouter = router({
             let tipoDia = "util";
             if (dow === 6) tipoDia = criteria.jornadaSabadoTipo === "compensado" ? "compensado" : "sabado";
             await db.execute(sql`
-              INSERT INTO timecard_daily (companyId, employeeId, data, mesCompetencia, statusDia,
-                horasTrabalhadas, horasExtras, horasNoturnas,
-                isFalta, isAtraso, isSaidaAntecipada, minutosAtraso, minutosSaidaAntecipada,
-                tipoDia, origem_registro, num_batidas, is_inconsistente)
+              INSERT INTO timecard_daily ("companyId", "employeeId", data, "mesCompetencia", "statusDia",
+                "horasTrabalhadas", "horasExtras", "horasNoturnas",
+                "isFalta", "isAtraso", "isSaidaAntecipada", "minutosAtraso", "minutosSaidaAntecipada",
+                "tipoDia", "origemRegistro", "numBatidas", "isInconsistente")
               VALUES (${input.companyId}, ${emp.id}, ${dateStr}, ${input.mesReferencia}, 'escuro',
                 ${minutesToHHMM(criteria.cargaHorariaDiaria * 60)}, '0:00', '0:00',
                 0, 0, 0, 0, 0,
@@ -611,55 +611,50 @@ export const payrollEngineRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
       if (input.resolucaoTipo === "ajustar_horario") {
-        // Update the timecard_daily with corrected times
         await db.execute(sql`
           UPDATE timecard_daily SET 
             entrada1 = COALESCE(${input.novaEntrada1 || null}, entrada1),
             saida1 = COALESCE(${input.novaSaida1 || null}, saida1),
             entrada2 = COALESCE(${input.novaEntrada2 || null}, entrada2),
             saida2 = COALESCE(${input.novaSaida2 || null}, saida2),
-            is_inconsistente = 0,
-            inconsistencia_resolvida = 1,
-            inconsistencia_resolucao = 'ajustar_horario',
-            inconsistencia_obs = ${input.observacao || "Horário ajustado manualmente"},
-            inconsistencia_resolvida_por = ${ctx.user.name || "Sistema"},
-            inconsistencia_resolvida_em = NOW(),
-            origem_registro = 'manual'
+            "isInconsistente" = 0,
+            "resolucaoTipo" = 'ajustar_horario',
+            "resolucaoObs" = ${input.observacao || "Horário ajustado manualmente"},
+            "resolucaoPor" = ${ctx.user.name || "Sistema"},
+            "resolucaoEm" = NOW(),
+            "origemRegistro" = 'manual'
           WHERE id = ${input.timecardDailyId}
         `);
       } else if (input.resolucaoTipo === "atestado") {
         await db.execute(sql`
           UPDATE timecard_daily SET 
-            is_inconsistente = 0,
-            inconsistencia_resolvida = 1,
-            inconsistencia_resolucao = 'atestado',
-            inconsistencia_obs = ${input.observacao || "Justificado por atestado médico"},
-            inconsistencia_resolvida_por = ${ctx.user.name || "Sistema"},
-            inconsistencia_resolvida_em = NOW(),
-            isFalta = 0
+            "isInconsistente" = 0,
+            "resolucaoTipo" = 'atestado',
+            "resolucaoObs" = ${input.observacao || "Justificado por atestado médico"},
+            "resolucaoPor" = ${ctx.user.name || "Sistema"},
+            "resolucaoEm" = NOW(),
+            "isFalta" = 0
           WHERE id = ${input.timecardDailyId}
         `);
       } else if (input.resolucaoTipo === "advertencia") {
         await db.execute(sql`
           UPDATE timecard_daily SET 
-            is_inconsistente = 0,
-            inconsistencia_resolvida = 1,
-            inconsistencia_resolucao = 'advertencia',
-            inconsistencia_obs = ${input.observacao || "Advertência emitida"},
-            inconsistencia_resolvida_por = ${ctx.user.name || "Sistema"},
-            inconsistencia_resolvida_em = NOW()
+            "isInconsistente" = 0,
+            "resolucaoTipo" = 'advertencia',
+            "resolucaoObs" = ${input.observacao || "Advertência emitida"},
+            "resolucaoPor" = ${ctx.user.name || "Sistema"},
+            "resolucaoEm" = NOW()
           WHERE id = ${input.timecardDailyId}
         `);
       } else if (input.resolucaoTipo === "justificar" || input.resolucaoTipo === "abonar") {
         await db.execute(sql`
           UPDATE timecard_daily SET 
-            is_inconsistente = 0,
-            inconsistencia_resolvida = 1,
-            inconsistencia_resolucao = ${input.resolucaoTipo},
-            inconsistencia_obs = ${input.observacao || "Justificado pelo gestor"},
-            inconsistencia_resolvida_por = ${ctx.user.name || "Sistema"},
-            inconsistencia_resolvida_em = NOW(),
-            isFalta = 0
+            "isInconsistente" = 0,
+            "resolucaoTipo" = ${input.resolucaoTipo},
+            "resolucaoObs" = ${input.observacao || "Justificado pelo gestor"},
+            "resolucaoPor" = ${ctx.user.name || "Sistema"},
+            "resolucaoEm" = NOW(),
+            "isFalta" = 0
           WHERE id = ${input.timecardDailyId}
         `);
       }
@@ -909,7 +904,7 @@ export const payrollEngineRouter = router({
           const heAfMins = Math.max(0, actualMinsAf - expectedMinsAf);
           const horasExtrasAf = heAfMins > 0 ? minutesToHHMM(heAfMins) : "0:00";
 
-          // Sobrescrever o registro "escuro" com os dados reais do ponto
+          const numBatidasVal = [actual.entrada1, actual.saida1, actual.entrada2, actual.saida2, actual.entrada3, actual.saida3].filter(Boolean).length;
           await db.execute(sql`
             UPDATE timecard_daily SET 
               "statusDia" = 'aferido',
@@ -917,19 +912,19 @@ export const payrollEngineRouter = router({
               "afericaoResultado" = ${resultado},
               "afericaoObs" = ${obs || null},
               "afericaoEm" = NOW(),
-              entrada1 = ${actual.entrada1 || null},
-              saida1 = ${actual.saida1 || null},
-              entrada2 = ${actual.entrada2 || null},
-              saida2 = ${actual.saida2 || null},
-              entrada3 = ${actual.entrada3 || null},
-              saida3 = ${actual.saida3 || null},
+              entrada1 = ${actual.entrada1 ?? null},
+              saida1 = ${actual.saida1 ?? null},
+              entrada2 = ${actual.entrada2 ?? null},
+              saida2 = ${actual.saida2 ?? null},
+              entrada3 = ${actual.entrada3 ?? null},
+              saida3 = ${actual.saida3 ?? null},
               "horasTrabalhadas" = ${actual.horasTrabalhadas || '0:00'},
               "horasExtras" = ${horasExtrasAf},
               "horasNoturnas" = ${actual.horasNoturnas || '0:00'},
-              "timeRecordId" = ${actual.id || null},
-              "obraId" = ${actual.obraId || null},
-              origem_registro = 'aferido',
-              num_batidas = ${[actual.entrada1, actual.saida1, actual.entrada2, actual.saida2, actual.entrada3, actual.saida3].filter(Boolean).length},
+              "timeRecordId" = ${actual.id ?? null},
+              "obraId" = ${actual.obraId ?? null},
+              "origemRegistro" = 'aferido',
+              "numBatidas" = ${numBatidasVal},
               "isFalta" = ${resultado === "falta" ? 1 : 0},
               "isAtraso" = ${resultado === "atraso" ? 1 : 0}
             WHERE id = ${escuro.id}
