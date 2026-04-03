@@ -7362,4 +7362,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 16:00:00",
   },
+  {
+    version: 983,
+    titulo: "VA — Validação de falta em dia de feriado + Barra de progresso",
+    descricao:
+      "• Ao gerar/regerar lançamentos, o sistema cruza cada falta com o calendário de feriados (nacional, estadual, municipal) da cidade da obra\n" +
+      "• Faltas em dias de feriado são marcadas como 'conflito_feriado' com destaque visual na aba Alertas\n" +
+      "• Banner de alerta no topo lista os conflitos detectados com nome do feriado, tipo e cidade\n" +
+      "• Tooltip detalhado ao passar o mouse na data mostra feriado, tipo (Nacional/Estadual/Municipal), cidade e orientação\n" +
+      "• Linhas com conflito de feriado ficam com fundo âmbar para fácil identificação\n" +
+      "• Barra de progresso animada com fases durante Gerar e Regerar lançamentos\n" +
+      "• Overlay com porcentagem, fase atual e confirmação visual ao concluir",
+    tipo: "feature",
+    modulos: "Vale Alimentação",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 18:00:00",
+  },
 ];

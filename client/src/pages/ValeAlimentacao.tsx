@@ -935,6 +935,41 @@ export default function ValeAlimentacao() {
               </div>
             </div>
 
+            {(() => {
+              const conflitos = (alertasQ.data || []).filter((a: any) => a.tipoFalta === 'conflito_feriado' || a.feriadoInfo);
+              if (conflitos.length > 0) {
+                return (
+                  <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex items-start gap-3">
+                    <div className="flex-shrink-0 h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center mt-0.5">
+                      <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-amber-900">Conflito Feriado x Falta Detectado</h4>
+                      <p className="text-sm text-amber-800 mt-1">
+                        <strong>{conflitos.length} falta{conflitos.length > 1 ? 's' : ''}</strong> {conflitos.length > 1 ? 'foram registradas' : 'foi registrada'} em datas que são feriados oficiais.
+                        Isso pode indicar erro no ponto ou que houve expediente excepcional. <strong>Verifique cada caso</strong> antes de descontar.
+                      </p>
+                      <ul className="mt-2 text-xs text-amber-700 space-y-1">
+                        {conflitos.slice(0, 5).map((c: any) => {
+                          let info: any = null;
+                          try { info = typeof c.feriadoInfo === 'string' ? JSON.parse(c.feriadoInfo) : c.feriadoInfo; } catch { /* */ }
+                          return (
+                            <li key={c.id} className="flex items-center gap-1.5">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              <strong>{c.nomeCompleto}</strong> — {new Date(c.dataFalta + 'T12:00:00').toLocaleDateString('pt-BR')}
+                              {info?.nomeFeriado && <span className="text-amber-600">({info.nomeFeriado} — {info.tipoFeriado})</span>}
+                            </li>
+                          );
+                        })}
+                        {conflitos.length > 5 && <li className="text-amber-600 font-medium">... e mais {conflitos.length - 5} conflito{conflitos.length - 5 > 1 ? 's' : ''}</li>}
+                      </ul>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             {alertasQ.isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -998,15 +1033,34 @@ export default function ValeAlimentacao() {
                           </tr>
                         </thead>
                         <tbody>
-                          {alertasQ.data.map((a: any) => (
-                            <tr key={a.id} className="border-b last:border-0 hover:bg-muted/20">
+                          {alertasQ.data.map((a: any) => {
+                            const isFeriadoConflito = a.tipoFalta === 'conflito_feriado' || !!a.feriadoInfo;
+                            let feriadoInfo: any = null;
+                            if (isFeriadoConflito && a.feriadoInfo) { try { feriadoInfo = typeof a.feriadoInfo === 'string' ? JSON.parse(a.feriadoInfo) : a.feriadoInfo; } catch { /* */ } }
+                            return (
+                            <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/20 ${isFeriadoConflito ? 'bg-amber-50/60' : ''}`}>
                               <td className="py-2.5 px-3">
                                 <span className="font-medium">{a.nomeCompleto || '—'}</span>
                                 {a.cpf && <span className="text-xs text-muted-foreground ml-2">{formatCPF(a.cpf)}</span>}
                               </td>
                               <td className="py-2.5 px-3 text-xs">{a.obraNome || 'Sem obra'}</td>
                               <td className="text-center py-2.5 px-3">
-                                {a.dataFalta ? new Date(a.dataFalta + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {a.dataFalta ? new Date(a.dataFalta + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                                  {isFeriadoConflito && (
+                                    <span className="relative group cursor-help">
+                                      <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-amber-200 text-amber-700 text-xs font-bold" title={feriadoInfo?.mensagem || 'Conflito com feriado'}>!</span>
+                                      <span className="absolute z-50 hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 bg-amber-900 text-amber-50 text-xs rounded-lg shadow-xl leading-relaxed">
+                                        <span className="font-bold block mb-1">Possível feriado nesta data</span>
+                                        {feriadoInfo?.nomeFeriado && <span className="block">Feriado: <strong>{feriadoInfo.nomeFeriado}</strong></span>}
+                                        {feriadoInfo?.tipoFeriado && <span className="block">Tipo: {feriadoInfo.tipoFeriado === 'nacional' ? 'Nacional' : feriadoInfo.tipoFeriado === 'estadual' ? 'Estadual' : 'Municipal'}</span>}
+                                        {feriadoInfo?.cidadeFeriado && <span className="block">Cidade: {feriadoInfo.cidadeFeriado}</span>}
+                                        <span className="block mt-1.5 text-amber-200">Verifique se houve expediente nesta data antes de descontar.</span>
+                                        <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-amber-900"></span>
+                                      </span>
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="text-right py-2.5 px-3 text-xs">{fmtValor(a.valorDescontoCafe)}</td>
                               <td className="text-right py-2.5 px-3 text-xs">{fmtValor(a.valorDescontoLanche)}</td>
@@ -1050,7 +1104,8 @@ export default function ValeAlimentacao() {
                                 )}
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

@@ -2996,6 +2996,7 @@ export const vaFaltaAlerts = pgTable("va_falta_alerts", {
         decidido_em: timestamp({ mode: 'string' }),
         observacoes: text(),
         vrBenefitId: integer(),
+        feriadoInfo: text(),
         createdAt: timestamp({ mode: 'string' }).defaultNow(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow(),
 }, (table) => [

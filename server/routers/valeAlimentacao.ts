@@ -107,6 +107,85 @@ async function calcularDiasUteisCidade(
   return diasUteis;
 }
 
+const NOMES_FERIADOS_NACIONAIS: Record<string, string> = {
+  "01-01": "Confraternização Universal",
+  "04-21": "Tiradentes",
+  "05-01": "Dia do Trabalho",
+  "09-07": "Independência do Brasil",
+  "10-12": "Nossa Senhora Aparecida",
+  "11-02": "Finados",
+  "11-15": "Proclamação da República",
+  "12-25": "Natal",
+};
+
+function getNomeFeriadoMovel(ano: number, dateStr: string): string | null {
+  const pascoa = new Date(calcularPascoa(ano) + 'T12:00:00Z');
+  const carnaval = new Date(pascoa);
+  carnaval.setUTCDate(carnaval.getUTCDate() - 47);
+  const sextaSanta = new Date(pascoa);
+  sextaSanta.setUTCDate(sextaSanta.getUTCDate() - 2);
+  const corpusChristi = new Date(pascoa);
+  corpusChristi.setUTCDate(corpusChristi.getUTCDate() + 60);
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+  if (dateStr === fmt(carnaval)) return "Carnaval";
+  if (dateStr === fmt(sextaSanta)) return "Sexta-Feira Santa";
+  if (dateStr === fmt(corpusChristi)) return "Corpus Christi";
+  return null;
+}
+
+async function obterFeriadosMes(
+  companyId: number,
+  cidade: string | null,
+  estado: string | null,
+  mesReferencia: string
+): Promise<Map<string, { nome: string; tipo: string; cidade?: string; estado?: string }>> {
+  const [anoStr, mesStr] = mesReferencia.split("-");
+  const ano = parseInt(anoStr);
+  const result = new Map<string, { nome: string; tipo: string; cidade?: string; estado?: string }>();
+
+  for (const mmdd of FERIADOS_NACIONAIS_FIXOS) {
+    const full = `${ano}-${mmdd}`;
+    if (full.startsWith(`${anoStr}-${mesStr.padStart(2, '0')}`)) {
+      result.set(full, { nome: NOMES_FERIADOS_NACIONAIS[mmdd] || "Feriado Nacional", tipo: "nacional" });
+    }
+  }
+  for (const dateStr of getFeriadosMoveis(ano)) {
+    if (dateStr.startsWith(`${anoStr}-${mesStr.padStart(2, '0')}`)) {
+      result.set(dateStr, { nome: getNomeFeriadoMovel(ano, dateStr) || "Feriado Móvel", tipo: "nacional" });
+    }
+  }
+
+  const db = (await getDb())!;
+  const feriadosDb = ((await db.execute(
+    sql`SELECT data, tipo, recorrente, estado, cidade, nome FROM feriados 
+        WHERE ("companyId" = ${companyId} OR "companyId" IS NULL) AND ativo = 1`
+  )) as any).rows || [];
+
+  for (const f of feriadosDb) {
+    let dataFull = f.data;
+    if (f.recorrente === 1 && f.data.length === 5) {
+      dataFull = `${ano}-${f.data}`;
+    }
+    if (!dataFull.startsWith(`${anoStr}-${mesStr.padStart(2, '0')}`)) continue;
+
+    if (f.tipo === 'municipal') {
+      if (!cidade) continue;
+      if (f.cidade && f.cidade.toLowerCase().trim() !== cidade.toLowerCase().trim()) continue;
+    }
+    if (f.tipo === 'estadual') {
+      if (!estado) continue;
+      if (f.estado && f.estado.toLowerCase().trim() !== estado.toLowerCase().trim()) continue;
+    }
+    result.set(dataFull, {
+      nome: f.nome || "Feriado",
+      tipo: f.tipo || "municipal",
+      cidade: f.cidade || undefined,
+      estado: f.estado || undefined,
+    });
+  }
+  return result;
+}
+
 function contarDiasUteisNoPeriodo(
   inicio: Date,
   fim: Date,
@@ -326,9 +405,17 @@ export const valeAlimentacaoRouter = router({
 
       let gerados = 0;
       let alertasGerados = 0;
+      let alertasFeriadoConflito = 0;
+      const feriadosCachePorCidade: Record<string, Map<string, { nome: string; tipo: string; cidade?: string; estado?: string }>> = {};
       for (const { emp, obraId, cidade, estado } of Object.values(empMap)) {
         const cfg = (obraId && cfgPorObra[obraId]) || cfgPadrao;
         if (!cfg) continue;
+
+        const cidadeKey = `${(cidade || 'default').toLowerCase()}_${(estado || '').toLowerCase()}`;
+        if (!feriadosCachePorCidade[cidadeKey]) {
+          feriadosCachePorCidade[cidadeKey] = await obterFeriadosMes(input.companyId, cidade, estado, input.mesReferencia);
+        }
+        const feriadosMes = feriadosCachePorCidade[cidadeKey];
 
         let diasUteis = await getDiasUteisCidade(cidade, estado);
         const diasUteisOriginal = diasUteis;
@@ -403,16 +490,34 @@ export const valeAlimentacaoRouter = router({
         if (faltasEmp && faltasEmp.semAtestado > 0) {
           for (const falta of faltasEmp.datas) {
             if (falta.temAtestado) continue;
+            const feriadoMatch = feriadosMes.get(falta.data);
+            let feriadoInfoJson: string | null = null;
+            let tipoFalta = 'injustificada';
+            if (feriadoMatch) {
+              tipoFalta = 'conflito_feriado';
+              feriadoInfoJson = JSON.stringify({
+                nomeFeriado: feriadoMatch.nome,
+                tipoFeriado: feriadoMatch.tipo,
+                cidadeFeriado: feriadoMatch.cidade || cidade || null,
+                estadoFeriado: feriadoMatch.estado || estado || null,
+                mensagem: `⚠️ ATENÇÃO: Falta registrada em ${new Date(falta.data + 'T12:00:00').toLocaleDateString('pt-BR')} que é feriado "${feriadoMatch.nome}" (${feriadoMatch.tipo}${feriadoMatch.tipo === 'municipal' ? ` — ${feriadoMatch.cidade || cidade}` : feriadoMatch.tipo === 'estadual' ? ` — ${feriadoMatch.estado || estado}` : ''}). Verifique se houve expediente nesta data.`
+              });
+              alertasFeriadoConflito++;
+            }
             await db.execute(
-              sql`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId")
-              VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${obraId || null}, ${falta.data}, 'injustificada', 0, 'pendente', ${formatBRL(cafeDia)}, ${formatBRL(lancheDia)}, ${formatBRL(jantaDia)}, ${vrId || null})`
+              sql`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId", "feriadoInfo")
+              VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${obraId || null}, ${falta.data}, ${tipoFalta}, 0, 'pendente', ${formatBRL(cafeDia)}, ${formatBRL(lancheDia)}, ${formatBRL(jantaDia)}, ${vrId || null}, ${feriadoInfoJson})`
             );
             alertasGerados++;
           }
         }
       }
 
-      return { success: true, gerados, alertasGerados, message: `${gerados} lançamentos gerados! ${alertasGerados > 0 ? `⚠️ ${alertasGerados} alertas de falta gerados para revisão do RH.` : 'Nenhum alerta de falta.'}` };
+      let msgExtra = '';
+      if (alertasFeriadoConflito > 0) {
+        msgExtra = ` 🏖️ ${alertasFeriadoConflito} faltas coincidem com feriados — revise na aba Alertas.`;
+      }
+      return { success: true, gerados, alertasGerados, alertasFeriadoConflito, message: `${gerados} lançamentos gerados! ${alertasGerados > 0 ? `⚠️ ${alertasGerados} alertas de falta gerados para revisão do RH.${msgExtra}` : 'Nenhum alerta de falta.'}` };
       } catch (err: any) {
         console.error('[VA gerarMes] Erro:', err?.message || err);
         return { success: false, gerados: 0, alertasGerados: 0, message: `Erro ao gerar: ${err?.message || 'erro desconhecido'}` };
@@ -539,6 +644,8 @@ export const valeAlimentacaoRouter = router({
 
       let gerados = 0;
       let alertasGerados = 0;
+      let alertasFeriadoConflito = 0;
+      const feriadosCachePorCidade: Record<string, Map<string, { nome: string; tipo: string; cidade?: string; estado?: string }>> = {};
 
       const empEntries = Object.values(empMap).filter(({ emp }) => !paidEmpIds.has(emp.id));
       const BATCH_SIZE = 20;
@@ -548,6 +655,12 @@ export const valeAlimentacaoRouter = router({
         for (const { emp, obraId, cidade, estado } of chunk) {
           const cfg = (obraId && cfgPorObra[obraId]) || cfgPadrao;
           if (!cfg) continue;
+
+          const cidadeKey = `${(cidade || 'default').toLowerCase()}_${(estado || '').toLowerCase()}`;
+          if (!feriadosCachePorCidade[cidadeKey]) {
+            feriadosCachePorCidade[cidadeKey] = await obterFeriadosMes(input.companyId, cidade, estado, input.mesReferencia);
+          }
+          const feriadosMes = feriadosCachePorCidade[cidadeKey];
 
           let diasUteis = await getDiasUteisCidade(cidade, estado);
           const diasUteisOriginal = diasUteis;
@@ -619,9 +732,23 @@ export const valeAlimentacaoRouter = router({
           if (faltasEmp && faltasEmp.semAtestado > 0) {
             for (const falta of faltasEmp.datas) {
               if (falta.temAtestado) continue;
+              const feriadoMatch = feriadosMes.get(falta.data);
+              let feriadoInfoJson: string | null = null;
+              let tipoFalta = 'injustificada';
+              if (feriadoMatch) {
+                tipoFalta = 'conflito_feriado';
+                feriadoInfoJson = JSON.stringify({
+                  nomeFeriado: feriadoMatch.nome,
+                  tipoFeriado: feriadoMatch.tipo,
+                  cidadeFeriado: feriadoMatch.cidade || cidade || null,
+                  estadoFeriado: feriadoMatch.estado || estado || null,
+                  mensagem: `⚠️ ATENÇÃO: Falta registrada em ${new Date(falta.data + 'T12:00:00').toLocaleDateString('pt-BR')} que é feriado "${feriadoMatch.nome}" (${feriadoMatch.tipo}${feriadoMatch.tipo === 'municipal' ? ` — ${feriadoMatch.cidade || cidade}` : feriadoMatch.tipo === 'estadual' ? ` — ${feriadoMatch.estado || estado}` : ''}). Verifique se houve expediente nesta data.`
+                });
+                alertasFeriadoConflito++;
+              }
               await db.execute(
-                sql`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId")
-                VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${obraId || null}, ${falta.data}, 'injustificada', 0, 'pendente', ${formatBRL(cafeDia)}, ${formatBRL(lancheDia)}, ${formatBRL(jantaDia)}, ${vrId || null})`
+                sql`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId", "feriadoInfo")
+                VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${obraId || null}, ${falta.data}, ${tipoFalta}, 0, 'pendente', ${formatBRL(cafeDia)}, ${formatBRL(lancheDia)}, ${formatBRL(jantaDia)}, ${vrId || null}, ${feriadoInfoJson})`
               );
               alertasGerados++;
             }
@@ -629,7 +756,11 @@ export const valeAlimentacaoRouter = router({
         }
       }
 
-      return { success: true, gerados, alertasGerados, message: `${gerados} lançamentos regerados! ${alertasGerados > 0 ? `⚠️ ${alertasGerados} alertas de falta para revisão.` : ''}` };
+      let msgExtra = '';
+      if (alertasFeriadoConflito > 0) {
+        msgExtra = ` 🏖️ ${alertasFeriadoConflito} faltas coincidem com feriados — revise na aba Alertas.`;
+      }
+      return { success: true, gerados, alertasGerados, alertasFeriadoConflito, message: `${gerados} lançamentos regerados! ${alertasGerados > 0 ? `⚠️ ${alertasGerados} alertas de falta para revisão.${msgExtra}` : ''}` };
       } catch (err: any) {
         console.error('[VA regerarMes] Erro:', err?.message || err);
         return { success: false, gerados: 0, alertasGerados: 0, message: `Erro ao regerar: ${err?.message || 'erro desconhecido'}` };
