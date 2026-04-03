@@ -781,7 +781,7 @@ export const avisoPrevioFeriasRouter = router({
         const db = (await getDb())!;
         try {
           const rows = ((await db.execute(
-            sql`SELECT mbc.*, o.nome as obraNome FROM meal_benefit_configs mbc LEFT JOIN obras o ON mbc.obraId = o.id WHERE mbc.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) ORDER BY mbc.obraId IS NULL DESC, o.nome ASC`
+            sql`SELECT mbc.*, o.nome as "obraNome" FROM meal_benefit_configs mbc LEFT JOIN obras o ON mbc."obraId" = o.id WHERE mbc."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) ORDER BY mbc."obraId" IS NULL DESC, o.nome ASC`
           )) as any).rows || [];
           return rows || [];
         } catch {
@@ -816,16 +816,16 @@ export const avisoPrevioFeriasRouter = router({
           await db.execute(
             sql`UPDATE meal_benefit_configs SET 
               nome = ${input.nome},
-              obraId = ${input.obraId ?? null},
-              cafeManhaDia = ${input.cafeManhaDia},
-              lancheTardeDia = ${input.lancheTardeDia},
-              valeAlimentacaoMes = ${input.valeAlimentacaoMes},
-              jantaDia = ${input.jantaDia},
-              totalVA_iFood = ${input.totalVA_iFood},
-              diasUteisRef = ${input.diasUteisRef},
-              cafeAtivo = ${cafeAtivoInt},
-              lancheAtivo = ${lancheAtivoInt},
-              jantaAtivo = ${jantaAtivoInt},
+              "obraId" = ${input.obraId ?? null},
+              "cafeManhaDia" = ${input.cafeManhaDia},
+              "lancheTardeDia" = ${input.lancheTardeDia},
+              "valeAlimentacaoMes" = ${input.valeAlimentacaoMes},
+              "jantaDia" = ${input.jantaDia},
+              "totalVA_iFood" = ${input.totalVA_iFood},
+              "diasUteisRef" = ${input.diasUteisRef},
+              "cafeAtivo" = ${cafeAtivoInt},
+              "lancheAtivo" = ${lancheAtivoInt},
+              "jantaAtivo" = ${jantaAtivoInt},
               observacoes = ${input.observacoes || null}
             WHERE id = ${input.id}`
           );
