@@ -182,6 +182,11 @@ export default function FolhaPagamento() {
   );
   const [auditFiltroCategoria, setAuditFiltroCategoria] = useState<string>("todos");
   const [auditExpandedIdx, setAuditExpandedIdx] = useState<number | null>(null);
+  const [auditOpenSections, setAuditOpenSections] = useState<Record<string, boolean>>({
+    semPagamento: true, semVale: true, variacaoSalarial: true,
+    descontosExcessivos: true, comFaltas: true, comAtrasos: false,
+    comHorasExtras: false, dadosBancariosIncompletos: false,
+  });
   const [afericaoResult, setAfericaoResult] = useState<any>(null);
   const [showAfericaoReport, setShowAfericaoReport] = useState(false);
   const [detalheAfericaoEmpId, setDetalheAfericaoEmpId] = useState<number | null>(null);
@@ -2952,28 +2957,30 @@ export default function FolhaPagamento() {
   if (viewMode === "auditoria_folha") {
     const auditoria = auditoriaFolha;
     const aud = auditoria.data as any;
-    const filtroCategoria = auditFiltroCategoria;
-    const setFiltroCategoria = setAuditFiltroCategoria;
-    const expandedIdx = auditExpandedIdx;
-    const setExpandedIdx = setAuditExpandedIdx;
+    const s = aud?.secoes;
+    const openSections = auditOpenSections;
+    const toggle = (key: string) => setAuditOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
 
-    const categoriaLabels: Record<string, { label: string; icon: JSX.Element; cor: string }> = {
-      vale_ausente: { label: "Sem vale", icon: <Wallet className="h-3.5 w-3.5" />, cor: "bg-amber-100 text-amber-800 border-amber-300" },
-      vale_bloqueado: { label: "Vale bloqueado", icon: <Ban className="h-3.5 w-3.5" />, cor: "bg-orange-100 text-orange-800 border-orange-300" },
-      pagamento_ausente: { label: "Sem pagamento", icon: <XCircle className="h-3.5 w-3.5" />, cor: "bg-red-100 text-red-800 border-red-300" },
-      variacao_salarial: { label: "Variação salarial", icon: <Scale className="h-3.5 w-3.5" />, cor: "bg-purple-100 text-purple-800 border-purple-300" },
-      desconto_faltas: { label: "Faltas", icon: <Ban className="h-3.5 w-3.5" />, cor: "bg-red-100 text-red-700 border-red-300" },
-      desconto_atrasos: { label: "Atrasos", icon: <Clock className="h-3.5 w-3.5" />, cor: "bg-amber-100 text-amber-700 border-amber-300" },
-      desconto_excessivo: { label: "Desc. excessivo", icon: <AlertTriangle className="h-3.5 w-3.5" />, cor: "bg-red-100 text-red-800 border-red-300" },
-      horas_extras: { label: "Horas extras", icon: <Clock className="h-3.5 w-3.5" />, cor: "bg-blue-100 text-blue-800 border-blue-300" },
-      pensao_alimenticia: { label: "Pensão", icon: <Scale className="h-3.5 w-3.5" />, cor: "bg-indigo-100 text-indigo-800 border-indigo-300" },
-      acerto_escuro: { label: "Ajustes", icon: <Wrench className="h-3.5 w-3.5" />, cor: "bg-gray-100 text-gray-800 border-gray-300" },
-      dados_bancarios_incompletos: { label: "Dados bancários", icon: <CreditCard className="h-3.5 w-3.5" />, cor: "bg-yellow-100 text-yellow-800 border-yellow-300" },
+    const AuditSection = ({ id, icon, title, count, color, children }: {
+      id: string; icon: JSX.Element; title: string; count: number; color: string; children: React.ReactNode;
+    }) => {
+      if (count === 0) return null;
+      const isOpen = openSections[id] ?? false;
+      return (
+        <div className={`border rounded-lg overflow-hidden mb-3 ${color}`}>
+          <div className="flex items-center gap-2 px-4 py-2.5 cursor-pointer hover:opacity-80" onClick={() => toggle(id)}>
+            {icon}
+            <span className="font-semibold text-sm flex-1">{title}</span>
+            <Badge variant="secondary" className="text-xs">{count}</Badge>
+            {isOpen ? <ChevronUp className="h-4 w-4 print:hidden" /> : <ChevronDown className="h-4 w-4 print:hidden" />}
+          </div>
+          {(isOpen || false) && <div className="border-t bg-white px-4 py-3">{children}</div>}
+          <div className="hidden print:block border-t bg-white px-4 py-2">{children}</div>
+        </div>
+      );
     };
 
-    const alertasFiltrados = aud?.alertas?.filter((a: any) =>
-      filtroCategoria === "todos" || a.categoria === filtroCategoria
-    ) || [];
+    const fmtR = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
 
     return (
       <DashboardLayout>
@@ -2987,7 +2994,7 @@ export default function FolhaPagamento() {
                 <ShieldCheck className="h-5 w-5 text-blue-600" />
                 Auditoria da Folha
               </h1>
-              <p className="text-muted-foreground text-xs">{formatMesAno(mesAno)} • Conferência automática de divergências e anomalias</p>
+              <p className="text-muted-foreground text-xs">{formatMesAno(mesAno)} • {aud?.diasUteisNoMes || '-'} dias úteis</p>
             </div>
           </div>
           <PrintActions title={`Auditoria Folha - ${formatMesAno(mesAno)}`} />
@@ -3000,148 +3007,275 @@ export default function FolhaPagamento() {
           </div>
         )}
 
-        {aud && (
+        {auditoria.isError && (
+          <div className="bg-red-50 border border-red-300 rounded-lg p-4 text-center">
+            <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+            <p className="font-medium text-red-800">Erro ao carregar auditoria</p>
+            <p className="text-xs text-red-600 mt-1">{(auditoria.error as any)?.message || 'Tente novamente'}</p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => auditoria.refetch()}>
+              <RefreshCw className="h-3.5 w-3.5 mr-1" /> Tentar novamente
+            </Button>
+          </div>
+        )}
+
+        {aud && s && (
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
               <div className="bg-white border rounded-lg p-3 text-center">
                 <p className="text-2xl font-bold">{aud.totalCltAtivos}</p>
                 <p className="text-[10px] text-muted-foreground uppercase">CLTs Ativos</p>
               </div>
-              <div className="bg-white border rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-green-700">{aud.totalNaFolha}</p>
+              <div className={`border rounded-lg p-3 text-center ${aud.totalNaFolha !== aud.totalCltAtivos ? 'bg-red-50 border-red-200' : 'bg-white'}`}>
+                <p className={`text-2xl font-bold ${aud.totalNaFolha !== aud.totalCltAtivos ? 'text-red-600' : 'text-green-700'}`}>{aud.totalNaFolha}</p>
                 <p className="text-[10px] text-muted-foreground uppercase">Na Folha</p>
               </div>
-              <div className="bg-white border rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-blue-700">{aud.totalNoVale}</p>
+              <div className={`border rounded-lg p-3 text-center ${aud.totalNoVale < aud.totalCltAtivos ? 'bg-amber-50 border-amber-200' : 'bg-white'}`}>
+                <p className={`text-2xl font-bold ${aud.totalNoVale < aud.totalCltAtivos ? 'text-amber-600' : 'text-blue-700'}`}>{aud.totalNoVale}</p>
                 <p className="text-[10px] text-muted-foreground uppercase">No Vale</p>
               </div>
-              <div className={`border rounded-lg p-3 text-center ${aud.totalErros > 0 ? 'bg-red-50 border-red-200' : 'bg-white'}`}>
-                <p className={`text-2xl font-bold ${aud.totalErros > 0 ? 'text-red-600' : ''}`}>{aud.totalErros}</p>
-                <p className="text-[10px] text-muted-foreground uppercase">Erros</p>
+              <div className={`border rounded-lg p-3 text-center ${aud.totalErros > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                <p className={`text-2xl font-bold ${aud.totalErros > 0 ? 'text-red-600' : 'text-green-600'}`}>{aud.totalErros}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">{aud.totalErros > 0 ? 'Erros' : 'Sem erros'}</p>
               </div>
-              <div className={`border rounded-lg p-3 text-center ${aud.totalWarnings > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white'}`}>
-                <p className={`text-2xl font-bold ${aud.totalWarnings > 0 ? 'text-amber-600' : ''}`}>{aud.totalWarnings}</p>
+              <div className={`border rounded-lg p-3 text-center ${aud.totalWarnings > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                <p className={`text-2xl font-bold ${aud.totalWarnings > 0 ? 'text-amber-600' : 'text-green-600'}`}>{aud.totalWarnings}</p>
                 <p className="text-[10px] text-muted-foreground uppercase">Avisos</p>
               </div>
             </div>
 
-            {aud.totalCltAtivos !== aud.totalNaFolha && (
-              <div className="bg-red-50 border border-red-300 rounded-lg p-3 mb-4 flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-red-800 text-sm">
-                    DIVERGÊNCIA CRÍTICA: {aud.totalCltAtivos} CLTs ativos no cadastro, mas apenas {aud.totalNaFolha} na folha de pagamento ({aud.totalCltAtivos - aud.totalNaFolha} ausente(s))
-                  </p>
-                  <p className="text-red-700 text-xs mt-1">A folha deve incluir todos os CLTs ativos. Veja os alertas abaixo para detalhes de cada funcionário ausente.</p>
-                </div>
-              </div>
+            <AuditSection id="semPagamento" count={s.semPagamento.length} color="border-red-300 bg-red-50"
+              icon={<XCircle className="h-4 w-4 text-red-600" />} title="Excluídos da folha de pagamento">
+              <p className="text-xs text-red-700 mb-2 italic">Funcionários CLT ativos que NÃO foram incluídos na simulação. Corrija o cadastro e resimule.</p>
+              <table className="w-full text-xs">
+                <thead><tr className="border-b text-left text-muted-foreground">
+                  <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2">Função</th><th className="py-1 px-2">Motivo</th>
+                </tr></thead>
+                <tbody>
+                  {s.semPagamento.map((r: any, i: number) => (
+                    <tr key={i} className="border-b border-red-100"><td className="py-1.5 px-2 font-medium">{r.nome}</td><td className="py-1.5 px-2 text-muted-foreground">{r.funcao || '-'}</td><td className="py-1.5 px-2 text-red-700">{r.motivo}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </AuditSection>
+
+            <AuditSection id="semVale" count={s.semVale.length} color="border-amber-300 bg-amber-50"
+              icon={<Wallet className="h-4 w-4 text-amber-600" />} title="Não receberam vale (adiantamento)">
+              <p className="text-xs text-amber-700 mb-2 italic">Funcionários CLT ativos que não tiveram adiantamento calculado neste mês e o motivo.</p>
+              <table className="w-full text-xs">
+                <thead><tr className="border-b text-left text-muted-foreground">
+                  <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2">Função</th><th className="py-1 px-2">Status</th><th className="py-1 px-2">Motivo</th>
+                </tr></thead>
+                <tbody>
+                  {s.semVale.map((r: any, i: number) => (
+                    <tr key={i} className="border-b border-amber-100"><td className="py-1.5 px-2 font-medium">{r.nome}</td><td className="py-1.5 px-2 text-muted-foreground">{r.funcao || '-'}</td><td className="py-1.5 px-2"><Badge variant="outline" className="text-[10px]">{r.status}</Badge></td><td className="py-1.5 px-2 text-amber-700">{r.motivo}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </AuditSection>
+
+            {s.valeBloqueado.length > 0 && (
+              <AuditSection id="valeBloqueado" count={s.valeBloqueado.length} color="border-orange-300 bg-orange-50"
+                icon={<Ban className="h-4 w-4 text-orange-600" />} title="Vales bloqueados">
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b text-left text-muted-foreground">
+                    <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2">Função</th><th className="py-1 px-2 text-right">Valor</th><th className="py-1 px-2">Motivo do bloqueio</th>
+                  </tr></thead>
+                  <tbody>
+                    {s.valeBloqueado.map((r: any, i: number) => (
+                      <tr key={i} className="border-b border-orange-100"><td className="py-1.5 px-2 font-medium">{r.nome}</td><td className="py-1.5 px-2 text-muted-foreground">{r.funcao || '-'}</td><td className="py-1.5 px-2 text-right">{formatBRL(r.valor)}</td><td className="py-1.5 px-2 text-orange-700 text-[11px]">{r.motivo}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </AuditSection>
             )}
 
-            {aud.totalCltAtivos !== aud.totalNoVale && aud.totalNoVale > 0 && (
-              <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-4 flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-amber-800 text-sm">
-                    {aud.totalCltAtivos} CLTs ativos, mas apenas {aud.totalNoVale} receberam vale ({aud.totalCltAtivos - aud.totalNoVale} sem vale)
-                  </p>
-                  <p className="text-amber-700 text-xs mt-1">Verifique os motivos abaixo — férias, admissão recente, bloqueio ou cadastro incompleto.</p>
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-1.5 mb-4 print:hidden">
-              <Button
-                variant={filtroCategoria === "todos" ? "default" : "outline"}
-                size="sm"
-                className="text-xs h-7"
-                onClick={() => setFiltroCategoria("todos")}
-              >
-                Todos ({aud.totalAlertas})
-              </Button>
-              {Object.entries(aud.categorias || {}).map(([cat, qtd]) => {
-                if (!qtd) return null;
-                const info = categoriaLabels[cat];
-                if (!info) return null;
-                return (
-                  <Button
-                    key={cat}
-                    variant={filtroCategoria === cat ? "default" : "outline"}
-                    size="sm"
-                    className={`text-xs h-7 ${filtroCategoria !== cat ? info.cor + ' border' : ''}`}
-                    onClick={() => setFiltroCategoria(cat)}
-                  >
-                    {info.icon}
-                    <span className="ml-1">{info.label} ({qtd as number})</span>
-                  </Button>
-                );
-              })}
-            </div>
-
-            {alertasFiltrados.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                <p className="font-medium">Nenhuma anomalia encontrada nesta categoria</p>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              {alertasFiltrados.map((alerta: any, idx: number) => {
-                const isExpanded = expandedIdx === idx;
-                const tipoStyles = {
-                  error: "border-red-300 bg-red-50",
-                  warning: "border-amber-300 bg-amber-50",
-                  info: "border-blue-200 bg-blue-50",
-                };
-                const tipoIcon = {
-                  error: <XCircle className="h-4 w-4 text-red-600 shrink-0" />,
-                  warning: <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />,
-                  info: <Info className="h-4 w-4 text-blue-600 shrink-0" />,
-                };
-                const catInfo = categoriaLabels[alerta.categoria];
-                return (
-                  <div
-                    key={idx}
-                    className={`border rounded-lg overflow-hidden ${tipoStyles[alerta.tipo as keyof typeof tipoStyles] || 'border-gray-200 bg-white'}`}
-                  >
-                    <div
-                      className="flex items-start gap-2 p-3 cursor-pointer hover:opacity-80"
-                      onClick={() => setExpandedIdx(isExpanded ? null : idx)}
-                    >
-                      {tipoIcon[alerta.tipo as keyof typeof tipoIcon]}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-sm">{alerta.nome}</span>
-                          {alerta.funcao && <span className="text-xs text-muted-foreground">({alerta.funcao})</span>}
-                          {catInfo && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${catInfo.cor}`}>
-                              {catInfo.label}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm mt-0.5">{alerta.titulo}</p>
-                        <p className="text-xs text-muted-foreground">{alerta.descricao}</p>
-                      </div>
-                      <div className="print:hidden">
-                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </div>
-                    </div>
-                    {isExpanded && (
-                      <div className="border-t px-4 py-3 bg-white/80">
-                        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1 flex items-center gap-1">
-                          <FileText className="h-3.5 w-3.5" />
-                          Memorial de Cálculo / Consideração do ERP
-                        </p>
-                        <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{alerta.memorial}</p>
-                      </div>
-                    )}
-                    <div className="hidden print:block border-t px-4 py-2 bg-white/80">
-                      <p className="text-[9px] font-semibold text-gray-500 uppercase">Memorial:</p>
-                      <p className="text-[10px] text-gray-700">{alerta.memorial}</p>
-                    </div>
+            <AuditSection id="variacaoSalarial" count={s.variacaoSalarial.length} color="border-purple-300 bg-purple-50"
+              icon={<Scale className="h-4 w-4 text-purple-600" />} title="Variação salarial na mesma função">
+              <p className="text-xs text-purple-700 mb-3 italic">Funções onde funcionários recebem valores brutos diferentes (variação {'>'} 5%). Pode indicar erro de lançamento ou diferenças legítimas (HE, bônus).</p>
+              {s.variacaoSalarial.map((v: any, vi: number) => (
+                <div key={vi} className={`mb-4 ${vi > 0 ? 'border-t border-purple-200 pt-3' : ''}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="font-bold text-sm text-purple-900">{v.funcao}</span>
+                    <Badge variant={v.variacao > 20 ? "destructive" : "secondary"} className="text-[10px]">
+                      {v.variacao.toFixed(1)}% de variação
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">{v.qtd} funcionários</span>
                   </div>
-                );
-              })}
-            </div>
+                  <div className="bg-purple-50/50 rounded px-3 py-1.5 mb-2 text-xs text-purple-800 flex items-start gap-1.5">
+                    <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span>{v.explicacao}</span>
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead><tr className="border-b text-left text-muted-foreground">
+                      <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2 text-right">VH</th><th className="py-1 px-2 text-right">Bruto</th><th className="py-1 px-2 text-right">HE</th><th className="py-1 px-2 text-right">Líquido</th>
+                    </tr></thead>
+                    <tbody>
+                      {v.funcionarios.map((f: any, fi: number) => {
+                        const isMin = f.bruto === Math.min(...v.funcionarios.map((x: any) => x.bruto));
+                        const isMax = f.bruto === Math.max(...v.funcionarios.map((x: any) => x.bruto));
+                        return (
+                          <tr key={fi} className={`border-b border-purple-100 ${isMin ? 'bg-red-50/50' : isMax ? 'bg-green-50/50' : ''}`}>
+                            <td className="py-1 px-2 font-medium">{f.nome} {isMin && <span className="text-red-500 text-[10px]">menor</span>}{isMax && <span className="text-green-600 text-[10px]">maior</span>}</td>
+                            <td className="py-1 px-2 text-right">R$ {f.valorHora}</td>
+                            <td className="py-1 px-2 text-right font-medium">{fmtR(f.bruto)}</td>
+                            <td className="py-1 px-2 text-right text-blue-600">{f.he > 0 ? fmtR(f.he) : '-'}</td>
+                            <td className="py-1 px-2 text-right">{fmtR(f.liquido)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </AuditSection>
+
+            <AuditSection id="descontosExcessivos" count={s.descontosExcessivos.length} color="border-red-300 bg-red-50"
+              icon={<AlertTriangle className="h-4 w-4 text-red-600" />} title="Descontos superiores a 50% do bruto">
+              <p className="text-xs text-red-700 mb-2 italic">Funcionários cujos descontos totais ultrapassam 50% do salário bruto. Pode indicar erro.</p>
+              {s.descontosExcessivos.map((r: any, i: number) => (
+                <div key={i} className={`${i > 0 ? 'border-t border-red-200 pt-2 mt-2' : ''}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-sm">{r.nome}</span>
+                    <span className="text-xs text-muted-foreground">({r.funcao || '-'})</span>
+                    <Badge variant="destructive" className="text-[10px]">{r.percentual.toFixed(1)}%</Badge>
+                  </div>
+                  <div className="flex gap-4 text-xs mb-1">
+                    <span>Bruto: <strong>{fmtR(r.bruto)}</strong></span>
+                    <span className="text-red-600">Descontos: <strong>{fmtR(r.totalDesc)}</strong></span>
+                    <span>Líquido: <strong>{fmtR(r.liquido)}</strong></span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                    {Object.entries(r.composicao).filter(([, v]) => (v as number) > 0).map(([k, v]) => (
+                      <span key={k}>{k}: {fmtR(v as number)}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </AuditSection>
+
+            <AuditSection id="comFaltas" count={s.comFaltas.length} color="border-amber-300 bg-amber-50"
+              icon={<Ban className="h-4 w-4 text-amber-600" />} title="Faltas no mês">
+              <table className="w-full text-xs">
+                <thead><tr className="border-b text-left text-muted-foreground">
+                  <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2">Função</th><th className="py-1 px-2 text-center">Faltas</th><th className="py-1 px-2 text-right">Desconto</th><th className="py-1 px-2 text-right">Bruto</th>
+                </tr></thead>
+                <tbody>
+                  {s.comFaltas.map((r: any, i: number) => (
+                    <tr key={i} className={`border-b border-amber-100 ${r.faltas >= 3 ? 'bg-red-50/50' : ''}`}>
+                      <td className="py-1.5 px-2 font-medium">{r.nome} {r.faltas >= 3 && <AlertTriangle className="h-3 w-3 text-red-500 inline" />}</td>
+                      <td className="py-1.5 px-2 text-muted-foreground">{r.funcao || '-'}</td>
+                      <td className="py-1.5 px-2 text-center font-bold">{r.faltas}</td>
+                      <td className="py-1.5 px-2 text-right text-red-600 font-medium">{fmtR(r.valor)}</td>
+                      <td className="py-1.5 px-2 text-right">{fmtR(r.bruto)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                {s.comFaltas.length > 0 && (
+                  <tfoot><tr className="bg-amber-100/50 font-semibold">
+                    <td className="py-1.5 px-2" colSpan={2}>Total</td>
+                    <td className="py-1.5 px-2 text-center">{s.comFaltas.reduce((s: number, r: any) => s + r.faltas, 0)}</td>
+                    <td className="py-1.5 px-2 text-right text-red-600">{fmtR(s.comFaltas.reduce((s: number, r: any) => s + r.valor, 0))}</td>
+                    <td className="py-1.5 px-2" />
+                  </tr></tfoot>
+                )}
+              </table>
+            </AuditSection>
+
+            <AuditSection id="comAtrasos" count={s.comAtrasos.length} color="border-amber-200 bg-amber-50/50"
+              icon={<Clock className="h-4 w-4 text-amber-500" />} title="Atrasos no mês">
+              <table className="w-full text-xs">
+                <thead><tr className="border-b text-left text-muted-foreground">
+                  <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2">Função</th><th className="py-1 px-2 text-center">Minutos</th><th className="py-1 px-2 text-right">Desconto</th>
+                </tr></thead>
+                <tbody>
+                  {s.comAtrasos.map((r: any, i: number) => (
+                    <tr key={i} className="border-b border-amber-100"><td className="py-1.5 px-2 font-medium">{r.nome}</td><td className="py-1.5 px-2 text-muted-foreground">{r.funcao || '-'}</td><td className="py-1.5 px-2 text-center">{r.minutos} min</td><td className="py-1.5 px-2 text-right text-red-600">{fmtR(r.valor)}</td></tr>
+                  ))}
+                </tbody>
+                {s.comAtrasos.length > 0 && (
+                  <tfoot><tr className="bg-amber-100/30 font-semibold">
+                    <td className="py-1.5 px-2" colSpan={2}>Total</td>
+                    <td className="py-1.5 px-2 text-center">{s.comAtrasos.reduce((s: number, r: any) => s + r.minutos, 0)} min</td>
+                    <td className="py-1.5 px-2 text-right text-red-600">{fmtR(s.comAtrasos.reduce((s: number, r: any) => s + r.valor, 0))}</td>
+                  </tr></tfoot>
+                )}
+              </table>
+            </AuditSection>
+
+            <AuditSection id="comHorasExtras" count={s.comHorasExtras.length} color="border-blue-200 bg-blue-50/50"
+              icon={<Clock className="h-4 w-4 text-blue-600" />} title="Funcionários com horas extras">
+              <table className="w-full text-xs">
+                <thead><tr className="border-b text-left text-muted-foreground">
+                  <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2">Função</th><th className="py-1 px-2 text-right">Valor HE</th><th className="py-1 px-2 text-right">Bruto</th><th className="py-1 px-2 text-right">Total Proventos</th>
+                </tr></thead>
+                <tbody>
+                  {s.comHorasExtras.map((r: any, i: number) => (
+                    <tr key={i} className="border-b border-blue-100"><td className="py-1.5 px-2 font-medium">{r.nome}</td><td className="py-1.5 px-2 text-muted-foreground">{r.funcao || '-'}</td><td className="py-1.5 px-2 text-right text-blue-700 font-medium">{fmtR(r.valorHE)}</td><td className="py-1.5 px-2 text-right">{fmtR(r.bruto)}</td><td className="py-1.5 px-2 text-right">{fmtR(r.totalProventos)}</td></tr>
+                  ))}
+                </tbody>
+                {s.comHorasExtras.length > 0 && (
+                  <tfoot><tr className="bg-blue-100/30 font-semibold">
+                    <td className="py-1.5 px-2" colSpan={2}>Total</td>
+                    <td className="py-1.5 px-2 text-right text-blue-700">{fmtR(s.comHorasExtras.reduce((s: number, r: any) => s + r.valorHE, 0))}</td>
+                    <td className="py-1.5 px-2" colSpan={2} />
+                  </tr></tfoot>
+                )}
+              </table>
+            </AuditSection>
+
+            {s.comPensao.length > 0 && (
+              <AuditSection id="comPensao" count={s.comPensao.length} color="border-indigo-200 bg-indigo-50/50"
+                icon={<Scale className="h-4 w-4 text-indigo-600" />} title="Pensão alimentícia">
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b text-left text-muted-foreground">
+                    <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2">Função</th><th className="py-1 px-2 text-right">Valor</th>
+                  </tr></thead>
+                  <tbody>
+                    {s.comPensao.map((r: any, i: number) => (
+                      <tr key={i} className="border-b border-indigo-100"><td className="py-1.5 px-2 font-medium">{r.nome}</td><td className="py-1.5 px-2 text-muted-foreground">{r.funcao || '-'}</td><td className="py-1.5 px-2 text-right">{fmtR(r.valor)}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </AuditSection>
+            )}
+
+            {s.ajustesManuais.length > 0 && (
+              <AuditSection id="ajustesManuais" count={s.ajustesManuais.length} color="border-gray-300 bg-gray-50"
+                icon={<Wrench className="h-4 w-4 text-gray-600" />} title="Ajustes manuais">
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b text-left text-muted-foreground">
+                    <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2">Função</th><th className="py-1 px-2 text-right">Valor</th><th className="py-1 px-2">Detalhes</th>
+                  </tr></thead>
+                  <tbody>
+                    {s.ajustesManuais.map((r: any, i: number) => (
+                      <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-2 font-medium">{r.nome}</td><td className="py-1.5 px-2 text-muted-foreground">{r.funcao || '-'}</td><td className="py-1.5 px-2 text-right">{fmtR(r.valor)}</td><td className="py-1.5 px-2 text-muted-foreground">{r.detalhes || '-'}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </AuditSection>
+            )}
+
+            <AuditSection id="dadosBancariosIncompletos" count={s.dadosBancariosIncompletos.length} color="border-yellow-300 bg-yellow-50"
+              icon={<CreditCard className="h-4 w-4 text-yellow-600" />} title="Dados bancários incompletos (impede CNAB)">
+              <table className="w-full text-xs">
+                <thead><tr className="border-b text-left text-muted-foreground">
+                  <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2">Função</th><th className="py-1 px-2">Campos faltando</th>
+                </tr></thead>
+                <tbody>
+                  {s.dadosBancariosIncompletos.map((r: any, i: number) => (
+                    <tr key={i} className="border-b border-yellow-100"><td className="py-1.5 px-2 font-medium">{r.nome}</td><td className="py-1.5 px-2 text-muted-foreground">{r.funcao || '-'}</td><td className="py-1.5 px-2">{r.problemas.map((p: string, pi: number) => <Badge key={pi} variant="outline" className="text-[10px] mr-1 mb-0.5 border-yellow-400 text-yellow-700">{p}</Badge>)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </AuditSection>
+
+            {aud.totalErros === 0 && aud.totalWarnings === 0 && (
+              <div className="text-center py-8">
+                <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
+                <p className="font-semibold text-green-700">Nenhuma divergência encontrada</p>
+                <p className="text-xs text-muted-foreground">A folha está consistente com o cadastro de funcionários.</p>
+              </div>
+            )}
           </>
         )}
         <PrintFooterLGPD />

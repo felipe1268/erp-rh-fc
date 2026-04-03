@@ -25,9 +25,18 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1001,
+    titulo: "Redesign completo da auditoria de folha — seções com tabelas estruturadas",
+    descricao: "A tela de auditoria foi completamente redesenhada. Em vez de alertas individuais com blocos de texto, agora cada categoria é uma seção colapsável com tabela estruturada: colunas de funcionário, função, valores e motivos. Variação salarial mostra tabela comparativa por função com destaque visual (menor/maior). Descontos excessivos mostram composição detalhada. Horas extras, faltas e atrasos são tabelas com totalização no rodapé. Dados bancários incompletos mostram badges dos campos faltantes. Layout limpo e profissional.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-04 00:00:00",
+  },
+  {
     version: 1000,
     titulo: "Auditoria completa da folha de pagamento com memorial de cálculo",
-    descricao: "Nova tela 'Auditoria da Folha' acessível pelo botão na tela de Pagamento/Saldo. Detecta automaticamente 11 tipos de anomalias: funcionários CLT ativos sem vale (férias, admissão recente, bloqueio), sem pagamento (cadastro incompleto), variação salarial entre funcionários da mesma função (possível erro de lançamento vs bônus legítimo), faltas, atrasos, descontos excessivos (>50% do bruto), horas extras, pensão alimentícia, ajustes manuais e dados bancários incompletos. Cada alerta inclui memorial de cálculo detalhado com a consideração do ERP explicando o motivo, o cálculo e a recomendação. Filtros por categoria, cards de resumo, ordenação por gravidade (erros → avisos → informações). Banner de divergência crítica quando CLTs ativos ≠ funcionários na folha.",
+    descricao: "Nova tela 'Auditoria da Folha' acessível pelo botão na tela de Pagamento/Saldo. Detecta automaticamente 11 tipos de anomalias: funcionários CLT ativos sem vale (férias, admissão recente, bloqueio), sem pagamento (cadastro incompleto), variação salarial entre funcionários da mesma função (possível erro de lançamento vs bônus legítimo), faltas, atrasos, descontos excessivos (>50% do bruto), horas extras, pensão alimentícia, ajustes manuais e dados bancários incompletos.",
     tipo: "feature",
     modulos: "Folha de Pagamento",
     criadoPor: "Assistente",
