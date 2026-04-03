@@ -703,12 +703,13 @@ export const payrollEngineRouter = router({
       const prevParsed = parseMesRef(prevMes);
       const diaCorte = criteria.diaCorte;
       const prevLastDay = new Date(prevParsed.year, prevParsed.month, 0).getDate();
+      const afericaoCompanyIds = resolveCompanyIds(input);
+      const afericaoCidsSql = sql.join(afericaoCompanyIds.map(id => sql`${id}`), sql`,`);
 
-      // Get "escuro" records from previous month
       // Limpar ajustes de aferição anteriores para permitir re-aferição
       await db.execute(sql`
         DELETE FROM payroll_adjustments 
-        WHERE "companyId" = ${input.companyId} 
+        WHERE "companyId" IN (${afericaoCidsSql}) 
         AND "mesOrigem" = ${prevMes}
         AND "mesDesconto" = ${input.mesReferencia}
         AND tipo IN ('falta', 'atraso', 'sem_registro')
@@ -722,7 +723,7 @@ export const payrollEngineRouter = router({
           "afericaoResultado" = NULL,
           "afericaoObs" = NULL,
           "afericaoEm" = NULL
-        WHERE "companyId" = ${input.companyId} 
+        WHERE "companyId" IN (${afericaoCidsSql}) 
         AND "mesCompetencia" = ${prevMes}
         AND ("statusAnterior" = 'escuro' OR "statusDia" IN ('escuro', 'pendente_decisao'))
       `);
@@ -730,16 +731,18 @@ export const payrollEngineRouter = router({
       // Buscar registros escuro (inclui os que acabaram de ser resetados)
       const escuroRecords = ((await db.execute(sql`
         SELECT * FROM timecard_daily 
-        WHERE "companyId" = ${input.companyId} 
+        WHERE "companyId" IN (${afericaoCidsSql}) 
         AND "mesCompetencia" = ${prevMes}
         AND "statusDia" = 'escuro'
         ORDER BY "employeeId", data
       `)) as any).rows || [];
       if (!escuroRecords || (escuroRecords as any[]).length === 0) {
-        await db.execute(sql`
-          UPDATE payroll_periods SET status = 'aferida', "afericaoRealizada" = 1, "afericaoEm" = NOW(), "afericaoPor" = ${ctx.user.name || "Sistema"}
-          WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
-        `);
+        for (const cid of afericaoCompanyIds) {
+          await db.execute(sql`
+            UPDATE payroll_periods SET status = 'aferida', "afericaoRealizada" = 1, "afericaoEm" = NOW(), "afericaoPor" = ${ctx.user.name || "Sistema"}
+            WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+          `);
+        }
         return { totalAferidos: 0, divergencias: 0, message: "Nenhum registro 'no escuro' encontrado no mês anterior. Competência avançada." };
       }
 
@@ -761,9 +764,9 @@ export const payrollEngineRouter = router({
       }
 
       // Build a map employeeId → jornadaTrabalho for correct HE recalculation per employee
-      const escuroEmployeeIds = [...new Set((escuroRecords as any[]).map((e: any) => e.employeeId))];
+      const escuroEmployeeIds = [...new Set((escuroRecords as any[]).map((e: any) => Number(e.employeeId)))];
       const escuroEmpRows = escuroEmployeeIds.length > 0
-        ? ((await db.execute(sql`SELECT id, "jornadaTrabalho" FROM employees WHERE id = ANY(${escuroEmployeeIds}::int[])`)) as any).rows || []
+        ? ((await db.execute(sql`SELECT id, "jornadaTrabalho" FROM employees WHERE id IN (${sql.join(escuroEmployeeIds.map(id => sql`${id}`), sql`,`)})`)) as any).rows || []
         : [];
       const empJornadaMap = new Map<number, string | null>();
       for (const row of escuroEmpRows) {
@@ -948,21 +951,21 @@ export const payrollEngineRouter = router({
         totalAferidos++;
       }
 
-      // Update period
-      await db.execute(sql`
-        UPDATE payroll_periods SET 
-          "afericaoRealizada" = 1,
-          "afericaoEm" = NOW(),
-          "afericaoPor" = ${ctx.user.name || "Sistema"},
-          "totalDivergenciasAferidas" = ${divergencias}
-        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${prevMes}
-      `);
-
-      // Update current period status to aferida
-      await db.execute(sql`
-        UPDATE payroll_periods SET status = 'aferida'
-        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
-      `);
+      // Update period for all companies
+      for (const cid of afericaoCompanyIds) {
+        await db.execute(sql`
+          UPDATE payroll_periods SET 
+            "afericaoRealizada" = 1,
+            "afericaoEm" = NOW(),
+            "afericaoPor" = ${ctx.user.name || "Sistema"},
+            "totalDivergenciasAferidas" = ${divergencias}
+          WHERE "companyId" = ${cid} AND "mesReferencia" = ${prevMes}
+        `);
+        await db.execute(sql`
+          UPDATE payroll_periods SET status = 'aferida'
+          WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+        `);
+      }
 
       // Create alert if divergences found
       if (divergencias > 0) {
