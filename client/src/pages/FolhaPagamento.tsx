@@ -2991,7 +2991,7 @@ export default function FolhaPagamento() {
                     {escuroInicio} a {escuroFim}
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground mb-2 flex-1">Compara o escuro de {mesEscuroLabel} com o ponto real importado</p>
+                <p className="text-xs text-muted-foreground mb-2 flex-1">Confere o que foi estimado no escuro com o ponto real (DIXI) recebido</p>
                 {afericaoOk && pd?.afericaoEm && (
                   <div className="mb-2 space-y-1">
                     <div className="flex items-center gap-1 text-[10px] text-green-700">
@@ -3086,30 +3086,35 @@ export default function FolhaPagamento() {
             </DialogHeader>
             <div className="space-y-3 text-sm text-slate-700">
               <p>
-                O período <strong>"no escuro"</strong> são os últimos dias do mês anterior (após o dia de corte do ponto) 
-                em que a folha já foi fechada com base em estimativas, pois o ponto real ainda não havia chegado.
+                O período <strong>"no escuro"</strong> é o intervalo entre o dia 16 do mês anterior e o dia 15 do mês de referência. 
+                Como a folha precisa ser processada antes de receber o cartão de ponto (DIXI) desse período, 
+                os valores são estimados. Quando o ponto real chega (dia 15), a aferição compara o estimado com o real.
               </p>
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <p className="font-semibold text-amber-800 mb-1">Exemplo prático:</p>
-                <p className="text-xs text-amber-700">
-                  Se o dia de corte é 15, a folha de Fevereiro é fechada com dados de ponto até dia 15/02. 
-                  Os dias 16/02 a 28/02 são estimados "no escuro". Quando o ponto real de Março chega, 
-                  a aferição compara o que foi estimado com o que realmente aconteceu.
-                </p>
+                <p className="font-semibold text-amber-800 mb-1">Fluxo da Folha — Exemplo com Março:</p>
+                <ol className="text-xs text-amber-700 space-y-1.5 list-decimal list-inside">
+                  <li>Dia <strong>15/02</strong> — RH recebe os cartões de ponto (DIXI) referentes a 16/01 a 15/02</li>
+                  <li>Dia <strong>20/02</strong> — Pagamento do vale (40% do salário) + horas extras calculadas</li>
+                  <li>O período <strong>16/02 a 15/03</strong> é fechado <strong>no escuro</strong> (estimado, pois o ponto ainda não chegou)</li>
+                  <li>Dia <strong>15/03</strong> — Chega o novo cartão de ponto. A <strong>aferição</strong> compara o escuro com o real</li>
+                  <li><strong>5º dia útil de Abril</strong> — Pagamento do salário de Março, já com os descontos da aferição</li>
+                </ol>
               </div>
               <div className="space-y-2">
-                <p className="font-semibold">O que a aferição faz:</p>
+                <p className="font-semibold">O que a aferição identifica:</p>
                 <ul className="list-disc list-inside text-xs space-y-1 text-slate-600">
-                  <li><strong>Identifica faltas</strong> — dias sem registro real de ponto</li>
-                  <li><strong>Detecta atrasos</strong> — entradas fora do horário esperado</li>
+                  <li><strong>Faltas</strong> — dias sem registro real de ponto</li>
+                  <li><strong>Atrasos</strong> — entradas fora do horário esperado</li>
                   <li><strong>Registros ausentes</strong> — dias sem dado no relógio (possível erro do equipamento)</li>
-                  <li><strong>Gera descontos</strong> — que serão aplicados na folha do mês atual</li>
+                  <li><strong>Descontos</strong> — gerados automaticamente para aplicar na folha atual</li>
                 </ul>
               </div>
-              <p className="text-xs text-slate-500">
-                Nesta competência, estamos conferindo o período no escuro de <strong>{(() => { const pm = mesSelecionado === 1 ? 12 : mesSelecionado - 1; const pa = mesSelecionado === 1 ? anoSelecionado - 1 : anoSelecionado; return `${MESES[pm - 1]} ${pa}`; })()}</strong> ({escuroInicio} a {escuroFim}), 
-                cujos eventuais descontos serão aplicados na folha de <strong>{MESES[mesSelecionado - 1]} {anoSelecionado}</strong>.
-              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-xs text-blue-700">
+                  Nesta competência, estamos conferindo o período no escuro de <strong>{escuroInicio} a {escuroFim}</strong>. 
+                  As divergências encontradas serão descontadas na folha de <strong>{MESES[mesSelecionado - 1]} {anoSelecionado}</strong> (paga no 5º dia útil de {MESES[mesSelecionado % 12]} {mesSelecionado === 12 ? anoSelecionado + 1 : anoSelecionado}).
+                </p>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAfericaoInfo(false)}>Entendi</Button>
