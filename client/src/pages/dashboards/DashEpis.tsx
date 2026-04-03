@@ -1,5 +1,5 @@
 import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL } from "@/lib/chartColors";
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, Fragment } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
@@ -17,7 +17,7 @@ import {
   HardHat, Package, AlertTriangle, ShieldAlert, TrendingUp, Users,
   DollarSign, Calendar, Building2, ClipboardList, Loader2,
   Shirt, Footprints, Shield, Filter, X, SlidersHorizontal,
-  ChevronRight, CheckCircle2, XCircle, FileText, User,
+  ChevronRight, ChevronDown, CheckCircle2, XCircle, FileText, User,
   ArrowUp, ArrowDown, TrendingDown, BarChart3, Target,
   Zap, Repeat, Activity, Award, Flame, ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
@@ -95,6 +95,7 @@ export default function DashEpis() {
   const motivoDetailRef = useRef<HTMLDivElement>(null);
   const kpiDetailRef = useRef<HTMLDivElement>(null);
   const [activeKpi, setActiveKpi] = useState<string | null>(null);
+  const [expandedEpiId, setExpandedEpiId] = useState<number | null>(null);
 
   function handleKpiClick(kpi: string) {
     const newVal = activeKpi === kpi ? null : kpi;
@@ -826,65 +827,121 @@ export default function DashEpis() {
                             </tr>
                           </thead>
                           <tbody>
-                            {analise.map((a: any, i: number) => (
-                              <tr key={i} className={`border-b border-border/50 ${a.status === 'critico' ? 'bg-red-50/50' : a.status === 'atencao' ? 'bg-yellow-50/30' : ''}`}>
-                                <td className="py-2 pr-3 font-medium">{a.nome}</td>
-                                <td className="py-2 pr-3 text-xs text-muted-foreground">{a.categoria}</td>
-                                <td className="py-2 pr-3 text-right text-green-700 font-semibold">{a.esperado}d</td>
-                                <td className={`py-2 pr-3 text-right font-bold ${a.status === 'critico' ? 'text-red-600' : a.status === 'atencao' ? 'text-yellow-700' : 'text-blue-600'}`}>
-                                  {a.mediaReal}d
-                                </td>
-                                <td className="py-2 pr-3 text-right">
-                                  {a.mediaReal < a.esperado ? (
-                                    <span className="text-red-600 flex items-center justify-end gap-0.5">
-                                      <ArrowDown className="h-3 w-3" />
-                                      {a.esperado - a.mediaReal}d antes
-                                    </span>
-                                  ) : (
-                                    <span className="text-green-600 flex items-center justify-end gap-0.5">
-                                      <ArrowUp className="h-3 w-3" />
-                                      +{a.mediaReal - a.esperado}d
-                                    </span>
+                            {analise.map((a: any, i: number) => {
+                              const isExpanded = expandedEpiId === a.epiId;
+                              const hasFuncs = a.funcDetalhe?.length > 0;
+                              const MOTIVO_LABELS: Record<string, string> = {
+                                regular: 'Entrega regular',
+                                desgaste: 'Desgaste',
+                                perda: 'Perda',
+                                dano: 'Dano',
+                                extravio: 'Extravio',
+                                vencido: 'Vencido',
+                                troca_tamanho: 'Troca tamanho',
+                                novo_funcionario: 'Novo funcionário',
+                              };
+                              return (
+                                <Fragment key={i}>
+                                  <tr
+                                    className={`border-b border-border/50 cursor-pointer transition-colors hover:bg-muted/40 ${a.status === 'critico' ? 'bg-red-50/50' : a.status === 'atencao' ? 'bg-yellow-50/30' : ''} ${isExpanded ? 'bg-muted/30' : ''}`}
+                                    onClick={() => setExpandedEpiId(isExpanded ? null : a.epiId)}
+                                  >
+                                    <td className="py-2 pr-3 font-medium">
+                                      <div className="flex items-center gap-1.5">
+                                        {hasFuncs ? (
+                                          isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                        ) : <span className="w-3.5" />}
+                                        {a.nome}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 pr-3 text-xs text-muted-foreground">{a.categoria}</td>
+                                    <td className="py-2 pr-3 text-right text-green-700 font-semibold">{a.esperado}d</td>
+                                    <td className={`py-2 pr-3 text-right font-bold ${a.status === 'critico' ? 'text-red-600' : a.status === 'atencao' ? 'text-yellow-700' : 'text-blue-600'}`}>
+                                      {a.mediaReal}d
+                                    </td>
+                                    <td className="py-2 pr-3 text-right">
+                                      {a.mediaReal < a.esperado ? (
+                                        <span className="text-red-600 flex items-center justify-end gap-0.5">
+                                          <ArrowDown className="h-3 w-3" />
+                                          {a.esperado - a.mediaReal}d antes
+                                        </span>
+                                      ) : (
+                                        <span className="text-green-600 flex items-center justify-end gap-0.5">
+                                          <ArrowUp className="h-3 w-3" />
+                                          +{a.mediaReal - a.esperado}d
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-2 pr-3">
+                                      <Badge variant={a.status === 'critico' ? 'destructive' : a.status === 'atencao' ? 'outline' : 'default'}
+                                        className={`text-[10px] ${a.status === 'atencao' ? 'border-yellow-500 text-yellow-700 bg-yellow-50' : a.status === 'ok' ? 'bg-green-100 text-green-700 border-green-300' : ''}`}>
+                                        {a.status === 'critico' ? 'CRÍTICO' : a.status === 'atencao' ? 'ATENÇÃO' : 'OK'}
+                                      </Badge>
+                                    </td>
+                                    <td className="py-2 text-right text-muted-foreground">{a.totalEntregas}</td>
+                                  </tr>
+                                  {isExpanded && hasFuncs && (
+                                    <tr>
+                                      <td colSpan={7} className="p-0">
+                                        <div className="bg-muted/20 border-b px-4 py-3">
+                                          <p className="text-xs font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                                            <Users className="h-3.5 w-3.5" />
+                                            Funcionários que receberam — {a.nome}
+                                            <span className="text-muted-foreground font-normal">({a.funcDetalhe.length} funcionário{a.funcDetalhe.length !== 1 ? 's' : ''})</span>
+                                          </p>
+                                          <div className="overflow-x-auto">
+                                            <table className="w-full text-xs">
+                                              <thead>
+                                                <tr className="text-left text-muted-foreground">
+                                                  <th className="py-1 pr-3 font-medium">Funcionário</th>
+                                                  <th className="py-1 pr-3 font-medium">Função</th>
+                                                  <th className="py-1 pr-3 font-medium text-center">Entregas</th>
+                                                  <th className="py-1 pr-3 font-medium text-center">Média (dias)</th>
+                                                  <th className="py-1 font-medium">Datas das Entregas</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {a.funcDetalhe.map((f: any, fi: number) => (
+                                                  <tr key={fi} className="border-t border-border/30">
+                                                    <td className="py-1.5 pr-3 font-medium">{f.nome}</td>
+                                                    <td className="py-1.5 pr-3 text-muted-foreground">{f.funcao}</td>
+                                                    <td className="py-1.5 pr-3 text-center">{f.entregas}</td>
+                                                    <td className="py-1.5 pr-3 text-center">
+                                                      {f.entregas >= 2 ? (
+                                                        <span className={`font-bold ${f.diasReal < a.esperado * 0.5 ? 'text-red-600' : f.diasReal < a.esperado ? 'text-yellow-600' : 'text-green-600'}`}>
+                                                          {f.diasReal}d
+                                                        </span>
+                                                      ) : (
+                                                        <span className="text-muted-foreground">—</span>
+                                                      )}
+                                                    </td>
+                                                    <td className="py-1.5">
+                                                      <div className="flex flex-wrap gap-1">
+                                                        {(f.datasEntrega || []).map((dt: string, di: number) => (
+                                                          <span key={di} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-background border text-[10px]">
+                                                            {fmtDate(dt)}
+                                                            {f.motivos?.[di] && f.motivos[di] !== 'regular' && (
+                                                              <span className="text-muted-foreground">· {MOTIVO_LABELS[f.motivos[di]] || f.motivos[di]}</span>
+                                                            )}
+                                                          </span>
+                                                        ))}
+                                                      </div>
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
                                   )}
-                                </td>
-                                <td className="py-2 pr-3">
-                                  <Badge variant={a.status === 'critico' ? 'destructive' : a.status === 'atencao' ? 'outline' : 'default'}
-                                    className={`text-[10px] ${a.status === 'atencao' ? 'border-yellow-500 text-yellow-700 bg-yellow-50' : a.status === 'ok' ? 'bg-green-100 text-green-700 border-green-300' : ''}`}>
-                                    {a.status === 'critico' ? 'CRÍTICO' : a.status === 'atencao' ? 'ATENÇÃO' : 'OK'}
-                                  </Badge>
-                                </td>
-                                <td className="py-2 text-right text-muted-foreground">{a.totalEntregas}</td>
-                              </tr>
-                            ))}
+                                </Fragment>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
-
-                      {analise.filter((a: any) => a.status === 'critico' && a.funcDetalhe?.length > 0).length > 0 && (
-                        <div className="mt-4 space-y-3">
-                          <h4 className="text-xs font-semibold text-red-700 uppercase tracking-wide flex items-center gap-1.5">
-                            <Flame className="h-3.5 w-3.5" />
-                            Funcionários com troca mais rápida (EPIs críticos)
-                          </h4>
-                          {analise.filter((a: any) => a.status === 'critico').map((a: any, idx: number) => (
-                            a.funcDetalhe?.length > 0 && (
-                              <div key={idx} className="bg-red-50/50 rounded-lg p-3 border border-red-100">
-                                <p className="text-xs font-semibold text-red-800 mb-2">{a.nome} (esperado: {a.esperado}d)</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                                  {a.funcDetalhe.map((f: any, fi: number) => (
-                                    <div key={fi} className="flex items-center justify-between text-xs px-2 py-1 bg-white rounded border border-red-50">
-                                      <span className="font-medium">{f.nome} <span className="text-muted-foreground">({f.funcao})</span></span>
-                                      <span className={`font-bold ${f.diasReal < a.esperado * 0.5 ? 'text-red-600' : 'text-yellow-600'}`}>
-                                        {f.diasReal}d ({f.entregas} entregas)
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )
-                          ))}
-                        </div>
-                      )}
                     </CardContent>
                   </Card>
                 </div>

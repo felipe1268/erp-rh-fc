@@ -7218,4 +7218,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 03:00:00",
   },
+  {
+    version: 973,
+    titulo: "Dashboard EPIs — Expandir EPI para ver quem trocou",
+    descricao:
+      "• Tabela de Durabilidade por EPI agora é clicável: clique na linha para expandir e ver todos os funcionários que receberam aquele EPI\n" +
+      "• Detalhe expandido mostra: nome, função, quantidade de entregas, média de dias entre trocas, datas de cada entrega e motivo\n" +
+      "• Backend otimizado: inclui todos os funcionários (não só top 10) com datas e motivos de cada entrega\n" +
+      "• Funcionários com 1 entrega também aparecem (sem média, pois não há intervalo)",
+    tipo: "feature",
+    modulos: "EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 03:30:00",
+  },
 ];

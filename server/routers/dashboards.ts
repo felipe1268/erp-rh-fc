@@ -1093,20 +1093,34 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
           .filter(d => d.epiId === epi.id)
           .sort((a, b) => (a.dataEntrega || '').localeCompare(b.dataEntrega || ''));
 
-        const porFunc: Record<number, string[]> = {};
+        const porFunc: Record<number, { datas: string[]; motivos: string[] }> = {};
         for (const d of entregas) {
           if (!d.employeeId) continue;
-          if (!porFunc[d.employeeId]) porFunc[d.employeeId] = [];
-          if (d.dataEntrega) porFunc[d.employeeId].push(d.dataEntrega);
+          if (!porFunc[d.employeeId]) porFunc[d.employeeId] = { datas: [], motivos: [] };
+          if (d.dataEntrega) {
+            porFunc[d.employeeId].datas.push(d.dataEntrega);
+            porFunc[d.employeeId].motivos.push(d.motivoTroca || d.motivo || 'regular');
+          }
         }
 
         const intervalos: number[] = [];
-        const funcDetalhe: { nome: string; funcao: string; diasReal: number; entregas: number }[] = [];
+        const funcDetalhe: { nome: string; funcao: string; diasReal: number; entregas: number; datasEntrega: string[]; motivos: string[] }[] = [];
 
-        for (const [empIdStr, datas] of Object.entries(porFunc)) {
-          if (datas.length < 2) continue;
+        for (const [empIdStr, info] of Object.entries(porFunc)) {
           const empId = Number(empIdStr);
           const emp = empMap.get(empId);
+          const { datas, motivos } = info;
+          if (datas.length < 2) {
+            funcDetalhe.push({
+              nome: emp?.nome || `#${empId}`,
+              funcao: emp?.funcao || '-',
+              diasReal: 0,
+              entregas: datas.length,
+              datasEntrega: datas,
+              motivos,
+            });
+            continue;
+          }
           let somaIntervalo = 0;
           let count = 0;
           for (let i = 1; i < datas.length; i++) {
@@ -1119,14 +1133,14 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
               count++;
             }
           }
-          if (count > 0) {
-            funcDetalhe.push({
-              nome: emp?.nome || `#${empId}`,
-              funcao: emp?.funcao || '-',
-              diasReal: Math.round(somaIntervalo / count),
-              entregas: datas.length,
-            });
-          }
+          funcDetalhe.push({
+            nome: emp?.nome || `#${empId}`,
+            funcao: emp?.funcao || '-',
+            diasReal: count > 0 ? Math.round(somaIntervalo / count) : 0,
+            entregas: datas.length,
+            datasEntrega: datas,
+            motivos,
+          });
         }
 
         if (intervalos.length === 0) return null;
@@ -1152,8 +1166,8 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
           percentual,
           status,
           totalEntregas: entregas.length,
-          funcComTroca: funcDetalhe.length,
-          funcDetalhe: funcDetalhe.sort((a, b) => a.diasReal - b.diasReal).slice(0, 10),
+          funcComTroca: funcDetalhe.filter(f => f.entregas >= 2).length,
+          funcDetalhe: funcDetalhe.sort((a, b) => b.entregas - a.entregas),
           motivosTroca,
         };
       }).filter(Boolean);
