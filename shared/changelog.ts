@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 990,
+    titulo: "Vale: indicação de funcionários excluídos por falta de cadastro salarial",
+    descricao: "O cálculo do Vale agora identifica funcionários CLT Ativos que não possuem valor hora cadastrado e os lista com nome no card e na tela de resultado detalhado. O card mostra um alerta vermelho com os nomes, e a tela completa exibe uma seção dedicada 'Funcionários Excluídos do Cálculo' explicando o motivo e sugerindo correção no cadastro.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-03 19:50:00",
+  },
+  {
     version: 989,
     titulo: "Consolidar HE, Aferição e Pagamento — rastreabilidade completa",
     descricao: "Adicionados botões 'Consolidar' nos cards de Hora Extra, Aferir Escuro e Simular Pagamento, seguindo o mesmo padrão do Consolidar Vale. Cada consolidação registra quem consolidou e quando (timestamp + nome do usuário). Botão 'Desconsolidar' permite reverter caso necessário. A consolidação garante que o responsável pela análise é registrado, reforçando a rastreabilidade e accountability do pipeline de folha.",

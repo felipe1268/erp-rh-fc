@@ -1741,6 +1741,30 @@ export default function FolhaPagamento() {
             </Card>
           </div>
 
+          {valeResult.excluidos?.length > 0 && (
+            <Card className="border-2 border-red-300 bg-red-50/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="h-8 w-8 rounded-lg bg-red-500 flex items-center justify-center">
+                    <AlertTriangle className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-red-800">{valeResult.excluidos.length} Funcionário(s) Excluído(s) do Cálculo</p>
+                    <p className="text-xs text-red-600">Estes funcionários estão ativos como CLT mas não possuem valor hora cadastrado. Corrija no cadastro para incluí-los.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-2">
+                  {valeResult.excluidos.map((e: any) => (
+                    <div key={e.id} className="flex items-center gap-2 text-sm text-red-700 bg-red-100 rounded px-2 py-1">
+                      <Users className="h-3 w-3 shrink-0" />
+                      <span className="font-medium">{e.nome}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* ALERTAS - DECISÃO DO USUÁRIO */}
           {funcionariosComAlerta.length > 0 && (
             <Card className="border-2 border-amber-400 bg-amber-50/50">
@@ -3035,6 +3059,17 @@ export default function FolhaPagamento() {
                       </div>
                     </div>
                     {(valeResult.totalAlertas || 0) > 0 && <p className="text-[9px] text-amber-600 text-center mt-1">{valeResult.totalAlertas} alerta(s)</p>}
+                  </div>
+                )}
+                {valeResult?.excluidos?.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-2 mb-2">
+                    <p className="text-[9px] text-red-600 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {valeResult.excluidos.length} funcionário(s) excluído(s) — sem valor hora cadastrado:
+                    </p>
+                    {valeResult.excluidos.map((e: any) => (
+                      <p key={e.id} className="text-[10px] text-red-700 ml-4">• {e.nome}</p>
+                    ))}
                   </div>
                 )}
                 {valeOk && pd?.valeGeradoEm && (

@@ -1238,6 +1238,19 @@ export const payrollEngineRouter = router({
         )
       );
 
+      const excluidos = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+      }).from(employees).where(
+        and(
+          companyFilter(employees.companyId, input),
+          eq(employees.tipoContrato, "CLT"),
+          eq(employees.status, "Ativo"),
+          sql`${employees.deletedAt} IS NULL`,
+          sql`(${employees.valorHora} IS NULL OR ${employees.valorHora} = '')`,
+        )
+      );
+
       // Count faltas ONLY from day 1 to 15 of current month (not the full ponto period)
       const primeiroDiaMes = `${year}-${String(month).padStart(2, '0')}-01`;
       const dia15Mes = `${year}-${String(month).padStart(2, '0')}-15`;
@@ -1504,6 +1517,7 @@ export const payrollEngineRouter = router({
         diasUteis,
         percentual: criteria.percentualAdiantamento,
         funcionarios: results,
+        excluidos: excluidos.map(e => ({ id: e.id, nome: e.nomeCompleto })),
         message: bloqueados > 0 
           ? `Vale calculado: ${empList.length} funcionários, ${bloqueados} com alerta (decisão pendente), total R$ ${formatMoney(totalVale)}`
           : `Vale calculado: ${empList.length} funcionários, total R$ ${formatMoney(totalVale)}`,
