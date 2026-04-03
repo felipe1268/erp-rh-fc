@@ -524,6 +524,15 @@ export const homeDataRouter = router({
           dataFim: dataFimStr,
           diasRestantes,
           valorEstimado: a.valorEstimadoTotal,
+          dataLimitePagamento: (() => {
+            try {
+              const prev = JSON.parse(a.previsaoRescisao || '{}');
+              const raw = prev.dataLimitePagamento;
+              if (!raw || typeof raw !== 'string') return null;
+              const d = new Date(raw + 'T00:00:00');
+              return isNaN(d.getTime()) ? null : raw;
+            } catch { return null; }
+          })(),
           status: a.status,
           urgencia: aguardando
             ? 'aguardando_pagamento'

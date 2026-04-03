@@ -326,6 +326,13 @@ export default function PainelRH() {
                               <span className="text-[10px] text-muted-foreground">Término: {new Date(a.dataFim + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
                               {canSeeValues && a.valorEstimado && <span className="text-[10px] font-bold text-red-600">R$ {parseFloat(a.valorEstimado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
                             </div>
+                            {a.dataLimitePagamento && (
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <span className="text-[10px] text-amber-600">
+                                  Prazo pgto: {new Date(a.dataLimitePagamento + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         );
                       })}

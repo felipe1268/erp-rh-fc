@@ -7191,4 +7191,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-02 23:50:00",
   },
+  {
+    version: 971,
+    titulo: "Vida Útil EPIs por Fabricante/CA + Data Pagamento no Card de Aviso Prévio",
+    descricao:
+      "• Vida útil dos EPIs atualizada com base nos dados reais dos fabricantes pesquisados por CA (Certificado de Aprovação)\n" +
+      "• Fontes: Marluvas, Bracol, MSA, Athenas, Danny, Volk, Delta Plus, Alltec, Somhar, Kalipso, Valcan, DuPont e outros\n" +
+      "• Uniformes atualizados conforme CCT SINDUSCON/SINTRACON-SP 2024/2025 (2 jogos semestrais = 180 dias)\n" +
+      "• Cards de aviso prévio no Painel RH agora mostram data de pagamento (pago ou prazo limite)\n" +
+      "• Prazo de pagamento exibido em âmbar; pagamento confirmado em verde com ✓",
+    tipo: "melhoria",
+    modulos: "EPIs, Painel RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 01:00:00",
+  },
 ];
