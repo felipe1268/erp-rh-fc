@@ -91,6 +91,7 @@ export default function FolhaPagamento() {
   const escuroInicio = `16/${String(prevMes).padStart(2, '0')}/${prevAno}`;
   const escuroFim = `15/${String(mesSelecionado).padStart(2, '0')}/${anoSelecionado}`;
   const mesEscuroLabel = `${MESES_CURTOS[prevMes - 1]}/${prevAno}`;
+  const prevMesAno = `${prevAno}-${String(prevMes).padStart(2, '0')}`;
   const defaultHeInicio = `${prevAno}-${String(prevMes).padStart(2, "0")}-16`;
   const defaultHeFim = `${anoSelecionado}-${String(mesSelecionado).padStart(2, "0")}-15`;
   const [heDataInicio, setHeDataInicio] = useState(defaultHeInicio);
@@ -3353,6 +3354,12 @@ export default function FolhaPagamento() {
                     <div className="text-2xl font-bold text-amber-700">{afericaoResult.semRegistro || 0}</div>
                     <div className="text-[10px] text-amber-600 font-medium">Sem Registro</div>
                   </div>
+                  {(afericaoResult.totalJustificados || 0) > 0 && (
+                    <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
+                      <div className="text-2xl font-bold text-blue-700">{afericaoResult.totalJustificados}</div>
+                      <div className="text-[10px] text-blue-600 font-medium">Justificados</div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Divergências */}
@@ -3367,6 +3374,7 @@ export default function FolhaPagamento() {
                           <tr className="bg-red-50 text-red-700">
                             <th className="py-2 px-3 text-left font-semibold">Funcionário</th>
                             <th className="py-2 px-3 text-left font-semibold">Função</th>
+                            <th className="py-2 px-3 text-center font-semibold">Status</th>
                             <th className="py-2 px-3 text-center font-semibold">Data</th>
                             <th className="py-2 px-3 text-center font-semibold">Tipo</th>
                             <th className="py-2 px-3 text-right font-semibold">Desconto</th>
@@ -3375,8 +3383,30 @@ export default function FolhaPagamento() {
                         <tbody>
                           {(afericaoResult.divergenciasList || []).map((d: any, i: number) => (
                             <tr key={i} className={`border-t ${i % 2 === 0 ? '' : 'bg-red-50/30'}`}>
-                              <td className="py-2 px-3 font-medium">{d.employeeName || `ID ${d.employeeId}`}</td>
+                              <td className="py-2 px-3 font-medium">
+                                <button
+                                  className="text-left text-blue-700 hover:text-blue-900 hover:underline cursor-pointer font-medium"
+                                  onClick={() => {
+                                    setShowAfericaoReport(false);
+                                    setLocation(`/fechamento-ponto?funcionario=${d.employeeId}&mes=${prevMesAno}`);
+                                  }}
+                                >
+                                  {d.employeeName || `ID ${d.employeeId}`}
+                                </button>
+                              </td>
                               <td className="py-2 px-3 text-slate-500">{d.funcao || '-'}</td>
+                              <td className="py-2 px-3 text-center">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  d.empStatus === 'Ferias' ? 'bg-orange-100 text-orange-700' :
+                                  d.empStatus === 'Afastado' ? 'bg-blue-100 text-blue-700' :
+                                  d.empStatus === 'Desligado' ? 'bg-gray-200 text-gray-700' :
+                                  d.empStatus === 'Recluso' ? 'bg-purple-100 text-purple-700' :
+                                  d.empStatus === 'Lista_Negra' ? 'bg-gray-300 text-gray-800' :
+                                  'bg-green-100 text-green-700'
+                                }`}>
+                                  {d.empStatus === 'Lista_Negra' ? 'LISTA NEGRA' : (d.empStatus || 'Ativo').toUpperCase()}
+                                </span>
+                              </td>
                               <td className="py-2 px-3 text-center font-mono">{d.data ? d.data.split('-').reverse().join('/') : '-'}</td>
                               <td className="py-2 px-3 text-center">
                                 <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
@@ -3395,12 +3425,63 @@ export default function FolhaPagamento() {
                         </tbody>
                         <tfoot>
                           <tr className="border-t-2 border-red-300 bg-red-50 font-bold">
-                            <td colSpan={4} className="py-2 px-3 text-right text-red-700">Total Descontos:</td>
+                            <td colSpan={5} className="py-2 px-3 text-right text-red-700">Total Descontos:</td>
                             <td className="py-2 px-3 text-right font-mono text-red-700">
                               R$ {(afericaoResult.divergenciasList || []).reduce((s: number, d: any) => s + (typeof d.valorDesconto === 'number' ? d.valorDesconto : 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
                         </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Justificados (Férias, Afastados, Desligados, Reclusos) */}
+                {(afericaoResult.justificadosList || []).length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm text-blue-700 mb-2 flex items-center gap-1">
+                      <ShieldCheck className="h-4 w-4" /> Ausências Justificadas ({afericaoResult.justificadosList.length})
+                    </h4>
+                    <div className="rounded-lg border border-blue-200 overflow-hidden max-h-[250px] overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0">
+                          <tr className="bg-blue-50 text-blue-700">
+                            <th className="py-2 px-3 text-left font-semibold">Funcionário</th>
+                            <th className="py-2 px-3 text-left font-semibold">Função</th>
+                            <th className="py-2 px-3 text-center font-semibold">Data</th>
+                            <th className="py-2 px-3 text-center font-semibold">Motivo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(afericaoResult.justificadosList || []).map((j: any, i: number) => (
+                            <tr key={i} className={`border-t ${i % 2 === 0 ? '' : 'bg-blue-50/30'}`}>
+                              <td className="py-2 px-3 font-medium">
+                                <button
+                                  className="text-left text-blue-700 hover:text-blue-900 hover:underline cursor-pointer font-medium"
+                                  onClick={() => {
+                                    setShowAfericaoReport(false);
+                                    setLocation(`/fechamento-ponto?funcionario=${j.employeeId}&mes=${prevMesAno}`);
+                                  }}
+                                >
+                                  {j.employeeName || `ID ${j.employeeId}`}
+                                </button>
+                              </td>
+                              <td className="py-2 px-3 text-slate-500">{j.funcao || '-'}</td>
+                              <td className="py-2 px-3 text-center font-mono">{j.data ? j.data.split('-').reverse().join('/') : '-'}</td>
+                              <td className="py-2 px-3 text-center">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  j.motivo === 'Férias' ? 'bg-orange-100 text-orange-700' :
+                                  j.motivo === 'Afastado' ? 'bg-blue-100 text-blue-700' :
+                                  j.motivo === 'Desligado' ? 'bg-gray-200 text-gray-700' :
+                                  j.motivo === 'Recluso' ? 'bg-purple-100 text-purple-700' :
+                                  'bg-gray-300 text-gray-800'
+                                }`}>
+                                  {j.motivo.toUpperCase()}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
                       </table>
                     </div>
                   </div>

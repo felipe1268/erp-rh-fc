@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 987,
+    titulo: "Aferição: status do funcionário, nomes clicáveis e exclusão de justificados",
+    descricao: "Relatório de Aferição agora considera o status do funcionário (Férias, Afastado, Desligado, Recluso, Lista Negra) e períodos de férias registrados. Funcionários nessas situações são automaticamente excluídos das divergências e listados em seção separada 'Ausências Justificadas' com badge colorido do motivo. Nova coluna 'Status' na tabela de divergências com badges coloridos (Ativo=verde, Férias=laranja, Afastado=azul, Desligado=cinza, Recluso=roxo). Nomes dos funcionários são clicáveis — abrem o Fechamento de Ponto do mês aferido para validação cruzada. Card resumo 'Justificados' adicionado ao painel de totais.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-03 18:40:00",
+  },
+  {
     version: 979,
     titulo: "VA Inteligente: Dias úteis por cidade, proporcional, férias e alertas de faltas",
     descricao: "O cálculo de Vale Alimentação (café, lanche, jantar) agora usa dias úteis reais baseados no calendário de feriados da cidade da obra (nacionais + estaduais + municipais). Admissão no meio do mês calcula proporcional. Férias e licenças descontam automaticamente. Faltas sem atestado geram alertas para decisão do RH (descontar ou abonar), com histórico de auditoria. Nova aba 'Alertas de Faltas' com badge de pendências. Cidade da obra é agora campo obrigatório.",

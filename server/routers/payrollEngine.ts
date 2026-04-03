@@ -770,18 +770,53 @@ export const payrollEngineRouter = router({
 
       // ===== BATCH-LOAD employee data upfront to avoid N+1 queries =====
       const empDataRows = escuroEmployeeIds.length > 0
-        ? ((await db.execute(sql`SELECT id, "valorHora", "vtValorDiario", "nomeCompleto", funcao FROM employees WHERE id IN (${sql.join(escuroEmployeeIds.map(id => sql`${id}`), sql`,`)})`)) as any).rows || []
+        ? ((await db.execute(sql`SELECT id, "valorHora", "vtValorDiario", "nomeCompleto", funcao, status FROM employees WHERE id IN (${sql.join(escuroEmployeeIds.map(id => sql`${id}`), sql`,`)})`)) as any).rows || []
         : [];
       const empValorHoraMap = new Map<number, number>();
       const empVtDiarioMap = new Map<number, number>();
       const empNomeMap = new Map<number, string>();
       const empFuncaoMap = new Map<number, string>();
+      const empStatusMap = new Map<number, string>();
       for (const row of empDataRows) {
         empValorHoraMap.set(row.id, parseBRL(row.valorHora));
         empVtDiarioMap.set(row.id, parseBRL(row.vtValorDiario));
         empNomeMap.set(row.id, row.nomeCompleto || `ID ${row.id}`);
         empFuncaoMap.set(row.id, row.funcao || '');
+        empStatusMap.set(row.id, row.status || 'Ativo');
       }
+
+      // ===== BATCH-LOAD vacation periods that overlap the escuro date range =====
+      const feriasDateSet = new Set<string>();
+      if (escuroEmployeeIds.length > 0) {
+        const feriasRows = ((await db.execute(sql`
+          SELECT "employeeId", "dataInicio", "dataFim", "periodo2Inicio", "periodo2Fim",
+                 "periodo3Inicio", "periodo3Fim"
+          FROM vacation_periods 
+          WHERE "employeeId" IN (${sql.join(escuroEmployeeIds.map(id => sql`${id}`), sql`,`)})
+          AND status NOT IN ('cancelada', 'pendente')
+          AND "dataInicio" IS NOT NULL AND "dataFim" IS NOT NULL
+          AND "dataFim" >= ${escuroInicio} AND "dataInicio" <= ${escuroFim}
+        `)) as any).rows || [];
+        for (const vp of feriasRows) {
+          const periods = [
+            { ini: vp.dataInicio, fim: vp.dataFim },
+            { ini: vp.periodo2Inicio, fim: vp.periodo2Fim },
+            { ini: vp.periodo3Inicio, fim: vp.periodo3Fim },
+          ];
+          for (const p of periods) {
+            if (!p.ini || !p.fim) continue;
+            const start = new Date(p.ini);
+            const end = new Date(p.fim);
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+              const dateStr = d.toISOString().split('T')[0];
+              feriasDateSet.add(`${vp.employeeId}-${dateStr}`);
+            }
+          }
+        }
+      }
+
+      const STATUS_JUSTIFICADO = new Set(['Ferias', 'Afastado', 'Desligado', 'Recluso', 'Lista_Negra']);
+      const justificadosList: any[] = [];
       const empVrDiarioMap = new Map<number, number>();
       if (criteria.descontoVrFalta && escuroEmployeeIds.length > 0) {
         const vrRows = ((await db.execute(sql`
@@ -811,6 +846,27 @@ export const payrollEngineRouter = router({
         let obs = "";
         const empNome = empNomeMap.get(escuro.employeeId) || `ID ${escuro.employeeId}`;
         const empFuncao = empFuncaoMap.get(escuro.employeeId) || '';
+        const empStatus = empStatusMap.get(escuro.employeeId) || 'Ativo';
+        const isFerias = feriasDateSet.has(key);
+        const isStatusJustificado = STATUS_JUSTIFICADO.has(empStatus);
+
+        if (isFerias || isStatusJustificado) {
+          const motivo = isFerias ? 'Férias' : empStatus === 'Afastado' ? 'Afastado' : empStatus === 'Desligado' ? 'Desligado' : empStatus === 'Recluso' ? 'Recluso' : empStatus === 'Lista_Negra' ? 'Lista Negra' : empStatus;
+          resultado = "justificado";
+          obs = `Ausência justificada: ${motivo}`;
+          totalOk++;
+          justificadosList.push({
+            employeeId: escuro.employeeId,
+            employeeName: empNome,
+            funcao: empFuncao,
+            data: escuro.data,
+            motivo,
+            empStatus,
+          });
+          timecardAferidoUpdates.push({ id: escuro.id, resultado: "justificado", obs, actual: actual || { entrada1: null, saida1: null, entrada2: null, saida2: null, entrada3: null, saida3: null, horasTrabalhadas: '0:00', horasNoturnas: '0:00', isFalta: false, isAtraso: false, isSaidaAntecipada: false, minutosAtraso: 0, minutosSaidaAntecipada: 0 }, horasExtras: '0:00', numBatidas: 0 });
+          totalAferidos++;
+          continue;
+        }
 
         if (actual) {
           if (!actual.entrada1 && !actual.saida1 && !actual.entrada2 && !actual.saida2) {
@@ -838,6 +894,7 @@ export const payrollEngineRouter = router({
               employeeId: escuro.employeeId,
               employeeName: empNome,
               funcao: empFuncao,
+              empStatus,
               data: escuro.data,
               tipo: "falta",
               valorDesconto: totalDesc,
@@ -867,6 +924,7 @@ export const payrollEngineRouter = router({
                   employeeId: escuro.employeeId,
                   employeeName: empNome,
                   funcao: empFuncao,
+                  empStatus,
                   data: escuro.data,
                   tipo: "atraso",
                   minutos: atraso,
@@ -927,6 +985,7 @@ export const payrollEngineRouter = router({
             employeeId: escuro.employeeId,
             employeeName: empNome,
             funcao: empFuncao,
+            empStatus,
             data: escuro.data,
             tipo: "sem_registro",
             valorDesconto: totalDescSR,
@@ -1036,10 +1095,11 @@ export const payrollEngineRouter = router({
       const semRegistro = divergenciasList.filter((d: any) => d.tipo === 'sem_registro').length;
       const faltas = divergenciasList.filter((d: any) => d.tipo === 'falta').length;
       const atrasos = divergenciasList.filter((d: any) => d.tipo === 'atraso').length;
+      const totalJustificados = justificadosList.length;
       return { 
-        totalAferidos, divergencias, totalOk, faltas, atrasos, semRegistro,
-        divergenciasList, validadosList,
-        message: `Aferição concluída: ${totalAferidos} dias aferidos, ${totalOk} OK, ${divergencias} divergências`
+        totalAferidos, divergencias, totalOk, faltas, atrasos, semRegistro, totalJustificados,
+        divergenciasList, validadosList, justificadosList,
+        message: `Aferição concluída: ${totalAferidos} dias aferidos, ${totalOk} OK, ${divergencias} divergências, ${totalJustificados} justificados`
       };
     }),
 
