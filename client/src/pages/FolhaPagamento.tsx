@@ -27,6 +27,7 @@ import { fmtNum } from "@/lib/formatters";
 import AlertaDivergenciaFolha from "@/components/AlertaDivergenciaFolha";
 
 const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const fmtDateBR = (d: string | null | undefined) => { if (!d) return '-'; const s = String(d).slice(0,10); const [y,m,dd] = s.split('-'); return `${dd}/${m}/${y}`; };
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 function formatMesAno(mesAno: string): string {
@@ -2561,7 +2562,7 @@ export default function FolhaPagamento() {
                             {/* Period header row */}
                             <div className="p-3 flex flex-wrap items-center gap-3">
                               <div className="flex-1 min-w-0">
-                                <span className="font-medium text-sm">{String(p.dataInicio).slice(0, 10)} → {String(p.dataFim).slice(0, 10)}</span>
+                                <span className="font-medium text-sm">{fmtDateBR(p.dataInicio)} → {fmtDateBR(p.dataFim)}</span>
                                 <span className="ml-3 text-sm text-muted-foreground">{p.totalFuncionarios} func · {formatBRL(Number(p.totalValorHE))}</span>
                                 <Badge className={`ml-2 text-[10px] ${statusColor(p.status)}`}>{p.status}</Badge>
                                 {p.criadoPor && <span className="ml-2 text-xs text-muted-foreground">por {p.criadoPor}</span>}
@@ -3295,7 +3296,7 @@ export default function FolhaPagamento() {
                           <Button key={p.id} size="sm" variant="ghost" className="w-full text-xs text-purple-700 h-7"
                             onClick={() => { setHeViewPeriodId(p.id); setViewMode("he_modulo"); }}>
                             <Eye className="h-3 w-3 mr-1" />
-                            {String(p.dataInicio).slice(0,10)} → {String(p.dataFim).slice(0,10)}
+                            {fmtDateBR(p.dataInicio)} → {fmtDateBR(p.dataFim)}
                             <Badge className={`ml-1 text-[9px] ${p.status === 'aprovado' ? 'bg-green-100 text-green-700' : p.status === 'pago' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{p.status}</Badge>
                           </Button>
                         ))}
@@ -3324,7 +3325,7 @@ export default function FolhaPagamento() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-1 text-[10px] text-green-700 justify-center">
                             <Lock className="h-3 w-3" />
-                            <span>Consolidado {(pd as any).heConsolidadoEm?.substring(0, 16)}{(pd as any).heConsolidadoPor ? ` por ${(pd as any).heConsolidadoPor}` : ''}</span>
+                            <span>Consolidado {(pd as any).heConsolidadoEm ? new Date((pd as any).heConsolidadoEm).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}{(pd as any).heConsolidadoPor ? ` por ${(pd as any).heConsolidadoPor}` : ''}</span>
                           </div>
                           <Button size="sm" variant="ghost" className="w-full text-[10px] text-slate-500 h-6"
                             onClick={() => desconsolidarHEMut.mutate({ companyId, mesReferencia: mesAno })}
@@ -3453,7 +3454,7 @@ export default function FolhaPagamento() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-1 text-[10px] text-green-700 justify-center">
                           <Lock className="h-3 w-3" />
-                          <span>Consolidado {(pd as any).afericaoConsolidadoEm?.substring(0, 16)}{(pd as any).afericaoConsolidadoPor ? ` por ${(pd as any).afericaoConsolidadoPor}` : ''}</span>
+                          <span>Consolidado {(pd as any).afericaoConsolidadoEm ? new Date((pd as any).afericaoConsolidadoEm).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}{(pd as any).afericaoConsolidadoPor ? ` por ${(pd as any).afericaoConsolidadoPor}` : ''}</span>
                         </div>
                         <Button size="sm" variant="ghost" className="w-full text-[10px] text-slate-500 h-6"
                           onClick={() => desconsolidarAfericaoMut.mutate({ companyId, mesReferencia: mesAno })}
@@ -3542,7 +3543,7 @@ export default function FolhaPagamento() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-1 text-[10px] text-green-700 justify-center">
                           <Lock className="h-3 w-3" />
-                          <span>Consolidado {(pd as any).pagamentoConsolidadoEm?.substring(0, 16)}{(pd as any).pagamentoConsolidadoPor ? ` por ${(pd as any).pagamentoConsolidadoPor}` : ''}</span>
+                          <span>Consolidado {(pd as any).pagamentoConsolidadoEm ? new Date((pd as any).pagamentoConsolidadoEm).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}{(pd as any).pagamentoConsolidadoPor ? ` por ${(pd as any).pagamentoConsolidadoPor}` : ''}</span>
                         </div>
                         <Button size="sm" variant="ghost" className="w-full text-[10px] text-slate-500 h-6"
                           onClick={() => desconsolidarPagamentoMut.mutate({ companyId, mesReferencia: mesAno })}
