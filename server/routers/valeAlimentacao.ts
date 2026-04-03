@@ -24,7 +24,7 @@ export const valeAlimentacaoRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const rows = ((await db.execute(
-        sql`SELECT vr.*, e."nomeCompleto", e.cpf, e.cargo, e.funcao, e.status as "empStatus",
+        sql`SELECT DISTINCT ON (vr.id) vr.*, e."nomeCompleto", e.cpf, e.cargo, e.funcao, e.status as "empStatus",
             of2."obraId", o.nome as "obraNome"
             FROM vr_benefits vr
             LEFT JOIN employees e ON vr."employeeId" = e.id
@@ -32,7 +32,7 @@ export const valeAlimentacaoRouter = router({
             LEFT JOIN obras o ON of2."obraId" = o.id
             WHERE vr."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND vr."mesReferencia" = ${input.mesReferencia}
             AND (e.status NOT IN ('Desligado', 'Lista_Negra') OR e.status IS NULL)
-            ORDER BY e."nomeCompleto" ASC`
+            ORDER BY vr.id, e."nomeCompleto" ASC`
       )) as any).rows || [];
       return rows || [];
     }),
