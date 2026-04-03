@@ -88,10 +88,8 @@ export default function FolhaPagamento() {
   // HE Módulo state
   const prevMes = mesSelecionado === 1 ? 12 : mesSelecionado - 1;
   const prevAno = mesSelecionado === 1 ? anoSelecionado - 1 : anoSelecionado;
-  const escuroMesAnt = prevMes === 1 ? 12 : prevMes - 1;
-  const escuroAnoAnt = prevMes === 1 ? prevAno - 1 : prevAno;
-  const escuroInicio = `21/${String(escuroMesAnt).padStart(2, '0')}/${escuroAnoAnt}`;
-  const escuroFim = `20/${String(prevMes).padStart(2, '0')}/${prevAno}`;
+  const escuroInicio = `16/${String(prevMes).padStart(2, '0')}/${prevAno}`;
+  const escuroFim = `15/${String(mesSelecionado).padStart(2, '0')}/${anoSelecionado}`;
   const defaultHeInicio = `${prevAno}-${String(prevMes).padStart(2, "0")}-16`;
   const defaultHeFim = `${anoSelecionado}-${String(mesSelecionado).padStart(2, "0")}-15`;
   const [heDataInicio, setHeDataInicio] = useState(defaultHeInicio);
