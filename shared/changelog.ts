@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 991,
+    titulo: "Cards de Funcionários com filtro interativo",
+    descricao: "Todos os cards de estatísticas na página de Colaboradores agora são clicáveis e filtram a tabela: Total, Ativos, CLT, PJ, Férias, Afastados, Licença, Desligados e Reclusos. CLT e PJ filtram por tipo de contrato. Cards com filtro ativo mostram destaque visual (ring). Dropdown de filtro também inclui opções CLT e PJ.",
+    tipo: "melhoria",
+    modulos: "Funcionários",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-03 20:00:00",
+  },
+  {
     version: 990,
     titulo: "Vale: indicação de funcionários excluídos por falta de cadastro salarial",
     descricao: "O cálculo do Vale agora identifica funcionários CLT Ativos que não possuem valor hora cadastrado e os lista com nome no card e na tela de resultado detalhado. O card mostra um alerta vermelho com os nomes, e a tela completa exibe uma seção dedicada 'Funcionários Excluídos do Cálculo' explicando o motivo e sugerindo correção no cadastro.",

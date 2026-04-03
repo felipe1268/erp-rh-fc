@@ -177,8 +177,9 @@ export default function Colaboradores() {
     { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined },
     { enabled: hasValidSelection }
   );
+  const serverStatus = statusFilter !== "Todos" && statusFilter !== "CLT" && statusFilter !== "PJ" ? statusFilter : undefined;
   const { data: employees, isLoading } = trpc.employees.list.useQuery(
-    { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined, search: search || undefined, status: statusFilter !== "Todos" ? statusFilter : undefined },
+    { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined, search: search || undefined, status: serverStatus },
     { enabled: hasValidSelection }
   );
 
@@ -197,6 +198,8 @@ export default function Colaboradores() {
   const displayEmployees = useMemo(() => {
     let list = employees ?? [];
     if (skillEmployeeIds) list = list.filter(e => skillEmployeeIds.has(e.id));
+    if (statusFilter === "CLT") list = list.filter(e => (e as any).tipoContrato === "CLT");
+    if (statusFilter === "PJ") list = list.filter(e => (e as any).tipoContrato === "PJ");
     if (statusFilter === "Desligado" && (desligDe || desligAte)) {
       list = list.filter(e => {
         const d = (e as any).dataDesligamentoEfetiva;
@@ -641,8 +644,8 @@ export default function Colaboradores() {
               {[
                 { label: "Total", value: statsQ.data.total - statsQ.data.desligados, icon: Users, color: "text-slate-700", bg: "bg-slate-50 border-slate-200", filter: "Todos" },
                 { label: "Ativos", value: statsQ.data.ativos, icon: UserCheck, color: "text-green-700", bg: "bg-green-50 border-green-200", filter: "Ativo" },
-                { label: "CLT", value: statsQ.data.clt, icon: FileText, color: "text-sky-700", bg: "bg-sky-50 border-sky-200", filter: null },
-                { label: "PJ", value: statsQ.data.pj, icon: Building2, color: "text-indigo-700", bg: "bg-indigo-50 border-indigo-200", filter: null },
+                { label: "CLT", value: statsQ.data.clt, icon: FileText, color: "text-sky-700", bg: "bg-sky-50 border-sky-200", filter: "CLT" },
+                { label: "PJ", value: statsQ.data.pj, icon: Building2, color: "text-indigo-700", bg: "bg-indigo-50 border-indigo-200", filter: "PJ" },
                 { label: "Férias", value: statsQ.data.ferias, icon: Palmtree, color: "text-blue-700", bg: "bg-blue-50 border-blue-200", filter: "Ferias" },
                 { label: "Afastados", value: statsQ.data.afastados, icon: HeartPulse, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", filter: "Afastado" },
                 { label: "Licença", value: statsQ.data.licenca, icon: Clock, color: "text-purple-700", bg: "bg-purple-50 border-purple-200", filter: "Licenca" },
@@ -682,6 +685,8 @@ export default function Colaboradores() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="Todos">Todos</SelectItem>
+              <SelectItem value="CLT">CLT</SelectItem>
+              <SelectItem value="PJ">PJ</SelectItem>
               {EMPLOYEE_STATUS.map(s => (
                 <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
               ))}
