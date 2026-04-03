@@ -10,6 +10,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -97,6 +98,11 @@ export default function DashEpis() {
   const kpiDetailRef = useRef<HTMLDivElement>(null);
   const [activeKpi, setActiveKpi] = useState<string | null>(null);
   const [expandedEpiId, setExpandedEpiId] = useState<number | null>(null);
+  const [fichaModal, setFichaModal] = useState<{ employeeId: number; employeeName: string; epiNome: string } | null>(null);
+  const fichaDeliveries = trpc.epis.listDeliveries.useQuery(
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), employeeId: fichaModal?.employeeId },
+    { enabled: !!fichaModal }
+  );
 
   function handleKpiClick(kpi: string) {
     const newVal = activeKpi === kpi ? null : kpi;
@@ -170,6 +176,7 @@ export default function DashEpis() {
   );
 
   return (
+    <>
     <DashboardLayout>
       <div className="space-y-6">
         {/* HEADER */}
@@ -904,7 +911,14 @@ export default function DashEpis() {
                                               <tbody>
                                                 {a.funcDetalhe.map((f: any, fi: number) => (
                                                   <tr key={fi} className="border-t border-border/30">
-                                                    <td className="py-1.5 pr-3 font-medium"><EmpNameWithStatus nome={f.nome} isDesligado={f.isDesligado} maxWidth="max-w-[200px]" /></td>
+                                                    <td className="py-1.5 pr-3 font-medium">
+                                                      <button
+                                                        className="text-left hover:text-blue-600 hover:underline cursor-pointer transition-colors"
+                                                        onClick={(e) => { e.stopPropagation(); setFichaModal({ employeeId: f.employeeId, employeeName: f.nome, epiNome: a.nome }); }}
+                                                      >
+                                                        <EmpNameWithStatus nome={f.nome} isDesligado={f.isDesligado} maxWidth="max-w-[200px]" />
+                                                      </button>
+                                                    </td>
                                                     <td className="py-1.5 pr-3 text-muted-foreground">{f.funcao}</td>
                                                     <td className="py-1.5 pr-3 text-center">{f.entregas}</td>
                                                     <td className="py-1.5 pr-3 text-center">
@@ -1435,5 +1449,69 @@ export default function DashEpis() {
           </div>
         )}
     </DashboardLayout>
+
+      <Dialog open={!!fichaModal} onOpenChange={() => setFichaModal(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              Entregas de EPI — {fichaModal?.employeeName}
+            </DialogTitle>
+          </DialogHeader>
+          {fichaDeliveries.isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-muted-foreground">Carregando entregas...</span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(() => {
+                const deliveries = (fichaDeliveries.data || []).sort((a: any, b: any) =>
+                  new Date(b.dataEntrega || 0).getTime() - new Date(a.dataEntrega || 0).getTime()
+                );
+                if (deliveries.length === 0) {
+                  return <p className="text-center text-muted-foreground py-8">Nenhuma entrega encontrada.</p>;
+                }
+                return (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-muted-foreground border-b">
+                        <th className="py-2 pr-3 font-medium">EPI</th>
+                        <th className="py-2 pr-3 font-medium">CA</th>
+                        <th className="py-2 pr-3 font-medium">Data Entrega</th>
+                        <th className="py-2 pr-3 font-medium">Qtd</th>
+                        <th className="py-2 pr-3 font-medium">Motivo</th>
+                        <th className="py-2 pr-3 font-medium">Ficha</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deliveries.map((d: any) => (
+                        <tr key={d.id} className="border-t border-border/30 hover:bg-muted/30">
+                          <td className="py-2 pr-3 font-medium">{d.nomeEpi || '-'}</td>
+                          <td className="py-2 pr-3"><Badge variant="outline" className="text-xs">{d.caEpi || '-'}</Badge></td>
+                          <td className="py-2 pr-3">{fmtDate(d.dataEntrega)}</td>
+                          <td className="py-2 pr-3 text-center">{d.quantidade || 1}</td>
+                          <td className="py-2 pr-3 text-xs text-muted-foreground">{d.motivo || d.motivoTroca || '-'}</td>
+                          <td className="py-2 pr-3">
+                            {d.fichaUrl ? (
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                                onClick={() => window.open(d.fichaUrl, '_blank')}>
+                                <FileText className="h-3 w-3" /> Ver PDF
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

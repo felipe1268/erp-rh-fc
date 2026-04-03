@@ -1112,7 +1112,7 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
         }
 
         const intervalos: number[] = [];
-        const funcDetalhe: { nome: string; funcao: string; isDesligado: boolean; diasReal: number; entregas: number; datasEntrega: string[]; motivos: string[] }[] = [];
+        const funcDetalhe: { employeeId: number; nome: string; funcao: string; isDesligado: boolean; diasReal: number; entregas: number; datasEntrega: string[]; motivos: string[] }[] = [];
 
         for (const [empIdStr, info] of Object.entries(porFunc)) {
           const empId = Number(empIdStr);
@@ -1120,6 +1120,7 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
           const { datas, motivos } = info;
           if (datas.length < 2) {
             funcDetalhe.push({
+              employeeId: empId,
               nome: emp?.nome || `Func. ${empId}`,
               funcao: emp?.funcao || '-',
               isDesligado: isDesligadoStatus(emp?.status),
@@ -1143,6 +1144,7 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
             }
           }
           funcDetalhe.push({
+            employeeId: empId,
             nome: emp?.nome || `Func. ${empId}`,
             funcao: emp?.funcao || '-',
             isDesligado: isDesligadoStatus(emp?.status),
