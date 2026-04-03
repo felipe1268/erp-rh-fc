@@ -942,6 +942,21 @@ export const payrollEngineRouter = router({
               escuroEntrada1: escuro.entrada1,
               escuroSaida1: escuro.saida1,
             });
+          } else if (isFimDeSemanaOuFeriado) {
+            resultado = "ok";
+            obs = `Batida em ${tipoDiaEscuro === 'feriado' ? 'feriado' : tipoDiaEscuro === 'domingo' ? 'domingo' : 'sábado'} — horas computadas como hora extra`;
+            totalOk++;
+            validadosList.push({
+              employeeId: escuro.employeeId,
+              employeeName: empNome,
+              data: escuro.data,
+              escuroEntrada1: escuro.entrada1 || '-',
+              escuroSaida1: escuro.saida1 || '-',
+              realEntrada1: actual.entrada1 || '-',
+              realSaida1: actual.saida1 || '-',
+              horasTrabalhadas: actual.horasTrabalhadas || '0:00',
+              heIndicator: true,
+            });
           } else {
             const entrada = parseTime(actual.entrada1);
             if (entrada !== null) {
