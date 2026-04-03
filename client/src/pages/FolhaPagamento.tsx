@@ -2279,9 +2279,15 @@ export default function FolhaPagamento() {
                                   {temDesconto ? <span className="text-red-600 font-semibold">R$ {descontoDia.toFixed(2)}</span> : '—'}
                                 </td>
                                 <td className="p-2 text-center text-[10px]">
-                                  {dia.afericaoResultado ? <Badge className={dia.afericaoResultado === 'ok' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}>{dia.afericaoResultado}</Badge>
-                                    : dia.statusDia ? <span className="text-muted-foreground">{dia.statusDia}</span>
-                                    : '—'}
+                                  {dia.classificacao === 'dia_util' ? (
+                                    dia.temRegistro
+                                      ? <Badge className="bg-green-100 text-green-700">{dia.afericaoResultado || 'ok'}</Badge>
+                                      : <Badge className="bg-red-100 text-red-700">sem_registro</Badge>
+                                  ) : (
+                                    dia.temRegistro
+                                      ? <Badge className="bg-green-100 text-green-700">ok</Badge>
+                                      : <span className="text-muted-foreground">—</span>
+                                  )}
                                 </td>
                               </tr>
                             );
