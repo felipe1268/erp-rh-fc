@@ -169,6 +169,7 @@ export default function FolhaPagamento() {
   const [valeResult, setValeResult] = useState<any>(null);
   const [pagamentoResult, setPagamentoResult] = useState<any>(null);
   const [afericaoResult, setAfericaoResult] = useState<any>(null);
+  const [showAfericaoReport, setShowAfericaoReport] = useState(false);
   const [calcElapsed, setCalcElapsed] = useState(0);
   const [calcType, setCalcType] = useState<"vale" | "pagamento" | null>(null);
 
@@ -238,9 +239,9 @@ export default function FolhaPagamento() {
     onSuccess: (data) => {
       finishProgress('afericao');
       setAfericaoResult(data);
+      setShowAfericaoReport(true);
       if ((data.semRegistro || 0) > 0) {
         toast.warning(`Aferição concluída com ${data.semRegistro} dia(s) sem registro de ponto. Decida se foi erro do relógio ou falta real.`);
-        setViewMode("alertas_afericao");
       } else {
         toast.success(data.message);
       }
@@ -3114,9 +3115,9 @@ export default function FolhaPagamento() {
                       <span>Concluído {fmtTimestamp(pd.afericaoEm)}{pd.afericaoPor ? ` por ${pd.afericaoPor}` : ''}</span>
                     </div>
                     {afericaoResult && (
-                      <div className="text-[10px] text-slate-600 bg-slate-50 rounded px-2 py-1">
-                        {afericaoResult.totalAferidos} dias | {afericaoResult.divergencias} diverg.
-                      </div>
+                      <button onClick={() => setShowAfericaoReport(true)} className="text-[10px] text-slate-600 bg-slate-50 rounded px-2 py-1 hover:bg-slate-100 transition-colors cursor-pointer text-left w-full">
+                        {afericaoResult.totalAferidos} dias | {afericaoResult.totalOk || 0} OK | {afericaoResult.divergencias} diverg. <span className="text-blue-500 underline ml-1">Ver relatório</span>
+                      </button>
                     )}
                     {(pd.totalDivergenciasAferidas || 0) > 0 && !afericaoResult && (
                       <div className="text-[10px] text-slate-600 bg-slate-50 rounded px-2 py-1">
@@ -3246,6 +3247,147 @@ export default function FolhaPagamento() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAfericaoInfo(false)}>Entendi</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* RELATÓRIO DE AFERIÇÃO */}
+        <Dialog open={showAfericaoReport} onOpenChange={setShowAfericaoReport}>
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600" /> Relatório de Aferição — {mesEscuroLabel}
+              </DialogTitle>
+              <DialogDescription>
+                Resultado da comparação entre o ponto estimado (escuro) e o ponto real (DIXI)
+              </DialogDescription>
+            </DialogHeader>
+            {afericaoResult && (
+              <div className="flex-1 overflow-y-auto space-y-4">
+                {/* Summary cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  <div className="bg-slate-50 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-slate-700">{afericaoResult.totalAferidos}</div>
+                    <div className="text-[10px] text-slate-500 font-medium">Dias Aferidos</div>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
+                    <div className="text-2xl font-bold text-green-700">{afericaoResult.totalOk || 0}</div>
+                    <div className="text-[10px] text-green-600 font-medium">Validados OK</div>
+                  </div>
+                  <div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
+                    <div className="text-2xl font-bold text-red-700">{afericaoResult.faltas || 0}</div>
+                    <div className="text-[10px] text-red-600 font-medium">Faltas</div>
+                  </div>
+                  <div className="bg-orange-50 rounded-lg p-3 text-center border border-orange-200">
+                    <div className="text-2xl font-bold text-orange-700">{afericaoResult.atrasos || 0}</div>
+                    <div className="text-[10px] text-orange-600 font-medium">Atrasos</div>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
+                    <div className="text-2xl font-bold text-amber-700">{afericaoResult.semRegistro || 0}</div>
+                    <div className="text-[10px] text-amber-600 font-medium">Sem Registro</div>
+                  </div>
+                </div>
+
+                {/* Divergências */}
+                {(afericaoResult.divergenciasList || []).length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm text-red-700 mb-2 flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" /> Divergências Encontradas ({afericaoResult.divergenciasList.length})
+                    </h4>
+                    <div className="rounded-lg border border-red-200 overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-red-50 text-red-700">
+                            <th className="py-2 px-3 text-left font-semibold">Funcionário</th>
+                            <th className="py-2 px-3 text-left font-semibold">Função</th>
+                            <th className="py-2 px-3 text-center font-semibold">Data</th>
+                            <th className="py-2 px-3 text-center font-semibold">Tipo</th>
+                            <th className="py-2 px-3 text-right font-semibold">Desconto</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(afericaoResult.divergenciasList || []).map((d: any, i: number) => (
+                            <tr key={i} className={`border-t ${i % 2 === 0 ? '' : 'bg-red-50/30'}`}>
+                              <td className="py-2 px-3 font-medium">{d.employeeName || `ID ${d.employeeId}`}</td>
+                              <td className="py-2 px-3 text-slate-500">{d.funcao || '-'}</td>
+                              <td className="py-2 px-3 text-center font-mono">{d.data ? d.data.split('-').reverse().join('/') : '-'}</td>
+                              <td className="py-2 px-3 text-center">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  d.tipo === 'falta' ? 'bg-red-100 text-red-700' : 
+                                  d.tipo === 'atraso' ? 'bg-orange-100 text-orange-700' : 
+                                  'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {d.tipo === 'falta' ? 'FALTA' : d.tipo === 'atraso' ? `ATRASO ${d.minutos ? `(${d.minutos}min)` : ''}` : 'SEM REGISTRO'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono font-bold text-red-600">
+                                R$ {typeof d.valorDesconto === 'number' ? d.valorDesconto.toFixed(2).replace('.', ',') : d.valorDesconto || '0,00'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-red-300 bg-red-50 font-bold">
+                            <td colSpan={4} className="py-2 px-3 text-right text-red-700">Total Descontos:</td>
+                            <td className="py-2 px-3 text-right font-mono text-red-700">
+                              R$ {(afericaoResult.divergenciasList || []).reduce((s: number, d: any) => s + (typeof d.valorDesconto === 'number' ? d.valorDesconto : 0), 0).toFixed(2).replace('.', ',')}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Validados OK */}
+                {(afericaoResult.validadosList || []).length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm text-green-700 mb-2 flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4" /> Registros Validados ({afericaoResult.validadosList.length})
+                    </h4>
+                    <div className="rounded-lg border border-green-200 overflow-hidden max-h-[250px] overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0">
+                          <tr className="bg-green-50 text-green-700">
+                            <th className="py-2 px-3 text-left font-semibold">Funcionário</th>
+                            <th className="py-2 px-3 text-center font-semibold">Data</th>
+                            <th className="py-2 px-3 text-center font-semibold">Escuro (E/S)</th>
+                            <th className="py-2 px-3 text-center font-semibold">Real (E/S)</th>
+                            <th className="py-2 px-3 text-center font-semibold">Horas Trab.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(afericaoResult.validadosList || []).map((v: any, i: number) => (
+                            <tr key={i} className={`border-t ${i % 2 === 0 ? '' : 'bg-green-50/30'}`}>
+                              <td className="py-1.5 px-3 font-medium">{v.employeeName || `ID ${v.employeeId}`}</td>
+                              <td className="py-1.5 px-3 text-center font-mono">{v.data ? v.data.split('-').reverse().join('/') : '-'}</td>
+                              <td className="py-1.5 px-3 text-center font-mono text-slate-500">{v.escuroEntrada1}/{v.escuroSaida1}</td>
+                              <td className="py-1.5 px-3 text-center font-mono text-green-700">{v.realEntrada1}/{v.realSaida1}</td>
+                              <td className="py-1.5 px-3 text-center font-mono">{v.horasTrabalhadas}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {afericaoResult.divergencias === 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                    <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                    <p className="font-semibold text-green-700">Nenhuma divergência encontrada!</p>
+                    <p className="text-xs text-green-600 mt-1">Todos os registros do período no escuro foram confirmados pelo ponto real.</p>
+                  </div>
+                )}
+              </div>
+            )}
+            <DialogFooter className="flex gap-2 mt-2">
+              {(afericaoResult?.semRegistro || 0) > 0 && (
+                <Button variant="outline" className="text-amber-700 border-amber-300" onClick={() => { setShowAfericaoReport(false); setViewMode("alertas_afericao"); }}>
+                  <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Decidir {afericaoResult.semRegistro} sem registro
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setShowAfericaoReport(false)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

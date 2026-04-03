@@ -768,36 +768,59 @@ export const payrollEngineRouter = router({
         empJornadaMap.set(row.id, row.jornadaTrabalho ?? null);
       }
 
+      // ===== BATCH-LOAD employee data upfront to avoid N+1 queries =====
+      const empDataRows = escuroEmployeeIds.length > 0
+        ? ((await db.execute(sql`SELECT id, "valorHora", "vtValorDiario", "nomeCompleto", funcao FROM employees WHERE id IN (${sql.join(escuroEmployeeIds.map(id => sql`${id}`), sql`,`)})`)) as any).rows || []
+        : [];
+      const empValorHoraMap = new Map<number, number>();
+      const empVtDiarioMap = new Map<number, number>();
+      const empNomeMap = new Map<number, string>();
+      const empFuncaoMap = new Map<number, string>();
+      for (const row of empDataRows) {
+        empValorHoraMap.set(row.id, parseBRL(row.valorHora));
+        empVtDiarioMap.set(row.id, parseBRL(row.vtValorDiario));
+        empNomeMap.set(row.id, row.nomeCompleto || `ID ${row.id}`);
+        empFuncaoMap.set(row.id, row.funcao || '');
+      }
+      const empVrDiarioMap = new Map<number, number>();
+      if (criteria.descontoVrFalta && escuroEmployeeIds.length > 0) {
+        const vrRows = ((await db.execute(sql`
+          SELECT DISTINCT ON ("employeeId") "employeeId", "valorDiario" FROM vr_benefits 
+          WHERE "employeeId" IN (${sql.join(escuroEmployeeIds.map(id => sql`${id}`), sql`,`)})
+          AND "companyId" IN (${afericaoCidsSql})
+          ORDER BY "employeeId", "mesReferencia" DESC
+        `)) as any).rows || [];
+        for (const row of vrRows) empVrDiarioMap.set(row.employeeId, parseBRL(row.valorDiario));
+      }
+
       let totalAferidos = 0;
       let divergencias = 0;
+      let totalOk = 0;
       const divergenciasList: any[] = [];
+      const validadosList: any[] = [];
 
       for (const escuro of escuroRecords) {
         const key = `${escuro.employeeId}-${escuro.data}`;
         const actual = actualMap.get(key);
         let resultado = "ok";
         let obs = "";
+        const empNome = empNomeMap.get(escuro.employeeId) || `ID ${escuro.employeeId}`;
+        const empFuncao = empFuncaoMap.get(escuro.employeeId) || '';
 
         if (actual) {
-          // Check if there was a falta
           if (!actual.entrada1 && !actual.saida1 && !actual.entrada2 && !actual.saida2) {
             resultado = "falta";
             obs = "Falta identificada na aferição";
             divergencias++;
 
-            // Create adjustment for next month's payment
-            const valorHoraEmp = await getEmployeeValorHora(db, escuro.employeeId);
+            const valorHoraEmp = empValorHoraMap.get(escuro.employeeId) || 0;
             const valorFalta = valorHoraEmp * criteria.cargaHorariaDiaria;
-            
-            // Get VR/VT values for discount
             let vrDesconto = "0", vtDesconto = "0";
             if (criteria.descontoVrFalta) {
-              const vrVal = await getEmployeeVrDiario(db, escuro.employeeId, input.companyId);
-              vrDesconto = formatMoney(vrVal);
+              vrDesconto = formatMoney(empVrDiarioMap.get(escuro.employeeId) || 0);
             }
             if (criteria.descontoVtFalta) {
-              const vtVal = await getEmployeeVtDiario(db, escuro.employeeId);
-              vtDesconto = formatMoney(vtVal);
+              vtDesconto = formatMoney(empVtDiarioMap.get(escuro.employeeId) || 0);
             }
             const totalDesc = valorFalta + parseBRL(vrDesconto) + parseBRL(vtDesconto);
 
@@ -811,12 +834,15 @@ export const payrollEngineRouter = router({
 
             divergenciasList.push({
               employeeId: escuro.employeeId,
+              employeeName: empNome,
+              funcao: empFuncao,
               data: escuro.data,
               tipo: "falta",
               valorDesconto: totalDesc,
+              escuroEntrada1: escuro.entrada1,
+              escuroSaida1: escuro.saida1,
             });
           } else {
-            // Check for tardiness
             const entrada = parseTime(actual.entrada1);
             if (entrada !== null) {
               const jornadaEntrada = 7 * 60;
@@ -826,54 +852,73 @@ export const payrollEngineRouter = router({
                 obs = `Atraso de ${minutesToHHMM(atraso)} identificado na aferição`;
                 divergencias++;
 
-                const valorHoraEmp = await getEmployeeValorHora(db, escuro.employeeId);
+                const valorHoraEmp = empValorHoraMap.get(escuro.employeeId) || 0;
                 const valorMinuto = valorHoraEmp / 60;
                 const valorAtraso = valorMinuto * atraso;
-                const totalDesc = valorAtraso;
 
                 await db.execute(sql`
                   INSERT INTO payroll_adjustments ("companyId", "employeeId", "mesOrigem", "mesDesconto", data, tipo, descricao,
                     "valorDesconto", "valorVrDesconto", "valorVtDesconto", "valorTotal", "timecardDailyId", status)
                   VALUES (${input.companyId}, ${escuro.employeeId}, ${prevMes}, ${input.mesReferencia}, ${escuro.data},
                     'atraso', ${`Atraso ${minutesToHHMM(atraso)} dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`},
-                    ${formatMoney(valorAtraso)}, '0', '0', ${formatMoney(totalDesc)}, ${escuro.id}, 'pendente')
+                    ${formatMoney(valorAtraso)}, '0', '0', ${formatMoney(valorAtraso)}, ${escuro.id}, 'pendente')
                 `);
 
                 divergenciasList.push({
                   employeeId: escuro.employeeId,
+                  employeeName: empNome,
+                  funcao: empFuncao,
                   data: escuro.data,
                   tipo: "atraso",
                   minutos: atraso,
-                  valorDesconto: totalDesc,
+                  valorDesconto: valorAtraso,
+                  realEntrada: actual.entrada1,
                 });
               } else {
                 resultado = "ok";
+                totalOk++;
+                validadosList.push({
+                  employeeId: escuro.employeeId,
+                  employeeName: empNome,
+                  data: escuro.data,
+                  escuroEntrada1: escuro.entrada1 || '-',
+                  escuroSaida1: escuro.saida1 || '-',
+                  realEntrada1: actual.entrada1 || '-',
+                  realSaida1: actual.saida1 || '-',
+                  horasTrabalhadas: actual.horasTrabalhadas || '0:00',
+                });
               }
             } else {
               resultado = "ok";
+              totalOk++;
+              validadosList.push({
+                employeeId: escuro.employeeId,
+                employeeName: empNome,
+                data: escuro.data,
+                escuroEntrada1: escuro.entrada1 || '-',
+                escuroSaida1: escuro.saida1 || '-',
+                realEntrada1: actual.entrada1 || '-',
+                realSaida1: actual.saida1 || '-',
+                horasTrabalhadas: actual.horasTrabalhadas || '0:00',
+              });
             }
           }
         } else {
-          // Sem registro real no DIXI → ALERTA para o usuário decidir (erro relógio vs falta real)
           resultado = "sem_registro";
           obs = `Sem registro de ponto real no DIXI para ${escuro.data}. Possível erro do relógio ou falta.`;
           divergencias++;
 
-          // Calcular valor potencial do desconto (caso o usuário decida que é falta)
-          const valorHoraEmpSR = await getEmployeeValorHora(db, escuro.employeeId);
+          const valorHoraEmpSR = empValorHoraMap.get(escuro.employeeId) || 0;
           const valorFaltaSR = valorHoraEmpSR * criteria.cargaHorariaDiaria;
           let vrDescontoSR = "0", vtDescontoSR = "0";
           if (criteria.descontoVrFalta) {
-            const vrVal = await getEmployeeVrDiario(db, escuro.employeeId, input.companyId);
-            vrDescontoSR = formatMoney(vrVal);
+            vrDescontoSR = formatMoney(empVrDiarioMap.get(escuro.employeeId) || 0);
           }
           if (criteria.descontoVtFalta) {
-            const vtVal = await getEmployeeVtDiario(db, escuro.employeeId);
-            vtDescontoSR = formatMoney(vtVal);
+            vtDescontoSR = formatMoney(empVtDiarioMap.get(escuro.employeeId) || 0);
           }
           const totalDescSR = valorFaltaSR + parseBRL(vrDescontoSR) + parseBRL(vtDescontoSR);
 
-          // Criar adjustment com status 'pendente_decisao' — NÃO aplica desconto automaticamente
           await db.execute(sql`
             INSERT INTO payroll_adjustments ("companyId", "employeeId", "mesOrigem", "mesDesconto", data, tipo, descricao,
               "valorDesconto", "valorVrDesconto", "valorVtDesconto", "valorTotal", "timecardDailyId", status)
@@ -884,15 +929,17 @@ export const payrollEngineRouter = router({
 
           divergenciasList.push({
             employeeId: escuro.employeeId,
+            employeeName: empNome,
+            funcao: empFuncao,
             data: escuro.data,
             tipo: "sem_registro",
             valorDesconto: totalDescSR,
+            escuroEntrada1: escuro.entrada1 || '-',
+            escuroSaida1: escuro.saida1 || '-',
           });
         }
 
-        // Update the timecard_daily record - sobrepor com dados reais do ponto
         if (actual) {
-          // Recalculate HE from actual worked minutes vs employee jornada
           const empJornada = empJornadaMap.get(escuro.employeeId) ?? null;
           const expectedMinsAf = getExpectedMins(empJornada, escuro.data, criteria.cargaHorariaDiaria);
           const actualMinsAf = (() => {
@@ -930,7 +977,6 @@ export const payrollEngineRouter = router({
             WHERE id = ${escuro.id}
           `);
         } else {
-          // Sem registro real → marcar como pendente de decisão do usuário
           await db.execute(sql`
             UPDATE timecard_daily SET 
               "statusDia" = 'pendente_decisao',
@@ -973,7 +1019,14 @@ export const payrollEngineRouter = router({
         `);
       }
 
-      return { totalAferidos, divergencias, divergenciasList, semRegistro: divergenciasList.filter((d: any) => d.tipo === 'sem_registro').length, message: `Aferição concluída: ${totalAferidos} dias aferidos, ${divergencias} divergências` };
+      const semRegistro = divergenciasList.filter((d: any) => d.tipo === 'sem_registro').length;
+      const faltas = divergenciasList.filter((d: any) => d.tipo === 'falta').length;
+      const atrasos = divergenciasList.filter((d: any) => d.tipo === 'atraso').length;
+      return { 
+        totalAferidos, divergencias, totalOk, faltas, atrasos, semRegistro,
+        divergenciasList, validadosList,
+        message: `Aferição concluída: ${totalAferidos} dias aferidos, ${totalOk} OK, ${divergencias} divergências`
+      };
     }),
 
   // ============================================================

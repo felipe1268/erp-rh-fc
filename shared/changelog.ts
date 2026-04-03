@@ -7393,4 +7393,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 19:00:00",
   },
+  {
+    version: 985,
+    titulo: "Aferição — Otimização de performance + Relatório detalhado",
+    descricao:
+      "• Batch-load de dados de funcionários (valorHora, VT, VR, nome) elimina N+1 queries — corrige timeout\n" +
+      "• Relatório completo exibido automaticamente após aferição com cards de resumo (total, OK, faltas, atrasos, sem registro)\n" +
+      "• Tabela de divergências com nome do funcionário, função, data, tipo e valor do desconto\n" +
+      "• Tabela de registros validados mostrando ponto escuro vs ponto real para conferência\n" +
+      "• Total de descontos calculado no rodapé da tabela de divergências\n" +
+      "• Botão 'Ver relatório' no card da etapa 3 para reabrir o último relatório",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 19:30:00",
+  },
 ];
