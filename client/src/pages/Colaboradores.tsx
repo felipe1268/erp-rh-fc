@@ -636,28 +636,32 @@ export default function Colaboradores() {
         ) : null}
 
         {statsQ.data && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 print:hidden">
-            {[
-              { label: "Total", value: statsQ.data.total, icon: Users, color: "text-slate-700", bg: "bg-slate-50 border-slate-200", filter: "Todos" },
-              { label: "Ativos", value: statsQ.data.ativos, icon: UserCheck, color: "text-green-700", bg: "bg-green-50 border-green-200", filter: "Ativo" },
-              { label: "Férias", value: statsQ.data.ferias, icon: Palmtree, color: "text-blue-700", bg: "bg-blue-50 border-blue-200", filter: "Ferias" },
-              { label: "Afastados", value: statsQ.data.afastados, icon: HeartPulse, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", filter: "Afastado" },
-              { label: "Licença", value: statsQ.data.licenca, icon: Clock, color: "text-purple-700", bg: "bg-purple-50 border-purple-200", filter: "Licenca" },
-              { label: "Desligados", value: statsQ.data.desligados, icon: UserX, color: "text-red-700", bg: "bg-red-50 border-red-200", filter: "Desligado" },
-              { label: "Reclusos", value: statsQ.data.reclusos, icon: Ban, color: "text-gray-700", bg: "bg-gray-50 border-gray-200", filter: "Recluso" },
-            ].map(item => (
-              <button
-                key={item.filter}
-                onClick={() => setStatusFilter(item.filter)}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all text-left hover:shadow-sm ${item.bg} ${statusFilter === item.filter ? 'ring-2 ring-primary ring-offset-1 shadow-sm' : ''}`}
-              >
-                <item.icon className={`h-4 w-4 ${item.color} shrink-0`} />
-                <div className="min-w-0">
-                  <p className={`text-lg font-bold leading-none ${item.color}`}>{item.value}</p>
-                  <p className="text-[10px] text-muted-foreground leading-tight mt-0.5 truncate">{item.label}</p>
-                </div>
-              </button>
-            ))}
+          <div className="space-y-2 print:hidden">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-9 gap-2.5">
+              {[
+                { label: "Total", value: statsQ.data.total, icon: Users, color: "text-slate-700", bg: "bg-slate-50 border-slate-200", filter: "Todos" },
+                { label: "Ativos", value: statsQ.data.ativos, icon: UserCheck, color: "text-green-700", bg: "bg-green-50 border-green-200", filter: "Ativo" },
+                { label: "CLT", value: statsQ.data.clt, icon: FileText, color: "text-sky-700", bg: "bg-sky-50 border-sky-200", filter: null },
+                { label: "PJ", value: statsQ.data.pj, icon: Building2, color: "text-indigo-700", bg: "bg-indigo-50 border-indigo-200", filter: null },
+                { label: "Férias", value: statsQ.data.ferias, icon: Palmtree, color: "text-blue-700", bg: "bg-blue-50 border-blue-200", filter: "Ferias" },
+                { label: "Afastados", value: statsQ.data.afastados, icon: HeartPulse, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", filter: "Afastado" },
+                { label: "Licença", value: statsQ.data.licenca, icon: Clock, color: "text-purple-700", bg: "bg-purple-50 border-purple-200", filter: "Licenca" },
+                { label: "Desligados", value: statsQ.data.desligados, icon: UserX, color: "text-red-700", bg: "bg-red-50 border-red-200", filter: "Desligado" },
+                { label: "Reclusos", value: statsQ.data.reclusos, icon: Ban, color: "text-gray-700", bg: "bg-gray-50 border-gray-200", filter: "Recluso" },
+              ].map(item => (
+                <button
+                  key={item.label}
+                  onClick={() => item.filter && setStatusFilter(item.filter)}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-all text-left hover:shadow-sm ${item.bg} ${item.filter && statusFilter === item.filter ? 'ring-2 ring-primary ring-offset-1 shadow-sm' : ''} ${!item.filter ? 'cursor-default' : ''}`}
+                >
+                  <item.icon className={`h-4 w-4 ${item.color} shrink-0`} />
+                  <div className="min-w-0">
+                    <p className={`text-lg font-bold leading-none ${item.color}`}>{item.value}</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight mt-0.5 truncate">{item.label}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

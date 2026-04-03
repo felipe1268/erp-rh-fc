@@ -685,13 +685,21 @@ export async function permanentDeleteEmployee(id: number, companyId: number) {
 
 export async function getEmployeeStats(companyId: number, companyIds?: number[]) {
   const db = await getDb();
-  if (!db) return { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, porStatus: {} as Record<string, number> };
+  if (!db) return { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, clt: 0, pj: 0, porStatus: {} as Record<string, number> };
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   const result = await db.select({
     status: employees.status,
     count: sql<number>`count(*)`,
   }).from(employees).where(and(inArray(employees.companyId, ids), isNull(employees.deletedAt))).groupBy(employees.status);
-  const stats = { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, porStatus: {} as Record<string, number> };
+  const tipoResult = ((await db.execute(
+    sql`SELECT "tipoContrato", COUNT(*) as cnt FROM employees WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)}) AND "deletedAt" IS NULL AND status != 'Desligado' GROUP BY "tipoContrato"`
+  )) as any).rows || [];
+  let clt = 0, pj = 0;
+  tipoResult.forEach((r: any) => {
+    if (r.tipoContrato === 'CLT') clt = Number(r.cnt);
+    else if (r.tipoContrato === 'PJ') pj = Number(r.cnt);
+  });
+  const stats = { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, clt, pj, porStatus: {} as Record<string, number> };
   result.forEach(r => {
     const c = Number(r.count);
     const s = r.status || 'Sem Status';
