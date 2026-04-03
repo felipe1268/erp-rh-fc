@@ -2149,7 +2149,9 @@ export default function FolhaPagamento() {
                   </DialogDescription>
                 )}
               </DialogHeader>
-              {detalheAfericaoDias.isLoading ? (
+              {detalheAfericaoDias.error ? (
+                <div className="text-center py-8 text-red-600">Erro ao carregar: {detalheAfericaoDias.error.message}</div>
+              ) : !detalheAfericaoDias.data ? (
                 <div className="text-center py-8 text-muted-foreground">Carregando detalhamento...</div>
               ) : detalheAfericaoDias.data ? (() => {
                 const dd = detalheAfericaoDias.data;
