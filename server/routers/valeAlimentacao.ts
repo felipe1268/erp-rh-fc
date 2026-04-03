@@ -24,15 +24,15 @@ export const valeAlimentacaoRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const rows = ((await db.execute(
-        sql`SELECT vr.*, e.nomeCompleto, e.cpf, e.cargo, e.funcao, e.status as empStatus,
-            o.nome as obraNome
+        sql`SELECT vr.*, e."nomeCompleto", e.cpf, e.cargo, e.funcao, e.status as "empStatus",
+            o.nome as "obraNome"
             FROM vr_benefits vr
-            LEFT JOIN employees e ON vr.employeeId = e.id
-            LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
-            LEFT JOIN obras o ON of2.obraId = o.id
-            WHERE vr.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND vr.mesReferencia = ${input.mesReferencia}
+            LEFT JOIN employees e ON vr."employeeId" = e.id
+            LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
+            LEFT JOIN obras o ON of2."obraId" = o.id
+            WHERE vr."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND vr."mesReferencia" = ${input.mesReferencia}
             AND (e.status NOT IN ('Desligado', 'Lista_Negra') OR e.status IS NULL)
-            ORDER BY e.nomeCompleto ASC`
+            ORDER BY e."nomeCompleto" ASC`
       )) as any).rows || [];
       return rows || [];
     }),
@@ -60,10 +60,10 @@ export const valeAlimentacaoRouter = router({
           SUM(CASE WHEN vr.status = 'aprovado' THEN 1 ELSE 0 END) as aprovados,
           SUM(CASE WHEN vr.status = 'pago' THEN 1 ELSE 0 END) as pagos,
           SUM(CASE WHEN vr.status = 'cancelado' THEN 1 ELSE 0 END) as cancelados,
-          SUM(CASE WHEN vr.status != 'cancelado' THEN CAST(REPLACE(REPLACE(vr.valorTotal, '.', ''), ',', '.') AS DECIMAL(10,2)) ELSE 0 END) as totalValor
+          SUM(CASE WHEN vr.status != 'cancelado' THEN CAST(REPLACE(REPLACE(vr."valorTotal", '.', ''), ',', '.') AS DECIMAL(10,2)) ELSE 0 END) as "totalValor"
         FROM vr_benefits vr
-        LEFT JOIN employees e ON vr.employeeId = e.id
-        WHERE vr.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND vr.mesReferencia = ${input.mesReferencia}
+        LEFT JOIN employees e ON vr."employeeId" = e.id
+        WHERE vr."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND vr."mesReferencia" = ${input.mesReferencia}
         AND (e.status NOT IN ('Desligado', 'Lista_Negra') OR e.status IS NULL)`
       )) as any).rows || [];
       
@@ -115,12 +115,12 @@ export const valeAlimentacaoRouter = router({
 
       // Buscar colaboradores ativos
       const empRows = ((await db.execute(
-        sql`SELECT e.id, e.nomeCompleto, e.cpf, e.cargo, e.funcao,
-            of2.obraId
+        sql`SELECT e.id, e."nomeCompleto", e.cpf, e.cargo, e.funcao,
+            of2."obraId"
             FROM employees e
-            LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
-            WHERE e.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e.deletedAt IS NULL
-            ORDER BY e.nomeCompleto ASC`
+            LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
+            WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e."deletedAt" IS NULL
+            ORDER BY e."nomeCompleto" ASC`
       )) as any).rows || [];
       const emps = empRows || [];
 
@@ -196,11 +196,11 @@ export const valeAlimentacaoRouter = router({
       }
 
       const empRows = ((await db.execute(
-        sql`SELECT e.id, e.nomeCompleto, of2.obraId
+        sql`SELECT e.id, e."nomeCompleto", of2."obraId"
             FROM employees e
-            LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
-            WHERE e.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e.deletedAt IS NULL
-            ORDER BY e.nomeCompleto ASC`
+            LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
+            WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e."deletedAt" IS NULL
+            ORDER BY e."nomeCompleto" ASC`
       )) as any).rows || [];
       const emps = empRows || [];
       const empMap: Record<number, { emp: any; obraId: number | null }> = {};
