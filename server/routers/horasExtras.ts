@@ -168,23 +168,37 @@ export const horasExtrasRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      // --- OVERLAP CHECK ---
+      // --- OVERLAP / UPSERT CHECK ---
       const overlap = ((await db.execute(sql`
         SELECT id, "dataInicio", "dataFim", status FROM he_periods
         WHERE "companyId" = ${input.companyId}
           AND status != 'cancelado'
           AND "dataInicio" <= ${input.dataFim}::date
           AND "dataFim"   >= ${input.dataInicio}::date
-        LIMIT 1
       `)) as any).rows || [];
+
+      let existingPeriodId: number | null = null;
       if (overlap.length > 0) {
-        const ov = overlap[0];
-        const di = String(ov.dataInicio).slice(0, 10);
-        const df = String(ov.dataFim).slice(0, 10);
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: `Sobreposição detectada com período já registrado: ${di} → ${df} (status: ${ov.status}). Cancele o período existente antes de recalcular.`,
-        });
+        const exactMatch = overlap.find((ov: any) =>
+          String(ov.dataInicio).slice(0, 10) === input.dataInicio &&
+          String(ov.dataFim).slice(0, 10) === input.dataFim
+        );
+        if (exactMatch && exactMatch.status === 'calculado') {
+          existingPeriodId = Number(exactMatch.id);
+        } else if (exactMatch && exactMatch.status === 'aprovado') {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Este período já foi aprovado (${String(exactMatch.dataInicio).slice(0, 10)} → ${String(exactMatch.dataFim).slice(0, 10)}). Não é possível recalcular um período aprovado.`,
+          });
+        } else {
+          const ov = overlap[0];
+          const di = String(ov.dataInicio).slice(0, 10);
+          const df = String(ov.dataFim).slice(0, 10);
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Sobreposição detectada com período já registrado: ${di} → ${df} (status: ${ov.status}). Cancele o período existente antes de recalcular.`,
+          });
+        }
       }
 
       const criteria = await getHECriteria(db, input.companyId);
@@ -237,17 +251,35 @@ export const horasExtrasRouter = router({
         });
       }
 
-      // Create he_period record
-      const periodResult = ((await db.execute(sql`
-        INSERT INTO he_periods ("companyId", "mesReferencia", "dataInicio", "dataFim", status,
-          "totalFuncionarios", "totalHEMins", "totalValorHE", "criadoPor")
-        VALUES (${input.companyId}, ${input.mesReferencia}, ${input.dataInicio}::date, ${input.dataFim}::date,
-          'calculado', ${empResults.length}, ${totalHEMins}, ${parseFloat(totalValorHE.toFixed(2))},
-          ${ctx.user.name || "Sistema"})
-        RETURNING id
-      `)) as any).rows || [];
-      const hePeriodId = Number(periodResult[0]?.id);
-      if (!hePeriodId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao criar registro de período HE." });
+      let hePeriodId: number;
+
+      if (existingPeriodId) {
+        await db.execute(sql`
+          UPDATE he_periods SET
+            "totalFuncionarios" = ${empResults.length},
+            "totalHEMins" = ${totalHEMins},
+            "totalValorHE" = ${parseFloat(totalValorHE.toFixed(2))},
+            "criadoPor" = ${ctx.user.name || "Sistema"},
+            "criadoEm" = NOW()
+          WHERE id = ${existingPeriodId} AND "companyId" = ${input.companyId}
+        `);
+        await db.execute(sql`
+          DELETE FROM he_period_employees
+          WHERE "hePeriodId" = ${existingPeriodId} AND "companyId" = ${input.companyId}
+        `);
+        hePeriodId = existingPeriodId;
+      } else {
+        const periodResult = ((await db.execute(sql`
+          INSERT INTO he_periods ("companyId", "mesReferencia", "dataInicio", "dataFim", status,
+            "totalFuncionarios", "totalHEMins", "totalValorHE", "criadoPor")
+          VALUES (${input.companyId}, ${input.mesReferencia}, ${input.dataInicio}::date, ${input.dataFim}::date,
+            'calculado', ${empResults.length}, ${totalHEMins}, ${parseFloat(totalValorHE.toFixed(2))},
+            ${ctx.user.name || "Sistema"})
+          RETURNING id
+        `)) as any).rows || [];
+        hePeriodId = Number(periodResult[0]?.id);
+        if (!hePeriodId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao criar registro de período HE." });
+      }
 
       const destPadraoRows = ((await db.execute(sql`
         SELECT "heDestinoPadrao" FROM companies WHERE id = ${input.companyId}
