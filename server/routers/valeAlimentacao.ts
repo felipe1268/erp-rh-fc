@@ -7,7 +7,8 @@ import { resolveCompanyIds, companyFilter } from "../companyHelper";
 
 function parseBRL(v: string | null | undefined): number {
   if (!v) return 0;
-  return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+  const raw = parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+  return Math.round(raw * 100) / 100;
 }
 
 function formatBRL(v: number): string {
