@@ -7267,4 +7267,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 05:00:00",
   },
+  {
+    version: 976,
+    titulo: "Folha de Pagamento — Wizard de Etapas com Progresso Visual",
+    descricao:
+      "• Cards do Cálculo Interno agora seguem a ordem lógica: 1. Calcular Vale → 2. Hora Extra → 3. Aferir Escuro → 4. Simular Pagamento\n" +
+      "• Barra de progresso no topo mostrando 'X de 4 etapas concluídas' com percentual\n" +
+      "• Etapas numeradas com indicador circular (número ou check verde quando concluída)\n" +
+      "• Etapas futuras ficam desabilitadas visualmente (opacidade reduzida) até a anterior ser concluída\n" +
+      "• Card 'Aferir Escuro' agora mostra qual mês está sendo conferido e inclui botão de informação com explicação detalhada\n" +
+      "• Timestamp e responsável exibidos em cada etapa concluída (ex: 'Concluído 02/04 14:30 por João')\n" +
+      "• Mini resumo em etapas concluídas (ex: '32 func. | R$ 45.320,00')\n" +
+      "• Botão 'Recalcular/Reaferir/Resimular' substituindo o botão original nas etapas já concluídas",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 05:30:00",
+  },
 ];

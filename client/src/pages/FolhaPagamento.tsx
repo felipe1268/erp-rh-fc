@@ -119,6 +119,7 @@ export default function FolhaPagamento() {
   // MO alocação
 
   const [fecharFolhaResult, setFecharFolhaResult] = useState<{ count: number } | null>(null);
+  const [showAfericaoInfo, setShowAfericaoInfo] = useState(false);
 
   // ===== QUERIES =====
   const statusMes = trpc.folha.statusMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
@@ -2800,67 +2801,144 @@ export default function FolhaPagamento() {
           </DialogContent>
         </Dialog>
 
-        {/* ===== CÁLCULO INTERNO (PayrollEngine) ===== */}
-        <Card className="border-2 border-[#1B2A4A]/20 bg-gradient-to-r from-blue-50/50 to-indigo-50/50">
+        {/* ===== CÁLCULO INTERNO (PayrollEngine) — Wizard de Etapas ===== */}
+        {(() => {
+          const pd = payrollPeriod.data as any;
+          const valeOk = !!pd?.valeGeradoEm;
+          const heOk = (() => {
+            const activePeriods = (hePeriods.data as any[] || []).filter((p: any) => p.status !== 'cancelado');
+            return activePeriods.some((p: any) => p.status === 'aprovado' || p.status === 'pago');
+          })();
+          const afericaoOk = pd?.afericaoRealizada === 1 || pd?.afericaoRealizada === true;
+          const pagOk = !!pd?.pagamentoSimuladoEm;
+          const pontoOk = !!statusMes.data?.pontoConsolidado;
+
+          const step1Ready = pontoOk;
+          const step2Ready = pontoOk;
+          const step3Ready = pontoOk;
+          const step4Ready = valeOk;
+
+          const etapas = [
+            { num: 1, done: valeOk, ready: step1Ready },
+            { num: 2, done: heOk, ready: step2Ready },
+            { num: 3, done: afericaoOk, ready: step3Ready },
+            { num: 4, done: pagOk, ready: step4Ready },
+          ];
+          const etapasConcluidas = etapas.filter(e => e.done).length;
+          const percentProgresso = Math.round((etapasConcluidas / 4) * 100);
+
+          const prevMesRef = mesSelecionado === 1 ? 12 : mesSelecionado - 1;
+          const mesEscuroLabel = `${MESES_CURTOS[prevMesRef - 1]}/${mesSelecionado === 1 ? anoSelecionado - 1 : anoSelecionado}`;
+
+          const fmtTimestamp = (ts: string | null | undefined) => {
+            if (!ts) return null;
+            try {
+              const d = new Date(ts);
+              return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            } catch { return null; }
+          };
+
+          return (
+          <Card className="border-2 border-[#1B2A4A]/20 bg-gradient-to-r from-blue-50/50 to-indigo-50/50">
           <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-[#1B2A4A] flex items-center justify-center">
                   <Calculator className="h-5 w-5 text-white" />
                 </div>
                 <div>
                   <p className="font-bold text-base text-[#1B2A4A]">Cálculo Interno</p>
-                  <p className="text-xs text-muted-foreground">Simulação automática a partir do ponto {statusMes.data?.pontoConsolidado ? <Badge className="bg-green-100 text-green-700 text-[10px] ml-1"><CheckCircle className="h-3 w-3 mr-0.5" /> Ponto Consolidado</Badge> : <Badge className="bg-amber-100 text-amber-700 text-[10px] ml-1"><AlertTriangle className="h-3 w-3 mr-0.5" /> Ponto Não Consolidado</Badge>}</p>
+                  <p className="text-xs text-muted-foreground">Simulação automática a partir do ponto {pontoOk ? <Badge className="bg-green-100 text-green-700 text-[10px] ml-1"><CheckCircle className="h-3 w-3 mr-0.5" /> Ponto Consolidado</Badge> : <Badge className="bg-amber-100 text-amber-700 text-[10px] ml-1"><AlertTriangle className="h-3 w-3 mr-0.5" /> Ponto Não Consolidado</Badge>}</p>
                 </div>
               </div>
-              {payrollPeriod.data && (
-                <Badge className="bg-blue-100 text-blue-700 text-xs">
-                  Status: {String(payrollPeriod.data.status).replace(/_/g, ' ')}
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {pd && (
+                  <Badge className="bg-blue-100 text-blue-700 text-xs">
+                    Status: {String(pd.status).replace(/_/g, ' ')}
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-[#1B2A4A]">{etapasConcluidas} de 4 etapas concluídas</span>
+                <span className="text-xs font-bold text-[#1B2A4A]">{percentProgresso}%</span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2">
+                <div className={`h-2 rounded-full transition-all duration-500 ${percentProgresso === 100 ? 'bg-green-500' : 'bg-[#1B2A4A]'}`} style={{ width: `${percentProgresso}%` }} />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-stretch">
-              {/* CALCULAR VALE */}
-              <div className="bg-white rounded-lg border border-orange-200 p-4 flex flex-col">
-                <div className="flex items-center gap-2 mb-2">
+              {/* ETAPA 1 — CALCULAR VALE */}
+              <div className={`bg-white rounded-lg border p-4 flex flex-col transition-all duration-300 ${valeOk ? 'border-green-300 bg-green-50/30' : step1Ready ? 'border-orange-200' : 'border-slate-200 opacity-50'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${valeOk ? 'bg-green-500 text-white' : step1Ready ? 'bg-orange-600 text-white' : 'bg-slate-300 text-slate-500'}`}>
+                      {valeOk ? <CheckCircle className="h-3.5 w-3.5" /> : '1'}
+                    </div>
+                    <span className="font-semibold text-sm">Calcular Vale</span>
+                  </div>
                   <CreditCard className="h-4 w-4 text-orange-600" />
-                  <span className="font-semibold text-sm">Calcular Vale</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3 flex-1">Adiantamento — {(() => { const p = (payrollPeriod.data as any); return p?.percentualAdiantamento || 40; })()}% do salário (sem HE)</p>
-                <Button size="sm" className="w-full bg-orange-600 hover:bg-orange-700 mt-auto"
-                  disabled={gerarValeMut.isPending}
-                  onClick={() => { setCalcType("vale"); gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
-                  {gerarValeMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Calculando...</> : <><Zap className="h-3 w-3 mr-1" /> Calcular Vale</>}
-                </Button>
-                {valeResult && (
-                  <>
-                    <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-orange-700" onClick={() => setViewMode("calculo_vale")}>
-                      <Eye className="h-3 w-3 mr-1" /> Ver Resultado ({formatBRL(valeResult.totalVale)})
-                    </Button>
-                    {(valeResult.totalAlertas || 0) > 0 && (
-                      <div className="mt-1 text-center">
-                        <Badge className="bg-amber-200 text-amber-800 text-[10px]">
-                          <AlertTriangle className="h-3 w-3 mr-0.5" /> {valeResult.totalAlertas} alerta(s)
-                        </Badge>
+                <p className="text-xs text-muted-foreground mb-2 flex-1">Adiantamento — {(() => { const p = (pd as any); return p?.percentualAdiantamento || 40; })()}% do salário (sem HE)</p>
+                {valeOk && pd?.valeGeradoEm && (
+                  <div className="mb-2 space-y-1">
+                    <div className="flex items-center gap-1 text-[10px] text-green-700">
+                      <CheckCircle className="h-3 w-3" />
+                      <span>Concluído {fmtTimestamp(pd.valeGeradoEm)}{pd.valeGeradoPor ? ` por ${pd.valeGeradoPor}` : ''}</span>
+                    </div>
+                    {valeResult && (
+                      <div className="text-[10px] text-slate-600 bg-slate-50 rounded px-2 py-1">
+                        {valeResult.totalFuncionarios} func. | {formatBRL(valeResult.totalVale)}
+                        {(valeResult.totalAlertas || 0) > 0 && <span className="text-amber-600 ml-1">| {valeResult.totalAlertas} alerta(s)</span>}
                       </div>
                     )}
-                  </>
+                  </div>
+                )}
+                <Button size="sm" className={`w-full mt-auto ${valeOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-orange-600 hover:bg-orange-700'}`}
+                  disabled={gerarValeMut.isPending || !step1Ready}
+                  onClick={() => { setCalcType("vale"); gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
+                  {gerarValeMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Calculando...</> : valeOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Recalcular</> : <><Zap className="h-3 w-3 mr-1" /> Calcular Vale</>}
+                </Button>
+                {valeResult && (
+                  <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-orange-700" onClick={() => setViewMode("calculo_vale")}>
+                    <Eye className="h-3 w-3 mr-1" /> Ver Resultado
+                  </Button>
                 )}
               </div>
 
-              {/* HORA EXTRA MÓDULO */}
-              <div className="bg-white rounded-lg border border-purple-300 p-4 flex flex-col">
-                <div className="flex items-center gap-2 mb-2">
+              {/* ETAPA 2 — HORA EXTRA */}
+              <div className={`bg-white rounded-lg border p-4 flex flex-col transition-all duration-300 ${heOk ? 'border-green-300 bg-green-50/30' : step2Ready ? 'border-purple-300' : 'border-slate-200 opacity-50'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${heOk ? 'bg-green-500 text-white' : step2Ready ? 'bg-purple-700 text-white' : 'bg-slate-300 text-slate-500'}`}>
+                      {heOk ? <CheckCircle className="h-3.5 w-3.5" /> : '2'}
+                    </div>
+                    <span className="font-semibold text-sm">Hora Extra</span>
+                  </div>
                   <TrendingUp className="h-4 w-4 text-purple-700" />
-                  <span className="font-semibold text-sm">Hora Extra</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-1 flex-1">Período configurável com detecção de duplicidade</p>
                 <div className={`text-[10px] font-bold px-2 py-1 rounded mb-2 text-center ${heDestinoIsBanco ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
                   Destino: {heDestinoIsBanco ? "Banco de Horas" : "Pagamento em Folha"}
                 </div>
+                {heOk && (
+                  <div className="mb-2">
+                    <div className="flex items-center gap-1 text-[10px] text-green-700">
+                      <CheckCircle className="h-3 w-3" />
+                      <span>HE processada e aprovada</span>
+                    </div>
+                  </div>
+                )}
                 <div className="mt-auto">
                   {(() => {
+                    if (!step2Ready) return (
+                      <Button size="sm" className="w-full bg-slate-300 text-slate-500" disabled>
+                        <Zap className="h-3 w-3 mr-1" /> Calcular HE
+                      </Button>
+                    );
                     const activePeriods = (hePeriods.data as any[] || []).filter((p: any) => p.status !== 'cancelado');
                     return activePeriods.length > 0 ? (
                       <div className="space-y-1">
@@ -2887,63 +2965,103 @@ export default function FolhaPagamento() {
                 </div>
               </div>
 
-              {/* SIMULAR PAGAMENTO */}
-              <div className="bg-white rounded-lg border border-green-200 p-4 flex flex-col">
-                <div className="flex items-center gap-2 mb-2">
-                  <DollarSign className="h-4 w-4 text-green-600" />
-                  <span className="font-semibold text-sm">Simular Pagamento</span>
+              {/* ETAPA 3 — AFERIR ESCURO */}
+              <div className={`bg-white rounded-lg border p-4 flex flex-col transition-all duration-300 ${afericaoOk ? 'border-green-300 bg-green-50/30' : step3Ready ? 'border-amber-300' : 'border-slate-200 opacity-50'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${afericaoOk ? 'bg-green-500 text-white' : step3Ready ? 'bg-amber-600 text-white' : 'bg-slate-300 text-slate-500'}`}>
+                      {afericaoOk ? <CheckCircle className="h-3.5 w-3.5" /> : '3'}
+                    </div>
+                    <span className="font-semibold text-sm">Aferir Escuro</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Moon className="h-4 w-4 text-amber-600" />
+                    <button type="button" className="text-slate-400 hover:text-blue-600 transition-colors" title="O que é o período no escuro?"
+                      onClick={() => setShowAfericaoInfo(true)}>
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3 flex-1">100% salário − adiantamento − faltas − INSS − descontos</p>
-                <Button size="sm" className="w-full bg-green-600 hover:bg-green-700 mt-auto"
-                  disabled={simularPagamentoMut.isPending}
-                  onClick={() => { setCalcType("pagamento"); simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
-                  {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
-                </Button>
-                {pagamentoResult && (
-                  <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-green-700" onClick={() => setViewMode("calculo_pagamento")}>
-                    <Eye className="h-3 w-3 mr-1" /> Ver Resultado ({formatBRL(pagamentoResult.totalLiquido)})
-                  </Button>
-                )}
-              </div>
-
-              {/* AFERIR ESCURO */}
-              <div className="bg-white rounded-lg border border-purple-200 p-4 flex flex-col">
-                <div className="flex items-center gap-2 mb-2">
-                  <Moon className="h-4 w-4 text-purple-600" />
-                  <span className="font-semibold text-sm">Aferir Escuro</span>
+                <div className="mb-2">
+                  <Badge className="bg-amber-100 text-amber-800 text-[10px]">
+                    <CalendarDays className="h-3 w-3 mr-0.5" /> Conferindo: {mesEscuroLabel}
+                  </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3 flex-1">Compara o escuro do mês anterior com o ponto real importado</p>
-                <Button size="sm" className="w-full bg-purple-600 hover:bg-purple-700 mt-auto"
-                  disabled={afericaoMut.isPending}
-                  onClick={() => afericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
-                  {afericaoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Aferindo...</> : <><Zap className="h-3 w-3 mr-1" /> Aferir Escuro</>}
-                </Button>
-                {afericaoResult && (
-                  <div className="mt-2 text-xs text-center space-y-1">
-                    <span className="text-purple-700 font-medium">{afericaoResult.totalAferidos} dias aferidos</span>
-                    {afericaoResult.divergencias > 0 && (
-                      <span className="text-red-600 font-bold ml-2">{afericaoResult.divergencias} divergências</span>
+                <p className="text-xs text-muted-foreground mb-2 flex-1">Compara o escuro de {mesEscuroLabel} com o ponto real importado</p>
+                {afericaoOk && pd?.afericaoEm && (
+                  <div className="mb-2 space-y-1">
+                    <div className="flex items-center gap-1 text-[10px] text-green-700">
+                      <CheckCircle className="h-3 w-3" />
+                      <span>Concluído {fmtTimestamp(pd.afericaoEm)}{pd.afericaoPor ? ` por ${pd.afericaoPor}` : ''}</span>
+                    </div>
+                    {afericaoResult && (
+                      <div className="text-[10px] text-slate-600 bg-slate-50 rounded px-2 py-1">
+                        {afericaoResult.totalAferidos} dias | {afericaoResult.divergencias} diverg.
+                      </div>
                     )}
-                    {afericaoResult.semRegistro > 0 && (
-                      <div>
-                        <Button size="sm" variant="ghost" className="text-amber-700 text-[10px] h-6" onClick={() => setViewMode("alertas_afericao")}>
-                          <AlertTriangle className="h-3 w-3 mr-1" /> {afericaoResult.semRegistro} sem registro - Decidir
-                        </Button>
+                    {(pd.totalDivergenciasAferidas || 0) > 0 && !afericaoResult && (
+                      <div className="text-[10px] text-slate-600 bg-slate-50 rounded px-2 py-1">
+                        {pd.totalDivergenciasAferidas} divergência(s) registrada(s)
                       </div>
                     )}
                   </div>
                 )}
+                <Button size="sm" className={`w-full mt-auto ${afericaoOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-amber-600 hover:bg-amber-700'}`}
+                  disabled={afericaoMut.isPending || !step3Ready}
+                  onClick={() => afericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
+                  {afericaoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Aferindo...</> : afericaoOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Reaferir</> : <><Zap className="h-3 w-3 mr-1" /> Aferir Escuro</>}
+                </Button>
+                {afericaoResult && afericaoResult.semRegistro > 0 && (
+                  <Button size="sm" variant="ghost" className="w-full mt-1 text-amber-700 text-[10px] h-6" onClick={() => setViewMode("alertas_afericao")}>
+                    <AlertTriangle className="h-3 w-3 mr-1" /> {afericaoResult.semRegistro} sem registro - Decidir
+                  </Button>
+                )}
                 {(alertasAfericao.data as any[] || []).length > 0 && !afericaoResult && (
-                  <div className="mt-2 text-center">
-                    <Button size="sm" variant="ghost" className="text-amber-700 text-[10px] h-6" onClick={() => setViewMode("alertas_afericao")}>
-                      <AlertTriangle className="h-3 w-3 mr-1" /> {(alertasAfericao.data as any[]).length} pendente(s) de decisão
-                    </Button>
+                  <Button size="sm" variant="ghost" className="w-full mt-1 text-amber-700 text-[10px] h-6" onClick={() => setViewMode("alertas_afericao")}>
+                    <AlertTriangle className="h-3 w-3 mr-1" /> {(alertasAfericao.data as any[]).length} pendente(s) de decisão
+                  </Button>
+                )}
+              </div>
+
+              {/* ETAPA 4 — SIMULAR PAGAMENTO */}
+              <div className={`bg-white rounded-lg border p-4 flex flex-col transition-all duration-300 ${pagOk ? 'border-green-300 bg-green-50/30' : step4Ready ? 'border-green-200' : 'border-slate-200 opacity-50'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${pagOk ? 'bg-green-500 text-white' : step4Ready ? 'bg-green-600 text-white' : 'bg-slate-300 text-slate-500'}`}>
+                      {pagOk ? <CheckCircle className="h-3.5 w-3.5" /> : '4'}
+                    </div>
+                    <span className="font-semibold text-sm">Simular Pagamento</span>
                   </div>
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                </div>
+                <p className="text-xs text-muted-foreground mb-2 flex-1">100% salário − adiantamento − faltas − INSS − descontos</p>
+                {pagOk && pd?.pagamentoSimuladoEm && (
+                  <div className="mb-2 space-y-1">
+                    <div className="flex items-center gap-1 text-[10px] text-green-700">
+                      <CheckCircle className="h-3 w-3" />
+                      <span>Concluído {fmtTimestamp(pd.pagamentoSimuladoEm)}{pd.pagamentoSimuladoPor ? ` por ${pd.pagamentoSimuladoPor}` : ''}</span>
+                    </div>
+                    {pagamentoResult && (
+                      <div className="text-[10px] text-slate-600 bg-slate-50 rounded px-2 py-1">
+                        {pagamentoResult.totalFuncionarios} func. | Líq. {formatBRL(pagamentoResult.totalLiquido)}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <Button size="sm" className={`w-full mt-auto ${pagOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-green-600 hover:bg-green-700'}`}
+                  disabled={simularPagamentoMut.isPending || !step4Ready}
+                  onClick={() => { setCalcType("pagamento"); simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
+                  {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : pagOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Resimular</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
+                </Button>
+                {pagamentoResult && (
+                  <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-green-700" onClick={() => setViewMode("calculo_pagamento")}>
+                    <Eye className="h-3 w-3 mr-1" /> Ver Resultado
+                  </Button>
                 )}
               </div>
             </div>
 
-            {!statusMes.data?.pontoConsolidado && (
+            {!pontoOk && (
               <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
                 <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-800">O ponto deste mês ainda não foi consolidado. Os cálculos podem não refletir todos os registros. Consolide o ponto no módulo <strong>Fechamento de Ponto</strong> para resultados precisos.</p>
@@ -2951,6 +3069,49 @@ export default function FolhaPagamento() {
             )}
           </CardContent>
         </Card>
+          );
+        })()}
+
+        {/* Dialog informativo — Aferir Escuro */}
+        <Dialog open={showAfericaoInfo} onOpenChange={setShowAfericaoInfo}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Moon className="h-5 w-5 text-amber-600" /> O que é o período "no escuro"?
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm text-slate-700">
+              <p>
+                O período <strong>"no escuro"</strong> são os últimos dias do mês anterior (após o dia de corte do ponto) 
+                em que a folha já foi fechada com base em estimativas, pois o ponto real ainda não havia chegado.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="font-semibold text-amber-800 mb-1">Exemplo prático:</p>
+                <p className="text-xs text-amber-700">
+                  Se o dia de corte é 15, a folha de Fevereiro é fechada com dados de ponto até dia 15/02. 
+                  Os dias 16/02 a 28/02 são estimados "no escuro". Quando o ponto real de Março chega, 
+                  a aferição compara o que foi estimado com o que realmente aconteceu.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <p className="font-semibold">O que a aferição faz:</p>
+                <ul className="list-disc list-inside text-xs space-y-1 text-slate-600">
+                  <li><strong>Identifica faltas</strong> — dias sem registro real de ponto</li>
+                  <li><strong>Detecta atrasos</strong> — entradas fora do horário esperado</li>
+                  <li><strong>Registros ausentes</strong> — dias sem dado no relógio (possível erro do equipamento)</li>
+                  <li><strong>Gera descontos</strong> — que serão aplicados na folha do mês atual</li>
+                </ul>
+              </div>
+              <p className="text-xs text-slate-500">
+                Nesta competência, estamos conferindo o período no escuro de <strong>{(() => { const pm = mesSelecionado === 1 ? 12 : mesSelecionado - 1; const pa = mesSelecionado === 1 ? anoSelecionado - 1 : anoSelecionado; return `${MESES[pm - 1]} ${pa}`; })()}</strong>, 
+                cujos eventuais descontos serão aplicados na folha de <strong>{MESES[mesSelecionado - 1]} {anoSelecionado}</strong>.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAfericaoInfo(false)}>Entendi</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* FECHAR FOLHA PARA MO */}
         <div className="bg-white border border-slate-200 rounded-xl p-5">
