@@ -2240,6 +2240,7 @@ export default function FolhaPagamento() {
                             <th className="text-center p-2 font-medium">Dia</th>
                             <th className="text-center p-2 font-medium">Classificação</th>
                             <th className="text-center p-2 font-medium">Registro?</th>
+                            <th className="text-left p-2 font-medium">Obra</th>
                             <th className="text-center p-2 font-medium">Entrada</th>
                             <th className="text-center p-2 font-medium">Saída</th>
                             <th className="text-center p-2 font-medium">Horas</th>
@@ -2270,6 +2271,7 @@ export default function FolhaPagamento() {
                                     : dia.classificacao === 'dia_util' ? <XCircle className="h-3.5 w-3.5 text-red-600 mx-auto" />
                                     : <span className="text-muted-foreground text-[10px]">N/A</span>}
                                 </td>
+                                <td className="p-2 text-left text-[10px] max-w-[120px] truncate" title={dia.obraNome || ''}>{dia.obraNome || '—'}</td>
                                 <td className="p-2 text-center font-mono text-[10px]">{dia.entrada1 || '—'}</td>
                                 <td className="p-2 text-center font-mono text-[10px]">{dia.saida2 || dia.saida1 || '—'}</td>
                                 <td className="p-2 text-center font-mono text-[10px]">{dia.horasTrabalhadas || '—'}</td>

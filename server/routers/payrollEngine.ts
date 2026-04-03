@@ -1214,13 +1214,15 @@ export const payrollEngineRouter = router({
       const escuroFim = `${prevParsed.year}-${String(prevParsed.month).padStart(2, "0")}-${String(prevLastDay).padStart(2, "0")}`;
 
       const tcRows = ((await db.execute(sql`
-        SELECT "data", "statusDia", "tipoDia", "entrada1", "saida1", "entrada2", "saida2",
-               "horasTrabalhadas", "horasExtras", "isFalta", "isAtraso", "minutosAtraso",
-               "numBatidas", "afericaoResultado", "afericaoObs"
-        FROM timecard_daily
-        WHERE "companyId" = ${input.companyId} AND "employeeId" = ${input.employeeId}
-          AND "data" >= ${escuroInicio} AND "data" <= ${escuroFim}
-        ORDER BY "data"
+        SELECT td."data", td."statusDia", td."tipoDia", td."entrada1", td."saida1", td."entrada2", td."saida2",
+               td."horasTrabalhadas", td."horasExtras", td."isFalta", td."isAtraso", td."minutosAtraso",
+               td."numBatidas", td."afericaoResultado", td."afericaoObs", td."obraId",
+               o.nome AS "obraNome"
+        FROM timecard_daily td
+        LEFT JOIN obras o ON o.id = td."obraId"
+        WHERE td."companyId" = ${input.companyId} AND td."employeeId" = ${input.employeeId}
+          AND td."data" >= ${escuroInicio} AND td."data" <= ${escuroFim}
+        ORDER BY td."data"
       `)) as any).rows || [];
 
       const ferRows = ((await db.execute(sql`
@@ -1279,6 +1281,7 @@ export const payrollEngineRouter = router({
           isFalta: tc?.isFalta || 0,
           afericaoResultado: tc?.afericaoResultado || null,
           afericaoObs: tc?.afericaoObs || null,
+          obraNome: tc?.obraNome || null,
         });
       }
 
