@@ -2243,6 +2243,7 @@ export default function FolhaPagamento() {
                             <th className="text-center p-2 font-medium">Entrada</th>
                             <th className="text-center p-2 font-medium">Saída</th>
                             <th className="text-center p-2 font-medium">Horas</th>
+                            <th className="text-right p-2 font-medium">Desconto</th>
                             <th className="text-center p-2 font-medium">Status</th>
                           </tr>
                         </thead>
@@ -2252,6 +2253,8 @@ export default function FolhaPagamento() {
                               : dia.classificacao === 'sabado' ? 'bg-blue-50/50'
                               : dia.classificacao === 'domingo' ? 'bg-gray-100'
                               : !dia.temRegistro ? 'bg-red-50' : '';
+                            const descontoDia = dd.descontoDiario || 0;
+                            const temDesconto = dia.classificacao === 'dia_util' && !dia.temRegistro && descontoDia > 0;
                             return (
                               <tr key={idx} className={`border-t ${bgClass}`}>
                                 <td className="p-2 font-mono">{new Date(dia.data + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
@@ -2270,6 +2273,9 @@ export default function FolhaPagamento() {
                                 <td className="p-2 text-center font-mono text-[10px]">{dia.entrada1 || '—'}</td>
                                 <td className="p-2 text-center font-mono text-[10px]">{dia.saida2 || dia.saida1 || '—'}</td>
                                 <td className="p-2 text-center font-mono text-[10px]">{dia.horasTrabalhadas || '—'}</td>
+                                <td className="p-2 text-right font-mono text-[10px]">
+                                  {temDesconto ? <span className="text-red-600 font-semibold">R$ {descontoDia.toFixed(2)}</span> : '—'}
+                                </td>
                                 <td className="p-2 text-center text-[10px]">
                                   {dia.afericaoResultado ? <Badge className={dia.afericaoResultado === 'ok' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}>{dia.afericaoResultado}</Badge>
                                     : dia.statusDia ? <span className="text-muted-foreground">{dia.statusDia}</span>
@@ -2287,7 +2293,14 @@ export default function FolhaPagamento() {
                         <div className="flex items-start gap-2">
                           <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-sm font-semibold text-red-800">{diasUteisSemReg.length} dia(s) útil(eis) sem registro de ponto</p>
+                            <p className="text-sm font-semibold text-red-800">
+                              {diasUteisSemReg.length} dia(s) útil(eis) sem registro de ponto
+                              {(dd.descontoDiario || 0) > 0 && (
+                                <span className="ml-2 text-red-700 font-normal">
+                                  — Desconto total estimado: R$ {(diasUteisSemReg.length * (dd.descontoDiario || 0)).toFixed(2)}
+                                </span>
+                              )}
+                            </p>
                             <p className="text-xs text-red-700 mt-1">Estes dias eram dias úteis no período no escuro e o funcionário não teve nenhuma batida registrada no relógio. Corrija no Espelho de Ponto e depois reaferição.</p>
                           </div>
                         </div>

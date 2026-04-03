@@ -1283,12 +1283,35 @@ export const payrollEngineRouter = router({
       }
 
       const empRow = ((await db.execute(sql`
-        SELECT "nomeCompleto", "funcao", "codigoInterno", "jornadaTrabalho"
+        SELECT "nomeCompleto", "funcao", "codigoInterno", "jornadaTrabalho", "salarioBase", "valorHora"
         FROM employees WHERE id = ${input.employeeId} AND "companyId" = ${input.companyId}
       `)) as any).rows?.[0] || {};
 
+      const salarioBase = parseFloat(empRow.salarioBase) || 0;
+      const valorHora = parseFloat(empRow.valorHora) || 0;
+      const jornadaObj = (() => {
+        try {
+          const j = empRow.jornadaTrabalho;
+          if (!j) return null;
+          return typeof j === 'string' ? JSON.parse(j) : j;
+        } catch { return null; }
+      })();
+      const horasDiarias = (() => {
+        if (!jornadaObj) return 8;
+        const seg = jornadaObj.seg || jornadaObj.segunda;
+        if (seg?.entrada && seg?.saida) {
+          const [eh, em] = seg.entrada.split(':').map(Number);
+          const [sh, sm] = seg.saida.split(':').map(Number);
+          const [ih, im] = (seg.intervalo || '01:00').split(':').map(Number);
+          return (sh * 60 + sm - eh * 60 - em - ih * 60 - im) / 60;
+        }
+        return 8;
+      })();
+      const descontoDiario = valorHora > 0 ? valorHora * horasDiarias : salarioBase / 30;
+
       return {
-        employee: { id: input.employeeId, nome: empRow.nomeCompleto, funcao: empRow.funcao, codigo: empRow.codigoInterno, jornada: empRow.jornadaTrabalho },
+        employee: { id: input.employeeId, nome: empRow.nomeCompleto, funcao: empRow.funcao, codigo: empRow.codigoInterno, jornada: empRow.jornadaTrabalho, salarioBase },
+        descontoDiario: Math.round(descontoDiario * 100) / 100,
         periodoInicio: escuroInicio,
         periodoFim: escuroFim,
         dias,
