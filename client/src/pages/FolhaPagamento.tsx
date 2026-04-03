@@ -2169,7 +2169,7 @@ export default function FolhaPagamento() {
           )}
 
           <Dialog open={!!detalheAfericaoEmpId} onOpenChange={(open) => { if (!open) setDetalheAfericaoEmpId(null); }}>
-            <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" resizable={false}>
+            <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto" resizable={false}>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <CalendarDays className="h-5 w-5 text-amber-600" />
