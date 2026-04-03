@@ -26,7 +26,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { formatCPF, fmtNum } from "@/lib/formatters";
 import { useAuth } from "@/_core/hooks/useAuth";
 
-type TabKey = "lancamento" | "configuracao" | "historico";
+type TabKey = "lancamento" | "por_obra" | "configuracao" | "historico";
 
 function parseBRL(v: string | null | undefined): number {
   if (!v) return 0;
@@ -54,6 +54,84 @@ const STATUS_LABELS: Record<string, string> = {
   pago: "Pago",
   cancelado: "Cancelado",
 };
+
+function ObraGroupCard({ group }: { group: { obraKey: string; obraNome: string; funcs: any[]; totalCafe: number; totalLanche: number; totalJanta: number; totalVA: number; totalGeral: number } }) {
+  const [expanded, setExpanded] = useState(false);
+  const pendentes = group.funcs.filter((f: any) => f.status === "pendente").length;
+  const aprovados = group.funcs.filter((f: any) => f.status === "aprovado" || f.status === "pago").length;
+
+  return (
+    <Card>
+      <CardHeader className="py-3 px-4 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setExpanded(!expanded)}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Building2 className="h-5 w-5 text-orange-500" />
+            <div>
+              <CardTitle className="text-base">{group.obraNome}</CardTitle>
+              <p className="text-xs text-muted-foreground">{group.funcs.length} colaborador{group.funcs.length !== 1 ? "es" : ""}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex gap-2">
+              {pendentes > 0 && <Badge className="bg-amber-100 text-amber-800 text-xs">{pendentes} pendente{pendentes !== 1 ? "s" : ""}</Badge>}
+              {aprovados > 0 && <Badge className="bg-green-100 text-green-800 text-xs">{aprovados} aprovado{aprovados !== 1 ? "s" : ""}</Badge>}
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-orange-600">R$ {fmtNum(group.totalGeral)}</p>
+            </div>
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-4 mt-2 text-xs text-muted-foreground">
+          <span><Coffee className="inline h-3 w-3" /> Café: <strong className="text-foreground">R$ {fmtNum(group.totalCafe)}</strong></span>
+          <span><Sandwich className="inline h-3 w-3" /> Lanche: <strong className="text-foreground">R$ {fmtNum(group.totalLanche)}</strong></span>
+          <span><Moon className="inline h-3 w-3" /> Jantar: <strong className="text-foreground">R$ {fmtNum(group.totalJanta)}</strong></span>
+          <span><CreditCard className="inline h-3 w-3" /> VA: <strong className="text-foreground">R$ {fmtNum(group.totalVA)}</strong></span>
+        </div>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="pt-0 px-4 pb-3">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs text-muted-foreground">
+                  <th className="text-left py-2 font-medium">Colaborador</th>
+                  <th className="text-right py-2 font-medium">Café</th>
+                  <th className="text-right py-2 font-medium">Lanche</th>
+                  <th className="text-right py-2 font-medium">Jantar</th>
+                  <th className="text-right py-2 font-medium">VA</th>
+                  <th className="text-right py-2 font-medium">Total</th>
+                  <th className="text-center py-2 font-medium">Dias</th>
+                  <th className="text-center py-2 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {group.funcs.map((f: any) => (
+                  <tr key={f.id} className="border-b last:border-0 hover:bg-muted/20">
+                    <td className="py-2">
+                      <span className="font-medium">{f.nomeCompleto || f.empNome || "—"}</span>
+                    </td>
+                    <td className="text-right py-2">{fmtValor(f.valorCafe)}</td>
+                    <td className="text-right py-2">{fmtValor(f.valorLanche)}</td>
+                    <td className="text-right py-2">{fmtValor(f.valorJanta)}</td>
+                    <td className="text-right py-2">{fmtValor(f.valorVa || f.valorVA)}</td>
+                    <td className="text-right py-2 font-semibold">{fmtValor(f.valorTotal)}</td>
+                    <td className="text-center py-2">{f.diasUteis || "—"}</td>
+                    <td className="text-center py-2">
+                      <Badge className={`text-xs ${STATUS_COLORS[f.status] || "bg-gray-100 text-gray-800"}`}>
+                        {STATUS_LABELS[f.status] || f.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
 
 export default function ValeAlimentacao() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
@@ -199,9 +277,28 @@ export default function ValeAlimentacao() {
 
   const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
     { key: "lancamento", label: "Lançamento Mensal", icon: CreditCard },
+    { key: "por_obra", label: "Por Obra", icon: Building2 },
     { key: "configuracao", label: "Configuração", icon: Settings },
     { key: "historico", label: "Histórico", icon: History },
   ];
+
+  const obraGroups = useMemo(() => {
+    if (!lancamentos || lancamentos.length === 0) return [];
+    const map = new Map<string, { obraKey: string; obraNome: string; funcs: any[]; totalCafe: number; totalLanche: number; totalJanta: number; totalVA: number; totalGeral: number }>();
+    for (const l of lancamentos as any[]) {
+      const obraKey = l.obraId ? String(l.obraId) : `sem_obra_${l.companyId || "0"}`;
+      const obraNome = l.obraNome || "Sem Obra";
+      if (!map.has(obraKey)) map.set(obraKey, { obraKey, obraNome, funcs: [], totalCafe: 0, totalLanche: 0, totalJanta: 0, totalVA: 0, totalGeral: 0 });
+      const g = map.get(obraKey)!;
+      g.funcs.push(l);
+      g.totalCafe += parseBRL(l.valorCafe);
+      g.totalLanche += parseBRL(l.valorLanche);
+      g.totalJanta += parseBRL(l.valorJanta);
+      g.totalVA += parseBRL(l.valorVa || l.valorVA);
+      g.totalGeral += parseBRL(l.valorTotal);
+    }
+    return Array.from(map.values()).sort((a, b) => a.obraNome.localeCompare(b.obraNome));
+  }, [lancamentos]);
 
   const mesLabel = (() => {
     const [y, m] = mesAno.split("-");
@@ -426,7 +523,7 @@ export default function ValeAlimentacao() {
                             {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorJanta), 0))}
                           </td>
                           <td className="px-3 py-3 text-right text-xs">
-                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorVA), 0))}
+                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorVa || l.valorVA), 0))}
                           </td>
                           <td className="px-3 py-3 text-right text-base">
                             {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorTotal), 0))}
@@ -447,7 +544,7 @@ export default function ValeAlimentacao() {
                             <td className="px-3 py-2.5 text-right text-xs">{fmtValor(l.valorCafe)}</td>
                             <td className="px-3 py-2.5 text-right text-xs">{fmtValor(l.valorLanche)}</td>
                             <td className="px-3 py-2.5 text-right text-xs">{fmtValor(l.valorJanta)}</td>
-                            <td className="px-3 py-2.5 text-right text-xs">{fmtValor(l.valorVA)}</td>
+                            <td className="px-3 py-2.5 text-right text-xs">{fmtValor(l.valorVa || l.valorVA)}</td>
                             <td className="px-3 py-2.5 text-right font-bold text-sm">{fmtValor(l.valorTotal)}</td>
                             <td className="px-3 py-2.5 text-center text-xs">{l.diasUteis || "-"}</td>
                             <td className="px-3 py-2.5 text-center">
@@ -506,6 +603,70 @@ export default function ValeAlimentacao() {
                   </div>
                 </CardContent>
               </Card>
+            )}
+          </div>
+        )}
+
+        {/* ===== ABA POR OBRA ===== */}
+        {tab === "por_obra" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Valores por Obra — {mesLabel}</h2>
+                <p className="text-sm text-muted-foreground">Resumo dos benefícios agrupados por obra/centro de custo.</p>
+              </div>
+              <MonthSelector value={mesAno} onChange={setMesAno} />
+            </div>
+
+            {lancamentosQ.isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : obraGroups.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  <Building2 className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                  <p>Nenhum lançamento encontrado para {mesLabel}.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {/* Totalizador geral */}
+                <Card className="border-orange-200 bg-orange-50/50">
+                  <CardContent className="py-4">
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Obras</p>
+                        <p className="text-lg font-bold">{obraGroups.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground"><Coffee className="inline h-3 w-3" /> Café</p>
+                        <p className="text-lg font-semibold">R$ {fmtNum(obraGroups.reduce((s, g) => s + g.totalCafe, 0))}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground"><Sandwich className="inline h-3 w-3" /> Lanche</p>
+                        <p className="text-lg font-semibold">R$ {fmtNum(obraGroups.reduce((s, g) => s + g.totalLanche, 0))}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground"><Moon className="inline h-3 w-3" /> Jantar</p>
+                        <p className="text-lg font-semibold">R$ {fmtNum(obraGroups.reduce((s, g) => s + g.totalJanta, 0))}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground"><CreditCard className="inline h-3 w-3" /> VA</p>
+                        <p className="text-lg font-semibold">R$ {fmtNum(obraGroups.reduce((s, g) => s + g.totalVA, 0))}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground"><DollarSign className="inline h-3 w-3" /> Total Geral</p>
+                        <p className="text-xl font-bold text-orange-600">R$ {fmtNum(obraGroups.reduce((s, g) => s + g.totalGeral, 0))}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {obraGroups.map((g) => (
+                  <ObraGroupCard key={g.obraKey} group={g} />
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -694,7 +855,7 @@ export default function ValeAlimentacao() {
                               <td className="px-3 py-2.5 text-right text-xs">{fmtValor(h.valorCafe)}</td>
                               <td className="px-3 py-2.5 text-right text-xs">{fmtValor(h.valorLanche)}</td>
                               <td className="px-3 py-2.5 text-right text-xs">{fmtValor(h.valorJanta)}</td>
-                              <td className="px-3 py-2.5 text-right text-xs">{fmtValor(h.valorVA)}</td>
+                              <td className="px-3 py-2.5 text-right text-xs">{fmtValor(h.valorVa || h.valorVA)}</td>
                               <td className="px-3 py-2.5 text-right font-bold">{fmtValor(h.valorTotal)}</td>
                               <td className="px-3 py-2.5 text-center text-xs">{h.diasUteis || "-"}</td>
                               <td className="px-3 py-2.5 text-center">
@@ -912,7 +1073,7 @@ export default function ValeAlimentacao() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground flex items-center gap-1"><UtensilsCrossed className="h-3.5 w-3.5" /> VA</span>
-                  <span>{fmtValor(detailRecord.valorVA)}</span>
+                  <span>{fmtValor(detailRecord.valorVa || detailRecord.valorVA)}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2 font-bold">
                   <span>Total</span>
@@ -1008,7 +1169,7 @@ export default function ValeAlimentacao() {
                         <td className="px-3 py-2 text-right text-xs">{fmtValor(h.valorCafe)}</td>
                         <td className="px-3 py-2 text-right text-xs">{fmtValor(h.valorLanche)}</td>
                         <td className="px-3 py-2 text-right text-xs">{fmtValor(h.valorJanta)}</td>
-                        <td className="px-3 py-2 text-right text-xs">{fmtValor(h.valorVA)}</td>
+                        <td className="px-3 py-2 text-right text-xs">{fmtValor(h.valorVa || h.valorVA)}</td>
                         <td className="px-3 py-2 text-right font-bold">{fmtValor(h.valorTotal)}</td>
                         <td className="px-3 py-2 text-center text-xs">{h.diasUteis || "-"}</td>
                         <td className="px-3 py-2 text-center">
@@ -1023,7 +1184,7 @@ export default function ValeAlimentacao() {
                       <td className="px-3 py-2.5 text-right text-xs">{fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorCafe), 0))}</td>
                       <td className="px-3 py-2.5 text-right text-xs">{fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorLanche), 0))}</td>
                       <td className="px-3 py-2.5 text-right text-xs">{fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorJanta), 0))}</td>
-                      <td className="px-3 py-2.5 text-right text-xs">{fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorVA), 0))}</td>
+                      <td className="px-3 py-2.5 text-right text-xs">{fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorVa || h.valorVA), 0))}</td>
                       <td className="px-3 py-2.5 text-right text-base">{fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorTotal), 0))}</td>
                       <td colSpan={2}></td>
                     </tr>

@@ -25,7 +25,7 @@ export const valeAlimentacaoRouter = router({
       const db = (await getDb())!;
       const rows = ((await db.execute(
         sql`SELECT vr.*, e."nomeCompleto", e.cpf, e.cargo, e.funcao, e.status as "empStatus",
-            o.nome as "obraNome"
+            of2."obraId", o.nome as "obraNome"
             FROM vr_benefits vr
             LEFT JOIN employees e ON vr."employeeId" = e.id
             LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1

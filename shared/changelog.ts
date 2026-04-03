@@ -7284,4 +7284,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 05:30:00",
   },
+  {
+    version: 977,
+    titulo: "Vale Alimentação — Aba 'Por Obra' e correções SQL",
+    descricao:
+      "• Nova aba 'Por Obra' no Vale Alimentação: agrupa benefícios por obra/centro de custo com totalizadores de Café, Lanche, Jantar, VA e Total\n" +
+      "• Cards expansíveis por obra com lista de colaboradores, status e valores individuais\n" +
+      "• Totalizador geral no topo com quantidade de obras e soma de todos os benefícios\n" +
+      "• Correção de SQL: todas as colunas camelCase em INSERT/UPDATE agora com aspas duplas (regerarMes, editarLancamento, aprovarLote, cancelar)\n" +
+      "• Correção do nome da coluna valorVA → valorVa (nome correto no banco)",
+    tipo: "feature",
+    modulos: "Vale Alimentação",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 11:10:00",
+  },
 ];
