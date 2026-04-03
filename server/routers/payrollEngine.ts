@@ -1875,7 +1875,6 @@ export const payrollEngineRouter = router({
       const nextMes = getNextMesRef(input.mesReferencia);
       const nextParsed = parseMesRef(nextMes);
 
-      // Get employees
       const empList = await db.select({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
@@ -1894,6 +1893,15 @@ export const payrollEngineRouter = router({
         inssPercentual: employees.inssPercentual,
         vaRecebe: employees.vaRecebe,
         vaValor: employees.vaValor,
+        banco: employees.banco,
+        bancoNome: employees.bancoNome,
+        agencia: employees.agencia,
+        conta: employees.conta,
+        tipoConta: employees.tipoConta,
+        tipoChavePix: employees.tipoChavePix,
+        chavePix: employees.chavePix,
+        bancoPix: employees.bancoPix,
+        cpf: employees.cpf,
       }).from(employees).where(
         and(
           companyFilter(employees.companyId, input),
@@ -2105,6 +2113,10 @@ export const payrollEngineRouter = router({
           descontoInss: inssValor, descontoFgts: fgtsValor, acertoEscuroValor, descontoConvenio,
           totalDescontos, salarioLiquido, dataPagamentoPrevista, vaValor,
           vtValor: vtValorMensal, vtDiario, vrValor: vrValorMensal, seguroVidaValor, rateioPorObra,
+          banco: emp.banco || null, bancoNome: emp.bancoNome || null,
+          agencia: emp.agencia || null, conta: emp.conta || null,
+          tipoConta: emp.tipoConta || null, tipoChavePix: emp.tipoChavePix || null,
+          chavePix: emp.chavePix || null, bancoPix: emp.bancoPix || null, cpf: emp.cpf || null,
         });
       }
 
@@ -2158,7 +2170,9 @@ export const payrollEngineRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const rows = ((await db.execute(sql`
-        SELECT pp.*, e."nomeCompleto", e.funcao, e."codigoInterno"
+        SELECT pp.*, e."nomeCompleto", e.funcao, e."codigoInterno",
+          e.banco, e."bancoNome", e.agencia, e.conta, e."tipoConta",
+          e."tipoChavePix", e."chavePix", e."bancoPix", e.cpf
         FROM payroll_payments pp
         LEFT JOIN employees e ON pp."employeeId" = e.id
         WHERE pp."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp."mesReferencia" = ${input.mesReferencia}

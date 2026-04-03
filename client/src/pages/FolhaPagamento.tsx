@@ -69,6 +69,7 @@ export default function FolhaPagamento() {
   const decimo2InputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<"vale" | "pagamento" | "decimo_terceiro_1" | "decimo_terceiro_2" | null>(null);
   const [showConferencia, setShowConferencia] = useState(false);
+  const [pagamentoSubView, setPagamentoSubView] = useState<"geral" | "por_banco">("geral");
 
   // Views
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -2579,6 +2580,141 @@ export default function FolhaPagamento() {
             </div>
           </div>
 
+          <div className="flex items-center gap-2">
+            <Button
+              variant={pagamentoSubView === "geral" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPagamentoSubView("geral")}
+              className="text-xs"
+            >
+              <BarChart3 className="h-3.5 w-3.5 mr-1" /> Visão Geral
+            </Button>
+            <Button
+              variant={pagamentoSubView === "por_banco" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPagamentoSubView("por_banco")}
+              className="text-xs"
+            >
+              <Building2 className="h-3.5 w-3.5 mr-1" /> Por Banco
+            </Button>
+          </div>
+
+          {pagamentoSubView === "por_banco" ? (() => {
+            const funcs = (pagamentoResult.funcionarios || []) as any[];
+            const byBank: Record<string, any[]> = {};
+            for (const f of funcs) {
+              const bankKey = f.banco || "Sem banco definido";
+              if (!byBank[bankKey]) byBank[bankKey] = [];
+              byBank[bankKey].push(f);
+            }
+            const bankKeys = Object.keys(byBank).sort((a, b) => {
+              if (a === "Sem banco definido") return 1;
+              if (b === "Sem banco definido") return -1;
+              return a.localeCompare(b);
+            });
+            const bankColors: Record<string, string> = {
+              "Caixa": "bg-blue-600",
+              "Bradesco": "bg-red-600",
+              "Santander": "bg-red-700",
+              "Itaú": "bg-orange-500",
+              "C6": "bg-gray-800",
+              "Nubank": "bg-purple-600",
+              "Inter": "bg-orange-600",
+              "Banco do Brasil": "bg-yellow-600",
+              "Sem banco definido": "bg-gray-400",
+            };
+            return (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {bankKeys.map(bk => {
+                    const bkFuncs = byBank[bk];
+                    const totalLiq = bkFuncs.reduce((s: number, f: any) => s + (f.salarioLiquido || 0), 0);
+                    const dotColor = bankColors[bk] || "bg-gray-500";
+                    return (
+                      <div key={bk} className="bg-white border rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className={`h-3 w-3 rounded-full ${dotColor}`} />
+                          <span className="text-sm font-semibold">{bk}</span>
+                        </div>
+                        <p className="text-lg font-bold text-[#1B2A4A]">{formatBRL(totalLiq)}</p>
+                        <p className="text-[10px] text-muted-foreground">{bkFuncs.length} funcionário{bkFuncs.length !== 1 ? 's' : ''}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {bankKeys.map(bk => {
+                  const bkFuncs = byBank[bk];
+                  const totalLiq = bkFuncs.reduce((s: number, f: any) => s + (f.salarioLiquido || 0), 0);
+                  const totalBruto = bkFuncs.reduce((s: number, f: any) => s + (f.totalProventos || 0), 0);
+                  const totalDesc = bkFuncs.reduce((s: number, f: any) => s + (f.totalDescontos || 0), 0);
+                  const dotColor = bankColors[bk] || "bg-gray-500";
+                  return (
+                    <Card key={bk} className="overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+                        <div className="flex items-center gap-2">
+                          <div className={`h-3.5 w-3.5 rounded-full ${dotColor}`} />
+                          <h3 className="font-semibold text-sm">{bk}</h3>
+                          <span className="text-xs text-muted-foreground bg-gray-200 px-2 py-0.5 rounded-full">{bkFuncs.length}</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs">
+                          <span className="text-green-700">Bruto: <strong>{formatBRL(totalBruto)}</strong></span>
+                          <span className="text-red-600">Desc: <strong>{formatBRL(totalDesc)}</strong></span>
+                          <span className="text-[#1B2A4A] text-sm font-bold">{formatBRL(totalLiq)}</span>
+                        </div>
+                      </div>
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[11px]">
+                            <thead>
+                              <tr className="bg-gray-50/80 border-b border-gray-200 text-[10px] text-gray-500 uppercase tracking-wider">
+                                <th className="text-left py-2 px-3 font-semibold">Funcionário</th>
+                                <th className="text-left py-2 px-2 font-semibold">CPF</th>
+                                <th className="text-left py-2 px-2 font-semibold">Agência</th>
+                                <th className="text-left py-2 px-2 font-semibold">Conta</th>
+                                <th className="text-left py-2 px-2 font-semibold">Tipo</th>
+                                <th className="text-left py-2 px-2 font-semibold">Pix</th>
+                                <th className="text-right py-2 px-2 font-semibold text-green-700">Proventos</th>
+                                <th className="text-right py-2 px-2 font-semibold text-red-600">Descontos</th>
+                                <th className="text-right py-2 px-3 font-semibold text-[#1B2A4A]">Líquido</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {bkFuncs.sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || '')).map((f: any, i: number) => {
+                                const zebra = i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50';
+                                const pixInfo = f.tipoChavePix ? `${f.tipoChavePix}: ${f.chavePix || '—'}` : '—';
+                                return (
+                                  <tr key={i} className={`border-b border-gray-100 hover:bg-blue-50/40 transition-colors ${zebra}`}>
+                                    <td className="py-2 px-3 font-medium whitespace-nowrap">{f.nome}</td>
+                                    <td className="py-2 px-2 text-muted-foreground font-mono text-[10px]">{f.cpf || '—'}</td>
+                                    <td className="py-2 px-2 font-mono text-[10px]">{f.agencia || '—'}</td>
+                                    <td className="py-2 px-2 font-mono text-[10px]">{f.conta || '—'}</td>
+                                    <td className="py-2 px-2 text-[10px]">{f.tipoConta || '—'}</td>
+                                    <td className="py-2 px-2 text-[10px] max-w-[160px] truncate" title={pixInfo}>{pixInfo}</td>
+                                    <td className="text-right py-2 px-2 text-green-700">{formatBRL(f.totalProventos)}</td>
+                                    <td className="text-right py-2 px-2 text-red-600">{formatBRL(f.totalDescontos)}</td>
+                                    <td className="text-right py-2 px-3 font-bold text-[#1B2A4A]">{formatBRL(f.salarioLiquido)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold text-xs">
+                                <td className="py-2.5 px-3" colSpan={6}>SUBTOTAL — {bkFuncs.length} funcionário{bkFuncs.length !== 1 ? 's' : ''}</td>
+                                <td className="text-right py-2.5 px-2 text-green-700">{formatBRL(totalBruto)}</td>
+                                <td className="text-right py-2.5 px-2 text-red-600">{formatBRL(totalDesc)}</td>
+                                <td className="text-right py-2.5 px-3 text-[#1B2A4A] text-sm">{formatBRL(totalLiq)}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            );
+          })() : (
           <Card className="overflow-hidden">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -2676,6 +2812,7 @@ export default function FolhaPagamento() {
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
         <PrintFooterLGPD />
       </DashboardLayout>

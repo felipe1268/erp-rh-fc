@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 998,
+    titulo: "Lista de pagamento agrupada por banco",
+    descricao: "Nova sub-aba 'Por Banco' na tela de Pagamento/Saldo. Após simular ou consolidar a folha, o usuário pode alternar entre 'Visão Geral' (tabela completa) e 'Por Banco' (funcionários agrupados por banco — Caixa, Bradesco, Santander, etc.). Cada banco mostra: cards com total líquido e quantidade de funcionários, tabela com nome, CPF, agência, conta, tipo, chave Pix, proventos, descontos e líquido. Subtotais por banco no rodapé de cada seção. Dados bancários (banco, agência, conta, tipoConta, chavePix) agora incluídos no retorno da simulação e listagem de pagamentos via JOIN com cadastro do funcionário.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-03 23:45:00",
+  },
+  {
     version: 997,
     titulo: "Layout melhorado na tela de Pagamento / Saldo",
     descricao: "Redesign completo da tela de Pagamento/Saldo para melhor experiência do usuário. Cards de resumo agora com ícones e hierarquia visual (Funcionários, Total Bruto, Total Descontos, Total Líquido com gradiente destaque). Tabela reorganizada com cabeçalho em duas linhas agrupando Proventos (Salário, H.E., Total) e Descontos (Vale, INSS, VT, VA, Faltas, Outros, Conv., Total) com separadores visuais. Colunas Pensão, Seguro e Ac. Escuro consolidadas em 'Outros' para reduzir colunas. Linhas zebradas e hover com transição suave. Fonte ajustada para melhor legibilidade.",
