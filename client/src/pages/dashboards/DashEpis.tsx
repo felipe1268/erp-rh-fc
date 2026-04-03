@@ -1451,7 +1451,7 @@ export default function DashEpis() {
     </DashboardLayout>
 
       <Dialog open={!!fichaModal} onOpenChange={() => setFichaModal(null)}>
-        <DialogContent className="max-w-[95vw] w-full max-h-[95vh] h-full overflow-y-auto">
+        <DialogContent className="!max-w-none !w-[98vw] !max-h-none !h-[96vh] overflow-y-auto fixed inset-0 m-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-blue-600" />
