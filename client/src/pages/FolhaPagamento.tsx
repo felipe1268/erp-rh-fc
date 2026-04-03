@@ -171,6 +171,7 @@ export default function FolhaPagamento() {
   const [valeResult, setValeResult] = useState<any>(null);
   const [pagamentoResult, setPagamentoResult] = useState<any>(null);
   const [afericaoResult, setAfericaoResult] = useState<any>(null);
+  const [afericaoResultLoaded, setAfericaoResultLoaded] = useState(false);
   const [showAfericaoReport, setShowAfericaoReport] = useState(false);
   const [calcElapsed, setCalcElapsed] = useState(0);
   const [calcType, setCalcType] = useState<"vale" | "pagamento" | null>(null);
@@ -228,6 +229,22 @@ export default function FolhaPagamento() {
     },
     onError: (err) => { resetProgress('pagamento'); setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao simular pagamento: ${err.message}`); },
   });
+
+  useEffect(() => {
+    const pd = payrollPeriod.data as any;
+    if (pd?.afericaoResultJson && !afericaoResult && !afericaoResultLoaded) {
+      try {
+        const saved = JSON.parse(pd.afericaoResultJson);
+        setAfericaoResult(saved);
+        setAfericaoResultLoaded(true);
+      } catch { /* ignore parse errors */ }
+    }
+  }, [payrollPeriod.data, afericaoResult, afericaoResultLoaded]);
+
+  useEffect(() => {
+    setAfericaoResult(null);
+    setAfericaoResultLoaded(false);
+  }, [mesAno]);
 
   useEffect(() => {
     if (!calcType) return;

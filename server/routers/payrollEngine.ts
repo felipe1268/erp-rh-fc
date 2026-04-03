@@ -1065,6 +1065,16 @@ export const payrollEngineRouter = router({
         `));
       }
 
+      const totalJustificados = justificadosList.length;
+      const afericaoResultPayload = {
+        totalAferidos, divergencias, totalOk, faltas: divergenciasList.filter((d: any) => d.tipo === 'falta').length,
+        atrasos: divergenciasList.filter((d: any) => d.tipo === 'atraso').length,
+        semRegistro: divergenciasList.filter((d: any) => d.tipo === 'sem_registro').length,
+        totalJustificados,
+        divergenciasList, validadosList, justificadosList,
+      };
+      const resultJson = JSON.stringify(afericaoResultPayload);
+
       // Update period for all companies
       for (const cid of afericaoCompanyIds) {
         await db.execute(sql`
@@ -1072,11 +1082,12 @@ export const payrollEngineRouter = router({
             "afericaoRealizada" = 1,
             "afericaoEm" = NOW(),
             "afericaoPor" = ${ctx.user.name || "Sistema"},
-            "totalDivergenciasAferidas" = ${divergencias}
+            "totalDivergenciasAferidas" = ${divergencias},
+            "afericaoResultJson" = ${resultJson}
           WHERE "companyId" = ${cid} AND "mesReferencia" = ${prevMes}
         `);
         await db.execute(sql`
-          UPDATE payroll_periods SET status = 'aferida'
+          UPDATE payroll_periods SET status = 'aferida', "afericaoResultJson" = ${resultJson}
           WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
         `);
       }
@@ -1092,13 +1103,8 @@ export const payrollEngineRouter = router({
         `);
       }
 
-      const semRegistro = divergenciasList.filter((d: any) => d.tipo === 'sem_registro').length;
-      const faltas = divergenciasList.filter((d: any) => d.tipo === 'falta').length;
-      const atrasos = divergenciasList.filter((d: any) => d.tipo === 'atraso').length;
-      const totalJustificados = justificadosList.length;
       return { 
-        totalAferidos, divergencias, totalOk, faltas, atrasos, semRegistro, totalJustificados,
-        divergenciasList, validadosList, justificadosList,
+        ...afericaoResultPayload,
         message: `Aferição concluída: ${totalAferidos} dias aferidos, ${totalOk} OK, ${divergencias} divergências, ${totalJustificados} justificados`
       };
     }),

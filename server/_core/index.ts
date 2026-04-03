@@ -333,6 +333,7 @@ async function startServer() {
         const { sql } = await import("drizzle-orm");
         await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoEm" VARCHAR(32)`);
         await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoPor" VARCHAR(200)`);
+        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "afericaoResultJson" TEXT`);
         console.log("[ColFix] payroll_periods valeConsolidado cols Rev.642 OK");
       } catch (e: any) { console.warn("[ColFix] payroll_periods valeConsolidado:", e?.message ?? e); }
     });
