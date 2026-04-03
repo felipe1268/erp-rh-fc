@@ -59,7 +59,7 @@ setInterval(() => {
   }
 }, 60000);
 
-async function gerarContratoPJDeOS(params: {
+async function gerarContratoTerceiroDeOS(params: {
   ocId: number;
   companyId: number;
   obraId: number | null;
@@ -73,54 +73,27 @@ async function gerarContratoPJDeOS(params: {
 }) {
   const db = await getDb();
   try {
-    const [existingPJ] = await db.execute(sql`
-      SELECT pc.id, pc."numeroContrato" FROM pj_contracts pc
-      JOIN compras_ordens co ON co.contrato_id = pc.id
-      WHERE co.id = ${params.ocId} AND pc."companyId" = ${params.companyId}
+    const existCheck = await db.execute(sql`
+      SELECT tc.id, tc.numero_contrato as "numeroContrato"
+      FROM terceiro_contratos tc
+      WHERE tc.company_id = ${params.companyId}
+        AND EXISTS (SELECT 1 FROM compras_ordens co WHERE co.id = ${params.ocId} AND co.contrato_id = tc.id)
       LIMIT 1
-    `).then((r: any) => r.rows || []);
-    if (existingPJ) {
-      console.log(`[gerarContratoPJDeOS] Contrato PJ #${existingPJ.id} já existe para OC #${params.ocId}, ignorando duplicata`);
-      return existingPJ as any;
+    `);
+    const existingTC = (existCheck as any).rows?.[0];
+    if (existingTC) {
+      console.log(`[gerarContratoTerceiroDeOS] Contrato Terceiro #${existingTC.id} já existe para OC #${params.ocId}, ignorando duplicata`);
+      return { id: existingTC.id, numeroContrato: existingTC.numeroContrato, terceiroContratoId: existingTC.id };
     }
-
-    const configRows = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, params.companyId)).limit(1);
-    const config = configRows[0];
-    const retPerc = config ? n((config as any).retencaoTecnicaPerc) : 5;
-    const diaCorte = config ? (config as any).diaCorte ?? 25 : 25;
-    const prazoAprov = config ? (config as any).prazoAprovacaoDias ?? 5 : 5;
-    const diaPag = config ? (config as any).diaPagamento ?? 10 : 10;
 
     const [forn] = await db.select().from(fornecedores).where(and(eq(fornecedores.id, params.fornecedorId), eq(fornecedores.companyId, params.companyId)));
     const cnpjRaw = forn?.cnpj?.trim() || "";
     const cnpj = cnpjRaw.replace(/\D/g, "").length >= 11 ? cnpjRaw : "";
     const razaoSocial = forn?.razaoSocial ?? params.fornecedorNome ?? "";
 
-    let employeeId: number;
-    let existingEmp: any;
-    if (cnpj) {
-      existingEmp = await db.execute(sql`
-        SELECT id FROM employees WHERE "companyId" = ${params.companyId} AND "tipoContrato" = 'pj' AND cpf = ${cnpj} AND "deletedAt" IS NULL LIMIT 1
-      `);
-    } else {
-      existingEmp = await db.execute(sql`
-        SELECT id FROM employees WHERE "companyId" = ${params.companyId} AND "tipoContrato" = 'pj' AND "nomeCompleto" = ${razaoSocial} AND (cpf IS NULL OR cpf = '') AND "deletedAt" IS NULL LIMIT 1
-      `);
-    }
-    if ((existingEmp as any).rows?.length > 0) {
-      employeeId = (existingEmp as any).rows[0].id;
-    } else {
-      const insertRes = await db.execute(sql`
-        INSERT INTO employees ("companyId", "nomeCompleto", "tipoContrato", cpf, status, "createdAt", "updatedAt")
-        VALUES (${params.companyId}, ${razaoSocial}, 'pj', ${cnpj || ""}, 'ativo', NOW(), NOW())
-        RETURNING id
-      `);
-      employeeId = (insertRes as any).rows[0].id;
-    }
-
     const ano = new Date().getFullYear();
     const countContratos = await db.execute(sql`
-      SELECT COUNT(*) as c FROM pj_contracts WHERE "companyId" = ${params.companyId}
+      SELECT COUNT(*) as c FROM terceiro_contratos WHERE company_id = ${params.companyId}
     `);
     const seqC = (parseInt(String((countContratos as any).rows?.[0]?.c ?? "0")) + 1).toString().padStart(4, "0");
     const numContrato = `CT-${ano}-${seqC}`;
@@ -151,15 +124,9 @@ async function gerarContratoPJDeOS(params: {
               AND (${sql.join(likeClauses, sql` OR `)})
           `);
           const row = (cronoDates as any).rows?.[0];
-          if (row?.primeiro_inicio) {
-            hoje = String(row.primeiro_inicio).slice(0, 10);
-            found = true;
-          }
-          if (row?.ultimo_termino) {
-            dataFim = String(row.ultimo_termino).slice(0, 10);
-            found = true;
-          }
-          if (found) console.log(`[gerarContratoPJDeOS] Datas do cronograma (por nome): ${hoje} a ${dataFim}`);
+          if (row?.primeiro_inicio) { hoje = String(row.primeiro_inicio).slice(0, 10); found = true; }
+          if (row?.ultimo_termino) { dataFim = String(row.ultimo_termino).slice(0, 10); found = true; }
+          if (found) console.log(`[gerarContratoTerceiroDeOS] Datas do cronograma (por nome): ${hoje} a ${dataFim}`);
         }
 
         if (!found) {
@@ -172,140 +139,102 @@ async function gerarContratoPJDeOS(params: {
           const fbRow = (fallback as any).rows?.[0];
           if (fbRow?.primeiro_inicio) hoje = String(fbRow.primeiro_inicio).slice(0, 10);
           if (fbRow?.ultimo_termino) dataFim = String(fbRow.ultimo_termino).slice(0, 10);
-          console.log(`[gerarContratoPJDeOS] Datas do cronograma (fallback obra): ${hoje} a ${dataFim}`);
+          console.log(`[gerarContratoTerceiroDeOS] Datas do cronograma (fallback obra): ${hoje} a ${dataFim}`);
         }
       } catch (e: any) {
-        console.error(`[gerarContratoPJDeOS] Erro ao buscar datas cronograma:`, e?.message);
+        console.error(`[gerarContratoTerceiroDeOS] Erro ao buscar datas cronograma:`, e?.message);
       }
     }
 
-    const eapItensJson = JSON.stringify(params.itensOS.map(it => ({
-      descricao: it.descricao,
-      unidade: it.unidade,
-      quantidade: it.quantidade,
-      precoUnitario: it.precoUnitario,
-      total: it.total,
-      insumoCodigo: it.insumoCodigo ?? null,
-      percentualExecutado: 0,
-    })));
+    let empTerceiraId: number | null = null;
+    if (cnpj) {
+      const [existEmp] = await db.select({ id: empresasTerceiras.id }).from(empresasTerceiras)
+        .where(and(eq(empresasTerceiras.companyId, params.companyId), eq(empresasTerceiras.cnpj, cnpj))).limit(1);
+      if (existEmp) {
+        empTerceiraId = existEmp.id;
+      } else {
+        const [novaEmp] = await db.insert(empresasTerceiras).values({
+          companyId: params.companyId,
+          razaoSocial: razaoSocial || params.fornecedorNome || "Empresa Terceira",
+          cnpj,
+          responsavelNome: razaoSocial || params.fornecedorNome || "",
+          status: "ativa",
+          fornecedorId: params.fornecedorId,
+        } as any).returning();
+        empTerceiraId = novaEmp.id;
+      }
+    } else {
+      const nomeEmpresa = razaoSocial || params.fornecedorNome || "Empresa Terceira";
+      const existEmpByName = await db.execute(sql`
+        SELECT id FROM empresas_terceiras WHERE "companyId" = ${params.companyId} AND razao_social = ${nomeEmpresa} AND (cnpj IS NULL OR cnpj = '') LIMIT 1
+      `);
+      if ((existEmpByName as any).rows?.length > 0) {
+        empTerceiraId = (existEmpByName as any).rows[0].id;
+      } else {
+        const insertEmpRes = await db.execute(sql`
+          INSERT INTO empresas_terceiras ("companyId", razao_social, cnpj, responsavel_nome, status, fornecedor_id, created_at, updated_at)
+          VALUES (${params.companyId}, ${nomeEmpresa}, '', ${nomeEmpresa}, 'ativa', ${params.fornecedorId}, NOW(), NOW())
+          RETURNING id
+        `);
+        empTerceiraId = (insertEmpRes as any).rows[0].id;
+      }
+    }
 
-    const objetoContrato = params.itensOS.map(it => `• ${it.descricao} — ${it.quantidade} ${it.unidade || "un"}`).join("\n");
+    if (!empTerceiraId) {
+      console.error(`[gerarContratoTerceiroDeOS] Não foi possível criar/encontrar empresa terceira para OC #${params.ocId}`);
+      return null;
+    }
 
-    const [contrato] = await db.insert(pjContracts).values({
+    const obraNome = params.obraId ? (await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, params.obraId)).limit(1))?.[0]?.nome ?? null : null;
+    const itensDescr = params.itensOS.map(it => `${it.descricao} — ${it.quantidade} ${it.unidade || "un"}`).join("; ");
+    const tipoContratoMap: Record<string, string> = {
+      medicao_mensal: "preco_unitario",
+      medicao_avanco: "preco_unitario",
+      medicao_etapa: "preco_unitario",
+      empreitada: "empreitada_global",
+      administracao: "administracao",
+    };
+    const tipoContratoTC = tipoContratoMap[params.moduloMedicao ?? ""] ?? "empreitada_global";
+
+    const [tc] = await db.insert(terceiroContratos).values({
       companyId: params.companyId,
-      employeeId,
-      numeroContrato: numContrato,
-      cnpjPrestador: cnpj,
-      razaoSocialPrestador: razaoSocial,
-      objetoContrato: `Prestação de serviços conforme OS vinculada:\n${objetoContrato}`,
-      dataInicio: hoje,
-      dataFim: dataFim,
-      valorMensal: String(params.total.toFixed(2)),
-      status: "ativo",
-      ordemId: params.ocId,
+      empresaTerceiraId: empTerceiraId,
       obraId: params.obraId,
-      eapItens: eapItensJson,
-      retencaoTecnicaPerc: String(retPerc),
-      diaCorte,
-      prazoAprovacaoDias: prazoAprov,
-      diaPagamento: diaPag,
-      valorTotalContrato: String(params.total.toFixed(2)),
-      valorMedido: "0",
-      valorRetido: "0",
+      obraNome: obraNome,
+      numeroContrato: numContrato,
+      descricao: `Prestação de serviços — OS ${params.ocId}: ${itensDescr}`.slice(0, 500),
+      tipoContrato: tipoContratoTC,
+      valorTotal: String(params.total.toFixed(2)),
+      dataInicio: hoje,
+      dataTermino: dataFim,
+      status: "ativo",
       criadoPor: params.userName,
-      criadoPorUserId: params.userId,
-    } as any).returning();
+    }).returning();
+
+    for (let i = 0; i < params.itensOS.length; i++) {
+      const it = params.itensOS[i];
+      await db.insert(terceiroContratoItens).values({
+        contratoId: tc.id,
+        companyId: params.companyId,
+        eapCodigo: (it as any).eapCodigo ?? null,
+        descricao: it.descricao,
+        unidade: it.unidade || "un",
+        quantidade: it.quantidade,
+        valorUnitario: it.precoUnitario,
+        valorTotal: it.total,
+        ordem: i + 1,
+      });
+    }
 
     await db.update(comprasOrdens).set({
-      contratoId: contrato.id,
+      contratoId: tc.id,
       atualizadoEm: new Date().toISOString(),
     } as any).where(eq(comprasOrdens.id, params.ocId));
 
-    let terceiroContratoId: number | null = null;
-    try {
-      let empTerceiraId: number | null = null;
-      if (cnpj) {
-        const [existEmp] = await db.select({ id: empresasTerceiras.id }).from(empresasTerceiras)
-          .where(and(eq(empresasTerceiras.companyId, params.companyId), eq(empresasTerceiras.cnpj, cnpj))).limit(1);
-        if (existEmp) {
-          empTerceiraId = existEmp.id;
-        } else {
-          const [novaEmp] = await db.insert(empresasTerceiras).values({
-            companyId: params.companyId,
-            razaoSocial: razaoSocial || params.fornecedorNome || "Empresa Terceira",
-            cnpj,
-            responsavelNome: razaoSocial || params.fornecedorNome || "",
-            status: "ativa",
-          } as any).returning();
-          empTerceiraId = novaEmp.id;
-        }
-      } else {
-        const nomeEmpresa = razaoSocial || params.fornecedorNome || "Empresa Terceira";
-        const existEmpByName = await db.execute(sql`
-          SELECT id FROM empresas_terceiras WHERE "companyId" = ${params.companyId} AND razao_social = ${nomeEmpresa} AND (cnpj IS NULL OR cnpj = '') LIMIT 1
-        `);
-        if ((existEmpByName as any).rows?.length > 0) {
-          empTerceiraId = (existEmpByName as any).rows[0].id;
-        } else {
-          const insertEmpRes = await db.execute(sql`
-            INSERT INTO empresas_terceiras ("companyId", razao_social, cnpj, responsavel_nome, status, created_at, updated_at)
-            VALUES (${params.companyId}, ${nomeEmpresa}, '', ${nomeEmpresa}, 'ativa', NOW(), NOW())
-            RETURNING id
-          `);
-          empTerceiraId = (insertEmpRes as any).rows[0].id;
-        }
-      }
-      if (empTerceiraId) {
-        const obraNome = params.obraId ? (await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, params.obraId)).limit(1))?.[0]?.nome ?? null : null;
-        const itensDescr = params.itensOS.map(it => `${it.descricao} — ${it.quantidade} ${it.unidade || "un"}`).join("; ");
-        const tipoContratoMap: Record<string, string> = {
-          medicao_mensal: "preco_unitario",
-          medicao_avanco: "preco_unitario",
-          medicao_etapa: "preco_unitario",
-          empreitada: "empreitada_global",
-          administracao: "administracao",
-        };
-        const tipoContratoTC = tipoContratoMap[params.moduloMedicao ?? ""] ?? "empreitada_global";
-        const [tc] = await db.insert(terceiroContratos).values({
-          companyId: params.companyId,
-          empresaTerceiraId: empTerceiraId,
-          obraId: params.obraId,
-          obraNome: obraNome,
-          numeroContrato: numContrato,
-          descricao: `Prestação de serviços — OS ${params.ocId}: ${itensDescr}`.slice(0, 500),
-          tipoContrato: tipoContratoTC,
-          valorTotal: String(params.total.toFixed(2)),
-          dataInicio: hoje,
-          dataTermino: dataFim,
-          status: "ativo",
-          criadoPor: params.userName,
-        }).returning();
-        terceiroContratoId = tc.id;
-
-        for (let i = 0; i < params.itensOS.length; i++) {
-          const it = params.itensOS[i];
-          await db.insert(terceiroContratoItens).values({
-            contratoId: tc.id,
-            companyId: params.companyId,
-            eapCodigo: (it as any).eapCodigo ?? null,
-            descricao: it.descricao,
-            unidade: it.unidade || "un",
-            quantidade: it.quantidade,
-            valorUnitario: it.precoUnitario,
-            valorTotal: it.total,
-            ordem: i + 1,
-          });
-        }
-        console.log(`[gerarContratoPJDeOS] Terceiro Contrato #${tc.id} (${numContrato}) criado para empresa #${empTerceiraId}`);
-      }
-    } catch (tcErr: any) {
-      console.error(`[gerarContratoPJDeOS] Erro ao criar terceiro contrato:`, tcErr?.message);
-    }
-
-    console.log(`[gerarContratoPJDeOS] Contrato ${numContrato} gerado para OS #${params.ocId} → PJ Contract #${contrato.id}, terceiroContratoId=${terceiroContratoId}`);
-    return { ...contrato, terceiroContratoId };
+    console.log(`[gerarContratoTerceiroDeOS] Contrato Terceiro #${tc.id} (${numContrato}) criado para empresa #${empTerceiraId} — OC #${params.ocId}`);
+    return { id: tc.id, numeroContrato: numContrato, terceiroContratoId: tc.id };
   } catch (err: any) {
-    console.error(`[gerarContratoPJDeOS] Erro FATAL:`, err?.message);
+    console.error(`[gerarContratoTerceiroDeOS] Erro FATAL:`, err?.message);
     return null;
   }
 }
@@ -4386,8 +4315,8 @@ Retorne APENAS um JSON válido neste formato:
           itensContrato = ocItensForContract.map(it => ({ descricao: it.descricao, unidade: it.unidade, quantidade: String(it.quantidade), precoUnitario: String(it.precoUnitario), total: String(it.total), insumoCodigo: (it as any).insumoCodigo ?? null }));
         }
 
-        console.log(`[criarOrdemDeCotacao] Criando contrato PJ para OC #${oc.id}, fornecedorId=${cot.fornecedorId}, moduloMedicao=${moduloMedicaoForn}, itens=${itensContrato.length}`);
-        const contratoPJ = await gerarContratoPJDeOS({
+        console.log(`[criarOrdemDeCotacao] Criando contrato terceiro para OC #${oc.id}, fornecedorId=${cot.fornecedorId}, moduloMedicao=${moduloMedicaoForn}, itens=${itensContrato.length}`);
+        const contratoTerceiro = await gerarContratoTerceiroDeOS({
           ocId: oc.id,
           companyId: input.companyId,
           obraId: cot.obraId ?? null,
@@ -4399,25 +4328,24 @@ Retorne APENAS um JSON válido neste formato:
           userName: input.userName ?? "Sistema",
           moduloMedicao: moduloMedicaoForn,
         });
-        console.log(`[criarOrdemDeCotacao] Resultado gerarContratoPJDeOS:`, contratoPJ ? `PJ #${contratoPJ.id}, terceiroContratoId=${(contratoPJ as any).terceiroContratoId}` : "null");
+        console.log(`[criarOrdemDeCotacao] Resultado gerarContratoTerceiroDeOS:`, contratoTerceiro ? `Terceiro #${contratoTerceiro.id}` : "null");
 
-        if (contratoPJ) {
-          contratoGeradoId = contratoPJ.id;
-          terceiroContratoGeradoId = (contratoPJ as any).terceiroContratoId ?? null;
+        if (contratoTerceiro) {
+          contratoGeradoId = contratoTerceiro.id;
+          terceiroContratoGeradoId = contratoTerceiro.terceiroContratoId ?? null;
           if (terceiroContratoGeradoId) {
-            await db.update(comprasOrdens).set({ contratoTerceiroId: terceiroContratoGeradoId, atualizadoEm: new Date().toISOString() } as any).where(eq(comprasOrdens.id, oc.id));
             await db.update(comprasCotacoes).set({ contratoTerceiroId: terceiroContratoGeradoId } as any).where(eq(comprasCotacoes.id, input.cotacaoId));
           }
           const [fornForSign] = await db.select().from(fornecedores)
             .where(and(eq(fornecedores.id, cot.fornecedorId), eq(fornecedores.companyId, input.companyId)));
 
           const itensDesc = ocItensForContract.map(it => `• ${it.descricao} — ${it.quantidade} ${it.unidade || "un"} × R$ ${n(it.precoUnitario).toFixed(2)}`).join("\n");
-          const textoContrato = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS\n\nContrato nº: ${(contratoPJ as any).numeroContrato || "N/A"}\nOC: ${oc.numeroOc}\n\nCONTRATANTE: FC Engenharia\nCONTRATADA: ${oc.fornecedorNome || "N/A"}\nCNPJ: ${fornForSign?.cnpj || "N/A"}\n\nOBJETO DO CONTRATO:\nPrestação de serviços conforme especificações abaixo:\n\n${itensDesc}\n\nVALOR TOTAL: R$ ${n(oc.total).toFixed(2)}\n\nAs partes concordam com os termos acima descritos e assinam eletronicamente este contrato.`;
+          const textoContrato = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS\n\nContrato nº: ${contratoTerceiro.numeroContrato || "N/A"}\nOC: ${oc.numeroOc}\n\nCONTRATANTE: FC Engenharia\nCONTRATADA: ${oc.fornecedorNome || "N/A"}\nCNPJ: ${fornForSign?.cnpj || "N/A"}\n\nOBJETO DO CONTRATO:\nPrestação de serviços conforme especificações abaixo:\n\n${itensDesc}\n\nVALOR TOTAL: R$ ${n(oc.total).toFixed(2)}\n\nAs partes concordam com os termos acima descritos e assinam eletronicamente este contrato.`;
 
           criarEnvelopeIntegraSign({
             companyId: input.companyId,
             ocId: oc.id,
-            contratoId: contratoPJ.id,
+            contratoId: contratoTerceiro.id,
             obraId: cot.obraId ?? null,
             titulo: `Contrato de Serviço — OC ${oc.numeroOc} — ${oc.fornecedorNome || "Fornecedor"}`,
             textoContrato,
@@ -8079,7 +8007,7 @@ Retorne APENAS um JSON válido neste formato:
             contratoGerado = { id: existCt.id, tipo: "aditivo" };
           } else {
             const ocItensForContract = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
-            contratoGerado = await gerarContratoPJDeOS({
+            contratoGerado = await gerarContratoTerceiroDeOS({
               ocId: oc.id,
               companyId: input.companyId,
               obraId: oc.obraId ?? null,

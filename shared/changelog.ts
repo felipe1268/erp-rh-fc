@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1002,
+    titulo: "Correção: terceiros não devem ser cadastrados como PJ/colaborador",
+    descricao: "Corrigido bug onde a geração de contrato a partir de OC criava um registro na tabela de funcionários (employees) com tipoContrato='pj' para fornecedores/terceiros. Agora o fluxo cria apenas empresa_terceira + terceiro_contrato, sem tocar na tabela de funcionários. Dados incorretos (RF Gesso cadastrada como PJ em employees) foram limpos. Função renomeada de gerarContratoPJDeOS para gerarContratoTerceiroDeOS.",
+    tipo: "bugfix",
+    modulos: "Compras, Terceiros",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-04 00:00:00",
+  },
+  {
     version: 1001,
     titulo: "Redesign completo da auditoria de folha — seções com tabelas estruturadas",
     descricao: "A tela de auditoria foi completamente redesenhada. Em vez de alertas individuais com blocos de texto, agora cada categoria é uma seção colapsável com tabela estruturada: colunas de funcionário, função, valores e motivos. Variação salarial mostra tabela comparativa por função com destaque visual (menor/maior). Descontos excessivos mostram composição detalhada. Horas extras, faltas e atrasos são tabelas com totalização no rodapé. Dados bancários incompletos mostram badges dos campos faltantes. Layout limpo e profissional.",
