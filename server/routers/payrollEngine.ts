@@ -1189,13 +1189,13 @@ export const payrollEngineRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const rows = ((await db.execute(sql`
-        SELECT pa.*, e.nomeCompleto, e.funcao, e.codigoInterno
+        SELECT pa.*, e."nomeCompleto", e."funcao", e."codigoInterno"
         FROM payroll_adjustments pa
-        LEFT JOIN employees e ON pa.employeeId = e.id
-        WHERE pa.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) 
-        AND pa.mesDesconto = ${input.mesReferencia}
+        LEFT JOIN employees e ON pa."employeeId" = e.id
+        WHERE pa."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) 
+        AND pa."mesDesconto" = ${input.mesReferencia}
         AND pa.status = 'pendente_decisao'
-        ORDER BY e.nomeCompleto, pa.data
+        ORDER BY e."nomeCompleto", pa.data
       `)) as any).rows || [];
       return rows || [];
     }),
@@ -1317,45 +1317,42 @@ export const payrollEngineRouter = router({
             UPDATE payroll_adjustments SET 
               status = 'cancelado',
               descricao = CONCAT(descricao, ' [DECISÃO: Erro do relógio - mantido como trabalhado por ${ctx.user.name || "Usuário"}]')
-            WHERE id = ${dec.adjustmentId} AND companyId = ${input.companyId}
+            WHERE id = ${dec.adjustmentId} AND "companyId" = ${input.companyId}
           `);
-          // Atualizar timecard_daily para aferido (trabalhado)
           const adjRow = ((await db.execute(sql`
-            SELECT timecardDailyId FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
+            SELECT "timecardDailyId" FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
           `)) as any).rows || [];
           const tcId = (adjRow as any[])?.[0]?.timecardDailyId;
           if (tcId) {
             await db.execute(sql`
               UPDATE timecard_daily SET 
-                statusDia = 'aferido',
-                afericaoResultado = 'ok',
-                afericaoObs = CONCAT(COALESCE(afericaoObs, ''), ' [Erro do relógio - mantido como trabalhado]'),
-                isFalta = 0, isAtraso = 0
+                "statusDia" = 'aferido',
+                "afericaoResultado" = 'ok',
+                "afericaoObs" = CONCAT(COALESCE("afericaoObs", ''), ' [Erro do relógio - mantido como trabalhado]'),
+                "isFalta" = 0, "isAtraso" = 0
               WHERE id = ${tcId}
             `);
           }
           errosRelogio++;
         } else {
-          // Falta real: aplicar o desconto (mudar status para pendente)
           await db.execute(sql`
             UPDATE payroll_adjustments SET 
               status = 'pendente',
               tipo = 'falta',
               descricao = CONCAT(descricao, ' [DECISÃO: Falta real confirmada por ${ctx.user.name || "Usuário"}]')
-            WHERE id = ${dec.adjustmentId} AND companyId = ${input.companyId}
+            WHERE id = ${dec.adjustmentId} AND "companyId" = ${input.companyId}
           `);
-          // Atualizar timecard_daily para falta
           const adjRow2 = ((await db.execute(sql`
-            SELECT timecardDailyId FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
+            SELECT "timecardDailyId" FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
           `)) as any).rows || [];
           const tcId2 = (adjRow2 as any[])?.[0]?.timecardDailyId;
           if (tcId2) {
             await db.execute(sql`
               UPDATE timecard_daily SET 
-                statusDia = 'aferido',
-                afericaoResultado = 'falta',
-                afericaoObs = CONCAT(COALESCE(afericaoObs, ''), ' [Falta real confirmada]'),
-                isFalta = 1
+                "statusDia" = 'aferido',
+                "afericaoResultado" = 'falta',
+                "afericaoObs" = CONCAT(COALESCE("afericaoObs", ''), ' [Falta real confirmada]'),
+                "isFalta" = 1
               WHERE id = ${tcId2}
             `);
           }
