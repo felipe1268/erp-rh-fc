@@ -28,7 +28,11 @@ export const valeAlimentacaoRouter = router({
             of2."obraId", o.nome as "obraNome"
             FROM vr_benefits vr
             LEFT JOIN employees e ON vr."employeeId" = e.id
-            LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
+            LEFT JOIN LATERAL (
+              SELECT of3."obraId" FROM obra_funcionarios of3
+              WHERE of3."employeeId" = e.id AND of3."isActive" = 1
+              ORDER BY of3.id DESC LIMIT 1
+            ) of2 ON true
             LEFT JOIN obras o ON of2."obraId" = o.id
             WHERE vr."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND vr."mesReferencia" = ${input.mesReferencia}
             AND (e.status NOT IN ('Desligado', 'Lista_Negra') OR e.status IS NULL)
