@@ -204,6 +204,7 @@ export const valeAlimentacaoRouter = router({
       geradoPor: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      try {
       const db = (await getDb())!;
       const userName = input.geradoPor || ctx.user?.name || "Sistema";
 
@@ -395,6 +396,10 @@ export const valeAlimentacaoRouter = router({
       }
 
       return { success: true, gerados, alertasGerados, message: `${gerados} lançamentos gerados! ${alertasGerados > 0 ? `⚠️ ${alertasGerados} alertas de falta gerados para revisão do RH.` : 'Nenhum alerta de falta.'}` };
+      } catch (err: any) {
+        console.error('[VA gerarMes] Erro:', err?.message || err);
+        return { success: false, gerados: 0, alertasGerados: 0, message: `Erro ao gerar: ${err?.message || 'erro desconhecido'}` };
+      }
     }),
 
   regerarMes: protectedProcedure
@@ -403,6 +408,7 @@ export const valeAlimentacaoRouter = router({
       geradoPor: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      try {
       const db = (await getDb())!;
       await db.execute(
         sql`DELETE FROM vr_benefits WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status != 'pago'`
@@ -516,75 +522,85 @@ export const valeAlimentacaoRouter = router({
 
       let gerados = 0;
       let alertasGerados = 0;
-      for (const { emp, obraId, cidade, estado } of Object.values(empMap)) {
-        if (paidEmpIds.has(emp.id)) continue;
-        const cfg = (obraId && cfgPorObra[obraId]) || cfgPadrao;
-        if (!cfg) continue;
 
-        let diasUteis = await getDiasUteisCidade(cidade, estado);
-        const diasUteisOriginal = diasUteis;
+      const empEntries = Object.values(empMap).filter(({ emp }) => !paidEmpIds.has(emp.id));
+      const BATCH_SIZE = 20;
 
-        const cafeAtivo = cfg.cafeAtivo === 1 || cfg.cafeAtivo === true;
-        const lancheAtivo = cfg.lancheAtivo === 1 || cfg.lancheAtivo === true;
-        const jantaAtivo = cfg.jantaAtivo === 1 || cfg.jantaAtivo === true;
+      for (let batch = 0; batch < empEntries.length; batch += BATCH_SIZE) {
+        const chunk = empEntries.slice(batch, batch + BATCH_SIZE);
+        for (const { emp, obraId, cidade, estado } of chunk) {
+          const cfg = (obraId && cfgPorObra[obraId]) || cfgPadrao;
+          if (!cfg) continue;
 
-        const cafeDia = cafeAtivo ? parseBRL(cfg.cafeManhaDia) : 0;
-        const lancheDia = lancheAtivo ? parseBRL(cfg.lancheTardeDia) : 0;
-        const jantaDia = jantaAtivo ? parseBRL(cfg.jantaDia) : 0;
-        const vaMes = parseBRL(cfg.valeAlimentacaoMes);
+          let diasUteis = await getDiasUteisCidade(cidade, estado);
+          const diasUteisOriginal = diasUteis;
 
-        let proporcionalDias: number | null = null;
-        if (emp.dataAdmissao) {
-          const admissao = new Date(emp.dataAdmissao + 'T00:00:00');
-          if (admissao > primeiroDiaMes && admissao <= ultimoDiaMes) {
-            let diasAdmissao = 0;
-            let cur = new Date(admissao);
-            while (cur <= ultimoDiaMes) {
-              const dow = cur.getDay();
-              if (dow !== 0 && dow !== 6) diasAdmissao++;
-              cur.setDate(cur.getDate() + 1);
+          const cafeAtivo = cfg.cafeAtivo === 1 || cfg.cafeAtivo === true;
+          const lancheAtivo = cfg.lancheAtivo === 1 || cfg.lancheAtivo === true;
+          const jantaAtivo = cfg.jantaAtivo === 1 || cfg.jantaAtivo === true;
+
+          const cafeDia = cafeAtivo ? parseBRL(cfg.cafeManhaDia) : 0;
+          const lancheDia = lancheAtivo ? parseBRL(cfg.lancheTardeDia) : 0;
+          const jantaDia = jantaAtivo ? parseBRL(cfg.jantaDia) : 0;
+          const vaMes = parseBRL(cfg.valeAlimentacaoMes);
+
+          let proporcionalDias: number | null = null;
+          if (emp.dataAdmissao) {
+            const admissao = new Date(emp.dataAdmissao + 'T00:00:00');
+            if (admissao > primeiroDiaMes && admissao <= ultimoDiaMes) {
+              let diasAdmissao = 0;
+              let cur = new Date(admissao);
+              while (cur <= ultimoDiaMes) {
+                const dow = cur.getDay();
+                if (dow !== 0 && dow !== 6) diasAdmissao++;
+                cur.setDate(cur.getDate() + 1);
+              }
+              proporcionalDias = diasAdmissao;
+              diasUteis = Math.min(diasUteis, diasAdmissao);
             }
-            proporcionalDias = diasAdmissao;
-            diasUteis = Math.min(diasUteis, diasAdmissao);
           }
-        }
 
-        const diasFerias = feriasMap[emp.id] || 0;
-        let diasLicenca = 0;
-        if (empLicenca.has(emp.id)) diasLicenca = diasUteis;
+          const diasFerias = feriasMap[emp.id] || 0;
+          let diasLicenca = 0;
+          if (empLicenca.has(emp.id)) diasLicenca = diasUteis;
 
-        const diasEfetivos = Math.max(0, diasUteis - diasFerias - diasLicenca);
+          const diasEfetivos = Math.max(0, diasUteis - diasFerias - diasLicenca);
 
-        const valorCafe = cafeDia * diasEfetivos;
-        const valorLanche = lancheDia * diasEfetivos;
-        const valorJanta = jantaDia * diasEfetivos;
-        const valorVA = vaMes;
-        const valorDiario = cafeDia + lancheDia + jantaDia;
-        const valorTotal = valorCafe + valorLanche + valorJanta + valorVA;
-        if (valorTotal <= 0) continue;
+          const valorCafe = cafeDia * diasEfetivos;
+          const valorLanche = lancheDia * diasEfetivos;
+          const valorJanta = jantaDia * diasEfetivos;
+          const valorVA = vaMes;
+          const valorDiario = cafeDia + lancheDia + jantaDia;
+          const valorTotal = valorCafe + valorLanche + valorJanta + valorVA;
+          if (valorTotal <= 0) continue;
 
-        const result = ((await db.execute(
-          sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor", "diasUteisCalc", "cidadeObra", "diasFerias", "diasLicenca", "diasFaltas", "diasDescontados", "proporcionalDias")
-          VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasEfetivos}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName}, ${diasUteisOriginal}, ${cidade || null}, ${diasFerias}, ${diasLicenca}, 0, 0, ${proporcionalDias})
-          RETURNING id`
-        )) as any).rows || [];
-        const vrId = result?.[0]?.id;
-        gerados++;
+          const result = ((await db.execute(
+            sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor", "diasUteisCalc", "cidadeObra", "diasFerias", "diasLicenca", "diasFaltas", "diasDescontados", "proporcionalDias")
+            VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasEfetivos}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName}, ${diasUteisOriginal}, ${cidade || null}, ${diasFerias}, ${diasLicenca}, 0, 0, ${proporcionalDias})
+            RETURNING id`
+          )) as any).rows || [];
+          const vrId = result?.[0]?.id;
+          gerados++;
 
-        const faltasEmp = faltasPorEmp[emp.id];
-        if (faltasEmp && faltasEmp.semAtestado > 0) {
-          for (const falta of faltasEmp.datas) {
-            if (falta.temAtestado) continue;
-            await db.execute(
-              sql`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId")
-              VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${obraId || null}, ${falta.data}, 'injustificada', 0, 'pendente', ${formatBRL(cafeDia)}, ${formatBRL(lancheDia)}, ${formatBRL(jantaDia)}, ${vrId || null})`
-            );
-            alertasGerados++;
+          const faltasEmp = faltasPorEmp[emp.id];
+          if (faltasEmp && faltasEmp.semAtestado > 0) {
+            for (const falta of faltasEmp.datas) {
+              if (falta.temAtestado) continue;
+              await db.execute(
+                sql`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId")
+                VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${obraId || null}, ${falta.data}, 'injustificada', 0, 'pendente', ${formatBRL(cafeDia)}, ${formatBRL(lancheDia)}, ${formatBRL(jantaDia)}, ${vrId || null})`
+              );
+              alertasGerados++;
+            }
           }
         }
       }
 
       return { success: true, gerados, alertasGerados, message: `${gerados} lançamentos regerados! ${alertasGerados > 0 ? `⚠️ ${alertasGerados} alertas de falta para revisão.` : ''}` };
+      } catch (err: any) {
+        console.error('[VA regerarMes] Erro:', err?.message || err);
+        return { success: false, gerados: 0, alertasGerados: 0, message: `Erro ao regerar: ${err?.message || 'erro desconhecido'}` };
+      }
     }),
 
   editarLancamento: protectedProcedure

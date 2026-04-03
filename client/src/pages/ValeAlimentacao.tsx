@@ -190,9 +190,13 @@ export default function ValeAlimentacao() {
   });
   const regerarMut = trpc.valeAlimentacao.regerarMes.useMutation({
     onSuccess: (data) => {
-      toast.success(data.message);
-      lancamentosQ.refetch();
-      statsQ.refetch();
+      if (data.success) {
+        toast.success(data.message);
+        lancamentosQ.refetch();
+        statsQ.refetch();
+      } else {
+        toast.error(data.message);
+      }
     },
     onError: (e) => toast.error(e.message),
   });
