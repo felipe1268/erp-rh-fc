@@ -158,7 +158,7 @@ export const valeAlimentacaoRouter = router({
         if (valorTotal <= 0) continue; // Sem valor, pular
 
         await db.execute(
-          sql`INSERT INTO vr_benefits (companyId, employeeId, mesReferencia, valorDiario, diasUteis, valorTotal, valorCafe, valorLanche, valorJanta, valorVA, operadora, status, geradoPor)
+          sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor")
           VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasUteis}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName})`
         );
         gerados++;
@@ -239,7 +239,7 @@ export const valeAlimentacaoRouter = router({
         if (valorTotal <= 0) continue;
 
         await db.execute(
-          sql`INSERT INTO vr_benefits (companyId, employeeId, mesReferencia, valorDiario, diasUteis, valorTotal, valorCafe, valorLanche, valorJanta, valorVA, operadora, status, geradoPor)
+          sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor")
           VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasUteis}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName})`
         );
         gerados++;
@@ -267,14 +267,14 @@ export const valeAlimentacaoRouter = router({
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       const sets: string[] = [];
-      if (input.valorTotal !== undefined) sets.push(`valorTotal = '${input.valorTotal}'`);
-      if (input.valorCafe !== undefined) sets.push(`valorCafe = '${input.valorCafe}'`);
-      if (input.valorLanche !== undefined) sets.push(`valorLanche = '${input.valorLanche}'`);
-      if (input.valorJanta !== undefined) sets.push(`valorJanta = '${input.valorJanta}'`);
-      if (input.valorVA !== undefined) sets.push(`valorVA = '${input.valorVA}'`);
-      if (input.diasUteis !== undefined) sets.push(`diasUteis = ${input.diasUteis}`);
+      if (input.valorTotal !== undefined) sets.push(`"valorTotal" = '${input.valorTotal}'`);
+      if (input.valorCafe !== undefined) sets.push(`"valorCafe" = '${input.valorCafe}'`);
+      if (input.valorLanche !== undefined) sets.push(`"valorLanche" = '${input.valorLanche}'`);
+      if (input.valorJanta !== undefined) sets.push(`"valorJanta" = '${input.valorJanta}'`);
+      if (input.valorVA !== undefined) sets.push(`"valorVa" = '${input.valorVA}'`);
+      if (input.diasUteis !== undefined) sets.push(`"diasUteis" = ${input.diasUteis}`);
       if (input.status !== undefined) sets.push(`status = '${input.status}'`);
-      if (input.motivoAlteracao !== undefined) sets.push(`motivoAlteracao = '${input.motivoAlteracao.replace(/'/g, "''")}'`);
+      if (input.motivoAlteracao !== undefined) sets.push(`"motivoAlteracao" = '${input.motivoAlteracao.replace(/'/g, "''")}'`);
       if (input.observacoes !== undefined) sets.push(`observacoes = '${input.observacoes.replace(/'/g, "''")}'`);
       
       if (sets.length === 0) return { success: false, message: "Nenhum campo para atualizar" };
@@ -297,12 +297,12 @@ export const valeAlimentacaoRouter = router({
       
       if (input.ids && input.ids.length > 0) {
         await db.execute(
-          sql`UPDATE vr_benefits SET status = 'aprovado', aprovadoPor = ${userName} WHERE id IN (${sql.raw(input.ids.join(","))}) AND status = 'pendente'`
+          sql`UPDATE vr_benefits SET status = 'aprovado', "aprovadoPor" = ${userName} WHERE id IN (${sql.raw(input.ids.join(","))}) AND status = 'pendente'`
         );
         return { success: true, aprovados: input.ids.length };
       } else {
         const result = await db.execute(
-          sql`UPDATE vr_benefits SET status = 'aprovado', aprovadoPor = ${userName} WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'pendente'`
+          sql`UPDATE vr_benefits SET status = 'aprovado', "aprovadoPor" = ${userName} WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'pendente'`
         );
         return { success: true, aprovados: (result as any)?.rowCount || 0 };
       }
@@ -363,7 +363,7 @@ export const valeAlimentacaoRouter = router({
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       await db.execute(
-        sql`UPDATE vr_benefits SET status = 'cancelado', motivoAlteracao = ${input.motivo || 'Cancelado pelo usuário'} WHERE id = ${input.id}`
+        sql`UPDATE vr_benefits SET status = 'cancelado', "motivoAlteracao" = ${input.motivo || 'Cancelado pelo usuário'} WHERE id = ${input.id}`
       );
       return { success: true };
     }),
