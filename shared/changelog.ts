@@ -7231,4 +7231,16 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 03:30:00",
   },
+  {
+    version: 974,
+    titulo: "Aviso Prévio — Linha de Total + Fix 'Não identificado' no Dash EPIs",
+    descricao:
+      "• Tabela de Aviso Prévio agora exibe linha de total no rodapé com quantidade de avisos e soma do Valor Estimado\n" +
+      "• Dashboard EPIs: corrigido bug 'Não identificado' — funcionários desligados agora aparecem corretamente no histórico de entregas\n" +
+      "• A query de funcionários no dashboard de EPIs não filtra mais por status, garantindo que entregas históricas exibam o nome correto",
+    tipo: "bugfix",
+    modulos: "Aviso Prévio, EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 04:00:00",
+  },
 ];

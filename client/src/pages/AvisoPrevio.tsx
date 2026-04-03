@@ -723,6 +723,19 @@ export default function AvisoPrevio() {
                     );
                   })}
                 </tbody>
+                {filtered.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-2 bg-muted/40">
+                      <td className="p-3 font-bold" colSpan={8}>
+                        Total ({filtered.length} aviso{filtered.length !== 1 ? 's' : ''})
+                      </td>
+                      <td className="p-3 text-right font-bold text-base">
+                        {formatMoeda(filtered.reduce((sum: number, a: any) => sum + (Number(a.valorEstimadoTotal) || 0), 0))}
+                      </td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </CardContent>

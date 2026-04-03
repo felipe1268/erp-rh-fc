@@ -750,8 +750,8 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
   const [allEpis, allDel, allEmps, epiEmpObraAlocs, allObras] = await Promise.all([
     db.select().from(epis).where(companyFilter),
     db.select().from(epiDeliveries).where(and(delFilter, isNull(epiDeliveries.deletedAt))),
-    db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao })
-      .from(employees).where(and(empFilter, isNull(employees.deletedAt), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`)),
+    db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, status: employees.status })
+      .from(employees).where(and(empFilter, isNull(employees.deletedAt))),
     db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
       .from(obraFuncionarios).where(and(ids.length === 1 ? eq(obraFuncionarios.companyId, ids[0]) : inArray(obraFuncionarios.companyId, ids), eq(obraFuncionarios.isActive, 1))),
     db.select({ id: obras.id, nome: obras.nome }).from(obras).where(obraFilter),
