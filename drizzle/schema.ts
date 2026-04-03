@@ -2961,10 +2961,46 @@ export const vrBenefits = pgTable("vr_benefits", {
         motivoAlteracao: text(),
         geradoPor: varchar({ length: 255 }),
         aprovadoPor: varchar({ length: 255 }),
+        diasUteisCalc: integer(),
+        cidadeObra: varchar({ length: 100 }),
+        diasFerias: integer().default(0),
+        diasLicenca: integer().default(0),
+        diasFaltas: integer().default(0),
+        diasDescontados: integer().default(0),
+        proporcionalDias: integer(),
 },
 (table) => [
         index("vr_company_mes").on(table.companyId, table.mesReferencia),
         index("vr_employee").on(table.employeeId),
+]);
+
+export const vaFaltaAlerts = pgTable("va_falta_alerts", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        employeeId: integer().notNull(),
+        mesReferencia: varchar({ length: 7 }).notNull(),
+        obraId: integer(),
+        dataFalta: date({ mode: 'string' }).notNull(),
+        tipoFalta: varchar({ length: 30 }).default('injustificada'),
+        temAtestado: smallint().default(0),
+        decisao: varchar({ length: 20 }).default('pendente'),
+        descontarCafe: smallint().default(0),
+        descontarLanche: smallint().default(0),
+        descontarJantar: smallint().default(0),
+        valorDescontoCafe: varchar({ length: 20 }).default('0'),
+        valorDescontoLanche: varchar({ length: 20 }).default('0'),
+        valorDescontoJantar: varchar({ length: 20 }).default('0'),
+        decidido_por: varchar({ length: 255 }),
+        decidido_por_user_id: integer(),
+        decidido_em: timestamp({ mode: 'string' }),
+        observacoes: text(),
+        vrBenefitId: integer(),
+        createdAt: timestamp({ mode: 'string' }).defaultNow(),
+        updatedAt: timestamp({ mode: 'string' }).defaultNow(),
+}, (table) => [
+        index("idx_va_falta_company_mes").on(table.companyId, table.mesReferencia),
+        index("idx_va_falta_employee").on(table.employeeId),
+        index("idx_va_falta_decisao").on(table.decisao),
 ]);
 
 export const warningTemplates = pgTable("warning_templates", {

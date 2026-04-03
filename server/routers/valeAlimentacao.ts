@@ -1,7 +1,7 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { vrBenefits, employees, obras, obraFuncionarios, mealBenefitConfigs } from "../../drizzle/schema";
+import { vrBenefits, employees, obras, obraFuncionarios, mealBenefitConfigs, vaFaltaAlerts } from "../../drizzle/schema";
 import { eq, and, sql, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 
@@ -14,10 +14,117 @@ function formatBRL(v: number): string {
   return v.toFixed(2).replace(".", ",");
 }
 
+const FERIADOS_NACIONAIS_FIXOS = [
+  "01-01", "04-21", "05-01", "09-07", "10-12", "11-02", "11-15", "12-25",
+];
+
+function calcularPascoa(ano: number): string {
+  const a = ano % 19;
+  const b = Math.floor(ano / 100);
+  const c = ano % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31);
+  const dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
+
+function getFeriadosMoveis(ano: number): string[] {
+  const pascoa = new Date(calcularPascoa(ano) + 'T12:00:00Z');
+  const carnaval = new Date(pascoa);
+  carnaval.setUTCDate(carnaval.getUTCDate() - 47);
+  const sextaSanta = new Date(pascoa);
+  sextaSanta.setUTCDate(sextaSanta.getUTCDate() - 2);
+  const corpusChristi = new Date(pascoa);
+  corpusChristi.setUTCDate(corpusChristi.getUTCDate() + 60);
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+  return [fmt(carnaval), fmt(sextaSanta), fmt(corpusChristi)];
+}
+
+async function calcularDiasUteisCidade(
+  companyId: number,
+  cidade: string | null,
+  estado: string | null,
+  mesReferencia: string // "YYYY-MM"
+): Promise<number> {
+  const [anoStr, mesStr] = mesReferencia.split("-");
+  const ano = parseInt(anoStr);
+  const mes = parseInt(mesStr);
+  const primeiroDia = new Date(ano, mes - 1, 1);
+  const ultimoDia = new Date(ano, mes, 0);
+  const totalDias = ultimoDia.getDate();
+
+  const feriadosNacionais = new Set<string>();
+  for (const mmdd of FERIADOS_NACIONAIS_FIXOS) {
+    const full = `${ano}-${mmdd}`;
+    feriadosNacionais.add(full);
+  }
+  for (const f of getFeriadosMoveis(ano)) {
+    feriadosNacionais.add(f);
+  }
+
+  const db = (await getDb())!;
+  const feriadosDb = ((await db.execute(
+    sql`SELECT data, tipo, recorrente, estado, cidade FROM feriados 
+        WHERE ("companyId" = ${companyId} OR "companyId" IS NULL) AND ativo = 1`
+  )) as any).rows || [];
+
+  const feriadosSet = new Set<string>(feriadosNacionais);
+  for (const f of feriadosDb) {
+    let dataFull = f.data;
+    if (f.recorrente === 1 && f.data.length === 5) {
+      dataFull = `${ano}-${f.data}`;
+    }
+    if (!dataFull.startsWith(anoStr + "-" + mesStr.padStart(2, '0'))) continue;
+
+    if (f.tipo === 'municipal' && cidade) {
+      if (f.cidade && f.cidade.toLowerCase().trim() !== cidade.toLowerCase().trim()) continue;
+    }
+    if (f.tipo === 'estadual' && estado) {
+      if (f.estado && f.estado.toLowerCase().trim() !== estado.toLowerCase().trim()) continue;
+    }
+    feriadosSet.add(dataFull);
+  }
+
+  let diasUteis = 0;
+  for (let d = 1; d <= totalDias; d++) {
+    const date = new Date(ano, mes - 1, d);
+    const dow = date.getDay();
+    if (dow === 0 || dow === 6) continue;
+    const dateStr = `${ano}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (feriadosSet.has(dateStr)) continue;
+    diasUteis++;
+  }
+
+  return diasUteis;
+}
+
+function contarDiasUteisNoPeriodo(
+  inicio: Date,
+  fim: Date,
+  feriadosSet: Set<string>
+): number {
+  let count = 0;
+  const current = new Date(inicio);
+  while (current <= fim) {
+    const dow = current.getDay();
+    if (dow !== 0 && dow !== 6) {
+      const dateStr = current.toISOString().split('T')[0];
+      if (!feriadosSet.has(dateStr)) count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+}
+
 export const valeAlimentacaoRouter = router({
-  // ============================================================
-  // LISTAR LANÇAMENTOS DO MÊS
-  // ============================================================
   listLancamentos: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
@@ -25,7 +132,8 @@ export const valeAlimentacaoRouter = router({
       const db = (await getDb())!;
       const rows = ((await db.execute(
         sql`SELECT DISTINCT ON (vr.id) vr.*, e."nomeCompleto", e.cpf, e.cargo, e.funcao, e.status as "empStatus",
-            of2."obraId", o.nome as "obraNome"
+            of2."obraId", o.nome as "obraNome",
+            vr."diasUteisCalc", vr."cidadeObra", vr."diasFerias", vr."diasLicenca", vr."diasFaltas", vr."diasDescontados", vr."proporcionalDias"
             FROM vr_benefits vr
             LEFT JOIN employees e ON vr."employeeId" = e.id
             LEFT JOIN LATERAL (
@@ -41,22 +149,17 @@ export const valeAlimentacaoRouter = router({
       return rows || [];
     }),
 
-  // ============================================================
-  // STATS DO MÊS
-  // ============================================================
   getStats: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       
-      // Total colaboradores ativos
       const empRows = ((await db.execute(
         sql`SELECT COUNT(*) as total FROM employees WHERE "companyId" = ${input.companyId} AND status = 'Ativo' AND "deletedAt" IS NULL`
       )) as any).rows || [];
       const totalAtivos = empRows?.[0]?.total || 0;
 
-      // Lançamentos do mês
       const vrRows = ((await db.execute(
         sql`SELECT 
           COUNT(*) as total,
@@ -72,6 +175,16 @@ export const valeAlimentacaoRouter = router({
       )) as any).rows || [];
       
       const stats = vrRows?.[0] || {};
+
+      const alertRows = ((await db.execute(
+        sql`SELECT 
+          COUNT(*) as total,
+          SUM(CASE WHEN decisao = 'pendente' THEN 1 ELSE 0 END) as pendentes
+        FROM va_falta_alerts 
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}`
+      )) as any).rows || [];
+      const alertStats = alertRows?.[0] || {};
+
       return {
         totalAtivos: Number(totalAtivos),
         totalLancamentos: Number(stats.total || 0),
@@ -80,22 +193,20 @@ export const valeAlimentacaoRouter = router({
         pagos: Number(stats.pagos || 0),
         cancelados: Number(stats.cancelados || 0),
         totalValor: Number(stats.totalValor || 0),
+        alertasFaltas: Number(alertStats.total || 0),
+        alertasFaltasPendentes: Number(alertStats.pendentes || 0),
       };
     }),
 
-  // ============================================================
-  // GERAR LANÇAMENTOS DO MÊS (baseado nas configs de meal_benefit_configs)
-  // ============================================================
   gerarMes: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
-      diasUteis: z.number().default(22),
+      diasUteis: z.number().optional(),
       geradoPor: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const userName = input.geradoPor || ctx.user?.name || "Sistema";
 
-      // Verificar se já existem lançamentos para o mês
       const existing = ((await db.execute(
         sql`SELECT COUNT(*) as total FROM vr_benefits WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}`
       )) as any).rows || [];
@@ -103,47 +214,123 @@ export const valeAlimentacaoRouter = router({
         return { success: false, message: `Já existem ${existing[0].total} lançamentos para este mês. Use "Regerar" para substituir.` };
       }
 
-      // Buscar configuração padrão da empresa
       const cfgRows = ((await db.execute(
-        sql`SELECT * FROM meal_benefit_configs WHERE "companyId" = ${input.companyId} AND ativo = 1 ORDER BY "obraId" IS NULL DESC LIMIT 10`
+        sql`SELECT * FROM meal_benefit_configs WHERE "companyId" = ${input.companyId} AND ativo = 1 ORDER BY "obraId" IS NULL DESC LIMIT 100`
       )) as any).rows || [];
       const configs = cfgRows || [];
-      
-      // Config padrão (obraId IS NULL)
       const cfgPadrao = configs.find((c: any) => !c.obraId) || null;
-      // Configs por obra
       const cfgPorObra: Record<number, any> = {};
       for (const c of configs) {
         if (c.obraId) cfgPorObra[c.obraId] = c;
       }
 
-      // Buscar colaboradores ativos
       const empRows = ((await db.execute(
         sql`SELECT e.id, e."nomeCompleto", e.cpf, e.cargo, e.funcao,
-            of2."obraId"
+            e."dataAdmissao", e.status as "empStatus",
+            of2."obraId", o.cidade as "obraCidade", o.estado as "obraEstado"
             FROM employees e
             LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
+            LEFT JOIN obras o ON of2."obraId" = o.id
             WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e."deletedAt" IS NULL
             AND (e."tipoContrato" IS NULL OR e."tipoContrato" != 'PJ')
             ORDER BY e."nomeCompleto" ASC`
       )) as any).rows || [];
       const emps = empRows || [];
-
-      // Agrupar por employeeId (pode ter múltiplas obras)
-      const empMap: Record<number, { emp: any; obraId: number | null }> = {};
+      const empMap: Record<number, { emp: any; obraId: number | null; cidade: string | null; estado: string | null }> = {};
       for (const e of emps) {
         if (!empMap[e.id]) {
-          empMap[e.id] = { emp: e, obraId: e.obraId };
+          empMap[e.id] = { emp: e, obraId: e.obraId, cidade: e.obraCidade || null, estado: e.obraEstado || null };
         }
       }
 
-      let gerados = 0;
-      for (const { emp, obraId } of Object.values(empMap)) {
-        // Buscar config: primeiro por obra, depois padrão
-        const cfg = (obraId && cfgPorObra[obraId]) || cfgPadrao;
-        if (!cfg) continue; // Sem config, pular
+      const [anoStr, mesStr] = input.mesReferencia.split("-");
+      const ano = parseInt(anoStr);
+      const mes = parseInt(mesStr);
+      const primeiroDiaMes = new Date(ano, mes - 1, 1);
+      const ultimoDiaMes = new Date(ano, mes, 0);
 
-        const diasUteis = input.diasUteis || cfg.diasUteisRef || 22;
+      const diasUteisPorCidade: Record<string, number> = {};
+      async function getDiasUteisCidade(cidade: string | null, estado: string | null): Promise<number> {
+        if (input.diasUteis) return input.diasUteis;
+        const key = `${(cidade || 'default').toLowerCase()}_${(estado || '').toLowerCase()}`;
+        if (diasUteisPorCidade[key] === undefined) {
+          diasUteisPorCidade[key] = await calcularDiasUteisCidade(input.companyId, cidade, estado, input.mesReferencia);
+        }
+        return diasUteisPorCidade[key];
+      }
+
+      const feriasRows = ((await db.execute(
+        sql`SELECT "employeeId", "dataInicio", "dataFim", "periodo2Inicio", "periodo2Fim", "periodo3Inicio", "periodo3Fim"
+            FROM vacation_periods
+            WHERE "companyId" = ${input.companyId} 
+            AND status IN ('aprovada', 'em_gozo', 'concluida')
+            AND "deletedAt" IS NULL
+            AND (
+              ("dataInicio" <= ${ultimoDiaMes.toISOString().split('T')[0]} AND "dataFim" >= ${primeiroDiaMes.toISOString().split('T')[0]})
+              OR ("periodo2Inicio" <= ${ultimoDiaMes.toISOString().split('T')[0]} AND "periodo2Fim" >= ${primeiroDiaMes.toISOString().split('T')[0]})
+              OR ("periodo3Inicio" <= ${ultimoDiaMes.toISOString().split('T')[0]} AND "periodo3Fim" >= ${primeiroDiaMes.toISOString().split('T')[0]})
+            )`
+      )) as any).rows || [];
+
+      const feriasMap: Record<number, number> = {};
+      for (const f of feriasRows) {
+        let dias = 0;
+        const periodos = [
+          { inicio: f.dataInicio, fim: f.dataFim },
+          { inicio: f.periodo2Inicio, fim: f.periodo2Fim },
+          { inicio: f.periodo3Inicio, fim: f.periodo3Fim },
+        ];
+        for (const p of periodos) {
+          if (!p.inicio || !p.fim) continue;
+          const ini = new Date(Math.max(new Date(p.inicio + 'T00:00:00').getTime(), primeiroDiaMes.getTime()));
+          const fim = new Date(Math.min(new Date(p.fim + 'T00:00:00').getTime(), ultimoDiaMes.getTime()));
+          if (ini > fim) continue;
+          let cur = new Date(ini);
+          while (cur <= fim) {
+            const dow = cur.getDay();
+            if (dow !== 0 && dow !== 6) dias++;
+            cur.setDate(cur.getDate() + 1);
+          }
+        }
+        feriasMap[f.employeeId] = (feriasMap[f.employeeId] || 0) + dias;
+      }
+
+      const licencaRows = ((await db.execute(
+        sql`SELECT id, status FROM employees 
+            WHERE "companyId" = ${input.companyId} AND status IN ('Afastado', 'Licenca') AND "deletedAt" IS NULL`
+      )) as any).rows || [];
+      const empLicenca = new Set((licencaRows || []).map((r: any) => r.id));
+
+      const faltasRows = ((await db.execute(
+        sql`SELECT "employeeId", data, "isFalta", "atestadoId"
+            FROM timecard_daily
+            WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}
+            AND "isFalta" = 1`
+      )) as any).rows || [];
+
+      const faltasPorEmp: Record<number, { comAtestado: number; semAtestado: number; datas: { data: string; temAtestado: boolean }[] }> = {};
+      for (const f of faltasRows) {
+        if (!faltasPorEmp[f.employeeId]) {
+          faltasPorEmp[f.employeeId] = { comAtestado: 0, semAtestado: 0, datas: [] };
+        }
+        const temAtestado = f.atestadoId != null && f.atestadoId > 0;
+        if (temAtestado) {
+          faltasPorEmp[f.employeeId].comAtestado++;
+        } else {
+          faltasPorEmp[f.employeeId].semAtestado++;
+        }
+        faltasPorEmp[f.employeeId].datas.push({ data: f.data, temAtestado });
+      }
+
+      let gerados = 0;
+      let alertasGerados = 0;
+      for (const { emp, obraId, cidade, estado } of Object.values(empMap)) {
+        const cfg = (obraId && cfgPorObra[obraId]) || cfgPadrao;
+        if (!cfg) continue;
+
+        let diasUteis = await getDiasUteisCidade(cidade, estado);
+        const diasUteisOriginal = diasUteis;
+        
         const cafeAtivo = cfg.cafeAtivo === 1 || cfg.cafeAtivo === true;
         const lancheAtivo = cfg.lancheAtivo === 1 || cfg.lancheAtivo === true;
         const jantaAtivo = cfg.jantaAtivo === 1 || cfg.jantaAtivo === true;
@@ -153,45 +340,80 @@ export const valeAlimentacaoRouter = router({
         const jantaDia = jantaAtivo ? parseBRL(cfg.jantaDia) : 0;
         const vaMes = parseBRL(cfg.valeAlimentacaoMes);
 
-        const valorCafe = cafeDia * diasUteis;
-        const valorLanche = lancheDia * diasUteis;
-        const valorJanta = jantaDia * diasUteis;
+        let proporcionalDias: number | null = null;
+        if (emp.dataAdmissao) {
+          const admissao = new Date(emp.dataAdmissao + 'T00:00:00');
+          if (admissao > primeiroDiaMes && admissao <= ultimoDiaMes) {
+            let diasAdmissao = 0;
+            let cur = new Date(admissao);
+            while (cur <= ultimoDiaMes) {
+              const dow = cur.getDay();
+              if (dow !== 0 && dow !== 6) diasAdmissao++;
+              cur.setDate(cur.getDate() + 1);
+            }
+            proporcionalDias = diasAdmissao;
+            diasUteis = Math.min(diasUteis, diasAdmissao);
+          }
+        }
+
+        const diasFerias = feriasMap[emp.id] || 0;
+        let diasLicenca = 0;
+        if (empLicenca.has(emp.id)) {
+          diasLicenca = diasUteis;
+        }
+
+        const diasEfetivos = Math.max(0, diasUteis - diasFerias - diasLicenca);
+
+        const valorCafe = cafeDia * diasEfetivos;
+        const valorLanche = lancheDia * diasEfetivos;
+        const valorJanta = jantaDia * diasEfetivos;
         const valorVA = vaMes;
         const valorDiario = cafeDia + lancheDia + jantaDia;
         const valorTotal = valorCafe + valorLanche + valorJanta + valorVA;
 
-        if (valorTotal <= 0) continue; // Sem valor, pular
+        if (valorTotal <= 0) continue;
 
-        await db.execute(
-          sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor")
-          VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasUteis}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName})`
-        );
+        const result = ((await db.execute(
+          sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor", "diasUteisCalc", "cidadeObra", "diasFerias", "diasLicenca", "diasFaltas", "diasDescontados", "proporcionalDias")
+          VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasEfetivos}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName}, ${diasUteisOriginal}, ${cidade || null}, ${diasFerias}, ${diasLicenca}, 0, 0, ${proporcionalDias})
+          RETURNING id`
+        )) as any).rows || [];
+        const vrId = result?.[0]?.id;
         gerados++;
+
+        const faltasEmp = faltasPorEmp[emp.id];
+        if (faltasEmp && faltasEmp.semAtestado > 0) {
+          for (const falta of faltasEmp.datas) {
+            if (falta.temAtestado) continue;
+            await db.execute(
+              sql`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId")
+              VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${obraId || null}, ${falta.data}, 'injustificada', 0, 'pendente', ${formatBRL(cafeDia)}, ${formatBRL(lancheDia)}, ${formatBRL(jantaDia)}, ${vrId || null})`
+            );
+            alertasGerados++;
+          }
+        }
       }
 
-      return { success: true, gerados, message: `${gerados} lançamentos gerados com sucesso!` };
+      return { success: true, gerados, alertasGerados, message: `${gerados} lançamentos gerados! ${alertasGerados > 0 ? `⚠️ ${alertasGerados} alertas de falta gerados para revisão do RH.` : 'Nenhum alerta de falta.'}` };
     }),
 
-  // ============================================================
-  // REGERAR MÊS (apaga e gera novamente)
-  // ============================================================
   regerarMes: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
-      diasUteis: z.number().default(22),
+      diasUteis: z.number().optional(),
       geradoPor: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      // Apagar lançamentos existentes que não estão pagos
       await db.execute(
         sql`DELETE FROM vr_benefits WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status != 'pago'`
       );
-      // Chamar geração
+      await db.execute(
+        sql`DELETE FROM va_falta_alerts WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}`
+      );
       const userName = input.geradoPor || ctx.user?.name || "Sistema";
 
-      // Buscar configuração
       const cfgRows = ((await db.execute(
-        sql`SELECT * FROM meal_benefit_configs WHERE "companyId" = ${input.companyId} AND ativo = 1 ORDER BY "obraId" IS NULL DESC LIMIT 10`
+        sql`SELECT * FROM meal_benefit_configs WHERE "companyId" = ${input.companyId} AND ativo = 1 ORDER BY "obraId" IS NULL DESC LIMIT 100`
       )) as any).rows || [];
       const configs = cfgRows || [];
       const cfgPadrao = configs.find((c: any) => !c.obraId) || null;
@@ -201,32 +423,107 @@ export const valeAlimentacaoRouter = router({
       }
 
       const empRows = ((await db.execute(
-        sql`SELECT e.id, e."nomeCompleto", of2."obraId"
+        sql`SELECT e.id, e."nomeCompleto", e."dataAdmissao", e.status as "empStatus",
+            of2."obraId", o.cidade as "obraCidade", o.estado as "obraEstado"
             FROM employees e
             LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
+            LEFT JOIN obras o ON of2."obraId" = o.id
             WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e."deletedAt" IS NULL
             AND (e."tipoContrato" IS NULL OR e."tipoContrato" != 'PJ')
             ORDER BY e."nomeCompleto" ASC`
       )) as any).rows || [];
       const emps = empRows || [];
-      const empMap: Record<number, { emp: any; obraId: number | null }> = {};
+      const empMap: Record<number, { emp: any; obraId: number | null; cidade: string | null; estado: string | null }> = {};
       for (const e of emps) {
-        if (!empMap[e.id]) empMap[e.id] = { emp: e, obraId: e.obraId };
+        if (!empMap[e.id]) empMap[e.id] = { emp: e, obraId: e.obraId, cidade: e.obraCidade || null, estado: e.obraEstado || null };
       }
 
-      // Check which employees already have paid records
       const paidRows = ((await db.execute(
         sql`SELECT "employeeId" FROM vr_benefits WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'pago'`
       )) as any).rows || [];
       const paidEmpIds = new Set((paidRows || []).map((r: any) => r.employeeId));
 
+      const [anoStr, mesStr] = input.mesReferencia.split("-");
+      const ano = parseInt(anoStr);
+      const mes = parseInt(mesStr);
+      const primeiroDiaMes = new Date(ano, mes - 1, 1);
+      const ultimoDiaMes = new Date(ano, mes, 0);
+
+      const diasUteisPorCidade: Record<string, number> = {};
+      async function getDiasUteisCidade(cidade: string | null, estado: string | null): Promise<number> {
+        if (input.diasUteis) return input.diasUteis;
+        const key = `${(cidade || 'default').toLowerCase()}_${(estado || '').toLowerCase()}`;
+        if (diasUteisPorCidade[key] === undefined) {
+          diasUteisPorCidade[key] = await calcularDiasUteisCidade(input.companyId, cidade, estado, input.mesReferencia);
+        }
+        return diasUteisPorCidade[key];
+      }
+
+      const feriasRows = ((await db.execute(
+        sql`SELECT "employeeId", "dataInicio", "dataFim", "periodo2Inicio", "periodo2Fim", "periodo3Inicio", "periodo3Fim"
+            FROM vacation_periods
+            WHERE "companyId" = ${input.companyId}
+            AND status IN ('aprovada', 'em_gozo', 'concluida')
+            AND "deletedAt" IS NULL
+            AND (
+              ("dataInicio" <= ${ultimoDiaMes.toISOString().split('T')[0]} AND "dataFim" >= ${primeiroDiaMes.toISOString().split('T')[0]})
+              OR ("periodo2Inicio" <= ${ultimoDiaMes.toISOString().split('T')[0]} AND "periodo2Fim" >= ${primeiroDiaMes.toISOString().split('T')[0]})
+              OR ("periodo3Inicio" <= ${ultimoDiaMes.toISOString().split('T')[0]} AND "periodo3Fim" >= ${primeiroDiaMes.toISOString().split('T')[0]})
+            )`
+      )) as any).rows || [];
+      const feriasMap: Record<number, number> = {};
+      for (const f of feriasRows) {
+        let dias = 0;
+        const periodos = [
+          { inicio: f.dataInicio, fim: f.dataFim },
+          { inicio: f.periodo2Inicio, fim: f.periodo2Fim },
+          { inicio: f.periodo3Inicio, fim: f.periodo3Fim },
+        ];
+        for (const p of periodos) {
+          if (!p.inicio || !p.fim) continue;
+          const ini = new Date(Math.max(new Date(p.inicio + 'T00:00:00').getTime(), primeiroDiaMes.getTime()));
+          const fim = new Date(Math.min(new Date(p.fim + 'T00:00:00').getTime(), ultimoDiaMes.getTime()));
+          if (ini > fim) continue;
+          let cur = new Date(ini);
+          while (cur <= fim) {
+            const dow = cur.getDay();
+            if (dow !== 0 && dow !== 6) dias++;
+            cur.setDate(cur.getDate() + 1);
+          }
+        }
+        feriasMap[f.employeeId] = (feriasMap[f.employeeId] || 0) + dias;
+      }
+
+      const licencaRows = ((await db.execute(
+        sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND status IN ('Afastado', 'Licenca') AND "deletedAt" IS NULL`
+      )) as any).rows || [];
+      const empLicenca = new Set((licencaRows || []).map((r: any) => r.id));
+
+      const faltasRows = ((await db.execute(
+        sql`SELECT "employeeId", data, "isFalta", "atestadoId"
+            FROM timecard_daily
+            WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}
+            AND "isFalta" = 1`
+      )) as any).rows || [];
+      const faltasPorEmp: Record<number, { comAtestado: number; semAtestado: number; datas: { data: string; temAtestado: boolean }[] }> = {};
+      for (const f of faltasRows) {
+        if (!faltasPorEmp[f.employeeId]) faltasPorEmp[f.employeeId] = { comAtestado: 0, semAtestado: 0, datas: [] };
+        const temAtestado = f.atestadoId != null && f.atestadoId > 0;
+        if (temAtestado) faltasPorEmp[f.employeeId].comAtestado++;
+        else faltasPorEmp[f.employeeId].semAtestado++;
+        faltasPorEmp[f.employeeId].datas.push({ data: f.data, temAtestado });
+      }
+
       let gerados = 0;
-      for (const { emp, obraId } of Object.values(empMap)) {
-        if (paidEmpIds.has(emp.id)) continue; // Não regerar pagos
+      let alertasGerados = 0;
+      for (const { emp, obraId, cidade, estado } of Object.values(empMap)) {
+        if (paidEmpIds.has(emp.id)) continue;
         const cfg = (obraId && cfgPorObra[obraId]) || cfgPadrao;
         if (!cfg) continue;
 
-        const diasUteis = input.diasUteis || cfg.diasUteisRef || 22;
+        let diasUteis = await getDiasUteisCidade(cidade, estado);
+        const diasUteisOriginal = diasUteis;
+
         const cafeAtivo = cfg.cafeAtivo === 1 || cfg.cafeAtivo === true;
         const lancheAtivo = cfg.lancheAtivo === 1 || cfg.lancheAtivo === true;
         const jantaAtivo = cfg.jantaAtivo === 1 || cfg.jantaAtivo === true;
@@ -236,30 +533,64 @@ export const valeAlimentacaoRouter = router({
         const jantaDia = jantaAtivo ? parseBRL(cfg.jantaDia) : 0;
         const vaMes = parseBRL(cfg.valeAlimentacaoMes);
 
-        const valorCafe = cafeDia * diasUteis;
-        const valorLanche = lancheDia * diasUteis;
-        const valorJanta = jantaDia * diasUteis;
+        let proporcionalDias: number | null = null;
+        if (emp.dataAdmissao) {
+          const admissao = new Date(emp.dataAdmissao + 'T00:00:00');
+          if (admissao > primeiroDiaMes && admissao <= ultimoDiaMes) {
+            let diasAdmissao = 0;
+            let cur = new Date(admissao);
+            while (cur <= ultimoDiaMes) {
+              const dow = cur.getDay();
+              if (dow !== 0 && dow !== 6) diasAdmissao++;
+              cur.setDate(cur.getDate() + 1);
+            }
+            proporcionalDias = diasAdmissao;
+            diasUteis = Math.min(diasUteis, diasAdmissao);
+          }
+        }
+
+        const diasFerias = feriasMap[emp.id] || 0;
+        let diasLicenca = 0;
+        if (empLicenca.has(emp.id)) diasLicenca = diasUteis;
+
+        const diasEfetivos = Math.max(0, diasUteis - diasFerias - diasLicenca);
+
+        const valorCafe = cafeDia * diasEfetivos;
+        const valorLanche = lancheDia * diasEfetivos;
+        const valorJanta = jantaDia * diasEfetivos;
         const valorVA = vaMes;
         const valorDiario = cafeDia + lancheDia + jantaDia;
         const valorTotal = valorCafe + valorLanche + valorJanta + valorVA;
         if (valorTotal <= 0) continue;
 
-        await db.execute(
-          sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor")
-          VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasUteis}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName})`
-        );
+        const result = ((await db.execute(
+          sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor", "diasUteisCalc", "cidadeObra", "diasFerias", "diasLicenca", "diasFaltas", "diasDescontados", "proporcionalDias")
+          VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasEfetivos}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName}, ${diasUteisOriginal}, ${cidade || null}, ${diasFerias}, ${diasLicenca}, 0, 0, ${proporcionalDias})
+          RETURNING id`
+        )) as any).rows || [];
+        const vrId = result?.[0]?.id;
         gerados++;
+
+        const faltasEmp = faltasPorEmp[emp.id];
+        if (faltasEmp && faltasEmp.semAtestado > 0) {
+          for (const falta of faltasEmp.datas) {
+            if (falta.temAtestado) continue;
+            await db.execute(
+              sql`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId")
+              VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${obraId || null}, ${falta.data}, 'injustificada', 0, 'pendente', ${formatBRL(cafeDia)}, ${formatBRL(lancheDia)}, ${formatBRL(jantaDia)}, ${vrId || null})`
+            );
+            alertasGerados++;
+          }
+        }
       }
 
-      return { success: true, gerados, message: `${gerados} lançamentos regerados!` };
+      return { success: true, gerados, alertasGerados, message: `${gerados} lançamentos regerados! ${alertasGerados > 0 ? `⚠️ ${alertasGerados} alertas de falta para revisão.` : ''}` };
     }),
 
-  // ============================================================
-  // EDITAR LANÇAMENTO INDIVIDUAL
-  // ============================================================
   editarLancamento: protectedProcedure
     .input(z.object({
       id: z.number(),
+      companyId: z.number(),
       valorTotal: z.string().optional(),
       valorCafe: z.string().optional(),
       valorLanche: z.string().optional(),
@@ -272,29 +603,29 @@ export const valeAlimentacaoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      const sets: string[] = [];
-      if (input.valorTotal !== undefined) sets.push(`"valorTotal" = '${input.valorTotal}'`);
-      if (input.valorCafe !== undefined) sets.push(`"valorCafe" = '${input.valorCafe}'`);
-      if (input.valorLanche !== undefined) sets.push(`"valorLanche" = '${input.valorLanche}'`);
-      if (input.valorJanta !== undefined) sets.push(`"valorJanta" = '${input.valorJanta}'`);
-      if (input.valorVA !== undefined) sets.push(`"valorVa" = '${input.valorVA}'`);
-      if (input.diasUteis !== undefined) sets.push(`"diasUteis" = ${input.diasUteis}`);
-      if (input.status !== undefined) sets.push(`status = '${input.status}'`);
-      if (input.motivoAlteracao !== undefined) sets.push(`"motivoAlteracao" = '${input.motivoAlteracao.replace(/'/g, "''")}'`);
-      if (input.observacoes !== undefined) sets.push(`observacoes = '${input.observacoes.replace(/'/g, "''")}'`);
+      const updateData: Record<string, any> = {};
+      if (input.valorTotal !== undefined) updateData.valorTotal = input.valorTotal;
+      if (input.valorCafe !== undefined) updateData.valorCafe = input.valorCafe;
+      if (input.valorLanche !== undefined) updateData.valorLanche = input.valorLanche;
+      if (input.valorJanta !== undefined) updateData.valorJanta = input.valorJanta;
+      if (input.valorVA !== undefined) updateData.valorVa = input.valorVA;
+      if (input.diasUteis !== undefined) updateData.diasUteis = input.diasUteis;
+      if (input.status !== undefined) updateData.status = input.status;
+      if (input.motivoAlteracao !== undefined) updateData.motivoAlteracao = input.motivoAlteracao;
+      if (input.observacoes !== undefined) updateData.observacoes = input.observacoes;
       
-      if (sets.length === 0) return { success: false, message: "Nenhum campo para atualizar" };
+      if (Object.keys(updateData).length === 0) return { success: false, message: "Nenhum campo para atualizar" };
 
-      await db.execute(sql.raw(`UPDATE vr_benefits SET ${sets.join(", ")} WHERE id = ${input.id}`));
+      await db.update(vrBenefits).set(updateData).where(and(
+        sql`${vrBenefits.id} = ${input.id}`,
+        eq(vrBenefits.companyId, input.companyId)
+      ));
       return { success: true };
     }),
 
-  // ============================================================
-  // APROVAR LANÇAMENTOS EM LOTE
-  // ============================================================
   aprovarLote: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
-      ids: z.array(z.number()).optional(), // Se vazio, aprova todos pendentes
+      ids: z.array(z.number()).optional(),
       aprovadoPor: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -302,10 +633,10 @@ export const valeAlimentacaoRouter = router({
       const userName = input.aprovadoPor || ctx.user?.name || "RH";
       
       if (input.ids && input.ids.length > 0) {
-        await db.execute(
-          sql`UPDATE vr_benefits SET status = 'aprovado', "aprovadoPor" = ${userName} WHERE id IN (${sql.raw(input.ids.join(","))}) AND status = 'pendente'`
+        const result = await db.execute(
+          sql`UPDATE vr_benefits SET status = 'aprovado', "aprovadoPor" = ${userName} WHERE id IN (${sql.raw(input.ids.join(","))}) AND "companyId" = ${input.companyId} AND status = 'pendente'`
         );
-        return { success: true, aprovados: input.ids.length };
+        return { success: true, aprovados: (result as any)?.rowCount || 0 };
       } else {
         const result = await db.execute(
           sql`UPDATE vr_benefits SET status = 'aprovado', "aprovadoPor" = ${userName} WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'pendente'`
@@ -314,9 +645,6 @@ export const valeAlimentacaoRouter = router({
       }
     }),
 
-  // ============================================================
-  // MARCAR COMO PAGO EM LOTE
-  // ============================================================
   marcarPago: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       ids: z.array(z.number()).optional(),
@@ -324,10 +652,10 @@ export const valeAlimentacaoRouter = router({
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       if (input.ids && input.ids.length > 0) {
-        await db.execute(
-          sql`UPDATE vr_benefits SET status = 'pago' WHERE id IN (${sql.raw(input.ids.join(","))}) AND status = 'aprovado'`
+        const result = await db.execute(
+          sql`UPDATE vr_benefits SET status = 'pago' WHERE id IN (${sql.raw(input.ids.join(","))}) AND "companyId" = ${input.companyId} AND status = 'aprovado'`
         );
-        return { success: true, pagos: input.ids.length };
+        return { success: true, pagos: (result as any)?.rowCount || 0 };
       } else {
         const result = await db.execute(
           sql`UPDATE vr_benefits SET status = 'pago' WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'aprovado'`
@@ -336,9 +664,6 @@ export const valeAlimentacaoRouter = router({
       }
     }),
 
-  // ============================================================
-  // REVERTER PAGO → APROVADO (corrigir clique errado)
-  // ============================================================
   reverterPago: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       ids: z.array(z.number()).optional(),
@@ -346,10 +671,10 @@ export const valeAlimentacaoRouter = router({
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       if (input.ids && input.ids.length > 0) {
-        await db.execute(
-          sql`UPDATE vr_benefits SET status = 'aprovado' WHERE id IN (${sql.raw(input.ids.join(","))}) AND status = 'pago'`
+        const result = await db.execute(
+          sql`UPDATE vr_benefits SET status = 'aprovado' WHERE id IN (${sql.raw(input.ids.join(","))}) AND "companyId" = ${input.companyId} AND status = 'pago'`
         );
-        return { success: true, revertidos: input.ids.length };
+        return { success: true, revertidos: (result as any)?.rowCount || 0 };
       } else {
         const result = await db.execute(
           sql`UPDATE vr_benefits SET status = 'aprovado' WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'pago'`
@@ -358,25 +683,20 @@ export const valeAlimentacaoRouter = router({
       }
     }),
 
-  // ============================================================
-  // CANCELAR LANÇAMENTO
-  // ============================================================
   cancelarLancamento: protectedProcedure
     .input(z.object({
       id: z.number(),
+      companyId: z.number(),
       motivo: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       await db.execute(
-        sql`UPDATE vr_benefits SET status = 'cancelado', "motivoAlteracao" = ${input.motivo || 'Cancelado pelo usuário'} WHERE id = ${input.id}`
+        sql`UPDATE vr_benefits SET status = 'cancelado', "motivoAlteracao" = ${input.motivo || 'Cancelado pelo usuário'} WHERE id = ${input.id} AND "companyId" = ${input.companyId}`
       );
       return { success: true };
     }),
 
-  // ============================================================
-  // HISTÓRICO POR COLABORADOR
-  // ============================================================
   historicoColaborador: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
     }))
@@ -388,9 +708,6 @@ export const valeAlimentacaoRouter = router({
       return rows || [];
     }),
 
-  // ============================================================
-  // EXCLUIR TODOS OS LANÇAMENTOS DO MÊS (apenas pendentes)
-  // ============================================================
   limparMes: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
@@ -399,6 +716,156 @@ export const valeAlimentacaoRouter = router({
       const result = await db.execute(
         sql`DELETE FROM vr_benefits WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status IN ('pendente', 'cancelado')`
       );
+      await db.execute(
+        sql`DELETE FROM va_falta_alerts WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND decisao = 'pendente'`
+      );
       return { success: true, removidos: (result as any)?.rowCount || 0 };
+    }),
+
+  listarAlertasFaltas: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      mesReferencia: z.string(),
+      status: z.enum(['pendente', 'descontar', 'abonar', 'todos']).default('todos'),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      let statusFilter = sql`1=1`;
+      if (input.status !== 'todos') {
+        statusFilter = sql`a.decisao = ${input.status}`;
+      }
+      const rows = ((await db.execute(
+        sql`SELECT a.*, e."nomeCompleto", e.cpf, e.funcao, o.nome as "obraNome"
+            FROM va_falta_alerts a
+            LEFT JOIN employees e ON a."employeeId" = e.id
+            LEFT JOIN obras o ON a."obraId" = o.id
+            WHERE a."companyId" = ${input.companyId} AND a."mesReferencia" = ${input.mesReferencia}
+            AND ${statusFilter}
+            ORDER BY a."dataFalta" ASC, e."nomeCompleto" ASC`
+      )) as any).rows || [];
+      return rows || [];
+    }),
+
+  decidirAlertaFalta: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      decisao: z.enum(['descontar', 'abonar']),
+      descontarCafe: z.boolean().default(true),
+      descontarLanche: z.boolean().default(true),
+      descontarJantar: z.boolean().default(true),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const userName = ctx.user?.name || 'RH';
+      const userId = ctx.user?.id;
+
+      const existing = ((await db.execute(
+        sql`SELECT * FROM va_falta_alerts WHERE id = ${input.id} AND "companyId" = ${input.companyId}`
+      )) as any).rows || [];
+      const alert = existing?.[0];
+      if (!alert) return { success: false, message: "Alerta não encontrado" };
+      if (alert.decisao !== 'pendente') return { success: false, message: "Este alerta já foi decidido" };
+
+      await db.execute(
+        sql`UPDATE va_falta_alerts SET 
+          decisao = ${input.decisao},
+          "descontarCafe" = ${input.decisao === 'descontar' && input.descontarCafe ? 1 : 0},
+          "descontarLanche" = ${input.decisao === 'descontar' && input.descontarLanche ? 1 : 0},
+          "descontarJantar" = ${input.decisao === 'descontar' && input.descontarJantar ? 1 : 0},
+          decidido_por = ${userName},
+          decidido_por_user_id = ${userId},
+          decidido_em = NOW(),
+          observacoes = ${input.observacoes || null},
+          "updatedAt" = NOW()
+        WHERE id = ${input.id} AND "companyId" = ${input.companyId} AND decisao = 'pendente'`
+      );
+
+      if (input.decisao === 'descontar' && alert.vrBenefitId) {
+        let descCafe = input.descontarCafe ? parseBRL(alert.valorDescontoCafe) : 0;
+        let descLanche = input.descontarLanche ? parseBRL(alert.valorDescontoLanche) : 0;
+        let descJantar = input.descontarJantar ? parseBRL(alert.valorDescontoJantar) : 0;
+        const totalDesconto = descCafe + descLanche + descJantar;
+
+        if (totalDesconto > 0) {
+          await db.execute(
+            sql`UPDATE vr_benefits SET 
+              "valorCafe" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorCafe", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descCafe}) AS TEXT),
+              "valorLanche" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorLanche", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descLanche}) AS TEXT),
+              "valorJanta" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorJanta", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descJantar}) AS TEXT),
+              "valorTotal" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorTotal", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${totalDesconto}) AS TEXT),
+              "diasFaltas" = COALESCE("diasFaltas", 0) + 1,
+              "diasDescontados" = COALESCE("diasDescontados", 0) + 1,
+              "updatedAt" = NOW()
+            WHERE id = ${alert.vrBenefitId} AND "companyId" = ${input.companyId}`
+          );
+        }
+      }
+
+      return { success: true };
+    }),
+
+  decidirAlertasFaltaLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ids: z.array(z.number()),
+      decisao: z.enum(['descontar', 'abonar']),
+      descontarCafe: z.boolean().default(true),
+      descontarLanche: z.boolean().default(true),
+      descontarJantar: z.boolean().default(true),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const userName = ctx.user?.name || 'RH';
+      const userId = ctx.user?.id;
+      let processados = 0;
+
+      for (const id of input.ids) {
+        const existing = ((await db.execute(
+          sql`SELECT * FROM va_falta_alerts WHERE id = ${id} AND "companyId" = ${input.companyId} AND decisao = 'pendente'`
+        )) as any).rows || [];
+        const alert = existing?.[0];
+        if (!alert) continue;
+
+        await db.execute(
+          sql`UPDATE va_falta_alerts SET 
+            decisao = ${input.decisao},
+            "descontarCafe" = ${input.decisao === 'descontar' && input.descontarCafe ? 1 : 0},
+            "descontarLanche" = ${input.decisao === 'descontar' && input.descontarLanche ? 1 : 0},
+            "descontarJantar" = ${input.decisao === 'descontar' && input.descontarJantar ? 1 : 0},
+            decidido_por = ${userName},
+            decidido_por_user_id = ${userId},
+            decidido_em = NOW(),
+            observacoes = ${input.observacoes || null},
+            "updatedAt" = NOW()
+          WHERE id = ${id} AND "companyId" = ${input.companyId} AND decisao = 'pendente'`
+        );
+
+        if (input.decisao === 'descontar' && alert.vrBenefitId) {
+          let descCafe = input.descontarCafe ? parseBRL(alert.valorDescontoCafe) : 0;
+          let descLanche = input.descontarLanche ? parseBRL(alert.valorDescontoLanche) : 0;
+          let descJantar = input.descontarJantar ? parseBRL(alert.valorDescontoJantar) : 0;
+          const totalDesconto = descCafe + descLanche + descJantar;
+          if (totalDesconto > 0) {
+            await db.execute(
+              sql`UPDATE vr_benefits SET 
+                "valorCafe" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorCafe", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descCafe}) AS TEXT),
+                "valorLanche" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorLanche", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descLanche}) AS TEXT),
+                "valorJanta" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorJanta", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descJantar}) AS TEXT),
+                "valorTotal" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorTotal", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${totalDesconto}) AS TEXT),
+                "diasFaltas" = COALESCE("diasFaltas", 0) + 1,
+                "diasDescontados" = COALESCE("diasDescontados", 0) + 1,
+                "updatedAt" = NOW()
+              WHERE id = ${alert.vrBenefitId} AND "companyId" = ${input.companyId}`
+            );
+          }
+        }
+        processados++;
+      }
+
+      return { success: true, processados };
     }),
 });

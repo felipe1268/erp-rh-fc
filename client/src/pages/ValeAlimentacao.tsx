@@ -26,7 +26,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { formatCPF, fmtNum } from "@/lib/formatters";
 import { useAuth } from "@/_core/hooks/useAuth";
 
-type TabKey = "lancamento" | "por_obra" | "configuracao" | "historico";
+type TabKey = "lancamento" | "por_obra" | "alertas_faltas" | "configuracao" | "historico";
 
 function parseBRL(v: string | null | undefined): number {
   if (!v) return 0;
@@ -156,6 +156,7 @@ export default function ValeAlimentacao() {
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [histDialogEmployeeId, setHistDialogEmployeeId] = useState<number | null>(null);
   const [histDialogName, setHistDialogName] = useState<string>("");
+  const [alertaFilter, setAlertaFilter] = useState<'todos' | 'pendente' | 'descontar' | 'abonar'>('pendente');
 
   // Queries
   const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: !!companyId || companyIds?.length > 0 });
@@ -171,6 +172,7 @@ export default function ValeAlimentacao() {
     { enabled: (!!companyId || companyIds?.length > 0) && !!histDialogEmployeeId }
   );
   const employeesQ = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "historico" });
+  const alertasQ = trpc.valeAlimentacao.listarAlertasFaltas.useQuery({ companyId, companyIds, mesReferencia: mesAno, status: alertaFilter }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "alertas_faltas" });
 
   // Mutations
   const gerarMut = trpc.valeAlimentacao.gerarMes.useMutation({
@@ -258,6 +260,24 @@ export default function ValeAlimentacao() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const decidirAlertaMut = trpc.valeAlimentacao.decidirAlertaFalta.useMutation({
+    onSuccess: () => {
+      toast.success("Decisão registrada!");
+      alertasQ.refetch();
+      lancamentosQ.refetch();
+      statsQ.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const decidirAlertaLoteMut = trpc.valeAlimentacao.decidirAlertasFaltaLote.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.processados} alerta(s) processado(s)!`);
+      alertasQ.refetch();
+      lancamentosQ.refetch();
+      statsQ.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const stats = statsQ.data;
   const lancamentos = lancamentosQ.data || [];
@@ -275,9 +295,11 @@ export default function ValeAlimentacao() {
     });
   }, [lancamentos, statusFilter, search]);
 
-  const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
+  const alertasPendentes = stats?.alertasFaltasPendentes || 0;
+  const TABS: { key: TabKey; label: string; icon: React.ElementType; badge?: number }[] = [
     { key: "lancamento", label: "Lançamento Mensal", icon: CreditCard },
     { key: "por_obra", label: "Por Obra", icon: Building2 },
+    { key: "alertas_faltas", label: "Alertas de Faltas", icon: AlertTriangle, badge: alertasPendentes },
     { key: "configuracao", label: "Configuração", icon: Settings },
     { key: "historico", label: "Histórico", icon: History },
   ];
@@ -337,6 +359,9 @@ export default function ValeAlimentacao() {
             >
               <t.icon className="h-4 w-4" />
               {t.label}
+              {t.badge && t.badge > 0 ? (
+                <span className="ml-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold rounded-full bg-red-500 text-white">{t.badge}</span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -570,7 +595,7 @@ export default function ValeAlimentacao() {
                                       <CheckCircle className="h-3.5 w-3.5" />
                                     </Button>
                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" title="Cancelar" onClick={() => {
-                                      if (confirm("Cancelar este lançamento?")) cancelarMut.mutate({ id: l.id });
+                                      if (confirm("Cancelar este lançamento?")) cancelarMut.mutate({ id: l.id, companyId });
                                     }}>
                                       <Ban className="h-3.5 w-3.5" />
                                     </Button>
@@ -665,6 +690,159 @@ export default function ValeAlimentacao() {
                 {obraGroups.map((g) => (
                   <ObraGroupCard key={g.obraKey} group={g} />
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== ABA ALERTAS DE FALTAS ===== */}
+        {tab === "alertas_faltas" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  Alertas de Faltas — {mesLabel}
+                </h2>
+                <p className="text-sm text-muted-foreground">Faltas sem atestado detectadas. O RH decide se desconta o café/lanche/jantar de cada dia.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <MonthSelector value={mesAno} onChange={setMesAno} />
+                <Select value={alertaFilter} onValueChange={(v) => setAlertaFilter(v as any)}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pendente">Pendentes</SelectItem>
+                    <SelectItem value="descontar">Descontados</SelectItem>
+                    <SelectItem value="abonar">Abonados</SelectItem>
+                    <SelectItem value="todos">Todos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {alertasQ.isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : !alertasQ.data || alertasQ.data.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  <CheckCircle className="h-10 w-10 mx-auto mb-3 opacity-40 text-green-500" />
+                  <p className="font-medium">Nenhum alerta de falta {alertaFilter === 'pendente' ? 'pendente' : ''} para {mesLabel}.</p>
+                  <p className="text-xs mt-1">Gere os lançamentos do mês para detectar faltas automaticamente.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {alertaFilter === 'pendente' && alertasQ.data.length > 0 && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 border-red-200 hover:bg-red-50"
+                      disabled={decidirAlertaLoteMut.isPending}
+                      onClick={() => {
+                        if (confirm(`Descontar café/lanche/jantar de TODAS as ${alertasQ.data.length} faltas pendentes?`)) {
+                          decidirAlertaLoteMut.mutate({ companyId, ids: alertasQ.data.map((a: any) => a.id), decisao: 'descontar' });
+                        }
+                      }}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" /> Descontar Todos ({alertasQ.data.length})
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-green-600 border-green-200 hover:bg-green-50"
+                      disabled={decidirAlertaLoteMut.isPending}
+                      onClick={() => {
+                        if (confirm(`Abonar (NÃO descontar) TODAS as ${alertasQ.data.length} faltas pendentes?`)) {
+                          decidirAlertaLoteMut.mutate({ companyId, ids: alertasQ.data.map((a: any) => a.id), decisao: 'abonar' });
+                        }
+                      }}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" /> Abonar Todos ({alertasQ.data.length})
+                    </Button>
+                  </div>
+                )}
+
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
+                            <th className="text-left py-2.5 px-3 font-medium">Colaborador</th>
+                            <th className="text-left py-2.5 px-3 font-medium">Obra</th>
+                            <th className="text-center py-2.5 px-3 font-medium">Data da Falta</th>
+                            <th className="text-right py-2.5 px-3 font-medium">Desc. Café</th>
+                            <th className="text-right py-2.5 px-3 font-medium">Desc. Lanche</th>
+                            <th className="text-right py-2.5 px-3 font-medium">Desc. Jantar</th>
+                            <th className="text-center py-2.5 px-3 font-medium">Status</th>
+                            <th className="text-center py-2.5 px-3 font-medium">Decisão</th>
+                            <th className="text-center py-2.5 px-3 font-medium">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {alertasQ.data.map((a: any) => (
+                            <tr key={a.id} className="border-b last:border-0 hover:bg-muted/20">
+                              <td className="py-2.5 px-3">
+                                <span className="font-medium">{a.nomeCompleto || '—'}</span>
+                                {a.cpf && <span className="text-xs text-muted-foreground ml-2">{formatCPF(a.cpf)}</span>}
+                              </td>
+                              <td className="py-2.5 px-3 text-xs">{a.obraNome || 'Sem obra'}</td>
+                              <td className="text-center py-2.5 px-3">
+                                {a.dataFalta ? new Date(a.dataFalta + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                              </td>
+                              <td className="text-right py-2.5 px-3 text-xs">{fmtValor(a.valorDescontoCafe)}</td>
+                              <td className="text-right py-2.5 px-3 text-xs">{fmtValor(a.valorDescontoLanche)}</td>
+                              <td className="text-right py-2.5 px-3 text-xs">{fmtValor(a.valorDescontoJantar)}</td>
+                              <td className="text-center py-2.5 px-3">
+                                <Badge className={`text-xs ${
+                                  a.decisao === 'pendente' ? 'bg-amber-100 text-amber-800' :
+                                  a.decisao === 'descontar' ? 'bg-red-100 text-red-800' :
+                                  'bg-green-100 text-green-800'
+                                }`}>
+                                  {a.decisao === 'pendente' ? 'Pendente' : a.decisao === 'descontar' ? 'Descontado' : 'Abonado'}
+                                </Badge>
+                              </td>
+                              <td className="text-center py-2.5 px-3 text-xs text-muted-foreground">
+                                {a.decidido_por ? `${a.decidido_por}` : '—'}
+                              </td>
+                              <td className="text-center py-2.5 px-3">
+                                {a.decisao === 'pendente' && (
+                                  <div className="flex items-center gap-1 justify-center">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-red-600 hover:bg-red-50"
+                                      disabled={decidirAlertaMut.isPending}
+                                      onClick={() => decidirAlertaMut.mutate({ id: a.id, companyId, decisao: 'descontar' })}
+                                      title="Descontar"
+                                    >
+                                      <XCircle className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-green-600 hover:bg-green-50"
+                                      disabled={decidirAlertaMut.isPending}
+                                      onClick={() => decidirAlertaMut.mutate({ id: a.id, companyId, decisao: 'abonar' })}
+                                      title="Abonar"
+                                    >
+                                      <CheckCircle className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
           </div>
@@ -936,7 +1114,7 @@ export default function ValeAlimentacao() {
             <Button variant="outline" onClick={() => setEditingId(null)}>Cancelar</Button>
             <Button className="bg-[#1B2A4A] hover:bg-[#243658] text-white" disabled={editarMut.isPending} onClick={() => {
               if (!editingId) return;
-              editarMut.mutate({ id: editingId, valorTotal: editForm.valorTotal, motivoAlteracao: editForm.motivoAlteracao, observacoes: editForm.observacoes });
+              editarMut.mutate({ id: editingId, companyId, valorTotal: editForm.valorTotal, motivoAlteracao: editForm.motivoAlteracao, observacoes: editForm.observacoes });
             }}>
               {editarMut.isPending ? "Salvando..." : "Salvar"}
             </Button>

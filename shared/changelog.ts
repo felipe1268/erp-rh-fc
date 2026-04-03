@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 979,
+    titulo: "VA Inteligente: Dias úteis por cidade, proporcional, férias e alertas de faltas",
+    descricao: "O cálculo de Vale Alimentação (café, lanche, jantar) agora usa dias úteis reais baseados no calendário de feriados da cidade da obra (nacionais + estaduais + municipais). Admissão no meio do mês calcula proporcional. Férias e licenças descontam automaticamente. Faltas sem atestado geram alertas para decisão do RH (descontar ou abonar), com histórico de auditoria. Nova aba 'Alertas de Faltas' com badge de pendências. Cidade da obra é agora campo obrigatório.",
+    tipo: "feature",
+    modulos: "Vale Alimentação, Obras",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-03 10:00:00",
+  },
+  {
     version: 949,
     titulo: "Layout de documento: cabeçalho com logo, rodapé com endereço e marca d'água",
     descricao: "O contrato agora exibe layout completo estilo papel timbrado: cabeçalho com logo da empresa, rodapé com endereço/contato centralizado, e marca d'água translúcida do logo no centro do documento. Estes elementos são configuráveis por empresa (campos doc_rodape_texto, doc_marca_dagua_url e doc_marca_dagua_opacidade). Aparece tanto no editor de template quanto na visualização do contrato.",
