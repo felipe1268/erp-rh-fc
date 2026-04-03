@@ -172,20 +172,50 @@ export default function FolhaPagamento() {
   const [calcElapsed, setCalcElapsed] = useState(0);
   const [calcType, setCalcType] = useState<"vale" | "pagamento" | null>(null);
 
+  const [stepProgress, setStepProgress] = useState<Record<string, number>>({});
+  const stepProgressRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  const startProgress = useCallback((key: string) => {
+    setStepProgress(p => ({ ...p, [key]: 5 }));
+    if (stepProgressRef.current[key]) clearInterval(stepProgressRef.current[key]);
+    stepProgressRef.current[key] = setInterval(() => {
+      setStepProgress(p => {
+        const cur = p[key] || 5;
+        if (cur >= 92) return p;
+        const increment = cur < 30 ? 8 : cur < 60 ? 4 : cur < 80 ? 2 : 0.5;
+        return { ...p, [key]: Math.min(92, cur + increment) };
+      });
+    }, 500);
+  }, []);
+
+  const finishProgress = useCallback((key: string) => {
+    if (stepProgressRef.current[key]) { clearInterval(stepProgressRef.current[key]); delete stepProgressRef.current[key]; }
+    setStepProgress(p => ({ ...p, [key]: 100 }));
+  }, []);
+
+  const resetProgress = useCallback((key: string) => {
+    if (stepProgressRef.current[key]) { clearInterval(stepProgressRef.current[key]); delete stepProgressRef.current[key]; }
+    setStepProgress(p => ({ ...p, [key]: 0 }));
+  }, []);
+
   const gerarValeMut = trpc.payrollEngine.gerarVale.useMutation({
+    onMutate: () => startProgress('vale'),
     onSuccess: (data) => {
+      finishProgress('vale');
       setCalcType(null);
       setCalcElapsed(0);
       setValeResult(data);
-      setValeExcluirSel(new Set()); // rejeitados are now in data.funcionarios[].status
+      setValeExcluirSel(new Set());
       setViewMode("calculo_vale");
       toast.success(`Vale calculado: ${data.totalFuncionarios ?? ''} funcionários — R$ ${data.totalVale ? Number(data.totalVale).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''}`);
       payrollPeriod.refetch();
     },
-    onError: (err) => { setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao calcular vale: ${err.message}`); },
+    onError: (err) => { resetProgress('vale'); setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao calcular vale: ${err.message}`); },
   });
   const simularPagamentoMut = trpc.payrollEngine.simularPagamento.useMutation({
+    onMutate: () => startProgress('pagamento'),
     onSuccess: (data) => {
+      finishProgress('pagamento');
       setCalcType(null);
       setCalcElapsed(0);
       setPagamentoResult(data);
@@ -193,7 +223,7 @@ export default function FolhaPagamento() {
       toast.success(`Pagamento simulado: ${data.totalFuncionarios ?? ''} funcionários — líquido R$ ${data.totalLiquido ? Number(data.totalLiquido).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''}`);
       payrollPeriod.refetch();
     },
-    onError: (err) => { setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao simular pagamento: ${err.message}`); },
+    onError: (err) => { resetProgress('pagamento'); setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao simular pagamento: ${err.message}`); },
   });
 
   useEffect(() => {
@@ -204,7 +234,9 @@ export default function FolhaPagamento() {
   }, [calcType]);
 
   const afericaoMut = trpc.payrollEngine.realizarAfericao.useMutation({
+    onMutate: () => startProgress('afericao'),
     onSuccess: (data) => {
+      finishProgress('afericao');
       setAfericaoResult(data);
       if ((data.semRegistro || 0) > 0) {
         toast.warning(`Aferição concluída com ${data.semRegistro} dia(s) sem registro de ponto. Decida se foi erro do relógio ou falta real.`);
@@ -214,7 +246,7 @@ export default function FolhaPagamento() {
       }
       payrollPeriod.refetch();
     },
-    onError: (err) => toast.error(`Erro na aferição: ${err.message}`),
+    onError: (err) => { resetProgress('afericao'); toast.error(`Erro na aferição: ${err.message}`); },
   });
   const alertasAfericao = trpc.payrollEngine.listarAlertasAfericao.useQuery(
     { companyId, mesReferencia: mesAno },
@@ -2927,9 +2959,19 @@ export default function FolhaPagamento() {
                   </div>
                   <CreditCard className="h-4 w-4 text-orange-600" />
                 </div>
-                <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
-                  <div className={`h-1.5 rounded-full transition-all duration-700 ${valeOk ? 'bg-green-500 w-full' : gerarValeMut.isPending ? 'bg-orange-400 w-2/3 animate-pulse' : step1Ready ? 'bg-orange-200 w-0' : 'bg-slate-200 w-0'}`} />
-                </div>
+                {(() => {
+                  const pct = valeOk ? 100 : (stepProgress['vale'] || 0);
+                  return (
+                    <div className="mb-2">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <span className={`text-[9px] font-bold ${pct === 100 ? 'text-green-600' : pct > 0 ? 'text-orange-600' : 'text-slate-400'}`}>{pct > 0 ? `${Math.round(pct)}%` : '0%'}</span>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-1.5">
+                        <div className={`h-1.5 rounded-full transition-all duration-500 ${pct === 100 ? 'bg-green-500' : pct > 0 ? 'bg-orange-400' : 'bg-slate-200'}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })()}
                 <p className="text-xs text-muted-foreground mb-2 flex-1">Adiantamento — {(() => { const p = (pd as any); return p?.percentualAdiantamento || 40; })()}% do salário (sem HE)</p>
                 {valeOk && pd?.valeGeradoEm && (
                   <div className="mb-2 space-y-1">
@@ -2968,9 +3010,19 @@ export default function FolhaPagamento() {
                   </div>
                   <TrendingUp className="h-4 w-4 text-purple-700" />
                 </div>
-                <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
-                  <div className={`h-1.5 rounded-full transition-all duration-700 ${heOk ? 'bg-green-500 w-full' : step2Ready ? 'bg-purple-200 w-0' : 'bg-slate-200 w-0'}`} />
-                </div>
+                {(() => {
+                  const pct = heOk ? 100 : 0;
+                  return (
+                    <div className="mb-2">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <span className={`text-[9px] font-bold ${pct === 100 ? 'text-green-600' : 'text-slate-400'}`}>{pct}%</span>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-1.5">
+                        <div className={`h-1.5 rounded-full transition-all duration-500 ${pct === 100 ? 'bg-green-500' : 'bg-slate-200'}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })()}
                 <p className="text-xs text-muted-foreground mb-1 flex-1">Período configurável com detecção de duplicidade</p>
                 <div className={`text-[10px] font-bold px-2 py-1 rounded mb-2 text-center ${heDestinoIsBanco ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
                   Destino: {heDestinoIsBanco ? "Banco de Horas" : "Pagamento em Folha"}
@@ -3033,9 +3085,19 @@ export default function FolhaPagamento() {
                     </button>
                   </div>
                 </div>
-                <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
-                  <div className={`h-1.5 rounded-full transition-all duration-700 ${afericaoOk ? 'bg-green-500 w-full' : afericaoMut.isPending ? 'bg-amber-400 w-2/3 animate-pulse' : step3Ready ? 'bg-amber-200 w-0' : 'bg-slate-200 w-0'}`} />
-                </div>
+                {(() => {
+                  const pct = afericaoOk ? 100 : (stepProgress['afericao'] || 0);
+                  return (
+                    <div className="mb-2">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <span className={`text-[9px] font-bold ${pct === 100 ? 'text-green-600' : pct > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{pct > 0 ? `${Math.round(pct)}%` : '0%'}</span>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-1.5">
+                        <div className={`h-1.5 rounded-full transition-all duration-500 ${pct === 100 ? 'bg-green-500' : pct > 0 ? 'bg-amber-400' : 'bg-slate-200'}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="mb-2 space-y-1">
                   <Badge className="bg-amber-100 text-amber-800 text-[10px]">
                     <CalendarDays className="h-3 w-3 mr-0.5" /> Conferindo: {mesEscuroLabel}
@@ -3091,9 +3153,19 @@ export default function FolhaPagamento() {
                   </div>
                   <DollarSign className="h-4 w-4 text-green-600" />
                 </div>
-                <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
-                  <div className={`h-1.5 rounded-full transition-all duration-700 ${pagOk ? 'bg-green-500 w-full' : simularPagamentoMut.isPending ? 'bg-green-400 w-2/3 animate-pulse' : step4Ready ? 'bg-green-200 w-0' : 'bg-slate-200 w-0'}`} />
-                </div>
+                {(() => {
+                  const pct = pagOk ? 100 : (stepProgress['pagamento'] || 0);
+                  return (
+                    <div className="mb-2">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <span className={`text-[9px] font-bold ${pct === 100 ? 'text-green-600' : pct > 0 ? 'text-green-500' : 'text-slate-400'}`}>{pct > 0 ? `${Math.round(pct)}%` : '0%'}</span>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-1.5">
+                        <div className={`h-1.5 rounded-full transition-all duration-500 ${pct === 100 ? 'bg-green-500' : pct > 0 ? 'bg-green-400' : 'bg-slate-200'}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })()}
                 <p className="text-xs text-muted-foreground mb-2 flex-1">100% salário − adiantamento − faltas − INSS − descontos</p>
                 {pagOk && pd?.pagamentoSimuladoEm && (
                   <div className="mb-2 space-y-1">
