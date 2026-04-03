@@ -351,7 +351,7 @@ export const payrollEngineRouter = router({
 
       // Clear existing timecard_daily for this competencia
       await db.execute(sql`
-        DELETE FROM timecard_daily WHERE companyId = ${input.companyId} AND mesCompetencia = ${input.mesReferencia}
+        DELETE FROM timecard_daily WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}
       `);
 
       let totalInserted = 0;
@@ -553,9 +553,9 @@ export const payrollEngineRouter = router({
       await db.execute(sql`
         UPDATE payroll_periods SET 
           status = 'ponto_importado',
-          pontoImportadoEm = NOW(),
-          pontoImportadoPor = ${ctx.user.name || "Sistema"}
-        WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
+          "pontoImportadoEm" = NOW(),
+          "pontoImportadoPor" = ${ctx.user.name || "Sistema"}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
       `);
       return {
         totalFuncionarios: empList.length,
@@ -679,7 +679,7 @@ export const payrollEngineRouter = router({
           SUM(CASE WHEN inconsistencia_tipo = 'entrada_faltando' AND is_inconsistente = 1 THEN 1 ELSE 0 END) as entradasFaltando,
           SUM(CASE WHEN inconsistencia_tipo = 'saida_faltando' AND is_inconsistente = 1 THEN 1 ELSE 0 END) as saidasFaltando
         FROM timecard_daily 
-        WHERE companyId = ${input.companyId} AND mesCompetencia = ${input.mesReferencia}
+        WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}
       `)) as any).rows || [];
       return rows[0] || { pendentes: 0, resolvidas: 0, batidasImpares: 0, sobreposicoes: 0, entradasFaltando: 0, saidasFaltando: 0 };
     }),
@@ -1907,7 +1907,7 @@ export const payrollEngineRouter = router({
       // Get advances for this month
       const advRows = ((await db.execute(sql`
         SELECT * FROM payroll_advances 
-        WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
       `)) as any).rows || [];
       const advMap = new Map<number, any>();
       for (const a of (advRows || [])) {
@@ -1917,7 +1917,7 @@ export const payrollEngineRouter = router({
       // Get adjustments (from escuro aferição) for this month
       const adjRows = ((await db.execute(sql`
         SELECT * FROM payroll_adjustments 
-        WHERE companyId = ${input.companyId} AND mesDesconto = ${input.mesReferencia} AND status = 'pendente'
+        WHERE "companyId" = ${input.companyId} AND "mesDesconto" = ${input.mesReferencia} AND status = 'pendente'
       `)) as any).rows || [];
       const adjMap = new Map<number, any[]>();
       for (const a of (adjRows || [])) {
@@ -2508,7 +2508,7 @@ export const payrollEngineRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const existing = ((await db.execute(sql`
-        SELECT id FROM system_criteria WHERE companyId = ${input.companyId} AND chave = ${input.chave} LIMIT 1
+        SELECT id FROM system_criteria WHERE "companyId" = ${input.companyId} AND chave = ${input.chave} LIMIT 1
       `)) as any).rows || [];
       if (existing[0]) {
         await db.execute(sql`
@@ -2534,9 +2534,9 @@ export const payrollEngineRouter = router({
       await db.execute(sql`
         UPDATE payroll_adjustments SET 
           status = 'abonado',
-          abonadoPor = ${ctx.user.name || "Sistema"},
-          abonadoEm = NOW(),
-          motivoAbono = ${input.motivo}
+          "abonadoPor" = ${ctx.user.name || "Sistema"},
+          "abonadoEm" = NOW(),
+          "motivoAbono" = ${input.motivo}
         WHERE id = ${input.adjustmentId}
       `);
       return { success: true };
@@ -2749,14 +2749,14 @@ export const payrollEngineRouter = router({
         SELECT data, statusDia, isFalta, isAtraso, is_inconsistente, inconsistencia_tipo,
           entrada1, saida1, entrada2, saida2, horasTrabalhadas
         FROM timecard_daily
-        WHERE employeeId = ${record.employeeId} AND companyId = ${input.companyId}
-          AND mesCompetencia = ${input.mesReferencia}
+        WHERE "employeeId" = ${record.employeeId} AND "companyId" = ${input.companyId}
+          AND "mesCompetencia" = ${input.mesReferencia}
         ORDER BY data DESC LIMIT 30
       `)) as any).rows || [];
       // Get golden rules for context
       const rulesRows = ((await db.execute(sql`
         SELECT titulo, descricao, categoria FROM golden_rules
-        WHERE companyId = ${input.companyId} AND deletedAt IS NULL
+        WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL
         AND categoria IN ('rh', 'operacional', 'geral')
         ORDER BY prioridade LIMIT 10
       `)) as any).rows || [];
@@ -3127,20 +3127,20 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 
       // 1. Buscar todos os funcionários ativos (não desligados/lista_negra) que são CLT
       const ativosRows = ((await db.execute(sql`
-        SELECT id, nomeCompleto, funcao, tipoContrato, companyId, status, codigoInterno
+        SELECT id, "nomeCompleto", funcao, "tipoContrato", "companyId", status, "codigoInterno"
         FROM employees
-        WHERE companyId IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+        WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
           AND status NOT IN ('Desligado', 'Lista_Negra')
-          AND deletedAt IS NULL
-        ORDER BY nomeCompleto
+          AND "deletedAt" IS NULL
+        ORDER BY "nomeCompleto"
       `)) as any).rows || [];
 
       // 2. Buscar employeeIds que têm pagamento processado neste mês
       const pagosRows = ((await db.execute(sql`
-        SELECT DISTINCT employeeId
+        SELECT DISTINCT "employeeId"
         FROM payroll_payments
-        WHERE companyId IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
-          AND mesReferencia = ${input.mesReferencia}
+        WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND "mesReferencia" = ${input.mesReferencia}
       `)) as any).rows || [];
       const pagosSet = new Set((pagosRows || []).map((r: any) => r.employeeId));
 
