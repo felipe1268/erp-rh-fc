@@ -3048,7 +3048,7 @@ export default function FolhaPagamento() {
                         </div>
                         <div className="text-center">
                           <p className="text-[9px] text-purple-600 font-medium">Total HE</p>
-                          <p className="text-sm font-black text-purple-800">{lastP.totalValor ? formatBRL(lastP.totalValor) : lastP.totalHoras ? `${lastP.totalHoras}h` : '-'}</p>
+                          <p className="text-sm font-black text-purple-800">{lastP.totalValorHE ? formatBRL(lastP.totalValorHE) : lastP.totalHEMins ? `${Math.floor(lastP.totalHEMins / 60)}h${String(lastP.totalHEMins % 60).padStart(2, '0')}` : '-'}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 text-[10px] text-green-700 mt-1.5 justify-center">
