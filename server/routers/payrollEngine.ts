@@ -2000,12 +2000,12 @@ export const payrollEngineRouter = router({
 
       // PRE-FETCH: Convênios for all employees in one query
       const convenioBatchRows = ((await db.execute(sql`
-        SELECT lp.employee_id, COALESCE(SUM(CAST(lp.valor AS DECIMAL(15,2))), 0) as "totalConvenio"
+        SELECT lp."employeeId" as employee_id, COALESCE(SUM(CAST(lp.valor AS DECIMAL(15,2))), 0) as "totalConvenio"
         FROM lancamentos_parceiros lp
-        WHERE lp.employee_id IN (${empIdsSql}) AND lp.company_id = ${input.companyId}
+        WHERE lp."employeeId" IN (${empIdsSql}) AND lp."companyId" = ${input.companyId}
           AND lp.competencia_desconto = ${input.mesReferencia}
-          AND lp.status_lancamento_parceiro IN ('pendente', 'aprovado')
-        GROUP BY lp.employee_id
+          AND lp.status IN ('pendente', 'aprovado')
+        GROUP BY lp."employeeId"
       `)) as any).rows || [];
       const convenioMap = new Map<number, number>();
       for (const r of convenioBatchRows) convenioMap.set(Number(r.employee_id), parseFloat(r.totalConvenio || '0'));
