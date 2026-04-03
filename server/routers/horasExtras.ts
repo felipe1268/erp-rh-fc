@@ -168,6 +168,20 @@ export const horasExtrasRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
+      // --- GUARD: block recalculation if HE is consolidated ---
+      const ppCheck = ((await db.execute(sql`
+        SELECT "heConsolidadoEm" FROM payroll_periods
+        WHERE "companyId" = ${input.companyId}
+          AND "mesReferencia" = ${input.mesReferencia}
+        LIMIT 1
+      `)) as any).rows || [];
+      if (ppCheck.length > 0 && ppCheck[0].heConsolidadoEm) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "HE consolidada — desconsolide primeiro para recalcular.",
+        });
+      }
+
       // --- CHECK: only 1 active period per mesReferencia ---
       const existing = ((await db.execute(sql`
         SELECT id, "dataInicio", "dataFim", status FROM he_periods

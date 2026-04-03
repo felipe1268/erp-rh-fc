@@ -692,6 +692,21 @@ export const payrollEngineRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // --- GUARD: block re-aferição if consolidated ---
+      const ppGuard = ((await db.execute(sql`
+        SELECT "afericaoConsolidadoEm" FROM payroll_periods
+        WHERE "companyId" = ${input.companyId}
+          AND "mesReferencia" = ${input.mesReferencia}
+        LIMIT 1
+      `)) as any).rows || [];
+      if (ppGuard.length > 0 && ppGuard[0].afericaoConsolidadoEm) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Aferição consolidada — desconsolide primeiro para reaferir.",
+        });
+      }
+
       const criteria = await getPayrollCriteria(db, input.companyId);
       const prevMes = getPrevMesRef(input.mesReferencia);
       const { year, month } = parseMesRef(input.mesReferencia);
@@ -1814,6 +1829,21 @@ export const payrollEngineRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // --- GUARD: block re-simulation if pagamento is consolidated ---
+      const ppPagGuard = ((await db.execute(sql`
+        SELECT "pagamentoConsolidadoEm" FROM payroll_periods
+        WHERE "companyId" = ${input.companyId}
+          AND "mesReferencia" = ${input.mesReferencia}
+        LIMIT 1
+      `)) as any).rows || [];
+      if (ppPagGuard.length > 0 && ppPagGuard[0].pagamentoConsolidadoEm) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Pagamento consolidado — desconsolide primeiro para resimular.",
+        });
+      }
+
       const criteria = await getPayrollCriteria(db, input.companyId);
       const { year, month } = parseMesRef(input.mesReferencia);
       const diasUteis = getDiasUteisNoMes(year, month);

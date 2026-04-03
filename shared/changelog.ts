@@ -7477,4 +7477,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 20:00:00",
   },
+  {
+    versao: 993,
+    descricao:
+      "Trava de consolidação: etapas consolidadas (HE, Aferição, Pagamento) bloqueiam recálculo.\n" +
+      "• Botões de calcular/recalcular/reaferir/resimular ficam travados quando consolidado\n" +
+      "• Botão mostra ícone de cadeado e texto 'Consolidado' quando travado\n" +
+      "• Tooltip explica que é necessário desconsolidar para alterar valores\n" +
+      "• Módulo HE: banner de aviso quando consolidado, destinação bloqueada\n" +
+      "• Proteção server-side: mutations rejeitam operações em etapas consolidadas\n" +
+      "• Cancelar período e Aprovar período também bloqueados quando HE consolidada",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento, Hora Extra",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 21:00:00",
+  },
 ];

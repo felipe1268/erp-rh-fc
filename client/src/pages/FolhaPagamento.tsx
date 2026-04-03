@@ -2405,6 +2405,8 @@ export default function FolhaPagamento() {
 
   // ===== HE MÓDULO VIEW =====
   if (viewMode === "he_modulo") {
+    const pdHE = payrollPeriod.data as any;
+    const heConsolidadoMod = !!(pdHE)?.heConsolidadoEm;
     const allPeriods = (hePeriods.data as any[]) || [];
     const periods = allPeriods.filter((p: any) => p.status !== 'cancelado');
     const detalhe = heDetalhe.data;
@@ -2430,11 +2432,12 @@ export default function FolhaPagamento() {
     const totalBancoMins = saldos.reduce((acc: number, s: any) => acc + Number(s.saldoMinutos), 0);
 
     const handleSetDestinacao = (empRowId: number, dest: "pagamento" | "banco_horas") => {
+      if (heConsolidadoMod) return;
       setDestinacaoMap(prev => ({ ...prev, [empRowId]: dest }));
       setDestinacaoMut.mutate({ hePeriodEmployeeId: empRowId, destinacao: dest });
     };
     const handleSetDestinacaoMassa = (dest: "pagamento" | "banco_horas") => {
-      if (!heViewPeriodId) return;
+      if (!heViewPeriodId || heConsolidadoMod) return;
       const newMap = { ...destinacaoMap };
       for (const emp of selectedEmps) newMap[emp.id] = dest;
       setDestinacaoMap(newMap);
@@ -2461,6 +2464,12 @@ export default function FolhaPagamento() {
                 <p className="text-sm text-muted-foreground">Período configurável · Banco de Horas · Histórico rastreado</p>
               </div>
             </div>
+            {heConsolidadoMod && (
+              <div className="w-full flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-300 rounded-lg text-amber-800 text-sm">
+                <Lock className="h-4 w-4 flex-shrink-0" />
+                <span className="font-medium">HE consolidada — valores travados. Desconsolide na tela principal para permitir alterações.</span>
+              </div>
+            )}
             <div className="flex gap-2 no-print">
               <Button size="sm"
                 variant={heSubView === "periodos" ? "default" : "outline"}
@@ -2529,10 +2538,12 @@ export default function FolhaPagamento() {
                         ? <><Lock className="h-3.5 w-3.5 mr-1.5" /> Desbloquear</>
                         : <><Unlock className="h-3.5 w-3.5 mr-1.5" /> Travar</>}
                     </Button>
-                    <Button className="bg-purple-700 hover:bg-purple-800" disabled={heCalcularMut.isPending}
-                      onClick={() => heCalcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno, dataInicio: heDataInicio, dataFim: heDataFim })}>
+                    <Button className="bg-purple-700 hover:bg-purple-800" disabled={heCalcularMut.isPending || heConsolidadoMod}
+                      onClick={() => heCalcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno, dataInicio: heDataInicio, dataFim: heDataFim })}
+                      title={heConsolidadoMod ? "HE consolidada — desconsolide primeiro para recalcular" : ""}>
                       {heCalcularMut.isPending
                         ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Calculando...</>
+                        : heConsolidadoMod ? <><Lock className="h-4 w-4 mr-2" /> Consolidado</>
                         : <><Zap className="h-4 w-4 mr-2" /> Calcular HE</>}
                     </Button>
                     <div className="text-xs text-muted-foreground">
@@ -2579,14 +2590,14 @@ export default function FolhaPagamento() {
                                     <CheckCircle className="h-3 w-3 mr-1" /> Confirmar Pagamento
                                   </Button>
                                 )}
-                                {p.status === "calculado" && (
+                                {p.status === "calculado" && !heConsolidadoMod && (
                                   <Button size="sm" variant="outline" className="h-7 text-xs border-purple-300 text-purple-700 hover:bg-purple-50"
                                     onClick={() => heCalcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno, dataInicio: String(p.dataInicio).slice(0, 10), dataFim: String(p.dataFim).slice(0, 10) })}
                                     disabled={heCalcularMut.isPending}>
                                     {heCalcularMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Recalculando...</> : <><RefreshCw className="h-3 w-3 mr-1" /> Recalcular</>}
                                   </Button>
                                 )}
-                                {p.status !== "pago" && p.status !== "cancelado" && (
+                                {p.status !== "pago" && p.status !== "cancelado" && !heConsolidadoMod && (
                                   <Button size="sm" variant="outline" className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50"
                                     onClick={() => { if (confirm("Cancelar este período? Isso permite recalcular o mesmo intervalo.")) heCancelarMut.mutate({ hePeriodId: p.id, companyId }); }}
                                     disabled={heCancelarMut.isPending}>
@@ -2709,7 +2720,7 @@ export default function FolhaPagamento() {
                                     </div>
 
                                     {/* APPROVE BUTTON */}
-                                    {p.status === "calculado" && periodEmps.length > 0 && (
+                                    {p.status === "calculado" && periodEmps.length > 0 && !heConsolidadoMod && (
                                       <div className="flex items-center gap-3 pt-2 border-t no-print">
                                         <Button className="bg-green-600 hover:bg-green-700"
                                           onClick={() => aprovarComDestinacaoMut.mutate({ hePeriodId: p.id, companyId })}
@@ -3098,6 +3109,9 @@ export default function FolhaPagamento() {
           const afericaoOk = pd?.afericaoRealizada === 1 || pd?.afericaoRealizada === true;
           const pagOk = !!pd?.pagamentoSimuladoEm;
           const pontoOk = !!statusMes.data?.pontoConsolidado;
+          const heConsolidado = !!(pd as any)?.heConsolidadoEm;
+          const afericaoConsolidada = !!(pd as any)?.afericaoConsolidadoEm;
+          const pagamentoConsolidado = !!(pd as any)?.pagamentoConsolidadoEm;
 
           const step1Ready = pontoOk;
           const step2Ready = pontoOk;
@@ -3421,10 +3435,11 @@ export default function FolhaPagamento() {
                     )}
                   </div>
                 )}
-                <Button size="sm" className={`w-full mt-auto ${afericaoOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-amber-600 hover:bg-amber-700'}`}
-                  disabled={afericaoMut.isPending || !step3Ready}
+                <Button size="sm" className={`w-full mt-auto ${afericaoConsolidada ? 'bg-gray-400 cursor-not-allowed' : afericaoOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-amber-600 hover:bg-amber-700'}`}
+                  disabled={afericaoMut.isPending || !step3Ready || afericaoConsolidada}
+                  title={afericaoConsolidada ? "Aferição consolidada — desconsolide primeiro para reaferir" : ""}
                   onClick={() => afericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
-                  {afericaoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Aferindo...</> : afericaoOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Reaferir</> : <><Zap className="h-3 w-3 mr-1" /> Aferir Escuro</>}
+                  {afericaoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Aferindo...</> : afericaoConsolidada ? <><Lock className="h-3 w-3 mr-1" /> Consolidado</> : afericaoOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Reaferir</> : <><Zap className="h-3 w-3 mr-1" /> Aferir Escuro</>}
                 </Button>
                 {afericaoResult && (
                   <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-amber-700" onClick={() => setShowAfericaoReport(true)}>
@@ -3520,10 +3535,11 @@ export default function FolhaPagamento() {
                     </div>
                   </div>
                 )}
-                <Button size="sm" className={`w-full mt-auto ${pagOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-green-600 hover:bg-green-700'}`}
-                  disabled={simularPagamentoMut.isPending || !step4Ready}
+                <Button size="sm" className={`w-full mt-auto ${pagamentoConsolidado ? 'bg-gray-400 cursor-not-allowed' : pagOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-green-600 hover:bg-green-700'}`}
+                  disabled={simularPagamentoMut.isPending || !step4Ready || pagamentoConsolidado}
+                  title={pagamentoConsolidado ? "Pagamento consolidado — desconsolide primeiro para resimular" : ""}
                   onClick={() => { setCalcType("pagamento"); simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
-                  {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : pagOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Resimular</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
+                  {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : pagamentoConsolidado ? <><Lock className="h-3 w-3 mr-1" /> Consolidado</> : pagOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Resimular</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
                 </Button>
                 {pagamentoResult && (
                   <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-green-700" onClick={() => setViewMode("calculo_pagamento")}>
