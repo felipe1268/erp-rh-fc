@@ -1,11 +1,11 @@
-// Storage helpers — usa Forge API quando configurada, senão armazena localmente em server/uploads/
 import { ENV } from './_core/env';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getDb } from './db';
+import { sql } from 'drizzle-orm';
 
 const LOCAL_UPLOADS_DIR = path.join(process.cwd(), 'server', 'uploads');
 
-// Garante que o diretório local existe
 function ensureLocalDir(filePath: string) {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
@@ -13,7 +13,6 @@ function ensureLocalDir(filePath: string) {
   }
 }
 
-// ── ARMAZENAMENTO LOCAL ──────────────────────────────────────
 async function localPut(
   relKey: string,
   data: Buffer | Uint8Array | string,
@@ -32,7 +31,6 @@ async function localGet(relKey: string): Promise<{ key: string; url: string }> {
   return { key, url: `/uploads/${key}` };
 }
 
-// ── FORGE / EXTERNAL STORAGE ────────────────────────────────
 type StorageConfig = { baseUrl: string; apiKey: string };
 
 function getStorageConfig(): StorageConfig | null {
@@ -76,7 +74,37 @@ function buildAuthHeaders(apiKey: string): HeadersInit {
   return { Authorization: `Bearer ${apiKey}` };
 }
 
-// ── API PÚBLICA ──────────────────────────────────────────────
+async function dbPersist(key: string, data: Buffer | Uint8Array | string, contentType: string) {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const buf = typeof data === 'string' ? Buffer.from(data, 'utf-8') : Buffer.from(data as any);
+    const b64 = buf.toString('base64');
+    await db.execute(sql`
+      INSERT INTO uploaded_files (file_key, data_base64, content_type)
+      VALUES (${key}, ${b64}, ${contentType})
+      ON CONFLICT (file_key) DO UPDATE SET data_base64 = ${b64}, content_type = ${contentType}
+    `);
+  } catch (e: any) {
+    console.warn(`[Storage] DB persist failed for ${key}: ${e.message}`);
+  }
+}
+
+export async function dbRetrieve(key: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+  try {
+    const db = await getDb();
+    if (!db) return null;
+    const rows = ((await db.execute(sql`
+      SELECT data_base64, content_type FROM uploaded_files WHERE file_key = ${key} LIMIT 1
+    `)) as any).rows || [];
+    if (rows.length === 0) return null;
+    const buffer = Buffer.from(rows[0].data_base64, 'base64');
+    return { buffer, contentType: rows[0].content_type || 'application/octet-stream' };
+  } catch (e: any) {
+    console.warn(`[Storage] DB retrieve failed for ${key}: ${e.message}`);
+    return null;
+  }
+}
 
 export async function storagePut(
   relKey: string,
@@ -84,13 +112,14 @@ export async function storagePut(
   contentType = 'application/octet-stream'
 ): Promise<{ key: string; url: string }> {
   const cfg = getStorageConfig();
+  const key = normalizeKey(relKey);
 
-  // Sem credenciais → armazena localmente
+  dbPersist(key, data, contentType).catch(() => {});
+
   if (!cfg) {
     return localPut(relKey, data);
   }
 
-  const key = normalizeKey(relKey);
   const uploadUrl = buildUploadUrl(cfg.baseUrl, key);
   const formData = toFormData(data, contentType, key.split('/').pop() ?? key);
   const response = await fetch(uploadUrl, {
@@ -101,7 +130,6 @@ export async function storagePut(
 
   if (!response.ok) {
     const message = await response.text().catch(() => response.statusText);
-    // Fallback para local se a API externa falhar
     console.warn(`[Storage] API externa falhou (${response.status}), usando armazenamento local.`);
     return localPut(relKey, data);
   }

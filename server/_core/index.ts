@@ -61,8 +61,38 @@ async function startServer() {
   // Download de arquivos SST em ZIP
   registerDownloadSSTRoute(app);
   registerDownloadOCRoute(app);
-  // Arquivos de upload locais (fotos de funcionários, etc.)
   app.use("/uploads", express.static(path.join(process.cwd(), "server/uploads")));
+
+  app.use("/uploads", async (req: any, res: any) => {
+    try {
+      const { dbRetrieve } = await import("../storage");
+      const key = req.path.replace(/^\/+/, '');
+      const result = await dbRetrieve(key);
+      if (result) {
+        const localPath = path.join(process.cwd(), "server/uploads", key);
+        const dir = path.dirname(localPath);
+        const fs = await import("fs");
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(localPath, result.buffer);
+        res.setHeader("Content-Type", result.contentType);
+        res.send(result.buffer);
+        return;
+      }
+    } catch (e: any) {
+      console.warn(`[Storage] DB fallback error: ${e.message}`);
+    }
+    res.status(404).send(`
+      <html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8f9fa">
+        <div style="text-align:center;max-width:400px">
+          <div style="font-size:48px;color:#dc3545;margin-bottom:16px">⚠️</div>
+          <h2 style="color:#333">Arquivo não encontrado</h2>
+          <p style="color:#666">Este arquivo não está mais disponível no servidor. Por favor, faça o upload novamente.</p>
+          <a href="/" style="display:inline-block;margin-top:16px;padding:8px 24px;background:#4F46E5;color:white;border-radius:6px;text-decoration:none">Voltar ao Sistema</a>
+        </div>
+      </body></html>
+    `);
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
