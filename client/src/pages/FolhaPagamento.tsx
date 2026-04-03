@@ -2169,17 +2169,17 @@ export default function FolhaPagamento() {
           )}
 
           <Dialog open={!!detalheAfericaoEmpId} onOpenChange={(open) => { if (!open) setDetalheAfericaoEmpId(null); }}>
-            <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto" resizable={false}>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-base">
+            <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] flex flex-col p-0" resizable={false}>
+              <DialogHeader className="px-6 pt-6 pb-3 shrink-0 border-b">
+                <DialogTitle className="flex items-center gap-2 text-base pr-8">
                   <CalendarDays className="h-5 w-5 text-amber-600 shrink-0" />
                   Detalhamento Dia a Dia — Período no Escuro
                 </DialogTitle>
                 {detalheAfericaoDias.data && (
                   <DialogDescription asChild>
-                    <div className="mt-1 space-y-0.5 text-sm text-muted-foreground">
+                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                       <div className="font-medium text-foreground">{detalheAfericaoDias.data.employee.nome} <span className="font-normal text-muted-foreground">({detalheAfericaoDias.data.employee.funcao || 'Sem função'})</span></div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                         <span>Jornada: {(() => {
                           const j = detalheAfericaoDias.data!.employee.jornada;
                           if (!j) return '44h';
@@ -2204,6 +2204,7 @@ export default function FolhaPagamento() {
                   </DialogDescription>
                 )}
               </DialogHeader>
+              <div className="flex-1 overflow-y-auto px-6 py-4">
               {detalheAfericaoDias.error ? (
                 <div className="text-center py-8 text-red-600">Erro ao carregar: {detalheAfericaoDias.error.message}</div>
               ) : !detalheAfericaoDias.data ? (
@@ -2326,7 +2327,8 @@ export default function FolhaPagamento() {
                   </div>
                 );
               })() : null}
-              <DialogFooter className="flex gap-2">
+              </div>
+              <DialogFooter className="flex gap-2 px-6 py-3 shrink-0 border-t">
                 <Button variant="default" className="bg-blue-600 hover:bg-blue-700 text-white"
                   onClick={() => {
                     const nome = detalheAfericaoDias.data?.employee?.nome || `ID ${detalheAfericaoEmpId}`;
