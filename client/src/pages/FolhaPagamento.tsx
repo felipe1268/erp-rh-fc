@@ -3293,6 +3293,11 @@ export default function FolhaPagamento() {
                   onClick={() => afericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
                   {afericaoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Aferindo...</> : afericaoOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Reaferir</> : <><Zap className="h-3 w-3 mr-1" /> Aferir Escuro</>}
                 </Button>
+                {afericaoResult && (
+                  <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-amber-700" onClick={() => setShowAfericaoReport(true)}>
+                    <Eye className="h-3 w-3 mr-1" /> Ver Resultado
+                  </Button>
+                )}
                 {afericaoResult && afericaoResult.semRegistro > 0 && (
                   <Button size="sm" variant="ghost" className="w-full mt-1 text-amber-700 text-[10px] h-6" onClick={() => setViewMode("alertas_afericao")}>
                     <AlertTriangle className="h-3 w-3 mr-1" /> {afericaoResult.semRegistro} sem registro - Decidir
