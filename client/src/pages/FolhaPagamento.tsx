@@ -3320,7 +3320,7 @@ export default function FolhaPagamento() {
 
         {/* RELATÓRIO DE AFERIÇÃO */}
         <Dialog open={showAfericaoReport} onOpenChange={setShowAfericaoReport}>
-          <DialogContent className="max-w-[98vw] w-full h-[95vh] max-h-[95vh] overflow-hidden flex flex-col">
+          <DialogContent resizable={false} className="overflow-hidden flex flex-col" style={{ width: "calc(100vw - 2rem)", maxWidth: "calc(100vw - 2rem)", height: "95vh", maxHeight: "95vh" }}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600" /> Relatório de Aferição — {mesEscuroLabel}
