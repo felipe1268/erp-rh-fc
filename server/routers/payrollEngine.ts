@@ -799,6 +799,11 @@ export const payrollEngineRouter = router({
       const divergenciasList: any[] = [];
       const validadosList: any[] = [];
 
+      const adjustmentInserts: string[] = [];
+      const timecardAferidoUpdates: { id: number; resultado: string; obs: string | null; actual: any; horasExtras: string; numBatidas: number }[] = [];
+      const timecardSemRegistroIds: number[] = [];
+      const timecardSemRegistroObs: string[] = [];
+
       for (const escuro of escuroRecords) {
         const key = `${escuro.employeeId}-${escuro.data}`;
         const actual = actualMap.get(key);
@@ -824,13 +829,10 @@ export const payrollEngineRouter = router({
             }
             const totalDesc = valorFalta + parseBRL(vrDesconto) + parseBRL(vtDesconto);
 
-            await db.execute(sql`
-              INSERT INTO payroll_adjustments ("companyId", "employeeId", "mesOrigem", "mesDesconto", data, tipo, descricao,
-                "valorDesconto", "valorVrDesconto", "valorVtDesconto", "valorTotal", "timecardDailyId", status)
-              VALUES (${input.companyId}, ${escuro.employeeId}, ${prevMes}, ${input.mesReferencia}, ${escuro.data}, 
-                'falta', ${`Falta dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`},
-                ${formatMoney(valorFalta)}, ${vrDesconto}, ${vtDesconto}, ${formatMoney(totalDesc)}, ${escuro.id}, 'pendente')
-            `);
+            const esc = (s: string) => s.replace(/'/g, "''");
+            adjustmentInserts.push(
+              `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'falta', '${esc(`Falta dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`)}', '${formatMoney(valorFalta)}', '${vrDesconto}', '${vtDesconto}', '${formatMoney(totalDesc)}', ${escuro.id}, 'pendente')`
+            );
 
             divergenciasList.push({
               employeeId: escuro.employeeId,
@@ -856,13 +858,10 @@ export const payrollEngineRouter = router({
                 const valorMinuto = valorHoraEmp / 60;
                 const valorAtraso = valorMinuto * atraso;
 
-                await db.execute(sql`
-                  INSERT INTO payroll_adjustments ("companyId", "employeeId", "mesOrigem", "mesDesconto", data, tipo, descricao,
-                    "valorDesconto", "valorVrDesconto", "valorVtDesconto", "valorTotal", "timecardDailyId", status)
-                  VALUES (${input.companyId}, ${escuro.employeeId}, ${prevMes}, ${input.mesReferencia}, ${escuro.data},
-                    'atraso', ${`Atraso ${minutesToHHMM(atraso)} dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`},
-                    ${formatMoney(valorAtraso)}, '0', '0', ${formatMoney(valorAtraso)}, ${escuro.id}, 'pendente')
-                `);
+                const esc = (s: string) => s.replace(/'/g, "''");
+                adjustmentInserts.push(
+                  `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'atraso', '${esc(`Atraso ${minutesToHHMM(atraso)} dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`)}', '${formatMoney(valorAtraso)}', '0', '0', '${formatMoney(valorAtraso)}', ${escuro.id}, 'pendente')`
+                );
 
                 divergenciasList.push({
                   employeeId: escuro.employeeId,
@@ -919,13 +918,10 @@ export const payrollEngineRouter = router({
           }
           const totalDescSR = valorFaltaSR + parseBRL(vrDescontoSR) + parseBRL(vtDescontoSR);
 
-          await db.execute(sql`
-            INSERT INTO payroll_adjustments ("companyId", "employeeId", "mesOrigem", "mesDesconto", data, tipo, descricao,
-              "valorDesconto", "valorVrDesconto", "valorVtDesconto", "valorTotal", "timecardDailyId", status)
-            VALUES (${input.companyId}, ${escuro.employeeId}, ${prevMes}, ${input.mesReferencia}, ${escuro.data}, 
-              'sem_registro', ${`Sem registro de ponto dia ${escuro.data} — Período no escuro de ${prevMes}. Aguardando decisão: erro do relógio ou falta real.`},
-              ${formatMoney(valorFaltaSR)}, ${vrDescontoSR}, ${vtDescontoSR}, ${formatMoney(totalDescSR)}, ${escuro.id}, 'pendente_decisao')
-          `);
+          const esc = (s: string) => s.replace(/'/g, "''");
+          adjustmentInserts.push(
+            `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'sem_registro', '${esc(`Sem registro de ponto dia ${escuro.data} — Período no escuro de ${prevMes}. Aguardando decisão: erro do relógio ou falta real.`)}', '${formatMoney(valorFaltaSR)}', '${vrDescontoSR}', '${vtDescontoSR}', '${formatMoney(totalDescSR)}', ${escuro.id}, 'pendente_decisao')`
+          );
 
           divergenciasList.push({
             employeeId: escuro.employeeId,
@@ -950,46 +946,64 @@ export const payrollEngineRouter = router({
           })();
           const heAfMins = Math.max(0, actualMinsAf - expectedMinsAf);
           const horasExtrasAf = heAfMins > 0 ? minutesToHHMM(heAfMins) : "0:00";
-
           const numBatidasVal = [actual.entrada1, actual.saida1, actual.entrada2, actual.saida2, actual.entrada3, actual.saida3].filter(Boolean).length;
-          await db.execute(sql`
-            UPDATE timecard_daily SET 
-              "statusDia" = 'aferido',
-              "statusAnterior" = 'escuro',
-              "afericaoResultado" = ${resultado},
-              "afericaoObs" = ${obs || null},
-              "afericaoEm" = NOW(),
-              entrada1 = ${actual.entrada1 ?? null},
-              saida1 = ${actual.saida1 ?? null},
-              entrada2 = ${actual.entrada2 ?? null},
-              saida2 = ${actual.saida2 ?? null},
-              entrada3 = ${actual.entrada3 ?? null},
-              saida3 = ${actual.saida3 ?? null},
-              "horasTrabalhadas" = ${actual.horasTrabalhadas || '0:00'},
-              "horasExtras" = ${horasExtrasAf},
-              "horasNoturnas" = ${actual.horasNoturnas || '0:00'},
-              "timeRecordId" = ${actual.id ?? null},
-              "obraId" = ${actual.obraId ?? null},
-              "origemRegistro" = 'aferido',
-              "numBatidas" = ${numBatidasVal},
-              "isFalta" = ${resultado === "falta" ? 1 : 0},
-              "isAtraso" = ${resultado === "atraso" ? 1 : 0}
-            WHERE id = ${escuro.id}
-          `);
+          timecardAferidoUpdates.push({ id: escuro.id, resultado, obs: obs || null, actual, horasExtras: horasExtrasAf, numBatidas: numBatidasVal });
         } else {
-          await db.execute(sql`
-            UPDATE timecard_daily SET 
-              "statusDia" = 'pendente_decisao',
-              "statusAnterior" = 'escuro',
-              "afericaoResultado" = 'sem_registro',
-              "afericaoObs" = ${obs},
-              "afericaoEm" = NOW(),
-              "isFalta" = 0,
-              "isAtraso" = 0
-            WHERE id = ${escuro.id}
-          `);
+          timecardSemRegistroIds.push(escuro.id);
+          timecardSemRegistroObs.push(obs);
         }
         totalAferidos++;
+      }
+
+      // ===== BATCH INSERT adjustments (single query) =====
+      if (adjustmentInserts.length > 0) {
+        const batchSize = 50;
+        for (let i = 0; i < adjustmentInserts.length; i += batchSize) {
+          const batch = adjustmentInserts.slice(i, i + batchSize);
+          await db.execute(sql.raw(
+            `INSERT INTO payroll_adjustments ("companyId", "employeeId", "mesOrigem", "mesDesconto", data, tipo, descricao, "valorDesconto", "valorVrDesconto", "valorVtDesconto", "valorTotal", "timecardDailyId", status) VALUES ${batch.join(',')}`
+          ));
+        }
+      }
+
+      // ===== BATCH UPDATE timecard_daily for aferido records (parallel chunks of 10) =====
+      if (timecardAferidoUpdates.length > 0) {
+        const chunkSize = 10;
+        for (let i = 0; i < timecardAferidoUpdates.length; i += chunkSize) {
+          const chunk = timecardAferidoUpdates.slice(i, i + chunkSize);
+          await Promise.all(chunk.map(u => db.execute(sql`
+            UPDATE timecard_daily SET 
+              "statusDia" = 'aferido', "statusAnterior" = 'escuro',
+              "afericaoResultado" = ${u.resultado}, "afericaoObs" = ${u.obs},
+              "afericaoEm" = NOW(),
+              entrada1 = ${u.actual.entrada1 ?? null}, saida1 = ${u.actual.saida1 ?? null},
+              entrada2 = ${u.actual.entrada2 ?? null}, saida2 = ${u.actual.saida2 ?? null},
+              entrada3 = ${u.actual.entrada3 ?? null}, saida3 = ${u.actual.saida3 ?? null},
+              "horasTrabalhadas" = ${u.actual.horasTrabalhadas || '0:00'},
+              "horasExtras" = ${u.horasExtras},
+              "horasNoturnas" = ${u.actual.horasNoturnas || '0:00'},
+              "timeRecordId" = ${u.actual.id ?? null}, "obraId" = ${u.actual.obraId ?? null},
+              "origemRegistro" = 'aferido', "numBatidas" = ${u.numBatidas},
+              "isFalta" = ${u.resultado === "falta" ? 1 : 0},
+              "isAtraso" = ${u.resultado === "atraso" ? 1 : 0}
+            WHERE id = ${u.id}
+          `)));
+        }
+      }
+
+      // ===== BATCH UPDATE timecard_daily for sem_registro records =====
+      if (timecardSemRegistroIds.length > 0) {
+        await db.execute(sql.raw(`
+          UPDATE timecard_daily SET 
+            "statusDia" = 'pendente_decisao',
+            "statusAnterior" = 'escuro',
+            "afericaoResultado" = 'sem_registro',
+            "afericaoObs" = 'Sem registro de ponto real no DIXI. Possível erro do relógio ou falta.',
+            "afericaoEm" = NOW(),
+            "isFalta" = 0,
+            "isAtraso" = 0
+          WHERE id IN (${timecardSemRegistroIds.join(',')})
+        `));
       }
 
       // Update period for all companies
