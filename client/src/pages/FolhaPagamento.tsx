@@ -94,6 +94,7 @@ export default function FolhaPagamento() {
   const defaultHeFim = `${anoSelecionado}-${String(mesSelecionado).padStart(2, "0")}-15`;
   const [heDataInicio, setHeDataInicio] = useState(defaultHeInicio);
   const [heDataFim, setHeDataFim] = useState(defaultHeFim);
+  const [heDatasLocked, setHeDatasLocked] = useState(true);
   const [heCalcResult, setHeCalcResult] = useState<any>(null);
   const [heViewPeriodId, setHeViewPeriodId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -2246,13 +2247,32 @@ export default function FolhaPagamento() {
                     <div>
                       <label className="text-xs text-muted-foreground block mb-1">Data Início</label>
                       <input type="date" value={heDataInicio} onChange={e => setHeDataInicio(e.target.value)}
-                        className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                        disabled={heDatasLocked}
+                        className={`border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 ${heDatasLocked ? "bg-slate-100 text-slate-500 cursor-not-allowed" : ""}`} />
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground block mb-1">Data Fim</label>
                       <input type="date" value={heDataFim} onChange={e => setHeDataFim(e.target.value)}
-                        className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                        disabled={heDatasLocked}
+                        className={`border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 ${heDatasLocked ? "bg-slate-100 text-slate-500 cursor-not-allowed" : ""}`} />
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`h-9 px-3 ${heDatasLocked ? "text-slate-500 border-slate-300" : "text-amber-700 border-amber-300 bg-amber-50"}`}
+                      onClick={() => {
+                        if (!heDatasLocked) {
+                          setHeDataInicio(defaultHeInicio);
+                          setHeDataFim(defaultHeFim);
+                        }
+                        setHeDatasLocked(!heDatasLocked);
+                      }}
+                      title={heDatasLocked ? "Desbloquear datas para edição manual" : "Travar datas e restaurar padrão"}
+                    >
+                      {heDatasLocked
+                        ? <><Lock className="h-3.5 w-3.5 mr-1.5" /> Desbloquear</>
+                        : <><Unlock className="h-3.5 w-3.5 mr-1.5" /> Travar</>}
+                    </Button>
                     <Button className="bg-purple-700 hover:bg-purple-800" disabled={heCalcularMut.isPending}
                       onClick={() => heCalcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno, dataInicio: heDataInicio, dataFim: heDataFim })}>
                       {heCalcularMut.isPending
@@ -2260,8 +2280,9 @@ export default function FolhaPagamento() {
                         : <><Zap className="h-4 w-4 mr-2" /> Calcular HE</>}
                     </Button>
                     <div className="text-xs text-muted-foreground">
-                      <p>Padrão sugerido: dia 16 do mês anterior → dia 15 do mês atual</p>
-                      <p className="text-amber-600 mt-0.5">Sobreposição com períodos ativos será bloqueada automaticamente</p>
+                      {heDatasLocked
+                        ? <p className="text-green-700 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Período padrão: dia 16 do mês anterior ao dia 15 do mês atual</p>
+                        : <p className="text-amber-600 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Datas desbloqueadas — edição manual habilitada</p>}
                     </div>
                   </div>
                 </CardContent>
