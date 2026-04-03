@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 996,
+    titulo: "Detalhamento aferição full-screen com obra, desconto e correções SQL",
+    descricao: "Dialog de detalhamento dia a dia agora abre em tela cheia (95vw x 95vh) com header fixo, conteúdo scrollável e footer fixo. Novas colunas: Obra (nome da obra onde bateu ponto via JOIN com tabela obras) e Desconto estimado por dia (baseado em valorHora × horas diárias ou salário/30). Jornada formatada como '07:00-17:00 (01:00 intervalo)' em vez de JSON bruto. Status padronizado: dia útil sem batida = 'sem_registro' (vermelho), sábado/domingo/feriado sem batida = '—'. temRegistro agora exige numBatidas>0 ou entrada1 preenchida. Múltiplas correções de aspas duplas em colunas camelCase em queries SQL raw (payroll_advances, payroll_adjustments, timecard_daily, lancamentos_parceiros, etc).",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-03 23:00:00",
+  },
+  {
     version: 995,
     titulo: "Alertas de aferição agora são apenas informativos",
     descricao: "A tela de 'Sem Registro de Ponto' não exige mais decisão (Erro Relógio / Falta Real) diretamente na folha. Agora mostra apenas alertas informativos agrupados por funcionário, orientando o usuário a corrigir no Espelho de Ponto e depois reaferir. Botões de decisão removidos. Tabela agrupada por funcionário com contagem de dias e desconto estimado.",
