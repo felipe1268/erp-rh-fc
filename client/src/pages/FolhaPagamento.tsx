@@ -90,6 +90,7 @@ export default function FolhaPagamento() {
   const prevAno = mesSelecionado === 1 ? anoSelecionado - 1 : anoSelecionado;
   const escuroInicio = `16/${String(prevMes).padStart(2, '0')}/${prevAno}`;
   const escuroFim = `15/${String(mesSelecionado).padStart(2, '0')}/${anoSelecionado}`;
+  const mesEscuroLabel = `${MESES_CURTOS[prevMes - 1]}/${prevAno}`;
   const defaultHeInicio = `${prevAno}-${String(prevMes).padStart(2, "0")}-16`;
   const defaultHeFim = `${anoSelecionado}-${String(mesSelecionado).padStart(2, "0")}-15`;
   const [heDataInicio, setHeDataInicio] = useState(defaultHeInicio);
@@ -2905,8 +2906,6 @@ export default function FolhaPagamento() {
           ];
           const etapasConcluidas = etapas.filter(e => e.done).length;
           const percentProgresso = Math.round((etapasConcluidas / 4) * 100);
-
-          const mesEscuroLabel = `${MESES_CURTOS[prevMes - 1]}/${prevAno}`;
 
           const fmtTimestamp = (ts: string | null | undefined) => {
             if (!ts) return null;
