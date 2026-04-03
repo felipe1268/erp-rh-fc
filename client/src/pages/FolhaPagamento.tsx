@@ -2171,27 +2171,36 @@ export default function FolhaPagamento() {
           <Dialog open={!!detalheAfericaoEmpId} onOpenChange={(open) => { if (!open) setDetalheAfericaoEmpId(null); }}>
             <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto" resizable={false}>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <CalendarDays className="h-5 w-5 text-amber-600" />
+                <DialogTitle className="flex items-center gap-2 text-base">
+                  <CalendarDays className="h-5 w-5 text-amber-600 shrink-0" />
                   Detalhamento Dia a Dia — Período no Escuro
                 </DialogTitle>
                 {detalheAfericaoDias.data && (
-                  <DialogDescription>
-                    {detalheAfericaoDias.data.employee.nome} ({detalheAfericaoDias.data.employee.funcao || 'Sem função'}) • Jornada: {(() => {
-                      const j = detalheAfericaoDias.data!.employee.jornada;
-                      if (!j) return '44h';
-                      if (typeof j === 'string' && !j.startsWith('{') && !j.startsWith('[')) return j;
-                      try {
-                        const parsed = typeof j === 'string' ? JSON.parse(j) : j;
-                        if (typeof parsed === 'object' && parsed !== null) {
-                          const seg = parsed.seg || parsed.segunda;
-                          if (seg?.entrada && seg?.saida) {
-                            return `${seg.entrada} - ${seg.saida} (${seg.intervalo || '01:00'} intervalo)`;
-                          }
-                        }
-                        return '44h';
-                      } catch { return String(j).substring(0, 30); }
-                    })()} • Período: {new Date(detalheAfericaoDias.data.periodoInicio + 'T12:00:00').toLocaleDateString('pt-BR')} a {new Date(detalheAfericaoDias.data.periodoFim + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  <DialogDescription asChild>
+                    <div className="mt-1 space-y-0.5 text-sm text-muted-foreground">
+                      <div className="font-medium text-foreground">{detalheAfericaoDias.data.employee.nome} <span className="font-normal text-muted-foreground">({detalheAfericaoDias.data.employee.funcao || 'Sem função'})</span></div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                        <span>Jornada: {(() => {
+                          const j = detalheAfericaoDias.data!.employee.jornada;
+                          if (!j) return '44h';
+                          if (typeof j === 'string' && !j.startsWith('{') && !j.startsWith('[')) return j;
+                          try {
+                            const parsed = typeof j === 'string' ? JSON.parse(j) : j;
+                            if (typeof parsed === 'object' && parsed !== null) {
+                              const seg = parsed.seg || parsed.segunda;
+                              if (seg?.entrada && seg?.saida) {
+                                return `${seg.entrada} - ${seg.saida} (${seg.intervalo || '01:00'} intervalo)`;
+                              }
+                            }
+                            return '44h';
+                          } catch { return String(j).substring(0, 30); }
+                        })()}</span>
+                        <span>Período: {new Date(detalheAfericaoDias.data.periodoInicio + 'T12:00:00').toLocaleDateString('pt-BR')} a {new Date(detalheAfericaoDias.data.periodoFim + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                        {(detalheAfericaoDias.data as any).descontoDiario > 0 && (
+                          <span>Valor diário: <strong className="text-foreground">R$ {((detalheAfericaoDias.data as any).descontoDiario as number).toFixed(2)}</strong></span>
+                        )}
+                      </div>
+                    </div>
                   </DialogDescription>
                 )}
               </DialogHeader>
