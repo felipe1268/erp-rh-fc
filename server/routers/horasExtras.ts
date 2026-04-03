@@ -226,6 +226,8 @@ export const horasExtrasRouter = router({
         const valorHEFim  = (heFim  / 60) * valorHora * (1 + criteria.hePercentualDomingo / 100);
         const valorHETotal = valorHEUtil + valorHEFim;
 
+        if (valorHETotal <= 0) continue;
+
         totalHEMins  += heTotal;
         totalValorHE += valorHETotal;
 
