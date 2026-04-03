@@ -388,9 +388,10 @@ export default function VisaoPanoramica() {
   const [showAllOportunidades, setShowAllOportunidades] = useState(false);
   const [showAllAcoes, setShowAllAcoes] = useState(false);
 
-  const { data, isLoading } = trpc.visaoPanoramica.getData.useQuery(
+  const queryEnabled = isConstrutoras ? companyIds.length > 0 : companyId > 0;
+  const { data, isLoading, error, refetch, isFetching } = trpc.visaoPanoramica.getData.useQuery(
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
-    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+    { enabled: queryEnabled, retry: 2 }
   );
 
   const analiseMutation = trpc.visaoPanoramica.analiseIA.useMutation({
@@ -405,7 +406,7 @@ export default function VisaoPanoramica() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isFetching) {
     return (
       <DashboardLayout>
         <div className="space-y-4">
@@ -419,13 +420,33 @@ export default function VisaoPanoramica() {
     );
   }
 
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+          <AlertTriangle className="h-12 w-12 mb-4 text-amber-500 opacity-70" />
+          <p className="text-lg font-medium">Erro ao carregar indicadores</p>
+          <p className="text-sm mb-4">Ocorreu um erro ao buscar os dados. Tente novamente.</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 mr-2" /> Tentar novamente
+          </Button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (!data) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <BarChart3 className="h-12 w-12 mb-4 opacity-50" />
           <p className="text-lg font-medium">Nenhum dado disponível</p>
-          <p className="text-sm">Selecione uma empresa para visualizar os indicadores</p>
+          <p className="text-sm">{queryEnabled ? "Carregando dados da empresa..." : "Selecione uma empresa para visualizar os indicadores"}</p>
+          {queryEnabled && (
+            <Button variant="outline" size="sm" className="mt-4" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2" /> Recarregar
+            </Button>
+          )}
         </div>
       </DashboardLayout>
     );
