@@ -95,6 +95,12 @@ export default function FolhaPagamento() {
   const [heDataInicio, setHeDataInicio] = useState(defaultHeInicio);
   const [heDataFim, setHeDataFim] = useState(defaultHeFim);
   const [heDatasLocked, setHeDatasLocked] = useState(true);
+
+  useEffect(() => {
+    setHeDataInicio(defaultHeInicio);
+    setHeDataFim(defaultHeFim);
+    setHeDatasLocked(true);
+  }, [mesSelecionado, anoSelecionado]);
   const [heCalcResult, setHeCalcResult] = useState<any>(null);
   const [heViewPeriodId, setHeViewPeriodId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
