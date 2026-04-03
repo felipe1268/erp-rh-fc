@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 995,
+    titulo: "Alertas de aferição agora são apenas informativos",
+    descricao: "A tela de 'Sem Registro de Ponto' não exige mais decisão (Erro Relógio / Falta Real) diretamente na folha. Agora mostra apenas alertas informativos agrupados por funcionário, orientando o usuário a corrigir no Espelho de Ponto e depois reaferir. Botões de decisão removidos. Tabela agrupada por funcionário com contagem de dias e desconto estimado.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-03 22:00:00",
+  },
+  {
     version: 992,
     titulo: "Detalhamento dia a dia dos alertas de aferição",
     descricao: "Na tela de alertas 'Sem Registro de Ponto', o nome do funcionário agora é clicável e abre uma tela detalhada mostrando cada dia do período no escuro: se foi dia útil sem registro, sábado, domingo ou feriado. Exibe resumo com contadores (com registro, úteis sem registro, feriados, sábados, domingos) e tabela com data, dia da semana, classificação, entrada/saída, horas trabalhadas e status da aferição. Botão 'Ver Resultado' adicionado ao card Aferir Escuro.",

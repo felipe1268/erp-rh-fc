@@ -269,7 +269,7 @@ export default function FolhaPagamento() {
       setAfericaoResult(data);
       setShowAfericaoReport(true);
       if ((data.semRegistro || 0) > 0) {
-        toast.warning(`Aferição concluída com ${data.semRegistro} dia(s) sem registro de ponto. Decida se foi erro do relógio ou falta real.`);
+        toast.warning(`Aferição concluída com ${data.semRegistro} dia(s) sem registro de ponto. Verifique os alertas e corrija no Espelho de Ponto.`);
       } else {
         toast.success(data.message);
       }
@@ -286,14 +286,6 @@ export default function FolhaPagamento() {
     { companyId, employeeId: detalheAfericaoEmpId!, mesReferencia: mesAno },
     { enabled: !!companyId && !!mesAno && !!detalheAfericaoEmpId }
   );
-  const decidirAfericaoMut = trpc.payrollEngine.decidirAfericao.useMutation({
-    onSuccess: (data) => {
-      toast.success(data.message);
-      alertasAfericao.refetch();
-      payrollPeriod.refetch();
-    },
-    onError: (err) => toast.error(`Erro na decisão: ${err.message}`),
-  });
   const decidirValeMut = trpc.payrollEngine.decidirVale.useMutation({
     onSuccess: (data) => {
       toast.success(data.message);
@@ -2030,6 +2022,21 @@ export default function FolhaPagamento() {
   // ===== CÁLCULO PAGAMENTO VIEW =====
   if (viewMode === "alertas_afericao") {
     const alertas = (alertasAfericao.data || []) as any[];
+    const alertasAgrupados = alertas.reduce((acc: Record<string, any[]>, a: any) => {
+      const key = `${a.employeeId}`;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(a);
+      return acc;
+    }, {} as Record<string, any[]>);
+    const funcionariosList = Object.values(alertasAgrupados).map((dias: any[]) => ({
+      employeeId: dias[0].employeeId,
+      nomeCompleto: dias[0].nomeCompleto,
+      codigoInterno: dias[0].codigoInterno,
+      funcao: dias[0].funcao,
+      diasSemRegistro: dias.length,
+      valorTotal: dias.reduce((s: number, d: any) => s + parseBRLNum(d.valorTotal || '0'), 0),
+      datas: dias.map((d: any) => d.data),
+    }));
     return (
       <DashboardLayout>
         <PrintHeader />
@@ -2042,7 +2049,7 @@ export default function FolhaPagamento() {
               </Button>
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Alertas da Aferição — Sem Registro de Ponto</h1>
-                <p className="text-sm text-muted-foreground">Funcionários que estavam no período "no escuro" mas não tiveram registro de ponto no DIXI. Decida se foi erro do relógio ou falta real.</p>
+                <p className="text-sm text-muted-foreground">Funcionários sem batida no DIXI durante o período "no escuro". Corrija no Espelho de Ponto e depois reaferição.</p>
               </div>
             </div>
           </div>
@@ -2052,8 +2059,8 @@ export default function FolhaPagamento() {
           ) : alertas.length === 0 ? (
             <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
               <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
-              <p className="text-green-800 font-medium">Nenhum alerta pendente de decisão.</p>
-              <p className="text-sm text-green-600 mt-1">Todos os registros da aferição já foram resolvidos.</p>
+              <p className="text-green-800 font-medium">Nenhum alerta de sem registro.</p>
+              <p className="text-sm text-green-600 mt-1">Todos os funcionários tiveram registro no período escuro, ou já foram corrigidos.</p>
             </div>
           ) : (
             <>
@@ -2061,31 +2068,25 @@ export default function FolhaPagamento() {
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold text-amber-800">{alertas.length} dia(s) sem registro de ponto</p>
-                    <p className="text-sm text-amber-700 mt-1">Esses funcionários estavam no período "no escuro" e não tiveram batida no relógio de ponto. Escolha para cada um:</p>
-                    <ul className="text-sm text-amber-700 mt-1 list-disc ml-4">
-                      <li><strong>Erro do Relógio</strong>: mantém como trabalhado (sem desconto)</li>
-                      <li><strong>Falta Real</strong>: aplica desconto na folha deste mês</li>
-                    </ul>
+                    <p className="font-semibold text-amber-800">{alertas.length} dia(s) sem registro — {funcionariosList.length} funcionário(s)</p>
+                    <p className="text-sm text-amber-700 mt-1">Estes funcionários estavam escalados no período "no escuro" mas não tiveram batida no relógio DIXI.</p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-2 justify-end">
-                <Button size="sm" variant="outline" className="text-green-700 border-green-300"
-                  disabled={decidirAfericaoMut.isPending}
-                  onClick={() => decidirAfericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno,
-                    decisoes: alertas.map((a: any) => ({ adjustmentId: a.id, decisao: "erro_relogio" as const }))
-                  })}>
-                  <CheckCircle className="h-3 w-3 mr-1" /> Todos: Erro do Relógio
-                </Button>
-                <Button size="sm" variant="outline" className="text-red-700 border-red-300"
-                  disabled={decidirAfericaoMut.isPending}
-                  onClick={() => decidirAfericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno,
-                    decisoes: alertas.map((a: any) => ({ adjustmentId: a.id, decisao: "falta_real" as const }))
-                  })}>
-                  <XCircle className="h-3 w-3 mr-1" /> Todos: Falta Real
-                </Button>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-blue-800">Como resolver:</p>
+                    <ol className="text-sm text-blue-700 mt-1 list-decimal ml-4 space-y-1">
+                      <li>Clique no nome do funcionário para ver o detalhamento dia a dia</li>
+                      <li>Vá ao <strong>Espelho de Ponto</strong> e corrija as batidas manualmente (adicionar batida, justificar falta, etc.)</li>
+                      <li>Depois de corrigir, volte à Folha e clique <strong>"Reaferir"</strong> para reprocessar</li>
+                    </ol>
+                    <p className="text-xs text-blue-600 mt-2">Enquanto houver dias sem registro, o desconto será calculado na folha. Após corrigir no ponto e reaferir, os valores serão recalculados automaticamente.</p>
+                  </div>
+                </div>
               </div>
 
               <div className="rounded-lg border overflow-hidden">
@@ -2094,40 +2095,32 @@ export default function FolhaPagamento() {
                     <tr>
                       <th className="text-left p-3 font-medium">Funcionário</th>
                       <th className="text-left p-3 font-medium">Função</th>
-                      <th className="text-center p-3 font-medium">Data</th>
-                      <th className="text-right p-3 font-medium">Valor Desconto</th>
-                      <th className="text-center p-3 font-medium">Decisão</th>
+                      <th className="text-center p-3 font-medium">Dias s/ Registro</th>
+                      <th className="text-right p-3 font-medium">Desconto Estimado</th>
+                      <th className="text-center p-3 font-medium">Ação</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {alertas.map((a: any) => (
-                      <tr key={a.id} className="border-t hover:bg-amber-50/50">
+                    {funcionariosList.map((f: any) => (
+                      <tr key={f.employeeId} className="border-t hover:bg-amber-50/50">
                         <td className="p-3">
-                          <button className="text-left font-medium text-blue-700 hover:text-blue-900 hover:underline cursor-pointer" onClick={() => setDetalheAfericaoEmpId(a.employeeId)}>
-                            {a.nomeCompleto || `ID ${a.employeeId}`}
+                          <button className="text-left font-medium text-blue-700 hover:text-blue-900 hover:underline cursor-pointer" onClick={() => setDetalheAfericaoEmpId(f.employeeId)}>
+                            {f.nomeCompleto || `ID ${f.employeeId}`}
                           </button>
-                          <div className="text-xs text-muted-foreground">{fmtNum(a.codigoInterno)}</div>
+                          <div className="text-xs text-muted-foreground">{fmtNum(f.codigoInterno)}</div>
                         </td>
-                        <td className="p-3 text-muted-foreground">{a.funcao || '-'}</td>
-                        <td className="p-3 text-center">{a.data ? new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</td>
-                        <td className="p-3 text-right font-mono text-red-600">{formatBRL(parseBRLNum(a.valorTotal || '0'))}</td>
+                        <td className="p-3 text-muted-foreground">{f.funcao || '-'}</td>
                         <td className="p-3 text-center">
-                          <div className="flex gap-1 justify-center">
-                            <Button size="sm" variant="outline" className="h-7 text-xs text-green-700 border-green-300 hover:bg-green-50"
-                              disabled={decidirAfericaoMut.isPending}
-                              onClick={() => decidirAfericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno,
-                                decisoes: [{ adjustmentId: a.id, decisao: "erro_relogio" }]
-                              })}>
-                              Erro Relógio
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-7 text-xs text-red-700 border-red-300 hover:bg-red-50"
-                              disabled={decidirAfericaoMut.isPending}
-                              onClick={() => decidirAfericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno,
-                                decisoes: [{ adjustmentId: a.id, decisao: "falta_real" }]
-                              })}>
-                              Falta Real
-                            </Button>
-                          </div>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-medium">
+                            {f.diasSemRegistro} dia(s)
+                          </span>
+                        </td>
+                        <td className="p-3 text-right font-mono text-red-600">{formatBRL(f.valorTotal)}</td>
+                        <td className="p-3 text-center">
+                          <Button size="sm" variant="outline" className="h-7 text-xs"
+                            onClick={() => setDetalheAfericaoEmpId(f.employeeId)}>
+                            <Eye className="h-3 w-3 mr-1" /> Ver Detalhes
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -2241,7 +2234,7 @@ export default function FolhaPagamento() {
                           <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
                           <div>
                             <p className="text-sm font-semibold text-red-800">{diasUteisSemReg.length} dia(s) útil(eis) sem registro de ponto</p>
-                            <p className="text-xs text-red-700 mt-1">Estes dias eram dias úteis no período no escuro e o funcionário não teve nenhuma batida registrada no relógio. Pode ser erro do relógio ou falta real.</p>
+                            <p className="text-xs text-red-700 mt-1">Estes dias eram dias úteis no período no escuro e o funcionário não teve nenhuma batida registrada no relógio. Corrija no Espelho de Ponto e depois reaferição.</p>
                           </div>
                         </div>
                       </div>
@@ -3449,12 +3442,12 @@ export default function FolhaPagamento() {
                 )}
                 {afericaoResult && afericaoResult.semRegistro > 0 && (
                   <Button size="sm" variant="ghost" className="w-full mt-1 text-amber-700 text-[10px] h-6" onClick={() => setViewMode("alertas_afericao")}>
-                    <AlertTriangle className="h-3 w-3 mr-1" /> {afericaoResult.semRegistro} sem registro - Decidir
+                    <AlertTriangle className="h-3 w-3 mr-1" /> {afericaoResult.semRegistro} sem registro — Ver Alertas
                   </Button>
                 )}
                 {(alertasAfericao.data as any[] || []).length > 0 && !afericaoResult && (
                   <Button size="sm" variant="ghost" className="w-full mt-1 text-amber-700 text-[10px] h-6" onClick={() => setViewMode("alertas_afericao")}>
-                    <AlertTriangle className="h-3 w-3 mr-1" /> {(alertasAfericao.data as any[]).length} pendente(s) de decisão
+                    <AlertTriangle className="h-3 w-3 mr-1" /> {(alertasAfericao.data as any[]).length} alerta(s) — Corrigir no Ponto
                   </Button>
                 )}
                 {afericaoOk && (
@@ -3686,7 +3679,7 @@ export default function FolhaPagamento() {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <div className="flex items-start gap-1.5">
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 whitespace-nowrap mt-0.5">SEM REGISTRO</span>
-                          <span>O sistema estimou jornada normal, mas <strong>não encontrou nenhuma batida</strong> no relógio DIXI neste dia. Pode ser falha do relógio ou falta real.</span>
+                          <span>O sistema estimou jornada normal, mas <strong>não encontrou nenhuma batida</strong> no relógio DIXI neste dia. Corrija no Espelho de Ponto se necessário.</span>
                         </div>
                         <div className="flex items-start gap-1.5">
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 whitespace-nowrap mt-0.5">FALTA</span>
@@ -3863,7 +3856,7 @@ export default function FolhaPagamento() {
             <DialogFooter className="flex gap-2 mt-2">
               {(afericaoResult?.semRegistro || 0) > 0 && (
                 <Button variant="outline" className="text-amber-700 border-amber-300" onClick={() => { setShowAfericaoReport(false); setViewMode("alertas_afericao"); }}>
-                  <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Decidir {afericaoResult.semRegistro} sem registro
+                  <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Ver {afericaoResult.semRegistro} alertas sem registro
                 </Button>
               )}
               <Button variant="outline" onClick={() => setShowAfericaoReport(false)}>Fechar</Button>
