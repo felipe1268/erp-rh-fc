@@ -1002,8 +1002,7 @@ export const appRouter = router({
       condicoesVigenciaInicio: z.string().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, responsavelId, ...data } = input;
-      // Se status mudou para Concluída/Paralisada/Cancelada, liberar SNs e desvincular funcionários
-      if (data.status && ["Concluida", "Paralisada", "Cancelada"].includes(data.status)) {
+      if (data.status && data.status !== "Em_Andamento") {
         await releaseObraSns(id);
         try {
           const db = await getDb();

@@ -7335,4 +7335,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 14:00:00",
   },
+  {
+    version: 981,
+    titulo: "Obras — Desalocação automática ao sair de Em Andamento",
+    descricao:
+      "• Quando uma obra muda de status (para Concluída, Paralisada, Cancelada ou Planejamento), todos os funcionários alocados são automaticamente desvinculados\n" +
+      "• Lógica ampliada: antes só cobria 3 status, agora cobre qualquer status diferente de Em Andamento\n" +
+      "• Corrigido caso do ANDERSON BRAGA SILVA que permanecia alocado em obra já concluída\n" +
+      "• Funcionários desalocados ficam disponíveis para realocação em nova obra",
+    tipo: "bugfix",
+    modulos: "Obras, Efetivo",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 15:00:00",
+  },
 ];
