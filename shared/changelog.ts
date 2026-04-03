@@ -7243,4 +7243,16 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 04:00:00",
   },
+  {
+    version: 975,
+    titulo: "Fix nomes faltando nos Rankings de Faltas, Atrasos e Horas Extras",
+    descricao:
+      "• Corrigido bug onde funcionários desligados apareciam apenas com código (#420XXX) nos rankings de faltas, atrasos e horas extras\n" +
+      "• Todos os dashboards agora incluem funcionários desligados no mapeamento de nomes, garantindo que registros históricos exibam o nome correto\n" +
+      "• Contagens de funcionários ativos permanecem corretas (filtradas por status)",
+    tipo: "bugfix",
+    modulos: "Dashboards",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 04:30:00",
+  },
 ];

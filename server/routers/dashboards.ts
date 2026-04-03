@@ -272,8 +272,8 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
   const [registros, allEmps] = await Promise.all([
     db.select().from(timeRecords)
       .where(and(companyWhere(timeRecords, companyId, companyIds), eq(timeRecords.mesReferencia, mes))),
-    db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, setor: employees.setor })
-      .from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`, sql`${employees.deletedAt} IS NULL`)),
+    db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, setor: employees.setor, status: employees.status })
+      .from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)),
   ]);
   const empMap = new Map(allEmps.map(e => [e.id, e]));
 
@@ -368,8 +368,9 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
   const evolucaoDiaria = Object.entries(porDia).sort(([a], [b]) => a.localeCompare(b))
     .map(([data, horas]) => ({ data, horas: Math.round(horas * 100) / 100 }));
 
+  const empsAtivos = allEmps.filter(e => !['Desligado', 'Lista_Negra'].includes(e.status || ''));
   const funcionariosComRegistro = Object.keys(porFuncionario).length;
-  const funcionariosSemRegistro = allEmps.length - funcionariosComRegistro;
+  const funcionariosSemRegistro = Math.max(0, empsAtivos.length - funcionariosComRegistro);
 
   // % de Horas Extras sobre Horas Normais
   const percentualHE = totalHorasTrab > 0 ? Math.round((totalHorasExtras / totalHorasTrab) * 10000) / 100 : 0;
@@ -392,7 +393,7 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
       totalRegistros: registros.length,
       funcionariosComRegistro,
       funcionariosSemRegistro,
-      totalFuncionariosAtivos: allEmps.length,
+      totalFuncionariosAtivos: empsAtivos.length,
       toleranciaCLT: TOLERANCIA_CLT_MINUTOS,
     },
     rankingFaltas,
@@ -574,7 +575,7 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
     db.select({
       id: employees.id, nomeCompleto: employees.nomeCompleto, cargo: employees.cargo,
       setor: employees.setor, valorHora: employees.valorHora, funcao: employees.funcao,
-    }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`, sql`${employees.deletedAt} IS NULL`)),
+    }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)),
     db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
       .from(obraFuncionarios).where(and(companyWhere(obraFuncionarios, companyId, companyIds), eq(obraFuncionarios.isActive, 1))),
     db.select({ id: obras.id, nome: obras.nome }).from(obras).where(and(companyWhere(obras, companyId, companyIds), sql`${obras.deletedAt} IS NULL`)),
