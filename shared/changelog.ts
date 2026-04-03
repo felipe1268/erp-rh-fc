@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 992,
+    titulo: "Detalhamento dia a dia dos alertas de aferição",
+    descricao: "Na tela de alertas 'Sem Registro de Ponto', o nome do funcionário agora é clicável e abre uma tela detalhada mostrando cada dia do período no escuro: se foi dia útil sem registro, sábado, domingo ou feriado. Exibe resumo com contadores (com registro, úteis sem registro, feriados, sábados, domingos) e tabela com data, dia da semana, classificação, entrada/saída, horas trabalhadas e status da aferição. Botão 'Ver Resultado' adicionado ao card Aferir Escuro.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-03 21:00:00",
+  },
+  {
     version: 991,
     titulo: "Cards de Funcionários com filtro interativo",
     descricao: "Todos os cards de estatísticas na página de Colaboradores agora são clicáveis e filtram a tabela: Total, Ativos, CLT, PJ, Férias, Afastados, Licença, Desligados e Reclusos. CLT e PJ filtram por tipo de contrato. Cards com filtro ativo mostram destaque visual (ring). Dropdown de filtro também inclui opções CLT e PJ.",

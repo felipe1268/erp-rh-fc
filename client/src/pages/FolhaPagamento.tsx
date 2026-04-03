@@ -172,6 +172,7 @@ export default function FolhaPagamento() {
   const [pagamentoResult, setPagamentoResult] = useState<any>(null);
   const [afericaoResult, setAfericaoResult] = useState<any>(null);
   const [showAfericaoReport, setShowAfericaoReport] = useState(false);
+  const [detalheAfericaoEmpId, setDetalheAfericaoEmpId] = useState<number | null>(null);
   const [calcElapsed, setCalcElapsed] = useState(0);
   const [calcType, setCalcType] = useState<"vale" | "pagamento" | null>(null);
 
@@ -278,6 +279,10 @@ export default function FolhaPagamento() {
   const alertasAfericao = trpc.payrollEngine.listarAlertasAfericao.useQuery(
     { companyId, mesReferencia: mesAno },
     { enabled: !!companyId && !!mesAno }
+  );
+  const detalheAfericaoDias = trpc.payrollEngine.detalharDiasAfericao.useQuery(
+    { companyId, employeeId: detalheAfericaoEmpId!, mesReferencia: mesAno },
+    { enabled: !!companyId && !!mesAno && !!detalheAfericaoEmpId }
   );
   const decidirAfericaoMut = trpc.payrollEngine.decidirAfericao.useMutation({
     onSuccess: (data) => {
@@ -2096,7 +2101,9 @@ export default function FolhaPagamento() {
                     {alertas.map((a: any) => (
                       <tr key={a.id} className="border-t hover:bg-amber-50/50">
                         <td className="p-3">
-                          <div className="font-medium">{a.nomeCompleto || `ID ${a.employeeId}`}</div>
+                          <button className="text-left font-medium text-blue-700 hover:text-blue-900 hover:underline cursor-pointer" onClick={() => setDetalheAfericaoEmpId(a.employeeId)}>
+                            {a.nomeCompleto || `ID ${a.employeeId}`}
+                          </button>
                           <div className="text-xs text-muted-foreground">{fmtNum(a.codigoInterno)}</div>
                         </td>
                         <td className="p-3 text-muted-foreground">{a.funcao || '-'}</td>
@@ -2127,6 +2134,122 @@ export default function FolhaPagamento() {
               </div>
             </>
           )}
+
+          <Dialog open={!!detalheAfericaoEmpId} onOpenChange={(open) => { if (!open) setDetalheAfericaoEmpId(null); }}>
+            <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" resizable={false}>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5 text-amber-600" />
+                  Detalhamento Dia a Dia — Período no Escuro
+                </DialogTitle>
+                {detalheAfericaoDias.data && (
+                  <DialogDescription>
+                    {detalheAfericaoDias.data.employee.nome} ({detalheAfericaoDias.data.employee.funcao || 'Sem função'}) • Jornada: {detalheAfericaoDias.data.employee.jornada || '44h'} • Período: {new Date(detalheAfericaoDias.data.periodoInicio + 'T12:00:00').toLocaleDateString('pt-BR')} a {new Date(detalheAfericaoDias.data.periodoFim + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  </DialogDescription>
+                )}
+              </DialogHeader>
+              {detalheAfericaoDias.isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Carregando detalhamento...</div>
+              ) : detalheAfericaoDias.data ? (() => {
+                const dd = detalheAfericaoDias.data;
+                const diasUteisSemReg = dd.dias.filter((d: any) => d.classificacao === 'dia_util' && !d.temRegistro);
+                const diasComReg = dd.dias.filter((d: any) => d.temRegistro);
+                const feriados = dd.dias.filter((d: any) => d.classificacao === 'feriado');
+                const sabados = dd.dias.filter((d: any) => d.classificacao === 'sabado');
+                const domingos = dd.dias.filter((d: any) => d.classificacao === 'domingo');
+                const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                return (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                      <div className="bg-green-50 border border-green-200 rounded p-2">
+                        <div className="text-lg font-bold text-green-700">{diasComReg.length}</div>
+                        <div className="text-green-600">Com registro</div>
+                      </div>
+                      <div className="bg-red-50 border border-red-200 rounded p-2">
+                        <div className="text-lg font-bold text-red-700">{diasUteisSemReg.length}</div>
+                        <div className="text-red-600">Úteis s/ registro</div>
+                      </div>
+                      <div className="bg-purple-50 border border-purple-200 rounded p-2">
+                        <div className="text-lg font-bold text-purple-700">{feriados.length}</div>
+                        <div className="text-purple-600">Feriados</div>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                        <div className="text-lg font-bold text-blue-700">{sabados.length}</div>
+                        <div className="text-blue-600">Sábados</div>
+                      </div>
+                      <div className="bg-gray-50 border border-gray-200 rounded p-2">
+                        <div className="text-lg font-bold text-gray-700">{domingos.length}</div>
+                        <div className="text-gray-600">Domingos</div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left p-2 font-medium">Data</th>
+                            <th className="text-center p-2 font-medium">Dia</th>
+                            <th className="text-center p-2 font-medium">Classificação</th>
+                            <th className="text-center p-2 font-medium">Registro?</th>
+                            <th className="text-center p-2 font-medium">Entrada</th>
+                            <th className="text-center p-2 font-medium">Saída</th>
+                            <th className="text-center p-2 font-medium">Horas</th>
+                            <th className="text-center p-2 font-medium">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dd.dias.map((dia: any, idx: number) => {
+                            const bgClass = dia.classificacao === 'feriado' ? 'bg-purple-50'
+                              : dia.classificacao === 'sabado' ? 'bg-blue-50/50'
+                              : dia.classificacao === 'domingo' ? 'bg-gray-100'
+                              : !dia.temRegistro ? 'bg-red-50' : '';
+                            return (
+                              <tr key={idx} className={`border-t ${bgClass}`}>
+                                <td className="p-2 font-mono">{new Date(dia.data + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                                <td className="p-2 text-center">{diasSemana[dia.diaSemana]}</td>
+                                <td className="p-2 text-center">
+                                  {dia.classificacao === 'feriado' && <Badge variant="outline" className="bg-purple-100 text-purple-700 text-[10px]">{dia.nomeFeriado}</Badge>}
+                                  {dia.classificacao === 'sabado' && <Badge variant="outline" className="bg-blue-100 text-blue-700 text-[10px]">Sábado</Badge>}
+                                  {dia.classificacao === 'domingo' && <Badge variant="outline" className="bg-gray-200 text-gray-700 text-[10px]">Domingo</Badge>}
+                                  {dia.classificacao === 'dia_util' && <Badge variant="outline" className="text-[10px]">Dia Útil</Badge>}
+                                </td>
+                                <td className="p-2 text-center">
+                                  {dia.temRegistro ? <CheckCircle className="h-3.5 w-3.5 text-green-600 mx-auto" /> : dia.classificacao === 'dia_util' ? <XCircle className="h-3.5 w-3.5 text-red-600 mx-auto" /> : <span className="text-muted-foreground">—</span>}
+                                </td>
+                                <td className="p-2 text-center font-mono text-[10px]">{dia.entrada1 || '—'}</td>
+                                <td className="p-2 text-center font-mono text-[10px]">{dia.saida2 || dia.saida1 || '—'}</td>
+                                <td className="p-2 text-center font-mono text-[10px]">{dia.horasTrabalhadas || '—'}</td>
+                                <td className="p-2 text-center text-[10px]">
+                                  {dia.afericaoResultado ? <Badge className={dia.afericaoResultado === 'ok' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}>{dia.afericaoResultado}</Badge>
+                                    : dia.statusDia ? <span className="text-muted-foreground">{dia.statusDia}</span>
+                                    : '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {diasUteisSemReg.length > 0 && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-semibold text-red-800">{diasUteisSemReg.length} dia(s) útil(eis) sem registro de ponto</p>
+                            <p className="text-xs text-red-700 mt-1">Estes dias eram dias úteis no período no escuro e o funcionário não teve nenhuma batida registrada no relógio. Pode ser erro do relógio ou falta real.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : null}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDetalheAfericaoEmpId(null)}>Fechar</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </DashboardLayout>
     );

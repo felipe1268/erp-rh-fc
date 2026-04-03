@@ -1129,6 +1129,94 @@ export const payrollEngineRouter = router({
       return rows || [];
     }),
 
+  detalharDiasAfericao: protectedProcedure
+    .input(z.object({ companyId: z.number(), employeeId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const criteria = await getPayrollCriteria(db, input.companyId);
+      const prevMes = getPrevMesRef(input.mesReferencia);
+      const prevParsed = parseMesRef(prevMes);
+      const diaCorte = criteria.diaCorte;
+      const prevLastDay = new Date(prevParsed.year, prevParsed.month, 0).getDate();
+      const escuroInicio = `${prevParsed.year}-${String(prevParsed.month).padStart(2, "0")}-${String(diaCorte + 1).padStart(2, "0")}`;
+      const escuroFim = `${prevParsed.year}-${String(prevParsed.month).padStart(2, "0")}-${String(prevLastDay).padStart(2, "0")}`;
+
+      const tcRows = ((await db.execute(sql`
+        SELECT "data", "statusDia", "tipoDia", "entrada1", "saida1", "entrada2", "saida2",
+               "horasTrabalhadas", "horasExtras", "isFalta", "isAtraso", "minutosAtraso",
+               "numBatidas", "afericaoResultado", "afericaoObs"
+        FROM timecard_daily
+        WHERE "companyId" = ${input.companyId} AND "employeeId" = ${input.employeeId}
+          AND "data" >= ${escuroInicio} AND "data" <= ${escuroFim}
+        ORDER BY "data"
+      `)) as any).rows || [];
+
+      const ferRows = ((await db.execute(sql`
+        SELECT data, nome, tipo FROM feriados
+        WHERE (companyId = ${input.companyId} OR companyId IS NULL)
+          AND ativo = 1
+          AND data >= ${escuroInicio} AND data <= ${escuroFim}
+      `)) as any).rows || [];
+      const feriadoMap = new Map<string, string>();
+      for (const f of ferRows as any[]) {
+        feriadoMap.set(f.data, f.nome);
+      }
+
+      const tcMap = new Map<string, any>();
+      for (const r of tcRows as any[]) {
+        tcMap.set(r.data, r);
+      }
+
+      const dias: any[] = [];
+      const start = new Date(`${escuroInicio}T12:00:00`);
+      const end = new Date(`${escuroFim}T12:00:00`);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        const dow = d.getDay();
+        const isSab = dow === 6;
+        const isDom = dow === 0;
+        const nomeFeriado = feriadoMap.get(dateStr) || null;
+        const tc = tcMap.get(dateStr) || null;
+
+        let classificacao = 'dia_util';
+        if (isDom) classificacao = 'domingo';
+        else if (isSab) classificacao = 'sabado';
+        if (nomeFeriado) classificacao = 'feriado';
+
+        dias.push({
+          data: dateStr,
+          diaSemana: dow,
+          classificacao,
+          nomeFeriado,
+          temRegistro: !!tc,
+          statusDia: tc?.statusDia || null,
+          tipoDia: tc?.tipoDia || null,
+          entrada1: tc?.entrada1 || null,
+          saida1: tc?.saida1 || null,
+          entrada2: tc?.entrada2 || null,
+          saida2: tc?.saida2 || null,
+          horasTrabalhadas: tc?.horasTrabalhadas || null,
+          numBatidas: tc?.numBatidas || 0,
+          isFalta: tc?.isFalta || 0,
+          afericaoResultado: tc?.afericaoResultado || null,
+          afericaoObs: tc?.afericaoObs || null,
+        });
+      }
+
+      const empRow = ((await db.execute(sql`
+        SELECT "nomeCompleto", "funcao", "codigoInterno", "jornadaTrabalho"
+        FROM employees WHERE id = ${input.employeeId} AND "companyId" = ${input.companyId}
+      `)) as any).rows?.[0] || {};
+
+      return {
+        employee: { id: input.employeeId, nome: empRow.nomeCompleto, funcao: empRow.funcao, codigo: empRow.codigoInterno, jornada: empRow.jornadaTrabalho },
+        periodoInicio: escuroInicio,
+        periodoFim: escuroFim,
+        dias,
+      };
+    }),
+
   // ============================================================
   // 3c. DECIDIR ALERTA DA AFERIÇÃO (erro relógio vs falta real)
   // ============================================================
