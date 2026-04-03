@@ -60,7 +60,7 @@ export default function ObraEfetivo() {
   // Queries
   const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const obrasAtivas = obrasQ.data ?? [];
-  const efetivoQ = trpc.obras.efetivoPorObra.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const efetivoQ = trpc.obras.efetivoPorObra.useQuery({ companyId, companyIds }, { enabled: !!companyId, staleTime: 0 });
   const efetivo = efetivoQ.data ?? [];
   const semObraQ = trpc.obras.semObra.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const semObra = semObraQ.data ?? [];
@@ -69,8 +69,8 @@ export default function ObraEfetivo() {
   const inconsistenciasCountQ = trpc.obras.inconsistenciasCount.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const inconsistenciasCount = inconsistenciasCountQ.data ?? 0;
 
-  // Funcionários da obra selecionada
-  const funcObraQ = trpc.obras.funcionarios.useQuery({ obraId: selectedObraId || 0, obraIds: selectedObraIds.length > 1 ? selectedObraIds : undefined }, { enabled: !!selectedObraId });
+  // Funcionários da obra selecionada — sempre passa obraIds para cobrir consolidação por nome
+  const funcObraQ = trpc.obras.funcionarios.useQuery({ obraId: selectedObraId || 0, obraIds: selectedObraIds.length > 0 ? selectedObraIds : undefined }, { enabled: !!selectedObraId, staleTime: 0 });
   const funcObra = funcObraQ.data ?? [];
 
   // All employees for multi-select (sem filtro de status — mostra todos os não-deletados)
@@ -1202,9 +1202,9 @@ export default function ObraEfetivo() {
       {/* Dialog: Equipe da Obra (FullScreen) */}
       <FullScreenDialog
         open={equipeDialogOpen}
-        onClose={() => { setEquipeDialogOpen(false); }}
-        title={`Equipe — ${efetivo.find((e: any) => e.obraId === selectedObraId)?.obraNome || ""}`}
-        subtitle={`${funcObra.length} funcionário(s) alocado(s) nesta obra`}
+        onClose={() => { setEquipeDialogOpen(false); efetivoQ.refetch(); }}
+        title={`Equipe — ${efetivo.find((e: any) => (e.obraIds || [e.obraId]).some((id: number) => selectedObraIds.includes(id)))?.obraNome || efetivo.find((e: any) => e.obraId === selectedObraId)?.obraNome || ""}`}
+        subtitle={`${funcObraQ.isLoading ? "..." : funcObra.length} funcionário(s) alocado(s) nesta obra`}
         icon={<Users className="h-5 w-5" />}
         headerActions={
           <div className="flex items-center gap-2">
@@ -1314,7 +1314,7 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
         }
         footer={
           <div className="flex items-center justify-between w-full">
-            <Button variant="outline" onClick={() => setEquipeDialogOpen(false)}>Fechar</Button>
+            <Button variant="outline" onClick={() => { setEquipeDialogOpen(false); efetivoQ.refetch(); }}>Fechar</Button>
             <Button onClick={() => { setAllocForm(f => ({ ...f, obraId: selectedObraId || 0 })); setAllocDialogOpen(true); }} className="bg-[#1B2A4A] hover:bg-[#243660] gap-2">
               <UserPlus className="h-4 w-4" /> Alocar Funcionários
             </Button>

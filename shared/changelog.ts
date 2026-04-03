@@ -7298,4 +7298,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 11:10:00",
   },
+  {
+    version: 978,
+    titulo: "Efetivo por Obra — Correção de contagem inconsistente no card vs equipe",
+    descricao:
+      "• Corrigido bug onde o card da obra mostrava X funcionários mas ao clicar abria vazio\n" +
+      "• Agora sempre envia todos os IDs da obra (obraIds) na consulta de equipe, cobrindo consolidação por nome\n" +
+      "• Removido cache (staleTime: 0) nas queries de efetivo e equipe para dados sempre atualizados\n" +
+      "• Ao fechar o dialog de equipe, os cards agora recarregam automaticamente",
+    tipo: "bugfix",
+    modulos: "Obras, Efetivo",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 12:00:00",
+  },
 ];
