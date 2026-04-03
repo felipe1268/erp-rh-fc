@@ -1081,6 +1081,7 @@ export const payrollEngineRouter = router({
   gerarVale: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      try {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const criteria = await getPayrollCriteria(db, input.companyId);
@@ -1090,6 +1091,7 @@ export const payrollEngineRouter = router({
       // Get active CLT employees — exclui Ferias, Afastado e demais inativos
       const empList = await db.select({
         id: employees.id,
+        companyId: employees.companyId,
         nomeCompleto: employees.nomeCompleto,
         valorHora: employees.valorHora,
         salarioBase: employees.salarioBase,
@@ -1108,10 +1110,11 @@ export const payrollEngineRouter = router({
       // Count faltas ONLY from day 1 to 15 of current month (not the full ponto period)
       const primeiroDiaMes = `${year}-${String(month).padStart(2, '0')}-01`;
       const dia15Mes = `${year}-${String(month).padStart(2, '0')}-15`;
+      const companyIdsSql = sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`);
       const faltasRows = ((await db.execute(sql`
         SELECT "employeeId", SUM("isFalta") as "totalFaltas"
         FROM timecard_daily 
-        WHERE "companyId" = ${input.companyId} 
+        WHERE "companyId" IN (${companyIdsSql}) 
         AND "mesCompetencia" = ${input.mesReferencia}
         AND data BETWEEN ${primeiroDiaMes}::date AND ${dia15Mes}::date
         AND "statusDia" = 'registrado'
@@ -1130,7 +1133,7 @@ export const payrollEngineRouter = router({
       const feriasRows = ((await db.execute(sql`
         SELECT "employeeId", "dataInicio", "dataFim"
         FROM vacation_periods
-        WHERE "companyId" = ${input.companyId}
+        WHERE "companyId" IN (${companyIdsSql})
           AND "deletedAt" IS NULL
           AND status IN ('em_gozo', 'concluida')
           AND "dataInicio" <= ${ultimoDiaMes}::date
@@ -1193,22 +1196,25 @@ export const payrollEngineRouter = router({
       // Preserve manually-rejected employees across recalc
       const rejeitadosRows = ((await db.execute(sql`
         SELECT "employeeId" FROM payroll_advances
-        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'rejeitado'
+        WHERE "companyId" IN (${companyIdsSql}) AND "mesReferencia" = ${input.mesReferencia} AND status = 'rejeitado'
       `)) as any).rows || [];
       const rejeitadosSet = new Set<number>((rejeitadosRows as any[]).map((r: any) => Number(r.employeeId)));
 
       // Preserve manually-approved alerts across recalc (decidirVale sets status='calculado' + motivoBloqueio LIKE '%[APROVADO%')
       const aprovadosAlertaRows = ((await db.execute(sql`
         SELECT "employeeId" FROM payroll_advances
-        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+        WHERE "companyId" IN (${companyIdsSql}) AND "mesReferencia" = ${input.mesReferencia}
           AND status = 'calculado' AND "motivoBloqueio" LIKE '%[APROVADO%'
       `)) as any).rows || [];
       const aprovadosAlertaSet = new Set<number>((aprovadosAlertaRows as any[]).map((r: any) => Number(r.employeeId)));
 
-      // Clear existing advances for this month
-      await db.execute(sql`
-        DELETE FROM payroll_advances WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
-      `);
+      // Clear existing advances for this month (all companies)
+      const allCompanyIds = resolveCompanyIds(input);
+      for (const cid of allCompanyIds) {
+        await db.execute(sql`
+          DELETE FROM payroll_advances WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+        `);
+      }
 
       const results: any[] = [];
       let totalVale = 0;
@@ -1286,7 +1292,7 @@ export const payrollEngineRouter = router({
             : diasFeriasNoMes > 0 ? "ferias_proporcional"
             : faltas > 0 ? "faltas_excessivas"
             : "admissao_recente";
-          advanceInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
+          advanceInsertRows.push(sql`(${emp.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
             ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
             ${1}, ${motivoBloqueio},
             ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'alerta'})`);
@@ -1301,14 +1307,14 @@ export const payrollEngineRouter = router({
 
         // Aprovado automaticamente, aprovado manualmente ou previously rejeitado
         const savedMotivo = foiAprovadoManualmente ? motivoBloqueio : null;
-        advanceInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
+        advanceInsertRows.push(sql`(${emp.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
           ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
           ${0}, ${savedMotivo},
           ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'calculado'})`);
 
         const isRejeitado = rejeitadosSet.has(emp.id);
         if (!isRejeitado) {
-          eventInsertRows.push(sql`(${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista},
+          eventInsertRows.push(sql`(${emp.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista},
             ${formatMoney(valorTotalVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto},
             ${`Vale ${input.mesReferencia} - ${emp.nomeCompleto}`}, 'payroll_advance', ${ctx.user.name || "Sistema"})`);
           totalVale += valorTotalVale;
@@ -1343,7 +1349,7 @@ export const payrollEngineRouter = router({
       for (const empId of rejeitadosSet) {
         await db.execute(sql`
           UPDATE payroll_advances SET status = 'rejeitado'
-          WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+          WHERE "mesReferencia" = ${input.mesReferencia}
             AND "employeeId" = ${empId}
         `);
       }
@@ -1351,22 +1357,27 @@ export const payrollEngineRouter = router({
       // Batch INSERT all financial events in one query
       if (eventInsertRows.length > 0) {
         // Also delete existing financial events for this vale (avoid duplicates on recalc)
-        await db.execute(sql`DELETE FROM financial_events WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia} AND "origemTipo" = 'payroll_advance'`);
+        for (const cid of allCompanyIds) {
+          await db.execute(sql`DELETE FROM financial_events WHERE "companyId" = ${cid} AND "mesCompetencia" = ${input.mesReferencia} AND "origemTipo" = 'payroll_advance'`);
+        }
         await db.execute(sql`
           INSERT INTO financial_events ("companyId", tipo, categoria, "mesCompetencia", "dataPrevista", valor, status, "employeeId", "employeeName", descricao, "origemTipo", "criadoPor")
           VALUES ${sql.join(eventInsertRows, sql`,`)}
         `);
       }
 
-      // Update period
-      await db.execute(sql`
-        UPDATE payroll_periods SET 
-          status = 'vale_gerado',
-          "valeGeradoEm" = NOW(),
-          "valeGeradoPor" = ${ctx.user.name || "Sistema"},
-          "totalVale" = ${formatMoney(totalVale)}
-        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
-      `);
+      // Update period for all companies
+      for (const cid of allCompanyIds) {
+        const companyVale = advanceInsertRows.length > 0 ? totalVale : 0;
+        await db.execute(sql`
+          UPDATE payroll_periods SET 
+            status = 'vale_gerado',
+            "valeGeradoEm" = NOW(),
+            "valeGeradoPor" = ${ctx.user.name || "Sistema"},
+            "totalVale" = ${formatMoney(companyVale)}
+          WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+        `);
+      }
 
       return {
         totalFuncionarios: empList.length,
@@ -1379,6 +1390,10 @@ export const payrollEngineRouter = router({
           ? `Vale calculado: ${empList.length} funcionários, ${bloqueados} com alerta (decisão pendente), total R$ ${formatMoney(totalVale)}`
           : `Vale calculado: ${empList.length} funcionários, total R$ ${formatMoney(totalVale)}`,
       };
+      } catch (err: any) {
+        console.error('[gerarVale] Erro:', err?.message || err, err?.stack);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao calcular vale: ${err?.message || 'erro desconhecido'}` });
+      }
     }),
 
   // ============================================================
