@@ -64,7 +64,7 @@ function getBatidas(r: any): string[] {
   return [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3].filter(Boolean);
 }
 
-type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado";
+type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado" | "escuro";
 
 function nextDay(d: string): string {
   const dt = new Date(d + "T12:00:00Z");
@@ -78,6 +78,8 @@ function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string
   if (isSun) return "domingo";
   if (isSat) return "sabado";
   if (feriasDates?.has(dateStr)) return "ferias";
+  const today = new Date().toISOString().slice(0, 10);
+  if (dateStr > today) return "escuro";
   if (!rec?.horasTrabalhadas || rec.horasTrabalhadas === "0:00" || rec.horasTrabalhadas === "") return "falta";
   const bat = getBatidas(rec);
   if (bat.length > 0 && bat.length % 2 !== 0) return "incompleto";
@@ -96,6 +98,7 @@ const STATUS_STYLE: Record<DayStatus, { row: string; badge: string; label: strin
   sabado:     { row: "bg-slate-50/60",  badge: "bg-slate-100 text-slate-500",   label: "Sábado" },
   domingo:    { row: "bg-slate-50/30",  badge: "",                              label: "Domingo" },
   desligado:  { row: "bg-gray-100/50",  badge: "bg-gray-200 text-gray-500",    label: "Desligado" },
+  escuro:     { row: "bg-indigo-50/30", badge: "bg-indigo-100 text-indigo-600", label: "Pendente" },
 };
 
 function initials(name: string) {
@@ -384,6 +387,8 @@ export default function EspelhoPonto() {
       if (r && !isFerias) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
       if (isWeekendDay) continue;
       if (isFerias) { diasFerias++; continue; }
+      const today = new Date().toISOString().slice(0, 10);
+      if (d > today) continue;
       if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") diasFalta++;
       else { trabalhados++; totalTrabMins += parseHHMM(r.horasTrabalhadas); }
     }
@@ -625,6 +630,7 @@ export default function EspelhoPonto() {
                   ["bg-orange-100 text-orange-700","Incompleto"],
                   ["bg-amber-100 text-amber-700","Atraso"],
                   ["bg-slate-100 text-slate-500","Fim de semana"],
+                  ["bg-indigo-100 text-indigo-600","Pendente"],
                 ].map(([cls, lbl]) => (
                   <span key={lbl} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{lbl}</span>
                 ))}
