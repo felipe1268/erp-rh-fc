@@ -2117,10 +2117,16 @@ export default function FolhaPagamento() {
                         </td>
                         <td className="p-3 text-right font-mono text-red-600">{formatBRL(f.valorTotal)}</td>
                         <td className="p-3 text-center">
-                          <Button size="sm" variant="outline" className="h-7 text-xs"
-                            onClick={() => setDetalheAfericaoEmpId(f.employeeId)}>
-                            <Eye className="h-3 w-3 mr-1" /> Ver Detalhes
-                          </Button>
+                          <div className="flex gap-1 justify-center">
+                            <Button size="sm" variant="outline" className="h-7 text-xs"
+                              onClick={() => setDetalheAfericaoEmpId(f.employeeId)}>
+                              <Eye className="h-3 w-3 mr-1" /> Detalhes
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-7 text-xs text-blue-700 border-blue-300 hover:bg-blue-50"
+                              onClick={() => setLocation(`/espelho-ponto?funcionario=${f.employeeId}&mes=${mesAno}`)}>
+                              <FileText className="h-3 w-3 mr-1" /> Espelho
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -2242,7 +2248,11 @@ export default function FolhaPagamento() {
                   </div>
                 );
               })() : null}
-              <DialogFooter>
+              <DialogFooter className="flex gap-2">
+                <Button variant="default" className="bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => { setDetalheAfericaoEmpId(null); setLocation(`/espelho-ponto?funcionario=${detalheAfericaoEmpId}&mes=${mesAno}`); }}>
+                  <FileText className="h-4 w-4 mr-1" /> Abrir Espelho de Ponto
+                </Button>
                 <Button variant="outline" onClick={() => setDetalheAfericaoEmpId(null)}>Fechar</Button>
               </DialogFooter>
             </DialogContent>
