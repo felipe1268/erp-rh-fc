@@ -168,36 +168,26 @@ export const horasExtrasRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      // --- OVERLAP / UPSERT CHECK ---
-      const overlap = ((await db.execute(sql`
+      // --- CHECK: only 1 active period per mesReferencia ---
+      const existing = ((await db.execute(sql`
         SELECT id, "dataInicio", "dataFim", status FROM he_periods
         WHERE "companyId" = ${input.companyId}
-          AND status != 'cancelado'
-          AND "dataInicio" <= ${input.dataFim}::date
-          AND "dataFim"   >= ${input.dataInicio}::date
+          AND "mesReferencia" = ${input.mesReferencia}
+          AND status NOT IN ('cancelado')
       `)) as any).rows || [];
 
       let existingPeriodId: number | null = null;
-      if (overlap.length > 0) {
-        const exactMatch = overlap.find((ov: any) =>
-          String(ov.dataInicio).slice(0, 10) === input.dataInicio &&
-          String(ov.dataFim).slice(0, 10) === input.dataFim
-        );
-        if (exactMatch && exactMatch.status === 'calculado') {
-          existingPeriodId = Number(exactMatch.id);
-        } else if (exactMatch && exactMatch.status === 'aprovado') {
+      if (existing.length > 0) {
+        const approved = existing.find((r: any) => r.status === 'aprovado');
+        if (approved) {
           throw new TRPCError({
             code: "CONFLICT",
-            message: `Este período já foi aprovado (${String(exactMatch.dataInicio).slice(0, 10)} → ${String(exactMatch.dataFim).slice(0, 10)}). Não é possível recalcular um período aprovado.`,
+            message: `Já existe um período aprovado para ${input.mesReferencia}. Não é possível recalcular.`,
           });
-        } else {
-          const ov = overlap[0];
-          const di = String(ov.dataInicio).slice(0, 10);
-          const df = String(ov.dataFim).slice(0, 10);
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: `Sobreposição detectada com período já registrado: ${di} → ${df} (status: ${ov.status}). Cancele o período existente antes de recalcular.`,
-          });
+        }
+        const calculado = existing.find((r: any) => r.status === 'calculado');
+        if (calculado) {
+          existingPeriodId = Number(calculado.id);
         }
       }
 
@@ -256,6 +246,8 @@ export const horasExtrasRouter = router({
       if (existingPeriodId) {
         await db.execute(sql`
           UPDATE he_periods SET
+            "dataInicio" = ${input.dataInicio}::date,
+            "dataFim" = ${input.dataFim}::date,
             "totalFuncionarios" = ${empResults.length},
             "totalHEMins" = ${totalHEMins},
             "totalValorHE" = ${parseFloat(totalValorHE.toFixed(2))},
