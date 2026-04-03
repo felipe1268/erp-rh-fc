@@ -172,6 +172,10 @@ export default function FolhaPagamento() {
   );
   const [valeResult, setValeResult] = useState<any>(null);
   const [pagamentoResult, setPagamentoResult] = useState<any>(null);
+  const divergenciasFolha = trpc.payrollEngine.validarDivergenciasFolha.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 }
+  );
   const [afericaoResult, setAfericaoResult] = useState<any>(null);
   const [showAfericaoReport, setShowAfericaoReport] = useState(false);
   const [detalheAfericaoEmpId, setDetalheAfericaoEmpId] = useState<number | null>(null);
@@ -231,7 +235,11 @@ export default function FolhaPagamento() {
       setCalcElapsed(0);
       setPagamentoResult(data);
       setViewMode("calculo_pagamento");
-      toast.success(`Pagamento simulado: ${data.totalFuncionarios ?? ''} funcionários — líquido R$ ${data.totalLiquido ? Number(data.totalLiquido).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''}`);
+      if (data.divergencias && data.divergencias.length > 0) {
+        toast.warning(`ATENÇÃO: ${data.divergencias.length} funcionário(s) CLT ativo(s) excluído(s) da folha por cadastro incompleto. Verifique o alerta na tela.`, { duration: 8000 });
+      }
+      toast.success(`Pagamento simulado: ${data.totalFuncionarios ?? ''} de ${data.totalCltAtivos ?? data.totalFuncionarios} CLTs — líquido R$ ${data.totalLiquido ? Number(data.totalLiquido).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''}`);
+      divergenciasFolha.refetch();
       payrollPeriod.refetch();
     },
     onError: (err) => { resetProgress('pagamento'); setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao simular pagamento: ${err.message}`); },
@@ -2594,6 +2602,67 @@ export default function FolhaPagamento() {
               </div>
             </div>
           </div>
+
+          {(() => {
+            const div = divergenciasFolha.data;
+            const simDiv = pagamentoResult.divergencias;
+            const hasSimDiv = simDiv && simDiv.length > 0;
+            const hasLiveDiv = div && div.temDivergencia;
+            if (!hasSimDiv && !hasLiveDiv) return null;
+            const excluidos = hasLiveDiv ? div.excluidos : simDiv;
+            const indevidos = hasLiveDiv ? div.indevidos : [];
+            const totalAtivos = hasLiveDiv ? div.totalCltAtivos : pagamentoResult.totalCltAtivos;
+            const totalFolha = hasLiveDiv ? div.totalNaFolha : pagamentoResult.totalFuncionarios;
+            return (
+              <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 print:hidden">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-amber-800 text-sm">
+                      Divergência detectada: {totalAtivos} CLTs ativos no cadastro, mas {totalFolha} na folha
+                    </p>
+                    {excluidos && excluidos.length > 0 && (
+                      <>
+                        <p className="text-amber-700 text-xs mt-1">
+                          {excluidos.length} funcionário(s) CLT ativo(s) excluído(s) da folha:
+                        </p>
+                        <ul className="mt-1 space-y-0.5">
+                          {excluidos.map((d: any, i: number) => (
+                            <li key={`exc-${i}`} className="text-xs text-amber-800 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-amber-500 rounded-full shrink-0" />
+                              <strong>{d.nome}</strong>
+                              {d.funcao && <span className="text-amber-600">({d.funcao})</span>}
+                              <span className="text-amber-600">— {d.motivo}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {indevidos && indevidos.length > 0 && (
+                      <>
+                        <p className="text-red-700 text-xs mt-2 font-semibold">
+                          {indevidos.length} funcionário(s) na folha que NÃO são CLT ativo:
+                        </p>
+                        <ul className="mt-1 space-y-0.5">
+                          {indevidos.map((d: any, i: number) => (
+                            <li key={`ind-${i}`} className="text-xs text-red-800 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-red-500 rounded-full shrink-0" />
+                              <strong>{d.nome}</strong>
+                              {d.funcao && <span className="text-red-600">({d.funcao})</span>}
+                              <span className="text-red-600">— {d.motivo}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    <p className="text-amber-700 text-[10px] mt-2 italic">
+                      Corrija o cadastro e resimule a folha para corrigir as divergências.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="flex items-center gap-2">
             <Button

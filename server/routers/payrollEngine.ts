@@ -1876,7 +1876,7 @@ export const payrollEngineRouter = router({
       const nextMes = getNextMesRef(input.mesReferencia);
       const nextParsed = parseMesRef(nextMes);
 
-      const empList = await db.select({
+      const allCltAtivos = await db.select({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
         valorHora: employees.valorHora,
@@ -1903,15 +1903,29 @@ export const payrollEngineRouter = router({
         chavePix: employees.chavePix,
         bancoPix: employees.bancoPix,
         cpf: employees.cpf,
+        status: employees.status,
       }).from(employees).where(
         and(
           companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, "CLT"),
           sql`${employees.status} IN ('Ativo', 'Ferias')`,
           sql`${employees.deletedAt} IS NULL`,
-          sql`${employees.valorHora} IS NOT NULL AND ${employees.valorHora} != ''`,
         )
       );
+
+      const divergencias: { employeeId: number; nome: string; funcao: string | null; motivo: string }[] = [];
+      const empList = allCltAtivos.filter(emp => {
+        if (!emp.valorHora || emp.valorHora === '') {
+          divergencias.push({
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            motivo: `Valor hora não preenchido${!emp.salarioBase ? ' e salário base também vazio' : ' (salário base: R$ ' + emp.salarioBase + ')'}`,
+          });
+          return false;
+        }
+        return true;
+      });
 
       // Get advances for this month
       const advRows = ((await db.execute(sql`
@@ -2136,13 +2150,17 @@ export const payrollEngineRouter = router({
 
       const pagamentoResultPayload = {
         totalFuncionarios: empList.length,
+        totalCltAtivos: allCltAtivos.length,
         totalBruto: grandTotalBruto,
         totalDescontos: grandTotalDescontos,
         totalLiquido: grandTotalLiquido,
         dataPagamentoPrevista,
         diasUteis,
         funcionarios: results,
-        message: `Simulação concluída: ${empList.length} funcionários, líquido total R$ ${formatMoney(grandTotalLiquido)}`,
+        divergencias,
+        message: divergencias.length > 0
+          ? `Simulação concluída: ${empList.length} de ${allCltAtivos.length} CLTs ativos processados. ATENÇÃO: ${divergencias.length} funcionário(s) excluído(s) da folha — verifique as divergências.`
+          : `Simulação concluída: ${empList.length} funcionários, líquido total R$ ${formatMoney(grandTotalLiquido)}`,
       };
       const pagJson = JSON.stringify(pagamentoResultPayload);
 
@@ -2180,6 +2198,74 @@ export const payrollEngineRouter = router({
         ORDER BY e."nomeCompleto"
       `)) as any).rows || [];
       return rows || [];
+    }),
+
+  validarDivergenciasFolha: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const allCltAtivos = ((await db.execute(sql`
+        SELECT id, "nomeCompleto", funcao, "valorHora", "salarioBase", status, banco, agencia, conta, cpf
+        FROM employees
+        WHERE "companyId" = ${input.companyId}
+          AND "tipoContrato" = 'CLT'
+          AND status IN ('Ativo', 'Ferias')
+          AND "deletedAt" IS NULL
+      `)) as any).rows || [];
+
+      const pagamentos = ((await db.execute(sql`
+        SELECT "employeeId" FROM payroll_payments
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `)) as any).rows || [];
+
+      const pagEmployeeIds = new Set(pagamentos.map((p: any) => p.employeeId));
+
+      const divergencias: { employeeId: number; nome: string; funcao: string | null; motivo: string }[] = [];
+
+      for (const emp of allCltAtivos) {
+        if (!pagEmployeeIds.has(emp.id)) {
+          const motivos: string[] = [];
+          if (!emp.valorHora || emp.valorHora === '') motivos.push('Valor hora não preenchido');
+          if (!emp.salarioBase) motivos.push('Salário base vazio');
+          if (!emp.cpf) motivos.push('CPF não preenchido');
+          if (!emp.banco && !emp.conta) motivos.push('Dados bancários não preenchidos');
+          divergencias.push({
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            motivo: motivos.length > 0 ? motivos.join('; ') : 'Não foi incluído na última simulação (motivo desconhecido)',
+          });
+        }
+      }
+
+      const empNaFolhaMasInativo: { employeeId: number; nome: string; funcao: string | null; motivo: string }[] = [];
+      const allCltIds = new Set(allCltAtivos.map((e: any) => e.id));
+      const indevidoIds = pagamentos.filter((p: any) => !allCltIds.has(p.employeeId)).map((p: any) => p.employeeId);
+      if (indevidoIds.length > 0) {
+        const indevidoRows = ((await db.execute(sql`
+          SELECT id, "nomeCompleto", funcao, status, "tipoContrato"
+          FROM employees
+          WHERE id IN (${sql.join(indevidoIds.map((id: number) => sql`${id}`), sql`,`)})
+        `)) as any).rows || [];
+        for (const empRow of indevidoRows) {
+          empNaFolhaMasInativo.push({
+            employeeId: empRow.id,
+            nome: empRow.nomeCompleto,
+            funcao: empRow.funcao,
+            motivo: `Na folha mas status atual: ${empRow.status} / contrato: ${empRow.tipoContrato}`,
+          });
+        }
+      }
+
+      return {
+        totalCltAtivos: allCltAtivos.length,
+        totalNaFolha: pagamentos.length,
+        temDivergencia: divergencias.length > 0 || empNaFolhaMasInativo.length > 0,
+        excluidos: divergencias,
+        indevidos: empNaFolhaMasInativo,
+      };
     }),
 
   // ============================================================
