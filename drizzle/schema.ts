@@ -2003,9 +2003,9 @@ export const obraFuncionarios = pgTable("obra_funcionarios", {
         dataFim: date({ mode: 'string' }),
         isActive: smallint().default(1).notNull(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
-        insalubridadeOverride: varchar({ length: 20 }).default('herda'),
-        periculosidadeOverride: varchar({ length: 10 }).default('herda'),
-        adicionalEscolhido: varchar({ length: 20 }).default('auto'),
+        insalubridadeOverride: varchar("insalubridade_override", { length: 20 }).default('herda'),
+        periculosidadeOverride: varchar("periculosidade_override", { length: 10 }).default('herda'),
+        adicionalEscolhido: varchar("adicional_escolhido", { length: 20 }).default('auto'),
 });
 
 export const obraHorasRateio = pgTable("obra_horas_rateio", {
