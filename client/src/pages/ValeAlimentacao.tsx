@@ -1009,12 +1009,23 @@ export default function ValeAlimentacao() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-sm">Total VA iFood (R$)</Label>
-                <Input value={configForm.totalVA_iFood || ""} onChange={e => setConfigForm((f: any) => ({ ...f, totalVA_iFood: e.target.value }))} className="mt-1" />
-              </div>
-              <div>
                 <Label className="text-sm">Dias Úteis Referência</Label>
                 <Input type="number" value={configForm.diasUteisRef || 22} onChange={e => setConfigForm((f: any) => ({ ...f, diasUteisRef: Number(e.target.value) }))} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm">Total VA iFood (R$)</Label>
+                <div className="mt-1 px-3 py-2 rounded-md border bg-muted/50 text-sm font-semibold text-orange-600">
+                  {(() => {
+                    const cafe = configForm.cafeAtivo !== false ? parseBRL(configForm.cafeManhaDia) : 0;
+                    const lanche = configForm.lancheAtivo !== false ? parseBRL(configForm.lancheTardeDia) : 0;
+                    const janta = configForm.jantaAtivo ? parseBRL(configForm.jantaDia) : 0;
+                    const va = parseBRL(configForm.valeAlimentacaoMes);
+                    const dias = configForm.diasUteisRef || 22;
+                    const total = (cafe + lanche + janta) * dias + va;
+                    return `R$ ${fmtNum(total)}`;
+                  })()}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">(Café + Lanche + Jantar) × Dias + VA Mensal</p>
               </div>
             </div>
             <div>
@@ -1025,8 +1036,15 @@ export default function ValeAlimentacao() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConfigDialog(false)}>Cancelar</Button>
             <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={saveConfigMut.isPending} onClick={() => {
+              const cafe = configForm.cafeAtivo !== false ? parseBRL(configForm.cafeManhaDia) : 0;
+              const lanche = configForm.lancheAtivo !== false ? parseBRL(configForm.lancheTardeDia) : 0;
+              const janta = configForm.jantaAtivo ? parseBRL(configForm.jantaDia) : 0;
+              const va = parseBRL(configForm.valeAlimentacaoMes);
+              const dias = configForm.diasUteisRef || 22;
+              const totalCalc = (cafe + lanche + janta) * dias + va;
               saveConfigMut.mutate({
                 ...configForm,
+                totalVA_iFood: totalCalc.toFixed(2).replace(".", ","),
                 id: editingConfigId || undefined,
                 companyId,
               });
