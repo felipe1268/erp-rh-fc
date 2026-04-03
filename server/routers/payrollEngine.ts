@@ -1231,12 +1231,14 @@ export const payrollEngineRouter = router({
       `)) as any).rows || [];
       const feriadoMap = new Map<string, string>();
       for (const f of ferRows as any[]) {
-        feriadoMap.set(f.data, f.nome);
+        const fk = f.data instanceof Date ? f.data.toISOString().split('T')[0] : String(f.data);
+        feriadoMap.set(fk, f.nome);
       }
 
       const tcMap = new Map<string, any>();
       for (const r of tcRows as any[]) {
-        tcMap.set(r.data, r);
+        const dk = r.data instanceof Date ? r.data.toISOString().split('T')[0] : String(r.data);
+        tcMap.set(dk, r);
       }
 
       const dias: any[] = [];
