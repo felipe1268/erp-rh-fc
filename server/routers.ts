@@ -1002,9 +1002,13 @@ export const appRouter = router({
       condicoesVigenciaInicio: z.string().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, responsavelId, ...data } = input;
-      // Se status mudou para Concluída/Paralisada/Cancelada, liberar SNs
+      // Se status mudou para Concluída/Paralisada/Cancelada, liberar SNs e desvincular funcionários
       if (data.status && ["Concluida", "Paralisada", "Cancelada"].includes(data.status)) {
         await releaseObraSns(id);
+        try {
+          const db = await getDb();
+          await db.execute(sql`UPDATE obra_funcionarios SET "isActive" = 0 WHERE "obraId" = ${id} AND "isActive" = 1`);
+        } catch (e) { /* não bloquear o update */ }
       }
       const result = await updateObra(id, { ...data, responsavelId } as any);
       // Registrar na timeline do colaborador responsável se mudou
