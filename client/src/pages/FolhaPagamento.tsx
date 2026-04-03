@@ -2973,18 +2973,27 @@ export default function FolhaPagamento() {
                   );
                 })()}
                 <p className="text-xs text-muted-foreground mb-2 flex-1">Adiantamento — {(() => { const p = (pd as any); return p?.percentualAdiantamento || 40; })()}% do salário (sem HE)</p>
+                {valeOk && valeResult && (
+                  <div className="mb-2 bg-orange-50 border border-orange-200 rounded-lg p-2">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="text-center">
+                        <p className="text-[9px] text-orange-600 font-medium">Funcionários</p>
+                        <p className="text-sm font-black text-orange-800">{valeResult.totalFuncionarios}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[9px] text-orange-600 font-medium">Total Vale</p>
+                        <p className="text-sm font-black text-orange-800">{formatBRL(valeResult.totalVale)}</p>
+                      </div>
+                    </div>
+                    {(valeResult.totalAlertas || 0) > 0 && <p className="text-[9px] text-amber-600 text-center mt-1">{valeResult.totalAlertas} alerta(s)</p>}
+                  </div>
+                )}
                 {valeOk && pd?.valeGeradoEm && (
-                  <div className="mb-2 space-y-1">
+                  <div className="mb-2">
                     <div className="flex items-center gap-1 text-[10px] text-green-700">
                       <CheckCircle className="h-3 w-3" />
                       <span>Concluído {fmtTimestamp(pd.valeGeradoEm)}{pd.valeGeradoPor ? ` por ${pd.valeGeradoPor}` : ''}</span>
                     </div>
-                    {valeResult && (
-                      <div className="text-[10px] text-slate-600 bg-slate-50 rounded px-2 py-1">
-                        {valeResult.totalFuncionarios} func. | {formatBRL(valeResult.totalVale)}
-                        {(valeResult.totalAlertas || 0) > 0 && <span className="text-amber-600 ml-1">| {valeResult.totalAlertas} alerta(s)</span>}
-                      </div>
-                    )}
                   </div>
                 )}
                 <Button size="sm" className={`w-full mt-auto ${valeOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-orange-600 hover:bg-orange-700'}`}
@@ -3027,14 +3036,35 @@ export default function FolhaPagamento() {
                 <div className={`text-[10px] font-bold px-2 py-1 rounded mb-2 text-center ${heDestinoIsBanco ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
                   Destino: {heDestinoIsBanco ? "Banco de Horas" : "Pagamento em Folha"}
                 </div>
-                {heOk && (
-                  <div className="mb-2">
-                    <div className="flex items-center gap-1 text-[10px] text-green-700">
-                      <CheckCircle className="h-3 w-3" />
-                      <span>HE processada e aprovada</span>
+                {heOk && (() => {
+                  const activePds = (hePeriods.data as any[] || []).filter((p: any) => p.status === 'aprovado' || p.status === 'pago');
+                  const lastP = activePds[0];
+                  return lastP ? (
+                    <div className="mb-2 bg-purple-50 border border-purple-200 rounded-lg p-2">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div className="text-center">
+                          <p className="text-[9px] text-purple-600 font-medium">Funcionários</p>
+                          <p className="text-sm font-black text-purple-800">{lastP.totalFuncionarios || '-'}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[9px] text-purple-600 font-medium">Total HE</p>
+                          <p className="text-sm font-black text-purple-800">{lastP.totalValor ? formatBRL(lastP.totalValor) : lastP.totalHoras ? `${lastP.totalHoras}h` : '-'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 text-[10px] text-green-700 mt-1.5 justify-center">
+                        <CheckCircle className="h-3 w-3" />
+                        <span>HE processada e aprovada</span>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="mb-2">
+                      <div className="flex items-center gap-1 text-[10px] text-green-700">
+                        <CheckCircle className="h-3 w-3" />
+                        <span>HE processada e aprovada</span>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="mt-auto">
                   {(() => {
                     if (!step2Ready) return (
@@ -3107,20 +3137,44 @@ export default function FolhaPagamento() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mb-2 flex-1">Confere o que foi estimado no escuro com o ponto real (DIXI) recebido</p>
-                {afericaoOk && pd?.afericaoEm && (
+                {afericaoOk && (
                   <div className="mb-2 space-y-1">
-                    <div className="flex items-center gap-1 text-[10px] text-green-700">
-                      <CheckCircle className="h-3 w-3" />
-                      <span>Concluído {fmtTimestamp(pd.afericaoEm)}{pd.afericaoPor ? ` por ${pd.afericaoPor}` : ''}</span>
-                    </div>
-                    {afericaoResult && (
-                      <button onClick={() => setShowAfericaoReport(true)} className="text-[10px] text-slate-600 bg-slate-50 rounded px-2 py-1 hover:bg-slate-100 transition-colors cursor-pointer text-left w-full">
-                        {afericaoResult.totalAferidos} dias | {afericaoResult.totalOk || 0} OK | {afericaoResult.divergencias} diverg. <span className="text-blue-500 underline ml-1">Ver relatório</span>
-                      </button>
-                    )}
-                    {(pd.totalDivergenciasAferidas || 0) > 0 && !afericaoResult && (
-                      <div className="text-[10px] text-slate-600 bg-slate-50 rounded px-2 py-1">
-                        {pd.totalDivergenciasAferidas} divergência(s) registrada(s)
+                    {afericaoResult ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+                        <div className="grid grid-cols-3 gap-1">
+                          <div className="text-center">
+                            <p className="text-[9px] text-amber-600 font-medium">Aferidos</p>
+                            <p className="text-sm font-black text-amber-800">{afericaoResult.totalAferidos}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[9px] text-green-600 font-medium">OK</p>
+                            <p className="text-sm font-black text-green-700">{afericaoResult.totalOk || 0}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[9px] text-red-600 font-medium">Diverg.</p>
+                            <p className="text-sm font-black text-red-700">{afericaoResult.divergencias}</p>
+                          </div>
+                        </div>
+                        {afericaoResult.faltas > 0 && (
+                          <div className="flex justify-between mt-1 text-[9px]">
+                            <span className="text-red-600">{afericaoResult.faltas} falta(s)</span>
+                            <span className="text-amber-600">{afericaoResult.atrasos || 0} atraso(s)</span>
+                          </div>
+                        )}
+                        <button onClick={() => setShowAfericaoReport(true)} className="text-[10px] text-blue-600 underline mt-1 w-full text-center hover:text-blue-800">
+                          Ver relatório completo
+                        </button>
+                      </div>
+                    ) : (pd.totalDivergenciasAferidas || 0) > 0 ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-center">
+                        <p className="text-sm font-black text-amber-800">{pd.totalDivergenciasAferidas}</p>
+                        <p className="text-[9px] text-amber-600 font-medium">divergência(s)</p>
+                      </div>
+                    ) : null}
+                    {pd?.afericaoEm && (
+                      <div className="flex items-center gap-1 text-[10px] text-green-700">
+                        <CheckCircle className="h-3 w-3" />
+                        <span>Concluído {fmtTimestamp(pd.afericaoEm)}{pd.afericaoPor ? ` por ${pd.afericaoPor}` : ''}</span>
                       </div>
                     )}
                   </div>
@@ -3167,17 +3221,31 @@ export default function FolhaPagamento() {
                   );
                 })()}
                 <p className="text-xs text-muted-foreground mb-2 flex-1">100% salário − adiantamento − faltas − INSS − descontos</p>
+                {pagOk && pagamentoResult && (
+                  <div className="mb-2 bg-green-50 border border-green-200 rounded-lg p-2">
+                    <div className="grid grid-cols-3 gap-1">
+                      <div className="text-center">
+                        <p className="text-[9px] text-green-600 font-medium">Bruto</p>
+                        <p className="text-[11px] font-black text-green-800">{formatBRL(pagamentoResult.totalBruto)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[9px] text-red-500 font-medium">Descontos</p>
+                        <p className="text-[11px] font-black text-red-600">{formatBRL(pagamentoResult.totalDescontos)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[9px] text-[#1B2A4A] font-medium">Líquido</p>
+                        <p className="text-[11px] font-black text-[#1B2A4A]">{formatBRL(pagamentoResult.totalLiquido)}</p>
+                      </div>
+                    </div>
+                    <p className="text-[9px] text-green-600 text-center mt-1">{pagamentoResult.totalFuncionarios} funcionários</p>
+                  </div>
+                )}
                 {pagOk && pd?.pagamentoSimuladoEm && (
-                  <div className="mb-2 space-y-1">
+                  <div className="mb-2">
                     <div className="flex items-center gap-1 text-[10px] text-green-700">
                       <CheckCircle className="h-3 w-3" />
                       <span>Concluído {fmtTimestamp(pd.pagamentoSimuladoEm)}{pd.pagamentoSimuladoPor ? ` por ${pd.pagamentoSimuladoPor}` : ''}</span>
                     </div>
-                    {pagamentoResult && (
-                      <div className="text-[10px] text-slate-600 bg-slate-50 rounded px-2 py-1">
-                        {pagamentoResult.totalFuncionarios} func. | Líq. {formatBRL(pagamentoResult.totalLiquido)}
-                      </div>
-                    )}
                   </div>
                 )}
                 <Button size="sm" className={`w-full mt-auto ${pagOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-green-600 hover:bg-green-700'}`}
