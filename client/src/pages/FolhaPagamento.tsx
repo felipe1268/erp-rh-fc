@@ -3368,6 +3368,24 @@ export default function FolhaPagamento() {
                     <h4 className="font-semibold text-sm text-red-700 mb-2 flex items-center gap-1">
                       <AlertTriangle className="h-4 w-4" /> Divergências Encontradas ({afericaoResult.divergenciasList.length})
                     </h4>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 text-xs text-slate-700 space-y-1">
+                      <p className="font-semibold text-slate-800 mb-1">O que significa cada tipo:</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="flex items-start gap-1.5">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 whitespace-nowrap mt-0.5">SEM REGISTRO</span>
+                          <span>O sistema estimou jornada normal, mas <strong>não encontrou nenhuma batida</strong> no relógio DIXI neste dia. Pode ser falha do relógio ou falta real.</span>
+                        </div>
+                        <div className="flex items-start gap-1.5">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 whitespace-nowrap mt-0.5">FALTA</span>
+                          <span>Existe registro no DIXI, mas <strong>sem nenhuma entrada/saída</strong> válida — indica que o funcionário não trabalhou neste dia.</span>
+                        </div>
+                        <div className="flex items-start gap-1.5">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 whitespace-nowrap mt-0.5">ATRASO</span>
+                          <span>O funcionário registrou entrada, mas <strong>após o horário</strong> previsto (além da tolerância configurada).</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1 italic">Clique no nome do funcionário para abrir o cartão de ponto e validar a informação.</p>
+                    </div>
                     <div className="rounded-lg border border-red-200 overflow-hidden">
                       <table className="w-full text-xs">
                         <thead>
