@@ -12,6 +12,11 @@ import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizz
 import { parseBRL } from "../utils/parseBRL";
 import { invokeLLM } from "../_core/llm";
 
+const DESLIGADO_STATUSES = ['Desligado', 'Lista_Negra'];
+function isDesligadoStatus(status?: string | null): boolean {
+  return !!status && DESLIGADO_STATUSES.includes(status);
+}
+
 /** Chave de agrupamento de cidades: minúsculo + sem acentos */
 const cidadeNormKey = (s: string) =>
   s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -333,7 +338,7 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
     .filter(([, d]) => d.faltasDias > 0)
     .map(([empId, d]) => {
       const emp = empMap.get(Number(empId));
-      return { employeeId: Number(empId), nome: emp?.nome || `#${empId}`, funcao: emp?.funcao || "-", faltasDias: d.faltasDias, faltasHoras: d.faltas };
+      return { employeeId: Number(empId), nome: emp?.nome || `Func. ${empId}`, funcao: emp?.funcao || "-", isDesligado: isDesligadoStatus(emp?.status), faltasDias: d.faltasDias, faltasHoras: d.faltas };
     }).sort((a, b) => b.faltasDias - a.faltasDias).slice(0, 10);
 
   // Ranking de atrasos (com tolerância CLT Art. 58 §1º - 10min/dia)
@@ -343,7 +348,7 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
       const emp = empMap.get(Number(empId));
       const horas = Math.floor(d.atrasosMinutos / 60);
       const minutos = d.atrasosMinutos % 60;
-      return { employeeId: Number(empId), nome: emp?.nome || `#${empId}`, funcao: emp?.funcao || "-", atrasosMinutos: d.atrasosMinutos, atrasosFormatado: `${horas}h${minutos > 0 ? String(minutos).padStart(2, '0') + 'min' : ''}` };
+      return { employeeId: Number(empId), nome: emp?.nome || `Func. ${empId}`, funcao: emp?.funcao || "-", isDesligado: isDesligadoStatus(emp?.status), atrasosMinutos: d.atrasosMinutos, atrasosFormatado: `${horas}h${minutos > 0 ? String(minutos).padStart(2, '0') + 'min' : ''}` };
     }).sort((a, b) => b.atrasosMinutos - a.atrasosMinutos).slice(0, 10);
 
   // Horas por dia da semana
@@ -574,7 +579,7 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
     db.select().from(extraPayments).where(and(...conditions)),
     db.select({
       id: employees.id, nomeCompleto: employees.nomeCompleto, cargo: employees.cargo,
-      setor: employees.setor, valorHora: employees.valorHora, funcao: employees.funcao,
+      setor: employees.setor, valorHora: employees.valorHora, funcao: employees.funcao, status: employees.status,
     }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)),
     db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
       .from(obraFuncionarios).where(and(companyWhere(obraFuncionarios, companyId, companyIds), eq(obraFuncionarios.isActive, 1))),
@@ -604,10 +609,11 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
     .map(([empId, data]) => {
       const emp = empMap.get(Number(empId));
       return {
-        nome: emp?.nomeCompleto || `#${empId}`,
+        nome: emp?.nomeCompleto || `Func. ${empId}`,
         funcao: emp?.funcao || emp?.cargo || "-",
         setor: emp?.setor || "-",
         valorHora: emp?.valorHora || "0",
+        isDesligado: isDesligadoStatus(emp?.status),
         ...data,
       };
     }).sort((a, b) => b.horas - a.horas);
@@ -698,9 +704,10 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
     return {
       id: he.id,
       mesReferencia: he.mesReferencia,
-      nome: emp?.nomeCompleto || `#${he.employeeId}`,
+      nome: emp?.nomeCompleto || `Func. ${he.employeeId}`,
       funcao: emp?.funcao || emp?.cargo || "-",
       setor: emp?.setor || "-",
+      isDesligado: isDesligadoStatus(emp?.status),
       obra: obraId ? (obraMap.get(obraId) || `Obra #${obraId}`) : "Sem Obra",
       horas: parseFloat(he.quantidadeHoras || "0"),
       percentual: he.percentualAcrescimo || "50",
@@ -869,7 +876,7 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
   const allFuncStats = Object.entries(porFunc)
     .map(([empId, d]) => {
       const emp = empMap.get(Number(empId));
-      return { id: Number(empId), nome: emp?.nome || `#${empId}`, funcao: emp?.funcao || "-", qtd: d.qtd, entregas: d.entregas, custo: d.custo };
+      return { id: Number(empId), nome: emp?.nome || `Func. ${empId}`, funcao: emp?.funcao || "-", isDesligado: isDesligadoStatus(emp?.status), qtd: d.qtd, entregas: d.entregas, custo: d.custo };
     });
   const topFuncionarios = [...allFuncStats].sort((a, b) => b.qtd - a.qtd).slice(0, 10);
 
@@ -1105,7 +1112,7 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
         }
 
         const intervalos: number[] = [];
-        const funcDetalhe: { nome: string; funcao: string; diasReal: number; entregas: number; datasEntrega: string[]; motivos: string[] }[] = [];
+        const funcDetalhe: { nome: string; funcao: string; isDesligado: boolean; diasReal: number; entregas: number; datasEntrega: string[]; motivos: string[] }[] = [];
 
         for (const [empIdStr, info] of Object.entries(porFunc)) {
           const empId = Number(empIdStr);
@@ -1113,8 +1120,9 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
           const { datas, motivos } = info;
           if (datas.length < 2) {
             funcDetalhe.push({
-              nome: emp?.nome || `#${empId}`,
+              nome: emp?.nome || `Func. ${empId}`,
               funcao: emp?.funcao || '-',
+              isDesligado: isDesligadoStatus(emp?.status),
               diasReal: 0,
               entregas: datas.length,
               datasEntrega: datas,
@@ -1135,8 +1143,9 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
             }
           }
           funcDetalhe.push({
-            nome: emp?.nome || `#${empId}`,
+            nome: emp?.nome || `Func. ${empId}`,
             funcao: emp?.funcao || '-',
+            isDesligado: isDesligadoStatus(emp?.status),
             diasReal: count > 0 ? Math.round(somaIntervalo / count) : 0,
             entregas: datas.length,
             datasEntrega: datas,

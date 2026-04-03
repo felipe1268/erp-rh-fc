@@ -4,6 +4,7 @@ import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import MonthSelector from "@/components/MonthSelector";
+import { EmpNameWithStatus } from "@/components/EmpStatusBadge";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -154,11 +155,11 @@ export default function DashHorasExtras() {
                             <td className="py-2 pr-3 font-medium">
                               {r.employeeId ? (
                                 <Link href={`/colaboradores?edit=${r.employeeId}`} className="text-blue-600 hover:underline flex items-center gap-1">
-                                  <span className="truncate max-w-[180px]">{r.nome}</span>
+                                  <EmpNameWithStatus nome={r.nome} isDesligado={r.isDesligado} maxWidth="max-w-[180px]" />
                                   <ExternalLink className="h-3 w-3 flex-shrink-0" />
                                 </Link>
                               ) : (
-                                <span className="truncate max-w-[180px]">{r.nome}</span>
+                                <EmpNameWithStatus nome={r.nome} isDesligado={r.isDesligado} maxWidth="max-w-[180px]" />
                               )}
                             </td>
                             <td className="py-2 pr-3 text-muted-foreground text-xs">{r.funcao}</td>
@@ -241,11 +242,11 @@ export default function DashHorasExtras() {
                             <td className="py-2 px-3 font-mono text-xs">{d.mesReferencia}</td>
                             <td className="py-2 px-3 font-medium">
                               {d.employeeId ? (
-                                <Link href={`/colaboradores?edit=${d.employeeId}`} className="text-blue-600 hover:underline truncate max-w-[160px] block">
-                                  {d.nome}
+                                <Link href={`/colaboradores?edit=${d.employeeId}`} className="text-blue-600 hover:underline block">
+                                  <EmpNameWithStatus nome={d.nome} isDesligado={d.isDesligado} maxWidth="max-w-[160px]" />
                                 </Link>
                               ) : (
-                                <span className="truncate max-w-[160px]">{d.nome}</span>
+                                <EmpNameWithStatus nome={d.nome} isDesligado={d.isDesligado} maxWidth="max-w-[160px]" />
                               )}
                             </td>
                             <td className="py-2 px-3 text-xs text-muted-foreground">{d.funcao}</td>

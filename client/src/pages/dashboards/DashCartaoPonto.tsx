@@ -4,6 +4,7 @@ import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import MonthSelector from "@/components/MonthSelector";
+import { EmpNameWithStatus } from "@/components/EmpStatusBadge";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -172,7 +173,7 @@ export default function DashCartaoPonto() {
                           <div className="flex items-center gap-2.5">
                             <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${i < 3 ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
                             <div className="min-w-0">
-                              <p className="text-sm font-medium truncate max-w-[220px]">{r.nome}</p>
+                              <p className="text-sm font-medium"><EmpNameWithStatus nome={r.nome} isDesligado={r.isDesligado} /></p>
                               <p className="text-xs text-muted-foreground">{r.funcao}</p>
                             </div>
                           </div>
@@ -216,7 +217,7 @@ export default function DashCartaoPonto() {
                           <div className="flex items-center gap-2.5">
                             <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${i < 3 ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
                             <div className="min-w-0">
-                              <p className="text-sm font-medium truncate max-w-[220px]">{r.nome}</p>
+                              <p className="text-sm font-medium"><EmpNameWithStatus nome={r.nome} isDesligado={r.isDesligado} /></p>
                               <p className="text-xs text-muted-foreground">{r.funcao}</p>
                             </div>
                           </div>

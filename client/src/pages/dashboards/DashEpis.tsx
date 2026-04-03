@@ -4,6 +4,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
+import { EmpNameWithStatus } from "@/components/EmpStatusBadge";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -474,7 +475,7 @@ export default function DashEpis() {
                                   <td className="py-2 pr-3 text-muted-foreground">{i + 1}</td>
                                   <td className="py-2 pr-3 font-medium text-blue-700 hover:underline flex items-center gap-1.5">
                                     <ChevronRight className="h-3.5 w-3.5 opacity-50 shrink-0" />
-                                    {f.nome}
+                                    <EmpNameWithStatus nome={f.nome} isDesligado={f.isDesligado} maxWidth="max-w-[200px]" />
                                   </td>
                                   <td className="py-2 pr-3 text-muted-foreground">{f.funcao}</td>
                                   <td className="py-2 pr-3 text-right">{f.entregas}</td>
@@ -558,7 +559,7 @@ export default function DashEpis() {
                 <InsightCard
                   icon={Award}
                   title="Func. Mais Recebe EPI"
-                  value={data.funcMaisEpi.nome.length > 30 ? data.funcMaisEpi.nome.slice(0, 30) + '...' : data.funcMaisEpi.nome}
+                  value={(data.funcMaisEpi.nome.length > 30 ? data.funcMaisEpi.nome.slice(0, 30) + '...' : data.funcMaisEpi.nome) + (data.funcMaisEpi.isDesligado ? ' (Desligado)' : '')}
                   sub={`${data.funcMaisEpi.qtd} unidades • ${data.funcMaisEpi.funcao}`}
                   color="purple"
                 />
@@ -568,7 +569,7 @@ export default function DashEpis() {
                 <InsightCard
                   icon={User}
                   title="Func. Menos Recebe EPI"
-                  value={data.funcMenosEpi.nome.length > 30 ? data.funcMenosEpi.nome.slice(0, 30) + '...' : data.funcMenosEpi.nome}
+                  value={(data.funcMenosEpi.nome.length > 30 ? data.funcMenosEpi.nome.slice(0, 30) + '...' : data.funcMenosEpi.nome) + (data.funcMenosEpi.isDesligado ? ' (Desligado)' : '')}
                   sub={`${data.funcMenosEpi.qtd} unidade(s) • ${data.funcMenosEpi.funcao}`}
                   color="blue"
                 />
@@ -903,7 +904,7 @@ export default function DashEpis() {
                                               <tbody>
                                                 {a.funcDetalhe.map((f: any, fi: number) => (
                                                   <tr key={fi} className="border-t border-border/30">
-                                                    <td className="py-1.5 pr-3 font-medium">{f.nome}</td>
+                                                    <td className="py-1.5 pr-3 font-medium"><EmpNameWithStatus nome={f.nome} isDesligado={f.isDesligado} maxWidth="max-w-[200px]" /></td>
                                                     <td className="py-1.5 pr-3 text-muted-foreground">{f.funcao}</td>
                                                     <td className="py-1.5 pr-3 text-center">{f.entregas}</td>
                                                     <td className="py-1.5 pr-3 text-center">
@@ -1166,7 +1167,7 @@ export default function DashEpis() {
                             <td className="py-2 pr-3 text-muted-foreground">{i + 1}</td>
                             <td className="py-2 pr-3 font-medium text-blue-700 hover:underline flex items-center gap-1.5">
                               <ChevronRight className="h-3.5 w-3.5 opacity-50 shrink-0" />
-                              {f.nome}
+                              <EmpNameWithStatus nome={f.nome} isDesligado={f.isDesligado} maxWidth="max-w-[200px]" />
                             </td>
                             <td className="py-2 pr-3 text-muted-foreground">{f.funcao}</td>
                             <td className="py-2 pr-3 text-right">{f.entregas}</td>
