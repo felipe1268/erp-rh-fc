@@ -16,7 +16,7 @@ import { Plus, Search, FileText, Trash2, Edit2, Eye, Copy, Link2, ToggleLeft, To
 
 export default function AvalPesquisas() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const utils = trpc.useUtils();
 

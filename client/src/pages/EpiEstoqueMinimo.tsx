@@ -16,7 +16,7 @@ import { fmtNum } from "@/lib/formatters";
 
 export default function EpiEstoqueMinimo() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState<"alertas" | "config">("alertas");
   const [showAddForm, setShowAddForm] = useState(false);

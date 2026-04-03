@@ -8,7 +8,7 @@ import { useLocation } from "wouter";
 export default function PainelTerceiros() {
   const { user } = useAuth();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [, setLocation] = useLocation();
   const { data: stats, isLoading } = trpc.terceiros.painel.useQuery(

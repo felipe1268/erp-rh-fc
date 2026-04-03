@@ -27,7 +27,7 @@ interface EpiAssinaturaProps {
 
 export default function EpiAssinatura({ employeeId, employeeName, deliveryId, tipo, tipoAssinante = "funcionario", epiNome, onComplete, onCancel }: EpiAssinaturaProps) {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);

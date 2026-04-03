@@ -81,7 +81,7 @@ export function ActivityTracker() {
   const lastPage = useRef<string | null>(null);
   const enterTime = useRef<number>(Date.now());
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const companyId = selectedCompanyId && selectedCompanyId !== "construtoras"
+  const companyId = selectedCompanyId
     ? parseInt(selectedCompanyId, 10) : 0;
 
   const sendLeave = useCallback((pagina: string, startTime: number) => {

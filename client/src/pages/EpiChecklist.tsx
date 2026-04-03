@@ -17,7 +17,7 @@ import EpiAssinatura from "./EpiAssinatura";
 
 export default function EpiChecklist() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState<"pendentes" | "concluidos" | "novo">("pendentes");
   const [search, setSearch] = useState("");

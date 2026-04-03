@@ -74,7 +74,7 @@ const CARGO_CIPA: Record<string, string> = {
 
 export default function CipaCompleta() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState("visao");
   const [selectedEleicaoId, setSelectedEleicaoId] = useState<number | null>(null);

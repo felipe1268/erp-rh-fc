@@ -499,7 +499,7 @@ export default function FechamentoPonto() {
   const [, setLocation] = useLocation();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
   const isMaster = user?.role === "admin_master";
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const now = new Date();
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());

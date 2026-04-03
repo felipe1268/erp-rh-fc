@@ -23,7 +23,7 @@ const CLIMA_CATEGORIAS: Record<string, { label: string; icon: any; cor: string }
 
 export default function AvalClima() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const utils = trpc.useUtils();
 

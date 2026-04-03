@@ -27,8 +27,8 @@ const TAX_FIELDS = [
 const EMPTY_PARTNER = { nome: "", cpf: "", cargo: "", percentualSociedade: "", valorProLabore: "", diaVencimento: "5", pixChave: "" };
 
 export function FinanceiroConfigSection() {
-  const { selectedCompanyId, isConstrutoras, construtorasIds } = useCompany();
-  const companyId = isConstrutoras ? (construtorasIds[0] || 0) : (Number(selectedCompanyId) || 0);
+  const { selectedCompanyId } = useCompany();
+  const companyId = Number(selectedCompanyId) || 0;
 
   const [expanded, setExpanded] = useState<"tributario" | "socios" | null>(null);
   const [taxForm, setTaxForm] = useState<any>({});

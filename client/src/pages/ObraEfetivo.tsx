@@ -26,11 +26,11 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { fmtNum } from "@/lib/formatters";
 
 export default function ObraEfetivo() {
-  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery, construtorasIds } = useCompany();
+  const { selectedCompanyId, getCompanyIdsForQuery } = useCompany();
   const companyIds = getCompanyIdsForQuery();
   // Quando CONSTRUTORAS está selecionado, selectedCompanyId = "construtoras" (string)
   // parseInt("construtoras") = NaN, que desabilita queries. Usar primeiro ID das construtoras.
-  const companyId = isConstrutoras ? (construtorasIds[0] || 0) : (selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0);
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
 
   const [activeTab, setActiveTab] = useState("efetivo");
   const [search, setSearch] = useState("");

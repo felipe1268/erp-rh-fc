@@ -47,7 +47,7 @@ export default function Home() {
     return isAdminMaster || !hasGroup || groupCanAccessRoute(route);
   };
   const hideValues = (route: string) => !isAdminMaster && hasGroup && groupOcultarValores(route);
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : undefined;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || undefined : undefined;
   const companyIds = getCompanyIdsForQuery();
   const [alertasOpen, setAlertasOpen] = useState(false);
   const [anivEmpresaOpen, setAnivEmpresaOpen] = useState(false);

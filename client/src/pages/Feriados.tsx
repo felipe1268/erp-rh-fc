@@ -15,7 +15,7 @@ const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov"
 
 export default function Feriados() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? Number(selectedCompanyId) : 0;
+  const companyId = selectedCompanyId ? Number(selectedCompanyId) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [anoFiltro, setAnoFiltro] = useState(new Date().getFullYear());
   const [search, setSearch] = useState("");

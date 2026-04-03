@@ -9,8 +9,8 @@ import { Save, ChevronRight, ShoppingCart, Hash, ShieldCheck, Percent } from "lu
 import { toast } from "sonner";
 
 export function ComprasConfigSection() {
-  const { selectedCompanyId, isConstrutoras, construtorasIds } = useCompany();
-  const companyId = isConstrutoras ? (construtorasIds[0] || 0) : (Number(selectedCompanyId) || 0);
+  const { selectedCompanyId } = useCompany();
+  const companyId = Number(selectedCompanyId) || 0;
 
   const [expanded, setExpanded] = useState<"numeracao" | "aprovacao" | "comissao" | null>(null);
 

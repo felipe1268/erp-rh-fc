@@ -112,7 +112,7 @@ export default function PayrollCompetencias() {
   const { user } = useAuth();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const utils = trpc.useUtils();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
 
   const now = new Date();

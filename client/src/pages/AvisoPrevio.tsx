@@ -57,7 +57,7 @@ const REDUCAO_LABELS: Record<string, string> = {
 
 export default function AvisoPrevio() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const { user } = useAuth();
   const [search, setSearch] = useState("");

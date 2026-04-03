@@ -7492,4 +7492,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 21:00:00",
   },
+  {
+    versao: 994,
+    descricao:
+      "Remoção completa do modo grupo 'CONSTRUTORAS' do ERP.\n" +
+      "• Opção 'CONSTRUTORAS' removida do seletor de empresa\n" +
+      "• CompanyContext simplificado — sem lógica de grupo\n" +
+      "• Todas as ~100 páginas limpas de referências ao modo construtoras\n" +
+      "• Se localStorage tinha 'construtoras' salvo, automaticamente reseta\n" +
+      "• Hook useCompany retorna sempre a empresa selecionada diretamente",
+    tipo: "melhoria",
+    modulos: "Global",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 21:30:00",
+  },
 ];

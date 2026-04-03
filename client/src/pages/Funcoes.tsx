@@ -93,7 +93,7 @@ type FilterType = "todas" | "incompletas" | "sem_cbo" | "sem_descricao" | "sem_o
 
 export default function Funcoes() {
   const { selectedCompanyId, selectedCompany, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const funcoesQ = trpc.jobFunctions.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
   const funcoes = funcoesQ.data ?? [];

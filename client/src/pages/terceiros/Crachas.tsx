@@ -112,7 +112,7 @@ interface BadgeData {
 export default function Crachas() {
   const { user } = useAuth();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [activeTab, setActiveTab] = useState<"clt" | "pj" | "terceiro">("clt");
   const [search, setSearch] = useState("");

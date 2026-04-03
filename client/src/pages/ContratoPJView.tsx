@@ -100,7 +100,7 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
   const [, navigate] = useLocation();
   const contratoId = routeContratoId;
   const { selectedCompany, selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== "construtoras") ? Number(selectedCompanyId) : 0;
+  const companyId = Number(selectedCompanyId) || 0;
   const companyIds = getCompanyIdsForQuery();
 
   const { data: contrato, isLoading, error } = (trpc as any).pj.contratos.getById.useQuery(

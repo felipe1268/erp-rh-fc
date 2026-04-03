@@ -12,7 +12,7 @@ interface Props {
 
 export default function AlertaDivergenciaFolha({ mesReferencia, mesLabel, variant = "full" }: Props) {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [expanded, setExpanded] = useState(false);
 

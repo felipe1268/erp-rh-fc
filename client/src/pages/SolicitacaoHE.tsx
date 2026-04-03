@@ -64,7 +64,7 @@ export default function SolicitacaoHE() {
     funcionarioIds: [] as number[],
   });
 
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
 
   // Queries

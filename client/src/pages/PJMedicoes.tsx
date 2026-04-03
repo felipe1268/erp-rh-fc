@@ -21,7 +21,7 @@ const MESES_LABEL = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","J
 
 export default function PJMedicoes() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? Number(selectedCompanyId) : 0;
+  const companyId = selectedCompanyId ? Number(selectedCompanyId) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin_master' || user?.role === 'admin';

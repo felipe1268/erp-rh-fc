@@ -25,7 +25,7 @@ export default function AditivoPJViewWrapper() {
 function AditivoPJViewInner({ aditivoId }: { aditivoId: number }) {
   const [, navigate] = useLocation();
   const { selectedCompany, selectedCompanyId } = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== "construtoras") ? Number(selectedCompanyId) : 0;
+  const companyId = Number(selectedCompanyId) || 0;
 
   const { data: aditivo, isLoading, error } = (trpc as any).pj.aditivos.getById.useQuery(
     { id: aditivoId, companyId },

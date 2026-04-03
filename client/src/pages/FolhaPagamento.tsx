@@ -51,11 +51,11 @@ function parseBRLNum(val: string | number | null | undefined): number {
 type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo";
 
 export default function FolhaPagamento() {
-  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const { selectedCompanyId, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
   const isMaster = user?.role === "admin_master";
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const now = new Date();
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());

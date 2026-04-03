@@ -285,7 +285,7 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
 
 export default function EspelhoPonto() {
   const { selectedCompanyId, getCompanyIdsForQuery, isConstrutoras } = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== "construtoras")
+  const companyId = selectedCompanyId
     ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;

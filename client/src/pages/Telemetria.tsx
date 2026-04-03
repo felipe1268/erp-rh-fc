@@ -286,7 +286,7 @@ function PerfilUsuario({ userId, companyId, periodo, onBack }: {
 export default function Telemetria() {
   const { user } = useAuth();
   const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId && selectedCompanyId !== "construtoras"
+  const companyId = selectedCompanyId
     ? parseInt(selectedCompanyId, 10) : 0;
   const [periodo, setPeriodo] = useState<Periodo>("30d");
   const [activeTab, setActiveTab] = useState("plataforma");

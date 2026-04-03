@@ -18,7 +18,7 @@ type ConfigTab = "kits" | "cores" | "vida_util" | "treinamentos";
 
 export default function EpiKitsConfig() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState<ConfigTab>("kits");
   const [showKitForm, setShowKitForm] = useState(false);

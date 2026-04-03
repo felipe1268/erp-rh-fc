@@ -39,7 +39,7 @@ function flattenSn(raw: any) {
 
 export default function RelogiosPonto() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
 
   const snsQ = trpc.obras.listSnsByCompany.useQuery(

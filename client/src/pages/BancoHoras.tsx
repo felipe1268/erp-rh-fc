@@ -24,7 +24,7 @@ type TabView = "saldos" | "extrato" | "alertas" | "configuracao";
 
 export default function BancoHoras() {
   const { selectedCompanyId } = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const [activeTab, setActiveTab] = useState<TabView>("saldos");
   const [searchTerm, setSearchTerm] = useState("");
 

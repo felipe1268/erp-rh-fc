@@ -166,7 +166,7 @@ function EvolutionTable({ evaluations }: { evaluations: any[] }) {
 // ─── Raio-X Detail View ───
 function RaioXDetail({ employeeId, onBack }: { employeeId: number; onBack: () => void }) {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const raioX = trpc.avaliacao.raioX.getByEmployee.useQuery({ employeeId, companyId }, { enabled: companyId > 0 || companyIds.length > 0 });
 
@@ -322,7 +322,7 @@ function RaioXDetail({ employeeId, onBack }: { employeeId: number; onBack: () =>
 // ─── Employee List for Raio-X ───
 export default function RaioXFuncionario() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");

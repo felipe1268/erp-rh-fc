@@ -33,7 +33,7 @@ type ComparisonResult = {
 export default function ComparativoConvencoes() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const [, navigate] = useLocation();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : undefined;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || undefined : undefined;
   const companyIds = getCompanyIdsForQuery();
   const [open, setOpen] = useState(true);
 

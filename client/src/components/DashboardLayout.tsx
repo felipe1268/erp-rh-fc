@@ -664,13 +664,12 @@ function DashboardLayoutContent({
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
-  const { selectedCompany, selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
+  const { selectedCompany, selectedCompanyId } = useCompany();
   const [avisoBannerOpen, setAvisoBannerOpen] = useState(true);
-  const cId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
-  const cIds = getCompanyIdsForQuery ? getCompanyIdsForQuery() : [];
+  const cId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const avisoAtivosQuery = trpc.avisoPrevio.avisoPrevio.list.useQuery(
-    { companyId: cId, companyIds: isConstrutoras ? cIds : undefined, status: 'em_andamento' },
-    { enabled: cId > 0 || (isConstrutoras && cIds.length > 0), staleTime: 60_000 }
+    { companyId: cId, status: 'em_andamento' },
+    { enabled: cId > 0, staleTime: 60_000 }
   );
   const { activeModule, setActiveModule } = useModule();
   const { isModuleEnabled, isPageEnabled } = useModuleConfig();
@@ -1444,10 +1443,9 @@ function DashboardLayoutContent({
 }
 
 function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLabel: string }) {
-  const { selectedCompanyId, setSelectedCompanyId, companies, selectedCompany, isConstrutoras, construtorasIds } = useCompany();
+  const { selectedCompanyId, setSelectedCompanyId, companies, selectedCompany } = useCompany();
   const { activeModule } = useModule();
   const [, setLocation] = useLocation();
-  const hasConstrutoras = construtorasIds.length >= 2;
   const logoUrl = selectedCompany?.logoUrl;
 
   return (
@@ -1478,16 +1476,6 @@ function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLab
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {hasConstrutoras && (
-              <SelectItem value="construtoras">
-                <div className="flex items-center gap-2">
-                  <div className="h-5 w-5 rounded bg-amber-500/20 flex items-center justify-center">
-                    <Building2 className="h-3.5 w-3.5 text-amber-600" />
-                  </div>
-                  <span className="font-semibold">CONSTRUTORAS</span>
-                </div>
-              </SelectItem>
-            )}
             {companies?.map((c: any) => (
               <SelectItem key={c.id} value={String(c.id)}>
                 <div className="flex items-center gap-2">

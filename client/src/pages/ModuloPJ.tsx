@@ -55,7 +55,7 @@ const STATUS_PAGAMENTO: Record<string, { label: string; color: string; bg: strin
 export default function ModuloPJ() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
-  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState("contratos");
   const [search, setSearch] = useState("");
