@@ -3042,6 +3042,90 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 
       return { success: true };
     }),
+
+  consolidarHE: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const agora = new Date().toISOString().replace("T", " ").substring(0, 19);
+      const quem = ctx.user?.name || "Sistema";
+      await db.execute(sql`
+        UPDATE payroll_periods
+        SET "heConsolidadoEm" = ${agora},
+            "heConsolidadoPor" = ${quem}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `);
+      return { success: true };
+    }),
+
+  desconsolidarHE: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await db.execute(sql`
+        UPDATE payroll_periods
+        SET "heConsolidadoEm" = NULL,
+            "heConsolidadoPor" = NULL
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `);
+      return { success: true };
+    }),
+
+  consolidarAfericao: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const agora = new Date().toISOString().replace("T", " ").substring(0, 19);
+      const quem = ctx.user?.name || "Sistema";
+      await db.execute(sql`
+        UPDATE payroll_periods
+        SET "afericaoConsolidadoEm" = ${agora},
+            "afericaoConsolidadoPor" = ${quem}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `);
+      return { success: true };
+    }),
+
+  desconsolidarAfericao: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await db.execute(sql`
+        UPDATE payroll_periods
+        SET "afericaoConsolidadoEm" = NULL,
+            "afericaoConsolidadoPor" = NULL
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `);
+      return { success: true };
+    }),
+
+  consolidarPagamento: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const agora = new Date().toISOString().replace("T", " ").substring(0, 19);
+      const quem = ctx.user?.name || "Sistema";
+      await db.execute(sql`
+        UPDATE payroll_periods
+        SET "pagamentoConsolidadoEm" = ${agora},
+            "pagamentoConsolidadoPor" = ${quem}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `);
+      return { success: true };
+    }),
+
+  desconsolidarPagamento: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await db.execute(sql`
+        UPDATE payroll_periods
+        SET "pagamentoConsolidadoEm" = NULL,
+            "pagamentoConsolidadoPor" = NULL
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `);
+      return { success: true };
+    }),
 });
 // ============================================================
 // HELPER FUNCTIONS

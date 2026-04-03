@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 989,
+    titulo: "Consolidar HE, Aferição e Pagamento — rastreabilidade completa",
+    descricao: "Adicionados botões 'Consolidar' nos cards de Hora Extra, Aferir Escuro e Simular Pagamento, seguindo o mesmo padrão do Consolidar Vale. Cada consolidação registra quem consolidou e quando (timestamp + nome do usuário). Botão 'Desconsolidar' permite reverter caso necessário. A consolidação garante que o responsável pela análise é registrado, reforçando a rastreabilidade e accountability do pipeline de folha.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-03 19:40:00",
+  },
+  {
     version: 988,
     titulo: "Persistência de resultados: Vale e Pagamento mantêm valores ao recarregar",
     descricao: "Os resultados completos do cálculo de Vale e da Simulação de Pagamento agora são salvos no banco de dados (valeResultJson e pagamentoResultJson). Ao recarregar a página ou voltar à Folha de Pagamento, os cards exibem automaticamente os valores calculados (funcionários, total vale, total bruto/descontos/líquido) sem necessidade de recalcular. O botão 'Ver Resultado' também funciona após reload. Reset automático ao trocar o mês de referência.",

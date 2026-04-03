@@ -498,6 +498,30 @@ export default function FolhaPagamento() {
     onSuccess: () => { toast.success("Vale desconsolidado — pode ser recalculado."); payrollPeriod.refetch(); statusMes.refetch(); lancamentos.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const consolidarHEMut = trpc.payrollEngine.consolidarHE.useMutation({
+    onSuccess: () => { toast.success("Hora Extra consolidada!"); payrollPeriod.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const desconsolidarHEMut = trpc.payrollEngine.desconsolidarHE.useMutation({
+    onSuccess: () => { toast.success("Hora Extra desconsolidada."); payrollPeriod.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const consolidarAfericaoMut = trpc.payrollEngine.consolidarAfericao.useMutation({
+    onSuccess: () => { toast.success("Aferição consolidada!"); payrollPeriod.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const desconsolidarAfericaoMut = trpc.payrollEngine.desconsolidarAfericao.useMutation({
+    onSuccess: () => { toast.success("Aferição desconsolidada."); payrollPeriod.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const consolidarPagamentoMut = trpc.payrollEngine.consolidarPagamento.useMutation({
+    onSuccess: () => { toast.success("Pagamento consolidado!"); payrollPeriod.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const desconsolidarPagamentoMut = trpc.payrollEngine.desconsolidarPagamento.useMutation({
+    onSuccess: () => { toast.success("Pagamento desconsolidado."); payrollPeriod.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
   const excluirMut = trpc.folha.excluirLancamento.useMutation({
     onSuccess: () => { toast.success("Lançamento excluído!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch(); setViewMode("resumo"); },
   });
@@ -3120,6 +3144,31 @@ export default function FolhaPagamento() {
                       </Button>
                     );
                   })()}
+                  {heOk && (
+                    <div className="mt-2">
+                      {!(pd as any)?.heConsolidadoEm ? (
+                        <Button size="sm" className="w-full bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => consolidarHEMut.mutate({ companyId, mesReferencia: mesAno })}
+                          disabled={consolidarHEMut.isPending}>
+                          <Lock className="h-3 w-3 mr-1" />
+                          {consolidarHEMut.isPending ? "Consolidando..." : "Consolidar HE"}
+                        </Button>
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-[10px] text-green-700 justify-center">
+                            <Lock className="h-3 w-3" />
+                            <span>Consolidado {(pd as any).heConsolidadoEm?.substring(0, 16)}{(pd as any).heConsolidadoPor ? ` por ${(pd as any).heConsolidadoPor}` : ''}</span>
+                          </div>
+                          <Button size="sm" variant="ghost" className="w-full text-[10px] text-slate-500 h-6"
+                            onClick={() => desconsolidarHEMut.mutate({ companyId, mesReferencia: mesAno })}
+                            disabled={desconsolidarHEMut.isPending}>
+                            <Unlock className="h-3 w-3 mr-1" />
+                            {desconsolidarHEMut.isPending ? "Abrindo..." : "Desconsolidar"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3219,6 +3268,31 @@ export default function FolhaPagamento() {
                     <AlertTriangle className="h-3 w-3 mr-1" /> {(alertasAfericao.data as any[]).length} pendente(s) de decisão
                   </Button>
                 )}
+                {afericaoOk && (
+                  <div className="mt-2">
+                    {!(pd as any)?.afericaoConsolidadoEm ? (
+                      <Button size="sm" className="w-full bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => consolidarAfericaoMut.mutate({ companyId, mesReferencia: mesAno })}
+                        disabled={consolidarAfericaoMut.isPending}>
+                        <Lock className="h-3 w-3 mr-1" />
+                        {consolidarAfericaoMut.isPending ? "Consolidando..." : "Consolidar Aferição"}
+                      </Button>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1 text-[10px] text-green-700 justify-center">
+                          <Lock className="h-3 w-3" />
+                          <span>Consolidado {(pd as any).afericaoConsolidadoEm?.substring(0, 16)}{(pd as any).afericaoConsolidadoPor ? ` por ${(pd as any).afericaoConsolidadoPor}` : ''}</span>
+                        </div>
+                        <Button size="sm" variant="ghost" className="w-full text-[10px] text-slate-500 h-6"
+                          onClick={() => desconsolidarAfericaoMut.mutate({ companyId, mesReferencia: mesAno })}
+                          disabled={desconsolidarAfericaoMut.isPending}>
+                          <Unlock className="h-3 w-3 mr-1" />
+                          {desconsolidarAfericaoMut.isPending ? "Abrindo..." : "Desconsolidar"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* ETAPA 4 — SIMULAR PAGAMENTO */}
@@ -3282,6 +3356,31 @@ export default function FolhaPagamento() {
                   <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-green-700" onClick={() => setViewMode("calculo_pagamento")}>
                     <Eye className="h-3 w-3 mr-1" /> Ver Resultado
                   </Button>
+                )}
+                {pagOk && (
+                  <div className="mt-2">
+                    {!(pd as any)?.pagamentoConsolidadoEm ? (
+                      <Button size="sm" className="w-full bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => consolidarPagamentoMut.mutate({ companyId, mesReferencia: mesAno })}
+                        disabled={consolidarPagamentoMut.isPending}>
+                        <Lock className="h-3 w-3 mr-1" />
+                        {consolidarPagamentoMut.isPending ? "Consolidando..." : "Consolidar Pagamento"}
+                      </Button>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1 text-[10px] text-green-700 justify-center">
+                          <Lock className="h-3 w-3" />
+                          <span>Consolidado {(pd as any).pagamentoConsolidadoEm?.substring(0, 16)}{(pd as any).pagamentoConsolidadoPor ? ` por ${(pd as any).pagamentoConsolidadoPor}` : ''}</span>
+                        </div>
+                        <Button size="sm" variant="ghost" className="w-full text-[10px] text-slate-500 h-6"
+                          onClick={() => desconsolidarPagamentoMut.mutate({ companyId, mesReferencia: mesAno })}
+                          disabled={desconsolidarPagamentoMut.isPending}>
+                          <Unlock className="h-3 w-3 mr-1" />
+                          {desconsolidarPagamentoMut.isPending ? "Abrindo..." : "Desconsolidar"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
