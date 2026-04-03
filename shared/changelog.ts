@@ -7205,4 +7205,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 01:00:00",
   },
+  {
+    version: 972,
+    titulo: "Correção do filtro 'Aguardando Baixa' na página de Aviso Prévio",
+    descricao:
+      "• Corrigido bug onde a tabela ficava vazia ao filtrar por 'Aguardando Baixa' — agora exibe loading enquanto carrega\n" +
+      "• Otimização da query de listagem: eliminado N+1 (batch de funcionários e férias em 2 queries ao invés de 2×N)\n" +
+      "• Adicionado indicador visual de carregamento na tabela ao trocar filtros\n" +
+      "• placeholderData mantém dados anteriores visíveis durante transição entre filtros",
+    tipo: "bugfix",
+    modulos: "Aviso Prévio",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 03:00:00",
+  },
 ];

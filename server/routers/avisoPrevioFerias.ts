@@ -142,12 +142,45 @@ export const avisoPrevioFeriasRouter = router({
         .where(and(...conditions))
         .orderBy(desc(terminationNotices.createdAt));
         
-        // Recalcular valorEstimadoTotal em tempo real para cada registro
+        // Batch: buscar todos os funcionários e contagens de férias de uma vez (evita N+1)
+        const empIds = [...new Set(rows.map(r => r.employeeId))];
+        const empMap = new Map<number, any>();
+        if (empIds.length > 0) {
+          const emps = await db.select().from(employees).where(inArray(employees.id, empIds));
+          for (const e of emps) empMap.set(e.id, e);
+        }
+
+        // Batch: contar férias vencidas por (employeeId, dataFim) usando uma única query correlacionada
+        const vpCountMap = new Map<string, number>();
+        if (rows.length > 0) {
+          try {
+            const pairs = rows
+              .filter(r => r.dataFim)
+              .map(r => sql`(${r.employeeId}, ${r.dataFim!})`);
+            if (pairs.length > 0) {
+              const vpCounts = ((await db.execute(sql`
+                SELECT p.emp_id, p.data_fim, COUNT(vp.*)::int AS total
+                FROM (VALUES ${sql.join(pairs, sql`, `)}) AS p(emp_id, data_fim)
+                LEFT JOIN vacation_periods vp
+                  ON vp."employeeId" = p.emp_id
+                  AND vp.status NOT IN ('concluida', 'cancelada', 'em_gozo')
+                  AND vp."periodoConcessivoFim" IS NOT NULL
+                  AND vp."periodoConcessivoFim" < p.data_fim
+                  AND vp."deletedAt" IS NULL
+                GROUP BY p.emp_id, p.data_fim
+              `)) as any).rows || [];
+              for (const vc of vpCounts) {
+                vpCountMap.set(`${vc.emp_id}|${vc.data_fim}`, Number(vc.total));
+              }
+            }
+          } catch { /* fallback — uses stored value */ }
+        }
+
         const results = [];
         for (const r of rows) {
           let valorRecalculado = r.valorEstimadoTotal;
           try {
-            const [emp] = await db.select().from(employees).where(eq(employees.id, r.employeeId));
+            const emp = empMap.get(r.employeeId);
             if (emp && r.dataFim) {
               const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split('T')[0];
               const salarioBase = parseBRL(emp.salarioBase);
@@ -156,19 +189,7 @@ export const avisoPrevioFeriasRouter = router({
               dtDataSaida.setDate(dtDataSaida.getDate() + 1);
               const diasTrabalhadosMes = dtDataSaida.getDate();
 
-              // Contagem real de férias vencidas do banco
-              let periodosVencidosRealList: number | undefined;
-              try {
-                const vpList = ((await db.execute(sql`
-                  SELECT COUNT(*)::int AS total FROM vacation_periods
-                  WHERE "employeeId" = ${r.employeeId}
-                    AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-                    AND "periodoConcessivoFim" IS NOT NULL
-                    AND "periodoConcessivoFim" < ${r.dataFim}
-                    AND "deletedAt" IS NULL
-                `)) as any).rows || [];
-                periodosVencidosRealList = Number(vpList[0]?.total ?? 0);
-              } catch { /* fallback */ }
+              const periodosVencidosRealList = vpCountMap.get(`${r.employeeId}|${r.dataFim}`) ?? 0;
               
               const previsao = calcularRescisaoCompleta({
                 salarioBase,
@@ -185,7 +206,6 @@ export const avisoPrevioFeriasRouter = router({
           } catch (e) {
             // Se falhar o recálculo, mantém o valor armazenado
           }
-          // Calcular data limite de pagamento (Art. 477 §6º CLT: 10 dias corridos após término)
           let dataLimitePagamento: string | null = null;
           let dataDiaTrabalhado: string | null = null;
           if (r.dataFim) {
@@ -193,7 +213,6 @@ export const avisoPrevioFeriasRouter = router({
             dtFim.setDate(dtFim.getDate() + 10);
             dataLimitePagamento = dtFim.toISOString().split('T')[0];
           }
-          // dataDiaTrabalhado = último dia trabalhado (dia anterior ao início do aviso)
           if (r.dataInicio) {
             const dtInicio = new Date(r.dataInicio + 'T00:00:00');
             dtInicio.setDate(dtInicio.getDate() - 1);

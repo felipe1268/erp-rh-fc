@@ -85,9 +85,9 @@ export default function AvisoPrevio() {
 
   // Queries
   // Query filtrada para a tabela
-  const { data: avisosList = [], refetch } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
+  const { data: avisosList = [], refetch, isLoading: isLoadingAvisos, isFetching: isFetchingAvisos } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
     { companyId, companyIds, ...(statusFilter !== "todos" ? { status: statusFilter } : {}) },
-    { enabled: !!companyId || (companyIds && companyIds.length > 0) }
+    { enabled: !!companyId || (companyIds && companyIds.length > 0), placeholderData: (prev: any) => prev }
   );
   // Query sem filtro para os cards de resumo (totais globais)
   const { data: allAvisosForStats = [] } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
@@ -593,7 +593,7 @@ export default function AvisoPrevio() {
         {/* Table */}
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className={`overflow-x-auto transition-opacity ${isFetchingAvisos && filtered.length > 0 ? 'opacity-60' : ''}`}>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
@@ -611,7 +611,14 @@ export default function AvisoPrevio() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 ? (
+                  {isLoadingAvisos || (isFetchingAvisos && filtered.length === 0) ? (
+                    <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        <span>Carregando avisos...</span>
+                      </div>
+                    </td></tr>
+                  ) : filtered.length === 0 ? (
                     <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Nenhum aviso prévio encontrado</td></tr>
                   ) : filtered.map((a: any) => {
                     const st = STATUS_LABELS[a.status] || STATUS_LABELS.em_andamento;
