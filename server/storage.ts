@@ -114,7 +114,12 @@ export async function storagePut(
   const cfg = getStorageConfig();
   const key = normalizeKey(relKey);
 
-  dbPersist(key, data, contentType).catch(() => {});
+  try {
+    await dbPersist(key, data, contentType);
+  } catch (e: any) {
+    console.warn(`[Storage] DB persist failed (will retry once): ${e.message}`);
+    try { await dbPersist(key, data, contentType); } catch {}
+  }
 
   if (!cfg) {
     return localPut(relKey, data);
