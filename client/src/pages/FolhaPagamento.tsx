@@ -3388,7 +3388,7 @@ export default function FolhaPagamento() {
                                 </span>
                               </td>
                               <td className="py-2 px-3 text-right font-mono font-bold text-red-600">
-                                R$ {typeof d.valorDesconto === 'number' ? d.valorDesconto.toFixed(2).replace('.', ',') : d.valorDesconto || '0,00'}
+                                R$ {typeof d.valorDesconto === 'number' ? d.valorDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : d.valorDesconto || '0,00'}
                               </td>
                             </tr>
                           ))}
@@ -3397,7 +3397,7 @@ export default function FolhaPagamento() {
                           <tr className="border-t-2 border-red-300 bg-red-50 font-bold">
                             <td colSpan={4} className="py-2 px-3 text-right text-red-700">Total Descontos:</td>
                             <td className="py-2 px-3 text-right font-mono text-red-700">
-                              R$ {(afericaoResult.divergenciasList || []).reduce((s: number, d: any) => s + (typeof d.valorDesconto === 'number' ? d.valorDesconto : 0), 0).toFixed(2).replace('.', ',')}
+                              R$ {(afericaoResult.divergenciasList || []).reduce((s: number, d: any) => s + (typeof d.valorDesconto === 'number' ? d.valorDesconto : 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
                         </tfoot>
