@@ -181,9 +181,9 @@ export default function FolhaPagamento() {
     stepProgressRef.current[key] = setInterval(() => {
       setStepProgress(p => {
         const cur = p[key] || 5;
-        if (cur >= 92) return p;
-        const increment = cur < 30 ? 8 : cur < 60 ? 4 : cur < 80 ? 2 : 0.5;
-        return { ...p, [key]: Math.min(92, cur + increment) };
+        if (cur >= 99) return p;
+        const increment = cur < 30 ? 8 : cur < 60 ? 4 : cur < 80 ? 2 : cur < 90 ? 0.8 : cur < 95 ? 0.3 : 0.1;
+        return { ...p, [key]: Math.min(99, cur + increment) };
       });
     }, 500);
   }, []);
