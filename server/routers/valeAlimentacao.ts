@@ -124,6 +124,7 @@ export const valeAlimentacaoRouter = router({
             FROM employees e
             LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
             WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e."deletedAt" IS NULL
+            AND (e."tipoContrato" IS NULL OR e."tipoContrato" != 'PJ')
             ORDER BY e."nomeCompleto" ASC`
       )) as any).rows || [];
       const emps = empRows || [];
@@ -204,6 +205,7 @@ export const valeAlimentacaoRouter = router({
             FROM employees e
             LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
             WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e."deletedAt" IS NULL
+            AND (e."tipoContrato" IS NULL OR e."tipoContrato" != 'PJ')
             ORDER BY e."nomeCompleto" ASC`
       )) as any).rows || [];
       const emps = empRows || [];
