@@ -2177,7 +2177,21 @@ export default function FolhaPagamento() {
                 </DialogTitle>
                 {detalheAfericaoDias.data && (
                   <DialogDescription>
-                    {detalheAfericaoDias.data.employee.nome} ({detalheAfericaoDias.data.employee.funcao || 'Sem função'}) • Jornada: {detalheAfericaoDias.data.employee.jornada || '44h'} • Período: {new Date(detalheAfericaoDias.data.periodoInicio + 'T12:00:00').toLocaleDateString('pt-BR')} a {new Date(detalheAfericaoDias.data.periodoFim + 'T12:00:00').toLocaleDateString('pt-BR')}
+                    {detalheAfericaoDias.data.employee.nome} ({detalheAfericaoDias.data.employee.funcao || 'Sem função'}) • Jornada: {(() => {
+                      const j = detalheAfericaoDias.data!.employee.jornada;
+                      if (!j) return '44h';
+                      if (typeof j === 'string' && !j.startsWith('{') && !j.startsWith('[')) return j;
+                      try {
+                        const parsed = typeof j === 'string' ? JSON.parse(j) : j;
+                        if (typeof parsed === 'object' && parsed !== null) {
+                          const seg = parsed.seg || parsed.segunda;
+                          if (seg?.entrada && seg?.saida) {
+                            return `${seg.entrada} - ${seg.saida} (${seg.intervalo || '01:00'} intervalo)`;
+                          }
+                        }
+                        return '44h';
+                      } catch { return String(j).substring(0, 30); }
+                    })()} • Período: {new Date(detalheAfericaoDias.data.periodoInicio + 'T12:00:00').toLocaleDateString('pt-BR')} a {new Date(detalheAfericaoDias.data.periodoFim + 'T12:00:00').toLocaleDateString('pt-BR')}
                   </DialogDescription>
                 )}
               </DialogHeader>
