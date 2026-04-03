@@ -337,12 +337,18 @@ export const valeAlimentacaoRouter = router({
         const lancheAtivo = cfg.lancheAtivo === 1 || cfg.lancheAtivo === true;
         const jantaAtivo = cfg.jantaAtivo === 1 || cfg.jantaAtivo === true;
 
+        const diasUteisRef = cfg.diasUteisRef || 22;
         const cafeDia = cafeAtivo ? parseBRL(cfg.cafeManhaDia) : 0;
         const lancheDia = lancheAtivo ? parseBRL(cfg.lancheTardeDia) : 0;
         const jantaDia = jantaAtivo ? parseBRL(cfg.jantaDia) : 0;
-        const vaMes = parseBRL(cfg.valeAlimentacaoMes);
+        const cafeMensal = Math.round(cafeDia * diasUteisRef * 100) / 100;
+        const lancheMensal = Math.round(lancheDia * diasUteisRef * 100) / 100;
+        const jantaMensal = Math.round(jantaDia * diasUteisRef * 100) / 100;
+        const totalIFood = parseBRL(cfg.totalVA_iFood);
+        const vaMensal = totalIFood > 0 ? Math.round((totalIFood - cafeMensal - lancheMensal - jantaMensal) * 100) / 100 : parseBRL(cfg.valeAlimentacaoMes) * diasUteisRef;
 
         let proporcionalDias: number | null = null;
+        let isProporcional = false;
         if (emp.dataAdmissao) {
           const admissao = new Date(emp.dataAdmissao + 'T00:00:00');
           if (admissao > primeiroDiaMes && admissao <= ultimoDiaMes) {
@@ -355,6 +361,7 @@ export const valeAlimentacaoRouter = router({
             }
             proporcionalDias = diasAdmissao;
             diasUteis = Math.min(diasUteis, diasAdmissao);
+            isProporcional = true;
           }
         }
 
@@ -366,12 +373,12 @@ export const valeAlimentacaoRouter = router({
 
         const diasEfetivos = Math.max(0, diasUteis - diasFerias - diasLicenca);
 
-        const valorCafe = cafeDia * diasEfetivos;
-        const valorLanche = lancheDia * diasEfetivos;
-        const valorJanta = jantaDia * diasEfetivos;
-        const valorVA = vaMes;
+        const valorCafe = Math.round(cafeDia * diasEfetivos * 100) / 100;
+        const valorLanche = Math.round(lancheDia * diasEfetivos * 100) / 100;
+        const valorJanta = Math.round(jantaDia * diasEfetivos * 100) / 100;
+        const valorVA = isProporcional ? Math.round(vaMensal * diasEfetivos / diasUteisOriginal * 100) / 100 : vaMensal;
         const valorDiario = cafeDia + lancheDia + jantaDia;
-        const valorTotal = valorCafe + valorLanche + valorJanta + valorVA;
+        const valorTotal = Math.round((valorCafe + valorLanche + valorJanta + valorVA) * 100) / 100;
 
         if (valorTotal <= 0) continue;
 
@@ -540,12 +547,18 @@ export const valeAlimentacaoRouter = router({
           const lancheAtivo = cfg.lancheAtivo === 1 || cfg.lancheAtivo === true;
           const jantaAtivo = cfg.jantaAtivo === 1 || cfg.jantaAtivo === true;
 
+          const diasUteisRef = cfg.diasUteisRef || 22;
           const cafeDia = cafeAtivo ? parseBRL(cfg.cafeManhaDia) : 0;
           const lancheDia = lancheAtivo ? parseBRL(cfg.lancheTardeDia) : 0;
           const jantaDia = jantaAtivo ? parseBRL(cfg.jantaDia) : 0;
-          const vaMes = parseBRL(cfg.valeAlimentacaoMes);
+          const cafeMensal = Math.round(cafeDia * diasUteisRef * 100) / 100;
+          const lancheMensal = Math.round(lancheDia * diasUteisRef * 100) / 100;
+          const jantaMensal = Math.round(jantaDia * diasUteisRef * 100) / 100;
+          const totalIFood = parseBRL(cfg.totalVA_iFood);
+          const vaMensal = totalIFood > 0 ? Math.round((totalIFood - cafeMensal - lancheMensal - jantaMensal) * 100) / 100 : parseBRL(cfg.valeAlimentacaoMes) * diasUteisRef;
 
           let proporcionalDias: number | null = null;
+          let isProporcional = false;
           if (emp.dataAdmissao) {
             const admissao = new Date(emp.dataAdmissao + 'T00:00:00');
             if (admissao > primeiroDiaMes && admissao <= ultimoDiaMes) {
@@ -558,6 +571,7 @@ export const valeAlimentacaoRouter = router({
               }
               proporcionalDias = diasAdmissao;
               diasUteis = Math.min(diasUteis, diasAdmissao);
+              isProporcional = true;
             }
           }
 
@@ -567,12 +581,12 @@ export const valeAlimentacaoRouter = router({
 
           const diasEfetivos = Math.max(0, diasUteis - diasFerias - diasLicenca);
 
-          const valorCafe = cafeDia * diasEfetivos;
-          const valorLanche = lancheDia * diasEfetivos;
-          const valorJanta = jantaDia * diasEfetivos;
-          const valorVA = vaMes;
+          const valorCafe = Math.round(cafeDia * diasEfetivos * 100) / 100;
+          const valorLanche = Math.round(lancheDia * diasEfetivos * 100) / 100;
+          const valorJanta = Math.round(jantaDia * diasEfetivos * 100) / 100;
+          const valorVA = isProporcional ? Math.round(vaMensal * diasEfetivos / diasUteisOriginal * 100) / 100 : vaMensal;
           const valorDiario = cafeDia + lancheDia + jantaDia;
-          const valorTotal = valorCafe + valorLanche + valorJanta + valorVA;
+          const valorTotal = Math.round((valorCafe + valorLanche + valorJanta + valorVA) * 100) / 100;
           if (valorTotal <= 0) continue;
 
           const result = ((await db.execute(
