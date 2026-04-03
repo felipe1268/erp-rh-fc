@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1000,
+    titulo: "Auditoria completa da folha de pagamento com memorial de cálculo",
+    descricao: "Nova tela 'Auditoria da Folha' acessível pelo botão na tela de Pagamento/Saldo. Detecta automaticamente 11 tipos de anomalias: funcionários CLT ativos sem vale (férias, admissão recente, bloqueio), sem pagamento (cadastro incompleto), variação salarial entre funcionários da mesma função (possível erro de lançamento vs bônus legítimo), faltas, atrasos, descontos excessivos (>50% do bruto), horas extras, pensão alimentícia, ajustes manuais e dados bancários incompletos. Cada alerta inclui memorial de cálculo detalhado com a consideração do ERP explicando o motivo, o cálculo e a recomendação. Filtros por categoria, cards de resumo, ordenação por gravidade (erros → avisos → informações). Banner de divergência crítica quando CLTs ativos ≠ funcionários na folha.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-04 00:00:00",
+  },
+  {
     version: 999,
     titulo: "Gerador de remessa bancária CNAB 240 para folha de pagamento",
     descricao: "Novo botão 'Gerar Remessa CNAB' na tela 'Por Banco' da folha de pagamento. Gera arquivo de remessa no formato CNAB 240 (padrão Febraban) separado por banco — um arquivo para Caixa, outro para Santander, etc. O arquivo inclui todos os funcionários daquele banco com nome, CPF, agência, conta e valor líquido. Formato: crédito em conta salário. Arquivo .rem pronto para upload no internet banking. Dados da empresa pagadora (CNPJ, agência, conta, convênio) são buscados da tabela company_bank_accounts. Adicionados campos convenio e usarParaFolha na tabela de contas bancárias da empresa.",

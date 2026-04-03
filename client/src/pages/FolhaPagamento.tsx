@@ -48,7 +48,7 @@ function parseBRLNum(val: string | number | null | undefined): number {
   return parseFloat(str) || 0;
 }
 
-type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo";
+type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo" | "auditoria_folha";
 
 export default function FolhaPagamento() {
   const { selectedCompanyId, getCompanyIdsForQuery} = useCompany();
@@ -176,6 +176,12 @@ export default function FolhaPagamento() {
     { companyId, mesReferencia: mesAno },
     { enabled: companyId > 0 }
   );
+  const auditoriaFolha = trpc.payrollEngine.auditarFolha.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 && viewMode === "auditoria_folha" }
+  );
+  const [auditFiltroCategoria, setAuditFiltroCategoria] = useState<string>("todos");
+  const [auditExpandedIdx, setAuditExpandedIdx] = useState<number | null>(null);
   const [afericaoResult, setAfericaoResult] = useState<any>(null);
   const [showAfericaoReport, setShowAfericaoReport] = useState(false);
   const [detalheAfericaoEmpId, setDetalheAfericaoEmpId] = useState<number | null>(null);
@@ -2561,7 +2567,18 @@ export default function FolhaPagamento() {
                 <p className="text-muted-foreground text-xs">{formatMesAno(mesAno)} • {pagamentoResult.totalFuncionarios} funcionários • Pagamento previsto: {pagamentoResult.dataPagamentoPrevista}</p>
               </div>
             </div>
-            <PrintActions title={`Cálculo Pagamento - ${formatMesAno(mesAno)}`} />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs print:hidden"
+                onClick={() => setViewMode("auditoria_folha")}
+              >
+                <ShieldCheck className="h-4 w-4 mr-1" />
+                Auditoria
+              </Button>
+              <PrintActions title={`Cálculo Pagamento - ${formatMesAno(mesAno)}`} />
+            </div>
           </div>
 
           <div className="grid grid-cols-4 gap-3">
@@ -2926,6 +2943,207 @@ export default function FolhaPagamento() {
           </Card>
           )}
         </div>
+        <PrintFooterLGPD />
+      </DashboardLayout>
+    );
+  }
+
+  // ===== AUDITORIA FOLHA VIEW =====
+  if (viewMode === "auditoria_folha") {
+    const auditoria = auditoriaFolha;
+    const aud = auditoria.data as any;
+    const filtroCategoria = auditFiltroCategoria;
+    const setFiltroCategoria = setAuditFiltroCategoria;
+    const expandedIdx = auditExpandedIdx;
+    const setExpandedIdx = setAuditExpandedIdx;
+
+    const categoriaLabels: Record<string, { label: string; icon: JSX.Element; cor: string }> = {
+      vale_ausente: { label: "Sem vale", icon: <Wallet className="h-3.5 w-3.5" />, cor: "bg-amber-100 text-amber-800 border-amber-300" },
+      vale_bloqueado: { label: "Vale bloqueado", icon: <Ban className="h-3.5 w-3.5" />, cor: "bg-orange-100 text-orange-800 border-orange-300" },
+      pagamento_ausente: { label: "Sem pagamento", icon: <XCircle className="h-3.5 w-3.5" />, cor: "bg-red-100 text-red-800 border-red-300" },
+      variacao_salarial: { label: "Variação salarial", icon: <Scale className="h-3.5 w-3.5" />, cor: "bg-purple-100 text-purple-800 border-purple-300" },
+      desconto_faltas: { label: "Faltas", icon: <Ban className="h-3.5 w-3.5" />, cor: "bg-red-100 text-red-700 border-red-300" },
+      desconto_atrasos: { label: "Atrasos", icon: <Clock className="h-3.5 w-3.5" />, cor: "bg-amber-100 text-amber-700 border-amber-300" },
+      desconto_excessivo: { label: "Desc. excessivo", icon: <AlertTriangle className="h-3.5 w-3.5" />, cor: "bg-red-100 text-red-800 border-red-300" },
+      horas_extras: { label: "Horas extras", icon: <Clock className="h-3.5 w-3.5" />, cor: "bg-blue-100 text-blue-800 border-blue-300" },
+      pensao_alimenticia: { label: "Pensão", icon: <Scale className="h-3.5 w-3.5" />, cor: "bg-indigo-100 text-indigo-800 border-indigo-300" },
+      acerto_escuro: { label: "Ajustes", icon: <Wrench className="h-3.5 w-3.5" />, cor: "bg-gray-100 text-gray-800 border-gray-300" },
+      dados_bancarios_incompletos: { label: "Dados bancários", icon: <CreditCard className="h-3.5 w-3.5" />, cor: "bg-yellow-100 text-yellow-800 border-yellow-300" },
+    };
+
+    const alertasFiltrados = aud?.alertas?.filter((a: any) =>
+      filtroCategoria === "todos" || a.categoria === filtroCategoria
+    ) || [];
+
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setViewMode("calculo_pagamento")}>
+              <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+            </Button>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-blue-600" />
+                Auditoria da Folha
+              </h1>
+              <p className="text-muted-foreground text-xs">{formatMesAno(mesAno)} • Conferência automática de divergências e anomalias</p>
+            </div>
+          </div>
+          <PrintActions title={`Auditoria Folha - ${formatMesAno(mesAno)}`} />
+        </div>
+
+        {auditoria.isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <RefreshCw className="h-6 w-6 animate-spin text-blue-500 mr-2" />
+            <span className="text-muted-foreground">Analisando folha...</span>
+          </div>
+        )}
+
+        {aud && (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+              <div className="bg-white border rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold">{aud.totalCltAtivos}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">CLTs Ativos</p>
+              </div>
+              <div className="bg-white border rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-green-700">{aud.totalNaFolha}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">Na Folha</p>
+              </div>
+              <div className="bg-white border rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-blue-700">{aud.totalNoVale}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">No Vale</p>
+              </div>
+              <div className={`border rounded-lg p-3 text-center ${aud.totalErros > 0 ? 'bg-red-50 border-red-200' : 'bg-white'}`}>
+                <p className={`text-2xl font-bold ${aud.totalErros > 0 ? 'text-red-600' : ''}`}>{aud.totalErros}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">Erros</p>
+              </div>
+              <div className={`border rounded-lg p-3 text-center ${aud.totalWarnings > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white'}`}>
+                <p className={`text-2xl font-bold ${aud.totalWarnings > 0 ? 'text-amber-600' : ''}`}>{aud.totalWarnings}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">Avisos</p>
+              </div>
+            </div>
+
+            {aud.totalCltAtivos !== aud.totalNaFolha && (
+              <div className="bg-red-50 border border-red-300 rounded-lg p-3 mb-4 flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-800 text-sm">
+                    DIVERGÊNCIA CRÍTICA: {aud.totalCltAtivos} CLTs ativos no cadastro, mas apenas {aud.totalNaFolha} na folha de pagamento ({aud.totalCltAtivos - aud.totalNaFolha} ausente(s))
+                  </p>
+                  <p className="text-red-700 text-xs mt-1">A folha deve incluir todos os CLTs ativos. Veja os alertas abaixo para detalhes de cada funcionário ausente.</p>
+                </div>
+              </div>
+            )}
+
+            {aud.totalCltAtivos !== aud.totalNoVale && aud.totalNoVale > 0 && (
+              <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-4 flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-amber-800 text-sm">
+                    {aud.totalCltAtivos} CLTs ativos, mas apenas {aud.totalNoVale} receberam vale ({aud.totalCltAtivos - aud.totalNoVale} sem vale)
+                  </p>
+                  <p className="text-amber-700 text-xs mt-1">Verifique os motivos abaixo — férias, admissão recente, bloqueio ou cadastro incompleto.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-1.5 mb-4 print:hidden">
+              <Button
+                variant={filtroCategoria === "todos" ? "default" : "outline"}
+                size="sm"
+                className="text-xs h-7"
+                onClick={() => setFiltroCategoria("todos")}
+              >
+                Todos ({aud.totalAlertas})
+              </Button>
+              {Object.entries(aud.categorias || {}).map(([cat, qtd]) => {
+                if (!qtd) return null;
+                const info = categoriaLabels[cat];
+                if (!info) return null;
+                return (
+                  <Button
+                    key={cat}
+                    variant={filtroCategoria === cat ? "default" : "outline"}
+                    size="sm"
+                    className={`text-xs h-7 ${filtroCategoria !== cat ? info.cor + ' border' : ''}`}
+                    onClick={() => setFiltroCategoria(cat)}
+                  >
+                    {info.icon}
+                    <span className="ml-1">{info.label} ({qtd as number})</span>
+                  </Button>
+                );
+              })}
+            </div>
+
+            {alertasFiltrados.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                <p className="font-medium">Nenhuma anomalia encontrada nesta categoria</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {alertasFiltrados.map((alerta: any, idx: number) => {
+                const isExpanded = expandedIdx === idx;
+                const tipoStyles = {
+                  error: "border-red-300 bg-red-50",
+                  warning: "border-amber-300 bg-amber-50",
+                  info: "border-blue-200 bg-blue-50",
+                };
+                const tipoIcon = {
+                  error: <XCircle className="h-4 w-4 text-red-600 shrink-0" />,
+                  warning: <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />,
+                  info: <Info className="h-4 w-4 text-blue-600 shrink-0" />,
+                };
+                const catInfo = categoriaLabels[alerta.categoria];
+                return (
+                  <div
+                    key={idx}
+                    className={`border rounded-lg overflow-hidden ${tipoStyles[alerta.tipo as keyof typeof tipoStyles] || 'border-gray-200 bg-white'}`}
+                  >
+                    <div
+                      className="flex items-start gap-2 p-3 cursor-pointer hover:opacity-80"
+                      onClick={() => setExpandedIdx(isExpanded ? null : idx)}
+                    >
+                      {tipoIcon[alerta.tipo as keyof typeof tipoIcon]}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm">{alerta.nome}</span>
+                          {alerta.funcao && <span className="text-xs text-muted-foreground">({alerta.funcao})</span>}
+                          {catInfo && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${catInfo.cor}`}>
+                              {catInfo.label}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm mt-0.5">{alerta.titulo}</p>
+                        <p className="text-xs text-muted-foreground">{alerta.descricao}</p>
+                      </div>
+                      <div className="print:hidden">
+                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </div>
+                    </div>
+                    {isExpanded && (
+                      <div className="border-t px-4 py-3 bg-white/80">
+                        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                          <FileText className="h-3.5 w-3.5" />
+                          Memorial de Cálculo / Consideração do ERP
+                        </p>
+                        <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{alerta.memorial}</p>
+                      </div>
+                    )}
+                    <div className="hidden print:block border-t px-4 py-2 bg-white/80">
+                      <p className="text-[9px] font-semibold text-gray-500 uppercase">Memorial:</p>
+                      <p className="text-[10px] text-gray-700">{alerta.memorial}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
         <PrintFooterLGPD />
       </DashboardLayout>
     );

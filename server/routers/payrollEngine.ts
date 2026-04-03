@@ -2268,6 +2268,351 @@ export const payrollEngineRouter = router({
       };
     }),
 
+  auditarFolha: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const { year, month } = parseMesRef(input.mesReferencia);
+      const diasUteis = getDiasUteisNoMes(year, month);
+
+      const allCltAtivos = ((await db.execute(sql`
+        SELECT id, "nomeCompleto", funcao, status, "dataAdmissao", "dataDemissao",
+          "valorHora", "salarioBase", "horasMensais", banco, agencia, conta, cpf,
+          "pensaoAlimenticia", "vtValorDiario", "seguroVida", "vaRecebe", "vaValor",
+          "fgtsPercentual", "inssPercentual"
+        FROM employees
+        WHERE "companyId" = ${input.companyId}
+          AND "tipoContrato" = 'CLT'
+          AND status IN ('Ativo', 'Ferias')
+          AND "deletedAt" IS NULL
+        ORDER BY "nomeCompleto"
+      `)) as any).rows || [];
+
+      const vales = ((await db.execute(sql`
+        SELECT "employeeId", "valorTotalVale", "valorAdiantamento", "percentualAdiantamento",
+          "salarioBrutoMes", bloqueado, "motivoBloqueio", "faltasNoPeriodo",
+          "horasExtrasQtd", "valorHorasExtras"
+        FROM payroll_advances
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `)) as any).rows || [];
+      const valeMap = new Map(vales.map((v: any) => [v.employeeId, v]));
+
+      const pagamentos = ((await db.execute(sql`
+        SELECT "employeeId", "salarioBrutoMes", "horasExtrasValor", "totalProventos",
+          "descontoAdiantamento", "descontoFaltas", "descontoFaltasQtd",
+          "descontoAtrasos", "descontoAtrasosMinutos", "descontoVrFaltas", "descontoVtFaltas",
+          "descontoPensao", "descontoInss", "descontoIrrf", "descontoFgts",
+          "descontoEpi", "descontoOutros", "descontoOutrosDetalhes",
+          "totalDescontos", "salarioLiquido", "acertoEscuroValor", "adicionaisValor", "adicionaisDetalhes"
+        FROM payroll_payments
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `)) as any).rows || [];
+      const pagMap = new Map(pagamentos.map((p: any) => [p.employeeId, p]));
+
+      type Alerta = {
+        tipo: 'info' | 'warning' | 'error';
+        categoria: string;
+        employeeId: number | null;
+        nome: string;
+        funcao: string | null;
+        titulo: string;
+        descricao: string;
+        memorial: string;
+      };
+      const alertas: Alerta[] = [];
+
+      // ========== 1. VALE: Quem não recebeu e por quê ==========
+      for (const emp of allCltAtivos) {
+        const vale = valeMap.get(emp.id);
+        if (!vale) {
+          const motivos: string[] = [];
+          let memorial = '';
+          if (emp.status === 'Ferias') {
+            motivos.push('em férias no período do vale');
+            memorial = `O funcionário ${emp.nomeCompleto} (${emp.funcao || 'sem função'}) consta com status "Férias" no cadastro. Durante o período de férias, o adiantamento salarial (vale) não é calculado pois o pagamento de férias já contempla a remuneração integral do período.`;
+          }
+          if (!emp.valorHora || emp.valorHora === '') {
+            motivos.push('valor hora não cadastrado');
+            memorial += (memorial ? ' Além disso, ' : `O funcionário ${emp.nomeCompleto} (${emp.funcao || 'sem função'}) `) + `não possui valor hora preenchido no cadastro, o que impede o cálculo do salário bruto e, consequentemente, do vale.`;
+          }
+          if (emp.dataAdmissao) {
+            const admDate = new Date(emp.dataAdmissao);
+            const refDate = new Date(year, month - 1, 15);
+            if (admDate > refDate) {
+              motivos.push(`admitido em ${new Date(emp.dataAdmissao).toLocaleDateString('pt-BR')} (após dia 15)`);
+              memorial += (memorial ? ' Adicionalmente, ' : `O funcionário ${emp.nomeCompleto} (${emp.funcao || 'sem função'}) `) + `foi admitido em ${new Date(emp.dataAdmissao).toLocaleDateString('pt-BR')}, posterior ao dia 15 do mês de referência, não completando dias suficientes para elegibilidade ao adiantamento salarial na primeira quinzena.`;
+            }
+          }
+          if (motivos.length === 0) {
+            motivos.push('motivo não identificado automaticamente');
+            memorial = `O funcionário ${emp.nomeCompleto} (${emp.funcao || 'sem função'}) é CLT ativo mas não consta na lista de adiantamentos do mês ${input.mesReferencia}. Não foi possível identificar automaticamente o motivo. Recomenda-se verificar manualmente o cadastro e a elegibilidade para adiantamento.`;
+          }
+          alertas.push({
+            tipo: 'warning',
+            categoria: 'vale_ausente',
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            titulo: `Não recebeu vale: ${motivos.join(', ')}`,
+            descricao: `${emp.nomeCompleto} é CLT ${emp.status} mas não teve adiantamento calculado neste mês.`,
+            memorial,
+          });
+        } else if (vale.bloqueado === 1) {
+          alertas.push({
+            tipo: 'info',
+            categoria: 'vale_bloqueado',
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            titulo: `Vale bloqueado: ${vale.motivoBloqueio || 'sem motivo registrado'}`,
+            descricao: `O vale de ${emp.nomeCompleto} foi calculado mas está com status bloqueado.`,
+            memorial: `O adiantamento salarial de ${emp.nomeCompleto} (${emp.funcao || 'sem função'}) no valor de R$ ${vale.valorTotalVale} foi calculado com base em ${vale.percentualAdiantamento}% do salário bruto de R$ ${vale.salarioBrutoMes}, porém foi BLOQUEADO pelo sistema. Motivo: ${vale.motivoBloqueio || 'não especificado'}. Vales bloqueados não são pagos até aprovação manual.`,
+          });
+        }
+      }
+
+      // ========== 2. PAGAMENTO: Quem não recebeu e por quê ==========
+      for (const emp of allCltAtivos) {
+        const pag = pagMap.get(emp.id);
+        if (!pag && pagamentos.length > 0) {
+          const motivos: string[] = [];
+          let memorial = '';
+          if (!emp.valorHora || emp.valorHora === '') {
+            motivos.push('valor hora não cadastrado');
+            memorial = `O funcionário ${emp.nomeCompleto} (${emp.funcao || 'sem função'}) não possui valor hora preenchido no cadastro, impedindo o cálculo do salário bruto mensal. Sem o salário bruto, não é possível calcular proventos, descontos nem o salário líquido. Corrija o cadastro e resimule a folha.`;
+          }
+          if (!emp.salarioBase && (!emp.valorHora || emp.valorHora === '')) {
+            motivos.push('salário base também vazio');
+          }
+          if (motivos.length === 0) motivos.push('motivo não identificado');
+          alertas.push({
+            tipo: 'error',
+            categoria: 'pagamento_ausente',
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            titulo: `Excluído da folha de pagamento: ${motivos.join(', ')}`,
+            descricao: `${emp.nomeCompleto} é CLT ${emp.status} mas não consta nos pagamentos simulados.`,
+            memorial: memorial || `O funcionário ${emp.nomeCompleto} (${emp.funcao || 'sem função'}) é CLT com status "${emp.status}" mas não foi incluído na simulação de pagamento do mês ${input.mesReferencia}. Motivo: ${motivos.join('; ')}. Verifique o cadastro e resimule.`,
+          });
+        }
+      }
+
+      // ========== 3. COMPARAÇÃO SALARIAL POR FUNÇÃO ==========
+      const funcaoGroups = new Map<string, { id: number; nome: string; bruto: number; liquido: number; he: number; valorHora: string }[]>();
+      for (const emp of allCltAtivos) {
+        const pag = pagMap.get(emp.id);
+        if (!pag || !emp.funcao) continue;
+        const key = emp.funcao.toUpperCase().trim();
+        if (!funcaoGroups.has(key)) funcaoGroups.set(key, []);
+        funcaoGroups.get(key)!.push({
+          id: emp.id,
+          nome: emp.nomeCompleto,
+          bruto: parseFloat(pag.salarioBrutoMes) || 0,
+          liquido: parseFloat(pag.salarioLiquido) || 0,
+          he: parseFloat(pag.horasExtrasValor) || 0,
+          valorHora: emp.valorHora || '0',
+        });
+      }
+
+      for (const [funcao, emps] of funcaoGroups) {
+        if (emps.length < 2) continue;
+        const brutos = emps.map(e => e.bruto);
+        const minBruto = Math.min(...brutos);
+        const maxBruto = Math.max(...brutos);
+        const diffPercent = minBruto > 0 ? ((maxBruto - minBruto) / minBruto * 100) : 0;
+
+        if (diffPercent > 5) {
+          const menorEmp = emps.find(e => e.bruto === minBruto)!;
+          const maiorEmp = emps.find(e => e.bruto === maxBruto)!;
+          const listaDetalhada = emps
+            .sort((a, b) => a.bruto - b.bruto)
+            .map(e => `${e.nome}: bruto R$ ${e.bruto.toFixed(2)} (VH: R$ ${e.valorHora}, HE: R$ ${e.he.toFixed(2)})`)
+            .join('; ');
+
+          const temHE = emps.some(e => e.he > 0);
+          const todosIguaisVH = new Set(emps.map(e => e.valorHora)).size === 1;
+
+          let explicacao = '';
+          if (temHE && todosIguaisVH) {
+            explicacao = `Todos possuem o mesmo valor hora (R$ ${emps[0].valorHora}). A diferença se deve a horas extras realizadas por alguns funcionários.`;
+          } else if (!todosIguaisVH) {
+            explicacao = `Os funcionários possuem valores hora diferentes, o que explica a variação salarial. Verifique se os valores hora estão corretos para a mesma função.`;
+          } else {
+            explicacao = `Verifique se houve algum bônus, adicional ou ajuste individual que justifique a diferença.`;
+          }
+
+          alertas.push({
+            tipo: diffPercent > 20 ? 'error' : 'warning',
+            categoria: 'variacao_salarial',
+            employeeId: null,
+            nome: funcao,
+            funcao,
+            titulo: `Variação de ${diffPercent.toFixed(1)}% no bruto entre ${emps.length} funcionários`,
+            descricao: `Menor: ${menorEmp.nome} (R$ ${minBruto.toFixed(2)}) / Maior: ${maiorEmp.nome} (R$ ${maxBruto.toFixed(2)})`,
+            memorial: `Na função "${funcao}", foram identificados ${emps.length} funcionários com variação de ${diffPercent.toFixed(1)}% no salário bruto. Detalhamento: ${listaDetalhada}. Consideração do ERP: ${explicacao} Diferença absoluta: R$ ${(maxBruto - minBruto).toFixed(2)}. ${diffPercent > 20 ? 'ATENÇÃO: variação superior a 20% — alto risco de erro de lançamento.' : 'Variação moderada — pode ser legítima mas merece verificação.'}`,
+          });
+        }
+      }
+
+      // ========== 4. DESCONTOS RELEVANTES (faltas, atrasos, pensão) ==========
+      for (const emp of allCltAtivos) {
+        const pag = pagMap.get(emp.id);
+        if (!pag) continue;
+        const bruto = parseFloat(pag.salarioBrutoMes) || 0;
+        const liquido = parseFloat(pag.salarioLiquido) || 0;
+        const totalDesc = parseFloat(pag.totalDescontos) || 0;
+        const faltas = pag.descontoFaltasQtd || 0;
+        const faltasVal = parseFloat(pag.descontoFaltas) || 0;
+        const atrasosMin = pag.descontoAtrasosMinutos || 0;
+        const atrasosVal = parseFloat(pag.descontoAtrasos) || 0;
+        const pensao = parseFloat(pag.descontoPensao) || 0;
+        const he = parseFloat(pag.horasExtrasValor) || 0;
+        const adicionais = parseFloat(pag.adicionaisValor) || 0;
+        const acertoEscuro = parseFloat(pag.acertoEscuroValor) || 0;
+
+        if (faltas > 0) {
+          alertas.push({
+            tipo: faltas >= 3 ? 'error' : 'warning',
+            categoria: 'desconto_faltas',
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            titulo: `${faltas} falta(s) — desconto de R$ ${faltasVal.toFixed(2)}`,
+            descricao: `Desconto de ${faltas} dia(s) de falta sobre salário bruto de R$ ${bruto.toFixed(2)}.`,
+            memorial: `${emp.nomeCompleto} (${emp.funcao || 'sem função'}) teve ${faltas} falta(s) injustificada(s) no mês ${input.mesReferencia}. Cálculo do desconto: valor hora R$ ${emp.valorHora} × ${emp.horasMensais || 8}h/dia × ${faltas} dia(s) = R$ ${faltasVal.toFixed(2)}. Este valor foi deduzido dos proventos. O desconto também impacta VR e VT proporcionalmente (VR faltas: R$ ${parseFloat(pag.descontoVrFaltas || '0').toFixed(2)}, VT faltas: R$ ${parseFloat(pag.descontoVtFaltas || '0').toFixed(2)}).${faltas >= 3 ? ' ATENÇÃO: 3 ou mais faltas — avaliar aplicação de advertência conforme política da empresa.' : ''}`,
+          });
+        }
+
+        if (atrasosMin > 0) {
+          alertas.push({
+            tipo: atrasosMin >= 60 ? 'warning' : 'info',
+            categoria: 'desconto_atrasos',
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            titulo: `${atrasosMin} min de atraso — desconto de R$ ${atrasosVal.toFixed(2)}`,
+            descricao: `Acúmulo de ${atrasosMin} minutos de atraso no mês.`,
+            memorial: `${emp.nomeCompleto} (${emp.funcao || 'sem função'}) acumulou ${atrasosMin} minutos de atraso no mês ${input.mesReferencia}. Cálculo: ${atrasosMin} min ÷ 60 × valor hora R$ ${emp.valorHora} = R$ ${atrasosVal.toFixed(2)} descontado. ${atrasosMin >= 60 ? 'Atenção: atrasos superiores a 1 hora acumulada no mês.' : ''}`,
+          });
+        }
+
+        if (he > 0) {
+          alertas.push({
+            tipo: 'info',
+            categoria: 'horas_extras',
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            titulo: `Horas extras: R$ ${he.toFixed(2)}`,
+            descricao: `Recebeu R$ ${he.toFixed(2)} em horas extras, elevando proventos para R$ ${parseFloat(pag.totalProventos).toFixed(2)}.`,
+            memorial: `${emp.nomeCompleto} (${emp.funcao || 'sem função'}) realizou horas extras no mês ${input.mesReferencia} no valor de R$ ${he.toFixed(2)}. Salário bruto base: R$ ${bruto.toFixed(2)}. Com HE, total de proventos: R$ ${parseFloat(pag.totalProventos).toFixed(2)}. As horas extras são calculadas com adicional conforme a legislação (50% dias úteis, 100% domingos/feriados).`,
+          });
+        }
+
+        if (pensao > 0) {
+          alertas.push({
+            tipo: 'info',
+            categoria: 'pensao_alimenticia',
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            titulo: `Pensão alimentícia: R$ ${pensao.toFixed(2)}`,
+            descricao: `Desconto de pensão alimentícia conforme determinação judicial.`,
+            memorial: `${emp.nomeCompleto} (${emp.funcao || 'sem função'}) possui desconto de pensão alimentícia no valor de R$ ${pensao.toFixed(2)}. ${emp.pensaoAlimenticia ? 'Cadastro indica pensão ativa.' : ''} Este desconto é obrigatório conforme determinação judicial e incide sobre o salário líquido antes de outros descontos voluntários.`,
+          });
+        }
+
+        if (bruto > 0 && totalDesc / bruto > 0.5) {
+          alertas.push({
+            tipo: 'error',
+            categoria: 'desconto_excessivo',
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            titulo: `Descontos excedem 50% do bruto (${(totalDesc / bruto * 100).toFixed(1)}%)`,
+            descricao: `Bruto: R$ ${bruto.toFixed(2)} / Descontos: R$ ${totalDesc.toFixed(2)} / Líquido: R$ ${liquido.toFixed(2)}`,
+            memorial: `${emp.nomeCompleto} (${emp.funcao || 'sem função'}) teve descontos totais de R$ ${totalDesc.toFixed(2)}, representando ${(totalDesc / bruto * 100).toFixed(1)}% do salário bruto de R$ ${bruto.toFixed(2)}. Composição dos descontos: Adiantamento R$ ${parseFloat(pag.descontoAdiantamento || '0').toFixed(2)}, Faltas R$ ${faltasVal.toFixed(2)}, Atrasos R$ ${atrasosVal.toFixed(2)}, INSS R$ ${parseFloat(pag.descontoInss || '0').toFixed(2)}, FGTS R$ ${parseFloat(pag.descontoFgts || '0').toFixed(2)}, Pensão R$ ${pensao.toFixed(2)}, EPI R$ ${parseFloat(pag.descontoEpi || '0').toFixed(2)}, Outros R$ ${parseFloat(pag.descontoOutros || '0').toFixed(2)}. ATENÇÃO: Descontos superiores a 50% do bruto podem indicar erro de lançamento ou acúmulo atípico de deduções. Verifique se todos os descontos são corretos.`,
+          });
+        }
+
+        if (acertoEscuro !== 0) {
+          alertas.push({
+            tipo: 'info',
+            categoria: 'acerto_escuro',
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            titulo: `Acerto/ajuste: R$ ${acertoEscuro.toFixed(2)}`,
+            descricao: `Ajuste manual aplicado ao pagamento.`,
+            memorial: `${emp.nomeCompleto} (${emp.funcao || 'sem função'}) recebeu um ajuste manual de R$ ${acertoEscuro.toFixed(2)} no pagamento de ${input.mesReferencia}. ${pag.acertoEscuroDetalhes ? 'Detalhes: ' + JSON.stringify(pag.acertoEscuroDetalhes) : 'Sem detalhes registrados.'} Ajustes manuais devem ser revisados para garantir conformidade.`,
+          });
+        }
+      }
+
+      // ========== 5. DADOS BANCÁRIOS INCOMPLETOS ==========
+      for (const emp of allCltAtivos) {
+        const pag = pagMap.get(emp.id);
+        if (!pag) continue;
+        const problemas: string[] = [];
+        if (!emp.banco && !emp.conta) problemas.push('banco e conta não cadastrados');
+        else if (!emp.banco) problemas.push('código do banco não cadastrado');
+        else if (!emp.conta) problemas.push('número da conta não cadastrado');
+        if (!emp.agencia) problemas.push('agência não cadastrada');
+        if (!emp.cpf) problemas.push('CPF não cadastrado');
+        if (problemas.length > 0) {
+          alertas.push({
+            tipo: 'warning',
+            categoria: 'dados_bancarios_incompletos',
+            employeeId: emp.id,
+            nome: emp.nomeCompleto,
+            funcao: emp.funcao,
+            titulo: `Dados bancários incompletos: ${problemas.join(', ')}`,
+            descricao: `Não será possível gerar remessa CNAB para este funcionário sem dados bancários completos.`,
+            memorial: `${emp.nomeCompleto} (${emp.funcao || 'sem função'}) possui dados bancários incompletos: ${problemas.join('; ')}. Banco: ${emp.banco || 'vazio'}, Agência: ${emp.agencia || 'vazio'}, Conta: ${emp.conta || 'vazio'}, CPF: ${emp.cpf || 'vazio'}. Sem estes dados completos, o sistema não incluirá este funcionário na geração de arquivo de remessa bancária (CNAB 240). O pagamento precisará ser feito manualmente.`,
+          });
+        }
+      }
+
+      // ========== 6. RESUMO GERAL ==========
+      const totalErros = alertas.filter(a => a.tipo === 'error').length;
+      const totalWarnings = alertas.filter(a => a.tipo === 'warning').length;
+      const totalInfos = alertas.filter(a => a.tipo === 'info').length;
+
+      const categorias = {
+        vale_ausente: alertas.filter(a => a.categoria === 'vale_ausente').length,
+        vale_bloqueado: alertas.filter(a => a.categoria === 'vale_bloqueado').length,
+        pagamento_ausente: alertas.filter(a => a.categoria === 'pagamento_ausente').length,
+        variacao_salarial: alertas.filter(a => a.categoria === 'variacao_salarial').length,
+        desconto_faltas: alertas.filter(a => a.categoria === 'desconto_faltas').length,
+        desconto_atrasos: alertas.filter(a => a.categoria === 'desconto_atrasos').length,
+        desconto_excessivo: alertas.filter(a => a.categoria === 'desconto_excessivo').length,
+        horas_extras: alertas.filter(a => a.categoria === 'horas_extras').length,
+        pensao_alimenticia: alertas.filter(a => a.categoria === 'pensao_alimenticia').length,
+        acerto_escuro: alertas.filter(a => a.categoria === 'acerto_escuro').length,
+        dados_bancarios_incompletos: alertas.filter(a => a.categoria === 'dados_bancarios_incompletos').length,
+      };
+
+      return {
+        mesReferencia: input.mesReferencia,
+        totalCltAtivos: allCltAtivos.length,
+        totalNaFolha: pagamentos.length,
+        totalNoVale: vales.length,
+        diasUteisNoMes: diasUteis,
+        totalAlertas: alertas.length,
+        totalErros,
+        totalWarnings,
+        totalInfos,
+        categorias,
+        alertas: alertas.sort((a, b) => {
+          const prioridade = { error: 0, warning: 1, info: 2 };
+          return prioridade[a.tipo] - prioridade[b.tipo];
+        }),
+      };
+    }),
+
   // ============================================================
   // 8. CONSOLIDAR PAGAMENTO
   // ============================================================
