@@ -286,10 +286,9 @@ export default function ValeAlimentacao() {
     if (!lancamentos || lancamentos.length === 0) return [];
     const map = new Map<string, { obraKey: string; obraNome: string; funcs: any[]; totalCafe: number; totalLanche: number; totalJanta: number; totalVA: number; totalGeral: number }>();
     for (const l of lancamentos as any[]) {
-      const obraKey = l.obraId ? String(l.obraId) : `sem_obra_${l.companyId || "0"}`;
       const obraNome = l.obraNome || "Sem Obra";
-      if (!map.has(obraKey)) map.set(obraKey, { obraKey, obraNome, funcs: [], totalCafe: 0, totalLanche: 0, totalJanta: 0, totalVA: 0, totalGeral: 0 });
-      const g = map.get(obraKey)!;
+      if (!map.has(obraNome)) map.set(obraNome, { obraKey: obraNome, obraNome, funcs: [], totalCafe: 0, totalLanche: 0, totalJanta: 0, totalVA: 0, totalGeral: 0 });
+      const g = map.get(obraNome)!;
       g.funcs.push(l);
       g.totalCafe += parseBRL(l.valorCafe);
       g.totalLanche += parseBRL(l.valorLanche);
