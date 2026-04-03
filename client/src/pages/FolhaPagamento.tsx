@@ -2576,6 +2576,13 @@ export default function FolhaPagamento() {
                                     <CheckCircle className="h-3 w-3 mr-1" /> Confirmar Pagamento
                                   </Button>
                                 )}
+                                {p.status === "calculado" && (
+                                  <Button size="sm" variant="outline" className="h-7 text-xs border-purple-300 text-purple-700 hover:bg-purple-50"
+                                    onClick={() => heCalcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno, dataInicio: String(p.dataInicio).slice(0, 10), dataFim: String(p.dataFim).slice(0, 10) })}
+                                    disabled={heCalcularMut.isPending}>
+                                    {heCalcularMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Recalculando...</> : <><RefreshCw className="h-3 w-3 mr-1" /> Recalcular</>}
+                                  </Button>
+                                )}
                                 {p.status !== "pago" && p.status !== "cancelado" && (
                                   <Button size="sm" variant="outline" className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50"
                                     onClick={() => { if (confirm("Cancelar este período? Isso permite recalcular o mesmo intervalo.")) heCancelarMut.mutate({ hePeriodId: p.id, companyId }); }}
