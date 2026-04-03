@@ -8,7 +8,7 @@ import {
   Upload, CalendarDays, DollarSign, CreditCard, ChevronLeft, ChevronRight,
   AlertTriangle, CheckCircle, FileText, Users, Lock, Unlock, Search,
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
-  FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp,
+  FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp, TrendingDown,
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
   HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X
 } from "lucide-react";
@@ -2527,63 +2527,84 @@ export default function FolhaPagamento() {
         <PrintHeader />
         {fileInputs}
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
                 <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
               </Button>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">Cálculo Interno — Pagamento / Saldo</h1>
-                <p className="text-muted-foreground text-sm">{formatMesAno(mesAno)} • {pagamentoResult.totalFuncionarios} funcionários • Previsão: {pagamentoResult.dataPagamentoPrevista}</p>
+                <h1 className="text-xl font-bold tracking-tight">Pagamento / Saldo</h1>
+                <p className="text-muted-foreground text-xs">{formatMesAno(mesAno)} • {pagamentoResult.totalFuncionarios} funcionários • Pagamento previsto: {pagamentoResult.dataPagamentoPrevista}</p>
               </div>
             </div>
             <PrintActions title={`Cálculo Pagamento - ${formatMesAno(mesAno)}`} />
           </div>
 
-          {/* RESUMO CARDS */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-green-700">{fmtNum(pagamentoResult.totalFuncionarios)}</p>
-              <p className="text-xs text-muted-foreground">Funcionários</p>
-            </CardContent></Card>
-            <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-green-700">{formatBRL(pagamentoResult.totalBruto)}</p>
-              <p className="text-xs text-muted-foreground">Total Bruto</p>
-            </CardContent></Card>
-            <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-red-600">{formatBRL(pagamentoResult.totalDescontos)}</p>
-              <p className="text-xs text-muted-foreground">Total Descontos</p>
-            </CardContent></Card>
-            <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-[#1B2A4A]">{formatBRL(pagamentoResult.totalLiquido)}</p>
-              <p className="text-xs text-muted-foreground">Total Líquido</p>
-            </CardContent></Card>
+          <div className="grid grid-cols-4 gap-3">
+            <div className="bg-white border rounded-lg p-3 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                <Users className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xl font-bold">{fmtNum(pagamentoResult.totalFuncionarios)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Funcionários</p>
+              </div>
+            </div>
+            <div className="bg-white border rounded-lg p-3 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
+                <TrendingUp className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-xl font-bold text-green-700">{formatBRL(pagamentoResult.totalBruto)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Bruto</p>
+              </div>
+            </div>
+            <div className="bg-white border rounded-lg p-3 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+                <TrendingDown className="h-5 w-5 text-red-500" />
+              </div>
+              <div>
+                <p className="text-xl font-bold text-red-600">{formatBRL(pagamentoResult.totalDescontos)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Descontos</p>
+              </div>
+            </div>
+            <div className="bg-gradient-to-r from-[#1B2A4A] to-[#2D4A7A] rounded-lg p-3 flex items-center gap-3 text-white">
+              <div className="h-10 w-10 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                <DollarSign className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xl font-bold">{formatBRL(pagamentoResult.totalLiquido)}</p>
+                <p className="text-[10px] uppercase tracking-wider opacity-80">Total Líquido</p>
+              </div>
+            </div>
           </div>
 
-          {/* TABELA DE FUNCIONÁRIOS - TODOS OS DESCONTOS */}
-          <Card>
-            <CardContent className="p-4">
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-[11px]">
                   <thead>
-                    <tr className="border-b-2 border-gray-200">
-                      <th className="text-left py-2 px-1 sticky left-0 bg-white z-10">Funcionário</th>
-                      <th className="text-left py-2 px-1">Função</th>
-                      <th className="text-right py-2 px-1 bg-green-50">Bruto</th>
-                      <th className="text-right py-2 px-1 bg-green-50">H.E.</th>
-                      <th className="text-right py-2 px-1 bg-green-50 font-bold">Proventos</th>
-                      <th className="text-right py-2 px-1 bg-orange-50">Adiant.</th>
-                      <th className="text-right py-2 px-1 bg-red-50">INSS</th>
-                      <th className="text-right py-2 px-1 bg-red-50">VT</th>
-                      <th className="text-right py-2 px-1 bg-red-50">VA (5%)</th>
-                      <th className="text-right py-2 px-1 bg-red-50">Faltas</th>
-                      <th className="text-right py-2 px-1 bg-red-50">Pensão</th>
-                      <th className="text-right py-2 px-1 bg-red-50">Seguro</th>
-                      <th className="text-right py-2 px-1 bg-red-50">Ac. Escuro</th>
-                      <th className="text-right py-2 px-1 bg-purple-50">Conv.</th>
-                      <th className="text-right py-2 px-1 bg-red-50 font-bold">Tot. Desc.</th>
-                      <th className="text-right py-2 px-1 bg-blue-50 font-bold">Líquido</th>
-                      <th className="text-right py-2 px-1 text-[9px] text-muted-foreground">FGTS</th>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="text-left py-2.5 px-2 sticky left-0 bg-gray-50 z-10 font-semibold text-gray-700" rowSpan={2}>Funcionário</th>
+                      <th className="text-left py-2.5 px-2 font-semibold text-gray-700" rowSpan={2}>Função</th>
+                      <th className="text-center py-1.5 px-1 font-semibold text-green-700 border-l border-green-200 bg-green-50/50" colSpan={3}>Proventos</th>
+                      <th className="text-center py-1.5 px-1 font-semibold text-red-700 border-l border-red-200 bg-red-50/30" colSpan={8}>Descontos</th>
+                      <th className="text-center py-1.5 px-1 font-semibold text-[#1B2A4A] border-l border-blue-200 bg-blue-50/50" colSpan={2}>Resultado</th>
+                    </tr>
+                    <tr className="bg-gray-50/80 border-b-2 border-gray-200 text-[10px] text-gray-500 uppercase tracking-wider">
+                      <th className="text-right py-1.5 px-2 border-l border-green-200 bg-green-50/30">Salário</th>
+                      <th className="text-right py-1.5 px-2 bg-green-50/30">H.E.</th>
+                      <th className="text-right py-1.5 px-2 bg-green-50/30 font-bold text-green-700">Total</th>
+                      <th className="text-right py-1.5 px-2 border-l border-red-200 bg-orange-50/30">Vale</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/20">INSS</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/20">VT</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/20">VA</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/20">Faltas</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/20">Outros</th>
+                      <th className="text-right py-1.5 px-2 bg-purple-50/30">Conv.</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/30 font-bold text-red-700">Total</th>
+                      <th className="text-right py-1.5 px-2 border-l border-blue-200 bg-blue-50/30 font-bold text-[#1B2A4A]">Líquido</th>
+                      <th className="text-right py-1.5 px-2 bg-gray-50/50 text-[9px]">FGTS</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2595,63 +2616,58 @@ export default function FolhaPagamento() {
                       const seguro = f.seguroVidaValor || 0;
                       const acertoEsc = f.acertoEscuroValor || 0;
                       const convenio = f.descontoConvenio || 0;
+                      const outros = pensao + seguro + acertoEsc;
+                      const zebra = i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50';
                       return (
-                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-1.5 px-1 font-medium sticky left-0 bg-white z-10 whitespace-nowrap">{f.nome}</td>
-                          <td className="py-1.5 px-1 text-muted-foreground text-[10px] whitespace-nowrap">{f.funcao}</td>
-                          <td className="text-right py-1.5 px-1">{formatBRL(f.salarioBruto)}</td>
-                          <td className="text-right py-1.5 px-1 text-green-700">{f.valorHE > 0 ? formatBRL(f.valorHE) : '—'}</td>
-                          <td className="text-right py-1.5 px-1 font-semibold">{formatBRL(f.totalProventos)}</td>
-                          <td className="text-right py-1.5 px-1 text-orange-700">{f.descontoAdiantamento > 0 ? formatBRL(f.descontoAdiantamento) : '—'}</td>
-                          <td className="text-right py-1.5 px-1 text-red-600">{f.descontoInss > 0 ? formatBRL(f.descontoInss) : '—'}</td>
-                          <td className="text-right py-1.5 px-1 text-red-600">{vtVal > 0 ? formatBRL(vtVal) : '—'}</td>
-                          <td className="text-right py-1.5 px-1 text-red-600">{vaDesc > 0 ? formatBRL(vaDesc) : '—'}</td>
-                          <td className="text-right py-1.5 px-1 text-red-600">{descFaltas > 0 ? formatBRL(descFaltas) : '—'}</td>
-                          <td className="text-right py-1.5 px-1 text-red-600">{pensao > 0 ? formatBRL(pensao) : '—'}</td>
-                          <td className="text-right py-1.5 px-1 text-red-600">{seguro > 0 ? formatBRL(seguro) : '—'}</td>
-                          <td className="text-right py-1.5 px-1 text-red-600">{acertoEsc > 0 ? formatBRL(acertoEsc) : '—'}</td>
-                          <td className="text-right py-1.5 px-1 text-purple-700">{convenio > 0 ? formatBRL(convenio) : '—'}</td>
-                          <td className="text-right py-1.5 px-1 font-semibold text-red-700">{formatBRL(f.totalDescontos)}</td>
-                          <td className="text-right py-1.5 px-1 font-bold text-[#1B2A4A]">{formatBRL(f.salarioLiquido)}</td>
-                          <td className="text-right py-1.5 px-1 text-[10px] text-muted-foreground">{formatBRL(f.descontoFgts)}</td>
+                        <tr key={i} className={`border-b border-gray-100 hover:bg-blue-50/40 transition-colors ${zebra}`}>
+                          <td className={`py-2 px-2 font-medium sticky left-0 z-10 whitespace-nowrap ${zebra}`}>{f.nome}</td>
+                          <td className="py-2 px-2 text-muted-foreground text-[10px] whitespace-nowrap max-w-[140px] truncate" title={f.funcao}>{f.funcao}</td>
+                          <td className="text-right py-2 px-2 border-l border-green-100">{formatBRL(f.salarioBruto)}</td>
+                          <td className="text-right py-2 px-2 text-green-700">{f.valorHE > 0 ? formatBRL(f.valorHE) : '—'}</td>
+                          <td className="text-right py-2 px-2 font-semibold text-green-800">{formatBRL(f.totalProventos)}</td>
+                          <td className="text-right py-2 px-2 border-l border-red-100 text-orange-600">{f.descontoAdiantamento > 0 ? formatBRL(f.descontoAdiantamento) : '—'}</td>
+                          <td className="text-right py-2 px-2 text-red-600">{f.descontoInss > 0 ? formatBRL(f.descontoInss) : '—'}</td>
+                          <td className="text-right py-2 px-2 text-red-600">{vtVal > 0 ? formatBRL(vtVal) : '—'}</td>
+                          <td className="text-right py-2 px-2 text-red-600">{vaDesc > 0 ? formatBRL(vaDesc) : '—'}</td>
+                          <td className="text-right py-2 px-2 text-red-600">{descFaltas > 0 ? formatBRL(descFaltas) : '—'}</td>
+                          <td className="text-right py-2 px-2 text-red-600">{outros > 0 ? formatBRL(outros) : '—'}</td>
+                          <td className="text-right py-2 px-2 text-purple-700">{convenio > 0 ? formatBRL(convenio) : '—'}</td>
+                          <td className="text-right py-2 px-2 font-semibold text-red-700">{formatBRL(f.totalDescontos)}</td>
+                          <td className="text-right py-2 px-2 border-l border-blue-100 font-bold text-[#1B2A4A]">{formatBRL(f.salarioLiquido)}</td>
+                          <td className="text-right py-2 px-2 text-[10px] text-muted-foreground">{formatBRL(f.descontoFgts)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                      <td className="py-2 px-1 sticky left-0 bg-gray-50 z-10" colSpan={2}>TOTAL ({pagamentoResult.totalFuncionarios})</td>
-                      <td className="text-right py-2 px-1" colSpan={3}>{formatBRL(pagamentoResult.totalBruto)}</td>
-                      <td className="text-right py-2 px-1 text-orange-700">
+                    <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold text-xs">
+                      <td className="py-3 px-2 sticky left-0 bg-gray-100 z-10" colSpan={2}>TOTAL — {pagamentoResult.totalFuncionarios} funcionários</td>
+                      <td className="text-right py-3 px-2 border-l border-green-200" colSpan={2}></td>
+                      <td className="text-right py-3 px-2 text-green-800">{formatBRL(pagamentoResult.totalBruto)}</td>
+                      <td className="text-right py-3 px-2 border-l border-red-200 text-orange-600">
                         {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoAdiantamento || 0), 0) || 0)}
                       </td>
-                      <td className="text-right py-2 px-1 text-red-600">
+                      <td className="text-right py-3 px-2 text-red-600">
                         {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoInss || 0), 0) || 0)}
                       </td>
-                      <td className="text-right py-2 px-1 text-red-600">
+                      <td className="text-right py-3 px-2 text-red-600">
                         {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.vtValor || 0), 0) || 0)}
                       </td>
-                      <td className="text-right py-2 px-1 text-red-600">
+                      <td className="text-right py-3 px-2 text-red-600">
                         {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoVaTotal || 0), 0) || 0)}
                       </td>
-                      <td className="text-right py-2 px-1 text-red-600">
+                      <td className="text-right py-3 px-2 text-red-600">
                         {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoFaltas || 0) + (f.descontoAtrasos || 0), 0) || 0)}
                       </td>
-                      <td className="text-right py-2 px-1 text-red-600">
-                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoPensao || 0), 0) || 0)}
+                      <td className="text-right py-3 px-2 text-red-600">
+                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoPensao || 0) + (f.seguroVidaValor || 0) + (f.acertoEscuroValor || 0), 0) || 0)}
                       </td>
-                      <td className="text-right py-2 px-1 text-red-600">
-                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.seguroVidaValor || 0), 0) || 0)}
-                      </td>
-                      <td className="text-right py-2 px-1 text-red-600">
-                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.acertoEscuroValor || 0), 0) || 0)}
-                      </td>
-                      <td className="text-right py-2 px-1 text-purple-700">
+                      <td className="text-right py-3 px-2 text-purple-700">
                         {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoConvenio || 0), 0) || 0)}
                       </td>
-                      <td className="text-right py-2 px-1 text-red-700">{formatBRL(pagamentoResult.totalDescontos)}</td>
-                      <td className="text-right py-2 px-1 text-lg text-[#1B2A4A]">{formatBRL(pagamentoResult.totalLiquido)}</td>
-                      <td className="text-right py-2 px-1 text-[10px] text-muted-foreground">
+                      <td className="text-right py-3 px-2 text-red-700">{formatBRL(pagamentoResult.totalDescontos)}</td>
+                      <td className="text-right py-3 px-2 border-l border-blue-200 text-base text-[#1B2A4A]">{formatBRL(pagamentoResult.totalLiquido)}</td>
+                      <td className="text-right py-3 px-2 text-[10px] text-muted-foreground">
                         {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoFgts || 0), 0) || 0)}
                       </td>
                     </tr>

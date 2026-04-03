@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 997,
+    titulo: "Layout melhorado na tela de Pagamento / Saldo",
+    descricao: "Redesign completo da tela de Pagamento/Saldo para melhor experiência do usuário. Cards de resumo agora com ícones e hierarquia visual (Funcionários, Total Bruto, Total Descontos, Total Líquido com gradiente destaque). Tabela reorganizada com cabeçalho em duas linhas agrupando Proventos (Salário, H.E., Total) e Descontos (Vale, INSS, VT, VA, Faltas, Outros, Conv., Total) com separadores visuais. Colunas Pensão, Seguro e Ac. Escuro consolidadas em 'Outros' para reduzir colunas. Linhas zebradas e hover com transição suave. Fonte ajustada para melhor legibilidade.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-03 23:30:00",
+  },
+  {
     version: 996,
     titulo: "Detalhamento aferição full-screen com obra, desconto e correções SQL",
     descricao: "Dialog de detalhamento dia a dia agora abre em tela cheia (95vw x 95vh) com header fixo, conteúdo scrollável e footer fixo. Novas colunas: Obra (nome da obra onde bateu ponto via JOIN com tabela obras) e Desconto estimado por dia (baseado em valorHora × horas diárias ou salário/30). Jornada formatada como '07:00-17:00 (01:00 intervalo)' em vez de JSON bruto. Status padronizado: dia útil sem batida = 'sem_registro' (vermelho), sábado/domingo/feriado sem batida = '—'. temRegistro agora exige numBatidas>0 ou entrada1 preenchida. Múltiplas correções de aspas duplas em colunas camelCase em queries SQL raw (payroll_advances, payroll_adjustments, timecard_daily, lancamentos_parceiros, etc).",
