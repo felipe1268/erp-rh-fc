@@ -1225,7 +1225,7 @@ export const payrollEngineRouter = router({
 
       const ferRows = ((await db.execute(sql`
         SELECT data, nome, tipo FROM feriados
-        WHERE (companyId = ${input.companyId} OR companyId IS NULL)
+        WHERE ("companyId" = ${input.companyId} OR "companyId" IS NULL)
           AND ativo = 1
           AND data >= ${escuroInicio} AND data <= ${escuroFim}
       `)) as any).rows || [];
