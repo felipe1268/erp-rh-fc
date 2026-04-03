@@ -2927,6 +2927,9 @@ export default function FolhaPagamento() {
                   </div>
                   <CreditCard className="h-4 w-4 text-orange-600" />
                 </div>
+                <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
+                  <div className={`h-1.5 rounded-full transition-all duration-700 ${valeOk ? 'bg-green-500 w-full' : gerarValeMut.isPending ? 'bg-orange-400 w-2/3 animate-pulse' : step1Ready ? 'bg-orange-200 w-0' : 'bg-slate-200 w-0'}`} />
+                </div>
                 <p className="text-xs text-muted-foreground mb-2 flex-1">Adiantamento — {(() => { const p = (pd as any); return p?.percentualAdiantamento || 40; })()}% do salário (sem HE)</p>
                 {valeOk && pd?.valeGeradoEm && (
                   <div className="mb-2 space-y-1">
@@ -2964,6 +2967,9 @@ export default function FolhaPagamento() {
                     <span className="font-semibold text-sm">Hora Extra</span>
                   </div>
                   <TrendingUp className="h-4 w-4 text-purple-700" />
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
+                  <div className={`h-1.5 rounded-full transition-all duration-700 ${heOk ? 'bg-green-500 w-full' : step2Ready ? 'bg-purple-200 w-0' : 'bg-slate-200 w-0'}`} />
                 </div>
                 <p className="text-xs text-muted-foreground mb-1 flex-1">Período configurável com detecção de duplicidade</p>
                 <div className={`text-[10px] font-bold px-2 py-1 rounded mb-2 text-center ${heDestinoIsBanco ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
@@ -3027,6 +3033,9 @@ export default function FolhaPagamento() {
                     </button>
                   </div>
                 </div>
+                <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
+                  <div className={`h-1.5 rounded-full transition-all duration-700 ${afericaoOk ? 'bg-green-500 w-full' : afericaoMut.isPending ? 'bg-amber-400 w-2/3 animate-pulse' : step3Ready ? 'bg-amber-200 w-0' : 'bg-slate-200 w-0'}`} />
+                </div>
                 <div className="mb-2 space-y-1">
                   <Badge className="bg-amber-100 text-amber-800 text-[10px]">
                     <CalendarDays className="h-3 w-3 mr-0.5" /> Conferindo: {mesEscuroLabel}
@@ -3081,6 +3090,9 @@ export default function FolhaPagamento() {
                     <span className="font-semibold text-sm">Simular Pagamento</span>
                   </div>
                   <DollarSign className="h-4 w-4 text-green-600" />
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
+                  <div className={`h-1.5 rounded-full transition-all duration-700 ${pagOk ? 'bg-green-500 w-full' : simularPagamentoMut.isPending ? 'bg-green-400 w-2/3 animate-pulse' : step4Ready ? 'bg-green-200 w-0' : 'bg-slate-200 w-0'}`} />
                 </div>
                 <p className="text-xs text-muted-foreground mb-2 flex-1">100% salário − adiantamento − faltas − INSS − descontos</p>
                 {pagOk && pd?.pagamentoSimuladoEm && (
