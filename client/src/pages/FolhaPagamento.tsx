@@ -88,6 +88,10 @@ export default function FolhaPagamento() {
   // HE Módulo state
   const prevMes = mesSelecionado === 1 ? 12 : mesSelecionado - 1;
   const prevAno = mesSelecionado === 1 ? anoSelecionado - 1 : anoSelecionado;
+  const escuroMesAnt = prevMes === 1 ? 12 : prevMes - 1;
+  const escuroAnoAnt = prevMes === 1 ? prevAno - 1 : prevAno;
+  const escuroInicio = `21/${String(escuroMesAnt).padStart(2, '0')}/${escuroAnoAnt}`;
+  const escuroFim = `20/${String(prevMes).padStart(2, '0')}/${prevAno}`;
   const defaultHeInicio = `${prevAno}-${String(prevMes).padStart(2, "0")}-16`;
   const defaultHeFim = `${anoSelecionado}-${String(mesSelecionado).padStart(2, "0")}-15`;
   const [heDataInicio, setHeDataInicio] = useState(defaultHeInicio);
@@ -2827,8 +2831,7 @@ export default function FolhaPagamento() {
           const etapasConcluidas = etapas.filter(e => e.done).length;
           const percentProgresso = Math.round((etapasConcluidas / 4) * 100);
 
-          const prevMesRef = mesSelecionado === 1 ? 12 : mesSelecionado - 1;
-          const mesEscuroLabel = `${MESES_CURTOS[prevMesRef - 1]}/${mesSelecionado === 1 ? anoSelecionado - 1 : anoSelecionado}`;
+          const mesEscuroLabel = `${MESES_CURTOS[prevMes - 1]}/${prevAno}`;
 
           const fmtTimestamp = (ts: string | null | undefined) => {
             if (!ts) return null;
@@ -2982,10 +2985,13 @@ export default function FolhaPagamento() {
                     </button>
                   </div>
                 </div>
-                <div className="mb-2">
+                <div className="mb-2 space-y-1">
                   <Badge className="bg-amber-100 text-amber-800 text-[10px]">
                     <CalendarDays className="h-3 w-3 mr-0.5" /> Conferindo: {mesEscuroLabel}
                   </Badge>
+                  <div className="text-[10px] text-slate-500 font-medium">
+                    {escuroInicio} a {escuroFim}
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground mb-2 flex-1">Compara o escuro de {mesEscuroLabel} com o ponto real importado</p>
                 {afericaoOk && pd?.afericaoEm && (
@@ -3103,7 +3109,7 @@ export default function FolhaPagamento() {
                 </ul>
               </div>
               <p className="text-xs text-slate-500">
-                Nesta competência, estamos conferindo o período no escuro de <strong>{(() => { const pm = mesSelecionado === 1 ? 12 : mesSelecionado - 1; const pa = mesSelecionado === 1 ? anoSelecionado - 1 : anoSelecionado; return `${MESES[pm - 1]} ${pa}`; })()}</strong>, 
+                Nesta competência, estamos conferindo o período no escuro de <strong>{(() => { const pm = mesSelecionado === 1 ? 12 : mesSelecionado - 1; const pa = mesSelecionado === 1 ? anoSelecionado - 1 : anoSelecionado; return `${MESES[pm - 1]} ${pa}`; })()}</strong> ({escuroInicio} a {escuroFim}), 
                 cujos eventuais descontos serão aplicados na folha de <strong>{MESES[mesSelecionado - 1]} {anoSelecionado}</strong>.
               </p>
             </div>
