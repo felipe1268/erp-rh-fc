@@ -100,6 +100,7 @@ export default function FolhaPagamento() {
     setHeDataInicio(defaultHeInicio);
     setHeDataFim(defaultHeFim);
     setHeDatasLocked(true);
+    setHeViewPeriodId(null);
   }, [mesSelecionado, anoSelecionado]);
   const [heCalcResult, setHeCalcResult] = useState<any>(null);
   const [heViewPeriodId, setHeViewPeriodId] = useState<number | null>(null);
@@ -248,6 +249,14 @@ export default function FolhaPagamento() {
     { companyId, mesReferencia: mesAno },
     { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "he_modulo" }
   );
+
+  useEffect(() => {
+    if (hePeriods.data && hePeriods.data.length > 0 && heViewPeriodId === null) {
+      const active = (hePeriods.data as any[]).find((p: any) => p.status === 'calculado' || p.status === 'aprovado');
+      if (active) setHeViewPeriodId(Number(active.id));
+    }
+  }, [hePeriods.data]);
+
   const heDetalhe = trpc.horasExtras.getDetalhe.useQuery(
     { hePeriodId: heViewPeriodId! },
     { enabled: heViewPeriodId !== null }
@@ -2163,7 +2172,8 @@ export default function FolhaPagamento() {
 
   // ===== HE MÓDULO VIEW =====
   if (viewMode === "he_modulo") {
-    const periods = (hePeriods.data as any[]) || [];
+    const allPeriods = (hePeriods.data as any[]) || [];
+    const periods = allPeriods.filter((p: any) => p.status !== 'cancelado');
     const detalhe = heDetalhe.data;
     const selectedEmps = (detalhe?.employees as any[]) || [];
     const saldos = (saldoBanco.data as any[]) || [];
