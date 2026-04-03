@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -173,6 +173,10 @@ export default function Colaboradores() {
 
 
   const utils = trpc.useUtils();
+  const statsQ = trpc.employees.stats.useQuery(
+    { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined },
+    { enabled: hasValidSelection }
+  );
   const { data: employees, isLoading } = trpc.employees.list.useQuery(
     { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined, search: search || undefined, status: statusFilter !== "Todos" ? statusFilter : undefined },
     { enabled: hasValidSelection }
@@ -630,6 +634,32 @@ export default function Colaboradores() {
             </Button>
           </div>
         ) : null}
+
+        {statsQ.data && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 print:hidden">
+            {[
+              { label: "Total", value: statsQ.data.total, icon: Users, color: "text-slate-700", bg: "bg-slate-50 border-slate-200", filter: "Todos" },
+              { label: "Ativos", value: statsQ.data.ativos, icon: UserCheck, color: "text-green-700", bg: "bg-green-50 border-green-200", filter: "Ativo" },
+              { label: "Férias", value: statsQ.data.ferias, icon: Palmtree, color: "text-blue-700", bg: "bg-blue-50 border-blue-200", filter: "Ferias" },
+              { label: "Afastados", value: statsQ.data.afastados, icon: HeartPulse, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", filter: "Afastado" },
+              { label: "Licença", value: statsQ.data.licenca, icon: Clock, color: "text-purple-700", bg: "bg-purple-50 border-purple-200", filter: "Licenca" },
+              { label: "Desligados", value: statsQ.data.desligados, icon: UserX, color: "text-red-700", bg: "bg-red-50 border-red-200", filter: "Desligado" },
+              { label: "Reclusos", value: statsQ.data.reclusos, icon: Ban, color: "text-gray-700", bg: "bg-gray-50 border-gray-200", filter: "Recluso" },
+            ].map(item => (
+              <button
+                key={item.filter}
+                onClick={() => setStatusFilter(item.filter)}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all text-left hover:shadow-sm ${item.bg} ${statusFilter === item.filter ? 'ring-2 ring-primary ring-offset-1 shadow-sm' : ''}`}
+              >
+                <item.icon className={`h-4 w-4 ${item.color} shrink-0`} />
+                <div className="min-w-0">
+                  <p className={`text-lg font-bold leading-none ${item.color}`}>{item.value}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight mt-0.5 truncate">{item.label}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Search and Filters */}
         <div className="flex flex-col sm:flex-row gap-3">

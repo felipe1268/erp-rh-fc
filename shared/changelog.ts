@@ -7348,4 +7348,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 15:00:00",
   },
+  {
+    version: 982,
+    titulo: "Colaboradores — Cards de contagem por status no topo",
+    descricao:
+      "• Novos cards interativos no topo da página de Colaboradores\n" +
+      "• Mostra Total, Ativos, Férias, Afastados, Licença, Desligados e Reclusos\n" +
+      "• Clicar em um card filtra automaticamente pelo status correspondente\n" +
+      "• Card selecionado fica destacado com ring azul\n" +
+      "• Query de stats agora suporta múltiplas empresas (construtoras)",
+    tipo: "feature",
+    modulos: "Colaboradores",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 16:00:00",
+  },
 ];

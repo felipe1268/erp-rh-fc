@@ -683,23 +683,26 @@ export async function permanentDeleteEmployee(id: number, companyId: number) {
   await db.delete(employees).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
 }
 
-export async function getEmployeeStats(companyId: number) {
+export async function getEmployeeStats(companyId: number, companyIds?: number[]) {
   const db = await getDb();
-  if (!db) return { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0 };
+  if (!db) return { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, porStatus: {} as Record<string, number> };
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   const result = await db.select({
     status: employees.status,
     count: sql<number>`count(*)`,
-  }).from(employees).where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt))).groupBy(employees.status);
-  const stats = { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0 };
+  }).from(employees).where(and(inArray(employees.companyId, ids), isNull(employees.deletedAt))).groupBy(employees.status);
+  const stats = { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, porStatus: {} as Record<string, number> };
   result.forEach(r => {
     const c = Number(r.count);
+    const s = r.status || 'Sem Status';
     stats.total += c;
-    if (r.status === "Ativo") stats.ativos = c;
-    else if (r.status === "Ferias") stats.ferias = c;
-    else if (r.status === "Afastado") stats.afastados = c;
-    else if (r.status === "Licenca") stats.licenca = c;
-    else if (r.status === "Desligado") stats.desligados = c;
-    else if (r.status === "Recluso") stats.reclusos = c;
+    stats.porStatus[s] = c;
+    if (s === "Ativo") stats.ativos = c;
+    else if (s === "Ferias") stats.ferias = c;
+    else if (s === "Afastado") stats.afastados = c;
+    else if (s === "Licenca") stats.licenca = c;
+    else if (s === "Desligado") stats.desligados = c;
+    else if (s === "Recluso") stats.reclusos = c;
   });
   return stats;
 }
