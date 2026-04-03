@@ -2184,7 +2184,14 @@ export default function FolhaPagamento() {
       s === "pago" ? "bg-blue-100 text-blue-700" :
       s === "cancelado" ? "bg-gray-100 text-gray-500" :
       "bg-purple-100 text-purple-700";
-    const minsToHHMM = (m: number) => `${Math.floor(Math.abs(m) / 60)}h${String(Math.abs(m) % 60).padStart(2, "0")}`;
+    const minsToHHMM = (m: number) => {
+      const abs = Math.abs(m);
+      const h = Math.floor(abs / 60);
+      const min = abs % 60;
+      if (h === 0) return `${min}min`;
+      if (min === 0) return `${h}h`;
+      return `${h}h ${min}min`;
+    };
     const saldoMap = new Map<number, number>();
     for (const s of saldos) saldoMap.set(Number(s.employeeId), Number(s.saldoMinutos));
     const totalBancoMins = saldos.reduce((acc: number, s: any) => acc + Number(s.saldoMinutos), 0);
