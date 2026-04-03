@@ -2020,6 +2020,7 @@ export async function getEfetivoPorObra(companyId: number, companyIds?: number[]
     .where(and(
       inArray(obraFuncionarios.companyId, ids),
       eq(obraFuncionarios.isActive, 1),
+      sql`${obras.status} NOT IN ('Concluida', 'Paralisada', 'Cancelada')`,
     ));
 
   if (alocacoes.length === 0) return [];
