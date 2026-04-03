@@ -274,12 +274,13 @@ export default function FolhaPagamento() {
         toast.success(data.message);
       }
       payrollPeriod.refetch();
+      alertasAfericao.refetch();
     },
     onError: (err) => { resetProgress('afericao'); toast.error(`Erro na aferição: ${err.message}`); },
   });
   const alertasAfericao = trpc.payrollEngine.listarAlertasAfericao.useQuery(
-    { companyId, mesReferencia: mesAno },
-    { enabled: !!companyId && !!mesAno }
+    { companyId, companyIds, mesReferencia: mesAno },
+    { enabled: (companyId > 0 || companyIds.length > 0) && !!mesAno }
   );
   const detalheAfericaoDias = trpc.payrollEngine.detalharDiasAfericao.useQuery(
     { companyId, employeeId: detalheAfericaoEmpId!, mesReferencia: mesAno },
