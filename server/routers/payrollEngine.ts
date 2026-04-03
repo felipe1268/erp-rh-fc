@@ -6,6 +6,7 @@ import { eq, and, sql, between, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
+import { gerarCnab240 } from "./cnab240";
 
 // ============================================================
 // HELPERS
@@ -3357,6 +3358,116 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
       `);
       return { success: true };
+    }),
+
+  gerarRemessaCnab: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      codigoBanco: z.string(),
+      contaBancariaId: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const companyRows = ((await db.execute(sql`
+        SELECT cnpj, "razaoSocial" FROM companies WHERE id = ${input.companyId} LIMIT 1
+      `)) as any).rows || [];
+      if (!companyRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Empresa não encontrada" });
+      const company = companyRows[0];
+
+      let bankAccountFilter = sql`"companyId" = ${input.companyId} AND "codigoBanco" = ${input.codigoBanco} AND ativo = 1 AND "deletedAt" IS NULL`;
+      if (input.contaBancariaId) {
+        bankAccountFilter = sql`id = ${input.contaBancariaId} AND "companyId" = ${input.companyId}`;
+      }
+      const bankRows = ((await db.execute(sql`
+        SELECT * FROM company_bank_accounts WHERE ${bankAccountFilter} LIMIT 1
+      `)) as any).rows || [];
+      if (!bankRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: `Conta bancária da empresa não encontrada para o banco ${input.codigoBanco}. Configure uma conta bancária nas configurações.` });
+      const bankAccount = bankRows[0];
+
+      const payRows = ((await db.execute(sql`
+        SELECT pp."salarioLiquido", pp."dataPagamentoPrevista",
+          e."nomeCompleto", e.cpf, e.banco, e.agencia, e.conta, e."tipoConta",
+          e."tipoChavePix", e."chavePix"
+        FROM payroll_payments pp
+        LEFT JOIN employees e ON pp."employeeId" = e.id
+        WHERE pp."companyId" = ${input.companyId} AND pp."mesReferencia" = ${input.mesReferencia}
+        ORDER BY e."nomeCompleto"
+      `)) as any).rows || [];
+
+      const funcBancoCodigo = input.codigoBanco;
+      const bankCodeMap: Record<string, string> = {
+        'caixa': '104', 'santander': '033', 'bradesco': '237',
+        'itau': '341', 'itaú': '341', 'banco do brasil': '001',
+        'c6': '336', 'nubank': '260', 'inter': '077',
+      };
+      function matchBankCode(bancoName: string): string {
+        const lower = (bancoName || '').toLowerCase();
+        for (const [key, code] of Object.entries(bankCodeMap)) {
+          if (lower.includes(key)) return code;
+        }
+        return '000';
+      }
+
+      const funcionariosFiltrados = payRows.filter((r: any) => {
+        const empBankCode = matchBankCode(r.banco || '');
+        return empBankCode === funcBancoCodigo;
+      });
+
+      if (funcionariosFiltrados.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: `Nenhum funcionário encontrado para o banco ${input.codigoBanco}` });
+      }
+
+      const cnabFuncionarios = funcionariosFiltrados.map((r: any) => ({
+        nome: r.nomeCompleto || '',
+        cpf: r.cpf || '',
+        banco: r.banco || '',
+        codigoBanco: matchBankCode(r.banco || ''),
+        agencia: r.agencia || '',
+        conta: r.conta || '',
+        tipoConta: r.tipoConta || 'corrente',
+        valorLiquido: parseFloat(r.salarioLiquido || '0'),
+        dataPagamento: r.dataPagamentoPrevista || '',
+        tipoChavePix: r.tipoChavePix || '',
+        chavePix: r.chavePix || '',
+      }));
+
+      const cnabEmpresa = {
+        cnpj: company.cnpj || '',
+        razaoSocial: company.razaoSocial || '',
+        codigoBanco: bankAccount.codigoBanco || input.codigoBanco,
+        agencia: bankAccount.agencia || '',
+        conta: bankAccount.conta || '',
+        tipoConta: bankAccount.tipoConta || 'corrente',
+        convenio: bankAccount.convenio || '',
+      };
+
+      const arquivo = gerarCnab240(cnabEmpresa, cnabFuncionarios);
+      const totalValor = cnabFuncionarios.reduce((s: number, f: any) => s + f.valorLiquido, 0);
+      const bancoNome = funcBancoCodigo === '104' ? 'Caixa' : funcBancoCodigo === '033' ? 'Santander' : `Banco ${funcBancoCodigo}`;
+
+      return {
+        arquivo,
+        nomeArquivo: `REMESSA_${bancoNome.toUpperCase()}_${input.mesReferencia.replace('-', '')}.rem`,
+        totalFuncionarios: cnabFuncionarios.length,
+        totalValor,
+        banco: bancoNome,
+      };
+    }),
+
+  listarContasBancariasEmpresa: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const rows = ((await db.execute(sql`
+        SELECT * FROM company_bank_accounts 
+        WHERE "companyId" = ${input.companyId} AND ativo = 1 AND "deletedAt" IS NULL
+        ORDER BY banco
+      `)) as any).rows || [];
+      return rows || [];
     }),
 });
 // ============================================================

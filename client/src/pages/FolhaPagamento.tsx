@@ -10,7 +10,7 @@ import {
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp, TrendingDown,
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
-  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X
+  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -552,6 +552,21 @@ export default function FolhaPagamento() {
   });
   const desconsolidarPagamentoMut = trpc.payrollEngine.desconsolidarPagamento.useMutation({
     onSuccess: () => { toast.success("Pagamento desconsolidado."); payrollPeriod.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const gerarRemessaMut = trpc.payrollEngine.gerarRemessaCnab.useMutation({
+    onSuccess: (data) => {
+      const blob = new Blob([data.arquivo], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = data.nomeArquivo;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Remessa ${data.banco} gerada: ${data.totalFuncionarios} funcionários, ${formatBRL(data.totalValor)}`);
+    },
     onError: (e) => toast.error(e.message),
   });
   const excluirMut = trpc.folha.excluirLancamento.useMutation({
@@ -2623,6 +2638,18 @@ export default function FolhaPagamento() {
               "Banco do Brasil": "bg-yellow-600",
               "Sem banco definido": "bg-gray-400",
             };
+            function getBankCode(bancoName: string): string | null {
+              const lower = (bancoName || '').toLowerCase();
+              if (lower.includes('caixa')) return '104';
+              if (lower.includes('santander')) return '033';
+              if (lower.includes('bradesco')) return '237';
+              if (lower.includes('itau') || lower.includes('itaú')) return '341';
+              if (lower.includes('c6')) return '336';
+              if (lower.includes('nubank')) return '260';
+              if (lower.includes('inter')) return '077';
+              if (lower.includes('banco do brasil')) return '001';
+              return null;
+            }
             return (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -2661,6 +2688,22 @@ export default function FolhaPagamento() {
                           <span className="text-green-700">Bruto: <strong>{formatBRL(totalBruto)}</strong></span>
                           <span className="text-red-600">Desc: <strong>{formatBRL(totalDesc)}</strong></span>
                           <span className="text-[#1B2A4A] text-sm font-bold">{formatBRL(totalLiq)}</span>
+                          {bk !== "Sem banco definido" && getBankCode(bk) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 ml-2 print:hidden"
+                              disabled={gerarRemessaMut.isPending}
+                              onClick={() => gerarRemessaMut.mutate({
+                                companyId,
+                                mesReferencia: mesAno,
+                                codigoBanco: getBankCode(bk)!,
+                              })}
+                            >
+                              <FileDown className="h-3.5 w-3.5 mr-1" />
+                              {gerarRemessaMut.isPending ? "Gerando..." : "Gerar Remessa CNAB"}
+                            </Button>
+                          )}
                         </div>
                       </div>
                       <CardContent className="p-0">

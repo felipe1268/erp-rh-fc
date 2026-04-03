@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 999,
+    titulo: "Gerador de remessa bancária CNAB 240 para folha de pagamento",
+    descricao: "Novo botão 'Gerar Remessa CNAB' na tela 'Por Banco' da folha de pagamento. Gera arquivo de remessa no formato CNAB 240 (padrão Febraban) separado por banco — um arquivo para Caixa, outro para Santander, etc. O arquivo inclui todos os funcionários daquele banco com nome, CPF, agência, conta e valor líquido. Formato: crédito em conta salário. Arquivo .rem pronto para upload no internet banking. Dados da empresa pagadora (CNPJ, agência, conta, convênio) são buscados da tabela company_bank_accounts. Adicionados campos convenio e usarParaFolha na tabela de contas bancárias da empresa.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-04 00:00:00",
+  },
+  {
     version: 998,
     titulo: "Lista de pagamento agrupada por banco",
     descricao: "Nova sub-aba 'Por Banco' na tela de Pagamento/Saldo. Após simular ou consolidar a folha, o usuário pode alternar entre 'Visão Geral' (tabela completa) e 'Por Banco' (funcionários agrupados por banco — Caixa, Bradesco, Santander, etc.). Cada banco mostra: cards com total líquido e quantidade de funcionários, tabela com nome, CPF, agência, conta, tipo, chave Pix, proventos, descontos e líquido. Subtotais por banco no rodapé de cada seção. Dados bancários (banco, agência, conta, tipoConta, chavePix) agora incluídos no retorno da simulação e listagem de pagamentos via JOIN com cadastro do funcionário.",

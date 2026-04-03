@@ -432,6 +432,8 @@ export const companyBankAccounts = pgTable("company_bank_accounts", {
         tipoConta: text().default('corrente').notNull(),
         apelido: varchar({ length: 100 }),
         cnpjTitular: varchar({ length: 20 }),
+        convenio: varchar({ length: 30 }),
+        usarParaFolha: smallint("usarParaFolha").default(0),
         ativo: smallint().default(1).notNull(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
