@@ -2015,10 +2015,10 @@ export const payrollEngineRouter = router({
 
       // Get active employees for projection
       const empRows = ((await db.execute(sql`
-        SELECT COUNT(*) as total, SUM(CAST(REPLACE(REPLACE(valorHora, '.', ''), ',', '.') AS DECIMAL(10,2))) as somaValorHora
+        SELECT COUNT(*) as total, SUM(CAST(REPLACE(REPLACE("valorHora", '.', ''), ',', '.') AS DECIMAL(10,2))) as "somaValorHora"
         FROM employees 
-        WHERE companyId = ${input.companyId} AND tipoContrato = 'CLT' AND status IN ('Ativo', 'Ferias') AND deletedAt IS NULL
-        AND valorHora IS NOT NULL AND valorHora != ''
+        WHERE "companyId" = ${input.companyId} AND "tipoContrato" = 'CLT' AND status IN ('Ativo', 'Ferias') AND "deletedAt" IS NULL
+        AND "valorHora" IS NOT NULL AND "valorHora" != ''
       `)) as any).rows || [];
       const totalEmps = empRows[0]?.total || 0;
       const somaValorHora = empRows[0]?.somaValorHora || 0;
@@ -2906,7 +2906,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 // HELPER FUNCTIONS
 // ============================================================
 async function getEmployeeValorHora(db: any, employeeId: number): Promise<number> {
-  const rows = ((await db.execute(sql`SELECT valorHora FROM employees WHERE id = ${employeeId} LIMIT 1`)) as any).rows || [];
+  const rows = ((await db.execute(sql`SELECT "valorHora" FROM employees WHERE id = ${employeeId} LIMIT 1`)) as any).rows || [];
   return parseBRL(rows[0]?.valorHora);
 }
 
@@ -2921,6 +2921,6 @@ async function getEmployeeVrDiario(db: any, employeeId: number, companyId: numbe
 }
 
 async function getEmployeeVtDiario(db: any, employeeId: number): Promise<number> {
-  const rows = ((await db.execute(sql`SELECT vtValorDiario FROM employees WHERE id = ${employeeId} LIMIT 1`)) as any).rows || [];
+  const rows = ((await db.execute(sql`SELECT "vtValorDiario" FROM employees WHERE id = ${employeeId} LIMIT 1`)) as any).rows || [];
   return parseBRL(rows[0]?.vtValorDiario);
 }
