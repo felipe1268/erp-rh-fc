@@ -1451,20 +1451,25 @@ export default function DashEpis() {
     </DashboardLayout>
 
       <Dialog open={!!fichaModal} onOpenChange={() => setFichaModal(null)}>
-        <DialogContent resizable={false} className="w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-blue-600" />
-              Entregas de EPI — {fichaModal?.employeeName}
+        <DialogContent resizable={false} className="w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] flex flex-col">
+          <DialogHeader className="pb-4 border-b">
+            <DialogTitle className="flex items-center gap-3 text-xl">
+              <div className="p-2 rounded-lg bg-blue-50">
+                <FileText className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <span>Entregas de EPI</span>
+                <p className="text-sm font-normal text-muted-foreground mt-0.5">{fichaModal?.employeeName}</p>
+              </div>
             </DialogTitle>
           </DialogHeader>
           {fichaDeliveries.isLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-12 flex-1">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               <span className="ml-2 text-muted-foreground">Carregando entregas...</span>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="flex-1 overflow-y-auto">
               {(() => {
                 const deliveries = (fichaDeliveries.data || []).sort((a: any, b: any) =>
                   new Date(b.dataEntrega || 0).getTime() - new Date(a.dataEntrega || 0).getTime()
@@ -1472,40 +1477,62 @@ export default function DashEpis() {
                 if (deliveries.length === 0) {
                   return <p className="text-center text-muted-foreground py-8">Nenhuma entrega encontrada.</p>;
                 }
+                const totalEntregas = deliveries.length;
+                const comFicha = deliveries.filter((d: any) => d.fichaUrl).length;
                 return (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-muted-foreground border-b">
-                        <th className="py-2 pr-3 font-medium">EPI</th>
-                        <th className="py-2 pr-3 font-medium">CA</th>
-                        <th className="py-2 pr-3 font-medium">Data Entrega</th>
-                        <th className="py-2 pr-3 font-medium">Qtd</th>
-                        <th className="py-2 pr-3 font-medium">Motivo</th>
-                        <th className="py-2 pr-3 font-medium">Ficha</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {deliveries.map((d: any) => (
-                        <tr key={d.id} className="border-t border-border/30 hover:bg-muted/30">
-                          <td className="py-2 pr-3 font-medium">{d.nomeEpi || '-'}</td>
-                          <td className="py-2 pr-3"><Badge variant="outline" className="text-xs">{d.caEpi || '-'}</Badge></td>
-                          <td className="py-2 pr-3">{fmtDate(d.dataEntrega)}</td>
-                          <td className="py-2 pr-3 text-center">{d.quantidade || 1}</td>
-                          <td className="py-2 pr-3 text-xs text-muted-foreground">{d.motivo || d.motivoTroca || '-'}</td>
-                          <td className="py-2 pr-3">
-                            {d.fichaUrl ? (
-                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-                                onClick={() => window.open(d.fichaUrl, '_blank')}>
-                                <FileText className="h-3 w-3" /> Ver PDF
-                              </Button>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground bg-muted/30 rounded-lg px-4 py-2">
+                      <span><strong>{totalEntregas}</strong> entregas registradas</span>
+                      <span className="text-border">|</span>
+                      <span><strong>{comFicha}</strong> com ficha anexada</span>
+                    </div>
+                    <div className="rounded-lg border overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-muted/50 text-left text-muted-foreground">
+                            <th className="py-3 px-4 font-semibold w-[25%]">EPI</th>
+                            <th className="py-3 px-4 font-semibold text-center w-[10%]">CA</th>
+                            <th className="py-3 px-4 font-semibold w-[15%]">Data Entrega</th>
+                            <th className="py-3 px-4 font-semibold text-center w-[8%]">Qtd</th>
+                            <th className="py-3 px-4 font-semibold w-[20%]">Motivo</th>
+                            <th className="py-3 px-4 font-semibold text-center w-[22%]">Ficha</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {deliveries.map((d: any, i: number) => {
+                            const isLocalFile = d.fichaUrl && d.fichaUrl.startsWith('/uploads/');
+                            const isCloudFile = d.fichaUrl && d.fichaUrl.startsWith('http');
+                            return (
+                              <tr key={d.id} className={`border-t hover:bg-muted/20 transition-colors ${i % 2 === 0 ? '' : 'bg-muted/10'}`}>
+                                <td className="py-3 px-4 font-medium">{d.nomeEpi || '-'}</td>
+                                <td className="py-3 px-4 text-center">
+                                  {d.caEpi ? <Badge variant="outline" className="text-xs font-mono">{d.caEpi}</Badge> : <span className="text-muted-foreground">-</span>}
+                                </td>
+                                <td className="py-3 px-4">{fmtDate(d.dataEntrega)}</td>
+                                <td className="py-3 px-4 text-center font-mono">{d.quantidade || 1}</td>
+                                <td className="py-3 px-4">
+                                  {d.motivo || d.motivoTroca ? (
+                                    <Badge variant="secondary" className="text-xs">{d.motivo || d.motivoTroca}</Badge>
+                                  ) : <span className="text-muted-foreground">-</span>}
+                                </td>
+                                <td className="py-3 px-4 text-center">
+                                  {d.fichaUrl ? (
+                                    <Button size="sm" variant={isCloudFile ? "default" : "outline"} 
+                                      className={`h-8 text-xs gap-1.5 ${isCloudFile ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+                                      onClick={() => window.open(d.fichaUrl, '_blank')}>
+                                      <FileText className="h-3.5 w-3.5" /> Ver PDF
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground italic">Sem ficha</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 );
               })()}
             </div>
