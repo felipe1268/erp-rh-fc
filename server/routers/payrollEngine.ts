@@ -1269,7 +1269,7 @@ export const payrollEngineRouter = router({
           diaSemana: dow,
           classificacao,
           nomeFeriado,
-          temRegistro: !!tc,
+          temRegistro: !!tc && (tc.numBatidas > 0 || !!tc.entrada1),
           statusDia: tc?.statusDia || null,
           tipoDia: tc?.tipoDia || null,
           entrada1: tc?.entrada1 || null,
