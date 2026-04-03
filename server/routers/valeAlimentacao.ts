@@ -48,7 +48,7 @@ export const valeAlimentacaoRouter = router({
       
       // Total colaboradores ativos
       const empRows = ((await db.execute(
-        sql`SELECT COUNT(*) as total FROM employees WHERE companyId = ${input.companyId} AND status = 'Ativo' AND deletedAt IS NULL`
+        sql`SELECT COUNT(*) as total FROM employees WHERE "companyId" = ${input.companyId} AND status = 'Ativo' AND "deletedAt" IS NULL`
       )) as any).rows || [];
       const totalAtivos = empRows?.[0]?.total || 0;
 
@@ -93,7 +93,7 @@ export const valeAlimentacaoRouter = router({
 
       // Verificar se já existem lançamentos para o mês
       const existing = ((await db.execute(
-        sql`SELECT COUNT(*) as total FROM vr_benefits WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}`
+        sql`SELECT COUNT(*) as total FROM vr_benefits WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}`
       )) as any).rows || [];
       if (existing?.[0]?.total > 0) {
         return { success: false, message: `Já existem ${existing[0].total} lançamentos para este mês. Use "Regerar" para substituir.` };
@@ -101,7 +101,7 @@ export const valeAlimentacaoRouter = router({
 
       // Buscar configuração padrão da empresa
       const cfgRows = ((await db.execute(
-        sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${input.companyId} AND ativo = 1 ORDER BY obraId IS NULL DESC LIMIT 10`
+        sql`SELECT * FROM meal_benefit_configs WHERE "companyId" = ${input.companyId} AND ativo = 1 ORDER BY "obraId" IS NULL DESC LIMIT 10`
       )) as any).rows || [];
       const configs = cfgRows || [];
       
@@ -179,14 +179,14 @@ export const valeAlimentacaoRouter = router({
       const db = (await getDb())!;
       // Apagar lançamentos existentes que não estão pagos
       await db.execute(
-        sql`DELETE FROM vr_benefits WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND status != 'pago'`
+        sql`DELETE FROM vr_benefits WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status != 'pago'`
       );
       // Chamar geração
       const userName = input.geradoPor || ctx.user?.name || "Sistema";
 
       // Buscar configuração
       const cfgRows = ((await db.execute(
-        sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${input.companyId} AND ativo = 1 ORDER BY obraId IS NULL DESC LIMIT 10`
+        sql`SELECT * FROM meal_benefit_configs WHERE "companyId" = ${input.companyId} AND ativo = 1 ORDER BY "obraId" IS NULL DESC LIMIT 10`
       )) as any).rows || [];
       const configs = cfgRows || [];
       const cfgPadrao = configs.find((c: any) => !c.obraId) || null;
@@ -210,7 +210,7 @@ export const valeAlimentacaoRouter = router({
 
       // Check which employees already have paid records
       const paidRows = ((await db.execute(
-        sql`SELECT employeeId FROM vr_benefits WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND status = 'pago'`
+        sql`SELECT "employeeId" FROM vr_benefits WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND status = 'pago'`
       )) as any).rows || [];
       const paidEmpIds = new Set((paidRows || []).map((r: any) => r.employeeId));
 
@@ -377,7 +377,7 @@ export const valeAlimentacaoRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const rows = ((await db.execute(
-        sql`SELECT * FROM vr_benefits WHERE companyId = ${input.companyId} AND employeeId = ${input.employeeId} ORDER BY mesReferencia DESC`
+        sql`SELECT * FROM vr_benefits WHERE "companyId" = ${input.companyId} AND "employeeId" = ${input.employeeId} ORDER BY "mesReferencia" DESC`
       )) as any).rows || [];
       return rows || [];
     }),
