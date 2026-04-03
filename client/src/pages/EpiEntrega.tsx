@@ -18,7 +18,7 @@ import {
 import {
   CheckCircle, Plus, Minus, Trash2,
   Package, User, ArrowRight, ArrowLeft, FileText,
-  Search, PenTool,
+  Search, PenTool, AlertTriangle, Camera,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +33,17 @@ interface ItemEntrega {
   quantidade: number;
   dataValidade: string;
   motivo: string;
+  motivoTroca?: string;
+  fotoEstadoAnteriorBase64?: string;
+  fotoEstadoAnteriorFileName?: string;
+  alertaVidaUtil?: {
+    alerta: boolean;
+    vidaUtilMeses?: number;
+    ultimaEntrega?: string;
+    dataExpiracao?: string;
+    diasRestantes?: number;
+    mensagem?: string;
+  };
 }
 
 export default function EpiEntrega() {
@@ -41,6 +52,7 @@ export default function EpiEntrega() {
   const companyId = isConstrutoras ? 0 : (selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0);
   const companyIds = getCompanyIdsForQuery();
   const { toast } = useToast();
+  const trpcUtils = trpc.useUtils();
 
   const [step, setStep] = useState<Step>("identificar");
   const [funcionario, setFuncionario] = useState<any | null>(null);
@@ -103,8 +115,29 @@ export default function EpiEntrega() {
     setStep("selecionar");
   };
 
-  const addItem = (epi: any) => {
+  const [pendingEpiAlert, setPendingEpiAlert] = useState<{ epi: any; alerta: any } | null>(null);
+
+  const addItem = async (epi: any) => {
     if (itens.find((i) => i.epiId === epi.id)) return;
+    if (!funcionario) return;
+    try {
+      const result = await trpcUtils.epis.checkVidaUtil.fetch({
+        companyId,
+        employeeId: funcionario.id,
+        epiId: epi.id,
+      });
+      if ((result as any).alerta) {
+        setPendingEpiAlert({ epi, alerta: result });
+      } else {
+        addItemDirect(epi);
+      }
+    } catch (err: any) {
+      toast({ title: "Erro ao verificar vida útil", description: "Não foi possível validar. Tente novamente.", variant: "destructive" });
+      return;
+    }
+  };
+
+  const addItemDirect = (epi: any, alertaVidaUtil?: any) => {
     setItens((prev) => [
       ...prev,
       {
@@ -114,6 +147,8 @@ export default function EpiEntrega() {
         quantidade: 1,
         dataValidade: "",
         motivo: "Entrega",
+        alertaVidaUtil: alertaVidaUtil || undefined,
+        motivoTroca: alertaVidaUtil?.alerta ? '' : undefined,
       },
     ]);
     setShowAddEpi(false);
@@ -134,6 +169,16 @@ export default function EpiEntrega() {
 
   const confirmarEntrega = () => {
     if (!funcionario || itens.length === 0) return;
+    const itensComAlerta = itens.filter(i => i.alertaVidaUtil?.alerta && !i.fotoEstadoAnteriorBase64);
+    if (itensComAlerta.length > 0) {
+      toast({ title: "Foto obrigatória", description: `Anexe a foto do estado do EPI anterior para: ${itensComAlerta.map(i => i.epiNome).join(', ')}`, variant: "destructive" });
+      return;
+    }
+    const itensComAlertaSemMotivo = itens.filter(i => i.alertaVidaUtil?.alerta && !i.motivoTroca);
+    if (itensComAlertaSemMotivo.length > 0) {
+      toast({ title: "Motivo obrigatório", description: `Informe o motivo da troca para: ${itensComAlertaSemMotivo.map(i => i.epiNome).join(', ')}`, variant: "destructive" });
+      return;
+    }
     createDelivery.mutate({
       companyId,
       employeeId: funcionario.id,
@@ -143,6 +188,9 @@ export default function EpiEntrega() {
         quantidade: i.quantidade,
         dataValidade: i.dataValidade || undefined,
         motivo: i.motivo,
+        motivoTroca: i.motivoTroca || undefined,
+        fotoEstadoAnteriorBase64: i.fotoEstadoAnteriorBase64 || undefined,
+        fotoEstadoAnteriorFileName: i.fotoEstadoAnteriorFileName || undefined,
       })),
       modoIdentificacao: "manual",
     });
@@ -297,23 +345,87 @@ export default function EpiEntrega() {
             ) : (
               <div className="space-y-2">
                 {itens.map((item) => (
-                  <div key={item.epiId} className="flex items-center gap-2 p-2.5 rounded-lg border border-gray-200 bg-white">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{item.epiNome}</p>
-                      {item.ca && <p className="text-xs text-gray-500">CA: {item.ca}</p>}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQtd(item.epiId, -1)}>
-                        <Minus className="h-3 w-3" />
+                  <div key={item.epiId} className={`p-2.5 rounded-lg border bg-white ${item.alertaVidaUtil?.alerta ? 'border-amber-400 bg-amber-50/50' : 'border-gray-200'}`}>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{item.epiNome}</p>
+                        {item.ca && <p className="text-xs text-gray-500">CA: {item.ca}</p>}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQtd(item.epiId, -1)}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-6 text-center text-sm font-medium">{item.quantidade}</span>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQtd(item.epiId, 1)}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-red-500" onClick={() => removeItem(item.epiId)}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
-                      <span className="w-6 text-center text-sm font-medium">{item.quantidade}</span>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQtd(item.epiId, 1)}>
-                        <Plus className="h-3 w-3" />
-                      </Button>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-red-500" onClick={() => removeItem(item.epiId)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {item.alertaVidaUtil?.alerta && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex items-start gap-2 bg-amber-100 rounded-lg p-2 text-xs text-amber-800">
+                          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="font-bold">EPI dentro da vida útil!</p>
+                            <p>{item.alertaVidaUtil.mensagem}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-amber-800 font-semibold">Motivo da troca *</Label>
+                          <Select value={item.motivoTroca || ''} onValueChange={(v) => setItens(prev => prev.map(i => i.epiId === item.epiId ? { ...i, motivoTroca: v } : i))}>
+                            <SelectTrigger className="mt-1 h-8 text-xs border-amber-300">
+                              <SelectValue placeholder="Selecione o motivo..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="desgaste_normal">Desgaste normal</SelectItem>
+                              <SelectItem value="mau_uso">Mau uso</SelectItem>
+                              <SelectItem value="perda">Perda</SelectItem>
+                              <SelectItem value="furto">Furto</SelectItem>
+                              <SelectItem value="defeito_fabricacao">Defeito de fabricação</SelectItem>
+                              <SelectItem value="tamanho_inadequado">Tamanho inadequado</SelectItem>
+                              <SelectItem value="outro">Outro</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-amber-800 font-semibold">Foto do EPI anterior *</Label>
+                          <div className="mt-1">
+                            {item.fotoEstadoAnteriorBase64 ? (
+                              <div className="flex items-center gap-2">
+                                <img src={item.fotoEstadoAnteriorBase64} alt="Foto EPI" className="h-16 w-16 object-cover rounded border" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-green-700 font-medium flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Foto anexada</p>
+                                  <Button variant="ghost" size="sm" className="text-xs h-6 text-red-500 p-0" onClick={() => setItens(prev => prev.map(i => i.epiId === item.epiId ? { ...i, fotoEstadoAnteriorBase64: undefined, fotoEstadoAnteriorFileName: undefined } : i))}>
+                                    Remover
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <label className="flex items-center gap-2 p-2 rounded border-2 border-dashed border-amber-300 cursor-pointer hover:bg-amber-50 transition-colors">
+                                <Camera className="h-5 w-5 text-amber-600" />
+                                <span className="text-xs text-amber-700">Tirar foto ou escolher arquivo</span>
+                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  const reader = new FileReader();
+                                  reader.onload = () => {
+                                    setItens(prev => prev.map(i => i.epiId === item.epiId ? {
+                                      ...i,
+                                      fotoEstadoAnteriorBase64: reader.result as string,
+                                      fotoEstadoAnteriorFileName: file.name,
+                                    } : i));
+                                  };
+                                  reader.readAsDataURL(file);
+                                }} />
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -476,6 +588,56 @@ export default function EpiEntrega() {
               )}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pendingEpiAlert} onOpenChange={(open) => { if (!open) setPendingEpiAlert(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="h-5 w-5" /> EPI dentro da vida útil
+            </DialogTitle>
+          </DialogHeader>
+          {pendingEpiAlert && (
+            <div className="space-y-3">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                <p className="font-semibold mb-1">{pendingEpiAlert.alerta.epiNome}</p>
+                <p>{pendingEpiAlert.alerta.mensagem}</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-white rounded p-1.5">
+                    <span className="text-amber-600 font-semibold">Última entrega:</span>
+                    <br />{pendingEpiAlert.alerta.ultimaEntrega?.split('-').reverse().join('/')}
+                  </div>
+                  <div className="bg-white rounded p-1.5">
+                    <span className="text-amber-600 font-semibold">Vida útil expira:</span>
+                    <br />{pendingEpiAlert.alerta.dataExpiracao?.split('-').reverse().join('/')}
+                  </div>
+                  <div className="bg-white rounded p-1.5">
+                    <span className="text-amber-600 font-semibold">Dias restantes:</span>
+                    <br />{pendingEpiAlert.alerta.diasRestantes} dias
+                  </div>
+                  <div className="bg-white rounded p-1.5">
+                    <span className="text-amber-600 font-semibold">Vida útil:</span>
+                    <br />{pendingEpiAlert.alerta.vidaUtilMeses} meses
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-slate-600">
+                Para prosseguir, será necessário informar o <strong>motivo da troca</strong> e anexar a <strong>foto do EPI anterior</strong> para análise (desgaste normal ou mau uso).
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setPendingEpiAlert(null)}>
+                  Cancelar
+                </Button>
+                <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white" onClick={() => {
+                  addItemDirect(pendingEpiAlert.epi, pendingEpiAlert.alerta);
+                  setPendingEpiAlert(null);
+                }}>
+                  Entendi, continuar
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

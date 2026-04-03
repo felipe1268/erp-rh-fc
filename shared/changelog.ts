@@ -7408,4 +7408,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 19:30:00",
   },
+  {
+    version: 986,
+    titulo: "EPI — Regra de vida útil com alerta, foto e motivo obrigatórios",
+    descricao:
+      "• Ao adicionar EPI na entrega, sistema verifica se o EPI ainda está dentro da vida útil\n" +
+      "• Dialog de alerta exibe informações da última entrega, dias restantes e data de expiração\n" +
+      "• Motivo da troca obrigatório (desgaste normal, mau uso, perda, furto, defeito, tamanho)\n" +
+      "• Foto do EPI anterior obrigatória para análise (captura ou upload de arquivo)\n" +
+      "• Cards de EPI com alerta visual destacado (borda e fundo âmbar)\n" +
+      "• Validação na confirmação impede entrega sem motivo e foto quando vida útil ativa",
+    tipo: "feature",
+    modulos: "EPI",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 20:00:00",
+  },
 ];

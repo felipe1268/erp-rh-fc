@@ -130,6 +130,9 @@ export const faceRecognitionRouter = router({
         quantidade: z.number(),
         dataValidade: z.string().optional(),
         motivo: z.string().optional(),
+        motivoTroca: z.string().optional(),
+        fotoEstadoAnteriorBase64: z.string().optional(),
+        fotoEstadoAnteriorFileName: z.string().optional(),
       })),
       modoIdentificacao: z.enum(['facial', 'qrcode', 'numero', 'manual']),
       biometriaFotoBase64: z.string().optional(),
@@ -149,8 +152,50 @@ export const faceRecognitionRouter = router({
         biometriaFacialUrl = result.url;
       }
 
-      const ids: number[] = [];
       for (const item of input.itens) {
+        const [epiInfo] = await db.select({
+          id: epis.id,
+          nome: epis.nome,
+          vidaUtilMeses: epis.vidaUtilMeses,
+        }).from(epis).where(eq(epis.id, item.epiId));
+
+        if (epiInfo?.vidaUtilMeses && epiInfo.vidaUtilMeses > 0) {
+          const lastDel = ((await db.execute(sql`
+            SELECT "dataEntrega" FROM epi_deliveries
+            WHERE "companyId" = ${input.companyId}
+              AND "employeeId" = ${input.employeeId}
+              AND "epiId" = ${item.epiId}
+              AND "deletedAt" IS NULL
+              AND "dataDevolucao" IS NULL
+            ORDER BY "dataEntrega" DESC LIMIT 1
+          `)) as any).rows?.[0];
+
+          if (lastDel) {
+            const dataEntrega = new Date(lastDel.dataEntrega);
+            const dataExpiracao = new Date(dataEntrega);
+            dataExpiracao.setMonth(dataExpiracao.getMonth() + epiInfo.vidaUtilMeses);
+            if (new Date() < dataExpiracao) {
+              if (!item.motivoTroca || !item.fotoEstadoAnteriorBase64) {
+                throw new Error(`EPI "${epiInfo.nome}" está dentro da vida útil (expira em ${dataExpiracao.toISOString().split('T')[0]}). Motivo da troca e foto do EPI anterior são obrigatórios.`);
+              }
+            }
+          }
+        }
+      }
+
+      const ids: number[] = [];
+      const alertasVidaUtil: any[] = [];
+      for (const item of input.itens) {
+        let fotoEstadoUrl: string | null = null;
+        if (item.fotoEstadoAnteriorBase64 && item.fotoEstadoAnteriorFileName) {
+          const base64Data = item.fotoEstadoAnteriorBase64.replace(/^data:image\/\w+;base64,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          const ext = item.fotoEstadoAnteriorFileName.split('.').pop() || 'jpg';
+          const key = `epi-fotos/${input.companyId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+          const result = await storagePut(key, buffer, `image/${ext}`);
+          fotoEstadoUrl = result.url;
+        }
+
         const [row] = await db.insert(epiDeliveries).values({
           companyId: input.companyId,
           employeeId: input.employeeId,
@@ -158,6 +203,7 @@ export const faceRecognitionRouter = router({
           quantidade: item.quantidade,
           dataEntrega: hoje,
           motivo: item.motivo || 'Entrega',
+          motivoTroca: item.motivoTroca || null,
           observacoes: input.observacoes || null,
           obraId: input.obraId || null,
           origemEntrega: input.obraId ? 'obra' : 'central',
@@ -165,11 +211,12 @@ export const faceRecognitionRouter = router({
           biometriaFacialUrl,
           biometriaCapturadaEm: biometriaFacialUrl ? agora : null,
           modoIdentificacao: input.modoIdentificacao,
+          fotoEstadoUrl,
         } as any).returning({ id: epiDeliveries.id });
         ids.push((row as any).id);
       }
 
-      return { ok: true, deliveryIds: ids };
+      return { ok: true, deliveryIds: ids, alertasVidaUtil };
     }),
 
   getDeliveriesForEmployee: protectedProcedure

@@ -272,6 +272,61 @@ export const episRouter = router({
       });
     }),
 
+  checkVidaUtil: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      employeeId: z.number(),
+      epiId: z.number(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [epi] = await db.select({
+        id: epis.id,
+        nome: epis.nome,
+        vidaUtilMeses: epis.vidaUtilMeses,
+      }).from(epis).where(eq(epis.id, input.epiId));
+
+      if (!epi || !epi.vidaUtilMeses || epi.vidaUtilMeses <= 0) {
+        return { alerta: false };
+      }
+
+      const lastDelivery = ((await db.execute(sql`
+        SELECT id, "dataEntrega", quantidade, motivo, "fotoEstadoUrl"
+        FROM epi_deliveries
+        WHERE "companyId" = ${input.companyId}
+          AND "employeeId" = ${input.employeeId}
+          AND "epiId" = ${input.epiId}
+          AND "deletedAt" IS NULL
+          AND "dataDevolucao" IS NULL
+        ORDER BY "dataEntrega" DESC
+        LIMIT 1
+      `)) as any).rows?.[0];
+
+      if (!lastDelivery) return { alerta: false };
+
+      const dataEntrega = new Date(lastDelivery.dataEntrega);
+      const dataExpiracao = new Date(dataEntrega);
+      dataExpiracao.setMonth(dataExpiracao.getMonth() + epi.vidaUtilMeses);
+      const hoje = new Date();
+
+      if (hoje < dataExpiracao) {
+        const diasRestantes = Math.ceil((dataExpiracao.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+        return {
+          alerta: true,
+          epiNome: epi.nome,
+          vidaUtilMeses: epi.vidaUtilMeses,
+          ultimaEntrega: lastDelivery.dataEntrega,
+          dataExpiracao: dataExpiracao.toISOString().split('T')[0],
+          diasRestantes,
+          fotoAnteriorUrl: lastDelivery.fotoEstadoUrl,
+          fotoObrigatoria: true,
+          mensagem: `Este EPI (${epi.nome}) foi entregue em ${lastDelivery.dataEntrega} e tem vida útil de ${epi.vidaUtilMeses} meses. Ainda restam ${diasRestantes} dias. É necessário anexar foto do estado atual do EPI anterior para análise (desgaste normal ou mau uso).`,
+        };
+      }
+
+      return { alerta: false };
+    }),
+
   createDelivery: protectedProcedure
     .input(z.object({
       companyId: z.number(),
