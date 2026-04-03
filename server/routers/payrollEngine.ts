@@ -708,37 +708,37 @@ export const payrollEngineRouter = router({
       // Limpar ajustes de aferição anteriores para permitir re-aferição
       await db.execute(sql`
         DELETE FROM payroll_adjustments 
-        WHERE companyId = ${input.companyId} 
-        AND mesOrigem = ${prevMes}
-        AND mesDesconto = ${input.mesReferencia}
+        WHERE "companyId" = ${input.companyId} 
+        AND "mesOrigem" = ${prevMes}
+        AND "mesDesconto" = ${input.mesReferencia}
         AND tipo IN ('falta', 'atraso', 'sem_registro')
       `);
 
       // Resetar status dos registros escuro que foram aferidos anteriormente
       await db.execute(sql`
         UPDATE timecard_daily SET 
-          statusDia = 'escuro',
-          statusAnterior = NULL,
-          afericaoResultado = NULL,
-          afericaoObs = NULL,
-          afericaoEm = NULL
-        WHERE companyId = ${input.companyId} 
-        AND mesCompetencia = ${prevMes}
-        AND (statusAnterior = 'escuro' OR statusDia IN ('escuro', 'pendente_decisao'))
+          "statusDia" = 'escuro',
+          "statusAnterior" = NULL,
+          "afericaoResultado" = NULL,
+          "afericaoObs" = NULL,
+          "afericaoEm" = NULL
+        WHERE "companyId" = ${input.companyId} 
+        AND "mesCompetencia" = ${prevMes}
+        AND ("statusAnterior" = 'escuro' OR "statusDia" IN ('escuro', 'pendente_decisao'))
       `);
 
       // Buscar registros escuro (inclui os que acabaram de ser resetados)
       const escuroRecords = ((await db.execute(sql`
         SELECT * FROM timecard_daily 
-        WHERE companyId = ${input.companyId} 
-        AND mesCompetencia = ${prevMes}
-        AND statusDia = 'escuro'
-        ORDER BY employeeId, data
+        WHERE "companyId" = ${input.companyId} 
+        AND "mesCompetencia" = ${prevMes}
+        AND "statusDia" = 'escuro'
+        ORDER BY "employeeId", data
       `)) as any).rows || [];
       if (!escuroRecords || (escuroRecords as any[]).length === 0) {
         await db.execute(sql`
-          UPDATE payroll_periods SET status = 'aferida', afericaoRealizada = 1, afericaoEm = NOW(), afericaoPor = ${ctx.user.name || "Sistema"}
-          WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
+          UPDATE payroll_periods SET status = 'aferida', "afericaoRealizada" = 1, "afericaoEm" = NOW(), "afericaoPor" = ${ctx.user.name || "Sistema"}
+          WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
         `);
         return { totalAferidos: 0, divergencias: 0, message: "Nenhum registro 'no escuro' encontrado no mês anterior. Competência avançada." };
       }
@@ -804,8 +804,8 @@ export const payrollEngineRouter = router({
             const totalDesc = valorFalta + parseBRL(vrDesconto) + parseBRL(vtDesconto);
 
             await db.execute(sql`
-              INSERT INTO payroll_adjustments (companyId, employeeId, mesOrigem, mesDesconto, data, tipo, descricao,
-                valorDesconto, valorVrDesconto, valorVtDesconto, valorTotal, timecardDailyId, status)
+              INSERT INTO payroll_adjustments ("companyId", "employeeId", "mesOrigem", "mesDesconto", data, tipo, descricao,
+                "valorDesconto", "valorVrDesconto", "valorVtDesconto", "valorTotal", "timecardDailyId", status)
               VALUES (${input.companyId}, ${escuro.employeeId}, ${prevMes}, ${input.mesReferencia}, ${escuro.data}, 
                 'falta', ${`Falta dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`},
                 ${formatMoney(valorFalta)}, ${vrDesconto}, ${vtDesconto}, ${formatMoney(totalDesc)}, ${escuro.id}, 'pendente')
@@ -834,8 +834,8 @@ export const payrollEngineRouter = router({
                 const totalDesc = valorAtraso;
 
                 await db.execute(sql`
-                  INSERT INTO payroll_adjustments (companyId, employeeId, mesOrigem, mesDesconto, data, tipo, descricao,
-                    valorDesconto, valorVrDesconto, valorVtDesconto, valorTotal, timecardDailyId, status)
+                  INSERT INTO payroll_adjustments ("companyId", "employeeId", "mesOrigem", "mesDesconto", data, tipo, descricao,
+                    "valorDesconto", "valorVrDesconto", "valorVtDesconto", "valorTotal", "timecardDailyId", status)
                   VALUES (${input.companyId}, ${escuro.employeeId}, ${prevMes}, ${input.mesReferencia}, ${escuro.data},
                     'atraso', ${`Atraso ${minutesToHHMM(atraso)} dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`},
                     ${formatMoney(valorAtraso)}, '0', '0', ${formatMoney(totalDesc)}, ${escuro.id}, 'pendente')
@@ -877,8 +877,8 @@ export const payrollEngineRouter = router({
 
           // Criar adjustment com status 'pendente_decisao' — NÃO aplica desconto automaticamente
           await db.execute(sql`
-            INSERT INTO payroll_adjustments (companyId, employeeId, mesOrigem, mesDesconto, data, tipo, descricao,
-              valorDesconto, valorVrDesconto, valorVtDesconto, valorTotal, timecardDailyId, status)
+            INSERT INTO payroll_adjustments ("companyId", "employeeId", "mesOrigem", "mesDesconto", data, tipo, descricao,
+              "valorDesconto", "valorVrDesconto", "valorVtDesconto", "valorTotal", "timecardDailyId", status)
             VALUES (${input.companyId}, ${escuro.employeeId}, ${prevMes}, ${input.mesReferencia}, ${escuro.data}, 
               'sem_registro', ${`Sem registro de ponto dia ${escuro.data} — Período no escuro de ${prevMes}. Aguardando decisão: erro do relógio ou falta real.`},
               ${formatMoney(valorFaltaSR)}, ${vrDescontoSR}, ${vtDescontoSR}, ${formatMoney(totalDescSR)}, ${escuro.id}, 'pendente_decisao')
@@ -909,39 +909,39 @@ export const payrollEngineRouter = router({
           // Sobrescrever o registro "escuro" com os dados reais do ponto
           await db.execute(sql`
             UPDATE timecard_daily SET 
-              statusDia = 'aferido',
-              statusAnterior = 'escuro',
-              afericaoResultado = ${resultado},
-              afericaoObs = ${obs || null},
-              afericaoEm = NOW(),
+              "statusDia" = 'aferido',
+              "statusAnterior" = 'escuro',
+              "afericaoResultado" = ${resultado},
+              "afericaoObs" = ${obs || null},
+              "afericaoEm" = NOW(),
               entrada1 = ${actual.entrada1 || null},
               saida1 = ${actual.saida1 || null},
               entrada2 = ${actual.entrada2 || null},
               saida2 = ${actual.saida2 || null},
               entrada3 = ${actual.entrada3 || null},
               saida3 = ${actual.saida3 || null},
-              horasTrabalhadas = ${actual.horasTrabalhadas || '0:00'},
-              horasExtras = ${horasExtrasAf},
-              horasNoturnas = ${actual.horasNoturnas || '0:00'},
-              timeRecordId = ${actual.id || null},
-              obraId = ${actual.obraId || null},
+              "horasTrabalhadas" = ${actual.horasTrabalhadas || '0:00'},
+              "horasExtras" = ${horasExtrasAf},
+              "horasNoturnas" = ${actual.horasNoturnas || '0:00'},
+              "timeRecordId" = ${actual.id || null},
+              "obraId" = ${actual.obraId || null},
               origem_registro = 'aferido',
               num_batidas = ${[actual.entrada1, actual.saida1, actual.entrada2, actual.saida2, actual.entrada3, actual.saida3].filter(Boolean).length},
-              isFalta = ${resultado === "falta" ? 1 : 0},
-              isAtraso = ${resultado === "atraso" ? 1 : 0}
+              "isFalta" = ${resultado === "falta" ? 1 : 0},
+              "isAtraso" = ${resultado === "atraso" ? 1 : 0}
             WHERE id = ${escuro.id}
           `);
         } else {
           // Sem registro real → marcar como pendente de decisão do usuário
           await db.execute(sql`
             UPDATE timecard_daily SET 
-              statusDia = 'pendente_decisao',
-              statusAnterior = 'escuro',
-              afericaoResultado = 'sem_registro',
-              afericaoObs = ${obs},
-              afericaoEm = NOW(),
-              isFalta = 0,
-              isAtraso = 0
+              "statusDia" = 'pendente_decisao',
+              "statusAnterior" = 'escuro',
+              "afericaoResultado" = 'sem_registro',
+              "afericaoObs" = ${obs},
+              "afericaoEm" = NOW(),
+              "isFalta" = 0,
+              "isAtraso" = 0
             WHERE id = ${escuro.id}
           `);
         }
@@ -951,23 +951,23 @@ export const payrollEngineRouter = router({
       // Update period
       await db.execute(sql`
         UPDATE payroll_periods SET 
-          afericaoRealizada = 1,
-          afericaoEm = NOW(),
-          afericaoPor = ${ctx.user.name || "Sistema"},
-          totalDivergenciasAferidas = ${divergencias}
-        WHERE companyId = ${input.companyId} AND mesReferencia = ${prevMes}
+          "afericaoRealizada" = 1,
+          "afericaoEm" = NOW(),
+          "afericaoPor" = ${ctx.user.name || "Sistema"},
+          "totalDivergenciasAferidas" = ${divergencias}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${prevMes}
       `);
 
       // Update current period status to aferida
       await db.execute(sql`
         UPDATE payroll_periods SET status = 'aferida'
-        WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
       `);
 
       // Create alert if divergences found
       if (divergencias > 0) {
         await db.execute(sql`
-          INSERT INTO payroll_alerts (companyId, mesReferencia, tipo, titulo, descricao, prioridade)
+          INSERT INTO payroll_alerts ("companyId", "mesReferencia", tipo, titulo, descricao, prioridade)
           VALUES (${input.companyId}, ${input.mesReferencia}, 'divergencias_aferidas',
             ${`${divergencias} divergência(s) encontrada(s) na aferição de ${prevMes}`},
             ${`Foram identificadas ${divergencias} ocorrências no período "no escuro" de ${prevMes} que gerarão descontos na folha de ${input.mesReferencia}.`},
@@ -1942,9 +1942,9 @@ export const payrollEngineRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       let query;
       if (input.mesReferencia) {
-        query = sql`SELECT * FROM payroll_alerts WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} ORDER BY createdAt DESC`;
+        query = sql`SELECT * FROM payroll_alerts WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} ORDER BY "createdAt" DESC`;
       } else {
-        query = sql`SELECT * FROM payroll_alerts WHERE companyId = ${input.companyId} AND resolvido = 0 ORDER BY createdAt DESC LIMIT 50`;
+        query = sql`SELECT * FROM payroll_alerts WHERE "companyId" = ${input.companyId} AND resolvido = 0 ORDER BY "createdAt" DESC LIMIT 50`;
       }
       const rows = ((await db.execute(query)) as any).rows || [];
       return rows || [];
@@ -1985,9 +1985,9 @@ export const payrollEngineRouter = router({
       const lim = input.limit || 100;
       let query;
       if (input.mesReferencia) {
-        query = sql`SELECT * FROM financial_events WHERE companyId = ${input.companyId} AND mesCompetencia = ${input.mesReferencia} ORDER BY dataPrevista, tipo LIMIT ${lim}`;
+        query = sql`SELECT * FROM financial_events WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia} ORDER BY "dataPrevista", tipo LIMIT ${lim}`;
       } else {
-        query = sql`SELECT * FROM financial_events WHERE companyId = ${input.companyId} ORDER BY dataPrevista DESC LIMIT ${lim}`;
+        query = sql`SELECT * FROM financial_events WHERE "companyId" = ${input.companyId} ORDER BY "dataPrevista" DESC LIMIT ${lim}`;
       }
       const rows = ((await db.execute(query)) as any).rows || [];
       return rows || [];
@@ -2553,15 +2553,15 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       // Delete data from related tables (each table has different column names)
       const deleteFromTable = async (table: string) => {
         if (table === "timecard_daily") {
-          await db.execute(sql`DELETE FROM timecard_daily WHERE companyId = ${companyId} AND mesCompetencia = ${mesReferencia}`);
+          await db.execute(sql`DELETE FROM timecard_daily WHERE "companyId" = ${companyId} AND "mesCompetencia" = ${mesReferencia}`);
         } else if (table === "payroll_adjustments") {
-          await db.execute(sql`DELETE FROM payroll_adjustments WHERE companyId = ${companyId} AND (mesOrigem = ${mesReferencia} OR mesDesconto = ${mesReferencia})`);
+          await db.execute(sql`DELETE FROM payroll_adjustments WHERE "companyId" = ${companyId} AND ("mesOrigem" = ${mesReferencia} OR "mesDesconto" = ${mesReferencia})`);
         } else if (table === "payroll_uploads") {
-          await db.execute(sql`DELETE FROM payroll_uploads WHERE companyId = ${companyId} AND month = ${mesReferencia}`);
+          await db.execute(sql`DELETE FROM payroll_uploads WHERE "companyId" = ${companyId} AND month = ${mesReferencia}`);
         } else if (table === "time_records") {
-          await db.execute(sql`DELETE FROM time_records WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+          await db.execute(sql`DELETE FROM time_records WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}`);
         } else {
-          await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+          await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}`);
         }
       };
 
@@ -2580,13 +2580,13 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       }
 
       // Update period status and clear timestamp fields
-      const clearSets = config.clearFields.map(f => `${f} = NULL`).join(", ");
+      const clearSets = config.clearFields.map(f => `"${f}" = NULL`).join(", ");
       // Also clear downstream fields
       const allClearFields = new Set(config.clearFields);
       for (let i = etapaIdx + 1; i < etapaOrder.length; i++) {
         for (const f of etapaMap[etapaOrder[i]].clearFields) allClearFields.add(f);
       }
-      const allClearSets = Array.from(allClearFields).map(f => `${f} = NULL`).join(", ");
+      const allClearSets = Array.from(allClearFields).map(f => `"${f}" = NULL`).join(", ");
 
       await db.execute(
         sql`UPDATE payroll_periods SET status = ${config.newStatus}, ${sql.raw(allClearSets)} WHERE id = ${periodId}`
@@ -2613,29 +2613,27 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const periodId = periods[0].id;
 
       // Delete ALL data for this competência (each table has different column names)
-      await db.execute(sql`DELETE FROM timecard_daily WHERE companyId = ${companyId} AND mesCompetencia = ${mesReferencia}`);
-      await db.execute(sql`DELETE FROM time_records WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
-      await db.execute(sql`DELETE FROM time_inconsistencies WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
-      await db.execute(sql`DELETE FROM payroll_uploads WHERE companyId = ${companyId} AND month = ${mesReferencia}`);
-      await db.execute(sql`DELETE FROM payroll_adjustments WHERE companyId = ${companyId} AND (mesOrigem = ${mesReferencia} OR mesDesconto = ${mesReferencia})`);
-      await db.execute(sql`DELETE FROM payroll_advances WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
-      await db.execute(sql`DELETE FROM payroll_payments WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
-      await db.execute(sql`DELETE FROM payroll_alerts WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
-      // Also delete financial_events related to this competência
-      await db.execute(sql`DELETE FROM financial_events WHERE companyId = ${companyId} AND mesCompetencia = ${mesReferencia} AND origemTipo IN ('payroll_advance', 'payroll_payment')`);
-      // Delete folha_lancamentos if any
-      await db.execute(sql`DELETE FROM folha_lancamentos WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM timecard_daily WHERE "companyId" = ${companyId} AND "mesCompetencia" = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM time_records WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM time_inconsistencies WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM payroll_uploads WHERE "companyId" = ${companyId} AND month = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM payroll_adjustments WHERE "companyId" = ${companyId} AND ("mesOrigem" = ${mesReferencia} OR "mesDesconto" = ${mesReferencia})`);
+      await db.execute(sql`DELETE FROM payroll_advances WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM payroll_payments WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM payroll_alerts WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM financial_events WHERE "companyId" = ${companyId} AND "mesCompetencia" = ${mesReferencia} AND "origemTipo" IN ('payroll_advance', 'payroll_payment')`);
+      await db.execute(sql`DELETE FROM folha_lancamentos WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}`);
 
       // Reset period to "aberta" and clear all timestamps
       await db.execute(sql`
         UPDATE payroll_periods SET 
           status = 'aberta',
-          pontoImportadoEm = NULL, pontoImportadoPor = NULL,
-          afericaoRealizada = 0, afericaoEm = NULL, afericaoPor = NULL,
-          valeGeradoEm = NULL, valeGeradoPor = NULL,
-          pagamentoSimuladoEm = NULL, pagamentoSimuladoPor = NULL,
-          consolidadoEm = NULL, consolidadoPor = NULL,
-          totalDivergenciasAferidas = 0, retificadoEm = NULL
+          "pontoImportadoEm" = NULL, "pontoImportadoPor" = NULL,
+          "afericaoRealizada" = 0, "afericaoEm" = NULL, "afericaoPor" = NULL,
+          "valeGeradoEm" = NULL, "valeGeradoPor" = NULL,
+          "pagamentoSimuladoEm" = NULL, "pagamentoSimuladoPor" = NULL,
+          "consolidadoEm" = NULL, "consolidadoPor" = NULL,
+          "totalDivergenciasAferidas" = 0, "retificadoEm" = NULL
         WHERE id = ${periodId}
       `);
 

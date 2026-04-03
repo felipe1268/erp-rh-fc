@@ -7255,4 +7255,16 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 04:30:00",
   },
+  {
+    version: 975,
+    titulo: "Fix queries SQL com nomes de colunas sem aspas na Folha de Pagamento",
+    descricao:
+      "• Corrigido erro 'failed query DELETE FROM payroll_adjustments' ao clicar em Aferir Escuro na Folha de Pagamento\n" +
+      "• Causa raiz: nomes de colunas camelCase (companyId, mesOrigem, etc.) sem aspas duplas no SQL raw — PostgreSQL converte para lowercase sem aspas\n" +
+      "• Corrigidas todas as queries raw SQL em payrollEngine.ts: DELETE, INSERT, UPDATE e SELECT nas tabelas payroll_adjustments, timecard_daily, payroll_periods, payroll_alerts, financial_events e folha_lancamentos",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 05:00:00",
+  },
 ];
