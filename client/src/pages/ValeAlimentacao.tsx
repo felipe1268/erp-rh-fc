@@ -1021,11 +1021,11 @@ export default function ValeAlimentacao() {
                     const janta = configForm.jantaAtivo ? parseBRL(configForm.jantaDia) : 0;
                     const va = parseBRL(configForm.valeAlimentacaoMes);
                     const dias = configForm.diasUteisRef || 22;
-                    const total = (cafe + lanche + janta) * dias + va;
+                    const total = (cafe + lanche + janta + va) * dias;
                     return `R$ ${fmtNum(total)}`;
                   })()}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">(Café + Lanche + Jantar) × Dias + VA Mensal</p>
+                <p className="text-xs text-muted-foreground mt-1">(Café + Lanche + Jantar + VA) × Dias Úteis</p>
               </div>
             </div>
             <div>
@@ -1041,7 +1041,7 @@ export default function ValeAlimentacao() {
               const janta = configForm.jantaAtivo ? parseBRL(configForm.jantaDia) : 0;
               const va = parseBRL(configForm.valeAlimentacaoMes);
               const dias = configForm.diasUteisRef || 22;
-              const totalCalc = (cafe + lanche + janta) * dias + va;
+              const totalCalc = (cafe + lanche + janta + va) * dias;
               saveConfigMut.mutate({
                 ...configForm,
                 totalVA_iFood: totalCalc.toFixed(2).replace(".", ","),
