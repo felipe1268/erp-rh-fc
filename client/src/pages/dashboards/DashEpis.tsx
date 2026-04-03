@@ -75,6 +75,28 @@ function InsightCard({ icon: Icon, title, value, sub, color, badge }: {
   );
 }
 
+function BackfillFichasButton({ companyId, onDone, semFicha }: { companyId: number; onDone: () => void; semFicha: number }) {
+  const backfillMut = trpc.epis.backfillFichas.useMutation({
+    onSuccess: (data) => {
+      onDone();
+      alert(`Fichas geradas: ${data.generated} de ${data.total}${data.errors ? ` (${data.errors} erros)` : ''}`);
+    },
+    onError: (err) => alert('Erro ao gerar fichas: ' + err.message),
+  });
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-7 text-xs gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50"
+      disabled={backfillMut.isPending}
+      onClick={() => backfillMut.mutate({ companyId })}
+    >
+      <FileText className="h-3.5 w-3.5" />
+      {backfillMut.isPending ? 'Gerando...' : `Gerar ${semFicha} fichas`}
+    </Button>
+  );
+}
+
 export default function DashEpis() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
@@ -1481,10 +1503,15 @@ export default function DashEpis() {
                 const comFicha = deliveries.filter((d: any) => d.fichaUrl).length;
                 return (
                   <div className="space-y-4">
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground bg-muted/30 rounded-lg px-4 py-2">
-                      <span><strong>{totalEntregas}</strong> entregas registradas</span>
-                      <span className="text-border">|</span>
-                      <span><strong>{comFicha}</strong> com ficha anexada</span>
+                    <div className="flex items-center justify-between text-sm text-muted-foreground bg-muted/30 rounded-lg px-4 py-2">
+                      <div className="flex items-center gap-4">
+                        <span><strong>{totalEntregas}</strong> entregas registradas</span>
+                        <span className="text-border">|</span>
+                        <span><strong>{comFicha}</strong> com ficha anexada</span>
+                      </div>
+                      {comFicha < totalEntregas && (
+                        <BackfillFichasButton companyId={queryCompanyId} onDone={() => fichaDeliveries.refetch()} semFicha={totalEntregas - comFicha} />
+                      )}
                     </div>
                     <div className="rounded-lg border overflow-hidden">
                       <table className="w-full text-sm">

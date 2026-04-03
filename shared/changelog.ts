@@ -7378,4 +7378,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 18:00:00",
   },
+  {
+    version: 984,
+    titulo: "EPI — Geração automática de ficha PDF na entrega",
+    descricao:
+      "• Ao registrar uma nova entrega de EPI, o sistema gera automaticamente o PDF da ficha de entrega\n" +
+      "• PDF inclui dados da empresa (razão social, CNPJ), dados do funcionário (nome, CPF, cargo, setor, matrícula)\n" +
+      "• Tabela com detalhes do equipamento entregue (nome, C.A., quantidade, data, motivo)\n" +
+      "• Declaração de recebimento conforme NR-6 com campos de assinatura\n" +
+      "• PDF é persistido automaticamente no banco e fica disponível no botão 'Ver PDF' do modal de entregas\n" +
+      "• Elimina necessidade de upload manual da ficha",
+    tipo: "feature",
+    modulos: "EPIs",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 19:00:00",
+  },
 ];

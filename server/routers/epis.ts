@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias, obraFuncionarios } from "../../drizzle/schema";
+import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias, obraFuncionarios, companies } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, gte, inArray } from "drizzle-orm";
 import { getConstrutorasIds } from "../db";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
 import { buscarFotoParaItem } from "../_core/autoFoto";
+import { generateEpiFichaPdf } from "../utils/generateEpiFichaPdf";
 
 export const episRouter = router({
   // ============================================================
@@ -369,6 +370,46 @@ export const episRouter = router({
         } as any);
       }
 
+      try {
+        const [emp] = await db.select({
+          nomeCompleto: employees.nomeCompleto,
+          cpf: employees.cpf,
+          cargo: employees.cargo,
+          setor: employees.setor,
+          matricula: employees.matricula,
+        }).from(employees).where(eq(employees.id, input.employeeId));
+
+        const [comp] = await db.select({
+          razaoSocial: companies.razaoSocial,
+          cnpj: companies.cnpj,
+        }).from(companies).where(eq(companies.id, input.companyId));
+
+        if (emp && comp) {
+          const fichaUrl = await generateEpiFichaPdf({
+            companyName: comp.razaoSocial,
+            companyCnpj: comp.cnpj,
+            employeeName: emp.nomeCompleto,
+            employeeCpf: emp.cpf,
+            employeeCargo: emp.cargo || '',
+            employeeSetor: emp.setor || '',
+            employeeMatricula: emp.matricula || '',
+            epiNome: epi?.nome || 'EPI',
+            epiCa: epi?.ca || '',
+            quantidade: input.quantidade,
+            dataEntrega: input.dataEntrega,
+            motivo: input.motivo || '',
+            observacoes: input.observacoes || '',
+            deliveryId: result[0].id,
+            companyId: input.companyId,
+          });
+          await db.update(epiDeliveries)
+            .set({ fichaUrl } as any)
+            .where(eq(epiDeliveries.id, result[0].id));
+        }
+      } catch (pdfErr) {
+        console.error('[EPI] Erro ao gerar ficha PDF automaticamente:', pdfErr);
+      }
+
       return { id: result[0].id, valorCobrado };
     }),
 
@@ -423,6 +464,81 @@ export const episRouter = router({
         eq(epiDiscountAlerts.status, 'pendente')
       ));
       return { success: true };
+    }),
+
+  backfillFichas: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const missing = await db.select({
+        id: epiDeliveries.id,
+        epiId: epiDeliveries.epiId,
+        employeeId: epiDeliveries.employeeId,
+        quantidade: epiDeliveries.quantidade,
+        dataEntrega: epiDeliveries.dataEntrega,
+        motivo: epiDeliveries.motivo,
+        observacoes: epiDeliveries.observacoes,
+      }).from(epiDeliveries).where(and(
+        eq(epiDeliveries.companyId, input.companyId),
+        isNull(epiDeliveries.fichaUrl),
+        isNull(epiDeliveries.deletedAt),
+      ));
+
+      const [comp] = await db.select({
+        razaoSocial: companies.razaoSocial,
+        cnpj: companies.cnpj,
+      }).from(companies).where(eq(companies.id, input.companyId));
+
+      if (!comp) return { generated: 0, errors: 0 };
+
+      let generated = 0;
+      let errors = 0;
+
+      for (const d of missing) {
+        try {
+          const [emp] = await db.select({
+            nomeCompleto: employees.nomeCompleto,
+            cpf: employees.cpf,
+            cargo: employees.cargo,
+            setor: employees.setor,
+            matricula: employees.matricula,
+          }).from(employees).where(eq(employees.id, d.employeeId));
+
+          const [epi] = await db.select({
+            nome: epis.nome,
+            ca: epis.ca,
+          }).from(epis).where(eq(epis.id, d.epiId));
+
+          if (emp) {
+            const fichaUrl = await generateEpiFichaPdf({
+              companyName: comp.razaoSocial,
+              companyCnpj: comp.cnpj,
+              employeeName: emp.nomeCompleto,
+              employeeCpf: emp.cpf,
+              employeeCargo: emp.cargo || '',
+              employeeSetor: emp.setor || '',
+              employeeMatricula: emp.matricula || '',
+              epiNome: epi?.nome || 'EPI',
+              epiCa: epi?.ca || '',
+              quantidade: d.quantidade,
+              dataEntrega: d.dataEntrega,
+              motivo: d.motivo || '',
+              observacoes: d.observacoes || '',
+              deliveryId: d.id,
+              companyId: input.companyId,
+            });
+            await db.update(epiDeliveries)
+              .set({ fichaUrl } as any)
+              .where(eq(epiDeliveries.id, d.id));
+            generated++;
+          }
+        } catch (err) {
+          console.error(`[EPI Backfill] Erro delivery #${d.id}:`, err);
+          errors++;
+        }
+      }
+
+      return { generated, errors, total: missing.length };
     }),
 
   // Upload signed EPI delivery form
