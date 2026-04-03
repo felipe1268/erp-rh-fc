@@ -134,7 +134,7 @@ export const valeAlimentacaoRouter = router({
       const rows = ((await db.execute(
         sql`SELECT DISTINCT ON (vr.id) vr.*, e."nomeCompleto", e.cpf, e.cargo, e.funcao, e.status as "empStatus",
             of2."obraId", o.nome as "obraNome",
-            vr."diasUteisCalc", vr."cidadeObra", vr."diasFerias", vr."diasLicenca", vr."diasFaltas", vr."diasDescontados", vr."proporcionalDias"
+            vr."diasUteisCalc", vr."cidadeObra", vr."diasFerias", vr."diasLicenca", vr."diasFaltas", vr."diasDescontados", vr."proporcionalDias", vr."memoriaCalculo"
             FROM vr_benefits vr
             LEFT JOIN employees e ON vr."employeeId" = e.id
             LEFT JOIN LATERAL (
@@ -382,9 +382,18 @@ export const valeAlimentacaoRouter = router({
 
         if (valorTotal <= 0) continue;
 
+        const memoria = JSON.stringify({
+          totalIFood, diasUteisRef, diasUteisOriginal, diasEfetivos,
+          cafeDia, lancheDia, jantaDia, cafeMensal, lancheMensal, jantaMensal, vaMensal,
+          cafeAtivo, lancheAtivo, jantaAtivo,
+          diasFerias, diasLicenca, isProporcional, proporcionalDias,
+          valorCafe, valorLanche, valorJanta, valorVA, valorTotal,
+          cidade: cidade || null,
+        });
+
         const result = ((await db.execute(
-          sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor", "diasUteisCalc", "cidadeObra", "diasFerias", "diasLicenca", "diasFaltas", "diasDescontados", "proporcionalDias")
-          VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasEfetivos}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName}, ${diasUteisOriginal}, ${cidade || null}, ${diasFerias}, ${diasLicenca}, 0, 0, ${proporcionalDias})
+          sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor", "diasUteisCalc", "cidadeObra", "diasFerias", "diasLicenca", "diasFaltas", "diasDescontados", "proporcionalDias", "memoriaCalculo")
+          VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasEfetivos}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName}, ${diasUteisOriginal}, ${cidade || null}, ${diasFerias}, ${diasLicenca}, 0, 0, ${proporcionalDias}, ${memoria})
           RETURNING id`
         )) as any).rows || [];
         const vrId = result?.[0]?.id;
@@ -589,9 +598,18 @@ export const valeAlimentacaoRouter = router({
           const valorTotal = Math.round((valorCafe + valorLanche + valorJanta + valorVA) * 100) / 100;
           if (valorTotal <= 0) continue;
 
+          const memoria = JSON.stringify({
+            totalIFood, diasUteisRef, diasUteisOriginal, diasEfetivos,
+            cafeDia, lancheDia, jantaDia, cafeMensal, lancheMensal, jantaMensal, vaMensal,
+            cafeAtivo, lancheAtivo, jantaAtivo,
+            diasFerias, diasLicenca, isProporcional, proporcionalDias,
+            valorCafe, valorLanche, valorJanta, valorVA, valorTotal,
+            cidade: cidade || null,
+          });
+
           const result = ((await db.execute(
-            sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor", "diasUteisCalc", "cidadeObra", "diasFerias", "diasLicenca", "diasFaltas", "diasDescontados", "proporcionalDias")
-            VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasEfetivos}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName}, ${diasUteisOriginal}, ${cidade || null}, ${diasFerias}, ${diasLicenca}, 0, 0, ${proporcionalDias})
+            sql`INSERT INTO vr_benefits ("companyId", "employeeId", "mesReferencia", "valorDiario", "diasUteis", "valorTotal", "valorCafe", "valorLanche", "valorJanta", "valorVa", operadora, status, "geradoPor", "diasUteisCalc", "cidadeObra", "diasFerias", "diasLicenca", "diasFaltas", "diasDescontados", "proporcionalDias", "memoriaCalculo")
+            VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatBRL(valorDiario)}, ${diasEfetivos}, ${formatBRL(valorTotal)}, ${formatBRL(valorCafe)}, ${formatBRL(valorLanche)}, ${formatBRL(valorJanta)}, ${formatBRL(valorVA)}, 'iFood Benefícios', 'pendente', ${userName}, ${diasUteisOriginal}, ${cidade || null}, ${diasFerias}, ${diasLicenca}, 0, 0, ${proporcionalDias}, ${memoria})
             RETURNING id`
           )) as any).rows || [];
           const vrId = result?.[0]?.id;

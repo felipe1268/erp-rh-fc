@@ -2968,6 +2968,7 @@ export const vrBenefits = pgTable("vr_benefits", {
         diasFaltas: integer().default(0),
         diasDescontados: integer().default(0),
         proporcionalDias: integer(),
+        memoriaCalculo: text(),
 },
 (table) => [
         index("vr_company_mes").on(table.companyId, table.mesReferencia),

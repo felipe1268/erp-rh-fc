@@ -18,9 +18,9 @@ import {
   UtensilsCrossed, Search, Upload, FileSpreadsheet, Users, DollarSign,
   Settings, ListChecks, History, CheckCircle, XCircle, Pencil, Trash2,
   RefreshCw, Plus, Building2, Coffee, Sandwich, Moon, CreditCard,
-  ChevronDown, ChevronUp, AlertTriangle, Eye, Loader2, Ban
+  ChevronDown, ChevronUp, AlertTriangle, Eye, Loader2, Ban, Calculator, Info
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { formatCPF, fmtNum } from "@/lib/formatters";
@@ -157,6 +157,7 @@ export default function ValeAlimentacao() {
   const [histDialogEmployeeId, setHistDialogEmployeeId] = useState<number | null>(null);
   const [histDialogName, setHistDialogName] = useState<string>("");
   const [alertaFilter, setAlertaFilter] = useState<'todos' | 'pendente' | 'descontar' | 'abonar'>('pendente');
+  const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
 
   // Queries
   const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: !!companyId || companyIds?.length > 0 });
@@ -558,8 +559,17 @@ export default function ValeAlimentacao() {
                           </td>
                           <td colSpan={3}></td>
                         </tr>
-                        {filteredLancamentos.map((l: any) => (
-                          <tr key={l.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                        {filteredLancamentos.map((l: any) => {
+                          const isExpanded = expandedRowId === l.id;
+                          let mc: any = null;
+                          try {
+                            if (l.memoriaCalculo) {
+                              mc = typeof l.memoriaCalculo === 'string' ? JSON.parse(l.memoriaCalculo) : l.memoriaCalculo;
+                            }
+                          } catch {}
+                          return (
+                          <React.Fragment key={l.id}>
+                          <tr className={`border-b last:border-0 hover:bg-muted/20 transition-colors ${isExpanded ? 'bg-blue-50/50' : ''}`}>
                             <td className="px-4 py-2.5">
                               <div>
                                 <span className="font-medium text-sm text-blue-700 cursor-pointer hover:underline" onClick={() => { setHistDialogEmployeeId(l.employeeId); setHistDialogName(l.nomeCompleto); }}>{l.nomeCompleto}</span>
@@ -582,6 +592,9 @@ export default function ValeAlimentacao() {
                             </td>
                             <td className="px-3 py-2.5 text-center">
                               <div className="flex items-center gap-1 justify-center">
+                                <Button variant="ghost" size="icon" className={`h-7 w-7 ${isExpanded ? 'text-blue-600 bg-blue-100' : ''}`} title="Memória de Cálculo" onClick={() => setExpandedRowId(isExpanded ? null : l.id)}>
+                                  <Calculator className="h-3.5 w-3.5" />
+                                </Button>
                                 <Button variant="ghost" size="icon" className="h-7 w-7" title="Ver detalhes" onClick={() => { setDetailRecord(l); setShowDetailDialog(true); }}>
                                   <Eye className="h-3.5 w-3.5" />
                                 </Button>
@@ -624,7 +637,125 @@ export default function ValeAlimentacao() {
                               </div>
                             </td>
                           </tr>
-                        ))}
+                          {isExpanded && (
+                            <tr className="bg-blue-50/30 border-b">
+                              <td colSpan={10} className="px-4 py-3">
+                                {mc ? (
+                                  <div className="rounded-lg border border-blue-200 bg-white p-4 space-y-3 max-w-2xl">
+                                    <div className="flex items-center gap-2 text-sm font-semibold text-blue-800">
+                                      <Calculator className="h-4 w-4" />
+                                      Memória de Cálculo
+                                      {mc.isProporcional && <Badge className="bg-amber-100 text-amber-800 text-[10px] ml-2">Proporcional</Badge>}
+                                      {mc.cidade && <span className="text-xs font-normal text-muted-foreground ml-2">Cidade: {mc.cidade}</span>}
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                                      <div className="flex items-center gap-1 text-muted-foreground">
+                                        <Info className="h-3 w-3" />
+                                        <span>Total iFood mensal configurado:</span>
+                                        <span className="font-semibold text-foreground">{fmtBRL(mc.totalIFood)}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1 text-muted-foreground">
+                                        <Info className="h-3 w-3" />
+                                        <span>Dias úteis ref. (config):</span>
+                                        <span className="font-semibold text-foreground">{mc.diasUteisRef}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1 text-muted-foreground">
+                                        <Info className="h-3 w-3" />
+                                        <span>Dias úteis do mês (cidade):</span>
+                                        <span className="font-semibold text-foreground">{mc.diasUteisOriginal}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1 text-muted-foreground">
+                                        <Info className="h-3 w-3" />
+                                        <span>Dias efetivos trabalhados:</span>
+                                        <span className="font-semibold text-foreground">{mc.diasEfetivos}</span>
+                                      </div>
+                                      {mc.diasFerias > 0 && (
+                                        <div className="flex items-center gap-1 text-amber-700">
+                                          <AlertTriangle className="h-3 w-3" />
+                                          <span>Dias de férias descontados: {mc.diasFerias}</span>
+                                        </div>
+                                      )}
+                                      {mc.diasLicenca > 0 && (
+                                        <div className="flex items-center gap-1 text-amber-700">
+                                          <AlertTriangle className="h-3 w-3" />
+                                          <span>Dias de licença descontados: {mc.diasLicenca}</span>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="border-t pt-3 space-y-2">
+                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fórmulas</p>
+                                      <div className="space-y-1.5 text-xs font-mono bg-muted/30 rounded p-3">
+                                        {mc.cafeAtivo && (
+                                          <div className="flex items-start gap-2">
+                                            <Coffee className="h-3.5 w-3.5 text-orange-500 mt-0.5 shrink-0" />
+                                            <div>
+                                              <span className="text-muted-foreground">Café da Manhã:</span>{' '}
+                                              <span>{fmtBRL(mc.cafeDia)}/dia × {mc.diasEfetivos} dias = <strong className="text-foreground">{fmtBRL(mc.valorCafe)}</strong></span>
+                                              <span className="text-muted-foreground text-[10px] block">Mensal ref: {fmtBRL(mc.cafeDia)} × {mc.diasUteisRef} = {fmtBRL(mc.cafeMensal)}</span>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {mc.lancheAtivo && (
+                                          <div className="flex items-start gap-2">
+                                            <Sandwich className="h-3.5 w-3.5 text-green-500 mt-0.5 shrink-0" />
+                                            <div>
+                                              <span className="text-muted-foreground">Lanche Tarde:</span>{' '}
+                                              <span>{fmtBRL(mc.lancheDia)}/dia × {mc.diasEfetivos} dias = <strong className="text-foreground">{fmtBRL(mc.valorLanche)}</strong></span>
+                                              <span className="text-muted-foreground text-[10px] block">Mensal ref: {fmtBRL(mc.lancheDia)} × {mc.diasUteisRef} = {fmtBRL(mc.lancheMensal)}</span>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {mc.jantaAtivo && (
+                                          <div className="flex items-start gap-2">
+                                            <Moon className="h-3.5 w-3.5 text-indigo-500 mt-0.5 shrink-0" />
+                                            <div>
+                                              <span className="text-muted-foreground">Jantar:</span>{' '}
+                                              <span>{fmtBRL(mc.jantaDia)}/dia × {mc.diasEfetivos} dias = <strong className="text-foreground">{fmtBRL(mc.valorJanta)}</strong></span>
+                                            </div>
+                                          </div>
+                                        )}
+                                        <div className="flex items-start gap-2">
+                                          <UtensilsCrossed className="h-3.5 w-3.5 text-blue-500 mt-0.5 shrink-0" />
+                                          <div>
+                                            <span className="text-muted-foreground">VA (Vale Alimentação):</span>{' '}
+                                            {mc.isProporcional ? (
+                                              <span>{fmtBRL(mc.vaMensal)} × {mc.diasEfetivos}/{mc.diasUteisOriginal} = <strong className="text-foreground">{fmtBRL(mc.valorVA)}</strong></span>
+                                            ) : (
+                                              <span>Fixo mensal = <strong className="text-foreground">{fmtBRL(mc.vaMensal)}</strong></span>
+                                            )}
+                                            <span className="text-muted-foreground text-[10px] block">
+                                              VA mensal = {fmtBRL(mc.totalIFood)} - {fmtBRL(mc.cafeMensal)} (café) - {fmtBRL(mc.lancheMensal)} (lanche){mc.jantaMensal > 0 ? ` - ${fmtBRL(mc.jantaMensal)} (jantar)` : ''} = {fmtBRL(mc.vaMensal)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="border-t pt-2 mt-2 flex items-center gap-2 font-bold text-sm">
+                                          <DollarSign className="h-4 w-4 text-green-600 shrink-0" />
+                                          <span>Total: {fmtBRL(mc.valorTotal)}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {mc.isProporcional && mc.proporcionalDias && (
+                                      <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1.5 flex items-start gap-1.5">
+                                        <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                                        <span>Admissão no meio do mês — {mc.proporcionalDias} dias úteis proporcionais de {mc.diasUteisOriginal} dias do mês. Café e lanche calculados por dia; VA proporcionado.</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-muted-foreground italic flex items-center gap-2">
+                                    <Info className="h-4 w-4" />
+                                    Memória de cálculo não disponível para este lançamento. Regere os lançamentos para gerar.
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                          </React.Fragment>
+                          );
+                        })}
                       </tbody>
 
                     </table>

@@ -7320,4 +7320,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 12:00:00",
   },
+  {
+    version: 980,
+    titulo: "VA Inteligente — Memória de Cálculo expandível por lançamento",
+    descricao:
+      "• Novo botão 'Calculadora' em cada linha da tabela de lançamentos\n" +
+      "• Ao clicar, expande uma seção com a memória de cálculo completa\n" +
+      "• Mostra: total iFood configurado, dias úteis ref, dias úteis cidade, dias efetivos\n" +
+      "• Detalha fórmulas: café/dia × dias, lanche/dia × dias, VA fixo ou proporcional\n" +
+      "• Indica férias, licença e admissão proporcional quando aplicável\n" +
+      "• Dados salvos em campo 'memoriaCalculo' no banco para auditoria futura",
+    tipo: "feature",
+    modulos: "Vale Alimentação",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-03 14:00:00",
+  },
 ];
