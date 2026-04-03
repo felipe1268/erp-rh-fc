@@ -20,7 +20,7 @@ import {
   RefreshCw, Plus, Building2, Coffee, Sandwich, Moon, CreditCard,
   ChevronDown, ChevronUp, AlertTriangle, Eye, Loader2, Ban, Calculator, Info
 } from "lucide-react";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { formatCPF, fmtNum } from "@/lib/formatters";
@@ -158,6 +158,8 @@ export default function ValeAlimentacao() {
   const [histDialogName, setHistDialogName] = useState<string>("");
   const [alertaFilter, setAlertaFilter] = useState<'todos' | 'pendente' | 'descontar' | 'abonar'>('pendente');
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
+  const [progressState, setProgressState] = useState<{ active: boolean; percent: number; phase: string; } | null>(null);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Queries
   const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: !!companyId || companyIds?.length > 0 });
@@ -178,6 +180,7 @@ export default function ValeAlimentacao() {
   // Mutations
   const gerarMut = trpc.valeAlimentacao.gerarMes.useMutation({
     onSuccess: (data) => {
+      stopProgress(!!data.success);
       if (data.success) {
         toast.success(data.message);
         lancamentosQ.refetch();
@@ -187,10 +190,46 @@ export default function ValeAlimentacao() {
         toast.error(data.message);
       }
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      stopProgress(false);
+      toast.error(e.message);
+    },
   });
+  const startProgress = useCallback((totalFuncs: number) => {
+    const phases = [
+      "Carregando configurações...",
+      "Consultando calendário de feriados...",
+      "Calculando dias úteis por cidade...",
+      "Processando férias e licenças...",
+      "Gerando lançamentos individuais...",
+      "Verificando faltas e alertas...",
+      "Finalizando...",
+    ];
+    let currentPercent = 0;
+    let phaseIdx = 0;
+    setProgressState({ active: true, percent: 0, phase: phases[0] });
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    const step = Math.max(0.3, 80 / (totalFuncs * 2));
+    progressTimerRef.current = setInterval(() => {
+      currentPercent = Math.min(currentPercent + step + Math.random() * step * 0.5, 92);
+      const newPhaseIdx = Math.min(Math.floor(currentPercent / (92 / phases.length)), phases.length - 1);
+      if (newPhaseIdx !== phaseIdx) phaseIdx = newPhaseIdx;
+      setProgressState({ active: true, percent: Math.round(currentPercent), phase: phases[phaseIdx] });
+    }, 200);
+  }, []);
+
+  const stopProgress = useCallback((success: boolean) => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    setProgressState({ active: true, percent: 100, phase: success ? "Concluído!" : "Erro no processamento" });
+    setTimeout(() => setProgressState(null), 1500);
+  }, []);
+
   const regerarMut = trpc.valeAlimentacao.regerarMes.useMutation({
     onSuccess: (data) => {
+      stopProgress(!!data.success);
       if (data.success) {
         toast.success(data.message);
         lancamentosQ.refetch();
@@ -199,7 +238,10 @@ export default function ValeAlimentacao() {
         toast.error(data.message);
       }
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      stopProgress(false);
+      toast.error(e.message);
+    },
   });
   const editarMut = trpc.valeAlimentacao.editarLancamento.useMutation({
     onSuccess: () => {
@@ -386,9 +428,11 @@ export default function ValeAlimentacao() {
                   <>
                     <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => {
                       if (confirm("Regerar todos os lançamentos pendentes? Lançamentos já pagos serão mantidos.")) {
+                        const totalFuncs = lancamentos.length || 50;
+                        startProgress(totalFuncs);
                         regerarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, diasUteis });
                       }
-                    }} disabled={regerarMut.isPending}>
+                    }} disabled={regerarMut.isPending || !!progressState}>
                       <RefreshCw className="h-3.5 w-3.5" /> Regerar
                     </Button>
                     {stats && stats.pendentes > 0 && (
@@ -478,6 +522,40 @@ export default function ValeAlimentacao() {
                 </CardContent>
               </Card>
             </div>
+
+            {progressState && (
+              <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center backdrop-blur-sm">
+                <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md mx-4 space-y-5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
+                      <RefreshCw className={`h-5 w-5 text-orange-600 ${progressState.percent < 100 ? 'animate-spin' : ''}`} />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg">Regenerando Lançamentos</h3>
+                      <p className="text-sm text-muted-foreground">{mesLabel}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{progressState.phase}</span>
+                      <span className="font-mono font-semibold text-orange-600">{progressState.percent}%</span>
+                    </div>
+                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ease-out ${progressState.percent >= 100 ? 'bg-green-500' : 'bg-gradient-to-r from-orange-400 to-orange-600'}`}
+                        style={{ width: `${progressState.percent}%` }}
+                      />
+                    </div>
+                  </div>
+                  {progressState.percent >= 100 && (
+                    <div className="flex items-center gap-2 text-green-600 text-sm font-medium">
+                      <CheckCircle className="h-4 w-4" />
+                      Processamento concluído!
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Filters */}
             <div className="flex items-center gap-3 flex-wrap">
@@ -1216,7 +1294,8 @@ export default function ValeAlimentacao() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowGerarDialog(false)}>Cancelar</Button>
-            <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={gerarMut.isPending} onClick={() => {
+            <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={gerarMut.isPending || !!progressState} onClick={() => {
+              startProgress(50);
               gerarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, diasUteis });
             }}>
               {gerarMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Gerando...</> : "Gerar Lançamentos"}
