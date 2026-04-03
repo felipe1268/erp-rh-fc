@@ -2214,7 +2214,9 @@ export default function FolhaPagamento() {
                                   {dia.classificacao === 'dia_util' && <Badge variant="outline" className="text-[10px]">Dia Útil</Badge>}
                                 </td>
                                 <td className="p-2 text-center">
-                                  {dia.temRegistro ? <CheckCircle className="h-3.5 w-3.5 text-green-600 mx-auto" /> : dia.classificacao === 'dia_util' ? <XCircle className="h-3.5 w-3.5 text-red-600 mx-auto" /> : <span className="text-muted-foreground">—</span>}
+                                  {dia.temRegistro ? <CheckCircle className="h-3.5 w-3.5 text-green-600 mx-auto" />
+                                    : dia.classificacao === 'dia_util' ? <XCircle className="h-3.5 w-3.5 text-red-600 mx-auto" />
+                                    : <span className="text-muted-foreground text-[10px]">N/A</span>}
                                 </td>
                                 <td className="p-2 text-center font-mono text-[10px]">{dia.entrada1 || '—'}</td>
                                 <td className="p-2 text-center font-mono text-[10px]">{dia.saida2 || dia.saida1 || '—'}</td>

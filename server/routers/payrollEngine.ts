@@ -868,8 +868,49 @@ export const payrollEngineRouter = router({
           continue;
         }
 
+        const tipoDiaEscuro = (escuro.tipoDia || 'util').toLowerCase();
+        const isDiaUtil = tipoDiaEscuro === 'util';
+        const isFimDeSemanaOuFeriado = ['sabado', 'domingo', 'compensado', 'feriado'].includes(tipoDiaEscuro);
+
+        if (!actual && isFimDeSemanaOuFeriado) {
+          resultado = "ok";
+          obs = `Sem registro em ${tipoDiaEscuro === 'feriado' ? 'feriado' : tipoDiaEscuro === 'domingo' ? 'domingo' : 'sábado'} — esperado (não é dia útil)`;
+          totalOk++;
+          validadosList.push({
+            employeeId: escuro.employeeId,
+            employeeName: empNome,
+            data: escuro.data,
+            escuroEntrada1: escuro.entrada1 || '-',
+            escuroSaida1: escuro.saida1 || '-',
+            realEntrada1: '-',
+            realSaida1: '-',
+            horasTrabalhadas: '0:00',
+          });
+          timecardAferidoUpdates.push({ id: escuro.id, resultado: "ok", obs, actual: { entrada1: null, saida1: null, entrada2: null, saida2: null, entrada3: null, saida3: null, horasTrabalhadas: '0:00', horasNoturnas: '0:00', isFalta: false, isAtraso: false, isSaidaAntecipada: false, minutosAtraso: 0, minutosSaidaAntecipada: 0 }, horasExtras: '0:00', numBatidas: 0 });
+          totalAferidos++;
+          continue;
+        }
+
         if (actual) {
           if (!actual.entrada1 && !actual.saida1 && !actual.entrada2 && !actual.saida2) {
+            if (isFimDeSemanaOuFeriado) {
+              resultado = "ok";
+              obs = `Sem batida em ${tipoDiaEscuro === 'feriado' ? 'feriado' : tipoDiaEscuro === 'domingo' ? 'domingo' : 'sábado'} — esperado`;
+              totalOk++;
+              validadosList.push({
+                employeeId: escuro.employeeId,
+                employeeName: empNome,
+                data: escuro.data,
+                escuroEntrada1: escuro.entrada1 || '-',
+                escuroSaida1: escuro.saida1 || '-',
+                realEntrada1: '-',
+                realSaida1: '-',
+                horasTrabalhadas: '0:00',
+              });
+              timecardAferidoUpdates.push({ id: escuro.id, resultado: "ok", obs, actual, horasExtras: '0:00', numBatidas: 0 });
+              totalAferidos++;
+              continue;
+            }
             resultado = "falta";
             obs = "Falta identificada na aferição";
             divergencias++;
@@ -1179,9 +1220,14 @@ export const payrollEngineRouter = router({
         const nomeFeriado = feriadoMap.get(dateStr) || null;
         const tc = tcMap.get(dateStr) || null;
 
+        const tcTipoDia = tc?.tipoDia?.toLowerCase() || null;
         let classificacao = 'dia_util';
-        if (isDom) classificacao = 'domingo';
-        else if (isSab) classificacao = 'sabado';
+        if (tcTipoDia && ['sabado', 'domingo', 'compensado', 'feriado'].includes(tcTipoDia)) {
+          classificacao = tcTipoDia === 'compensado' ? 'sabado' : tcTipoDia;
+        } else {
+          if (isDom) classificacao = 'domingo';
+          else if (isSab) classificacao = 'sabado';
+        }
         if (nomeFeriado) classificacao = 'feriado';
 
         dias.push({
