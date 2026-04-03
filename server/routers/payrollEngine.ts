@@ -1497,20 +1497,7 @@ export const payrollEngineRouter = router({
         `);
       }
 
-      // Update period for all companies
-      for (const cid of allCompanyIds) {
-        const companyVale = advanceInsertRows.length > 0 ? totalVale : 0;
-        await db.execute(sql`
-          UPDATE payroll_periods SET 
-            status = 'vale_gerado',
-            "valeGeradoEm" = NOW(),
-            "valeGeradoPor" = ${ctx.user.name || "Sistema"},
-            "totalVale" = ${formatMoney(companyVale)}
-          WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
-        `);
-      }
-
-      return {
+      const valeResultPayload = {
         totalFuncionarios: empList.length,
         totalAlertas: bloqueados,
         totalVale,
@@ -1521,6 +1508,23 @@ export const payrollEngineRouter = router({
           ? `Vale calculado: ${empList.length} funcionários, ${bloqueados} com alerta (decisão pendente), total R$ ${formatMoney(totalVale)}`
           : `Vale calculado: ${empList.length} funcionários, total R$ ${formatMoney(totalVale)}`,
       };
+      const valeJson = JSON.stringify(valeResultPayload);
+
+      // Update period for all companies
+      for (const cid of allCompanyIds) {
+        const companyVale = advanceInsertRows.length > 0 ? totalVale : 0;
+        await db.execute(sql`
+          UPDATE payroll_periods SET 
+            status = 'vale_gerado',
+            "valeGeradoEm" = NOW(),
+            "valeGeradoPor" = ${ctx.user.name || "Sistema"},
+            "totalVale" = ${formatMoney(companyVale)},
+            "valeResultJson" = ${valeJson}
+          WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+        `);
+      }
+
+      return valeResultPayload;
       } catch (err: any) {
         console.error('[gerarVale] Erro:', err?.message || err, err?.stack);
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao calcular vale: ${err?.message || 'erro desconhecido'}` });
@@ -1899,19 +1903,7 @@ export const payrollEngineRouter = router({
         `);
       }
 
-      // Update period
-      await db.execute(sql`
-        UPDATE payroll_periods SET 
-          status = 'pagamento_simulado',
-          "pagamentoSimuladoEm" = NOW(),
-          "pagamentoSimuladoPor" = ${ctx.user.name || "Sistema"},
-          "totalSalarioBruto" = ${formatMoney(grandTotalBruto)},
-          "totalDescontos" = ${formatMoney(grandTotalDescontos)},
-          "totalLiquido" = ${formatMoney(grandTotalLiquido)}
-        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
-      `);
-
-      return {
+      const pagamentoResultPayload = {
         totalFuncionarios: empList.length,
         totalBruto: grandTotalBruto,
         totalDescontos: grandTotalDescontos,
@@ -1921,6 +1913,22 @@ export const payrollEngineRouter = router({
         funcionarios: results,
         message: `Simulação concluída: ${empList.length} funcionários, líquido total R$ ${formatMoney(grandTotalLiquido)}`,
       };
+      const pagJson = JSON.stringify(pagamentoResultPayload);
+
+      // Update period
+      await db.execute(sql`
+        UPDATE payroll_periods SET 
+          status = 'pagamento_simulado',
+          "pagamentoSimuladoEm" = NOW(),
+          "pagamentoSimuladoPor" = ${ctx.user.name || "Sistema"},
+          "totalSalarioBruto" = ${formatMoney(grandTotalBruto)},
+          "totalDescontos" = ${formatMoney(grandTotalDescontos)},
+          "totalLiquido" = ${formatMoney(grandTotalLiquido)},
+          "pagamentoResultJson" = ${pagJson}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `);
+
+      return pagamentoResultPayload;
     }),
 
   // ============================================================

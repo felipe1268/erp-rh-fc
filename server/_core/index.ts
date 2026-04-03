@@ -334,6 +334,8 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoEm" VARCHAR(32)`);
         await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoPor" VARCHAR(200)`);
         await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "afericaoResultJson" TEXT`);
+        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeResultJson" TEXT`);
+        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "pagamentoResultJson" TEXT`);
         console.log("[ColFix] payroll_periods valeConsolidado cols Rev.642 OK");
       } catch (e: any) { console.warn("[ColFix] payroll_periods valeConsolidado:", e?.message ?? e); }
     });

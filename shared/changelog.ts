@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 988,
+    titulo: "Persistência de resultados: Vale e Pagamento mantêm valores ao recarregar",
+    descricao: "Os resultados completos do cálculo de Vale e da Simulação de Pagamento agora são salvos no banco de dados (valeResultJson e pagamentoResultJson). Ao recarregar a página ou voltar à Folha de Pagamento, os cards exibem automaticamente os valores calculados (funcionários, total vale, total bruto/descontos/líquido) sem necessidade de recalcular. O botão 'Ver Resultado' também funciona após reload. Reset automático ao trocar o mês de referência.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-03 19:20:00",
+  },
+  {
     version: 987,
     titulo: "Aferição: status do funcionário, nomes clicáveis e exclusão de justificados",
     descricao: "Relatório de Aferição agora considera o status do funcionário (Férias, Afastado, Desligado, Recluso, Lista Negra) e períodos de férias registrados. Funcionários nessas situações são automaticamente excluídos das divergências e listados em seção separada 'Ausências Justificadas' com badge colorido do motivo. Nova coluna 'Status' na tabela de divergências com badges coloridos (Ativo=verde, Férias=laranja, Afastado=azul, Desligado=cinza, Recluso=roxo). Nomes dos funcionários são clicáveis — abrem o Fechamento de Ponto do mês aferido para validação cruzada. Card resumo 'Justificados' adicionado ao painel de totais.",
