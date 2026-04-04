@@ -336,6 +336,12 @@ const menuSectionsCompras: MenuSection[] = [
     ],
   },
   {
+    title: "Documentação",
+    items: [
+      { icon: BookOpen,        label: "Databook de Obra",     path: "/compras/databook"         },
+    ],
+  },
+  {
     title: "Cadastros",
     items: [
       { icon: Users,           label: "Fornecedores",         path: "/compras/fornecedores"     },

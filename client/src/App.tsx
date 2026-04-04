@@ -192,6 +192,7 @@ const IntegraSignAssinar = lazy(() => import("./pages/IntegraSignAssinar"));
 const IntegraSignDashboard = lazy(() => import("./pages/IntegraSignDashboard"));
 const PortalServicoPage = lazy(() => import("./pages/PortalServico"));
 const MedicoesServicoPage = lazy(() => import("./pages/compras/MedicoesServico"));
+const DatabookPage = lazy(() => import("./pages/compras/Databook"));
 const PortalOCEntregaPage = lazy(() => import("./pages/PortalOCEntrega"));
 
 // Integrações
@@ -389,6 +390,7 @@ function Router() {
         <Route path="/portal/cotacao/:token"     component={PortalCotacaoPage} />
         <Route path="/portal/servico/:token"    component={PortalServicoPage} />
         <Route path="/compras/medicoes-servico" component={MedicoesServicoPage} />
+        <Route path="/compras/databook"          component={DatabookPage} />
         <Route path="/portal/oc-entrega/:token"  component={PortalOCEntregaPage} />
         {/* Integrações */}
         <Route path="/integracoes/mas-controle"  component={MasControle} />

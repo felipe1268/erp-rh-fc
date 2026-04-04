@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1003,
+    titulo: "Novo Módulo: Databook de Obra",
+    descricao: "Módulo completo de Databook para documentação de produtos da obra. Importação automática de itens de OCs, classificação de disciplina e geração de especificações técnicas via IA (Claude), busca de fotos via Gemini, fluxo de aprovação (pendente_ia → gerado → revisado → enviado → aprovado/reprovado), deduplicação inteligente, entregas de terceiros com validação IA, geração de PDF individual e índice, dashboard com progresso por disciplina.",
+    tipo: "feature",
+    modulos: "Compras, Databook",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-04 12:00:00",
+  },
+  {
     version: 1002,
     titulo: "Correção: terceiros não devem ser cadastrados como PJ/colaborador",
     descricao: "Corrigido bug onde a geração de contrato a partir de OC criava um registro na tabela de funcionários (employees) com tipoContrato='pj' para fornecedores/terceiros. Agora o fluxo cria apenas empresa_terceira + terceiro_contrato, sem tocar na tabela de funcionários. Dados incorretos (RF Gesso cadastrada como PJ em employees) foram limpos. Função renomeada de gerarContratoPJDeOS para gerarContratoTerceiroDeOS.",
