@@ -18,7 +18,7 @@ export default function PainelOperacional() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
 
-  const [filtroStatus, setFiltroStatus] = useState<string>("em_andamento");
+  const [filtroStatus, setFiltroStatus] = useState<string>("Em_Andamento");
   const todasObras = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
   const obrasFiltradas = (todasObras.data as any[])?.filter((o: any) =>
     filtroStatus === "todas" ? true : o.status === filtroStatus
@@ -52,9 +52,9 @@ export default function PainelOperacional() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="em_andamento">Em andamento</SelectItem>
-              <SelectItem value="concluida">Concluídas</SelectItem>
-              <SelectItem value="paralisada">Paralisadas</SelectItem>
+              <SelectItem value="Em_Andamento">Em andamento</SelectItem>
+              <SelectItem value="Concluida">Concluídas</SelectItem>
+              <SelectItem value="Paralisada">Paralisadas</SelectItem>
               <SelectItem value="todas">Todas</SelectItem>
             </SelectContent>
           </Select>

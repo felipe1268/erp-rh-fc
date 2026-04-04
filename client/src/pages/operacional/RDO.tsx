@@ -28,10 +28,10 @@ export default function RDO() {
   const obraIdParam = Number(params.get("obra")) || 0;
   const rdoIdParam = Number(params.get("id")) || 0;
 
-  const [filtroStatus, setFiltroStatus] = useState<string>("em_andamento");
+  const [filtroStatusObra, setFiltroStatusObra] = useState<string>("Em_Andamento");
   const todasObras = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
   const obrasFiltradas = (todasObras.data as any[])?.filter((o: any) =>
-    filtroStatus === "todas" ? true : o.status === filtroStatus
+    filtroStatusObra === "todas" ? true : o.status === filtroStatusObra
   ) || [];
   const [obraId, setObraId] = useState(obraIdParam);
   const selectedObraId = obraId || obrasFiltradas[0]?.id || 0;
@@ -351,12 +351,12 @@ export default function RDO() {
           <p className="text-sm text-gray-500">Relatórios diários de obra</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Select value={filtroStatus} onValueChange={(v) => { setFiltroStatus(v); setObraId(0); }}>
+          <Select value={filtroStatusObra} onValueChange={(v) => { setFiltroStatusObra(v); setObraId(0); }}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="em_andamento">Em andamento</SelectItem>
-              <SelectItem value="concluida">Concluídas</SelectItem>
-              <SelectItem value="paralisada">Paralisadas</SelectItem>
+              <SelectItem value="Em_Andamento">Em andamento</SelectItem>
+              <SelectItem value="Concluida">Concluídas</SelectItem>
+              <SelectItem value="Paralisada">Paralisadas</SelectItem>
               <SelectItem value="todas">Todas</SelectItem>
             </SelectContent>
           </Select>

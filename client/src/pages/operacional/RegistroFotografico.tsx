@@ -21,7 +21,7 @@ export default function RegistroFotografico() {
   const [location] = useLocation();
   const params = new URLSearchParams(location.split("?")[1] || "");
   const obraIdParam = Number(params.get("obra")) || 0;
-  const [filtroStatusObra, setFiltroStatusObra] = useState<string>("em_andamento");
+  const [filtroStatusObra, setFiltroStatusObra] = useState<string>("Em_Andamento");
   const todasObras = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
   const obrasFiltradas = (todasObras.data as any[])?.filter((o: any) =>
     filtroStatusObra === "todas" ? true : o.status === filtroStatusObra
@@ -70,9 +70,9 @@ export default function RegistroFotografico() {
           <Select value={filtroStatusObra} onValueChange={(v) => { setFiltroStatusObra(v); setObraId(0); }}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="em_andamento">Em andamento</SelectItem>
-              <SelectItem value="concluida">Concluídas</SelectItem>
-              <SelectItem value="paralisada">Paralisadas</SelectItem>
+              <SelectItem value="Em_Andamento">Em andamento</SelectItem>
+              <SelectItem value="Concluida">Concluídas</SelectItem>
+              <SelectItem value="Paralisada">Paralisadas</SelectItem>
               <SelectItem value="todas">Todas</SelectItem>
             </SelectContent>
           </Select>
