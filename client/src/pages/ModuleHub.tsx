@@ -10,7 +10,7 @@ import {
   ArrowRight, Lock, Building2, LogOut, ChevronDown, LayoutGrid,
   Bell, Clock, Zap, Layers, ArrowUpRight, ClipboardCheck,
   Handshake, TrendingUp, Home, Ruler, BookOpen, FileSignature,
-  HardHat, Warehouse, BarChart3, FolderOpen,
+  HardHat, Warehouse, BarChart3, FolderOpen, ClipboardList,
   Settings, FileText, Trash2, GitBranch,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -205,6 +205,12 @@ const MODULES: Module[] = [
     description: "Controle de documentos técnicos de obra com revisões, aprovações, ARTs/RRTs e distribuição por disciplina.",
     icon: FolderOpen, accentFrom: "#6366F1", accentTo: "#4338CA", accentGlow: "rgba(99,102,241,0.35)", iconBg: "rgba(99,102,241,0.12)", path: "/gestao-documentos", active: true,
     features: ["Dashboard Executivo", "Documentos Técnicos", "Revisões e Aprovações", "ARTs / RRTs", "Disciplinas e Tipos"],
+  },
+  {
+    id: "operacional", title: "Operacional", subtitle: "Controle Operacional de Obra",
+    description: "RDO, checklists de qualidade, controle de concretagem, não conformidades, registro fotográfico e dashboard de obra.",
+    icon: ClipboardList, accentFrom: "#D97706", accentTo: "#B45309", accentGlow: "rgba(217,119,6,0.35)", iconBg: "rgba(217,119,6,0.12)", path: "/operacional/painel", active: true,
+    features: ["RDO Diário", "Checklists", "Concretagem", "Não Conformidades", "Registro Fotográfico", "Dashboard"],
   },
   {
     id: "indicadores-bi", title: "Indicadores / BI", subtitle: "Business Intelligence",
