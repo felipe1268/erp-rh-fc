@@ -18,9 +18,13 @@ export default function PainelOperacional() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
 
-  const obras = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  const [filtroStatus, setFiltroStatus] = useState<string>("em_andamento");
+  const todasObras = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
+  const obrasFiltradas = (todasObras.data as any[])?.filter((o: any) =>
+    filtroStatus === "todas" ? true : o.status === filtroStatus
+  ) || [];
   const [obraId, setObraId] = useState<number | null>(null);
-  const selectedObraId = obraId || (obras.data as any)?.[0]?.id;
+  const selectedObraId = obraId || obrasFiltradas[0]?.id;
 
   const dashboard = trpc.operacional.dashboardOperacional.useQuery(
     { companyId, obraId: selectedObraId! },
@@ -42,16 +46,29 @@ export default function PainelOperacional() {
           <h1 className="text-2xl font-bold text-gray-800">Painel Operacional</h1>
           <p className="text-sm text-gray-500">Visão consolidada da obra</p>
         </div>
-        <Select value={String(selectedObraId || "")} onValueChange={(v) => setObraId(Number(v))}>
-          <SelectTrigger className="w-64">
-            <SelectValue placeholder="Selecione a obra" />
-          </SelectTrigger>
-          <SelectContent>
-            {(obras.data as any[])?.map((o: any) => (
-              <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={filtroStatus} onValueChange={(v) => { setFiltroStatus(v); setObraId(null); }}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="em_andamento">Em andamento</SelectItem>
+              <SelectItem value="concluida">Concluídas</SelectItem>
+              <SelectItem value="paralisada">Paralisadas</SelectItem>
+              <SelectItem value="todas">Todas</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={String(selectedObraId || "")} onValueChange={(v) => setObraId(Number(v))}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Selecione a obra" />
+            </SelectTrigger>
+            <SelectContent>
+              {obrasFiltradas.map((o: any) => (
+                <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {!selectedObraId ? (

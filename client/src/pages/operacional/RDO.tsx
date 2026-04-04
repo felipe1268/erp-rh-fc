@@ -28,9 +28,13 @@ export default function RDO() {
   const obraIdParam = Number(params.get("obra")) || 0;
   const rdoIdParam = Number(params.get("id")) || 0;
 
-  const obras = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  const [filtroStatus, setFiltroStatus] = useState<string>("em_andamento");
+  const todasObras = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
+  const obrasFiltradas = (todasObras.data as any[])?.filter((o: any) =>
+    filtroStatus === "todas" ? true : o.status === filtroStatus
+  ) || [];
   const [obraId, setObraId] = useState(obraIdParam);
-  const selectedObraId = obraId || (obras.data as any)?.[0]?.id || 0;
+  const selectedObraId = obraId || obrasFiltradas[0]?.id || 0;
 
   const rdos = trpc.operacional.listarRDOs.useQuery(
     { companyId, obraId: selectedObraId },
@@ -346,11 +350,20 @@ export default function RDO() {
           <h1 className="text-2xl font-bold">RDO — Relatório Diário de Obra</h1>
           <p className="text-sm text-gray-500">Relatórios diários de obra</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2 flex-wrap">
+          <Select value={filtroStatus} onValueChange={(v) => { setFiltroStatus(v); setObraId(0); }}>
+            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="em_andamento">Em andamento</SelectItem>
+              <SelectItem value="concluida">Concluídas</SelectItem>
+              <SelectItem value="paralisada">Paralisadas</SelectItem>
+              <SelectItem value="todas">Todas</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={String(selectedObraId || "")} onValueChange={(v) => setObraId(Number(v))}>
             <SelectTrigger className="w-56"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
             <SelectContent>
-              {(obras.data as any[])?.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+              {obrasFiltradas.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
             </SelectContent>
           </Select>
           <Button onClick={() => criarRDO.mutate({ companyId, obraId: selectedObraId, data: hoje, responsavelNome: user?.nome || user?.email })} disabled={criarRDO.isPending || !selectedObraId}>

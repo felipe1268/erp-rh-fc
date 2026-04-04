@@ -23,9 +23,13 @@ export default function Concretagem() {
   const [location] = useLocation();
   const params = new URLSearchParams(location.split("?")[1] || "");
   const obraIdParam = Number(params.get("obra")) || 0;
-  const obras = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  const [filtroStatusObra, setFiltroStatusObra] = useState<string>("em_andamento");
+  const todasObras = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
+  const obrasFiltradas = (todasObras.data as any[])?.filter((o: any) =>
+    filtroStatusObra === "todas" ? true : o.status === filtroStatusObra
+  ) || [];
   const [obraId, setObraId] = useState<number>(obraIdParam);
-  const selectedObraId = obraId || obraIdParam || (obras.data as any)?.[0]?.id || 0;
+  const selectedObraId = obraId || obraIdParam || obrasFiltradas[0]?.id || 0;
 
   const mapa = trpc.operacional.listarConcretagem.useQuery(
     { companyId, obraId: selectedObraId },
@@ -185,11 +189,20 @@ export default function Concretagem() {
           <h1 className="text-2xl font-bold">Mapa de Concretagem</h1>
           <p className="text-sm text-gray-500">Controle de lançamentos de concreto</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2 flex-wrap">
+          <Select value={filtroStatusObra} onValueChange={(v) => { setFiltroStatusObra(v); setObraId(0); }}>
+            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="em_andamento">Em andamento</SelectItem>
+              <SelectItem value="concluida">Concluídas</SelectItem>
+              <SelectItem value="paralisada">Paralisadas</SelectItem>
+              <SelectItem value="todas">Todas</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={String(selectedObraId || "")} onValueChange={(v) => setObraId(Number(v))}>
             <SelectTrigger className="w-56"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
             <SelectContent>
-              {(obras.data as any[])?.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+              {obrasFiltradas.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
             </SelectContent>
           </Select>
           <Button onClick={() => { setNovoElemento({ pavimento: "", elemento: "", tipoElemento: "", fck: 25, volumePrevisto: 0, dataPrevista: "" }); setDialogNovoElemento(true); }} disabled={!selectedObraId}>
