@@ -23,42 +23,52 @@ async function buscarFotoParaFicha(fichaId: number, companyId: number): Promise<
   const googleKey = process.env.GOOGLE_API_KEY;
   if (!googleKey) return null;
 
-  const prompt = `Busque uma imagem real de produto de construção civil: "${ficha.descricao}".
-Retorne APENAS a URL direta de uma imagem do produto (JPG ou PNG) que seja de um catálogo de fabricante ou loja online confiável.
-Responda apenas a URL, nada mais.`;
+  const prompt = `Gere uma foto realista de catálogo de produto de construção civil, fundo branco limpo, estilo e-commerce profissional.
+Produto: "${ficha.descricao}"
+A imagem deve mostrar APENAS o produto, sem texto, sem pessoas, sem cenário. Foto tipo catálogo de loja de material de construção.`;
 
   try {
     const res = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${googleKey}`,
       {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${googleKey}`,
-        },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          model: "gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "Você busca imagens reais de produtos de construção civil. Retorne apenas a URL direta da imagem." },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 500,
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseModalities: ["IMAGE", "TEXT"],
+            maxOutputTokens: 8192,
+          },
         }),
       }
     );
 
-    if (!res.ok) return null;
-    const data = await res.json();
-    const url = data.choices?.[0]?.message?.content?.trim() || "";
-
-    if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
-      await db.update(databookFichas).set({
-        fotoUrl: url,
-        updatedAt: new Date().toISOString(),
-      } as any).where(eq(databookFichas.id, fichaId));
-      return url;
+    if (!res.ok) {
+      console.log(`[FotoIA] Gemini image gen failed (${res.status}) for ficha ${fichaId}`);
+      return null;
     }
-  } catch {}
+
+    const data = await res.json();
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    for (const part of parts) {
+      if (part.inlineData?.mimeType?.startsWith("image/")) {
+        const base64 = part.inlineData.data;
+        const mime = part.inlineData.mimeType;
+        const dataUrl = `data:${mime};base64,${base64}`;
+
+        await db.update(databookFichas).set({
+          fotoUrl: dataUrl,
+          updatedAt: new Date().toISOString(),
+        } as any).where(eq(databookFichas.id, fichaId));
+
+        console.log(`[FotoIA] Imagem gerada para ficha ${fichaId} (${(base64.length / 1024).toFixed(0)}KB)`);
+        return dataUrl;
+      }
+    }
+    console.log(`[FotoIA] Nenhuma imagem na resposta para ficha ${fichaId}`);
+  } catch (e: any) {
+    console.log(`[FotoIA] Erro para ficha ${fichaId}:`, e.message);
+  }
   return null;
 }
 
