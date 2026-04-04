@@ -667,30 +667,6 @@ export default function Databook() {
                 Gerar Databook Completo
               </Button>
               <Button
-                onClick={() => gerarFichasOC.mutate({ companyId, obraId, userName })}
-                disabled={gerarFichasOC.isPending || !!loteProgress?.running}
-                variant="outline"
-              >
-                {gerarFichasOC.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Package className="w-4 h-4 mr-1" />}
-                Importar Materiais de OCs
-              </Button>
-              <Button
-                onClick={() => gerarEspecsLote.mutate({ companyId, obraId })}
-                disabled={gerarEspecsLote.isPending || !!loteProgress?.running}
-                variant="outline"
-              >
-                {gerarEspecsLote.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Wand2 className="w-4 h-4 mr-1" />}
-                Gerar Especificações IA (Lote)
-              </Button>
-              <Button
-                onClick={handleBuscarFotoLote}
-                disabled={!!loteProgress?.running}
-                variant="outline"
-              >
-                {loteProgress?.running ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Image className="w-4 h-4 mr-1" />}
-                Gerar Fotos IA (Lote)
-              </Button>
-              <Button
                 onClick={() => gerarPdfIndice.mutate({ companyId, obraId })}
                 disabled={gerarPdfIndice.isPending}
                 variant="outline"
