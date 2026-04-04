@@ -7,18 +7,29 @@ import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import {
   Truck, Wrench, Fuel, AlertTriangle, DollarSign, TrendingDown, Gauge,
-  BarChart3, Shield, Receipt, FileText, RefreshCw,
+  BarChart3, Shield, Receipt, FileText, RefreshCw, AlertCircle, Info,
+  CheckCircle2, Calendar, MapPin,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function fmtDate(d: string) {
+  if (!d) return "—";
+  const parts = d.split("-");
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return d;
+}
+
+type AlertFilter = "todos" | "critico" | "alerta" | "info";
+
 export default function PainelFrotas() {
   const { selectedCompanyId } = useCompany();
   const cId = parseInt(selectedCompanyId || "0");
   const [, navigate] = useLocation();
+  const [alertFilter, setAlertFilter] = useState<AlertFilter>("todos");
 
   const initMut = trpc.frotas.initTables.useMutation();
   const dash = trpc.frotas.getDashboard.useQuery(
@@ -31,6 +42,26 @@ export default function PainelFrotas() {
   }, [cId]);
 
   const d = dash.data;
+
+  const filteredAlertas = d?.alertas?.filter((a: any) =>
+    alertFilter === "todos" ? true : a.urgencia === alertFilter
+  ) || [];
+
+  const alertasByTipo: Record<string, any[]> = {};
+  for (const a of filteredAlertas) {
+    if (!alertasByTipo[a.tipo]) alertasByTipo[a.tipo] = [];
+    alertasByTipo[a.tipo].push(a);
+  }
+
+  const tipoLabels: Record<string, { label: string; icon: any; color: string }> = {
+    crlv: { label: "CRLV", icon: FileText, color: "text-blue-600" },
+    seguro: { label: "Seguro (veículo)", icon: Shield, color: "text-emerald-600" },
+    seguro_apolice: { label: "Apólice de Seguro", icon: Shield, color: "text-emerald-600" },
+    manutencao: { label: "Manutenção", icon: Wrench, color: "text-orange-600" },
+    multa: { label: "Multas", icon: AlertTriangle, color: "text-red-600" },
+    ipva: { label: "IPVA", icon: Receipt, color: "text-purple-600" },
+    licenciamento: { label: "Licenciamento", icon: Calendar, color: "text-indigo-600" },
+  };
 
   return (
     <DashboardLayout>
@@ -74,8 +105,91 @@ export default function PainelFrotas() {
               <KpiCard icon={AlertTriangle} label="Multas Pendentes" value={d.multasPendentes} onClick={() => navigate("/frotas/multas")} color="text-red-600" bg="bg-red-50" sub={d.totalMultas > 0 ? `Total: ${fmt(d.totalMultas)}` : undefined} />
               <KpiCard icon={Receipt} label="IPVA Pendente" value={fmt(d.totalIpvaPendente)} onClick={() => navigate("/frotas/ipva")} color="text-purple-600" bg="bg-purple-50" />
               <KpiCard icon={Shield} label="Seguros" value="Ver" onClick={() => navigate("/frotas/seguros")} color="text-emerald-600" bg="bg-emerald-50" />
-              <KpiCard icon={FileText} label="Licenciamento" value="Ver" onClick={() => navigate("/frotas/licenciamento")} color="text-indigo-600" bg="bg-indigo-50" />
+              <KpiCard icon={MapPin} label="Rastreamento" value="Ver" onClick={() => navigate("/frotas/rastreamento")} color="text-indigo-600" bg="bg-indigo-50" />
             </div>
+
+            {d.alertas.length > 0 && (
+              <Card className="border-l-4 border-l-red-500">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                      Central de Alertas
+                      <Badge variant="outline" className="ml-2">
+                        {d.alertas.length} {d.alertas.length === 1 ? "alerta" : "alertas"}
+                      </Badge>
+                    </CardTitle>
+                    <div className="flex gap-1.5">
+                      <FilterBtn active={alertFilter === "todos"} onClick={() => setAlertFilter("todos")} label="Todos" count={d.alertas.length} />
+                      {d.alertasCriticos > 0 && (
+                        <FilterBtn active={alertFilter === "critico"} onClick={() => setAlertFilter("critico")} label="Vencidos" count={d.alertasCriticos} color="bg-red-100 text-red-700 border-red-200" />
+                      )}
+                      {d.alertasAlerta > 0 && (
+                        <FilterBtn active={alertFilter === "alerta"} onClick={() => setAlertFilter("alerta")} label="Próximos" count={d.alertasAlerta} color="bg-amber-100 text-amber-700 border-amber-200" />
+                      )}
+                      {d.alertasInfo > 0 && (
+                        <FilterBtn active={alertFilter === "info"} onClick={() => setAlertFilter("info")} label="Pendentes" count={d.alertasInfo} color="bg-blue-100 text-blue-700 border-blue-200" />
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {d.alertasCriticos > 0 && alertFilter === "todos" && (
+                    <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-lg">
+                      <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                      <span className="text-sm text-red-700 font-medium">
+                        {d.alertasCriticos} {d.alertasCriticos === 1 ? "item vencido" : "itens vencidos"} — ação imediata necessária!
+                      </span>
+                    </div>
+                  )}
+                  <div className="space-y-4 max-h-[500px] overflow-y-auto">
+                    {Object.entries(alertasByTipo)
+                      .sort(([, a], [, b]) => {
+                        const criticos = (arr: any[]) => arr.filter(x => x.urgencia === "critico").length;
+                        return criticos(b) - criticos(a);
+                      })
+                      .map(([tipo, items]) => {
+                        const info = tipoLabels[tipo] || { label: tipo, icon: AlertTriangle, color: "text-gray-600" };
+                        const Icon = info.icon;
+                        return (
+                          <div key={tipo} className="space-y-1.5">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Icon className={`h-3.5 w-3.5 ${info.color}`} />
+                              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{info.label}</span>
+                              <Badge variant="outline" className="text-[10px] h-4">{items.length}</Badge>
+                            </div>
+                            {items.map((a: any, i: number) => (
+                              <div
+                                key={i}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${
+                                  a.urgencia === "critico" ? "bg-red-50 border border-red-200" :
+                                  a.urgencia === "alerta" ? "bg-amber-50 border border-amber-200" :
+                                  "bg-blue-50 border border-blue-100"
+                                }`}
+                              >
+                                {a.urgencia === "critico" ? <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" /> :
+                                 a.urgencia === "alerta" ? <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" /> :
+                                 <Info className="h-3.5 w-3.5 text-blue-500 shrink-0" />}
+                                <Badge
+                                  className={`text-[9px] shrink-0 ${
+                                    a.urgencia === "critico" ? "bg-red-600 text-white" :
+                                    a.urgencia === "alerta" ? "bg-amber-500 text-white" :
+                                    "bg-blue-500 text-white"
+                                  }`}
+                                >
+                                  {a.urgencia === "critico" ? "VENCIDO" : a.urgencia === "alerta" ? "EM BREVE" : "PENDENTE"}
+                                </Badge>
+                                {a.placa && <span className="font-bold text-slate-700">{a.placa}</span>}
+                                <span className="text-slate-600 flex-1">{a.msg}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <Card>
@@ -178,30 +292,21 @@ export default function PainelFrotas() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-red-500" /> Alertas ({d.alertas.length})
+                    <CheckCircle2 className="h-4 w-4 text-green-600" /> Resumo de Obrigações
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  {d.alertas.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhum alerta</p>
-                  ) : (
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                      {d.alertas.map((a: any, i: number) => (
-                        <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-muted/50">
-                          <Badge
-                            variant={a.urgencia === "critico" ? "destructive" : "outline"}
-                            className="text-[10px] shrink-0 mt-0.5"
-                          >
-                            {a.tipo}
-                          </Badge>
-                          <div className="text-xs">
-                            {a.placa && <span className="font-semibold">{a.placa} — </span>}
-                            {a.msg}
-                          </div>
-                        </div>
-                      ))}
+                <CardContent className="space-y-3">
+                  <ObrigacaoRow label="Multas pendentes" value={d.multasPendentes} total={fmt(d.totalMultas)} onClick={() => navigate("/frotas/multas")} />
+                  <ObrigacaoRow label="IPVA pendente" value={null} total={fmt(d.totalIpvaPendente)} onClick={() => navigate("/frotas/ipva")} />
+                  <ObrigacaoRow label="Em manutenção" value={d.veiculosEmManutencao} onClick={() => navigate("/frotas/manutencoes")} />
+                  <div className="border-t pt-2 flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Alertas ativos</span>
+                    <div className="flex gap-1.5">
+                      {d.alertasCriticos > 0 && <Badge className="bg-red-600 text-white text-[10px]">{d.alertasCriticos} vencidos</Badge>}
+                      {d.alertasAlerta > 0 && <Badge className="bg-amber-500 text-white text-[10px]">{d.alertasAlerta} próximos</Badge>}
+                      {d.alertasInfo > 0 && <Badge className="bg-blue-500 text-white text-[10px]">{d.alertasInfo} pendentes</Badge>}
                     </div>
-                  )}
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -292,5 +397,35 @@ function KpiCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function FilterBtn({ active, onClick, label, count, color }: { active: boolean; onClick: () => void; label: string; count: number; color?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+        active
+          ? color || "bg-slate-800 text-white border-slate-800"
+          : "bg-white text-muted-foreground border-border hover:border-slate-400"
+      }`}
+    >
+      {label}
+      <span className={`inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-bold ${
+        active ? "bg-white/20 text-inherit" : "bg-muted text-muted-foreground"
+      }`}>{count}</span>
+    </button>
+  );
+}
+
+function ObrigacaoRow({ label, value, total, onClick }: { label: string; value?: number | null; total?: string; onClick?: () => void }) {
+  return (
+    <div className="flex justify-between items-center cursor-pointer hover:bg-muted/50 -mx-2 px-2 py-1 rounded" onClick={onClick}>
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <div className="flex items-center gap-2">
+        {value != null && <span className="font-semibold">{value}</span>}
+        {total && <span className="text-xs text-muted-foreground">({total})</span>}
+      </div>
+    </div>
   );
 }

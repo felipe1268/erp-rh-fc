@@ -164,6 +164,17 @@ const ALL_ROUTES = [
   { section: "Proj./Doc. Técnicos", color: "sky", routes: [
     { path: "/gestao-documentos", label: "Documentos", icon: "FolderOpen" },
   ]},
+  { section: "Frotas", color: "cyan", routes: [
+    { path: "/frotas/painel", label: "Dashboard Frotas", icon: "LayoutDashboard" },
+    { path: "/frotas/veiculos", label: "Veículos", icon: "Truck" },
+    { path: "/frotas/manutencoes", label: "Manutenções", icon: "Wrench" },
+    { path: "/frotas/combustivel", label: "Combustível", icon: "Fuel" },
+    { path: "/frotas/multas", label: "Multas", icon: "AlertTriangle" },
+    { path: "/frotas/ipva", label: "IPVA", icon: "Receipt" },
+    { path: "/frotas/licenciamento", label: "Licenciamento", icon: "FileText" },
+    { path: "/frotas/seguros", label: "Seguros", icon: "Shield" },
+    { path: "/frotas/rastreamento", label: "Rastreamento", icon: "MapPin" },
+  ]},
   { section: "Geral", color: "slate", routes: [
     { path: "/ajuda", label: "Biblioteca de Conhecimento", icon: "BookOpen" },
     { path: "/revisoes", label: "Revisões do Sistema", icon: "FileText" },

@@ -269,6 +269,19 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "documentos",  label: "Documentos Técnicos",  actions: ["view","create","edit","delete"] },
     ],
   },
+  "frotas": {
+    pages: [
+      { id: "painel",         label: "Dashboard Frotas",   actions: ["view"] },
+      { id: "veiculos",       label: "Veículos",           actions: ["view","create","edit","delete"] },
+      { id: "manutencoes",    label: "Manutenções",        actions: ["view","create","edit","delete"] },
+      { id: "combustivel",    label: "Combustível",        actions: ["view","create","edit","delete"] },
+      { id: "multas",         label: "Multas",             actions: ["view","create","edit","delete"] },
+      { id: "ipva",           label: "IPVA",               actions: ["view","create","edit","delete"] },
+      { id: "licenciamento",  label: "Licenciamento",      actions: ["view","create","edit","delete"] },
+      { id: "seguros",        label: "Seguros",            actions: ["view","create","edit","delete"] },
+      { id: "rastreamento",   label: "Rastreamento",       actions: ["view"] },
+    ],
+  },
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -423,6 +436,17 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
   },
   "gestao-documentos": {
     "/gestao-documentos":  "documentos",
+  },
+  "frotas": {
+    "/frotas/painel":        "painel",
+    "/frotas/veiculos":      "veiculos",
+    "/frotas/manutencoes":   "manutencoes",
+    "/frotas/combustivel":   "combustivel",
+    "/frotas/multas":        "multas",
+    "/frotas/ipva":          "ipva",
+    "/frotas/licenciamento": "licenciamento",
+    "/frotas/seguros":       "seguros",
+    "/frotas/rastreamento":  "rastreamento",
   },
   "medicao": {},
 };

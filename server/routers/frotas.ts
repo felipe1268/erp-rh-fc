@@ -1024,6 +1024,25 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         }
       }
 
+      const anoAtual = now.getFullYear();
+      for (const v of allVehicles) {
+        const temIpva = allIpva.some((i: any) => i.vehicle_id === v.id && String(i.ano_referencia) === String(anoAtual));
+        if (!temIpva) {
+          alertas.push({ tipo: "ipva", msg: `IPVA ${anoAtual} não cadastrado`, veiculoId: v.id, placa: v.placa, urgencia: "info" });
+        }
+        const temLic = allLic.some((l: any) => l.vehicle_id === v.id && String(l.ano_exercicio) === String(anoAtual));
+        if (!temLic) {
+          alertas.push({ tipo: "licenciamento", msg: `Licenciamento ${anoAtual} não cadastrado`, veiculoId: v.id, placa: v.placa, urgencia: "info" });
+        }
+        if (!v.crlv_vencimento) {
+          alertas.push({ tipo: "crlv", msg: `Vencimento do CRLV não informado`, veiculoId: v.id, placa: v.placa, urgencia: "info" });
+        }
+      }
+
+      const alertasCriticos = alertas.filter(a => a.urgencia === "critico").length;
+      const alertasAlerta = alertas.filter(a => a.urgencia === "alerta").length;
+      const alertasInfo = alertas.filter(a => a.urgencia === "info").length;
+
       const consumoMedio = allFuel.length > 0
         ? allFuel.reduce((s: number, f: any) => s + n(f.consumo_km_l), 0) / allFuel.filter((f: any) => n(f.consumo_km_l) > 0).length || 0
         : 0;
@@ -1037,7 +1056,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         totalIpvaPendente, consumoMedio, custoKm, totalKm,
         tipoCount, marcaCount,
         fuelByMonth, maintByMonth,
-        alertas,
+        alertas, alertasCriticos, alertasAlerta, alertasInfo,
         veiculosEmManutencao: allMaint.filter((m: any) => m.status === "em_andamento").length,
       };
     }),
