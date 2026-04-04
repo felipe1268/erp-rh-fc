@@ -142,7 +142,10 @@ export default function Databook() {
 
   const gerarFichasOC = trpc.databook.gerarFichasOC.useMutation({
     onSuccess: (data) => {
-      toast.success(`${data.criadas} fichas criadas, ${data.duplicadas} duplicadas ignoradas`);
+      const parts = [`${data.criadas} fichas criadas`];
+      if (data.duplicadas > 0) parts.push(`${data.duplicadas} agrupadas`);
+      if ((data as any).ignorados > 0) parts.push(`${(data as any).ignorados} serviços ignorados`);
+      toast.success(parts.join(", "));
       fichas.refetch();
       dashboard.refetch();
     },

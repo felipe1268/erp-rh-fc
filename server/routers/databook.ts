@@ -71,8 +71,27 @@ async function buscarFotosEmBackground(fichaIds: number[], companyId: number) {
   }
 }
 
+function stripEapPrefix(desc: string): string {
+  return desc.replace(/^\[\d+[\d.]*\]\s*/, "").trim();
+}
+
 function hashDescricao(desc: string): string {
-  return createHash("md5").update(desc.toLowerCase().trim().replace(/\s+/g, " ")).digest("hex");
+  const clean = stripEapPrefix(desc).toLowerCase().trim().replace(/\s+/g, " ");
+  return createHash("md5").update(clean).digest("hex");
+}
+
+const SERVICO_KEYWORDS = [
+  "ajudante", "pedreiro", "gesseiro", "eletricista", "encanador", "pintor",
+  "carpinteiro", "servente", "mestre de obra", "encarregado", "almoxarife",
+  "vigia", "operador", "montador", "serralheiro", "soldador", "bombeiro",
+  "técnico", "supervisor", "coordenador", "engenheiro", "arquiteto",
+  "mão de obra", "mao de obra", "m.o.", "mo ", "diária", "diaria",
+  "hora técnica", "hora tecnica", "h/h", "homem hora", "homem-hora",
+];
+
+function isServico(descricao: string): boolean {
+  const lower = descricao.toLowerCase().trim();
+  return SERVICO_KEYWORDS.some(kw => lower === kw || lower.startsWith(kw + " ") || lower.includes(" " + kw + " ") || lower.endsWith(" " + kw));
 }
 
 export const databookRouter = router({
@@ -234,7 +253,13 @@ export const databookRouter = router({
       let duplicadas = 0;
       const dedup = new Map<string, any>();
 
+      let ignorados = 0;
       for (const item of itens) {
+        const descLimpa = stripEapPrefix(item.descricao);
+        if (isServico(descLimpa)) {
+          ignorados++;
+          continue;
+        }
         const hash = hashDescricao(item.descricao);
         if (existingHashes.has(hash)) {
           duplicadas++;
@@ -246,6 +271,12 @@ export const databookRouter = router({
           if (!fornConsolidados.find((f: any) => f.id === item.fornecedor_id)) {
             fornConsolidados.push({ id: item.fornecedor_id, nome: item.fornecedor_nome, oc: item.numero_oc });
             existing.fornecedores_consolidados = JSON.stringify(fornConsolidados);
+          }
+          const eapList = existing.eap_codigos_list || [];
+          if (item.eap_codigo && !eapList.includes(item.eap_codigo)) {
+            eapList.push(item.eap_codigo);
+            existing.eap_codigos_list = eapList;
+            existing.eap_codigo = eapList.join(", ");
           }
           duplicadas++;
           continue;
@@ -260,9 +291,10 @@ export const databookRouter = router({
           fornecedor_id: item.fornecedor_id,
           fornecedor_nome: item.fornecedor_nome,
           contrato_numero: item.numero_oc,
-          descricao: item.descricao,
+          descricao: descLimpa,
           disciplina: "Outros",
           eap_codigo: item.eap_codigo || null,
+          eap_codigos_list: item.eap_codigo ? [item.eap_codigo] : [],
           insumo_codigo: item.insumo_codigo || null,
           hash_produto: hash,
           fornecedores_consolidados: JSON.stringify([{ id: item.fornecedor_id, nome: item.fornecedor_nome, oc: item.numero_oc }]),
@@ -286,7 +318,7 @@ export const databookRouter = router({
         criadas++;
       }
 
-      return { criadas, duplicadas };
+      return { criadas, duplicadas, ignorados };
     }),
 
   gerarEspecificacoesIA: protectedProcedure
