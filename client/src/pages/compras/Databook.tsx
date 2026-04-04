@@ -1054,14 +1054,14 @@ export default function Databook() {
 
         {/* PDF Preview Dialog */}
         <Dialog open={!!pdfPreview} onOpenChange={(open) => { if (!open) { if (pdfPreview) URL.revokeObjectURL(pdfPreview); setPdfPreview(null); } }}>
-          <DialogContent className="max-w-[95vw] w-full h-[95vh] max-h-[95vh] p-0">
-            <DialogHeader className="px-4 pt-4 pb-2">
+          <DialogContent className="!max-w-[98vw] !w-[98vw] !h-[96vh] !max-h-[96vh] p-0 flex flex-col">
+            <DialogHeader className="px-4 pt-4 pb-2 shrink-0">
               <DialogTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-blue-600" />
                 Visualização da Ficha Databook
               </DialogTitle>
             </DialogHeader>
-            <div className="flex-1 px-4 pb-4 h-[calc(95vh-80px)]">
+            <div className="flex-1 px-4 pb-4 min-h-0">
               {pdfPreview && (
                 <iframe src={pdfPreview} className="w-full h-full rounded-lg border" />
               )}
