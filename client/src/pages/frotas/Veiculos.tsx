@@ -10,11 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Car, Plus, Search, Pencil, Trash2, DollarSign } from "lucide-react";
+import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-const TIPOS = ["Caminhonete", "Caminhão", "Carro", "Van", "Moto", "Ônibus", "Máquina", "Outros"];
+const TIPOS = ["Carro", "SUV", "Caminhonete", "Caminhão", "Utilitário", "Van", "Moto", "Ônibus", "Máquina", "Outros"];
 const STATUS = ["Ativo", "Em Manutenção", "Inativo", "Vendido"];
 
 function fmt(v: any) {
@@ -148,46 +148,52 @@ export default function Veiculos() {
         ) : list.length === 0 ? (
           <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhum veículo encontrado</CardContent></Card>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left p-3">Placa</th>
-                  <th className="text-left p-3">Tipo</th>
-                  <th className="text-left p-3">Marca / Modelo</th>
-                  <th className="text-left p-3">Ano</th>
-                  <th className="text-left p-3">KM</th>
-                  <th className="text-left p-3">Valor Compra</th>
-                  <th className="text-left p-3">Valor FIPE</th>
-                  <th className="text-left p-3">Status</th>
-                  <th className="text-left p-3">Responsável</th>
-                  <th className="text-right p-3">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((v: any) => (
-                  <tr key={v.id} className="border-t hover:bg-muted/30">
-                    <td className="p-3 font-mono font-semibold">{v.placa || "—"}</td>
-                    <td className="p-3">{v.tipoVeiculo}</td>
-                    <td className="p-3">{[v.marca, v.modelo].filter(Boolean).join(" ")}</td>
-                    <td className="p-3">{v.anoFabricacao || "—"}</td>
-                    <td className="p-3">{v.km_atual ? parseFloat(v.km_atual).toLocaleString("pt-BR") : "—"}</td>
-                    <td className="p-3">{v.valor_compra ? fmt(v.valor_compra) : "—"}</td>
-                    <td className="p-3 text-green-600 font-medium">{v.valor_fipe ? fmt(v.valor_fipe) : "—"}</td>
-                    <td className="p-3">
-                      <Badge variant={v.statusVeiculo === "Ativo" ? "default" : "secondary"}>{v.statusVeiculo}</Badge>
-                    </td>
-                    <td className="p-3 text-muted-foreground">{v.responsavel || v.motorista_nome || "—"}</td>
-                    <td className="p-3 text-right">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(v)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => { if (confirm("Inativar este veículo?")) deleteMut.mutate({ id: v.id, companyId: cId }); }}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {list.map((v: any) => (
+              <Card key={v.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                <div className="flex">
+                  <div className="w-32 h-32 flex-shrink-0 bg-muted flex items-center justify-center overflow-hidden">
+                    {v.foto_url ? (
+                      <img src={v.foto_url} alt={v.modelo} className="w-full h-full object-cover" />
+                    ) : (
+                      <Car className="h-10 w-10 text-muted-foreground/40" />
+                    )}
+                  </div>
+                  <div className="flex-1 p-3 min-w-0">
+                    <div className="flex items-start justify-between gap-1">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{v.modelo}</p>
+                        <p className="text-xs text-muted-foreground">{v.marca} | {v.anoFabricacao}/{v.anoModelo || "—"} | {v.cor || "—"}</p>
+                      </div>
+                      <Badge variant={v.statusVeiculo === "Ativo" ? "default" : "secondary"} className="text-[10px] shrink-0">{v.statusVeiculo}</Badge>
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className="font-mono text-sm font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{v.placa || "S/P"}</span>
+                      <span className="text-xs text-muted-foreground">{v.tipoVeiculo}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground truncate">
+                      {v.responsavel || v.motorista_nome || "Sem responsável"}
+                    </div>
+                    <div className="mt-2 flex items-center gap-1 flex-wrap">
+                      {v.crlv_url && (
+                        <a href={v.crlv_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-100">
+                          <FileDown className="h-3 w-3" /> CRLV
+                        </a>
+                      )}
+                      {v.seguro_url && (
+                        <a href={v.seguro_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] bg-green-50 text-green-700 border border-green-200 rounded px-1.5 py-0.5 hover:bg-green-100">
+                          <FileDown className="h-3 w-3" /> Seguro
+                        </a>
+                      )}
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(v)}><Pencil className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { if (confirm("Inativar este veículo?")) deleteMut.mutate({ id: v.id, companyId: cId }); }}>
+                        <Trash2 className="h-3 w-3 text-red-500" />
                       </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
           </div>
         )}
 

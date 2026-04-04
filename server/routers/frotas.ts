@@ -272,7 +272,9 @@ export const frotasRouter = router({
       depreciacaoAnos: z.number().optional(),
       valorResidual: z.string().optional(),
       fotoUrl: z.string().optional(),
+      crlvUrl: z.string().optional(),
       crlvVencimento: z.string().optional(),
+      seguroUrl: z.string().optional(),
       seguroVencimento: z.string().optional(),
       observacoes: z.string().optional(),
     }))
@@ -305,7 +307,9 @@ export const frotasRouter = router({
         depreciacaoAnos: input.depreciacaoAnos || 5,
         valorResidual: input.valorResidual || "0",
         fotoUrl: input.fotoUrl || null,
+        crlvUrl: input.crlvUrl || null,
         crlvVencimento: input.crlvVencimento || null,
+        seguroUrl: input.seguroUrl || null,
         seguroVencimento: input.seguroVencimento || null,
         observacoes: input.observacoes || null,
       } as any).returning();
@@ -340,7 +344,9 @@ export const frotasRouter = router({
       depreciacaoAnos: z.number().optional(),
       valorResidual: z.string().nullable().optional(),
       fotoUrl: z.string().nullable().optional(),
+      crlvUrl: z.string().nullable().optional(),
       crlvVencimento: z.string().nullable().optional(),
+      seguroUrl: z.string().nullable().optional(),
       seguroVencimento: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),
     }))

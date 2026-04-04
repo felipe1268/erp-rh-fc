@@ -1,3 +1,62 @@
 uploads = []
 generated = []
-outputs = []
+
+[[outputs]]
+id = "ymo9vkKPGT97dlvOhT6J2"
+uri = "file://attached_assets/stock_images/vw_gol_16v.jpg"
+type = "image"
+title = "Volkswagen Gol 16V 2000 white car Brazil"
+
+[[outputs]]
+id = "LqPzQBgqoHjkRMN-9ES10"
+uri = "file://attached_assets/stock_images/honda_fit_lxl.jpg"
+type = "image"
+title = "Honda Fit LXL 2007 white car sedan"
+
+[[outputs]]
+id = "KzFYh-n0T_biZXGBboGQm"
+uri = "file://attached_assets/stock_images/vw_kombi.jpg"
+type = "image"
+title = "Volkswagen Kombi van 2009 white Brazil"
+
+[[outputs]]
+id = "VdNcUsxiNEXt0uDTfVEWx"
+uri = "file://attached_assets/stock_images/hyundai_hr.jpg"
+type = "image"
+title = "Hyundai HR HDB truck 2011 white cargo"
+
+[[outputs]]
+id = "gFZwPal0_gQX6U-rfQya0"
+uri = "file://attached_assets/stock_images/vw_gol_mpi.jpg"
+type = "image"
+title = "Volkswagen Gol MPI 2023 white car hatchback"
+
+[[outputs]]
+id = "bFjlKYkR7cseWpzQbyJvM"
+uri = "file://attached_assets/stock_images/vw_novo_gol.jpg"
+type = "image"
+title = "Volkswagen Novo Gol 2017 white car Brazil"
+
+[[outputs]]
+id = "dvh8yh7lbXQHEkN1B9nI0"
+uri = "file://attached_assets/stock_images/yamaha_ybr150.jpg"
+type = "image"
+title = "Yamaha YBR 150 Factor motorcycle 2023 black"
+
+[[outputs]]
+id = "csMyup-hzZjvTHwVuyYP1"
+uri = "file://attached_assets/stock_images/toyota_corolla_gli.jpg"
+type = "image"
+title = "Toyota Corolla GLi 2017 silver sedan"
+
+[[outputs]]
+id = "RckOS4HAD-xpMXl4c-uuU"
+uri = "file://attached_assets/stock_images/fiat_doblo_adv.jpg"
+type = "image"
+title = "Fiat Doblo Adventure 2016 white van"
+
+[[outputs]]
+id = "37ML3Qwa25r1FI0NB3fn8"
+uri = "file://attached_assets/stock_images/byd_song_plus.jpg"
+type = "image"
+title = "BYD Song Plus DM-i 2024 grey SUV hybrid"
