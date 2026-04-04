@@ -239,8 +239,8 @@ export default function Databook() {
       fases[0].resultado = e.message || "Erro";
     }
 
-    await fichas.refetch();
-    const allFichas = fichas.data || [];
+    const refetchResult = await fichas.refetch();
+    const allFichas = refetchResult.data || fichas.data || [];
 
     const fichasSemEspec = allFichas.filter((f: any) => !f.especificacoes || f.especificacoes.trim() === "");
     fases[1].status = "rodando";
@@ -283,8 +283,8 @@ export default function Databook() {
     }
     fases[1].status = "concluido";
 
-    await fichas.refetch();
-    const allFichas2 = fichas.data || [];
+    const refetchResult2 = await fichas.refetch();
+    const allFichas2 = refetchResult2.data || fichas.data || [];
 
     const fichasSemFoto = allFichas2.filter((f: any) => !f.foto_url);
     fases[2].status = "rodando";

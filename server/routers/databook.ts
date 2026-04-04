@@ -65,6 +65,10 @@ async function buscarFotoParaFicha(fichaId: number, companyId: number): Promise<
   );
   if (!ficha) return null;
 
+  if (ficha.fotoUrl && (ficha.fotoUrl as string).length > 20) {
+    return ficha.fotoUrl as string;
+  }
+
   const urls = await buscarImagemDuckDuckGo(ficha.descricao + " produto construção civil");
   if (urls.length === 0) {
     console.log(`[FotoIA] Nenhuma imagem encontrada para ficha ${fichaId}`);
@@ -357,6 +361,10 @@ export const databookRouter = router({
         and(eq(databookFichas.id, input.fichaId), eq(databookFichas.companyId, input.companyId))
       );
       if (!ficha) throw new Error("Ficha não encontrada");
+
+      if (ficha.especificacoes && (ficha.especificacoes as string).trim().length > 10) {
+        return { disciplina: ficha.disciplina, especificacoes: ficha.especificacoes, jaExistia: true };
+      }
 
       const prompt = `Você é um engenheiro civil especialista em especificações técnicas de materiais de construção.
 
