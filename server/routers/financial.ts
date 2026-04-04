@@ -843,9 +843,9 @@ export const financialRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
     const res = await db.execute(
-      `SELECT id, company_id AS "companyId", banco, agencia, conta, tipo, descricao,
-              saldo_atual AS "saldoAtual", ativo
-       FROM company_bank_accounts WHERE company_id=ANY($1::int[]) ORDER BY banco ASC`,
+      `SELECT id, "companyId", banco, "codigoBanco", agencia, conta,
+              "tipoConta" AS tipo, apelido AS descricao, ativo
+       FROM company_bank_accounts WHERE "companyId"=ANY($1::int[]) ORDER BY banco ASC`,
       [ids]
     );
     return rows(res);
@@ -1088,6 +1088,387 @@ export const financialRouter = router({
   }),
 
   // ─────────────────── A RECEBER / A PAGAR RESUMO ───────────────────
+
+  getDashboardExecutivo: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    mesCompetencia: z.string().optional(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    const mes = input.mesCompetencia ?? new Date().toISOString().slice(0, 7);
+    const today = new Date().toISOString().split("T")[0];
+    const [year, month] = mes.split("-").map(Number);
+    const mesAnterior = month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, "0")}`;
+
+    const [
+      receitaMesRes, despesaMesRes,
+      receitaMesAntRes, despesaMesAntRes,
+      aReceberRes, aPagarRes,
+      vencidosRecRes, vencidosPagRes,
+      bancosRes,
+      evolucaoRes,
+      topDespesasRes,
+      proxVencimentosRes,
+      receitaPorObraRes,
+    ] = await Promise.all([
+      db.execute(`SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mes]),
+      db.execute(`SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mes]),
+      db.execute(`SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mesAnterior]),
+      db.execute(`SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mesAnterior]),
+      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('a_receber','recebido_parcial')`, [ids]),
+      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status='a_pagar'`, [ids]),
+      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('a_receber','recebido_parcial') AND data_vencimento < $2`, [ids, today]),
+      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status='a_pagar' AND data_vencimento < $2`, [ids, today]),
+      db.execute(`SELECT id, banco, agencia, conta, "tipoConta" AS tipo, apelido AS descricao FROM company_bank_accounts WHERE "companyId"=ANY($1::int[]) AND ativo=1 ORDER BY banco ASC`, [ids]),
+      db.execute(`
+        SELECT TO_CHAR(data_competencia, 'YYYY-MM-DD') AS dia,
+               SUM(CASE WHEN tipo='receita' AND status IN ('recebido','pago') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS entradas,
+               SUM(CASE WHEN tipo='despesa' AND status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS saidas
+        FROM financial_entries
+        WHERE company_id=ANY($1::int[]) AND data_competencia >= (CURRENT_DATE - INTERVAL '30 days') AND status IN ('pago','recebido')
+        GROUP BY TO_CHAR(data_competencia, 'YYYY-MM-DD')
+        ORDER BY dia ASC`, [ids]),
+      db.execute(`
+        SELECT conta_nome AS "categoria", SUM(COALESCE(valor_realizado, valor_previsto)) AS total
+        FROM financial_entries
+        WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$2
+        GROUP BY conta_nome ORDER BY total DESC LIMIT 8`, [ids, mes]),
+      db.execute(`
+        SELECT id, descricao, obra_nome AS "obraNome", valor_previsto AS "valor", data_vencimento AS "vencimento", tipo,
+               CASE WHEN data_vencimento < CURRENT_DATE THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
+        FROM financial_entries
+        WHERE company_id=ANY($1::int[]) AND status IN ('a_pagar','a_receber','recebido_parcial')
+        ORDER BY data_vencimento ASC LIMIT 15`, [ids]),
+      db.execute(`
+        SELECT obra_nome AS "obraNome", obra_id AS "obraId",
+               SUM(CASE WHEN tipo='receita' AND status IN ('recebido','pago') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS receita,
+               SUM(CASE WHEN tipo='despesa' AND status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS despesa
+        FROM financial_entries
+        WHERE company_id=ANY($1::int[]) AND obra_id IS NOT NULL AND TO_CHAR(data_competencia,'YYYY-MM')=$2
+        GROUP BY obra_nome, obra_id ORDER BY receita DESC LIMIT 10`, [ids, mes]),
+    ]);
+
+    const rec = Number(rows(receitaMesRes)[0]?.total ?? 0);
+    const desp = Number(rows(despesaMesRes)[0]?.total ?? 0);
+    const recAnt = Number(rows(receitaMesAntRes)[0]?.total ?? 0);
+    const despAnt = Number(rows(despesaMesAntRes)[0]?.total ?? 0);
+    const aReceber = Number(rows(aReceberRes)[0]?.total ?? 0);
+    const aPagar = Number(rows(aPagarRes)[0]?.total ?? 0);
+    const vencRec = Number(rows(vencidosRecRes)[0]?.total ?? 0);
+    const vencPag = Number(rows(vencidosPagRes)[0]?.total ?? 0);
+
+    const openingRes = await db.execute(
+      `SELECT conta_bancaria_id, COALESCE(SUM(valor),0) AS total
+       FROM financial_opening_balances WHERE company_id=ANY($1::int[]) GROUP BY conta_bancaria_id`, [ids]
+    );
+    const openingMap: Record<number, number> = {};
+    rows(openingRes).forEach((r: any) => { openingMap[r.conta_bancaria_id] = Number(r.total ?? 0); });
+
+    const bancos = rows(bancosRes).map((b: any) => {
+      const saldoAbertura = openingMap[b.id] ?? 0;
+      return { ...b, descricao: b.descricao || b.banco, saldoAtual: saldoAbertura };
+    });
+    const saldoConsolidado = bancos.reduce((s: number, b: any) => s + b.saldoAtual, 0);
+
+    const compromissos30d = aPagar;
+    const caixaLivre = saldoConsolidado - compromissos30d;
+
+    const varReceita = recAnt > 0 ? ((rec - recAnt) / recAnt) * 100 : 0;
+    const varDespesa = despAnt > 0 ? ((desp - despAnt) / despAnt) * 100 : 0;
+
+    return {
+      kpis: {
+        receitaMes: rec, despesaMes: desp, resultadoMes: rec - desp,
+        receitaMesAnterior: recAnt, despesaMesAnterior: despAnt,
+        varReceita, varDespesa,
+        totalAReceber: aReceber, qtdAReceber: Number(rows(aReceberRes)[0]?.qtd ?? 0),
+        totalAPagar: aPagar, qtdAPagar: Number(rows(aPagarRes)[0]?.qtd ?? 0),
+        vencidosReceber: vencRec, qtdVencidosReceber: Number(rows(vencidosRecRes)[0]?.qtd ?? 0),
+        vencidosPagar: vencPag, qtdVencidosPagar: Number(rows(vencidosPagRes)[0]?.qtd ?? 0),
+        saldoConsolidado, caixaLivre,
+        margemOperacional: rec > 0 ? ((rec - desp) / rec) * 100 : 0,
+      },
+      bancos,
+      evolucaoDiaria: rows(evolucaoRes).map((r: any) => ({
+        dia: r.dia, entradas: Number(r.entradas ?? 0), saidas: Number(r.saidas ?? 0),
+      })),
+      topDespesas: rows(topDespesasRes).map((r: any) => ({ categoria: r.categoria ?? "Sem categoria", total: Number(r.total ?? 0) })),
+      proxVencimentos: rows(proxVencimentosRes).map((r: any) => ({
+        id: r.id, descricao: r.descricao, obraNome: r.obraNome, valor: Number(r.valor ?? 0),
+        vencimento: r.vencimento, tipo: r.tipo, diasAtraso: Number(r.diasAtraso ?? 0),
+      })),
+      resultadoPorObra: rows(receitaPorObraRes).map((r: any) => ({
+        obraId: r.obraId, obraNome: r.obraNome ?? "Sem obra",
+        receita: Number(r.receita ?? 0), despesa: Number(r.despesa ?? 0),
+        margem: Number(r.receita ?? 0) - Number(r.despesa ?? 0),
+      })),
+    };
+  }),
+
+  // ─────────────────── LANÇAMENTOS RECORRENTES ───────────────────
+
+  getRecurringEntries: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const res = await db.execute(
+      `SELECT id, descricao, valor, tipo, natureza, conta_nome AS "contaNome",
+              obra_nome AS "obraNome", frequencia, dia_vencimento AS "diaVencimento",
+              forma_pagamento AS "formaPagamento", fornecedor_nome AS "fornecedorNome",
+              ativo, proximo_vencimento AS "proximoVencimento",
+              ultimo_gerado AS "ultimoGerado", observacoes,
+              criado_por_nome AS "criadoPorNome", created_at AS "createdAt"
+       FROM financial_recurring_entries WHERE company_id=$1 ORDER BY ativo DESC, descricao ASC`,
+      [input.companyId]
+    );
+    return rows(res);
+  }),
+
+  createRecurringEntry: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    descricao: z.string().min(2),
+    valor: z.number().positive(),
+    tipo: z.enum(["receita", "despesa"]).default("despesa"),
+    natureza: z.string().default("fixo"),
+    contaId: z.number().optional(),
+    contaNome: z.string().optional(),
+    obraId: z.number().optional(),
+    obraNome: z.string().optional(),
+    frequencia: z.enum(["mensal", "quinzenal", "semanal", "trimestral", "anual"]).default("mensal"),
+    diaVencimento: z.number().min(1).max(31).default(5),
+    formaPagamento: z.string().optional(),
+    fornecedorNome: z.string().optional(),
+    observacoes: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(input.diaVencimento, 28));
+    const res = await db.execute(
+      `INSERT INTO financial_recurring_entries
+        (company_id, descricao, valor, tipo, natureza, conta_id, conta_nome, obra_id, obra_nome,
+         frequencia, dia_vencimento, forma_pagamento, fornecedor_nome, observacoes,
+         proximo_vencimento, criado_por_id, criado_por_nome)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
+      [input.companyId, input.descricao, input.valor, input.tipo, input.natureza,
+       input.contaId ?? null, input.contaNome ?? null, input.obraId ?? null, input.obraNome ?? null,
+       input.frequencia, input.diaVencimento, input.formaPagamento ?? null,
+       input.fornecedorNome ?? null, input.observacoes ?? null,
+       nextMonth.toISOString().split("T")[0],
+       ctx.user?.id ?? null, ctx.user?.name ?? ctx.user?.email ?? null]
+    );
+    await createAuditLog({
+      userId: ctx.user?.id,
+      action: "financial_recurring_create",
+      details: `Recorrência criada: ${input.descricao} - ${input.valor}`,
+      companyId: input.companyId,
+    });
+    return { id: rows(res)[0]?.id };
+  }),
+
+  updateRecurringEntry: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    descricao: z.string().optional(),
+    valor: z.number().optional(),
+    tipo: z.string().optional(),
+    contaNome: z.string().optional(),
+    obraNome: z.string().optional(),
+    frequencia: z.string().optional(),
+    diaVencimento: z.number().optional(),
+    formaPagamento: z.string().optional(),
+    fornecedorNome: z.string().optional(),
+    observacoes: z.string().optional(),
+    ativo: z.number().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const sets: string[] = [];
+    const vals: any[] = [];
+    let i = 1;
+    const fields: Record<string, string> = {
+      descricao: "descricao", valor: "valor", tipo: "tipo", contaNome: "conta_nome",
+      obraNome: "obra_nome", frequencia: "frequencia", diaVencimento: "dia_vencimento",
+      formaPagamento: "forma_pagamento", fornecedorNome: "fornecedor_nome",
+      observacoes: "observacoes", ativo: "ativo",
+    };
+    for (const [k, col] of Object.entries(fields)) {
+      if ((input as any)[k] !== undefined) { sets.push(`${col}=$${i++}`); vals.push((input as any)[k]); }
+    }
+    if (sets.length === 0) return { ok: true };
+    sets.push(`updated_at=NOW()`);
+    vals.push(input.id, input.companyId);
+    await db.execute(`UPDATE financial_recurring_entries SET ${sets.join(",")} WHERE id=$${i++} AND company_id=$${i}`, vals);
+    return { ok: true };
+  }),
+
+  generateRecurringEntries: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+    const recRes = await db.execute(
+      `SELECT * FROM financial_recurring_entries WHERE company_id=$1 AND ativo=1 AND (proximo_vencimento IS NULL OR proximo_vencimento <= $2)`,
+      [input.companyId, todayStr]
+    );
+    const recs = rows(recRes);
+    let count = 0;
+    for (const rec of recs) {
+      const venc = rec.proximo_vencimento ? new Date(rec.proximo_vencimento) : today;
+      const vencStr = venc.toISOString().split("T")[0];
+      const mesComp = vencStr.slice(0, 7);
+      const existing = await db.execute(
+        `SELECT id FROM financial_entries WHERE company_id=$1 AND origem_modulo='recorrente' AND origem_id=$2 AND TO_CHAR(data_vencimento,'YYYY-MM')=$3 LIMIT 1`,
+        [input.companyId, rec.id, mesComp]
+      );
+      if (rows(existing).length > 0) continue;
+      await db.execute(
+        `INSERT INTO financial_entries
+          (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
+           valor_previsto, data_competencia, data_vencimento, status,
+           origem_modulo, origem_id, origem_descricao, descricao)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'recorrente',$12,$13,$14)`,
+        [input.companyId, rec.obra_id, rec.obra_nome, rec.conta_id, rec.conta_nome,
+         rec.tipo, rec.natureza ?? "fixo", rec.valor, vencStr, vencStr,
+         rec.tipo === "receita" ? "a_receber" : "a_pagar",
+         rec.id, `Recorrência: ${rec.descricao}`, rec.descricao]
+      );
+      let nextVenc = new Date(venc);
+      if (rec.frequencia === "mensal") nextVenc.setMonth(nextVenc.getMonth() + 1);
+      else if (rec.frequencia === "quinzenal") nextVenc.setDate(nextVenc.getDate() + 15);
+      else if (rec.frequencia === "semanal") nextVenc.setDate(nextVenc.getDate() + 7);
+      else if (rec.frequencia === "trimestral") nextVenc.setMonth(nextVenc.getMonth() + 3);
+      else if (rec.frequencia === "anual") nextVenc.setFullYear(nextVenc.getFullYear() + 1);
+      await db.execute(
+        `UPDATE financial_recurring_entries SET proximo_vencimento=$1, ultimo_gerado=$2, updated_at=NOW() WHERE id=$3`,
+        [nextVenc.toISOString().split("T")[0], todayStr, rec.id]
+      );
+      count++;
+    }
+    return { generated: count };
+  }),
+
+  // ─────────────────── IMPORTAÇÃO EXTRATO OFX/CSV ───────────────────
+
+  importBankStatement: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    formato: z.enum(["ofx", "csv"]),
+    conteudo: z.string(),
+    csvSeparador: z.string().optional(),
+    csvColunaData: z.number().optional(),
+    csvColunaDescricao: z.number().optional(),
+    csvColunaValor: z.number().optional(),
+    csvColunaSaldo: z.number().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const ownerCheck = await db.execute(
+      `SELECT id FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+      [input.contaBancariaId, input.companyId]
+    );
+    if (rows(ownerCheck).length === 0) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
+    }
+
+    let lines: Array<{ data: string; descricao: string; valor: number; saldo: number | null }> = [];
+
+    if (input.formato === "ofx") {
+      const content = input.conteudo;
+      const stmtTrnMatch = content.match(/<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi);
+      if (!stmtTrnMatch || stmtTrnMatch.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma transação encontrada no arquivo OFX" });
+      }
+      for (const trn of stmtTrnMatch) {
+        const dtposted = trn.match(/<DTPOSTED>(\d{8})/)?.[1] ?? "";
+        const trnamt = trn.match(/<TRNAMT>([-\d.,]+)/)?.[1] ?? "0";
+        const memo = trn.match(/<MEMO>([^<\n]+)/)?.[1]?.trim() ?? "";
+        const name = trn.match(/<NAME>([^<\n]+)/)?.[1]?.trim() ?? "";
+        if (!dtposted) continue;
+        const y = dtposted.slice(0, 4);
+        const m = dtposted.slice(4, 6);
+        const d = dtposted.slice(6, 8);
+        const dataStr = `${y}-${m}-${d}`;
+        const valor = parseFloat(trnamt.replace(",", "."));
+        lines.push({
+          data: dataStr,
+          descricao: memo || name || "Sem descrição",
+          valor: isNaN(valor) ? 0 : valor,
+          saldo: null,
+        });
+      }
+      const balMatch = content.match(/<BALAMT>([-\d.,]+)/);
+      if (balMatch && lines.length > 0) {
+        const lastLine = lines[lines.length - 1];
+        lastLine.saldo = parseFloat(balMatch[1].replace(",", "."));
+      }
+    } else {
+      const sep = input.csvSeparador ?? ";";
+      const colData = input.csvColunaData ?? 0;
+      const colDesc = input.csvColunaDescricao ?? 1;
+      const colValor = input.csvColunaValor ?? 2;
+      const colSaldo = input.csvColunaSaldo ?? -1;
+      const rawLines = input.conteudo.split(/\r?\n/).filter(l => l.trim().length > 0);
+      for (let i = 1; i < rawLines.length; i++) {
+        const cols = rawLines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ""));
+        if (cols.length < 3) continue;
+        const rawData = cols[colData] ?? "";
+        let dataStr = rawData;
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawData)) {
+          const [dd, mm, yyyy] = rawData.split("/");
+          dataStr = `${yyyy}-${mm}-${dd}`;
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dataStr)) continue;
+        const rawValor = (cols[colValor] ?? "0").replace(/\./g, "").replace(",", ".");
+        const valor = parseFloat(rawValor);
+        const saldoRaw = colSaldo >= 0 ? (cols[colSaldo] ?? "") : "";
+        const saldo = saldoRaw ? parseFloat(saldoRaw.replace(/\./g, "").replace(",", ".")) : null;
+        lines.push({
+          data: dataStr,
+          descricao: cols[colDesc] ?? "Sem descrição",
+          valor: isNaN(valor) ? 0 : valor,
+          saldo: saldo !== null && isNaN(saldo) ? null : saldo,
+        });
+      }
+    }
+
+    if (lines.length === 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma linha válida encontrada no arquivo" });
+    }
+
+    let inserted = 0;
+    let skipped = 0;
+    const importadoEm = new Date().toISOString();
+    for (const line of lines) {
+      const existing = await db.execute(
+        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 LIMIT 1`,
+        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor]
+      );
+      if (rows(existing).length > 0) { skipped++; continue; }
+      await db.execute(
+        `INSERT INTO bank_statement_lines (company_id, conta_bancaria_id, data, descricao, valor, tipo, saldo_apos, conciliado, importado_em)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,0,$8)`,
+        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor,
+         line.valor >= 0 ? "credito" : "debito", line.saldo, importadoEm]
+      );
+      inserted++;
+    }
+
+    await createAuditLog({
+      userId: ctx.user?.id,
+      action: "bank_statement_import",
+      details: `Importação ${input.formato.toUpperCase()}: ${inserted} inseridos, ${skipped} duplicados`,
+      companyId: input.companyId,
+    });
+
+    return { inserted, skipped, total: lines.length };
+  }),
 
   getContasAReceber: protectedProcedure.input(z.object({
     companyId: z.number(),

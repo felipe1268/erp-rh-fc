@@ -2215,6 +2215,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Cadastros", label: "Plano de Contas", path: "/financeiro/plano-de-contas" },
     { section: "Cadastros", label: "Centros de Custo", path: "/financeiro/centros-de-custo" },
     { section: "Cadastros", label: "Conciliação Bancária", path: "/financeiro/conciliacao" },
+    { section: "Movimentações", label: "Recorrentes", path: "/financeiro/recorrentes" },
     { section: "Cadastros", label: "Configurações", path: "/financeiro/configuracoes" },
   ],
   medicao: [

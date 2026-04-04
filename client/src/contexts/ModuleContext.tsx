@@ -111,6 +111,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/financeiro/centros-de-custo":     "financeiro" as ModuleId,
   "/financeiro/configuracoes":        "financeiro" as ModuleId,
   "/financeiro/conciliacao":          "financeiro" as ModuleId,
+  "/financeiro/recorrentes":          "financeiro" as ModuleId,
   // Gestão de Documentos
   "/gestao-documentos":              "gestao-documentos" as ModuleId,
   // Operacional routes

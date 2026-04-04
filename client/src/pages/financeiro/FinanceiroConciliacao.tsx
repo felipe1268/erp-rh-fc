@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -34,6 +36,13 @@ export default function FinanceiroConciliacao() {
   const [conciliadoFilter, setConciliadoFilter] = useState("all");
   const [selectedStatement, setSelectedStatement] = useState<number | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<number | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [importFormato, setImportFormato] = useState<"ofx" | "csv">("ofx");
+  const [importConta, setImportConta] = useState("");
+  const [importContent, setImportContent] = useState("");
+  const [importFileName, setImportFileName] = useState("");
+  const [csvSeparador, setCsvSeparador] = useState(";");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
     { companyId },
@@ -61,22 +70,61 @@ export default function FinanceiroConciliacao() {
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
+  const importMut = (trpc as any).financial.importBankStatement.useMutation({
+    onSuccess: (res: any) => {
+      toast({ title: `Importação concluída! ${res.inserted} inseridos, ${res.skipped} duplicados ignorados` });
+      setShowImport(false);
+      setImportContent("");
+      setImportFileName("");
+      refetchSt();
+    },
+    onError: (e: any) => toast({ title: "Erro na importação", description: e.message, variant: "destructive" }),
+  });
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFileName(file.name);
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext === "ofx" || ext === "qfx") setImportFormato("ofx");
+    else setImportFormato("csv");
+    const reader = new FileReader();
+    reader.onload = (ev) => { setImportContent(ev.target?.result as string ?? ""); };
+    reader.readAsText(file, "ISO-8859-1");
+  }
+
+  function handleImport() {
+    if (!importContent) { toast({ title: "Selecione um arquivo", variant: "destructive" }); return; }
+    if (!importConta) { toast({ title: "Selecione a conta bancária", variant: "destructive" }); return; }
+    importMut.mutate({
+      companyId,
+      contaBancariaId: parseInt(importConta),
+      formato: importFormato,
+      conteudo: importContent,
+      csvSeparador: importFormato === "csv" ? csvSeparador : undefined,
+    });
+  }
+
   const pendentes = (statements ?? []).filter((s: any) => !s.conciliado);
   const conciliados = (statements ?? []).filter((s: any) => s.conciliado);
   const totalEntradas = pendentes.filter((s: any) => s.tipo === "credito").reduce((a: number, s: any) => a + Number(s.valor), 0);
-  const totalSaidas = pendentes.filter((s: any) => s.tipo === "debito").reduce((a: number, s: any) => a + Number(s.valor), 0);
+  const totalSaidas = pendentes.filter((s: any) => s.tipo === "debito").reduce((a: number, s: any) => a + Math.abs(Number(s.valor)), 0);
 
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto p-6 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <RefreshCw className="w-6 h-6 text-blue-600" />Conciliação Bancária
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Relacione os lançamentos do sistema com o extrato bancário</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <RefreshCw className="w-6 h-6 text-blue-600" />Conciliação Bancária
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">Relacione os lançamentos do sistema com o extrato bancário</p>
+          </div>
+          <Button size="sm" className="h-9" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
+            <Upload className="w-3.5 h-3.5 mr-1.5" />Importar Extrato
+          </Button>
         </div>
 
-        {/* Filtros */}
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-3 items-end">
@@ -87,7 +135,7 @@ export default function FinanceiroConciliacao() {
                   <SelectContent>
                     {(bankAccounts ?? []).map((b: any) => (
                       <SelectItem key={b.id} value={String(b.id)}>
-                        {b.banco} - {b.agencia}/{b.conta} ({b.descricao ?? b.tipo})
+                        {b.banco} - {b.agencia}/{b.conta} ({b.descricao ?? b.tipo ?? ""})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -121,11 +169,11 @@ export default function FinanceiroConciliacao() {
             <CardContent className="p-12 text-center">
               <RefreshCw className="w-14 h-14 mx-auto mb-4 text-gray-300" />
               <p className="text-gray-500 font-medium">Selecione uma conta bancária para iniciar a conciliação.</p>
+              <p className="text-xs text-gray-400 mt-2">Ou importe um extrato bancário (OFX/CSV) para começar</p>
             </CardContent>
           </Card>
         ) : (
           <>
-            {/* Resumo */}
             <div className="grid grid-cols-3 gap-4">
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4">
@@ -157,7 +205,6 @@ export default function FinanceiroConciliacao() {
             </div>
 
             <div className="grid grid-cols-2 gap-6">
-              {/* Extrato bancário */}
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Extrato Bancário ({pendentes.length} pendentes)</CardTitle>
@@ -166,7 +213,13 @@ export default function FinanceiroConciliacao() {
                   {stLoading ? (
                     <div className="p-6 text-center text-gray-500">Carregando...</div>
                   ) : pendentes.length === 0 ? (
-                    <div className="p-6 text-center text-gray-400">Nenhum item pendente.</div>
+                    <div className="p-6 text-center text-gray-400">
+                      <Upload className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      <p>Nenhum item pendente.</p>
+                      <Button variant="outline" size="sm" className="mt-2" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
+                        Importar Extrato
+                      </Button>
+                    </div>
                   ) : (
                     <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
                       {pendentes.map((s: any) => (
@@ -176,11 +229,11 @@ export default function FinanceiroConciliacao() {
                           className={`w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors ${selectedStatement === s.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
                         >
                           <div>
-                            <p className="text-xs text-gray-500">{s.data}</p>
+                            <p className="text-xs text-gray-500">{s.data ? new Date(s.data).toLocaleDateString("pt-BR") : "—"}</p>
                             <p className="text-sm text-gray-700 truncate max-w-[180px]">{s.descricao}</p>
                           </div>
-                          <p className={`text-sm font-bold ${s.tipo === "credito" ? "text-green-600" : "text-red-500"}`}>
-                            {s.tipo === "credito" ? "+" : "-"}{formatBRL(Number(s.valor))}
+                          <p className={`text-sm font-bold ${Number(s.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>
+                            {formatBRL(Number(s.valor))}
                           </p>
                         </button>
                       ))}
@@ -189,7 +242,6 @@ export default function FinanceiroConciliacao() {
                 </CardContent>
               </Card>
 
-              {/* Lançamentos do sistema */}
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Lançamentos do Sistema</CardTitle>
@@ -206,7 +258,7 @@ export default function FinanceiroConciliacao() {
                           className={`w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors ${selectedEntry === e.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
                         >
                           <div>
-                            <p className="text-xs text-gray-500">{e.dataCompetencia}</p>
+                            <p className="text-xs text-gray-500">{e.dataCompetencia ? new Date(e.dataCompetencia).toLocaleDateString("pt-BR") : "—"}</p>
                             <p className="text-sm text-gray-700 truncate max-w-[180px]">{e.descricao ?? e.contaNome ?? "—"}</p>
                             <p className="text-xs text-gray-400">{e.obraNome ?? ""}</p>
                           </div>
@@ -221,7 +273,6 @@ export default function FinanceiroConciliacao() {
               </Card>
             </div>
 
-            {/* Botão conciliar */}
             {selectedStatement && selectedEntry && (
               <div className="flex justify-center">
                 <Button
@@ -236,6 +287,78 @@ export default function FinanceiroConciliacao() {
             )}
           </>
         )}
+
+        <Dialog open={showImport} onOpenChange={setShowImport}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Upload className="w-5 h-5" /> Importar Extrato Bancário
+              </DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4">
+              <div>
+                <Label>Conta Bancária *</Label>
+                <Select value={importConta} onValueChange={setImportConta}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    {(bankAccounts ?? []).map((b: any) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.banco} - {b.agencia}/{b.conta}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Arquivo (OFX, QFX ou CSV) *</Label>
+                <div className="mt-1">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".ofx,.qfx,.csv,.txt"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    {importFileName || "Selecionar arquivo..."}
+                  </Button>
+                </div>
+                {importContent && (
+                  <p className="text-xs text-green-600 mt-1">
+                    Arquivo carregado ({importFormato.toUpperCase()}, {(importContent.length / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </div>
+              {importFormato === "csv" && (
+                <div>
+                  <Label>Separador CSV</Label>
+                  <Select value={csvSeparador} onValueChange={setCsvSeparador}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value=";">Ponto e vírgula (;)</SelectItem>
+                      <SelectItem value=",">Vírgula (,)</SelectItem>
+                      <SelectItem value="\t">Tab</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    O CSV deve ter colunas: Data, Descrição, Valor (e opcionalmente Saldo)
+                  </p>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowImport(false)}>Cancelar</Button>
+              <Button onClick={handleImport} disabled={importMut.isPending || !importContent || !importConta}>
+                {importMut.isPending ? "Importando..." : "Importar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

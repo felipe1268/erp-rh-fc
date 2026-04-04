@@ -80,6 +80,7 @@ const FinanceiroPlanoDeConta  = lazy(() => import("./pages/financeiro/Financeiro
 const FinanceiroCentrosCusto  = lazy(() => import("./pages/financeiro/FinanceiroCentrosCusto"));
 const FinanceiroConfiguracoes = lazy(() => import("./pages/financeiro/FinanceiroConfiguracoes"));
 const FinanceiroConciliacao   = lazy(() => import("./pages/financeiro/FinanceiroConciliacao"));
+const FinanceiroRecorrentes  = lazy(() => import("./pages/financeiro/FinanceiroRecorrentes"));
 const ApontamentosCampo = lazy(() => import("./pages/ApontamentosCampo"));
 const Feriados = lazy(() => import("./pages/Feriados"));
 const Dissidio = lazy(() => import("./pages/Dissidio"));
@@ -291,6 +292,7 @@ function Router() {
         <Route path="/financeiro/centros-de-custo" component={FinanceiroCentrosCusto} />
         <Route path="/financeiro/configuracoes" component={FinanceiroConfiguracoes} />
         <Route path="/financeiro/conciliacao" component={FinanceiroConciliacao} />
+        <Route path="/financeiro/recorrentes" component={FinanceiroRecorrentes} />
         <Route path={"/apontamentos-campo"} component={ApontamentosCampo} />
         <Route path={"/feriados"} component={Feriados} />
         <Route path={"/dissidio"} component={Dissidio} />

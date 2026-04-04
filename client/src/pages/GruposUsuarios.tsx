@@ -128,6 +128,7 @@ const ALL_ROUTES = [
     { path: "/financeiro/plano-de-contas", label: "Plano de Contas", icon: "ListChecks" },
     { path: "/financeiro/centros-de-custo", label: "Centros de Custo", icon: "Layers" },
     { path: "/financeiro/conciliacao", label: "Conciliação Bancária", icon: "Scale" },
+    { path: "/financeiro/recorrentes", label: "Recorrentes", icon: "Repeat" },
   ]},
   { section: "Terceiros - Gestão", color: "orange", routes: [
     { path: "/terceiros/painel", label: "Painel Terceiros", icon: "LayoutDashboard" },

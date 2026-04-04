@@ -243,6 +243,7 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "plano_contas",      label: "Plano de Contas",                       actions: ["view","create","edit","delete"] },
       { id: "centros_custo",     label: "Centros de Custo",                      actions: ["view","create","edit","delete"] },
       { id: "conciliacao",       label: "Conciliação Bancária",                  actions: ["view","create","edit","delete"] },
+      { id: "recorrentes",       label: "Recorrentes",                           actions: ["view","create","edit","delete"] },
     ],
     sensitiveFlags: [
       { id: "saldos",             label: "Saldos bancários e financeiros" },
@@ -388,6 +389,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/financeiro/plano-de-contas":  "plano_contas",
     "/financeiro/centros-de-custo": "centros_custo",
     "/financeiro/conciliacao":      "conciliacao",
+    "/financeiro/recorrentes":      "recorrentes",
   },
   "compras": {
     "/compras/painel":        "solicitacoes",

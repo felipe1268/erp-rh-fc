@@ -37,7 +37,7 @@ import {
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
-  Camera, Blocks, CheckSquare,
+  Camera, Blocks, CheckSquare, Repeat,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -396,6 +396,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
     title: "Movimentações",
     items: [
       { icon: DollarSign,    label: "Lançamentos",       path: "/financeiro/lancamentos" },
+      { icon: Repeat,        label: "Recorrentes",        path: "/financeiro/recorrentes" },
       { icon: TrendingUp,    label: "Receitas de Obras",  path: "/financeiro/receitas" },
       { icon: CheckCircle,   label: "Contas a Pagar",     path: "/financeiro/contas-a-pagar" },
       { icon: CreditCard,    label: "Contas a Receber",   path: "/financeiro/contas-a-receber" },

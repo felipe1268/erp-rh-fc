@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1009,
+    titulo: "Financeiro Fase 1 — Dashboard Executivo, Recorrentes e Importação OFX/CSV",
+    descricao: "Dashboard Financeiro executivo redesenhado com posição de caixa, saldo consolidado por conta bancária, KPIs do mês com variação vs anterior, evolução 30 dias, top despesas, resultado por obra, alertas de vencidos e atalhos rápidos. Novo módulo de Lançamentos Recorrentes (CRUD completo com geração automática, pausar/retomar, frequência configurável). Importação de extrato bancário via OFX/CSV com detecção de duplicatas e conciliação semi-automática integrada. Correção de colunas camelCase na tabela company_bank_accounts (companyId, tipoConta, apelido).",
+    tipo: "feature",
+    modulos: "Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-04 22:00:00",
+  },
+  {
     version: 1008,
     titulo: "Módulo Operacional no Controle de Acesso",
     descricao: "Adicionado módulo Operacional (RDO, Checklists, Concretagem, Não Conformidades, Registro Fotográfico) na tela de Usuários (toggle de acesso por módulo com permissões granulares), na tela de Grupos de Acesso (permissões por rota) e nas Configurações (ativar/desativar funcionalidades). Corrigidos paths de rotas para '/operacional/nc' e '/operacional/fotos'.",

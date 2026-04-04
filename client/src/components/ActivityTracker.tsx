@@ -51,6 +51,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/financeiro/centros-de-custo": "Financeiro Centros de Custo",
   "/financeiro/configuracoes": "Financeiro Configurações",
   "/financeiro/conciliacao": "Financeiro Conciliação",
+  "/financeiro/recorrentes": "Financeiro Recorrentes",
   "/orcamento": "Orçamento",
   "/planejamento": "Planejamento",
   "/medicao": "Medição",
