@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1008,
+    titulo: "Módulo Operacional no Controle de Acesso",
+    descricao: "Adicionado módulo Operacional (RDO, Checklists, Concretagem, Não Conformidades, Registro Fotográfico) na tela de Usuários (toggle de acesso por módulo com permissões granulares), na tela de Grupos de Acesso (permissões por rota) e nas Configurações (ativar/desativar funcionalidades). Corrigidos paths de rotas para '/operacional/nc' e '/operacional/fotos'.",
+    tipo: "feature",
+    modulos: "Administração, Operacional",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-04 17:25:00",
+  },
+  {
     version: 1007,
     titulo: "Correções e Automação de Pesos Financeiros",
     descricao: "Correção de FK constraint ao editar itens de Solicitação de Compra (NULL em cotações/ordens referenciantes antes de deletar). Dashboard Orçamento agora inicia na visão consolidada 'Todos' em vez de tela vazia. Novo endpoint de recálculo automático de pesos financeiros do cronograma via EAP do orçamento vinculado (botão 'Vincular Pesos EAP' no modo edição do cronograma).",

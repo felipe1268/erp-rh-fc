@@ -249,6 +249,20 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "valores_financeiros",label: "Valores de receitas e despesas" },
     ],
   },
+
+  // ══════════════════════════════════════════════════════
+  // OPERACIONAL
+  // ══════════════════════════════════════════════════════
+  "operacional": {
+    pages: [
+      { id: "painel",                label: "Dashboard Operacional",           actions: ["view"] },
+      { id: "rdo",                   label: "RDO (Relatório Diário de Obra)",  actions: ["view","create","edit","delete"] },
+      { id: "checklists",           label: "Checklists de Qualidade",         actions: ["view","create","edit","delete"] },
+      { id: "concretagem",          label: "Concretagem",                     actions: ["view","create","edit","delete"] },
+      { id: "nao_conformidades",    label: "Não Conformidades (NCs)",         actions: ["view","create","edit","delete"] },
+      { id: "registro_fotografico", label: "Registro Fotográfico",            actions: ["view","create","edit","delete"] },
+    ],
+  },
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -391,6 +405,14 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/almoxarifado":                  "estoque",
     "/almoxarifado/movimentacoes":    "movimentacoes",
     "/almoxarifado/inventario":       "inventario",
+  },
+  "operacional": {
+    "/operacional/painel":                "painel",
+    "/operacional/rdo":                   "rdo",
+    "/operacional/checklists":            "checklists",
+    "/operacional/concretagem":           "concretagem",
+    "/operacional/nc":                    "nao_conformidades",
+    "/operacional/fotos":                 "registro_fotografico",
   },
   "medicao": {},
 };

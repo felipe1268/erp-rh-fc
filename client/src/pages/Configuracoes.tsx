@@ -2232,8 +2232,8 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Diário de Obra", label: "RDO", path: "/operacional/rdo" },
     { section: "Qualidade", label: "Checklists", path: "/operacional/checklists" },
     { section: "Qualidade", label: "Concretagem", path: "/operacional/concretagem" },
-    { section: "Qualidade", label: "Não Conformidades", path: "/operacional/nao-conformidades" },
-    { section: "Registros", label: "Registro Fotográfico", path: "/operacional/registro-fotografico" },
+    { section: "Qualidade", label: "Não Conformidades", path: "/operacional/nc" },
+    { section: "Registros", label: "Registro Fotográfico", path: "/operacional/fotos" },
   ],
 };
 

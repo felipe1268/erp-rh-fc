@@ -152,6 +152,14 @@ const ALL_ROUTES = [
     { path: "/parceiros/guia-descontos", label: "Guia de Descontos", icon: "FileText" },
     { path: "/parceiros/pagamentos", label: "Pagamentos", icon: "Wallet" },
   ]},
+  { section: "Operacional", color: "cyan", routes: [
+    { path: "/operacional/painel", label: "Dashboard Operacional", icon: "LayoutDashboard" },
+    { path: "/operacional/rdo", label: "RDO", icon: "ClipboardList" },
+    { path: "/operacional/checklists", label: "Checklists", icon: "ClipboardCheck" },
+    { path: "/operacional/concretagem", label: "Concretagem", icon: "HardHat" },
+    { path: "/operacional/nc", label: "Não Conformidades", icon: "AlertTriangle" },
+    { path: "/operacional/fotos", label: "Registro Fotográfico", icon: "FileSearch" },
+  ]},
   { section: "Geral", color: "slate", routes: [
     { path: "/ajuda", label: "Biblioteca de Conhecimento", icon: "BookOpen" },
     { path: "/revisoes", label: "Revisões do Sistema", icon: "FileText" },
@@ -172,6 +180,7 @@ const sectionColorMap: Record<string, { bg: string; border: string; text: string
   teal:    { bg: "bg-teal-50",    border: "border-teal-200",    text: "text-teal-700",    headerBg: "bg-teal-100",    dot: "bg-teal-500" },
   sky:     { bg: "bg-sky-50",     border: "border-sky-200",     text: "text-sky-700",     headerBg: "bg-sky-100",     dot: "bg-sky-500" },
   slate:   { bg: "bg-slate-50",   border: "border-slate-200",   text: "text-slate-700",   headerBg: "bg-slate-100",   dot: "bg-slate-500" },
+  cyan:    { bg: "bg-cyan-50",    border: "border-cyan-200",    text: "text-cyan-700",    headerBg: "bg-cyan-100",    dot: "bg-cyan-500" },
 };
 
 type RoutePermission = {

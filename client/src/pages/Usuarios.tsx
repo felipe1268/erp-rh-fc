@@ -37,6 +37,7 @@ const ALL_MODULES = [
   { id: "compras",      label: "Compras",          dot: "bg-rose-500",    tag: "bg-rose-100 text-rose-700 border-rose-200" },
   { id: "almoxarifado", label: "Almoxarifado",     dot: "bg-lime-600",    tag: "bg-lime-100 text-lime-700 border-lime-200" },
   { id: "financeiro",   label: "Financeiro",       dot: "bg-emerald-500", tag: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  { id: "operacional",  label: "Operacional",      dot: "bg-cyan-500",    tag: "bg-cyan-100 text-cyan-700 border-cyan-200" },
 ];
 
 const GROUP_COLORS = [
