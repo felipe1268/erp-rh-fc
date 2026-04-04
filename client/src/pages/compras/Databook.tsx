@@ -186,17 +186,36 @@ export default function Databook() {
     onError: (e) => toast.error(e.message),
   });
 
-  const buscarFotoLote = trpc.databook.buscarFotoLote.useMutation({
-    onSuccess: (data) => {
-      if (data.total > 0) {
-        toast.success(data.msg);
-        setTimeout(() => fichas.refetch(), 3000);
-      } else {
-        toast.info(data.msg);
+  const [fotoLoteProgress, setFotoLoteProgress] = useState<{ current: number; total: number; successCount: number; failCount: number; running: boolean; currentDesc: string } | null>(null);
+
+  const buscarFotoIA_single = trpc.databook.buscarFotoIA.useMutation();
+
+  const handleBuscarFotoLote = async () => {
+    const fichasSemFoto = (fichas.data || []).filter((f: any) => !f.foto_url);
+    if (fichasSemFoto.length === 0) {
+      toast.info("Todas as fichas já possuem foto");
+      return;
+    }
+    setFotoLoteProgress({ current: 0, total: fichasSemFoto.length, successCount: 0, failCount: 0, running: true, currentDesc: "" });
+
+    let successCount = 0;
+    let failCount = 0;
+    for (let i = 0; i < fichasSemFoto.length; i++) {
+      const f = fichasSemFoto[i];
+      setFotoLoteProgress({ current: i, total: fichasSemFoto.length, successCount, failCount, running: true, currentDesc: f.descricao?.substring(0, 50) || "" });
+      try {
+        const result = await buscarFotoIA_single.mutateAsync({ companyId, fichaId: f.id });
+        if (result.fotoUrl) successCount++;
+        else failCount++;
+      } catch {
+        failCount++;
       }
-    },
-    onError: (e) => toast.error(e.message),
-  });
+    }
+    setFotoLoteProgress({ current: fichasSemFoto.length, total: fichasSemFoto.length, successCount, failCount, running: false, currentDesc: "" });
+    fichas.refetch();
+    toast.success(`Fotos geradas: ${successCount} ok, ${failCount} falhas de ${fichasSemFoto.length} fichas`);
+    setTimeout(() => setFotoLoteProgress(null), 5000);
+  };
 
   const uploadFoto = trpc.databook.uploadFotoFicha.useMutation({
     onSuccess: () => {
@@ -474,11 +493,11 @@ export default function Databook() {
                 Gerar Especificações IA (Lote)
               </Button>
               <Button
-                onClick={() => buscarFotoLote.mutate({ companyId, obraId })}
-                disabled={buscarFotoLote.isPending}
+                onClick={handleBuscarFotoLote}
+                disabled={!!fotoLoteProgress?.running}
                 variant="outline"
               >
-                {buscarFotoLote.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Image className="w-4 h-4 mr-1" />}
+                {fotoLoteProgress?.running ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Image className="w-4 h-4 mr-1" />}
                 Gerar Fotos IA (Lote)
               </Button>
               <Button
@@ -490,6 +509,41 @@ export default function Databook() {
                 Exportar Índice PDF
               </Button>
             </div>
+
+          {fotoLoteProgress && (
+            <div className="bg-white border rounded-lg p-4 mt-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {fotoLoteProgress.running ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                  )}
+                  <span className="text-sm font-medium">
+                    {fotoLoteProgress.running
+                      ? `Gerando fotos... ${fotoLoteProgress.current + 1} de ${fotoLoteProgress.total}`
+                      : `Concluído: ${fotoLoteProgress.successCount} fotos geradas`}
+                  </span>
+                </div>
+                <span className="text-sm font-bold text-blue-600">
+                  {Math.round(((fotoLoteProgress.current + (fotoLoteProgress.running ? 0 : 0)) / fotoLoteProgress.total) * 100)}%
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                <div
+                  className={`h-3 rounded-full transition-all duration-500 ${fotoLoteProgress.running ? "bg-blue-500" : "bg-green-500"}`}
+                  style={{ width: `${Math.round((fotoLoteProgress.current / fotoLoteProgress.total) * 100)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span className="truncate max-w-[60%]">{fotoLoteProgress.running && fotoLoteProgress.currentDesc ? `Buscando: ${fotoLoteProgress.currentDesc}...` : ""}</span>
+                <div className="flex gap-3">
+                  <span className="text-green-600">{fotoLoteProgress.successCount} ok</span>
+                  {fotoLoteProgress.failCount > 0 && <span className="text-red-500">{fotoLoteProgress.failCount} falhas</span>}
+                </div>
+              </div>
+            </div>
+          )}
           </div>
         )}
 
