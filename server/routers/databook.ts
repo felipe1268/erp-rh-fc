@@ -788,6 +788,30 @@ Responda APENAS o JSON.`;
       const [obraRow] = await db.select().from(obras).where(and(eq(obras.id, ficha.obra_id), eq((obras as any).companyId, input.companyId)));
       const [companyRow] = await db.select().from(companies).where(eq(companies.id, input.companyId));
 
+      let fornecedorData = null;
+      if (ficha.fornecedor_id) {
+        const fornResult = await db.execute(sql`
+          SELECT razao_social, logradouro, numero, bairro, cidade, estado, cep,
+                 responsavel_nome, telefone, celular, email
+          FROM empresas_terceiras WHERE id = ${ficha.fornecedor_id}
+        `);
+        const forn = ((fornResult as any).rows ?? fornResult ?? [])[0];
+        if (forn) {
+          fornecedorData = {
+            razaoSocial: forn.razao_social || forn.nome_fantasia,
+            endereco: [forn.logradouro, forn.numero].filter(Boolean).join(", "),
+            bairro: forn.bairro,
+            cidade: forn.cidade,
+            estado: forn.estado,
+            cep: forn.cep,
+            contato: forn.responsavel_nome,
+            telefone: forn.telefone,
+            celular: forn.celular,
+            email: forn.email,
+          };
+        }
+      }
+
       const pdfBuffer = await gerarDatabookFichaPdf(
         ficha,
         {
@@ -801,6 +825,7 @@ Responda APENAS o JSON.`;
           razaoSocial: companyRow?.razaoSocial || "Empresa",
           logoUrl: companyRow?.logoUrl,
         },
+        fornecedorData,
       );
 
       return { pdf: pdfBuffer.toString("base64"), filename: `DATABOOK-${String(ficha.numero_sequencial).padStart(3, "0")}_${ficha.descricao.substring(0, 30).replace(/[^a-zA-Z0-9]/g, "_")}.pdf` };
