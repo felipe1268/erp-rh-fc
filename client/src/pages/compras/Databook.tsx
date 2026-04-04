@@ -1015,17 +1015,15 @@ export default function Databook() {
 
         {/* Ficha Detail Dialog */}
         <Dialog open={!!fichaDialog} onOpenChange={(open) => { if (!open) setFichaDialog(null); }}>
-          <DialogContent className="max-w-[95vw] w-full h-[95vh] max-h-[95vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5" />
-                DATABOOK-{String(fichaDialog?.numero_sequencial || 0).padStart(3, "0")}
-              </DialogTitle>
-            </DialogHeader>
+          <DialogContent className="!max-w-[100vw] !w-[100vw] !h-[100vh] !max-h-[100vh] !rounded-none !border-0 m-0 p-0 overflow-hidden [&>button]:top-3 [&>button]:right-4 [&>button]:z-50">
+            <div className="flex items-center gap-3 px-6 py-3 border-b bg-white shrink-0">
+              <BookOpen className="w-5 h-5 text-blue-600" />
+              <span className="text-lg font-bold text-gray-800">DATABOOK-{String(fichaDialog?.numero_sequencial || 0).padStart(3, "0")}</span>
+              <span className="text-sm text-gray-400 ml-2 truncate max-w-[400px]">{fichaDialog?.descricao}</span>
+            </div>
             {fichaDialog && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-                {/* Left Column — Info & Edit */}
-                <div className="space-y-4 overflow-y-auto pr-2">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 flex-1 overflow-hidden" style={{ height: "calc(100vh - 52px)" }}>
+                <div className="space-y-4 overflow-y-auto p-6">
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h3 className="text-base font-semibold text-gray-800 mb-3">{fichaDialog.descricao}</h3>
                     <div className="grid grid-cols-2 gap-3">
@@ -1127,8 +1125,7 @@ export default function Databook() {
                   </div>
                 </div>
 
-                {/* Right Column — Photo & PDF Preview */}
-                <div className="space-y-4 overflow-y-auto pl-2 border-l">
+                <div className="space-y-4 overflow-y-auto p-6 border-l bg-gray-50/50">
                   <div>
                     <Label className="text-xs text-gray-500 mb-2 block flex items-center gap-1">
                       Foto do Produto
@@ -1184,7 +1181,7 @@ export default function Databook() {
                       </Button>
                     </div>
                     {pdfPreview && (
-                      <iframe src={pdfPreview} className="w-full h-[60vh] rounded-lg border" />
+                      <iframe src={pdfPreview} className="w-full rounded-lg border flex-1" style={{ minHeight: "50vh", height: "calc(100vh - 380px)" }} />
                     )}
                     {!pdfPreview && !fichaDialog.foto_url && (
                       <div className="flex flex-col items-center justify-center py-16 text-gray-400 border rounded-lg bg-gray-50">
