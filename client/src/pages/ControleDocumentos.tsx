@@ -25,6 +25,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import FullScreenDialog from "@/components/FullScreenDialog";
+import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
 import { TRAINING_RULES, TRAINING_CATEGORIES, calcularDataValidade, type TrainingRule } from "../../../shared/trainingRules";
 
 // ============ HELPERS ============
@@ -927,6 +928,7 @@ export default function ControleDocumentos() {
   const [showAdvDialog, setShowAdvDialog] = useState(false);
   const [showImportAso, setShowImportAso] = useState(false);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  const [atestPreviewDoc, setAtestPreviewDoc] = useState<{ url: string; name: string; title: string } | null>(null);
 
   // ============ EDIT MODE (null = criação, number = edição) ============
   const [editingAsoId, setEditingAsoId] = useState<number | null>(null);
@@ -1770,9 +1772,15 @@ export default function ControleDocumentos() {
                           </td>
                           <td className="py-2">
                             {a.documentoUrl ? (
-                              <a href={a.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs flex items-center gap-1">
-                                <FileText className="h-3.5 w-3.5" /> Ver
-                              </a>
+                              canPreviewFile(a.documentoUrl) ? (
+                                <button onClick={() => setAtestPreviewDoc({ url: a.documentoUrl, name: a.documentoUrl.split("/").pop() || "arquivo", title: `Atestado - ${a.nomeCompleto}` })} className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                                  <FileText className="h-3.5 w-3.5" /> Ver
+                                </button>
+                              ) : (
+                                <a href={a.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                                  <FileText className="h-3.5 w-3.5" /> Ver
+                                </a>
+                              )
                             ) : (
                               <span className="text-xs text-muted-foreground">-</span>
                             )}
@@ -2646,6 +2654,15 @@ export default function ControleDocumentos() {
           </div>
         );
       })()}
+
+      {/* ===================== PREVIEW ATESTADO ===================== */}
+      <DocumentPreviewDialog
+        open={!!atestPreviewDoc}
+        onOpenChange={(open) => { if (!open) setAtestPreviewDoc(null); }}
+        fileUrl={atestPreviewDoc?.url || null}
+        fileName={atestPreviewDoc?.name || null}
+        title={atestPreviewDoc?.title}
+      />
 
       {/* ===================== RAIO-X DO FUNCIONÁRIO ===================== */}
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />

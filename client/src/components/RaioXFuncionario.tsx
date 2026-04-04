@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -151,6 +152,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const [descontoMes, setDescontoMes] = useState("");
   const [reprovarModal, setReprovarModal] = useState<{ id: number } | null>(null);
   const [reprovarMotivo, setReprovarMotivo] = useState("");
+  const [atestPreviewDoc, setAtestPreviewDoc] = useState<{ url: string; name: string; title: string } | null>(null);
 
   const utils = trpc.useContext();
   const criarDescontoMut = trpc.warehouse.criarDescontoFolha.useMutation({
@@ -1078,7 +1080,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                             <td className="p-3">{formatDate(a.dataRetorno)}</td>
                             <td className="p-3">{a.cid || "-"}</td>
                             <td className="p-3">{a.medico || "-"}</td>
-                            <td className="p-3">{a.documentoUrl ? <a href={a.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> Ver</a> : <span className="text-muted-foreground text-xs">—</span>}</td>
+                            <td className="p-3">{a.documentoUrl ? (canPreviewFile(a.documentoUrl) ? <button onClick={() => setAtestPreviewDoc({ url: a.documentoUrl, name: a.documentoUrl.split("/").pop() || "arquivo", title: `Atestado - ${a.tipo}` })} className="text-blue-600 hover:underline flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> Ver</button> : <a href={a.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> Ver</a>) : <span className="text-muted-foreground text-xs">—</span>}</td>
                             <td className="p-3 max-w-[250px] truncate">{a.observacoes || a.descricao || "-"}</td>
                           </tr>
                         ))}
@@ -2428,6 +2430,14 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
           </div>
         </div>
       )}
+
+      <DocumentPreviewDialog
+        open={!!atestPreviewDoc}
+        onOpenChange={(open) => { if (!open) setAtestPreviewDoc(null); }}
+        fileUrl={atestPreviewDoc?.url || null}
+        fileName={atestPreviewDoc?.name || null}
+        title={atestPreviewDoc?.title}
+      />
     </div>
   );
 }

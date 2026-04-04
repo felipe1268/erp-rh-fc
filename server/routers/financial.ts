@@ -1262,7 +1262,10 @@ export const financialRouter = router({
     );
     await createAuditLog({
       userId: ctx.user?.id,
+      userName: ctx.user?.name ?? ctx.user?.email,
       action: "financial_recurring_create",
+      entityType: "financial_recurring_entries",
+      entityId: rows(res)[0]?.id,
       details: `Recorrência criada: ${input.descricao} - ${input.valor}`,
       companyId: input.companyId,
     });
