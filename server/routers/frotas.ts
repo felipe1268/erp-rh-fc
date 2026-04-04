@@ -217,7 +217,7 @@ export const frotasRouter = router({
     .query(async ({ input }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
-      let q = sql`SELECT v.*, o.nome as obra_nome, e.nome as motorista_nome
+      let q = sql`SELECT v.*, o.nome as obra_nome, e."nomeCompleto" as motorista_nome
         FROM vehicles v
         LEFT JOIN obras o ON o.id = v.obra_id
         LEFT JOIN employees e ON e.id = v.motorista_id
@@ -236,7 +236,7 @@ export const frotasRouter = router({
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
       const res = await db.execute(sql`
-        SELECT v.*, o.nome as obra_nome, e.nome as motorista_nome
+        SELECT v.*, o.nome as obra_nome, e."nomeCompleto" as motorista_nome
         FROM vehicles v
         LEFT JOIN obras o ON o.id = v.obra_id
         LEFT JOIN employees e ON e.id = v.motorista_id
