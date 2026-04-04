@@ -1,5 +1,82 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "VqTCEhd4xKWO2KchKIbrk"
+uri = "file://server/uploads/frotas/fotos/CSD4674.png"
+type = "image"
+title = "VW Gol 16V 2000"
+
+[[generated]]
+id = "Jk9dWmhKkwl4OSn21Fxn9"
+uri = "file://server/uploads/frotas/fotos/DSR6I25.png"
+type = "image"
+title = "Honda Fit LXL 2007"
+
+[[generated]]
+id = "S7wcljTpGlC5LV5QZ3dlV"
+uri = "file://server/uploads/frotas/fotos/EAM2G13.png"
+type = "image"
+title = "VW Kombi 2009"
+
+[[generated]]
+id = "HOlUE8MVIXX1su-S_v6lU"
+uri = "file://server/uploads/frotas/fotos/EIN8H18.png"
+type = "image"
+title = "Hyundai HR 2011"
+
+[[generated]]
+id = "wB_5oW_0sK6QtoqDWjhio"
+uri = "file://server/uploads/frotas/fotos/EUY7E02.png"
+type = "image"
+title = "VW Gol MPI 2023"
+
+[[generated]]
+id = "zZ69tYhRajNtn6GYFLL4W"
+uri = "file://server/uploads/frotas/fotos/EVW9H23.png"
+type = "image"
+title = "VW Gol MPI 2023 b"
+
+[[generated]]
+id = "No80kO5rYYEZRgVfoVjOR"
+uri = "file://server/uploads/frotas/fotos/EVY2H85.png"
+type = "image"
+title = "VW Gol MPI 2023 c"
+
+[[generated]]
+id = "X0JJXvpoA_PNDDuIoxR7Z"
+uri = "file://server/uploads/frotas/fotos/FFI4B12.png"
+type = "image"
+title = "VW Novo Gol 2017"
+
+[[generated]]
+id = "Jli7K9u_UpqA7uRzbUSG7"
+uri = "file://server/uploads/frotas/fotos/FSB1H05.png"
+type = "image"
+title = "Yamaha YBR150 2023"
+
+[[generated]]
+id = "dM8V3xDyF_frJ8Qn0dJXm"
+uri = "file://server/uploads/frotas/fotos/FZG2747.png"
+type = "image"
+title = "Toyota Corolla 2017"
+
+[[generated]]
+id = "IAZS-uvm5zzgO5RsgHrZi"
+uri = "file://server/uploads/frotas/fotos/GBA1E07.png"
+type = "image"
+title = "Fiat Doblo 2016"
+
+[[generated]]
+id = "pInyfv7MWiQJN-EYuhCW8"
+uri = "file://server/uploads/frotas/fotos/FJH5A24.png"
+type = "image"
+title = "BYD Song Plus 2024"
+
+[[generated]]
+id = "aRuekAg6sHhhclucTuKbA"
+uri = "file://server/uploads/frotas/fotos/ATA8A53.png"
+type = "image"
+title = "VW 17250 Bomba"
 
 [[outputs]]
 id = "ymo9vkKPGT97dlvOhT6J2"
