@@ -186,10 +186,48 @@ export default function Databook() {
     onError: (e) => toast.error(e.message),
   });
 
+  const buscarFotoLote = trpc.databook.buscarFotoLote.useMutation({
+    onSuccess: (data) => {
+      if (data.total > 0) {
+        toast.success(data.msg);
+        setTimeout(() => fichas.refetch(), 3000);
+      } else {
+        toast.info(data.msg);
+      }
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const uploadFoto = trpc.databook.uploadFotoFicha.useMutation({
+    onSuccess: () => {
+      toast.success("Foto enviada com sucesso");
+      fichas.refetch();
+      if (fichaDialog) fichaRefetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handleFotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !fichaDialog) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Arquivo muito grande. Máximo: 5MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      uploadFoto.mutate({ companyId, fichaId: fichaDialog.id, fotoBase64: base64 });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   const atualizarFicha = trpc.databook.atualizarFicha.useMutation({
     onSuccess: () => {
       toast.success("Ficha atualizada");
       fichas.refetch();
+      if (fichaDialog) fichaRefetch();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -436,6 +474,14 @@ export default function Databook() {
                 Gerar Especificações IA (Lote)
               </Button>
               <Button
+                onClick={() => buscarFotoLote.mutate({ companyId, obraId })}
+                disabled={buscarFotoLote.isPending}
+                variant="outline"
+              >
+                {buscarFotoLote.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Image className="w-4 h-4 mr-1" />}
+                Gerar Fotos IA (Lote)
+              </Button>
+              <Button
                 onClick={() => gerarPdfIndice.mutate({ companyId, obraId })}
                 disabled={gerarPdfIndice.isPending}
                 variant="outline"
@@ -532,6 +578,7 @@ export default function Databook() {
                     <TableHead className="w-40">Disciplina</TableHead>
                     <TableHead className="w-36">Fornecedor</TableHead>
                     <TableHead className="w-20">Origem</TableHead>
+                    <TableHead className="w-14">Foto</TableHead>
                     <TableHead className="w-28">Status</TableHead>
                     <TableHead className="w-32">Ações</TableHead>
                   </TableRow>
@@ -565,6 +612,13 @@ export default function Databook() {
                         <span className={`text-xs px-1.5 py-0.5 rounded ${f.origem === "oc" ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600"}`}>
                           {f.origem === "oc" ? "OC" : "Terceiro"}
                         </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {f.foto_url ? (
+                          <Image className="w-4 h-4 text-green-500 mx-auto" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 text-amber-400 mx-auto" title="Foto obrigatória" />
+                        )}
                       </TableCell>
                       <TableCell><StatusBadge status={f.status} /></TableCell>
                       <TableCell>
@@ -767,10 +821,6 @@ export default function Databook() {
                         {gerarEspecIA.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
                         Gerar com IA
                       </Button>
-                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => buscarFoto.mutate({ companyId, fichaId: fichaDialog.id })} disabled={buscarFoto.isPending}>
-                        {buscarFoto.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Image className="w-3 h-3 mr-1" />}
-                        Buscar Foto IA
-                      </Button>
                     </div>
                   </div>
 
@@ -826,14 +876,48 @@ export default function Databook() {
 
                 {/* Right Column — Photo & PDF Preview */}
                 <div className="space-y-4 overflow-y-auto pl-2 border-l">
-                  {fichaDialog.foto_url && (
-                    <div>
-                      <Label className="text-xs text-gray-500 mb-2 block">Foto do Produto</Label>
+                  <div>
+                    <Label className="text-xs text-gray-500 mb-2 block flex items-center gap-1">
+                      Foto do Produto
+                      {!fichaDialog.foto_url && (
+                        <span className="text-red-500 font-semibold text-[10px] bg-red-50 px-1.5 py-0.5 rounded">OBRIGATÓRIA</span>
+                      )}
+                      {fichaDialog.foto_url && (
+                        <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                      )}
+                    </Label>
+                    {fichaDialog.foto_url ? (
                       <div className="border rounded-lg overflow-hidden bg-gray-50 p-4">
-                        <img src={fichaDialog.foto_url} alt={fichaDialog.descricao} className="max-h-64 object-contain mx-auto" onError={(e) => { (e.target as any).style.display = "none"; }} />
+                        <img src={fichaDialog.foto_url} alt={fichaDialog.descricao} className="max-h-56 object-contain mx-auto" onError={(e) => { (e.target as any).style.display = "none"; }} />
                       </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-10 text-gray-400 border-2 border-dashed border-amber-300 rounded-lg bg-amber-50/30">
+                        <Image className="w-10 h-10 mb-2 text-amber-400" />
+                        <p className="text-sm text-amber-600 font-medium">Foto obrigatória</p>
+                        <p className="text-xs text-gray-400 mt-1">Use a IA ou envie uma foto</p>
+                      </div>
+                    )}
+                    <div className="flex gap-2 mt-2">
+                      <Button variant="outline" size="sm" className="text-xs flex-1" onClick={() => buscarFoto.mutate({ companyId, fichaId: fichaDialog.id })} disabled={buscarFoto.isPending}>
+                        {buscarFoto.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                        Buscar via IA
+                      </Button>
+                      <label className="flex-1">
+                        <input type="file" accept="image/*" className="hidden" onChange={handleFotoUpload} />
+                        <Button variant="outline" size="sm" className="text-xs w-full" onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }} disabled={uploadFoto.isPending}>
+                          {uploadFoto.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Image className="w-3 h-3 mr-1" />}
+                          Enviar Foto
+                        </Button>
+                      </label>
                     </div>
-                  )}
+                    {fichaDialog.foto_url && (
+                      <Button variant="ghost" size="sm" className="text-xs text-red-500 mt-1 w-full" onClick={() => {
+                        atualizarFicha.mutate({ companyId, fichaId: fichaDialog.id, fotoUrl: null });
+                      }}>
+                        Remover Foto
+                      </Button>
+                    )}
+                  </div>
 
                   <div>
                     <Label className="text-xs text-gray-500 mb-2 block">Pré-visualização do PDF</Label>

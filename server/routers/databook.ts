@@ -13,6 +13,64 @@ const DISCIPLINAS = [
   "Incêndio / SPDA", "Paisagismo", "Equipamentos", "Outros",
 ];
 
+async function buscarFotoParaFicha(fichaId: number, companyId: number): Promise<string | null> {
+  const db = await getDb();
+  const [ficha] = await db.select().from(databookFichas).where(
+    and(eq(databookFichas.id, fichaId), eq(databookFichas.companyId, companyId))
+  );
+  if (!ficha) return null;
+
+  const googleKey = process.env.GOOGLE_API_KEY;
+  if (!googleKey) return null;
+
+  const prompt = `Busque uma imagem real de produto de construção civil: "${ficha.descricao}".
+Retorne APENAS a URL direta de uma imagem do produto (JPG ou PNG) que seja de um catálogo de fabricante ou loja online confiável.
+Responda apenas a URL, nada mais.`;
+
+  try {
+    const res = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${googleKey}`,
+        },
+        body: JSON.stringify({
+          model: "gemini-2.5-flash",
+          messages: [
+            { role: "system", content: "Você busca imagens reais de produtos de construção civil. Retorne apenas a URL direta da imagem." },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 500,
+        }),
+      }
+    );
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    const url = data.choices?.[0]?.message?.content?.trim() || "";
+
+    if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+      await db.update(databookFichas).set({
+        fotoUrl: url,
+        updatedAt: new Date().toISOString(),
+      } as any).where(eq(databookFichas.id, fichaId));
+      return url;
+    }
+  } catch {}
+  return null;
+}
+
+async function buscarFotosEmBackground(fichaIds: number[], companyId: number) {
+  for (const fichaId of fichaIds) {
+    try {
+      await buscarFotoParaFicha(fichaId, companyId);
+      await new Promise(r => setTimeout(r, 500));
+    } catch {}
+  }
+}
+
 function hashDescricao(desc: string): string {
   return createHash("md5").update(desc.toLowerCase().trim().replace(/\s+/g, " ")).digest("hex");
 }
@@ -344,6 +402,7 @@ Responda APENAS o JSON array, sem markdown.`;
       }
 
       let processadas = 0;
+      const fichasParaFoto: number[] = [];
       for (const item of items) {
         const fichaIndex = (item.index ?? item.idx ?? 0) - 1;
         if (fichaIndex < 0 || fichaIndex >= fichas.length) continue;
@@ -357,6 +416,11 @@ Responda APENAS o JSON array, sem markdown.`;
           updatedAt: new Date().toISOString(),
         } as any).where(eq(databookFichas.id, ficha.id));
         processadas++;
+        if (!ficha.fotoUrl) fichasParaFoto.push(ficha.id);
+      }
+
+      if (fichasParaFoto.length > 0) {
+        buscarFotosEmBackground(fichasParaFoto, input.companyId).catch(() => {});
       }
 
       return { processadas };
@@ -368,51 +432,47 @@ Responda APENAS o JSON array, sem markdown.`;
       fichaId: z.number(),
     }))
     .mutation(async ({ input }) => {
+      const url = await buscarFotoParaFicha(input.fichaId, input.companyId);
+      if (url) return { fotoUrl: url };
+      return { fotoUrl: null, aviso: "Não foi possível encontrar uma foto para este produto" };
+    }),
+
+  buscarFotoLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
       const db = await getDb();
-      const [ficha] = await db.select().from(databookFichas).where(
+      const result = await db.execute(sql`
+        SELECT id FROM databook_fichas
+        WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId}
+          AND (foto_url IS NULL OR foto_url = '')
+        ORDER BY numero_sequencial ASC
+      `);
+      const fichaIds = ((result as any).rows ?? result ?? []).map((r: any) => r.id);
+      if (fichaIds.length === 0) return { total: 0, msg: "Todas as fichas já possuem foto" };
+
+      buscarFotosEmBackground(fichaIds, input.companyId).catch(() => {});
+
+      return { total: fichaIds.length, msg: `Buscando fotos para ${fichaIds.length} fichas em background...` };
+    }),
+
+  uploadFotoFicha: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      fichaId: z.number(),
+      fotoBase64: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(databookFichas).set({
+        fotoUrl: input.fotoBase64,
+        updatedAt: new Date().toISOString(),
+      } as any).where(
         and(eq(databookFichas.id, input.fichaId), eq(databookFichas.companyId, input.companyId))
       );
-      if (!ficha) throw new Error("Ficha não encontrada");
-
-      const googleKey = process.env.GOOGLE_API_KEY;
-      if (!googleKey) throw new Error("GOOGLE_API_KEY não configurada");
-
-      const prompt = `Busque uma imagem real de produto de construção civil: "${ficha.descricao}".
-Retorne APENAS a URL direta de uma imagem do produto (JPG ou PNG) que seja de um catálogo de fabricante ou loja online confiável.
-Responda apenas a URL, nada mais.`;
-
-      const res = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${googleKey}`,
-          },
-          body: JSON.stringify({
-            model: "gemini-2.5-flash",
-            messages: [
-              { role: "system", content: "Você busca imagens reais de produtos de construção civil. Retorne apenas a URL direta da imagem." },
-              { role: "user", content: prompt },
-            ],
-            max_tokens: 500,
-          }),
-        }
-      );
-
-      if (!res.ok) throw new Error(`Gemini falhou: ${res.status}`);
-      const data = await res.json();
-      const url = data.choices?.[0]?.message?.content?.trim() || "";
-
-      if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
-        await db.update(databookFichas).set({
-          fotoUrl: url,
-          updatedAt: new Date().toISOString(),
-        } as any).where(eq(databookFichas.id, input.fichaId));
-        return { fotoUrl: url };
-      }
-
-      return { fotoUrl: null, aviso: "Não foi possível encontrar uma foto para este produto" };
+      return { success: true };
     }),
 
   atualizarFicha: protectedProcedure
