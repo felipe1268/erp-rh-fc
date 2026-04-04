@@ -141,6 +141,39 @@ export default function Veiculos() {
           </Select>
         </div>
 
+        {!vehicles.isLoading && list.length > 0 && (() => {
+          const totalFipe = list.reduce((s: number, v: any) => s + parseFloat(v.valor_fipe || "0"), 0);
+          const comFipe = list.filter((v: any) => parseFloat(v.valor_fipe || "0") > 0).length;
+          return (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Card className="bg-cyan-50 dark:bg-cyan-950 border-cyan-200">
+                <CardContent className="p-3 text-center">
+                  <p className="text-2xl font-bold text-cyan-700">{list.length}</p>
+                  <p className="text-xs text-cyan-600">Veículos na Frota</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-green-50 dark:bg-green-950 border-green-200">
+                <CardContent className="p-3 text-center">
+                  <p className="text-lg font-bold text-green-700">{fmt(totalFipe)}</p>
+                  <p className="text-xs text-green-600">Valor do Inventário</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200">
+                <CardContent className="p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-700">{comFipe}</p>
+                  <p className="text-xs text-blue-600">Com Valor FIPE</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-amber-50 dark:bg-amber-950 border-amber-200">
+                <CardContent className="p-3 text-center">
+                  <p className="text-2xl font-bold text-amber-700">{list.filter((v: any) => v.statusVeiculo === "Ativo").length}</p>
+                  <p className="text-xs text-amber-600">Ativos</p>
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })()}
+
         {vehicles.isLoading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin h-6 w-6 border-2 border-cyan-600 border-t-transparent rounded-full" />
@@ -170,6 +203,9 @@ export default function Veiculos() {
                     <div className="mt-1.5 flex items-center gap-2">
                       <span className="font-mono text-sm font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{v.placa || "S/P"}</span>
                       <span className="text-xs text-muted-foreground">{v.tipoVeiculo}</span>
+                      {v.valor_fipe && parseFloat(v.valor_fipe) > 0 && (
+                        <span className="text-xs font-semibold text-green-600">{fmt(v.valor_fipe)}</span>
+                      )}
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground truncate">
                       {v.responsavel || v.motorista_nome || "Sem responsável"}
