@@ -7658,4 +7658,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-04 02:00:00",
   },
+  {
+    version: 1010,
+    titulo: "Frotas — Parser PDF Combustível: Extração Inteligente de Produto/Quantidade",
+    descricao:
+      "Correção do parser de PDF do posto de combustível para linhas comprimidas onde " +
+      "o nome do produto (ex: OLEO DIESEL S10) e a quantidade (ex: 175.78) ficavam concatenados. " +
+      "Novo algoritmo identifica produtos conhecidos (Diesel S10/S500, Gasolina Comum/Aditivada, Etanol, GNV) " +
+      "antes de extrair a quantidade, eliminando leituras incorretas como 1015L ou 10175L. " +
+      "Adicionado limite de sanidade (max 1000L por abastecimento) para rejeitar registros com parsing inválido.",
+    tipo: "bugfix",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-04 12:00:00",
+  },
 ];

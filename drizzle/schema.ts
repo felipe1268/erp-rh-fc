@@ -3005,6 +3005,8 @@ export const fleetFuelRecords = pgTable("fleet_fuel_records", {
         tipoCombustivel: varchar("tipo_combustivel", { length: 30 }).default("gasolina"),
         motorista: varchar({ length: 255 }),
         posto: varchar({ length: 255 }),
+        numDoc: varchar("num_doc", { length: 20 }),
+        desconto: numeric({ precision: 14, scale: 2 }),
         observacoes: text(),
         criadoPor: varchar("criado_por", { length: 255 }),
         createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),

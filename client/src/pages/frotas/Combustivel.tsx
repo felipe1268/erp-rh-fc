@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Fuel, Plus, Pencil, Trash2, Upload, Search } from "lucide-react";
+import { Fuel, Plus, Pencil, Trash2, Upload, Search, FileText, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 
@@ -20,6 +20,8 @@ function fmt(v: any) {
 
 const COMBUSTIVEIS = ["Gasolina", "Etanol", "Diesel", "Diesel S10", "GNV", "Flex"];
 
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
 export default function Combustivel() {
   const { selectedCompanyId } = useCompany();
   const { user } = useAuth();
@@ -28,8 +30,12 @@ export default function Combustivel() {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
   const [filterVehicle, setFilterVehicle] = useState("all");
+  const [filterMonth, setFilterMonth] = useState("all");
   const [search, setSearch] = useState("");
+  const [importResult, setImportResult] = useState<any>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
 
   const vehicles = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
   const fuel = trpc.frotas.listFuelRecords.useQuery(
@@ -45,9 +51,17 @@ export default function Combustivel() {
   const deleteMut = trpc.frotas.deleteFuelRecord.useMutation({
     onSuccess: () => { fuel.refetch(); toast.success("Registro excluído"); },
   });
-  const importMut = trpc.frotas.importFuelCsv.useMutation({
-    onSuccess: (data) => { fuel.refetch(); toast.success(`${data.imported} registros importados`); },
+  const importCsvMut = trpc.frotas.importFuelCsv.useMutation({
+    onSuccess: (data) => { fuel.refetch(); toast.success(`${data.inserted} registros importados`); },
     onError: (err) => toast.error(err.message),
+  });
+  const importPdfMut = trpc.frotas.importFuelPdf.useMutation({
+    onSuccess: (data) => {
+      fuel.refetch();
+      setImportResult(data);
+      setImportDialogOpen(true);
+    },
+    onError: (err) => toast.error("Erro ao importar PDF: " + err.message),
   });
 
   function openNew() {
@@ -81,13 +95,53 @@ export default function Combustivel() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      importMut.mutate({ companyId: cId, csvContent: ev.target?.result as string, criadoPor: user?.name || "" });
+      importCsvMut.mutate({ companyId: cId, csvContent: ev.target?.result as string, criadoPor: user?.name || "" } as any);
     };
     reader.readAsText(file);
     e.target.value = "";
   }
 
-  const list = (fuel.data || []).filter((r: any) => {
+  function handlePdf(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error("Selecione um arquivo PDF");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx. 10MB)");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as ArrayBuffer;
+      const base64 = btoa(
+        new Uint8Array(result).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      importPdfMut.mutate({ companyId: cId, pdfBase64: base64, criadoPor: user?.name || "" });
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = "";
+  }
+
+  const allRecords = fuel.data || [];
+
+  const availableMonths = (() => {
+    const months = new Set<string>();
+    allRecords.forEach((r: any) => {
+      if (r.data) {
+        const [y, m] = r.data.split('-');
+        months.add(`${y}-${m}`);
+      }
+    });
+    return [...months].sort().reverse();
+  })();
+
+  const list = allRecords.filter((r: any) => {
+    if (filterMonth !== "all" && r.data) {
+      const [y, m] = r.data.split('-');
+      if (`${y}-${m}` !== filterMonth) return false;
+    }
     if (!search) return true;
     const s = search.toLowerCase();
     return (
@@ -96,6 +150,44 @@ export default function Combustivel() {
       (r.motorista || "").toLowerCase().includes(s)
     );
   });
+
+  const resumo = (() => {
+    const totalLitros = list.reduce((s: number, r: any) => s + parseFloat(r.litros || "0"), 0);
+    const totalValor = list.reduce((s: number, r: any) => s + parseFloat(r.valor_total || "0"), 0);
+    const totalDesc = list.reduce((s: number, r: any) => s + parseFloat(r.desconto || "0"), 0);
+    const veiculosSet = new Set(list.map((r: any) => r.vehicle_id));
+    const motoristasSet = new Set(list.filter((r: any) => r.motorista).map((r: any) => r.motorista));
+    return { totalLitros, totalValor, totalDesc, veiculos: veiculosSet.size, motoristas: motoristasSet.size, registros: list.length };
+  })();
+
+  const byVehicle = (() => {
+    const map: Record<string, { placa: string; litros: number; valor: number; count: number }> = {};
+    list.forEach((r: any) => {
+      const key = r.vehicle_id;
+      if (!map[key]) map[key] = { placa: r.placa || r.modelo || "—", litros: 0, valor: 0, count: 0 };
+      map[key].litros += parseFloat(r.litros || "0");
+      map[key].valor += parseFloat(r.valor_total || "0");
+      map[key].count++;
+    });
+    return Object.values(map).sort((a, b) => b.valor - a.valor);
+  })();
+
+  const byDriver = (() => {
+    const map: Record<string, { litros: number; valor: number; count: number }> = {};
+    list.forEach((r: any) => {
+      const key = r.motorista || "Não informado";
+      if (!map[key]) map[key] = { litros: 0, valor: 0, count: 0 };
+      map[key].litros += parseFloat(r.litros || "0");
+      map[key].valor += parseFloat(r.valor_total || "0");
+      map[key].count++;
+    });
+    return Object.entries(map).sort((a, b) => b[1].valor - a[1].valor);
+  })();
+
+  function formatMonth(ym: string) {
+    const [y, m] = ym.split('-');
+    return `${MESES[parseInt(m) - 1]} ${y}`;
+  }
 
   return (
     <DashboardLayout>
@@ -106,8 +198,13 @@ export default function Combustivel() {
           </h1>
           <div className="flex gap-2">
             <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={handleCsv} />
-            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importMut.isPending}>
-              <Upload className="h-4 w-4 mr-1" /> {importMut.isPending ? "Importando..." : "Importar CSV"}
+            <input type="file" accept=".pdf" ref={pdfRef} className="hidden" onChange={handlePdf} />
+            <Button variant="outline" onClick={() => pdfRef.current?.click()} disabled={importPdfMut.isPending}>
+              <FileText className="h-4 w-4 mr-1" />
+              {importPdfMut.isPending ? "Processando PDF..." : "Importar PDF Posto"}
+            </Button>
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importCsvMut.isPending}>
+              <Upload className="h-4 w-4 mr-1" /> Importar CSV
             </Button>
             <Button onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo Abastecimento</Button>
           </div>
@@ -116,8 +213,17 @@ export default function Combustivel() {
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+            <Input placeholder="Buscar placa, posto, motorista..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          <Select value={filterMonth} onValueChange={setFilterMonth}>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Mês" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os meses</SelectItem>
+              {availableMonths.map(m => (
+                <SelectItem key={m} value={m}>{formatMonth(m)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={filterVehicle} onValueChange={setFilterVehicle}>
             <SelectTrigger className="w-[200px]"><SelectValue placeholder="Veículo" /></SelectTrigger>
             <SelectContent>
@@ -129,9 +235,79 @@ export default function Combustivel() {
           </Select>
         </div>
 
-        <div className="text-xs text-muted-foreground">
-          CSV: vehicleId, data (YYYY-MM-DD), tipo_combustivel, litros, valor_litro, valor_total, km_atual, posto, motorista
-        </div>
+        {list.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <Card className="bg-amber-50 dark:bg-amber-950 border-amber-200">
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold text-amber-700">{resumo.registros}</p>
+                <p className="text-xs text-amber-600">Abastecimentos</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-green-50 dark:bg-green-950 border-green-200">
+              <CardContent className="p-3 text-center">
+                <p className="text-lg font-bold text-green-700">{fmt(resumo.totalValor)}</p>
+                <p className="text-xs text-green-600">Valor Total</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200">
+              <CardContent className="p-3 text-center">
+                <p className="text-lg font-bold text-blue-700">{resumo.totalLitros.toFixed(1)}L</p>
+                <p className="text-xs text-blue-600">Litros Total</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-cyan-50 dark:bg-cyan-950 border-cyan-200">
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold text-cyan-700">{resumo.veiculos}</p>
+                <p className="text-xs text-cyan-600">Veículos</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-purple-50 dark:bg-purple-950 border-purple-200">
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold text-purple-700">{resumo.motoristas}</p>
+                <p className="text-xs text-purple-600">Motoristas</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {list.length > 0 && (byVehicle.length > 1 || byDriver.length > 1) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {byVehicle.length > 1 && (
+              <Card>
+                <CardContent className="p-4">
+                  <h3 className="font-semibold text-sm mb-2">Consumo por Veículo</h3>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                    {byVehicle.map((v, i) => (
+                      <div key={i} className="flex justify-between items-center text-sm border-b pb-1">
+                        <span className="font-mono text-xs">{v.placa}</span>
+                        <span className="text-muted-foreground">{v.litros.toFixed(1)}L</span>
+                        <span className="font-medium">{fmt(v.valor)}</span>
+                        <Badge variant="outline" className="text-xs">{v.count}x</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {byDriver.length > 1 && (
+              <Card>
+                <CardContent className="p-4">
+                  <h3 className="font-semibold text-sm mb-2">Consumo por Motorista</h3>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                    {byDriver.map(([name, d], i) => (
+                      <div key={i} className="flex justify-between items-center text-sm border-b pb-1">
+                        <span className="truncate max-w-[140px] text-xs">{name}</span>
+                        <span className="text-muted-foreground">{d.litros.toFixed(1)}L</span>
+                        <span className="font-medium">{fmt(d.valor)}</span>
+                        <Badge variant="outline" className="text-xs">{d.count}x</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
         {fuel.isLoading ? (
           <div className="flex justify-center py-12">
@@ -151,24 +327,24 @@ export default function Combustivel() {
                   <th className="text-right p-3">R$/L</th>
                   <th className="text-right p-3">Total</th>
                   <th className="text-right p-3">KM</th>
-                  <th className="text-left p-3">Posto</th>
                   <th className="text-left p-3">Motorista</th>
+                  <th className="text-left p-3">Posto</th>
                   <th className="text-right p-3">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {list.map((r: any) => (
                   <tr key={r.id} className="border-t hover:bg-muted/30">
-                    <td className="p-3">{r.data}</td>
+                    <td className="p-3 whitespace-nowrap">{r.data ? r.data.split('-').reverse().join('/') : "—"}</td>
                     <td className="p-3 font-mono">{r.placa || "—"}</td>
                     <td className="p-3"><Badge variant="outline">{r.tipo_combustivel}</Badge></td>
                     <td className="p-3 text-right">{parseFloat(r.litros || 0).toFixed(2)}</td>
                     <td className="p-3 text-right">{r.preco_litro ? `R$ ${parseFloat(r.preco_litro).toFixed(3)}` : "—"}</td>
                     <td className="p-3 text-right font-medium">{fmt(r.valor_total)}</td>
                     <td className="p-3 text-right">{r.km_atual ? parseFloat(r.km_atual).toLocaleString("pt-BR") : "—"}</td>
-                    <td className="p-3">{r.posto || "—"}</td>
-                    <td className="p-3">{r.motorista || "—"}</td>
-                    <td className="p-3 text-right">
+                    <td className="p-3 text-xs max-w-[150px] truncate">{r.motorista || "—"}</td>
+                    <td className="p-3 text-xs">{r.posto || "—"}</td>
+                    <td className="p-3 text-right whitespace-nowrap">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir?")) deleteMut.mutate({ id: r.id, companyId: cId }); }}>
                         <Trash2 className="h-4 w-4 text-red-500" />
@@ -217,6 +393,70 @@ export default function Combustivel() {
               <Button onClick={save} disabled={createMut.isPending || updateMut.isPending}>
                 {(createMut.isPending || updateMut.isPending) ? "Salvando..." : "Salvar"}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Resultado da Importação PDF</DialogTitle></DialogHeader>
+            {importResult && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <div>
+                      <p className="text-lg font-bold text-green-700">{importResult.inserted}</p>
+                      <p className="text-xs text-green-600">Importados</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950 rounded-lg">
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    <div>
+                      <p className="text-lg font-bold text-amber-700">{importResult.duplicates}</p>
+                      <p className="text-xs text-amber-600">Duplicados (ignorados)</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Total lido do PDF: <strong>{importResult.totalParsed}</strong> registros de combustível
+                </div>
+                {importResult.noVehicle > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-red-600">
+                    <XCircle className="h-4 w-4" />
+                    {importResult.noVehicle} registro(s) sem veículo correspondente
+                  </div>
+                )}
+                {importResult.matchedDrivers?.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-1">Motoristas vinculados a funcionários:</p>
+                    <div className="text-xs space-y-1 max-h-[120px] overflow-y-auto bg-muted/50 rounded p-2">
+                      {importResult.matchedDrivers.map((m: string, i: number) => (
+                        <div key={i} className="flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
+                          <span>{m}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {importResult.unmatchedDrivers?.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-1">Motoristas não encontrados no cadastro:</p>
+                    <div className="text-xs space-y-1 max-h-[80px] overflow-y-auto bg-muted/50 rounded p-2">
+                      {importResult.unmatchedDrivers.map((d: string, i: number) => (
+                        <div key={i} className="flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                          <span>{d}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              <Button onClick={() => setImportDialogOpen(false)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

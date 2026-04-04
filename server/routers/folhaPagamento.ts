@@ -10,8 +10,6 @@ import {
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
-import { PDFParse } from "pdf-parse";
-
 // ============================================================
 // HELPERS
 // ============================================================
@@ -31,11 +29,9 @@ function normalizeNome(nome: string): string {
 }
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  const uint8 = new Uint8Array(buffer);
-  const parser = new PDFParse(uint8) as any;
-  await parser.load();
-  const result = await parser.getText();
-  return result.text;
+  const pdfParse = require('pdf-parse');
+  const data = await pdfParse(buffer);
+  return data.text;
 }
 
 // ============================================================
