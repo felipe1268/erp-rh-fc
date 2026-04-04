@@ -574,6 +574,7 @@ export default function Databook() {
                             setEditEspecificacoes(f.especificacoes || "");
                             setEditObservacoes(f.observacoes || "");
                             setEditDisciplina(f.disciplina || "Outros");
+                            if (pdfPreview) { URL.revokeObjectURL(pdfPreview); setPdfPreview(null); }
                           }}>
                             <Edit className="w-3.5 h-3.5" />
                           </Button>
@@ -707,7 +708,7 @@ export default function Databook() {
 
         {/* Ficha Detail Dialog */}
         <Dialog open={!!fichaDialog} onOpenChange={(open) => { if (!open) setFichaDialog(null); }}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-[95vw] w-full h-[95vh] max-h-[95vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <BookOpen className="w-5 h-5" />
@@ -715,123 +716,146 @@ export default function Databook() {
               </DialogTitle>
             </DialogHeader>
             {fichaDialog && (
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-xs text-gray-500">Descrição</Label>
-                  <p className="text-sm font-medium">{fichaDialog.descricao}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs text-gray-500">Fornecedor</Label>
-                    <p className="text-sm">{fichaDialog.fornecedor_nome || "—"}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">OC/Contrato</Label>
-                    <p className="text-sm">{fichaDialog.contrato_numero || "—"}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Status</Label>
-                    <div className="mt-1"><StatusBadge status={fichaDialog.status} /></div>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">EAP</Label>
-                    <p className="text-sm font-mono">{fichaDialog.eap_codigo || "—"}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-xs text-gray-500">Disciplina</Label>
-                  <Select value={editDisciplina} onValueChange={setEditDisciplina}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DISCIPLINAS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="text-xs text-gray-500">Especificações Técnicas</Label>
-                  <Textarea
-                    value={editEspecificacoes}
-                    onChange={(e) => setEditEspecificacoes(e.target.value)}
-                    rows={6}
-                    className="mt-1 text-sm"
-                    placeholder="Especificações técnicas do produto..."
-                  />
-                  <div className="flex gap-1 mt-1">
-                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => gerarEspecIA.mutate({ companyId, fichaId: fichaDialog.id })} disabled={gerarEspecIA.isPending}>
-                      {gerarEspecIA.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
-                      Gerar com IA
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => buscarFoto.mutate({ companyId, fichaId: fichaDialog.id })} disabled={buscarFoto.isPending}>
-                      {buscarFoto.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Image className="w-3 h-3 mr-1" />}
-                      Buscar Foto IA
-                    </Button>
-                  </div>
-                </div>
-
-                {fichaDialog.foto_url && (
-                  <div>
-                    <Label className="text-xs text-gray-500">Foto do Produto</Label>
-                    <div className="mt-1 border rounded-lg overflow-hidden bg-gray-50 p-2">
-                      <img src={fichaDialog.foto_url} alt={fichaDialog.descricao} className="max-h-48 object-contain mx-auto" onError={(e) => { (e.target as any).style.display = "none"; }} />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+                {/* Left Column — Info & Edit */}
+                <div className="space-y-4 overflow-y-auto pr-2">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="text-base font-semibold text-gray-800 mb-3">{fichaDialog.descricao}</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs text-gray-500">Fornecedor</Label>
+                        <p className="text-sm font-medium">{fichaDialog.fornecedor_nome || "—"}</p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">OC/Contrato</Label>
+                        <p className="text-sm font-medium">{fichaDialog.contrato_numero || "—"}</p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Status</Label>
+                        <div className="mt-1"><StatusBadge status={fichaDialog.status} /></div>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">EAP</Label>
+                        <p className="text-sm font-mono">{fichaDialog.eap_codigo || "—"}</p>
+                      </div>
                     </div>
                   </div>
-                )}
 
-                <div>
-                  <Label className="text-xs text-gray-500">Observações</Label>
-                  <Textarea
-                    value={editObservacoes}
-                    onChange={(e) => setEditObservacoes(e.target.value)}
-                    rows={3}
-                    className="mt-1 text-sm"
-                    placeholder="Observações adicionais..."
-                  />
-                </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Disciplina</Label>
+                    <Select value={editDisciplina} onValueChange={setEditDisciplina}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DISCIPLINAS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="flex flex-wrap gap-2 pt-2 border-t">
-                  <Button size="sm" onClick={() => {
-                    atualizarFicha.mutate({
-                      companyId,
-                      fichaId: fichaDialog.id,
-                      especificacoes: editEspecificacoes,
-                      observacoes: editObservacoes,
-                      disciplina: editDisciplina,
-                    });
-                    setFichaDialog(null);
-                  }}>
-                    Salvar Alterações
-                  </Button>
-                  {fichaDialog.status === "gerado" && (
-                    <Button size="sm" variant="outline" onClick={() => { alterarStatus.mutate({ companyId, fichaId: fichaDialog.id, novoStatus: "revisado", userName }); setFichaDialog(null); }}>
-                      <CheckCircle className="w-3.5 h-3.5 mr-1" /> Marcar Revisado
-                    </Button>
-                  )}
-                  {fichaDialog.status === "revisado" && (
-                    <Button size="sm" variant="outline" onClick={() => { alterarStatus.mutate({ companyId, fichaId: fichaDialog.id, novoStatus: "enviado", userName }); setFichaDialog(null); }}>
-                      <Send className="w-3.5 h-3.5 mr-1" /> Enviar ao Cliente
-                    </Button>
-                  )}
-                  {fichaDialog.status === "enviado" && (
-                    <>
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => { alterarStatus.mutate({ companyId, fichaId: fichaDialog.id, novoStatus: "aprovado", userName }); setFichaDialog(null); }}>
-                        <ThumbsUp className="w-3.5 h-3.5 mr-1" /> Aprovar
+                  <div>
+                    <Label className="text-xs text-gray-500">Especificações Técnicas</Label>
+                    <Textarea
+                      value={editEspecificacoes}
+                      onChange={(e) => setEditEspecificacoes(e.target.value)}
+                      rows={10}
+                      className="mt-1 text-sm"
+                      placeholder="Especificações técnicas do produto..."
+                    />
+                    <div className="flex gap-1 mt-2">
+                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => gerarEspecIA.mutate({ companyId, fichaId: fichaDialog.id })} disabled={gerarEspecIA.isPending}>
+                        {gerarEspecIA.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                        Gerar com IA
                       </Button>
-                      <Button size="sm" variant="destructive" onClick={() => {
+                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => buscarFoto.mutate({ companyId, fichaId: fichaDialog.id })} disabled={buscarFoto.isPending}>
+                        {buscarFoto.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Image className="w-3 h-3 mr-1" />}
+                        Buscar Foto IA
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-gray-500">Observações</Label>
+                    <Textarea
+                      value={editObservacoes}
+                      onChange={(e) => setEditObservacoes(e.target.value)}
+                      rows={4}
+                      className="mt-1 text-sm"
+                      placeholder="Observações adicionais..."
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-3 border-t sticky bottom-0 bg-white pb-2">
+                    <Button onClick={() => {
+                      atualizarFicha.mutate({
+                        companyId,
+                        fichaId: fichaDialog.id,
+                        especificacoes: editEspecificacoes,
+                        observacoes: editObservacoes,
+                        disciplina: editDisciplina,
+                      });
+                      setFichaDialog(null);
+                    }}>
+                      Salvar Alterações
+                    </Button>
+                    {fichaDialog.status === "gerado" && (
+                      <Button variant="outline" onClick={() => { alterarStatus.mutate({ companyId, fichaId: fichaDialog.id, novoStatus: "revisado", userName }); setFichaDialog(null); }}>
+                        <CheckCircle className="w-4 h-4 mr-1" /> Marcar Revisado
+                      </Button>
+                    )}
+                    {fichaDialog.status === "revisado" && (
+                      <Button variant="outline" onClick={() => { alterarStatus.mutate({ companyId, fichaId: fichaDialog.id, novoStatus: "aprovado", userName }); setFichaDialog(null); }}>
+                        <ThumbsUp className="w-4 h-4 mr-1" /> Aprovar
+                      </Button>
+                    )}
+                    {fichaDialog.status === "aprovado" && (
+                      <Button variant="outline" className="border-purple-200 text-purple-700 hover:bg-purple-50" onClick={() => { alterarStatus.mutate({ companyId, fichaId: fichaDialog.id, novoStatus: "enviado", userName }); setFichaDialog(null); }}>
+                        <Send className="w-4 h-4 mr-1" /> Enviar ao Cliente
+                      </Button>
+                    )}
+                    {fichaDialog.status === "enviado" && (
+                      <Button variant="destructive" onClick={() => {
                         const motivo = prompt("Motivo da reprovação:");
                         if (motivo) { alterarStatus.mutate({ companyId, fichaId: fichaDialog.id, novoStatus: "reprovado", userName, motivo }); setFichaDialog(null); }
                       }}>
-                        <ThumbsDown className="w-3.5 h-3.5 mr-1" /> Reprovar
+                        <ThumbsDown className="w-4 h-4 mr-1" /> Reprovar
                       </Button>
-                    </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Column — Photo & PDF Preview */}
+                <div className="space-y-4 overflow-y-auto pl-2 border-l">
+                  {fichaDialog.foto_url && (
+                    <div>
+                      <Label className="text-xs text-gray-500 mb-2 block">Foto do Produto</Label>
+                      <div className="border rounded-lg overflow-hidden bg-gray-50 p-4">
+                        <img src={fichaDialog.foto_url} alt={fichaDialog.descricao} className="max-h-64 object-contain mx-auto" onError={(e) => { (e.target as any).style.display = "none"; }} />
+                      </div>
+                    </div>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => gerarPdfFicha.mutate({ companyId, fichaId: fichaDialog.id })} disabled={gerarPdfFicha.isPending}>
-                    <FileDown className="w-3.5 h-3.5 mr-1" /> PDF
-                  </Button>
+
+                  <div>
+                    <Label className="text-xs text-gray-500 mb-2 block">Pré-visualização do PDF</Label>
+                    <div className="flex gap-2 mb-3">
+                      <Button variant="outline" size="sm" onClick={() => visualizarPdfFicha.mutate({ companyId, fichaId: fichaDialog.id })} disabled={visualizarPdfFicha.isPending}>
+                        {visualizarPdfFicha.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Eye className="w-4 h-4 mr-1" />}
+                        Visualizar PDF
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => gerarPdfFicha.mutate({ companyId, fichaId: fichaDialog.id })} disabled={gerarPdfFicha.isPending}>
+                        <FileDown className="w-4 h-4 mr-1" /> Baixar PDF
+                      </Button>
+                    </div>
+                    {pdfPreview && (
+                      <iframe src={pdfPreview} className="w-full h-[60vh] rounded-lg border" />
+                    )}
+                    {!pdfPreview && !fichaDialog.foto_url && (
+                      <div className="flex flex-col items-center justify-center py-16 text-gray-400 border rounded-lg bg-gray-50">
+                        <FileText className="w-12 h-12 mb-3 opacity-30" />
+                        <p className="text-sm">Clique em "Visualizar PDF" para pré-visualizar a ficha</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
