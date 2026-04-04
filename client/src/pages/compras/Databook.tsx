@@ -1,7 +1,8 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCompany } from "@/hooks/useCompany";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,7 @@ import {
   BookOpen, Search, Loader2, CheckCircle, Clock, AlertTriangle, Eye,
   FileDown, Sparkles, Image, Edit, Trash2, Send, ThumbsUp, ThumbsDown,
   BarChart3, Filter, RefreshCw, FileText, Package, Building2, ChevronDown,
-  ChevronRight, XCircle, Download, Wand2
+  ChevronRight, XCircle, Download, Wand2, HardHat
 } from "lucide-react";
 
 const STATUS_LABELS: Record<string, { label: string; cls: string; icon: any }> = {
@@ -70,12 +71,19 @@ function downloadBase64Pdf(base64: string, filename: string) {
 }
 
 export default function Databook() {
-  const { selectedCompanyId, selectedObraId, obrasDisponiveis, user } = useCompany();
-  const companyId = selectedCompanyId || 0;
-  const obraId = selectedObraId || 0;
+  const { companyId, getCompanyIds } = useCompany();
+  const companyIds = getCompanyIds();
+  const { user } = useAuth();
   const userName = (user as any)?.name || (user as any)?.email || "Usuário";
 
+  const [obraId, setObraId] = useState<number>(0);
   const [abaAtiva, setAbaAtiva] = useState<"dashboard" | "fichas" | "terceiros">("dashboard");
+
+  const obrasQ = trpc.obras.listActive.useQuery(
+    { companyId, companyIds },
+    { enabled: companyId > 0 }
+  );
+  const obrasLista = (obrasQ.data || []) as any[];
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
   const [filtroDisciplina, setFiltroDisciplina] = useState<string>("todas");
   const [filtroOrigem, setFiltroOrigem] = useState<string>("todas");
@@ -254,28 +262,54 @@ export default function Databook() {
   const fichaRefetch = fichaDetalhe.refetch;
 
   const obraNome = useMemo(() => {
-    const obra = obrasDisponiveis?.find((o: any) => o.id === obraId);
+    const obra = obrasLista.find((o: any) => o.id === obraId);
     return obra?.nome || "Selecione uma obra";
-  }, [obraId, obrasDisponiveis]);
+  }, [obraId, obrasLista]);
 
   const fichasList = (fichas.data as any[]) || [];
   const allSelected = fichasList.length > 0 && selecionados.length === fichasList.length;
 
-  if (!companyId || !obraId) {
+  if (!companyId) {
     return (
-      <DashboardLayout title="Databook de Obra" subtitle="Selecione uma empresa e obra">
+      <DashboardLayout title="Databook de Obra" subtitle="Selecione uma empresa">
         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
           <BookOpen className="w-16 h-16 mb-4 opacity-30" />
-          <p className="text-lg font-medium">Selecione uma empresa e obra no menu acima</p>
-          <p className="text-sm mt-1">O Databook agrupa fichas técnicas de todos os materiais da obra</p>
+          <p className="text-lg font-medium">Selecione uma empresa no menu acima</p>
         </div>
       </DashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout title="Databook de Obra" subtitle={obraNome}>
+    <DashboardLayout title="Databook de Obra" subtitle={obraId ? obraNome : "Selecione uma obra"}>
       <div className="space-y-4">
+        {/* Obra Selector */}
+        <div className="bg-white rounded-lg border p-3 flex items-center gap-3">
+          <HardHat className="w-5 h-5 text-gray-400" />
+          <Label className="text-sm font-medium text-gray-600 whitespace-nowrap">Obra:</Label>
+          <Select value={obraId ? String(obraId) : "none"} onValueChange={(v) => { setObraId(v === "none" ? 0 : parseInt(v)); setSelecionados([]); }}>
+            <SelectTrigger className="w-80 h-9">
+              <SelectValue placeholder="Selecione a obra..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Selecione uma obra...</SelectItem>
+              {obrasLista.map((o: any) => (
+                <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {obrasQ.isLoading && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+        </div>
+
+        {!obraId && (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+            <BookOpen className="w-16 h-16 mb-4 opacity-30" />
+            <p className="text-lg font-medium">Selecione uma obra para visualizar o Databook</p>
+            <p className="text-sm mt-1">O Databook agrupa fichas técnicas de todos os materiais da obra</p>
+          </div>
+        )}
+
+        {obraId > 0 && <>
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b">
           {[
@@ -630,6 +664,8 @@ export default function Databook() {
             </div>
           </div>
         )}
+
+        </>}
 
         {/* Ficha Detail Dialog */}
         <Dialog open={!!fichaDialog} onOpenChange={(open) => { if (!open) setFichaDialog(null); }}>
