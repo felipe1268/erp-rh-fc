@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "operacional" | "admin" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "operacional" | "frotas" | "admin" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -121,6 +121,16 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/operacional/concretagem":        "operacional" as ModuleId,
   "/operacional/nc":                 "operacional" as ModuleId,
   "/operacional/fotos":              "operacional" as ModuleId,
+  // Frotas routes
+  "/frotas/painel":                  "frotas" as ModuleId,
+  "/frotas/veiculos":                "frotas" as ModuleId,
+  "/frotas/manutencoes":             "frotas" as ModuleId,
+  "/frotas/combustivel":             "frotas" as ModuleId,
+  "/frotas/rastreamento":            "frotas" as ModuleId,
+  "/frotas/multas":                  "frotas" as ModuleId,
+  "/frotas/ipva":                    "frotas" as ModuleId,
+  "/frotas/licenciamento":           "frotas" as ModuleId,
+  "/frotas/seguros":                 "frotas" as ModuleId,
   // Admin routes
   "/admin/telemetria":               "admin" as ModuleId,
   // Shared routes (appear in all modules)
@@ -151,6 +161,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "financeiro": "Financeiro",
   "gestao-documentos": "Proj./Doc. Técnicos",
   "operacional": "Operacional",
+  "frotas": "Frotas",
   "admin": "Administração",
   "all": "Todos os Módulos",
 };
@@ -161,7 +172,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [activeModule, setActiveModuleState] = useState<ModuleId>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "gestao-documentos" || saved === "operacional" || saved === "all")) {
+    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "gestao-documentos" || saved === "operacional" || saved === "frotas" || saved === "all")) {
       return saved as ModuleId;
     }
     return "rh-dp"; // Default to RH & DP

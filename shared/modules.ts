@@ -94,7 +94,8 @@ export type ActiveModuleId =
   | "medicao"
   | "almoxarifado"
   | "gestao-documentos"
-  | "operacional";
+  | "operacional"
+  | "frotas";
 
 export interface ModuleFeature {
   key: string;
@@ -366,6 +367,24 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "operacional-concretagem",   label: "Controle de Concretagem", route: "/operacional/concretagem",   icon: "Blocks" },
       { key: "operacional-nc",            label: "Não Conformidades",       route: "/operacional/nc",            icon: "AlertTriangle" },
       { key: "operacional-fotos",         label: "Registro Fotográfico",    route: "/operacional/fotos",         icon: "Camera" },
+    ],
+  },
+  {
+    id: "frotas",
+    label: "Frotas",
+    description: "Controle de Frotas e Veículos",
+    color: "cyan",
+    icon: "Truck",
+    features: [
+      { key: "frotas-painel",         label: "Dashboard",          route: "/frotas/painel",         icon: "LayoutDashboard" },
+      { key: "frotas-veiculos",       label: "Veículos",           route: "/frotas/veiculos",       icon: "Truck" },
+      { key: "frotas-manutencoes",    label: "Manutenções",        route: "/frotas/manutencoes",    icon: "Wrench" },
+      { key: "frotas-combustivel",    label: "Combustível",        route: "/frotas/combustivel",    icon: "Fuel" },
+      { key: "frotas-multas",         label: "Multas",             route: "/frotas/multas",         icon: "AlertTriangle" },
+      { key: "frotas-ipva",           label: "IPVA",               route: "/frotas/ipva",           icon: "Receipt" },
+      { key: "frotas-licenciamento",  label: "Licenciamento",      route: "/frotas/licenciamento",  icon: "FileText" },
+      { key: "frotas-seguros",        label: "Seguros",            route: "/frotas/seguros",        icon: "Shield" },
+      { key: "frotas-rastreamento",   label: "Rastreamento",       route: "/frotas/rastreamento",   icon: "MapPin" },
     ],
   },
 ];

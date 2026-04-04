@@ -477,6 +477,43 @@ const menuSectionsOperacional: MenuSection[] = [
   },
 ];
 
+const menuSectionsFrotas: MenuSection[] = [
+  {
+    title: "Painel",
+    items: [
+      { icon: LayoutDashboard, label: "Dashboard Frotas", path: "/frotas/painel" },
+    ],
+  },
+  {
+    title: "Cadastro",
+    items: [
+      { icon: Truck, label: "Veículos", path: "/frotas/veiculos" },
+    ],
+  },
+  {
+    title: "Operacional",
+    items: [
+      { icon: Wrench, label: "Manutenções", path: "/frotas/manutencoes" },
+      { icon: Construction, label: "Combustível", path: "/frotas/combustivel" },
+    ],
+  },
+  {
+    title: "Obrigações Legais",
+    items: [
+      { icon: AlertTriangle, label: "Multas", path: "/frotas/multas" },
+      { icon: Receipt, label: "IPVA", path: "/frotas/ipva" },
+      { icon: FileText, label: "Licenciamento", path: "/frotas/licenciamento" },
+      { icon: Shield, label: "Seguros", path: "/frotas/seguros" },
+    ],
+  },
+  {
+    title: "Rastreamento",
+    items: [
+      { icon: Target, label: "Mapa e Trajetos", path: "/frotas/rastreamento" },
+    ],
+  },
+];
+
 const menuSectionsAdmin: MenuSection[] = [
   {
     title: "Administração",
@@ -522,6 +559,7 @@ const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "financeiro":    menuSectionsFinanceiro,
   "gestao-documentos": menuSectionsGestaoDocumentos,
   "operacional": menuSectionsOperacional,
+  "frotas": menuSectionsFrotas,
   "admin": menuSectionsAdmin,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
@@ -590,6 +628,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "financeiro":     "/financeiro",
   "gestao-documentos": "/gestao-documentos",
   "operacional": "/operacional/painel",
+  "frotas":         "/frotas/painel",
   "admin": "/admin/telemetria",
   "all": "/painel",
 };
@@ -611,6 +650,7 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "financeiro":    { icon: DollarSign,    color: "text-green-400",   bg: "bg-green-500/20"   },
   "gestao-documentos": { icon: FolderOpen, color: "text-indigo-400", bg: "bg-indigo-500/20" },
   "operacional": { icon: HardHat, color: "text-amber-400", bg: "bg-amber-500/20" },
+  "frotas":      { icon: Truck,     color: "text-cyan-400",    bg: "bg-cyan-500/20" },
   "admin": { icon: BarChart3, color: "text-red-400", bg: "bg-red-500/20" },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };

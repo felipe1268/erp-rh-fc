@@ -196,6 +196,17 @@ const MedicoesServicoPage = lazy(() => import("./pages/compras/MedicoesServico")
 const DatabookPage = lazy(() => import("./pages/compras/Databook"));
 const PortalOCEntregaPage = lazy(() => import("./pages/PortalOCEntrega"));
 
+// Frotas
+const PainelFrotas = lazy(() => import("./pages/frotas/PainelFrotas"));
+const FrotasVeiculos = lazy(() => import("./pages/frotas/Veiculos"));
+const FrotasManutencoes = lazy(() => import("./pages/frotas/Manutencoes"));
+const FrotasCombustivel = lazy(() => import("./pages/frotas/Combustivel"));
+const FrotasRastreamento = lazy(() => import("./pages/frotas/Rastreamento"));
+const FrotasMultas = lazy(() => import("./pages/frotas/Multas"));
+const FrotasIpva = lazy(() => import("./pages/frotas/Ipva"));
+const FrotasLicenciamento = lazy(() => import("./pages/frotas/Licenciamento"));
+const FrotasSeguros = lazy(() => import("./pages/frotas/Seguros"));
+
 // Operacional
 const PainelOperacional = lazy(() => import("./pages/operacional/PainelOperacional"));
 const RDOPage = lazy(() => import("./pages/operacional/RDO"));
@@ -402,6 +413,16 @@ function Router() {
         <Route path="/compras/medicoes-servico" component={MedicoesServicoPage} />
         <Route path="/compras/databook"          component={DatabookPage} />
         <Route path="/portal/oc-entrega/:token"  component={PortalOCEntregaPage} />
+        {/* Frotas */}
+        <Route path="/frotas/painel" component={PainelFrotas} />
+        <Route path="/frotas/veiculos" component={FrotasVeiculos} />
+        <Route path="/frotas/manutencoes" component={FrotasManutencoes} />
+        <Route path="/frotas/combustivel" component={FrotasCombustivel} />
+        <Route path="/frotas/rastreamento" component={FrotasRastreamento} />
+        <Route path="/frotas/multas" component={FrotasMultas} />
+        <Route path="/frotas/ipva" component={FrotasIpva} />
+        <Route path="/frotas/licenciamento" component={FrotasLicenciamento} />
+        <Route path="/frotas/seguros" component={FrotasSeguros} />
         {/* Operacional */}
         <Route path="/operacional/painel" component={PainelOperacional} />
         <Route path="/operacional/rdo" component={RDOPage} />

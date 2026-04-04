@@ -110,6 +110,7 @@ import { portalServicoRouter } from "./routers/portalServico";
 import { integrasignRouter } from "./routers/integrasign";
 import { databookRouter } from "./routers/databook";
 import { operacionalRouter } from "./routers/operacional";
+import { frotasRouter } from "./routers/frotas";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -173,6 +174,7 @@ export const appRouter = router({
   migration: migrationRouter,
   contracts: contractsRouter,
   skills: skillsRouter,
+  frotas: frotasRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

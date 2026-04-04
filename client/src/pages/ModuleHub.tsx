@@ -10,7 +10,7 @@ import {
   ArrowRight, Lock, Building2, LogOut, ChevronDown, LayoutGrid,
   Bell, Clock, Zap, Layers, ArrowUpRight, ClipboardCheck,
   Handshake, TrendingUp, Home, Ruler, BookOpen, FileSignature,
-  HardHat, Warehouse, BarChart3, FolderOpen, Hammer,
+  HardHat, Warehouse, BarChart3, FolderOpen, Hammer, Truck,
   Settings, FileText, Trash2, GitBranch,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -211,6 +211,12 @@ const MODULES: Module[] = [
     description: "RDO, checklists de qualidade, controle de concretagem, não conformidades, registro fotográfico e dashboard de obra.",
     icon: Hammer, accentFrom: "#C2410C", accentTo: "#7C2D12", accentGlow: "rgba(194,65,12,0.40)", iconBg: "rgba(194,65,12,0.14)", path: "/operacional/painel", active: true,
     features: ["RDO Diário", "Checklists", "Concretagem", "Não Conformidades", "Registro Fotográfico", "Dashboard"],
+  },
+  {
+    id: "frotas", title: "Frotas", subtitle: "Controle de Frotas",
+    description: "Veículos, manutenções, combustível, multas, IPVA, licenciamento, seguros com análise IA e rastreamento.",
+    icon: Truck, accentFrom: "#0891B2", accentTo: "#0E7490", accentGlow: "rgba(8,145,178,0.35)", iconBg: "rgba(8,145,178,0.12)", path: "/frotas/painel", active: true,
+    features: ["Veículos", "Manutenções", "Combustível", "Multas", "IPVA", "Licenciamento", "Seguros IA", "Rastreamento"],
   },
   {
     id: "indicadores-bi", title: "Indicadores / BI", subtitle: "Business Intelligence",

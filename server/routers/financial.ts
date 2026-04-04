@@ -1260,7 +1260,7 @@ export const financialRouter = router({
        nextMonth.toISOString().split("T")[0],
        ctx.user?.id ?? null, ctx.user?.name ?? ctx.user?.email ?? null]
     );
-    await createAuditLog({
+    await createAuditLog(db, {
       userId: ctx.user?.id,
       userName: ctx.user?.name ?? ctx.user?.email,
       action: "financial_recurring_create",
@@ -1463,7 +1463,7 @@ export const financialRouter = router({
       inserted++;
     }
 
-    await createAuditLog({
+    await createAuditLog(db, {
       userId: ctx.user?.id,
       action: "bank_statement_import",
       details: `Importação ${input.formato.toUpperCase()}: ${inserted} inseridos, ${skipped} duplicados`,
