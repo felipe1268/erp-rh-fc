@@ -45,14 +45,28 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function ProgressBar({ value, max, color = "bg-blue-500" }: { value: number; max: number; color?: string }) {
+function ProgressBar({ value, max, color = "bg-emerald-500", showScale = false }: { value: number; max: number; color?: string; showScale?: boolean }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-        <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+    <div className="w-full">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 relative">
+          <div className="h-4 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+            <div
+              className={`h-full ${color} rounded-full transition-all duration-500 ease-out`}
+              style={{ width: `${pct}%`, minWidth: pct > 0 ? '8px' : '0' }}
+            />
+          </div>
+          {showScale && (
+            <div className="flex justify-between mt-1 px-0.5">
+              {[0, 25, 50, 75, 100].map(tick => (
+                <span key={tick} className="text-[9px] text-gray-400">{tick}%</span>
+              ))}
+            </div>
+          )}
+        </div>
+        <span className={`text-sm font-semibold min-w-[45px] text-right ${pct >= 100 ? 'text-emerald-600' : pct >= 50 ? 'text-blue-600' : 'text-gray-600'}`}>{pct}%</span>
       </div>
-      <span className="text-xs text-gray-500 w-10 text-right">{pct}%</span>
     </div>
   );
 }
@@ -360,6 +374,7 @@ export default function Databook() {
                 value={(dashboard.data?.totais?.aprovado || 0) + (dashboard.data?.totais?.enviado || 0) + (dashboard.data?.totais?.revisado || 0)}
                 max={dashboard.data?.totais?.total || 1}
                 color="bg-emerald-500"
+                showScale
               />
               <p className="text-xs text-gray-500 mt-1">
                 {dashboard.data?.totais?.aprovado || 0} aprovados + {dashboard.data?.totais?.enviado || 0} enviados + {dashboard.data?.totais?.revisado || 0} revisados de {dashboard.data?.totais?.total || 0} fichas
