@@ -13,6 +13,51 @@ const DISCIPLINAS = [
   "Incêndio / SPDA", "Paisagismo", "Equipamentos", "Outros",
 ];
 
+async function buscarImagemDuckDuckGo(query: string): Promise<string[]> {
+  try {
+    const tokenRes = await fetch("https://duckduckgo.com/?q=" + encodeURIComponent(query), {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+    });
+    const html = await tokenRes.text();
+    const vqdMatch = html.match(/vqd=['"]([^'"]+)/);
+    if (!vqdMatch) return [];
+
+    const imgRes = await fetch(
+      "https://duckduckgo.com/i.js?l=br-pt&o=json&q=" + encodeURIComponent(query) + "&vqd=" + vqdMatch[1] + "&f=,,,,,&p=1",
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": "https://duckduckgo.com/",
+        },
+      }
+    );
+    const data = await imgRes.json();
+    return (data.results || [])
+      .filter((r: any) => r.image && r.width >= 200 && r.height >= 200)
+      .map((r: any) => r.image as string);
+  } catch {
+    return [];
+  }
+}
+
+async function downloadImageAsBase64(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(15000),
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+    });
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    if (!contentType.startsWith("image/")) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 1000) return null;
+    const mime = contentType.split(";")[0].trim();
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
 async function buscarFotoParaFicha(fichaId: number, companyId: number): Promise<string | null> {
   const db = await getDb();
   const [ficha] = await db.select().from(databookFichas).where(
@@ -20,55 +65,25 @@ async function buscarFotoParaFicha(fichaId: number, companyId: number): Promise<
   );
   if (!ficha) return null;
 
-  const googleKey = process.env.GOOGLE_API_KEY;
-  if (!googleKey) return null;
-
-  const prompt = `Gere uma foto realista de catálogo de produto de construção civil, fundo branco limpo, estilo e-commerce profissional.
-Produto: "${ficha.descricao}"
-A imagem deve mostrar APENAS o produto, sem texto, sem pessoas, sem cenário. Foto tipo catálogo de loja de material de construção.`;
-
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${googleKey}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseModalities: ["IMAGE", "TEXT"],
-            maxOutputTokens: 8192,
-          },
-        }),
-      }
-    );
-
-    if (!res.ok) {
-      console.log(`[FotoIA] Gemini image gen failed (${res.status}) for ficha ${fichaId}`);
-      return null;
-    }
-
-    const data = await res.json();
-    const parts = data.candidates?.[0]?.content?.parts || [];
-    for (const part of parts) {
-      if (part.inlineData?.mimeType?.startsWith("image/")) {
-        const base64 = part.inlineData.data;
-        const mime = part.inlineData.mimeType;
-        const dataUrl = `data:${mime};base64,${base64}`;
-
-        await db.update(databookFichas).set({
-          fotoUrl: dataUrl,
-          updatedAt: new Date().toISOString(),
-        } as any).where(eq(databookFichas.id, fichaId));
-
-        console.log(`[FotoIA] Imagem gerada para ficha ${fichaId} (${(base64.length / 1024).toFixed(0)}KB)`);
-        return dataUrl;
-      }
-    }
-    console.log(`[FotoIA] Nenhuma imagem na resposta para ficha ${fichaId}`);
-  } catch (e: any) {
-    console.log(`[FotoIA] Erro para ficha ${fichaId}:`, e.message);
+  const urls = await buscarImagemDuckDuckGo(ficha.descricao + " produto construção civil");
+  if (urls.length === 0) {
+    console.log(`[FotoIA] Nenhuma imagem encontrada para ficha ${fichaId}`);
+    return null;
   }
+
+  for (const imgUrl of urls.slice(0, 5)) {
+    const dataUrl = await downloadImageAsBase64(imgUrl);
+    if (dataUrl) {
+      await db.update(databookFichas).set({
+        fotoUrl: dataUrl,
+        updatedAt: new Date().toISOString(),
+      } as any).where(eq(databookFichas.id, fichaId));
+      console.log(`[FotoIA] Foto real encontrada para ficha ${fichaId} (${(dataUrl.length / 1024).toFixed(0)}KB) — ${imgUrl.substring(0, 80)}`);
+      return dataUrl;
+    }
+  }
+
+  console.log(`[FotoIA] Nenhuma imagem baixada com sucesso para ficha ${fichaId}`);
   return null;
 }
 
