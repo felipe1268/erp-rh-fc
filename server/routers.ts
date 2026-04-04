@@ -942,6 +942,9 @@ export const appRouter = router({
       periculosidade: z.number().optional(),
       adicionalNoturnoAtivo: z.number().optional(),
       condicoesVigenciaInicio: z.string().nullable().optional(),
+      gerenciadoraNome: z.string().nullable().optional(),
+      gerenciadoraLogoUrl: z.string().nullable().optional(),
+      clienteLogoUrl: z.string().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { sns, ...obraData } = input;
       const result = await createObra(obraData as any);
@@ -1000,6 +1003,9 @@ export const appRouter = router({
       periculosidade: z.number().optional(),
       adicionalNoturnoAtivo: z.number().optional(),
       condicoesVigenciaInicio: z.string().nullable().optional(),
+      gerenciadoraNome: z.string().nullable().optional(),
+      gerenciadoraLogoUrl: z.string().nullable().optional(),
+      clienteLogoUrl: z.string().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, responsavelId, ...data } = input;
       if (data.status && data.status !== "Em_Andamento") {

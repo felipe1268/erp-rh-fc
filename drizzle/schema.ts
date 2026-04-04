@@ -2105,6 +2105,9 @@ export const obras = pgTable("obras", {
         periculosidade: smallint().default(0),
         adicionalNoturnoAtivo: smallint("adicional_noturno_ativo").default(0),
         condicoesVigenciaInicio: date("condicoes_vigencia_inicio", { mode: 'string' }),
+        gerenciadoraNome: varchar("gerenciadora_nome", { length: 255 }),
+        gerenciadoraLogoUrl: text("gerenciadora_logo_url"),
+        clienteLogoUrl: text("cliente_logo_url"),
 },
 (table) => [
         index("idx_obra_company").on(table.companyId),

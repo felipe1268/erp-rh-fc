@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
@@ -38,6 +38,9 @@ type ObraForm = {
   periculosidade: number;
   adicionalNoturnoAtivo: number;
   condicoesVigenciaInicio: string;
+  gerenciadoraNome: string;
+  gerenciadoraLogoUrl: string;
+  clienteLogoUrl: string;
 };
 
 const emptyForm: ObraForm = {
@@ -52,10 +55,13 @@ const emptyForm: ObraForm = {
   periculosidade: 0,
   adicionalNoturnoAtivo: 0,
   condicoesVigenciaInicio: "",
+  gerenciadoraNome: "",
+  gerenciadoraLogoUrl: "",
+  clienteLogoUrl: "",
 };
 
 export default function Obras() {
-  const { selectedCompanyId, getCompanyIdsForQuery } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const hasCompany = companyIds.length > 0;
@@ -206,6 +212,9 @@ export default function Obras() {
       periculosidade: obra.periculosidade ?? 0,
       adicionalNoturnoAtivo: obra.adicionalNoturnoAtivo ?? 0,
       condicoesVigenciaInicio: obra.condicoesVigenciaInicio || "",
+      gerenciadoraNome: obra.gerenciadoraNome || "",
+      gerenciadoraLogoUrl: obra.gerenciadoraLogoUrl || "",
+      clienteLogoUrl: obra.clienteLogoUrl || "",
     });
     setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setNomeError(false);
     setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca("");
@@ -290,8 +299,9 @@ export default function Obras() {
     }
     setNomeError(false);
     setSaving(true);
+    const logoFields = ["clienteLogoUrl", "gerenciadoraLogoUrl", "gerenciadoraNome"];
     const cleanForm = Object.fromEntries(
-      Object.entries(form).map(([k, v]) => [k, typeof v === "string" && v.trim() === "" ? undefined : v])
+      Object.entries(form).map(([k, v]) => [k, typeof v === "string" && v.trim() === "" ? (logoFields.includes(k) ? null : undefined) : v])
     ) as any;
     cleanForm.nome = nomeEfetivo;
     if (editingId) {
@@ -587,6 +597,83 @@ export default function Obras() {
                     )}
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* ── LOGO DO CLIENTE ── */}
+            <div>
+              <Label className="flex items-center gap-1.5 mb-1">
+                <ImageIcon className="h-3.5 w-3.5 text-purple-500" />
+                Logo do Cliente
+              </Label>
+              <div className="flex items-center gap-3">
+                {form.clienteLogoUrl ? (
+                  <div className="relative group">
+                    <img src={form.clienteLogoUrl} alt="Logo cliente" className="h-16 w-auto max-w-[120px] object-contain rounded border border-slate-200 bg-white p-1" />
+                    <button type="button" className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setForm(f => ({ ...f, clienteLogoUrl: "" }))}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="h-16 w-20 rounded border-2 border-dashed border-slate-200 flex items-center justify-center">
+                    <ImageIcon className="h-5 w-5 text-slate-300" />
+                  </div>
+                )}
+                <label className="cursor-pointer">
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 2 * 1024 * 1024) { toast.error("Imagem muito grande (máx. 2MB)"); return; }
+                    const reader = new FileReader();
+                    reader.onload = () => { setForm(f => ({ ...f, clienteLogoUrl: reader.result as string })); };
+                    reader.readAsDataURL(file);
+                  }} />
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md px-3 py-1.5 hover:bg-blue-50">
+                    <Upload className="h-3.5 w-3.5" />
+                    {form.clienteLogoUrl ? "Trocar" : "Enviar"}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* ── GERENCIADORA ── */}
+            <div>
+              <Label className="flex items-center gap-1.5 mb-1">
+                <Building className="h-3.5 w-3.5 text-amber-600" />
+                Gerenciadora <span className="text-xs text-slate-400 font-normal">(se houver)</span>
+              </Label>
+              <Input
+                value={form.gerenciadoraNome}
+                onChange={e => setForm(f => ({ ...f, gerenciadoraNome: e.target.value }))}
+                placeholder="Ex: Método Engenharia"
+              />
+              <div className="flex items-center gap-3 mt-2">
+                {form.gerenciadoraLogoUrl ? (
+                  <div className="relative group">
+                    <img src={form.gerenciadoraLogoUrl} alt="Logo gerenciadora" className="h-16 w-auto max-w-[120px] object-contain rounded border border-slate-200 bg-white p-1" />
+                    <button type="button" className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setForm(f => ({ ...f, gerenciadoraLogoUrl: "" }))}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="h-16 w-20 rounded border-2 border-dashed border-slate-200 flex items-center justify-center">
+                    <ImageIcon className="h-5 w-5 text-slate-300" />
+                  </div>
+                )}
+                <label className="cursor-pointer">
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 2 * 1024 * 1024) { toast.error("Imagem muito grande (máx. 2MB)"); return; }
+                    const reader = new FileReader();
+                    reader.onload = () => { setForm(f => ({ ...f, gerenciadoraLogoUrl: reader.result as string })); };
+                    reader.readAsDataURL(file);
+                  }} />
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md px-3 py-1.5 hover:bg-blue-50">
+                    <Upload className="h-3.5 w-3.5" />
+                    {form.gerenciadoraLogoUrl ? "Trocar Logo" : "Enviar Logo"}
+                  </span>
+                </label>
               </div>
             </div>
 
