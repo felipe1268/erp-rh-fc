@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
-  BookOpen, Search, Loader2, CheckCircle, Clock, AlertTriangle, Eye,
+  BookOpen, Search, Loader2, CheckCircle, Clock, AlertTriangle, AlertCircle, Eye,
   FileDown, Sparkles, Image, Edit, Trash2, Send, ThumbsUp, ThumbsDown,
   BarChart3, Filter, RefreshCw, FileText, Package, Building2, ChevronDown,
   ChevronRight, XCircle, Download, Wand2, HardHat
@@ -189,9 +189,163 @@ export default function Databook() {
     onError: (e) => toast.error(e.message),
   });
 
-  const [fotoLoteProgress, setFotoLoteProgress] = useState<{ current: number; total: number; successCount: number; failCount: number; running: boolean; currentDesc: string } | null>(null);
+  const [loteProgress, setLoteProgress] = useState<{
+    fase: string;
+    faseNum: number;
+    totalFases: number;
+    current: number;
+    total: number;
+    successCount: number;
+    failCount: number;
+    running: boolean;
+    currentDesc: string;
+    fases: { nome: string; status: "pendente" | "rodando" | "concluido" | "erro"; resultado?: string }[];
+  } | null>(null);
 
   const buscarFotoIA_single = trpc.databook.buscarFotoIA.useMutation();
+  const gerarEspecIA_single = trpc.databook.gerarEspecificacoesIA.useMutation();
+
+  const makeFases = () => [
+    { nome: "Importar Materiais de OCs", status: "pendente" as const },
+    { nome: "Gerar Especificações IA", status: "pendente" as const },
+    { nome: "Gerar Fotos IA", status: "pendente" as const },
+  ];
+
+  const handleGerarCompleto = async () => {
+    const fases = makeFases();
+    const updateProgress = (patch: Partial<typeof loteProgress>) =>
+      setLoteProgress((prev) => prev ? { ...prev, ...patch } : null);
+
+    fases[0].status = "rodando";
+    setLoteProgress({
+      fase: fases[0].nome,
+      faseNum: 1,
+      totalFases: 3,
+      current: 0,
+      total: 1,
+      successCount: 0,
+      failCount: 0,
+      running: true,
+      currentDesc: "Importando materiais das ordens de compra...",
+      fases: [...fases],
+    });
+
+    try {
+      const importResult = await gerarFichasOC.mutateAsync({ companyId, obraId, userName });
+      fases[0].status = "concluido";
+      fases[0].resultado = `${(importResult as any).criadas || 0} criadas, ${(importResult as any).duplicadas || 0} duplicadas`;
+    } catch (e: any) {
+      fases[0].status = "erro";
+      fases[0].resultado = e.message || "Erro";
+    }
+
+    await fichas.refetch();
+    const allFichas = fichas.data || [];
+
+    const fichasSemEspec = allFichas.filter((f: any) => !f.especificacoes || f.especificacoes.trim() === "");
+    fases[1].status = "rodando";
+    setLoteProgress({
+      fase: fases[1].nome,
+      faseNum: 2,
+      totalFases: 3,
+      current: 0,
+      total: fichasSemEspec.length || 1,
+      successCount: 0,
+      failCount: 0,
+      running: true,
+      currentDesc: fichasSemEspec.length > 0 ? "Iniciando..." : "Todas já possuem especificações",
+      fases: [...fases],
+    });
+
+    if (fichasSemEspec.length > 0) {
+      let specOk = 0, specFail = 0;
+      for (let i = 0; i < fichasSemEspec.length; i++) {
+        const f = fichasSemEspec[i];
+        setLoteProgress((prev) => prev ? {
+          ...prev,
+          current: i,
+          total: fichasSemEspec.length,
+          successCount: specOk,
+          failCount: specFail,
+          currentDesc: f.descricao?.substring(0, 50) || "",
+          fases: [...fases],
+        } : null);
+        try {
+          await gerarEspecIA_single.mutateAsync({ companyId, fichaId: f.id });
+          specOk++;
+        } catch {
+          specFail++;
+        }
+      }
+      fases[1].resultado = `${specOk} geradas, ${specFail} falhas`;
+    } else {
+      fases[1].resultado = "Nenhuma pendente";
+    }
+    fases[1].status = "concluido";
+
+    await fichas.refetch();
+    const allFichas2 = fichas.data || [];
+
+    const fichasSemFoto = allFichas2.filter((f: any) => !f.foto_url);
+    fases[2].status = "rodando";
+    setLoteProgress({
+      fase: fases[2].nome,
+      faseNum: 3,
+      totalFases: 3,
+      current: 0,
+      total: fichasSemFoto.length || 1,
+      successCount: 0,
+      failCount: 0,
+      running: true,
+      currentDesc: fichasSemFoto.length > 0 ? "Iniciando..." : "Todas já possuem foto",
+      fases: [...fases],
+    });
+
+    if (fichasSemFoto.length > 0) {
+      let fotoOk = 0, fotoFail = 0;
+      for (let i = 0; i < fichasSemFoto.length; i++) {
+        const f = fichasSemFoto[i];
+        setLoteProgress((prev) => prev ? {
+          ...prev,
+          current: i,
+          total: fichasSemFoto.length,
+          successCount: fotoOk,
+          failCount: fotoFail,
+          currentDesc: f.descricao?.substring(0, 50) || "",
+          fases: [...fases],
+        } : null);
+        try {
+          const result = await buscarFotoIA_single.mutateAsync({ companyId, fichaId: f.id });
+          if (result.fotoUrl) fotoOk++;
+          else fotoFail++;
+        } catch {
+          fotoFail++;
+        }
+      }
+      fases[2].resultado = `${fotoOk} fotos, ${fotoFail} falhas`;
+    } else {
+      fases[2].resultado = "Nenhuma pendente";
+    }
+    fases[2].status = "concluido";
+
+    setLoteProgress({
+      fase: "Concluído",
+      faseNum: 3,
+      totalFases: 3,
+      current: 1,
+      total: 1,
+      successCount: 0,
+      failCount: 0,
+      running: false,
+      currentDesc: "",
+      fases: [...fases],
+    });
+
+    fichas.refetch();
+    dashboard.refetch();
+    toast.success("Geração completa finalizada!");
+    setTimeout(() => setLoteProgress(null), 10000);
+  };
 
   const handleBuscarFotoLote = async () => {
     const fichasSemFoto = (fichas.data || []).filter((f: any) => !f.foto_url);
@@ -199,13 +353,30 @@ export default function Databook() {
       toast.info("Todas as fichas já possuem foto");
       return;
     }
-    setFotoLoteProgress({ current: 0, total: fichasSemFoto.length, successCount: 0, failCount: 0, running: true, currentDesc: "" });
+    const fases = [{ nome: "Gerar Fotos IA", status: "rodando" as const }];
+    setLoteProgress({
+      fase: "Gerar Fotos IA",
+      faseNum: 1,
+      totalFases: 1,
+      current: 0,
+      total: fichasSemFoto.length,
+      successCount: 0,
+      failCount: 0,
+      running: true,
+      currentDesc: "",
+      fases,
+    });
 
-    let successCount = 0;
-    let failCount = 0;
+    let successCount = 0, failCount = 0;
     for (let i = 0; i < fichasSemFoto.length; i++) {
       const f = fichasSemFoto[i];
-      setFotoLoteProgress({ current: i, total: fichasSemFoto.length, successCount, failCount, running: true, currentDesc: f.descricao?.substring(0, 50) || "" });
+      setLoteProgress((prev) => prev ? {
+        ...prev,
+        current: i,
+        successCount,
+        failCount,
+        currentDesc: f.descricao?.substring(0, 50) || "",
+      } : null);
       try {
         const result = await buscarFotoIA_single.mutateAsync({ companyId, fichaId: f.id });
         if (result.fotoUrl) successCount++;
@@ -214,10 +385,18 @@ export default function Databook() {
         failCount++;
       }
     }
-    setFotoLoteProgress({ current: fichasSemFoto.length, total: fichasSemFoto.length, successCount, failCount, running: false, currentDesc: "" });
+    fases[0].status = "concluido";
+    setLoteProgress((prev) => prev ? {
+      ...prev,
+      current: fichasSemFoto.length,
+      successCount,
+      failCount,
+      running: false,
+      fases: [...fases],
+    } : null);
     fichas.refetch();
-    toast.success(`Fotos geradas: ${successCount} ok, ${failCount} falhas de ${fichasSemFoto.length} fichas`);
-    setTimeout(() => setFotoLoteProgress(null), 5000);
+    toast.success(`Fotos: ${successCount} ok, ${failCount} falhas`);
+    setTimeout(() => setLoteProgress(null), 5000);
   };
 
   const uploadFoto = trpc.databook.uploadFotoFicha.useMutation({
@@ -480,16 +659,24 @@ export default function Databook() {
             {/* Actions */}
             <div className="flex flex-wrap gap-2">
               <Button
-                onClick={() => gerarFichasOC.mutate({ companyId, obraId, userName })}
-                disabled={gerarFichasOC.isPending}
+                onClick={handleGerarCompleto}
+                disabled={!!loteProgress?.running}
                 className="bg-blue-600 hover:bg-blue-700"
+              >
+                {loteProgress?.running ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Wand2 className="w-4 h-4 mr-1" />}
+                Gerar Databook Completo
+              </Button>
+              <Button
+                onClick={() => gerarFichasOC.mutate({ companyId, obraId, userName })}
+                disabled={gerarFichasOC.isPending || !!loteProgress?.running}
+                variant="outline"
               >
                 {gerarFichasOC.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Package className="w-4 h-4 mr-1" />}
                 Importar Materiais de OCs
               </Button>
               <Button
                 onClick={() => gerarEspecsLote.mutate({ companyId, obraId })}
-                disabled={gerarEspecsLote.isPending}
+                disabled={gerarEspecsLote.isPending || !!loteProgress?.running}
                 variant="outline"
               >
                 {gerarEspecsLote.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Wand2 className="w-4 h-4 mr-1" />}
@@ -497,10 +684,10 @@ export default function Databook() {
               </Button>
               <Button
                 onClick={handleBuscarFotoLote}
-                disabled={!!fotoLoteProgress?.running}
+                disabled={!!loteProgress?.running}
                 variant="outline"
               >
-                {fotoLoteProgress?.running ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Image className="w-4 h-4 mr-1" />}
+                {loteProgress?.running ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Image className="w-4 h-4 mr-1" />}
                 Gerar Fotos IA (Lote)
               </Button>
               <Button
@@ -513,37 +700,70 @@ export default function Databook() {
               </Button>
             </div>
 
-          {fotoLoteProgress && (
-            <div className="bg-white border rounded-lg p-4 mt-3 space-y-2">
+          {loteProgress && (
+            <div className="bg-white border rounded-lg p-5 mt-3 space-y-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {fotoLoteProgress.running ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                  {loteProgress.running ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
                   ) : (
-                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <CheckCircle className="w-5 h-5 text-green-500" />
                   )}
-                  <span className="text-sm font-medium">
-                    {fotoLoteProgress.running
-                      ? `Gerando fotos... ${fotoLoteProgress.current + 1} de ${fotoLoteProgress.total}`
-                      : `Concluído: ${fotoLoteProgress.successCount} fotos geradas`}
+                  <span className="text-sm font-semibold">
+                    {loteProgress.running
+                      ? `Fase ${loteProgress.faseNum} de ${loteProgress.totalFases}: ${loteProgress.fase}`
+                      : "Geração completa finalizada!"}
                   </span>
                 </div>
-                <span className="text-sm font-bold text-blue-600">
-                  {Math.round(((fotoLoteProgress.current + (fotoLoteProgress.running ? 0 : 0)) / fotoLoteProgress.total) * 100)}%
-                </span>
+                {!loteProgress.running && (
+                  <button onClick={() => setLoteProgress(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+                )}
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                <div
-                  className={`h-3 rounded-full transition-all duration-500 ${fotoLoteProgress.running ? "bg-blue-500" : "bg-green-500"}`}
-                  style={{ width: `${Math.round((fotoLoteProgress.current / fotoLoteProgress.total) * 100)}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <span className="truncate max-w-[60%]">{fotoLoteProgress.running && fotoLoteProgress.currentDesc ? `Buscando: ${fotoLoteProgress.currentDesc}...` : ""}</span>
-                <div className="flex gap-3">
-                  <span className="text-green-600">{fotoLoteProgress.successCount} ok</span>
-                  {fotoLoteProgress.failCount > 0 && <span className="text-red-500">{fotoLoteProgress.failCount} falhas</span>}
-                </div>
+
+              <div className="space-y-2">
+                {loteProgress.fases.map((fase, idx) => (
+                  <div key={idx} className="flex items-center gap-3">
+                    <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center">
+                      {fase.status === "concluido" ? (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      ) : fase.status === "erro" ? (
+                        <AlertCircle className="w-5 h-5 text-red-500" />
+                      ) : fase.status === "rodando" ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-sm ${fase.status === "rodando" ? "font-semibold text-blue-700" : fase.status === "concluido" ? "text-green-700" : fase.status === "erro" ? "text-red-700" : "text-gray-400"}`}>
+                          {fase.nome}
+                        </span>
+                        {fase.resultado && (
+                          <span className="text-xs text-gray-500 ml-2">{fase.resultado}</span>
+                        )}
+                      </div>
+                      {fase.status === "rodando" && loteProgress.total > 1 && (
+                        <div className="mt-1">
+                          <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                            <span className="truncate max-w-[70%]">{loteProgress.currentDesc}</span>
+                            <span>{loteProgress.current + 1} / {loteProgress.total}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                            <div
+                              className="h-2 rounded-full bg-blue-500 transition-all duration-300"
+                              style={{ width: `${Math.max(2, Math.round(((loteProgress.current) / loteProgress.total) * 100))}%` }}
+                            />
+                          </div>
+                          <div className="flex gap-3 text-xs mt-1">
+                            <span className="text-green-600">{loteProgress.successCount} ok</span>
+                            {loteProgress.failCount > 0 && <span className="text-red-500">{loteProgress.failCount} falhas</span>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
