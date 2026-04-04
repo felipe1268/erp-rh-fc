@@ -39,9 +39,6 @@ const ALL_MODULES = [
   { id: "financeiro",   label: "Financeiro",       dot: "bg-emerald-500", tag: "bg-emerald-100 text-emerald-700 border-emerald-200" },
   { id: "operacional",  label: "Operacional",      dot: "bg-cyan-500",    tag: "bg-cyan-100 text-cyan-700 border-cyan-200" },
   { id: "gestao-documentos", label: "Proj./Doc. Técnicos", dot: "bg-sky-500", tag: "bg-sky-100 text-sky-700 border-sky-200" },
-  { id: "integrasign",  label: "IntegraSign",      dot: "bg-pink-500",    tag: "bg-pink-100 text-pink-700 border-pink-200" },
-  { id: "databook",     label: "Databook de Obra", dot: "bg-yellow-500",  tag: "bg-yellow-100 text-yellow-700 border-yellow-200" },
-  { id: "bim",          label: "BIM 3D/4D",        dot: "bg-fuchsia-500", tag: "bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200" },
 ];
 
 const GROUP_COLORS = [

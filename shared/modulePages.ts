@@ -269,21 +269,6 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "documentos",  label: "Documentos Técnicos",  actions: ["view","create","edit","delete"] },
     ],
   },
-  "integrasign": {
-    pages: [
-      { id: "painel",  label: "Painel IntegraSign",  actions: ["view","create","edit","delete"] },
-    ],
-  },
-  "databook": {
-    pages: [
-      { id: "databook",  label: "Databook de Obra",  actions: ["view","create","edit","delete"] },
-    ],
-  },
-  "bim": {
-    pages: [
-      { id: "visualizador",  label: "Visualizador BIM",  actions: ["view","create","edit","delete"] },
-    ],
-  },
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -438,15 +423,6 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
   },
   "gestao-documentos": {
     "/gestao-documentos":  "documentos",
-  },
-  "integrasign": {
-    "/integrasign":  "painel",
-  },
-  "databook": {
-    "/compras/databook":  "databook",
-  },
-  "bim": {
-    "/planejamento/bim":  "visualizador",
   },
   "medicao": {},
 };
