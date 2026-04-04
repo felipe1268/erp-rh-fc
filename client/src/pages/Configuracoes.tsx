@@ -17,7 +17,7 @@ import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
 import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection";
 import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -2227,6 +2227,14 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Documentos", label: "ARTs / RRTs", path: "/gestao-documentos?tab=arts" },
     { section: "Configurações", label: "Disciplinas e Tipos", path: "/gestao-documentos?tab=configuracoes" },
   ],
+  operacional: [
+    { section: "Painel", label: "Dashboard Operacional", path: "/operacional/painel" },
+    { section: "Diário de Obra", label: "RDO", path: "/operacional/rdo" },
+    { section: "Qualidade", label: "Checklists", path: "/operacional/checklists" },
+    { section: "Qualidade", label: "Concretagem", path: "/operacional/concretagem" },
+    { section: "Qualidade", label: "Não Conformidades", path: "/operacional/nao-conformidades" },
+    { section: "Registros", label: "Registro Fotográfico", path: "/operacional/registro-fotografico" },
+  ],
 };
 
 function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: boolean }) {
@@ -2273,6 +2281,7 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
     financeiro:     { label: "Financeiro",     subtitle: "Gestão Financeira",                    icon: DollarSign,    color: "text-yellow-600", bgColor: "bg-yellow-50", borderColor: "border-yellow-200", description: "Lançamentos, contas a pagar/receber, DRE, fluxo de caixa, plano de contas e obrigações fiscais." },
     medicao:        { label: "Medição",        subtitle: "Medição de Contratos",                 icon: FileBarChart,  color: "text-teal-600",   bgColor: "bg-teal-50",   borderColor: "border-teal-200",   description: "Boletins de medição por contrato, planilha EAP com avanço físico, faturamento direto e controle de FDs." },
     "gestao-documentos": { label: "Proj./Doc. Técnicos", subtitle: "Projetos e Documentos Técnicos", icon: FolderOpen, color: "text-indigo-600", bgColor: "bg-indigo-50", borderColor: "border-indigo-200", description: "Controle de documentos técnicos, revisões com aprovação, disciplinas, ARTs/RRTs e distribuição." },
+    operacional: { label: "Operacional", subtitle: "Gestão Operacional de Obras", icon: Hammer, color: "text-orange-600", bgColor: "bg-orange-50", borderColor: "border-orange-200", description: "RDO, checklists de qualidade, mapa de concretagem, não conformidades, registro fotográfico e dashboard operacional." },
   };
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;

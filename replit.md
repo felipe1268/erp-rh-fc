@@ -210,6 +210,12 @@ SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date a
 ## User Preferences
 - After every completed adjustment, remind the user to click **Publish** to deploy. Deployment config: autoscale, build=`pnpm run build`, run=`node dist/index.js`.
 
+## Golden Rule: New Module Checklist
+When creating a new module, ALWAYS register it in ALL 3 places:
+1. **`server/routers.ts`** → `ALL_MODULES` array in `moduleConfig.list` (~line 2411)
+2. **`client/src/pages/Configuracoes.tsx`** → `MODULE_INFO` object (label, subtitle, icon, colors, description) AND `MODULE_PAGES` object (sub-features with section/label/path)
+3. **`client/src/pages/ModuleHub.tsx`** → `MODULES` array (icon, label, path, theme colors)
+
 ## Critical DB Patterns (PostgreSQL/Neon)
 - `db.execute()` returns QueryResult object, NOT array. Use: `((await db.execute(sql`...`)) as any).rows || []`
 - All camelCase column names in raw SQL MUST be quoted: `"companyId"`, `"deletedAt"`, `"nomeCompleto"`, etc.
