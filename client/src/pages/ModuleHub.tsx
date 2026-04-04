@@ -10,7 +10,7 @@ import {
   ArrowRight, Lock, Building2, LogOut, ChevronDown, LayoutGrid,
   Bell, Clock, Zap, Layers, ArrowUpRight, ClipboardCheck,
   Handshake, TrendingUp, Home, Ruler, BookOpen, FileSignature,
-  HardHat, Warehouse, BarChart3, FolderOpen, Construction,
+  HardHat, Warehouse, BarChart3, FolderOpen, Hammer,
   Settings, FileText, Trash2, GitBranch,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -209,7 +209,7 @@ const MODULES: Module[] = [
   {
     id: "operacional", title: "Operacional", subtitle: "Controle Operacional de Obra",
     description: "RDO, checklists de qualidade, controle de concretagem, não conformidades, registro fotográfico e dashboard de obra.",
-    icon: Construction, accentFrom: "#E65100", accentTo: "#BF360C", accentGlow: "rgba(230,81,0,0.35)", iconBg: "rgba(230,81,0,0.12)", path: "/operacional/painel", active: true,
+    icon: Hammer, accentFrom: "#C2410C", accentTo: "#7C2D12", accentGlow: "rgba(194,65,12,0.40)", iconBg: "rgba(194,65,12,0.14)", path: "/operacional/painel", active: true,
     features: ["RDO Diário", "Checklists", "Concretagem", "Não Conformidades", "Registro Fotográfico", "Dashboard"],
   },
   {
