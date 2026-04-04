@@ -909,7 +909,7 @@ export const appRouter = router({
             SELECT DISTINCT o.id, o.nome, o.codigo, o."companyId"
             FROM obras o
             INNER JOIN obra_funcionarios of2 ON of2."obraId" = o.id AND of2."employeeId" = ${employeeId} AND of2."isActive" = 1
-            WHERE o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o."isActive" = 1
+            WHERE o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o."isActive" = 1 AND o.status = 'Em_Andamento'
             ORDER BY o.nome
           `);
           const rows = (obrasResult?.rows ?? obrasResult ?? []) as any[];

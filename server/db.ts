@@ -1491,7 +1491,7 @@ export async function getObrasByCompanyActive(companyId: number, companyIds?: nu
   const db = await getDb();
   if (!db) return [];
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
-  const rows = await db.select().from(obras).where(and(inArray(obras.companyId, ids), eq(obras.isActive, 1), isNull(obras.deletedAt))).orderBy(obras.nome);
+  const rows = await db.select().from(obras).where(and(inArray(obras.companyId, ids), eq(obras.isActive, 1), isNull(obras.deletedAt), eq(obras.status, 'Em_Andamento'))).orderBy(obras.nome);
   // Consolidate by name when multiple companies (CONSTRUTORAS mode)
   if (ids.length > 1) {
     const seen = new Map<string, typeof rows[0] & { obraIds?: number[] }>();
