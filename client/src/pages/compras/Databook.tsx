@@ -107,6 +107,7 @@ export default function Databook() {
   const [editEspecificacoes, setEditEspecificacoes] = useState("");
   const [editObservacoes, setEditObservacoes] = useState("");
   const [editDisciplina, setEditDisciplina] = useState("");
+  const [pdfPreview, setPdfPreview] = useState<string | null>(null);
   const [terceiroDialog, setTerceiroDialog] = useState(false);
   const [terceiroForm, setTerceiroForm] = useState({
     terceiroContratoId: 0,
@@ -225,6 +226,18 @@ export default function Databook() {
     onSuccess: (data) => {
       downloadBase64Pdf(data.pdf, data.filename);
       toast.success("PDF gerado");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const visualizarPdfFicha = trpc.databook.gerarPdfFicha.useMutation({
+    onSuccess: (data) => {
+      const bytes = atob(data.pdf);
+      const arr = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      const blob = new Blob([arr], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      setPdfPreview(url);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -412,7 +425,7 @@ export default function Databook() {
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 {gerarFichasOC.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Package className="w-4 h-4 mr-1" />}
-                Importar Itens de OCs
+                Importar Materiais de OCs
               </Button>
               <Button
                 onClick={() => gerarEspecsLote.mutate({ companyId, obraId })}
@@ -483,16 +496,16 @@ export default function Databook() {
 
             {/* Batch Actions */}
             {selecionados.length > 0 && (
-              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg p-2">
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg p-2 flex-wrap">
                 <span className="text-sm text-blue-700 font-medium">{selecionados.length} selecionados</span>
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => alterarStatusLote.mutate({ companyId, fichaIds: selecionados, novoStatus: "revisado", userName })}>
-                  Marcar Revisado
-                </Button>
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => alterarStatusLote.mutate({ companyId, fichaIds: selecionados, novoStatus: "enviado", userName })}>
-                  Marcar Enviado
+                  <CheckCircle className="w-3 h-3 mr-1" /> Marcar Revisado
                 </Button>
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => alterarStatusLote.mutate({ companyId, fichaIds: selecionados, novoStatus: "aprovado", userName })}>
-                  Aprovar
+                  <ThumbsUp className="w-3 h-3 mr-1" /> Aprovar
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs border-purple-200 text-purple-700 hover:bg-purple-50" onClick={() => alterarStatusLote.mutate({ companyId, fichaIds: selecionados, novoStatus: "enviado", userName })}>
+                  <Send className="w-3 h-3 mr-1" /> Enviar ao Cliente
                 </Button>
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelecionados([])}>
                   Limpar
@@ -556,27 +569,37 @@ export default function Databook() {
                       <TableCell><StatusBadge status={f.status} /></TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => {
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Editar ficha" onClick={() => {
                             setFichaDialog(f);
                             setEditEspecificacoes(f.especificacoes || "");
                             setEditObservacoes(f.observacoes || "");
                             setEditDisciplina(f.disciplina || "Outros");
                           }}>
-                            <Eye className="w-3.5 h-3.5" />
+                            <Edit className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Visualizar PDF" onClick={() => visualizarPdfFicha.mutate({ companyId, fichaId: f.id })} disabled={visualizarPdfFicha.isPending}>
+                            <Eye className="w-3.5 h-3.5 text-blue-500" />
                           </Button>
                           {f.status === "pendente_ia" && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => gerarEspecIA.mutate({ companyId, fichaId: f.id })} disabled={gerarEspecIA.isPending}>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Gerar specs IA" onClick={() => gerarEspecIA.mutate({ companyId, fichaId: f.id })} disabled={gerarEspecIA.isPending}>
                               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => gerarPdfFicha.mutate({ companyId, fichaId: f.id })} disabled={gerarPdfFicha.isPending}>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Baixar PDF" onClick={() => gerarPdfFicha.mutate({ companyId, fichaId: f.id })} disabled={gerarPdfFicha.isPending}>
                             <FileDown className="w-3.5 h-3.5 text-gray-500" />
                           </Button>
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => {
-                            if (confirm("Excluir esta ficha?")) excluirFicha.mutate({ companyId, fichaId: f.id });
-                          }}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          {f.status === "aprovado" && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Marcar como Enviado ao Cliente" onClick={() => alterarStatus.mutate({ companyId, fichaId: f.id, novoStatus: "enviado", userName })} disabled={alterarStatus.isPending}>
+                              <Send className="w-3.5 h-3.5 text-purple-500" />
+                            </Button>
+                          )}
+                          {!["aprovado", "enviado"].includes(f.status) && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" title="Excluir" onClick={() => {
+                              if (confirm("Excluir esta ficha?")) excluirFicha.mutate({ companyId, fichaId: f.id });
+                            }}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -863,6 +886,23 @@ export default function Databook() {
                 {cadastrarEntrega.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
                 Cadastrar Entrega
               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* PDF Preview Dialog */}
+        <Dialog open={!!pdfPreview} onOpenChange={(open) => { if (!open) { if (pdfPreview) URL.revokeObjectURL(pdfPreview); setPdfPreview(null); } }}>
+          <DialogContent className="max-w-4xl h-[90vh] p-0">
+            <DialogHeader className="px-4 pt-4 pb-2">
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                Visualização da Ficha Databook
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 px-4 pb-4 h-[calc(90vh-80px)]">
+              {pdfPreview && (
+                <iframe src={pdfPreview} className="w-full h-full rounded-lg border" />
+              )}
             </div>
           </DialogContent>
         </Dialog>

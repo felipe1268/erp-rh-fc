@@ -146,9 +146,12 @@ export const databookRouter = router({
         FROM compras_ordens_itens oi
         JOIN compras_ordens o ON o.id = oi.ordem_id
         LEFT JOIN compras_solicitacoes_itens si ON si.id = oi.solicitacao_item_id
+        LEFT JOIN compras_solicitacoes s ON s.id = o.solicitacao_id
         WHERE o.company_id = ${input.companyId}
           AND o.obra_id = ${input.obraId}
           AND o.status IN ('entregue', 'concluida', 'aprovada', 'parcial')
+          AND COALESCE(s.tipo, o.tipo, 'material') IN ('material', 'compra', 'pacote')
+          AND COALESCE(s.tipo, 'material') != 'servico'
         ORDER BY oi.descricao
       `);
       const itens = (itensResult as any).rows ?? itensResult ?? [];
