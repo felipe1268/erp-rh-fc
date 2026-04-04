@@ -3,6 +3,17 @@ import { getDb } from "../db";
 import { obras, companies } from "../../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 
+async function downloadImage(url: string): Promise<Buffer | null> {
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) return null;
+    const arrayBuf = await resp.arrayBuffer();
+    return Buffer.from(arrayBuf);
+  } catch {
+    return null;
+  }
+}
+
 interface FornecedorData {
   razaoSocial?: string | null;
   endereco?: string | null;
@@ -51,6 +62,16 @@ export async function gerarDatabookFichaPdf(
   company: CompanyData,
   fornecedor?: FornecedorData | null,
 ): Promise<Buffer> {
+  let photoBuf: Buffer | null = null;
+  if (ficha.foto_url) {
+    if (ficha.foto_url.startsWith("data:image")) {
+      const b64 = ficha.foto_url.split(",")[1];
+      if (b64) photoBuf = Buffer.from(b64, "base64");
+    } else if (ficha.foto_url.startsWith("http")) {
+      photoBuf = await downloadImage(ficha.foto_url);
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 50 });
     const chunks: Buffer[] = [];
@@ -154,22 +175,12 @@ export async function gerarDatabookFichaPdf(
     doc.text("OUTRAS INFORMAÇÕES / FOTO:", m, y);
     y += lineH + 6;
 
-    if (ficha.foto_url) {
+    if (photoBuf) {
       try {
-        if (ficha.foto_url.startsWith("data:image")) {
-          const base64Data = ficha.foto_url.split(",")[1];
-          if (base64Data) {
-            const buf = Buffer.from(base64Data, "base64");
-            const maxH = Math.min(280, pageH - y - 100);
-            if (maxH > 60) {
-              doc.image(buf, m + 5, y, { fit: [490, maxH] });
-              y += maxH + 10;
-            }
-          }
-        } else if (ficha.foto_url.startsWith("http")) {
-          doc.font("Helvetica").fontSize(9);
-          doc.text("Foto: " + ficha.foto_url, m + 5, y, { width: 490 });
-          y = doc.y + 10;
+        const maxH = Math.min(280, pageH - y - 100);
+        if (maxH > 60) {
+          doc.image(photoBuf, m + 5, y, { fit: [490, maxH] });
+          y += maxH + 10;
         }
       } catch {
         y += 10;
