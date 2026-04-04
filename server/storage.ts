@@ -114,11 +114,18 @@ export async function storagePut(
   const cfg = getStorageConfig();
   const key = normalizeKey(relKey);
 
+  let dbOk = false;
   try {
     await dbPersist(key, data, contentType);
+    dbOk = true;
   } catch (e: any) {
-    console.warn(`[Storage] DB persist failed (will retry once): ${e.message}`);
-    try { await dbPersist(key, data, contentType); } catch {}
+    console.error(`[Storage] DB persist failed for "${key}" (will retry once): ${e.message}`);
+    try { await dbPersist(key, data, contentType); dbOk = true; } catch (e2: any) {
+      console.error(`[Storage] DB persist RETRY ALSO FAILED for "${key}": ${e2.message}`);
+    }
+  }
+  if (!dbOk) {
+    console.error(`[Storage] CRITICAL: file "${key}" NOT persisted to DB — will be lost on restart!`);
   }
 
   if (!cfg) {
