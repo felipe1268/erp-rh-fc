@@ -3,17 +3,6 @@ import { getDb } from "../db";
 import { obras, companies } from "../../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 
-async function downloadImage(url: string): Promise<Buffer | null> {
-  try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if (!resp.ok) return null;
-    const arrayBuf = await resp.arrayBuffer();
-    return Buffer.from(arrayBuf);
-  } catch {
-    return null;
-  }
-}
-
 interface FornecedorData {
   razaoSocial?: string | null;
   endereco?: string | null;
@@ -68,7 +57,10 @@ export async function gerarDatabookFichaPdf(
       const b64 = ficha.foto_url.split(",")[1];
       if (b64) photoBuf = Buffer.from(b64, "base64");
     } else if (ficha.foto_url.startsWith("http")) {
-      photoBuf = await downloadImage(ficha.foto_url);
+      try {
+        const resp = await fetch(ficha.foto_url, { signal: AbortSignal.timeout(15000) });
+        if (resp.ok) photoBuf = Buffer.from(await resp.arrayBuffer());
+      } catch {}
     }
   }
 
@@ -79,131 +71,143 @@ export async function gerarDatabookFichaPdf(
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
+    const pageW = 595.28;
     const pageH = 841.89;
     const m = 50;
-    const rightCol = 330;
-    const lineH = 14;
+    const contentW = pageW - m * 2;
+    const midX = m + contentW / 2;
+    const rightCol = m + contentW * 0.5;
+    const lineH = 15;
+    const s = (v: any) => (v == null || v === "") ? "" : String(v);
 
     let y = m;
 
-    const s = (v: any) => (v == null || v === "") ? "" : String(v);
-
-    doc.font("Helvetica-Bold").fontSize(11).fillColor("black");
-    doc.text("DADOS CONTRATUAIS:", m, y);
-    y += lineH + 4;
-
-    doc.fontSize(9);
-
-    const row = (l1: string, v1: string, l2: string, v2: string) => {
-      doc.font("Helvetica-Bold").text(l1, m + 5, y, { continued: true });
-      doc.font("Helvetica").text(" " + v1, { continued: false });
-      doc.font("Helvetica-Bold").text(l2, rightCol, y, { continued: true });
-      doc.font("Helvetica").text(" " + v2, { continued: false });
-      y += lineH;
+    const drawSectionTitle = (title: string) => {
+      doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
+      doc.text(title, m, y);
+      y = doc.y + 2;
+      doc.moveTo(m, y).lineTo(m + contentW, y).lineWidth(0.8).strokeColor("black").stroke();
+      y += 6;
     };
 
-    row(
-      "Contratada:",
-      s(fornecedor?.razaoSocial) || s(ficha.fornecedor_nome),
-      "Contrato nº:",
-      s(ficha.contrato_numero)
-    );
-    row(
-      "Endereço:",
-      s(fornecedor?.endereco),
-      "Bairro:",
-      s(fornecedor?.bairro)
-    );
+    const drawHR = () => {
+      doc.moveTo(m, y).lineTo(m + contentW, y).lineWidth(0.5).strokeColor("#999999").stroke();
+      y += 8;
+    };
 
-    doc.font("Helvetica-Bold").fontSize(9).text("Município:", m + 5, y, { continued: true });
-    doc.font("Helvetica").text(" " + s(fornecedor?.cidade), { continued: false });
-    doc.font("Helvetica-Bold").text("Estado:", rightCol, y, { continued: true });
-    doc.font("Helvetica").text(" " + s(fornecedor?.estado) + "           CEP: " + s(fornecedor?.cep), { continued: false });
-    y += lineH;
+    drawSectionTitle("DADOS CONTRATUAIS:");
+    y += 2;
 
-    row(
-      "Contato:",
-      s(fornecedor?.contato),
-      "Fone Comercial:",
-      s(fornecedor?.telefone)
-    );
-    row(
-      "Email:",
-      s(fornecedor?.email),
-      "Celular:",
-      s(fornecedor?.celular)
-    );
+    const tableTop = y;
+    const rowH = 16;
+    const col1W = contentW * 0.5;
+    const col2W = contentW * 0.5;
 
-    y += lineH * 2;
+    const contractRows = [
+      [
+        "Contratada: " + (s(fornecedor?.razaoSocial) || s(ficha.fornecedor_nome)),
+        "Contrato nº: " + s(ficha.contrato_numero),
+      ],
+      [
+        "Endereço: " + s(fornecedor?.endereco),
+        "Bairro: " + s(fornecedor?.bairro),
+      ],
+      [
+        "Município: " + s(fornecedor?.cidade),
+        "Estado: " + s(fornecedor?.estado) + "       CEP: " + s(fornecedor?.cep),
+      ],
+      [
+        "Contato: " + s(fornecedor?.contato),
+        "Fone Comercial: " + s(fornecedor?.telefone),
+      ],
+      [
+        "Email: " + s(fornecedor?.email),
+        "Celular: " + s(fornecedor?.celular),
+      ],
+    ];
 
-    doc.font("Helvetica-Bold").fontSize(11);
-    doc.text("DESCRIÇÃO DO PRODUTO / SERVIÇO:", m, y);
-    y += lineH + 4;
+    doc.font("Helvetica").fontSize(8.5);
+    for (let i = 0; i < contractRows.length; i++) {
+      const rowY = tableTop + i * rowH;
+      doc.rect(m, rowY, col1W, rowH).stroke();
+      doc.rect(m + col1W, rowY, col2W, rowH).stroke();
+      doc.text(contractRows[i][0], m + 3, rowY + 3, { width: col1W - 6 });
+      doc.text(contractRows[i][1], m + col1W + 3, rowY + 3, { width: col2W - 6 });
+    }
 
-    doc.font("Helvetica").fontSize(10);
-    doc.text("  " + ficha.descricao, m, y, { width: 495 });
-    y = doc.y + lineH * 3;
+    y = tableTop + contractRows.length * rowH + 12;
 
-    doc.font("Helvetica-Bold").fontSize(11);
-    doc.text("ESPECIFICAÇÕES:", m, y);
-    y += lineH + 6;
+    drawSectionTitle("DESCRIÇÃO DO PRODUTO / SERVIÇO:");
+    y += 2;
+
+    const descBoxTop = y;
+    doc.font("Helvetica").fontSize(9);
+    doc.text(ficha.descricao, m + 4, y + 3, { width: contentW - 8 });
+    const descBoxH = Math.max(20, doc.y - descBoxTop + 6);
+    doc.rect(m, descBoxTop, contentW, descBoxH).stroke();
+    y = descBoxTop + descBoxH + 12;
+
+    drawSectionTitle("ESPECIFICAÇÕES:");
+    y += 4;
 
     if (ficha.especificacoes) {
       const lines = ficha.especificacoes.split("\n").filter(l => l.trim());
-      doc.font("Helvetica").fontSize(9);
+      doc.font("Helvetica").fontSize(8.5);
       for (const line of lines) {
-        if (y > pageH - 100) {
+        if (y > pageH - 120) {
           doc.addPage();
           y = m;
         }
         const clean = line.replace(/^[\s•\-\*○◦▪o]+/, "").trim();
         if (clean) {
-          doc.text("              o    " + clean, m, y, { width: 495 });
+          doc.text("       o    " + clean, m + 10, y, { width: contentW - 20 });
           y = doc.y + 2;
         }
       }
     }
 
-    y += lineH * 2;
+    y += 10;
 
-    if (y > pageH - 250) {
+    if (y > pageH - 280) {
       doc.addPage();
       y = m;
     }
 
-    doc.font("Helvetica-Bold").fontSize(11);
-    doc.text("OUTRAS INFORMAÇÕES / FOTO:", m, y);
-    y += lineH + 6;
+    drawSectionTitle("OUTRAS INFORMAÇÕES / FOTO:");
+    y += 6;
 
     if (photoBuf) {
       try {
-        const maxH = Math.min(280, pageH - y - 100);
-        if (maxH > 60) {
-          doc.image(photoBuf, m + 5, y, { fit: [490, maxH] });
-          y += maxH + 10;
+        const photoMaxW = contentW - 40;
+        const photoMaxH = Math.min(260, pageH - y - 120);
+        if (photoMaxH > 60) {
+          const imgX = m + 20;
+          doc.image(photoBuf, imgX, y, { fit: [photoMaxW, photoMaxH] });
+          y += photoMaxH + 10;
         }
       } catch {
-        y += 10;
+        y += 20;
       }
     } else {
-      y += lineH * 4;
+      y += 60;
     }
 
-    y += lineH;
+    y += 8;
 
     if (y > pageH - 80) {
       doc.addPage();
       y = m;
     }
 
-    doc.font("Helvetica-Bold").fontSize(11);
-    doc.text("OBSERVAÇÕES:", m, y);
-    y += lineH + 6;
+    drawSectionTitle("OBSERVAÇÕES:");
+    y += 2;
 
-    if (ficha.observacoes) {
-      doc.font("Helvetica").fontSize(9);
-      doc.text("  " + ficha.observacoes, m, y, { width: 495 });
-    }
+    const obsBoxTop = y;
+    doc.font("Helvetica").fontSize(9);
+    const obsText = ficha.observacoes || "";
+    doc.text(obsText, m + 4, y + 3, { width: contentW - 8 });
+    const obsBoxH = Math.max(20, doc.y - obsBoxTop + 6);
+    doc.rect(m, obsBoxTop, contentW, obsBoxH).stroke();
 
     doc.end();
   });
