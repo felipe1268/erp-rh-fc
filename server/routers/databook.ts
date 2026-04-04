@@ -71,7 +71,7 @@ async function buscarFotoParaFicha(fichaId: number, companyId: number): Promise<
     return null;
   }
 
-  for (const imgUrl of urls.slice(0, 5)) {
+  for (const imgUrl of urls.slice(0, 10)) {
     const dataUrl = await downloadImageAsBase64(imgUrl);
     if (dataUrl) {
       await db.update(databookFichas).set({
