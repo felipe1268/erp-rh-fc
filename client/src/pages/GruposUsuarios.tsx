@@ -161,6 +161,18 @@ const ALL_ROUTES = [
     { path: "/operacional/nc", label: "Não Conformidades", icon: "AlertTriangle" },
     { path: "/operacional/fotos", label: "Registro Fotográfico", icon: "FileSearch" },
   ]},
+  { section: "Proj./Doc. Técnicos", color: "sky", routes: [
+    { path: "/gestao-documentos", label: "Documentos", icon: "FolderOpen" },
+  ]},
+  { section: "IntegraSign", color: "pink", routes: [
+    { path: "/integrasign", label: "Painel IntegraSign", icon: "PenLine" },
+  ]},
+  { section: "Databook de Obra", color: "yellow", routes: [
+    { path: "/compras/databook", label: "Databook", icon: "BookOpen" },
+  ]},
+  { section: "BIM 3D/4D", color: "fuchsia", routes: [
+    { path: "/planejamento/bim", label: "Visualizador BIM", icon: "Box" },
+  ]},
   { section: "Geral", color: "slate", routes: [
     { path: "/ajuda", label: "Biblioteca de Conhecimento", icon: "BookOpen" },
     { path: "/revisoes", label: "Revisões do Sistema", icon: "FileText" },
@@ -182,6 +194,8 @@ const sectionColorMap: Record<string, { bg: string; border: string; text: string
   sky:     { bg: "bg-sky-50",     border: "border-sky-200",     text: "text-sky-700",     headerBg: "bg-sky-100",     dot: "bg-sky-500" },
   slate:   { bg: "bg-slate-50",   border: "border-slate-200",   text: "text-slate-700",   headerBg: "bg-slate-100",   dot: "bg-slate-500" },
   cyan:    { bg: "bg-cyan-50",    border: "border-cyan-200",    text: "text-cyan-700",    headerBg: "bg-cyan-100",    dot: "bg-cyan-500" },
+  pink:    { bg: "bg-pink-50",    border: "border-pink-200",    text: "text-pink-700",    headerBg: "bg-pink-100",    dot: "bg-pink-500" },
+  fuchsia: { bg: "bg-fuchsia-50", border: "border-fuchsia-200", text: "text-fuchsia-700", headerBg: "bg-fuchsia-100", dot: "bg-fuchsia-500" },
 };
 
 type RoutePermission = {
