@@ -891,14 +891,17 @@ export const appRouter = router({
       let parsedObras: number[] = [];
       try { if (rawObras) parsedObras = JSON.parse(rawObras); } catch {}
       if (parsedObras.length > 0) {
-        const obrasResult = await db.execute(sql`
-          SELECT DISTINCT o.id, o.nome, o.codigo, o."companyId"
-          FROM obras o
-          WHERE o.id = ANY(${parsedObras}) AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o."isActive" = 1
-          ORDER BY o.nome
-        `);
-        const rows = (obrasResult?.rows ?? obrasResult ?? []) as any[];
-        if (rows.length > 0) return rows;
+        const obraIds = parsedObras.filter(id => typeof id === 'number' && id > 0);
+        if (obraIds.length > 0) {
+          const obrasResult = await db.execute(sql`
+            SELECT DISTINCT o.id, o.nome, o.codigo, o."companyId"
+            FROM obras o
+            WHERE o.id IN (${sql.raw(obraIds.join(","))}) AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o."isActive" = 1
+            ORDER BY o.nome
+          `);
+          const rows = (obrasResult?.rows ?? obrasResult ?? []) as any[];
+          if (rows.length > 0) return rows;
+        }
       }
 
       const userEmail = ctx.user.email ?? '';
