@@ -51,18 +51,27 @@ export async function gerarDatabookFichaPdf(
   company: CompanyData,
   fornecedor?: FornecedorData | null,
 ): Promise<Buffer> {
-  let photoBuf: Buffer | null = null;
-  if (ficha.foto_url) {
-    if (ficha.foto_url.startsWith("data:image")) {
-      const b64 = ficha.foto_url.split(",")[1];
-      if (b64) photoBuf = Buffer.from(b64, "base64");
-    } else if (ficha.foto_url.startsWith("http")) {
-      try {
-        const resp = await fetch(ficha.foto_url, { signal: AbortSignal.timeout(15000) });
-        if (resp.ok) photoBuf = Buffer.from(await resp.arrayBuffer());
-      } catch {}
-    }
+  async function loadImage(url: string | null | undefined): Promise<Buffer | null> {
+    if (!url) return null;
+    try {
+      if (url.startsWith("data:image")) {
+        const b64 = url.split(",")[1];
+        return b64 ? Buffer.from(b64, "base64") : null;
+      }
+      if (url.startsWith("http")) {
+        const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+        if (resp.ok) return Buffer.from(await resp.arrayBuffer());
+      }
+    } catch {}
+    return null;
   }
+
+  const [photoBuf, clienteLogoBuf, companyLogoBuf, gerenciadoraLogoBuf] = await Promise.all([
+    loadImage(ficha.foto_url),
+    loadImage(obra.clienteLogoUrl),
+    loadImage(company.logoUrl),
+    loadImage(obra.gerenciadoraLogoUrl),
+  ]);
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 50 });
@@ -75,12 +84,35 @@ export async function gerarDatabookFichaPdf(
     const pageH = 841.89;
     const m = 50;
     const contentW = pageW - m * 2;
-    const midX = m + contentW / 2;
-    const rightCol = m + contentW * 0.5;
     const lineH = 15;
     const s = (v: any) => (v == null || v === "") ? "" : String(v);
 
     let y = m;
+
+    const logoH = 50;
+    const logoSlotW = contentW / 3;
+    const logoPositions = [
+      { buf: clienteLogoBuf, x: m, align: "left" },
+      { buf: companyLogoBuf, x: m + logoSlotW, align: "center" },
+      { buf: gerenciadoraLogoBuf, x: m + logoSlotW * 2, align: "right" },
+    ];
+
+    let hasAnyLogo = false;
+    for (const lp of logoPositions) {
+      if (lp.buf) {
+        hasAnyLogo = true;
+        try {
+          const logoX = lp.align === "right" ? lp.x + logoSlotW - 80 : lp.align === "center" ? lp.x + (logoSlotW - 80) / 2 : lp.x;
+          doc.image(lp.buf, logoX, y, { fit: [80, logoH] });
+        } catch {}
+      }
+    }
+
+    if (hasAnyLogo) {
+      y += logoH + 8;
+    } else {
+      y += logoH + 8;
+    }
 
     const drawSectionTitle = (title: string) => {
       doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
@@ -88,11 +120,6 @@ export async function gerarDatabookFichaPdf(
       y = doc.y + 2;
       doc.moveTo(m, y).lineTo(m + contentW, y).lineWidth(0.8).strokeColor("black").stroke();
       y += 6;
-    };
-
-    const drawHR = () => {
-      doc.moveTo(m, y).lineTo(m + contentW, y).lineWidth(0.5).strokeColor("#999999").stroke();
-      y += 8;
     };
 
     drawSectionTitle("DADOS CONTRATUAIS:");
