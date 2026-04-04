@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1007,
+    titulo: "Correções e Automação de Pesos Financeiros",
+    descricao: "Correção de FK constraint ao editar itens de Solicitação de Compra (NULL em cotações/ordens referenciantes antes de deletar). Dashboard Orçamento agora inicia na visão consolidada 'Todos' em vez de tela vazia. Novo endpoint de recálculo automático de pesos financeiros do cronograma via EAP do orçamento vinculado (botão 'Vincular Pesos EAP' no modo edição do cronograma).",
+    tipo: "bugfix",
+    modulos: "Compras, Orçamento, Planejamento",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-04 14:00:00",
+  },
+  {
     version: 1006,
     titulo: "Módulo Operacional: Automação e Alertas",
     descricao: "Jobs automáticos do módulo Operacional: (1) Auto-criação de RDO às 05:00 Brasília para todas as obras ativas com auto-preenchimento de equipamentos e mão de obra, (2) Alerta por e-mail às 18:00 para engenheiros sobre RDOs não finalizados, (3) Alerta urgente às 20:00 para gerentes/diretores, (4) Preenchimento automático de clima via Open-Meteo (temperatura min/max, condição climática, choveu) para obras com coordenadas cadastradas, atualização a cada 30 minutos. Query param ?obra= propagado em todas as sub-páginas para contexto de navegação.",

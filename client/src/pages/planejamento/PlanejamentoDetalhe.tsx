@@ -2447,6 +2447,20 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     },
   });
 
+  const recalcPesosMut = trpc.planejamento.recalcularPesosFinanceiros.useMutation({
+    onSuccess: (res: any) => {
+      if (!res.ok) { toast.error(res.msg ?? "Erro ao recalcular pesos"); return; }
+      const metLabel = res.metodo === "orcamento" ? "Orçamento (EAP)" : "Duração (dias)";
+      const extra = res.metodo === "orcamento" && res.semVinculo > 0
+        ? ` (${res.vinculados} vinculados, ${res.semVinculo} sem correspondência)`
+        : "";
+      toast.success(`Pesos recalculados via ${metLabel}${extra}`);
+      utils.planejamento.listarAtividades.invalidate();
+      utils.planejamento.getCurvaSFinanceira.invalidate();
+    },
+    onError: (err: any) => toast.error(`Erro: ${err.message}`),
+  });
+
   const avMap = useMemo(() => {
     const m: Record<number, number> = {};
     avancos.forEach((av: any) => { m[av.atividadeId] = n(av.percentualAcumulado); });
@@ -2717,13 +2731,15 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               <Button
                 variant="outline" size="sm"
                 className="gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
-                title="Calcula o peso de cada atividade folha proporcional à sua duração em dias"
+                title={orcamentoId ? "Calcula pesos via Orçamento (EAP) ou Duração" : "Calcula pesos proporcionais à duração em dias"}
+                disabled={recalcPesosMut.isPending}
                 onClick={() => {
                   if (!confirm("Recalcular pesos automaticamente? Os pesos atuais serão substituídos.")) return;
-                  calcularPesosAutomaticos();
+                  recalcPesosMut.mutate({ projetoId, revisaoId: revisaoAtiva.id });
+                  setEditando(false);
                 }}>
-                <Calculator className="h-3.5 w-3.5" />
-                Calcular Pesos
+                {recalcPesosMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Calculator className="h-3.5 w-3.5" />}
+                {orcamentoId ? "Vincular Pesos (EAP)" : "Calcular Pesos"}
               </Button>
               <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 relative overflow-hidden min-w-[100px]"
                 disabled={salvarMutation.isPending}

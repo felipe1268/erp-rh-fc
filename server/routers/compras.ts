@@ -7608,7 +7608,15 @@ Retorne APENAS um JSON válido neste formato:
             }
           }
         } else {
-          await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+          const existingItems = await db.select({ id: comprasSolicitacoesItens.id })
+            .from(comprasSolicitacoesItens)
+            .where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+          if (existingItems.length > 0) {
+            const existingIds = existingItems.map(i => i.id);
+            await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + existingIds.join(",") + "]::int[]")})`);
+            await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + existingIds.join(",") + "]::int[]")})`);
+            await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+          }
 
           if (input.itens.length > 0) {
             await db.insert(comprasSolicitacoesItens).values(

@@ -3348,6 +3348,92 @@ REGRAS TÉCNICAS:
       return { status: "ok" as const, divergencias: [], curva: curvaCompleta, totalVenda };
     }),
 
+  recalcularPesosFinanceiros: protectedProcedure
+    .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+
+      const [proj] = await db.select({
+        orcamentoId: planejamentoProjetos.orcamentoId,
+        companyId: planejamentoProjetos.companyId,
+      }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+      if (!proj) return { ok: false, msg: "Projeto não encontrado" };
+
+      const [rev] = await db.select({ id: planejamentoRevisoes.id })
+        .from(planejamentoRevisoes)
+        .where(and(eq(planejamentoRevisoes.id, input.revisaoId), eq(planejamentoRevisoes.projetoId, input.projetoId)))
+        .limit(1);
+      if (!rev) return { ok: false, msg: "Revisão não pertence ao projeto" };
+
+      const ativs = await db.select({
+        id: planejamentoAtividades.id,
+        eapCodigo: planejamentoAtividades.eapCodigo,
+        isGrupo: planejamentoAtividades.isGrupo,
+        isMarco: planejamentoAtividades.isMarco,
+        duracaoDias: planejamentoAtividades.duracaoDias,
+      }).from(planejamentoAtividades).where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+
+      if (ativs.length === 0) return { ok: false, msg: "Nenhuma atividade encontrada" };
+
+      const folhas = ativs.filter(a => !a.isGrupo && !a.isMarco);
+      let metodo = "duracao";
+      let vinculados = 0;
+      let semVinculo = 0;
+      const updates: { id: number; peso: string }[] = [];
+
+      if (proj?.orcamentoId) {
+        const eapItens = await db.select({
+          eapCodigo: orcamentoItens.eapCodigo,
+          custoTotal: orcamentoItens.custoTotal,
+        }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, proj.orcamentoId));
+
+        if (eapItens.length > 0) {
+          const custoMap = new Map<string, number>();
+          for (const it of eapItens) {
+            const code = it.eapCodigo ?? "";
+            custoMap.set(code, (custoMap.get(code) ?? 0) + (parseFloat(it.custoTotal ?? "0") || 0));
+          }
+
+          const totalCusto = folhas.reduce((s, a) => s + (custoMap.get(a.eapCodigo ?? "") ?? 0), 0);
+          vinculados = folhas.filter(a => custoMap.has(a.eapCodigo ?? "")).length;
+          semVinculo = folhas.length - vinculados;
+
+          if (totalCusto > 0) {
+            metodo = "orcamento";
+            for (const a of ativs) {
+              if (a.isGrupo || a.isMarco) {
+                updates.push({ id: a.id, peso: "0" });
+              } else {
+                const custo = custoMap.get(a.eapCodigo ?? "") ?? 0;
+                updates.push({ id: a.id, peso: String(+((custo / totalCusto) * 100).toFixed(4)) });
+              }
+            }
+          }
+        }
+      }
+
+      if (updates.length === 0) {
+        const totalDias = folhas.reduce((s, a) => s + (a.duracaoDias ?? 0), 0);
+        if (totalDias === 0) return { ok: false, msg: "Sem duração nas atividades para calcular pesos" };
+        for (const a of ativs) {
+          if (a.isGrupo || a.isMarco) {
+            updates.push({ id: a.id, peso: "0" });
+          } else {
+            const dur = a.duracaoDias ?? 0;
+            updates.push({ id: a.id, peso: String(+((dur / totalDias) * 100).toFixed(4)) });
+          }
+        }
+      }
+
+      for (const u of updates) {
+        await db.update(planejamentoAtividades)
+          .set({ pesoFinanceiro: u.peso })
+          .where(eq(planejamentoAtividades.id, u.id));
+      }
+
+      return { ok: true, metodo, totalAtividades: folhas.length, vinculados, semVinculo };
+    }),
+
   dashboardGeral: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {

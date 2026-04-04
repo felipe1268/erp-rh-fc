@@ -249,7 +249,7 @@ function OrcamentoDashPageInner({ routeId }: { routeId: number }) {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
 
   const [selectedId, setSelectedId] = useState<number | null>(
-    routeId || null
+    routeId > 0 ? routeId : TODOS_ID
   );
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -411,11 +411,15 @@ function OrcamentoDashPageInner({ routeId }: { routeId: number }) {
 
         {/* ── Conteúdo ──────────────────────────────────────────────── */}
 
-        {/* Estado inicial sem seleção */}
-        {!selectedId && !loadingLista && (
+        {/* Estado vazio — lista sem orçamentos */}
+        {!loadingLista && lista.length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
-            <p className="text-lg font-medium">Selecione um orçamento para ver o dashboard</p>
-            <p className="text-sm">Use o seletor acima para escolher um projeto ou ver todos juntos</p>
+            <DollarSign className="h-12 w-12 opacity-20" />
+            <p className="text-lg font-medium">Nenhum orçamento cadastrado</p>
+            <p className="text-sm">Crie um orçamento para visualizar o dashboard</p>
+            <Button variant="default" size="sm" onClick={() => setLocation("/orcamento/lista")}>
+              Ir para Orçamentos
+            </Button>
           </div>
         )}
 
