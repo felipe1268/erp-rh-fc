@@ -45,36 +45,35 @@ interface CompanyData {
   logoUrl?: string | null;
 }
 
+async function loadImage(url: string | null | undefined): Promise<Buffer | null> {
+  if (!url) return null;
+  try {
+    if (url.startsWith("data:image")) {
+      const b64 = url.split(",")[1];
+      return b64 ? Buffer.from(b64, "base64") : null;
+    }
+    if (url.startsWith("http")) {
+      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (resp.ok) return Buffer.from(await resp.arrayBuffer());
+    }
+  } catch {}
+  return null;
+}
+
 export async function gerarDatabookFichaPdf(
   ficha: DatabookFichaData,
   obra: ObraData,
   company: CompanyData,
   fornecedor?: FornecedorData | null,
 ): Promise<Buffer> {
-  async function loadImage(url: string | null | undefined): Promise<Buffer | null> {
-    if (!url) return null;
-    try {
-      if (url.startsWith("data:image")) {
-        const b64 = url.split(",")[1];
-        return b64 ? Buffer.from(b64, "base64") : null;
-      }
-      if (url.startsWith("http")) {
-        const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
-        if (resp.ok) return Buffer.from(await resp.arrayBuffer());
-      }
-    } catch {}
-    return null;
-  }
-
-  const [photoBuf, clienteLogoBuf, companyLogoBuf, gerenciadoraLogoBuf] = await Promise.all([
+  const [photoBuf, clienteLogoBuf, gerenciadoraLogoBuf] = await Promise.all([
     loadImage(ficha.foto_url),
     loadImage(obra.clienteLogoUrl),
-    loadImage(company.logoUrl),
     loadImage(obra.gerenciadoraLogoUrl),
   ]);
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    const doc = new PDFDocument({ size: "A4", margin: 40 });
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
@@ -82,159 +81,123 @@ export async function gerarDatabookFichaPdf(
 
     const pageW = 595.28;
     const pageH = 841.89;
-    const m = 50;
-    const contentW = pageW - m * 2;
-    const lineH = 15;
+    const ml = 40;
+    const mr = 40;
+    const cw = pageW - ml - mr;
     const s = (v: any) => (v == null || v === "") ? "" : String(v);
 
-    let y = m;
+    let y = 35;
 
-    const logoH = 50;
-    const logoSlotW = contentW / 3;
-    const logoPositions = [
-      { buf: clienteLogoBuf, x: m, align: "left" },
-      { buf: companyLogoBuf, x: m + logoSlotW, align: "center" },
-      { buf: gerenciadoraLogoBuf, x: m + logoSlotW * 2, align: "right" },
+    if (clienteLogoBuf) {
+      try { doc.image(clienteLogoBuf, ml, y, { fit: [100, 65] }); } catch {}
+    }
+    if (gerenciadoraLogoBuf) {
+      try { doc.image(gerenciadoraLogoBuf, pageW - mr - 100, y, { fit: [100, 65] }); } catch {}
+    }
+
+    y += 75;
+
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
+    doc.text("DADOS CONTRATUAIS:", ml, y);
+    y = doc.y + 1;
+    doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(1).strokeColor("black").stroke();
+    y += 3;
+
+    const rowH = 18;
+    const c1w = Math.round(cw * 0.55);
+    const c2w = cw - c1w;
+
+    const tRows = [
+      ["Contratada: " + (s(fornecedor?.razaoSocial) || s(ficha.fornecedor_nome)), "Contrato nº: " + s(ficha.contrato_numero)],
+      ["Endereço: " + s(fornecedor?.endereco), "Bairro: " + s(fornecedor?.bairro)],
+      ["Município: " + s(fornecedor?.cidade), "Estado: " + s(fornecedor?.estado) + "       CEP: " + s(fornecedor?.cep)],
+      ["Contato: " + s(fornecedor?.contato), "Fone Comercial: " + s(fornecedor?.telefone)],
+      ["Email: " + s(fornecedor?.email), "Celular: " + s(fornecedor?.celular)],
     ];
 
-    let hasAnyLogo = false;
-    for (const lp of logoPositions) {
-      if (lp.buf) {
-        hasAnyLogo = true;
-        try {
-          const logoX = lp.align === "right" ? lp.x + logoSlotW - 80 : lp.align === "center" ? lp.x + (logoSlotW - 80) / 2 : lp.x;
-          doc.image(lp.buf, logoX, y, { fit: [80, logoH] });
-        } catch {}
-      }
+    doc.lineWidth(0.5).strokeColor("black");
+    for (let i = 0; i < tRows.length; i++) {
+      const ry = y + i * rowH;
+      doc.rect(ml, ry, c1w, rowH).stroke();
+      doc.rect(ml + c1w, ry, c2w, rowH).stroke();
+      doc.font("Helvetica").fontSize(8.5);
+      doc.text(tRows[i][0], ml + 4, ry + 4, { width: c1w - 8 });
+      doc.text(tRows[i][1], ml + c1w + 4, ry + 4, { width: c2w - 8 });
     }
 
-    if (hasAnyLogo) {
-      y += logoH + 8;
-    } else {
-      y += logoH + 8;
-    }
+    y += tRows.length * rowH + 18;
 
-    const drawSectionTitle = (title: string) => {
-      doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
-      doc.text(title, m, y);
-      y = doc.y + 2;
-      doc.moveTo(m, y).lineTo(m + contentW, y).lineWidth(0.8).strokeColor("black").stroke();
-      y += 6;
-    };
-
-    drawSectionTitle("DADOS CONTRATUAIS:");
-    y += 2;
-
-    const tableTop = y;
-    const rowH = 16;
-    const col1W = contentW * 0.5;
-    const col2W = contentW * 0.5;
-
-    const contractRows = [
-      [
-        "Contratada: " + (s(fornecedor?.razaoSocial) || s(ficha.fornecedor_nome)),
-        "Contrato nº: " + s(ficha.contrato_numero),
-      ],
-      [
-        "Endereço: " + s(fornecedor?.endereco),
-        "Bairro: " + s(fornecedor?.bairro),
-      ],
-      [
-        "Município: " + s(fornecedor?.cidade),
-        "Estado: " + s(fornecedor?.estado) + "       CEP: " + s(fornecedor?.cep),
-      ],
-      [
-        "Contato: " + s(fornecedor?.contato),
-        "Fone Comercial: " + s(fornecedor?.telefone),
-      ],
-      [
-        "Email: " + s(fornecedor?.email),
-        "Celular: " + s(fornecedor?.celular),
-      ],
-    ];
-
-    doc.font("Helvetica").fontSize(8.5);
-    for (let i = 0; i < contractRows.length; i++) {
-      const rowY = tableTop + i * rowH;
-      doc.rect(m, rowY, col1W, rowH).stroke();
-      doc.rect(m + col1W, rowY, col2W, rowH).stroke();
-      doc.text(contractRows[i][0], m + 3, rowY + 3, { width: col1W - 6 });
-      doc.text(contractRows[i][1], m + col1W + 3, rowY + 3, { width: col2W - 6 });
-    }
-
-    y = tableTop + contractRows.length * rowH + 12;
-
-    drawSectionTitle("DESCRIÇÃO DO PRODUTO / SERVIÇO:");
-    y += 2;
-
-    const descBoxTop = y;
-    doc.font("Helvetica").fontSize(9);
-    doc.text(ficha.descricao, m + 4, y + 3, { width: contentW - 8 });
-    const descBoxH = Math.max(20, doc.y - descBoxTop + 6);
-    doc.rect(m, descBoxTop, contentW, descBoxH).stroke();
-    y = descBoxTop + descBoxH + 12;
-
-    drawSectionTitle("ESPECIFICAÇÕES:");
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
+    doc.text("DESCRIÇÃO DO PRODUTO / SERVIÇO:", ml, y);
+    y = doc.y + 1;
+    doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(1).strokeColor("black").stroke();
     y += 4;
+
+    doc.font("Helvetica").fontSize(9);
+    const descStartY = y;
+    doc.text(ficha.descricao, ml + 4, y + 3, { width: cw - 8 });
+    const descEndY = doc.y + 5;
+    const descH = Math.max(22, descEndY - descStartY);
+    doc.lineWidth(0.5).rect(ml, descStartY, cw, descH).stroke();
+    y = descStartY + descH + 18;
+
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
+    doc.text("ESPECIFICAÇÕES:", ml, y);
+    y = doc.y + 1;
+    doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(1).strokeColor("black").stroke();
+    y += 8;
 
     if (ficha.especificacoes) {
       const lines = ficha.especificacoes.split("\n").filter(l => l.trim());
       doc.font("Helvetica").fontSize(8.5);
       for (const line of lines) {
-        if (y > pageH - 120) {
-          doc.addPage();
-          y = m;
-        }
+        if (y > pageH - 120) { doc.addPage(); y = 40; }
         const clean = line.replace(/^[\s•\-\*○◦▪o]+/, "").trim();
         if (clean) {
-          doc.text("       o    " + clean, m + 10, y, { width: contentW - 20 });
-          y = doc.y + 2;
+          doc.text("     o    " + clean, ml + 20, y, { width: cw - 30 });
+          y = doc.y + 3;
         }
       }
     }
 
+    y += 18;
+    if (y > pageH - 300) { doc.addPage(); y = 40; }
+
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
+    doc.text("OUTRAS INFORMAÇÕES / FOTO:", ml, y);
+    y = doc.y + 1;
+    doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(1).strokeColor("black").stroke();
     y += 10;
-
-    if (y > pageH - 280) {
-      doc.addPage();
-      y = m;
-    }
-
-    drawSectionTitle("OUTRAS INFORMAÇÕES / FOTO:");
-    y += 6;
 
     if (photoBuf) {
       try {
-        const photoMaxW = contentW - 40;
-        const photoMaxH = Math.min(260, pageH - y - 120);
-        if (photoMaxH > 60) {
-          const imgX = m + 20;
-          doc.image(photoBuf, imgX, y, { fit: [photoMaxW, photoMaxH] });
-          y += photoMaxH + 10;
+        const maxPhotoH = Math.min(250, pageH - y - 130);
+        if (maxPhotoH > 50) {
+          const photoW = cw * 0.6;
+          const photoX = ml + (cw - photoW) / 2;
+          doc.image(photoBuf, photoX, y, { fit: [photoW, maxPhotoH] });
+          y += maxPhotoH + 10;
         }
-      } catch {
-        y += 20;
-      }
+      } catch { y += 20; }
     } else {
-      y += 60;
+      y += 80;
     }
 
-    y += 8;
+    y += 18;
+    if (y > pageH - 80) { doc.addPage(); y = 40; }
 
-    if (y > pageH - 80) {
-      doc.addPage();
-      y = m;
-    }
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
+    doc.text("OBSERVAÇÕES:", ml, y);
+    y = doc.y + 1;
+    doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(1).strokeColor("black").stroke();
+    y += 4;
 
-    drawSectionTitle("OBSERVAÇÕES:");
-    y += 2;
-
-    const obsBoxTop = y;
     doc.font("Helvetica").fontSize(9);
-    const obsText = ficha.observacoes || "";
-    doc.text(obsText, m + 4, y + 3, { width: contentW - 8 });
-    const obsBoxH = Math.max(20, doc.y - obsBoxTop + 6);
-    doc.rect(m, obsBoxTop, contentW, obsBoxH).stroke();
+    const obsStartY = y;
+    doc.text(ficha.observacoes || "", ml + 4, y + 3, { width: cw - 8 });
+    const obsEndY = doc.y + 5;
+    const obsH = Math.max(22, obsEndY - obsStartY);
+    doc.lineWidth(0.5).rect(ml, obsStartY, cw, obsH).stroke();
 
     doc.end();
   });
@@ -285,10 +248,7 @@ export async function gerarIndicePdf(
 
     doc.font("Helvetica").fontSize(8);
     for (const ficha of fichas) {
-      if (y > 540) {
-        doc.addPage();
-        y = 40;
-      }
+      if (y > 540) { doc.addPage(); y = 40; }
       cx = margin + 5;
       const row = [
         "DATABOOK-" + String(ficha.numero_sequencial).padStart(3, "0"),

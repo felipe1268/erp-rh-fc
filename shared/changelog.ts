@@ -7587,4 +7587,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-03 21:30:00",
   },
+  {
+    versao: 1004,
+    descricao:
+      "PDF Databook reescrito pixel por pixel conforme template do cliente.\n" +
+      "• Layout: logo cliente (esq) + logo gerenciadora (dir) no cabeçalho\n" +
+      "• DADOS CONTRATUAIS com tabela bordada de 2 colunas\n" +
+      "• DESCRIÇÃO DO PRODUTO / SERVIÇO em caixa com borda\n" +
+      "• ESPECIFICAÇÕES com bullets 'o' indentados\n" +
+      "• OUTRAS INFORMAÇÕES / FOTO com imagem centralizada\n" +
+      "• OBSERVAÇÕES em caixa com borda\n" +
+      "• Títulos de seção em negrito com linha separadora\n" +
+      "• Proteção de dados: specs/fotos já geradas nunca são sobrescritas",
+    tipo: "melhoria",
+    modulos: "Compras, Databook",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-04 02:00:00",
+  },
 ];
