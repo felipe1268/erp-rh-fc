@@ -30,7 +30,7 @@ export default function NaoConformidades() {
   const [location] = useLocation();
   const params = new URLSearchParams(location.split("?")[1] || "");
   const obraIdParam = Number(params.get("obra")) || 0;
-  const obras = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
+  const obras = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
   const [obraId, setObraId] = useState<number>(obraIdParam);
   const selectedObraId = obraId || obraIdParam || (obras.data as any)?.[0]?.id || 0;
   const [filtroStatus, setFiltroStatus] = useState<string>("");

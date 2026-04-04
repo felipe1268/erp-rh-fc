@@ -28,7 +28,7 @@ export default function RDO() {
   const obraIdParam = Number(params.get("obra")) || 0;
   const rdoIdParam = Number(params.get("id")) || 0;
 
-  const obras = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
+  const obras = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
   const [obraId, setObraId] = useState(obraIdParam);
   const selectedObraId = obraId || (obras.data as any)?.[0]?.id || 0;
 

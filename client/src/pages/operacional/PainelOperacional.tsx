@@ -18,7 +18,7 @@ export default function PainelOperacional() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
 
-  const obras = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
+  const obras = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
   const [obraId, setObraId] = useState<number | null>(null);
   const selectedObraId = obraId || (obras.data as any)?.[0]?.id;
 
