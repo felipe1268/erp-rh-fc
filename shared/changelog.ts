@@ -25,6 +25,33 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1006,
+    titulo: "Módulo Operacional: Automação e Alertas",
+    descricao: "Jobs automáticos do módulo Operacional: (1) Auto-criação de RDO às 05:00 Brasília para todas as obras ativas com auto-preenchimento de equipamentos e mão de obra, (2) Alerta por e-mail às 18:00 para engenheiros sobre RDOs não finalizados, (3) Alerta urgente às 20:00 para gerentes/diretores, (4) Preenchimento automático de clima via Open-Meteo (temperatura min/max, condição climática, choveu) para obras com coordenadas cadastradas, atualização a cada 30 minutos. Query param ?obra= propagado em todas as sub-páginas para contexto de navegação.",
+    tipo: "feature",
+    modulos: "Operacional",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-04 03:00:00",
+  },
+  {
+    version: 1005,
+    titulo: "Módulo Operacional: Frontend Completo",
+    descricao: "6 páginas do módulo Operacional implementadas: Painel (dashboard com KPIs de RDO, NCs, Concretagem, Checklists, Fotos), RDO (criar/editar/finalizar com clima, mão de obra, atividades, equipamentos, materiais), Checklists (templates com itens, preenchimento com Conforme/NC/NA), Concretagem (mapa de elementos, lançamentos com controle de tempo, CPs com datas de ruptura), Não Conformidades (abertura, tratativa, fechamento com plano de ação), Registro Fotográfico (upload, galeria com filtros por disciplina/data). Router backend completo registrado. Auto-preenchimento de RDO com equipamentos e mão de obra ativos.",
+    tipo: "feature",
+    modulos: "Operacional",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-04 14:00:00",
+  },
+  {
+    version: 1004,
+    titulo: "Módulo Operacional: Fundação (DB + Router)",
+    descricao: "Criação de todas as tabelas do módulo operacional no banco (rdo_relatorios, rdo_mao_obra, rdo_equipamentos, rdo_atividades, rdo_materiais, rdo_fotos, checklists_templates, checklists_template_itens, checklists_preenchidos, checklists_respostas, concretagem_mapa, concretagem_lancamentos, concretagem_cps, nao_conformidades, registro_fotografico). Módulo registrado na navegação (sidebar, rotas, tema amber).",
+    tipo: "feature",
+    modulos: "Operacional",
+    criadoPor: "Assistente",
+    dataPublicacao: "2026-04-04 13:00:00",
+  },
+  {
     version: 1003,
     titulo: "Novo Módulo: Databook de Obra",
     descricao: "Módulo completo de Databook para documentação de produtos da obra. Importação automática de itens de OCs, classificação de disciplina e geração de especificações técnicas via IA (Claude), busca de fotos via Gemini, fluxo de aprovação (pendente_ia → gerado → revisado → enviado → aprovado/reprovado), deduplicação inteligente, entregas de terceiros com validação IA, geração de PDF individual e índice, dashboard com progresso por disciplina.",

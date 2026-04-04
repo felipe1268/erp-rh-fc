@@ -109,6 +109,7 @@ import { telemetriaRouter } from "./routers/telemetria";
 import { portalServicoRouter } from "./routers/portalServico";
 import { integrasignRouter } from "./routers/integrasign";
 import { databookRouter } from "./routers/databook";
+import { operacionalRouter } from "./routers/operacional";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -162,6 +163,7 @@ export const appRouter = router({
   portalServico: portalServicoRouter,
   integrasign: integrasignRouter,
   databook: databookRouter,
+  operacional: operacionalRouter,
   portalExterno: portalExternoRouter,
   payrollEngine: payrollEngineRouter,
   horasExtras: horasExtrasRouter,

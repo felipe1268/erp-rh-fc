@@ -93,7 +93,8 @@ export type ActiveModuleId =
   | "orcamento"
   | "medicao"
   | "almoxarifado"
-  | "gestao-documentos";
+  | "gestao-documentos"
+  | "operacional";
 
 export interface ModuleFeature {
   key: string;
@@ -350,6 +351,21 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "compras-realocacao",     label: "Realocação",          route: "/compras/realocacao",     icon: "ArrowLeftRight" },
       { key: "compras-comissoes",      label: "Comissões",           route: "/compras/comissoes",      icon: "Percent" },
       { key: "compras-configuracoes",  label: "Configurações",       route: "/compras/configuracoes",  icon: "Settings2" },
+    ],
+  },
+  {
+    id: "operacional",
+    label: "Operacional",
+    description: "Gestão Operacional de Obras",
+    color: "amber",
+    icon: "HardHat",
+    features: [
+      { key: "operacional-painel",        label: "Painel",                  route: "/operacional/painel",        icon: "LayoutDashboard" },
+      { key: "operacional-rdo",           label: "RDO",                     route: "/operacional/rdo",           icon: "ClipboardList" },
+      { key: "operacional-checklists",    label: "Checklists de Qualidade", route: "/operacional/checklists",    icon: "CheckSquare" },
+      { key: "operacional-concretagem",   label: "Controle de Concretagem", route: "/operacional/concretagem",   icon: "Blocks" },
+      { key: "operacional-nc",            label: "Não Conformidades",       route: "/operacional/nc",            icon: "AlertTriangle" },
+      { key: "operacional-fotos",         label: "Registro Fotográfico",    route: "/operacional/fotos",         icon: "Camera" },
     ],
   },
 ];

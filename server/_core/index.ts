@@ -685,6 +685,8 @@ async function startServer() {
     import("../services/financialAutoImportJob").then(m => m.startFinancialAutoImportJob()).catch(e => console.error("[FinancialJob] Erro:", e));
     // Jobs de compras: vencimentos de OC, expiração de cotações, alertas de contratos
     import("../services/purchaseAutoJobs").then(m => m.startPurchaseJobs()).catch(e => console.error("[PurchaseJobs] Erro:", e));
+    // Jobs do módulo operacional: auto-criar RDO, alertas 18h/20h, clima automático
+    import("../services/operacionalJobs").then(m => m.startOperacionalJobs()).catch(e => console.error("[OperacionalJobs] Erro:", e));
   });
 }
 

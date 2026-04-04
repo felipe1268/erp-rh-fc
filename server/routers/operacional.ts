@@ -1,0 +1,719 @@
+import { z } from "zod";
+import { protectedProcedure, router } from "../_core/trpc";
+import { getDb } from "../db";
+import { sql } from "drizzle-orm";
+
+function rows(result: any): any[] {
+  return (result as any).rows ?? result ?? [];
+}
+
+export const operacionalRouter = router({
+  listarRDOs: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number(), mes: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const conditions = [
+        sql`company_id = ${input.companyId}`,
+        sql`obra_id = ${input.obraId}`,
+      ];
+      if (input.mes) {
+        conditions.push(sql`TO_CHAR(data, 'YYYY-MM') = ${input.mes}`);
+      }
+      const where = sql.join(conditions, sql` AND `);
+      return rows(await db.execute(sql`SELECT * FROM rdo_relatorios WHERE ${where} ORDER BY data DESC`));
+    }),
+
+  getRDO: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rdoRows = rows(await db.execute(sql`SELECT * FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
+      const rdoData = rdoRows[0] || null;
+      if (!rdoData) return null;
+
+      const maoObra = rows(await db.execute(sql`SELECT * FROM rdo_mao_obra WHERE rdo_id = ${input.id} ORDER BY tipo, funcao`));
+      const equipamentos = rows(await db.execute(sql`SELECT * FROM rdo_equipamentos WHERE rdo_id = ${input.id} ORDER BY nome`));
+      const atividades = rows(await db.execute(sql`SELECT * FROM rdo_atividades WHERE rdo_id = ${input.id} ORDER BY id`));
+      const materiais = rows(await db.execute(sql`SELECT * FROM rdo_materiais WHERE rdo_id = ${input.id} ORDER BY tipo, id`));
+      const fotos = rows(await db.execute(sql`SELECT * FROM rdo_fotos WHERE rdo_id = ${input.id} ORDER BY id`));
+
+      return { ...rdoData, maoObra, equipamentos, atividades, materiais, fotos };
+    }),
+
+  criarRDO: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      data: z.string(),
+      responsavelNome: z.string().optional(),
+      responsavelId: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const existingRows = rows(await db.execute(sql`
+        SELECT id FROM rdo_relatorios WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId} AND data = ${input.data}
+      `));
+      if (existingRows.length > 0) return { id: existingRows[0].id, jaExistia: true };
+
+      const result = rows(await db.execute(sql`
+        INSERT INTO rdo_relatorios (company_id, obra_id, data, responsavel_nome, responsavel_id, status)
+        VALUES (${input.companyId}, ${input.obraId}, ${input.data}, ${input.responsavelNome || null}, ${input.responsavelId || null}, 'rascunho')
+        RETURNING id
+      `));
+      const rdoId = result[0]?.id;
+
+      await autoPreencherRDO(db, rdoId, input.companyId, input.obraId);
+
+      return { id: rdoId, jaExistia: false };
+    }),
+
+  atualizarRDO: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      climaManha: z.string().optional(),
+      climaTarde: z.string().optional(),
+      temperaturaMin: z.number().optional(),
+      temperaturaMax: z.number().optional(),
+      choveu: z.boolean().optional(),
+      horasTrabalhadas: z.number().optional(),
+      horaInicio: z.string().optional(),
+      horaFim: z.string().optional(),
+      observacoes: z.string().optional(),
+      visitantes: z.string().optional(),
+      ddsRealizado: z.boolean().optional(),
+      ddsTema: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        UPDATE rdo_relatorios SET
+          clima_manha = COALESCE(${input.climaManha ?? null}, clima_manha),
+          clima_tarde = COALESCE(${input.climaTarde ?? null}, clima_tarde),
+          temperatura_min = COALESCE(${input.temperaturaMin ?? null}, temperatura_min),
+          temperatura_max = COALESCE(${input.temperaturaMax ?? null}, temperatura_max),
+          choveu = COALESCE(${input.choveu ?? null}, choveu),
+          horas_trabalhadas = COALESCE(${input.horasTrabalhadas ?? null}, horas_trabalhadas),
+          hora_inicio = COALESCE(${input.horaInicio ?? null}, hora_inicio),
+          hora_fim = COALESCE(${input.horaFim ?? null}, hora_fim),
+          observacoes = COALESCE(${input.observacoes ?? null}, observacoes),
+          visitantes = COALESCE(${input.visitantes ?? null}, visitantes),
+          dds_realizado = COALESCE(${input.ddsRealizado ?? null}, dds_realizado),
+          dds_tema = COALESCE(${input.ddsTema ?? null}, dds_tema),
+          updated_at = NOW()
+        WHERE id = ${input.id} AND company_id = ${input.companyId}
+      `);
+      return { ok: true };
+    }),
+
+  finalizarRDO: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      responsavelNome: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        UPDATE rdo_relatorios SET
+          status = 'finalizado',
+          assinatura_responsavel = ${input.responsavelNome},
+          assinatura_data = NOW(),
+          updated_at = NOW()
+        WHERE id = ${input.id} AND company_id = ${input.companyId}
+      `);
+      return { ok: true };
+    }),
+
+  adicionarMaoObra: protectedProcedure
+    .input(z.object({
+      rdoId: z.number(),
+      companyId: z.number(),
+      tipo: z.string().default("proprio"),
+      empresaNome: z.string().optional(),
+      funcao: z.string(),
+      quantidade: z.number(),
+      presente: z.boolean().default(true),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rdo = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.rdoId} AND company_id = ${input.companyId}`));
+      if (!rdo.length) throw new Error("RDO não encontrado");
+      await db.execute(sql`
+        INSERT INTO rdo_mao_obra (rdo_id, tipo, empresa_nome, funcao, quantidade, presente)
+        VALUES (${input.rdoId}, ${input.tipo}, ${input.empresaNome || null}, ${input.funcao}, ${input.quantidade}, ${input.presente})
+      `);
+      return { ok: true };
+    }),
+
+  removerMaoObra: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM rdo_mao_obra WHERE id = ${input.id}
+        AND rdo_id IN (SELECT id FROM rdo_relatorios WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
+  adicionarAtividade: protectedProcedure
+    .input(z.object({
+      rdoId: z.number(),
+      companyId: z.number(),
+      descricao: z.string(),
+      local: z.string().optional(),
+      percentualAvanco: z.number().optional(),
+      status: z.string().default("em_andamento"),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rdo = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.rdoId} AND company_id = ${input.companyId}`));
+      if (!rdo.length) throw new Error("RDO não encontrado");
+      await db.execute(sql`
+        INSERT INTO rdo_atividades (rdo_id, descricao, local, percentual_avanco, status)
+        VALUES (${input.rdoId}, ${input.descricao}, ${input.local || null}, ${input.percentualAvanco || 0}, ${input.status})
+      `);
+      return { ok: true };
+    }),
+
+  removerAtividade: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM rdo_atividades WHERE id = ${input.id}
+        AND rdo_id IN (SELECT id FROM rdo_relatorios WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
+  adicionarEquipamento: protectedProcedure
+    .input(z.object({
+      rdoId: z.number(),
+      companyId: z.number(),
+      nome: z.string(),
+      tipo: z.string().optional(),
+      situacao: z.string().default("operando"),
+      horasUso: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rdo = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.rdoId} AND company_id = ${input.companyId}`));
+      if (!rdo.length) throw new Error("RDO não encontrado");
+      await db.execute(sql`
+        INSERT INTO rdo_equipamentos (rdo_id, nome, tipo, situacao, horas_uso)
+        VALUES (${input.rdoId}, ${input.nome}, ${input.tipo || null}, ${input.situacao}, ${input.horasUso || 0})
+      `);
+      return { ok: true };
+    }),
+
+  removerEquipamento: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM rdo_equipamentos WHERE id = ${input.id}
+        AND rdo_id IN (SELECT id FROM rdo_relatorios WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
+  adicionarMaterial: protectedProcedure
+    .input(z.object({
+      rdoId: z.number(),
+      companyId: z.number(),
+      tipo: z.string().default("recebido"),
+      descricao: z.string(),
+      quantidade: z.number().optional(),
+      unidade: z.string().optional(),
+      fornecedor: z.string().optional(),
+      notaFiscal: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rdo = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.rdoId} AND company_id = ${input.companyId}`));
+      if (!rdo.length) throw new Error("RDO não encontrado");
+      await db.execute(sql`
+        INSERT INTO rdo_materiais (rdo_id, tipo, descricao, quantidade, unidade, fornecedor, nota_fiscal)
+        VALUES (${input.rdoId}, ${input.tipo}, ${input.descricao}, ${input.quantidade || 0}, ${input.unidade || null}, ${input.fornecedor || null}, ${input.notaFiscal || null})
+      `);
+      return { ok: true };
+    }),
+
+  removerMaterial: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM rdo_materiais WHERE id = ${input.id}
+        AND rdo_id IN (SELECT id FROM rdo_relatorios WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
+  adicionarFotoRDO: protectedProcedure
+    .input(z.object({
+      rdoId: z.number(),
+      companyId: z.number(),
+      fotoUrl: z.string(),
+      legenda: z.string().optional(),
+      disciplina: z.string().optional(),
+      local: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rdo = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.rdoId} AND company_id = ${input.companyId}`));
+      if (!rdo.length) throw new Error("RDO não encontrado");
+      await db.execute(sql`
+        INSERT INTO rdo_fotos (rdo_id, foto_url, legenda, disciplina, local)
+        VALUES (${input.rdoId}, ${input.fotoUrl}, ${input.legenda || null}, ${input.disciplina || null}, ${input.local || null})
+      `);
+      return { ok: true };
+    }),
+
+  removerFotoRDO: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM rdo_fotos WHERE id = ${input.id}
+        AND rdo_id IN (SELECT id FROM rdo_relatorios WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
+  listarNCs: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number(), status: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const conditions = [
+        sql`company_id = ${input.companyId}`,
+        sql`obra_id = ${input.obraId}`,
+      ];
+      if (input.status) conditions.push(sql`status = ${input.status}`);
+      const where = sql.join(conditions, sql` AND `);
+      return rows(await db.execute(sql`SELECT * FROM nao_conformidades WHERE ${where} ORDER BY data_abertura DESC`));
+    }),
+
+  criarNC: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      origem: z.string(),
+      origemId: z.number().optional(),
+      descricao: z.string(),
+      disciplina: z.string().optional(),
+      local: z.string().optional(),
+      gravidade: z.string().default("media"),
+      responsavelNome: z.string().optional(),
+      prazo: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const countRows = rows(await db.execute(sql`SELECT COUNT(*) as total FROM nao_conformidades WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId}`));
+      const seq = parseInt(countRows[0]?.total || "0") + 1;
+      const numeroNc = `NC-${String(seq).padStart(4, "0")}`;
+
+      await db.execute(sql`
+        INSERT INTO nao_conformidades (company_id, obra_id, numero_nc, origem, origem_id, data_abertura, descricao, disciplina, local, gravidade, responsavel_nome, prazo, status)
+        VALUES (${input.companyId}, ${input.obraId}, ${numeroNc}, ${input.origem}, ${input.origemId || null}, CURRENT_DATE, ${input.descricao}, ${input.disciplina || null}, ${input.local || null}, ${input.gravidade}, ${input.responsavelNome || null}, ${input.prazo || null}, 'aberta')
+      `);
+      return { ok: true, numero: numeroNc };
+    }),
+
+  atualizarNC: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      planoAcao: z.string().optional(),
+      prazo: z.string().optional(),
+      responsavelNome: z.string().optional(),
+      status: z.string().optional(),
+      evidenciaFechamentoUrl: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const sets: any[] = [];
+      if (input.planoAcao !== undefined) sets.push(sql`plano_acao = ${input.planoAcao}`);
+      if (input.prazo !== undefined) sets.push(sql`prazo = ${input.prazo}`);
+      if (input.responsavelNome !== undefined) sets.push(sql`responsavel_nome = ${input.responsavelNome}`);
+      if (input.status !== undefined) {
+        sets.push(sql`status = ${input.status}`);
+        if (input.status === "fechada") sets.push(sql`data_fechamento = CURRENT_DATE`);
+      }
+      if (input.evidenciaFechamentoUrl !== undefined) sets.push(sql`evidencia_fechamento_url = ${input.evidenciaFechamentoUrl}`);
+      sets.push(sql`updated_at = NOW()`);
+
+      const setClause = sql.join(sets, sql`, `);
+      await db.execute(sql`UPDATE nao_conformidades SET ${setClause} WHERE id = ${input.id} AND company_id = ${input.companyId}`);
+      return { ok: true };
+    }),
+
+  listarChecklists: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return rows(await db.execute(sql`
+        SELECT cp.*, ct.nome as template_nome, ct.disciplina as template_disciplina
+        FROM checklists_preenchidos cp
+        LEFT JOIN checklists_templates ct ON cp.template_id = ct.id
+        WHERE cp.company_id = ${input.companyId} AND cp.obra_id = ${input.obraId}
+        ORDER BY cp.data DESC
+      `));
+    }),
+
+  listarTemplatesChecklist: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return rows(await db.execute(sql`
+        SELECT t.*, (SELECT COUNT(*) FROM checklists_template_itens WHERE template_id = t.id) as total_itens
+        FROM checklists_templates t
+        WHERE t.company_id = ${input.companyId} AND t.is_active = true
+        ORDER BY t.nome
+      `));
+    }),
+
+  criarTemplateChecklist: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      nome: z.string(),
+      disciplina: z.string().optional(),
+      descricao: z.string().optional(),
+      itens: z.array(z.object({
+        descricao: z.string(),
+        categoria: z.string().optional(),
+        fotoObrigatoria: z.boolean().default(false),
+        criticidade: z.string().default("normal"),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const tRows = rows(await db.execute(sql`
+        INSERT INTO checklists_templates (company_id, nome, disciplina, descricao)
+        VALUES (${input.companyId}, ${input.nome}, ${input.disciplina || null}, ${input.descricao || null})
+        RETURNING id
+      `));
+      const templateId = tRows[0]?.id;
+      for (let i = 0; i < input.itens.length; i++) {
+        const item = input.itens[i];
+        await db.execute(sql`
+          INSERT INTO checklists_template_itens (template_id, ordem, descricao, categoria, foto_obrigatoria, criticidade)
+          VALUES (${templateId}, ${i + 1}, ${item.descricao}, ${item.categoria || null}, ${item.fotoObrigatoria}, ${item.criticidade})
+        `);
+      }
+      return { ok: true, id: templateId };
+    }),
+
+  criarChecklistPreenchido: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      templateId: z.number(),
+      local: z.string().optional(),
+      pavimento: z.string().optional(),
+      responsavelNome: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const tmpl = rows(await db.execute(sql`SELECT id FROM checklists_templates WHERE id = ${input.templateId} AND company_id = ${input.companyId}`));
+      if (!tmpl.length) throw new Error("Template não encontrado");
+
+      const cRows = rows(await db.execute(sql`
+        INSERT INTO checklists_preenchidos (company_id, obra_id, template_id, data, local, pavimento, responsavel_nome, status)
+        VALUES (${input.companyId}, ${input.obraId}, ${input.templateId}, CURRENT_DATE, ${input.local || null}, ${input.pavimento || null}, ${input.responsavelNome || null}, 'em_andamento')
+        RETURNING id
+      `));
+      const checklistId = cRows[0]?.id;
+
+      const itens = rows(await db.execute(sql`
+        SELECT * FROM checklists_template_itens WHERE template_id = ${input.templateId} ORDER BY ordem
+      `));
+      for (const item of itens) {
+        await db.execute(sql`
+          INSERT INTO checklists_respostas (checklist_id, item_id, descricao_item, resposta)
+          VALUES (${checklistId}, ${item.id}, ${item.descricao}, 'na')
+        `);
+      }
+      return { ok: true, id: checklistId };
+    }),
+
+  getChecklistRespostas: protectedProcedure
+    .input(z.object({ checklistId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const cl = rows(await db.execute(sql`SELECT id FROM checklists_preenchidos WHERE id = ${input.checklistId} AND company_id = ${input.companyId}`));
+      if (!cl.length) return [];
+
+      return rows(await db.execute(sql`
+        SELECT cr.*, cti.categoria, cti.foto_obrigatoria, cti.criticidade
+        FROM checklists_respostas cr
+        LEFT JOIN checklists_template_itens cti ON cr.item_id = cti.id
+        WHERE cr.checklist_id = ${input.checklistId}
+        ORDER BY cti.ordem
+      `));
+    }),
+
+  responderChecklist: protectedProcedure
+    .input(z.object({
+      respostaId: z.number(),
+      companyId: z.number(),
+      resposta: z.string(),
+      observacao: z.string().optional(),
+      fotoUrl: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        UPDATE checklists_respostas SET resposta = ${input.resposta}, observacao = ${input.observacao || null}, foto_url = ${input.fotoUrl || null}
+        WHERE id = ${input.respostaId}
+        AND checklist_id IN (SELECT id FROM checklists_preenchidos WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
+  listarConcretagem: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return rows(await db.execute(sql`
+        SELECT cm.*,
+          (SELECT COALESCE(SUM(volume_entregue), 0) FROM concretagem_lancamentos WHERE mapa_id = cm.id) as volume_realizado
+        FROM concretagem_mapa cm
+        WHERE cm.company_id = ${input.companyId} AND cm.obra_id = ${input.obraId}
+        ORDER BY cm.pavimento, cm.elemento
+      `));
+    }),
+
+  criarElementoConcretagem: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      pavimento: z.string().optional(),
+      elemento: z.string(),
+      tipoElemento: z.string().optional(),
+      fck: z.number(),
+      volumePrevisto: z.number(),
+      dataPrevista: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        INSERT INTO concretagem_mapa (company_id, obra_id, pavimento, elemento, tipo_elemento, fck, volume_previsto, data_prevista, status)
+        VALUES (${input.companyId}, ${input.obraId}, ${input.pavimento || null}, ${input.elemento}, ${input.tipoElemento || null}, ${input.fck}, ${input.volumePrevisto}, ${input.dataPrevista || null}, 'pendente')
+      `);
+      return { ok: true };
+    }),
+
+  registrarLancamento: protectedProcedure
+    .input(z.object({
+      mapaId: z.number(),
+      companyId: z.number(),
+      obraId: z.number(),
+      dataLancamento: z.string(),
+      fornecedor: z.string().optional(),
+      notaFiscal: z.string().optional(),
+      fckNota: z.number().optional(),
+      slumpPrevisto: z.number().optional(),
+      slumpRealizado: z.number().optional(),
+      volumeEntregue: z.number(),
+      horaSaidaUsina: z.string().optional(),
+      horaChegadaObra: z.string().optional(),
+      horaInicioLancamento: z.string().optional(),
+      horaFimLancamento: z.string().optional(),
+      temperatura: z.number().optional(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const mapa = rows(await db.execute(sql`SELECT id FROM concretagem_mapa WHERE id = ${input.mapaId} AND company_id = ${input.companyId}`));
+      if (!mapa.length) throw new Error("Elemento não encontrado");
+
+      let tempoMax: number | null = null;
+      if (input.horaSaidaUsina && input.horaFimLancamento) {
+        const [h1, m1] = input.horaSaidaUsina.split(":").map(Number);
+        const [h2, m2] = input.horaFimLancamento.split(":").map(Number);
+        tempoMax = (h2 * 60 + m2) - (h1 * 60 + m1);
+      }
+
+      const result = rows(await db.execute(sql`
+        INSERT INTO concretagem_lancamentos (
+          mapa_id, company_id, obra_id, data_lancamento, fornecedor, nota_fiscal,
+          fck_nota, slump_previsto, slump_realizado, volume_entregue,
+          hora_saida_usina, hora_chegada_obra, hora_inicio_lancamento, hora_fim_lancamento,
+          tempo_maximo_minutos, temperatura, observacoes, status
+        ) VALUES (
+          ${input.mapaId}, ${input.companyId}, ${input.obraId}, ${input.dataLancamento},
+          ${input.fornecedor || null}, ${input.notaFiscal || null},
+          ${input.fckNota || null}, ${input.slumpPrevisto || null}, ${input.slumpRealizado || null},
+          ${input.volumeEntregue},
+          ${input.horaSaidaUsina || null}, ${input.horaChegadaObra || null},
+          ${input.horaInicioLancamento || null}, ${input.horaFimLancamento || null},
+          ${tempoMax}, ${input.temperatura || null}, ${input.observacoes || null}, 'lancado'
+        ) RETURNING id
+      `));
+      const lancamentoId = result[0]?.id;
+
+      await db.execute(sql`UPDATE concretagem_mapa SET status = 'concretado', updated_at = NOW() WHERE id = ${input.mapaId} AND company_id = ${input.companyId}`);
+
+      return { ok: true, id: lancamentoId, tempoMaximoMinutos: tempoMax };
+    }),
+
+  listarLancamentos: protectedProcedure
+    .input(z.object({ mapaId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return rows(await db.execute(sql`
+        SELECT cl.*, (SELECT COUNT(*) FROM concretagem_cps WHERE lancamento_id = cl.id) as total_cps
+        FROM concretagem_lancamentos cl
+        WHERE cl.mapa_id = ${input.mapaId}
+        AND cl.mapa_id IN (SELECT id FROM concretagem_mapa WHERE company_id = ${input.companyId})
+        ORDER BY cl.data_lancamento DESC
+      `));
+    }),
+
+  registrarCP: protectedProcedure
+    .input(z.object({
+      lancamentoId: z.number(),
+      companyId: z.number(),
+      numeroCp: z.string(),
+      dataMoldagem: z.string(),
+      fckProjeto: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const lanc = rows(await db.execute(sql`SELECT id FROM concretagem_lancamentos WHERE id = ${input.lancamentoId} AND company_id = ${input.companyId}`));
+      if (!lanc.length) throw new Error("Lançamento não encontrado");
+
+      const d = new Date(input.dataMoldagem);
+      const d7 = new Date(d); d7.setDate(d7.getDate() + 7);
+      const d14 = new Date(d); d14.setDate(d14.getDate() + 14);
+      const d28 = new Date(d); d28.setDate(d28.getDate() + 28);
+      await db.execute(sql`
+        INSERT INTO concretagem_cps (lancamento_id, numero_cp, data_moldagem, data_ruptura_7d, data_ruptura_14d, data_ruptura_28d, fck_projeto)
+        VALUES (${input.lancamentoId}, ${input.numeroCp}, ${input.dataMoldagem},
+          ${d7.toISOString().split("T")[0]}, ${d14.toISOString().split("T")[0]}, ${d28.toISOString().split("T")[0]},
+          ${input.fckProjeto})
+      `);
+      return { ok: true };
+    }),
+
+  listarFotos: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number(), data: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const conditions = [
+        sql`company_id = ${input.companyId}`,
+        sql`obra_id = ${input.obraId}`,
+      ];
+      if (input.data) conditions.push(sql`data = ${input.data}`);
+      const where = sql.join(conditions, sql` AND `);
+      return rows(await db.execute(sql`SELECT * FROM registro_fotografico WHERE ${where} ORDER BY created_at DESC`));
+    }),
+
+  adicionarFoto: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      fotoUrl: z.string(),
+      legenda: z.string().optional(),
+      disciplina: z.string().optional(),
+      local: z.string().optional(),
+      pavimento: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        INSERT INTO registro_fotografico (company_id, obra_id, data, foto_url, legenda, disciplina, local, pavimento)
+        VALUES (${input.companyId}, ${input.obraId}, CURRENT_DATE, ${input.fotoUrl}, ${input.legenda || null}, ${input.disciplina || null}, ${input.local || null}, ${input.pavimento || null})
+      `);
+      return { ok: true };
+    }),
+
+  dashboardOperacional: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rdoStats = rows(await db.execute(sql`
+        SELECT
+          COUNT(*) as total_rdos,
+          COUNT(*) FILTER (WHERE status = 'finalizado') as finalizados,
+          COUNT(*) FILTER (WHERE status = 'rascunho') as rascunhos,
+          COUNT(*) FILTER (WHERE choveu = true) as dias_chuva
+        FROM rdo_relatorios WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId}
+      `))[0] || {};
+
+      const ncStats = rows(await db.execute(sql`
+        SELECT
+          COUNT(*) as total_ncs,
+          COUNT(*) FILTER (WHERE status = 'aberta') as abertas,
+          COUNT(*) FILTER (WHERE status = 'fechada') as fechadas
+        FROM nao_conformidades WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId}
+      `))[0] || {};
+
+      const concStats = rows(await db.execute(sql`
+        SELECT
+          COUNT(*) as total_elementos,
+          COUNT(*) FILTER (WHERE status = 'concretado') as concretados,
+          COUNT(*) FILTER (WHERE status = 'pendente') as pendentes,
+          COALESCE(SUM(volume_previsto), 0) as volume_previsto_total
+        FROM concretagem_mapa WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId}
+      `))[0] || {};
+
+      const checkStats = rows(await db.execute(sql`
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'concluido') as concluidos
+        FROM checklists_preenchidos WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId}
+      `))[0] || {};
+
+      const fotoStats = rows(await db.execute(sql`
+        SELECT COUNT(*) as total FROM registro_fotografico WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId}
+      `))[0] || {};
+
+      const rdoHojeRows = rows(await db.execute(sql`
+        SELECT id, status FROM rdo_relatorios
+        WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId} AND data = CURRENT_DATE
+      `));
+
+      return {
+        rdo: { ...rdoStats, hojeStatus: rdoHojeRows[0]?.status || "nao_criado", hojeId: rdoHojeRows[0]?.id },
+        ncs: ncStats,
+        concretagem: concStats,
+        checklists: checkStats,
+        fotos: fotoStats,
+      };
+    }),
+});
+
+async function autoPreencherRDO(db: any, rdoId: number, companyId: number, obraId: number) {
+  try {
+    const equips = rows(await db.execute(sql`
+      SELECT nome, tipo_equipamento as tipo FROM equipment
+      WHERE company_id = ${companyId} AND status_equipamento = 'Ativo'
+      AND (obra_id = ${obraId} OR obra_id IS NULL)
+      LIMIT 50
+    `));
+    for (const eq of equips) {
+      await db.execute(sql`
+        INSERT INTO rdo_equipamentos (rdo_id, nome, tipo, situacao) VALUES (${rdoId}, ${eq.nome}, ${eq.tipo || null}, 'operando')
+      `);
+    }
+  } catch {}
+
+  try {
+    const funcs = rows(await db.execute(sql`
+      SELECT funcao, COUNT(*) as qtd FROM employees
+      WHERE company_id = ${companyId} AND status = 'Ativo'
+      AND (obra_id = ${obraId} OR obra_id IS NULL)
+      GROUP BY funcao ORDER BY funcao
+    `));
+    for (const f of funcs) {
+      await db.execute(sql`
+        INSERT INTO rdo_mao_obra (rdo_id, tipo, funcao, quantidade, presente)
+        VALUES (${rdoId}, 'proprio', ${f.funcao || 'Geral'}, ${parseInt(f.qtd) || 0}, true)
+      `);
+    }
+  } catch {}
+}

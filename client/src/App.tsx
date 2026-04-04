@@ -195,6 +195,14 @@ const MedicoesServicoPage = lazy(() => import("./pages/compras/MedicoesServico")
 const DatabookPage = lazy(() => import("./pages/compras/Databook"));
 const PortalOCEntregaPage = lazy(() => import("./pages/PortalOCEntrega"));
 
+// Operacional
+const PainelOperacional = lazy(() => import("./pages/operacional/PainelOperacional"));
+const RDOPage = lazy(() => import("./pages/operacional/RDO"));
+const ChecklistsPage = lazy(() => import("./pages/operacional/Checklists"));
+const ConcratagemPage = lazy(() => import("./pages/operacional/Concretagem"));
+const NaoConformidadesPage = lazy(() => import("./pages/operacional/NaoConformidades"));
+const RegistroFotograficoPage = lazy(() => import("./pages/operacional/RegistroFotografico"));
+
 // Integrações
 const MasControle = lazy(() => import("./pages/integracoes/MasControle"));
 
@@ -392,6 +400,13 @@ function Router() {
         <Route path="/compras/medicoes-servico" component={MedicoesServicoPage} />
         <Route path="/compras/databook"          component={DatabookPage} />
         <Route path="/portal/oc-entrega/:token"  component={PortalOCEntregaPage} />
+        {/* Operacional */}
+        <Route path="/operacional/painel" component={PainelOperacional} />
+        <Route path="/operacional/rdo" component={RDOPage} />
+        <Route path="/operacional/checklists" component={ChecklistsPage} />
+        <Route path="/operacional/concretagem" component={ConcratagemPage} />
+        <Route path="/operacional/nc" component={NaoConformidadesPage} />
+        <Route path="/operacional/fotos" component={RegistroFotograficoPage} />
         {/* Integrações */}
         <Route path="/integracoes/mas-controle"  component={MasControle} />
         {/* Sprint 6 - IA */}

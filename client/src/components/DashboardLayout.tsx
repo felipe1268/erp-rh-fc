@@ -37,6 +37,7 @@ import {
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
+  Camera, Blocks, CheckSquare,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -461,6 +462,20 @@ const menuSectionsGestaoDocumentos: MenuSection[] = [
   },
 ];
 
+const menuSectionsOperacional: MenuSection[] = [
+  {
+    title: "Operacional",
+    items: [
+      { icon: LayoutDashboard, label: "Painel",                  path: "/operacional/painel" },
+      { icon: ClipboardList,   label: "RDO",                     path: "/operacional/rdo" },
+      { icon: CheckSquare,     label: "Checklists de Qualidade", path: "/operacional/checklists" },
+      { icon: Blocks,          label: "Controle de Concretagem", path: "/operacional/concretagem" },
+      { icon: AlertTriangle,   label: "Não Conformidades",       path: "/operacional/nc" },
+      { icon: Camera,          label: "Registro Fotográfico",    path: "/operacional/fotos" },
+    ],
+  },
+];
+
 const menuSectionsAdmin: MenuSection[] = [
   {
     title: "Administração",
@@ -505,6 +520,7 @@ const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "almoxarifado":  menuSectionsAlmoxarifado,
   "financeiro":    menuSectionsFinanceiro,
   "gestao-documentos": menuSectionsGestaoDocumentos,
+  "operacional": menuSectionsOperacional,
   "admin": menuSectionsAdmin,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
@@ -572,6 +588,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "almoxarifado":   "/almoxarifado",
   "financeiro":     "/financeiro",
   "gestao-documentos": "/gestao-documentos",
+  "operacional": "/operacional/painel",
   "admin": "/admin/telemetria",
   "all": "/painel",
 };
@@ -592,6 +609,7 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "almoxarifado":  { icon: Warehouse,     color: "text-emerald-400", bg: "bg-emerald-500/20" },
   "financeiro":    { icon: DollarSign,    color: "text-green-400",   bg: "bg-green-500/20"   },
   "gestao-documentos": { icon: FolderOpen, color: "text-indigo-400", bg: "bg-indigo-500/20" },
+  "operacional": { icon: HardHat, color: "text-amber-400", bg: "bg-amber-500/20" },
   "admin": { icon: BarChart3, color: "text-red-400", bg: "bg-red-500/20" },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
