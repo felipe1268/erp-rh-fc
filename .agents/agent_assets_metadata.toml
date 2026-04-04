@@ -60,3 +60,9 @@ id = "37ML3Qwa25r1FI0NB3fn8"
 uri = "file://attached_assets/stock_images/byd_song_plus.jpg"
 type = "image"
 title = "BYD Song Plus DM-i 2024 grey SUV hybrid"
+
+[[outputs]]
+id = "AtdbpwLixICjUKNUFWwRu"
+uri = "file://attached_assets/stock_images/vw_17250_bomba.jpg"
+type = "image"
+title = "Volkswagen VW 17.250 concrete pump truck white caminhão bomba"
