@@ -166,9 +166,6 @@ importers:
       '@types/jsonwebtoken':
         specifier: ^9.0.10
         version: 9.0.10
-      '@types/leaflet':
-        specifier: ^1.9.21
-        version: 1.9.21
       '@types/nodemailer':
         specifier: ^7.0.11
         version: 7.0.11
@@ -377,6 +374,9 @@ importers:
       '@types/google.maps':
         specifier: ^3.58.1
         version: 3.58.1
+      '@types/leaflet':
+        specifier: ^1.9.21
+        version: 1.9.21
       '@types/node':
         specifier: ^24.7.0
         version: 24.7.0

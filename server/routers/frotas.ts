@@ -2531,11 +2531,6 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       };
     }),
 
-  getGoogleMapsKey: protectedProcedure
-    .query(async () => {
-      return { key: process.env.GOOGLE_API_KEY || "" };
-    }),
-
   getFuelPrices: protectedProcedure
     .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
     .query(async ({ input }) => {

@@ -6,12 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
-  Fuel, TrendingUp, TrendingDown, MapPin, Search, DollarSign,
-  BarChart3, ArrowUpRight, ArrowDownRight, Minus, RefreshCw, Info,
+  Fuel, MapPin, DollarSign, BarChart3, RefreshCw, Info, Navigation,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -28,16 +29,22 @@ const FUEL_COLORS: Record<string, string> = {
 
 const BASE_LAT = -22.8117;
 const BASE_LNG = -45.1928;
-const SEARCH_RADIUS = 15000;
 
 interface NearbyStation {
+  id: number;
   name: string;
-  address: string;
   lat: number;
   lng: number;
-  rating?: number;
-  placeId: string;
-  distance?: number;
+  brand?: string;
+  distance: number;
+}
+
+function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export default function PrecosCombustivel() {
@@ -48,125 +55,99 @@ export default function PrecosCombustivel() {
   const [loadingMap, setLoadingMap] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const mapInstanceRef = useRef<L.Map | null>(null);
 
   const { data: prices } = trpc.frotas.getFuelPrices.useQuery(
     { companyId, ano },
     { enabled: companyId > 0 }
   );
 
-  const { data: mapsKeyData } = trpc.frotas.getGoogleMapsKey.useQuery();
+  const initMap = useCallback(() => {
+    if (!mapRef.current || mapInstanceRef.current) return;
+    const map = L.map(mapRef.current).setView([BASE_LAT, BASE_LNG], 13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; OpenStreetMap',
+    }).addTo(map);
 
-  useEffect(() => {
-    if (!mapsKeyData?.key) return;
-    if ((window as any).google?.maps) {
-      setScriptLoaded(true);
-      return;
-    }
-    const existing = document.querySelector('script[src*="maps.googleapis.com"]');
-    if (existing) {
-      existing.addEventListener('load', () => setScriptLoaded(true));
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsKeyData.key}&libraries=places,geometry`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => setScriptLoaded(true);
-    script.onerror = () => setMapError("Erro ao carregar Google Maps");
-    document.head.appendChild(script);
-  }, [mapsKeyData?.key]);
+    const baseIcon = L.divIcon({
+      html: '<div style="background:#1e40af;color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">FC</div>',
+      className: '',
+      iconSize: [30, 30],
+      iconAnchor: [15, 15],
+    });
+    L.marker([BASE_LAT, BASE_LNG], { icon: baseIcon })
+      .addTo(map)
+      .bindPopup("<strong>FC Engenharia — Base</strong><br/>Guaratinguetá, SP");
 
-  const searchStations = useCallback(() => {
-    if (!scriptLoaded || !mapRef.current) return;
+    mapInstanceRef.current = map;
+  }, []);
+
+  const searchStations = useCallback(async () => {
     setLoadingMap(true);
     setMapError(null);
 
-    const google = (window as any).google;
-    const map = new google.maps.Map(mapRef.current, {
-      center: { lat: BASE_LAT, lng: BASE_LNG },
-      zoom: 13,
-      styles: [{ featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }],
-    });
-    mapInstanceRef.current = map;
+    try {
+      const query = `[out:json][timeout:15];node["amenity"="fuel"](around:15000,${BASE_LAT},${BASE_LNG});out body;`;
+      const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
+      if (!res.ok) throw new Error("Erro na API Overpass");
+      const data = await res.json();
 
-    new google.maps.Marker({
-      position: { lat: BASE_LAT, lng: BASE_LNG },
-      map,
-      title: "FC Engenharia - Base",
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 12,
-        fillColor: "#1e40af",
-        fillOpacity: 1,
-        strokeColor: "#fff",
-        strokeWeight: 3,
-      },
-      label: { text: "FC", color: "#fff", fontSize: "9px", fontWeight: "bold" },
-    });
+      const found: NearbyStation[] = data.elements
+        .filter((e: any) => e.lat && e.lon)
+        .map((e: any) => ({
+          id: e.id,
+          name: e.tags?.name || e.tags?.brand || "Posto sem nome",
+          lat: e.lat,
+          lng: e.lon,
+          brand: e.tags?.brand || e.tags?.operator || "",
+          distance: Math.round(haversine(BASE_LAT, BASE_LNG, e.lat, e.lon)),
+        }))
+        .sort((a: NearbyStation, b: NearbyStation) => a.distance - b.distance);
 
-    const service = new google.maps.places.PlacesService(map);
-    service.nearbySearch(
-      {
-        location: { lat: BASE_LAT, lng: BASE_LNG },
-        radius: SEARCH_RADIUS,
-        type: "gas_station",
-      },
-      (results: any[], status: string) => {
-        setLoadingMap(false);
-        if (status !== google.maps.places.PlacesServiceStatus.OK || !results) {
-          setMapError("Nenhum posto encontrado na região");
-          return;
-        }
+      setStations(found);
 
-        const found: NearbyStation[] = results.map((place: any) => {
-          const dist = google.maps.geometry.spherical.computeDistanceBetween(
-            new google.maps.LatLng(BASE_LAT, BASE_LNG),
-            place.geometry.location
-          );
-          return {
-            name: place.name,
-            address: place.vicinity || "",
-            lat: place.geometry.location.lat(),
-            lng: place.geometry.location.lng(),
-            rating: place.rating,
-            placeId: place.place_id,
-            distance: Math.round(dist),
-          };
-        }).sort((a: NearbyStation, b: NearbyStation) => (a.distance || 0) - (b.distance || 0));
+      if (mapInstanceRef.current) {
+        const map = mapInstanceRef.current;
+        map.eachLayer((layer) => {
+          if (layer instanceof L.Marker && !(layer.getPopup()?.getContent()?.toString().includes("FC Engenharia"))) {
+            map.removeLayer(layer);
+          }
+        });
 
-        setStations(found);
+        const fuelIcon = L.divIcon({
+          html: '<div style="background:#ef4444;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,.3)">⛽</div>',
+          className: '',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+        });
 
         found.forEach((s) => {
-          const marker = new google.maps.Marker({
-            position: { lat: s.lat, lng: s.lng },
-            map,
-            title: s.name,
-            icon: {
-              url: "https://maps.google.com/mapfiles/ms/icons/gas.png",
-              scaledSize: new google.maps.Size(32, 32),
-            },
-          });
-          const infoWindow = new google.maps.InfoWindow({
-            content: `<div style="font-family:sans-serif;font-size:13px;min-width:180px">
-              <strong>${s.name}</strong><br/>
-              <span style="color:#666">${s.address}</span><br/>
-              <span style="color:#1e40af;font-weight:bold">${((s.distance || 0) / 1000).toFixed(1)} km da base</span>
-              ${s.rating ? `<br/>⭐ ${s.rating}/5` : ''}
-            </div>`,
-          });
-          marker.addListener("click", () => infoWindow.open(map, marker));
+          L.marker([s.lat, s.lng], { icon: fuelIcon })
+            .addTo(map)
+            .bindPopup(`<div style="font-family:sans-serif;font-size:13px;min-width:180px">
+              <strong>${s.name}</strong>
+              ${s.brand ? `<br/><span style="color:#666">${s.brand}</span>` : ''}
+              <br/><span style="color:#1e40af;font-weight:bold">${(s.distance / 1000).toFixed(1)} km da base</span>
+            </div>`);
         });
       }
-    );
-  }, [scriptLoaded]);
+    } catch (err: any) {
+      setMapError(err.message || "Erro ao buscar postos");
+    } finally {
+      setLoadingMap(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (scriptLoaded && mapRef.current) {
-      searchStations();
-    }
-  }, [scriptLoaded, searchStations]);
+    initMap();
+    searchStations();
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []);
 
   const chartData = useMemo(() => {
     if (!prices?.byMonth) return [];
@@ -218,7 +199,7 @@ export default function PrecosCombustivel() {
   }, [prices?.byPosto]);
 
   return (
-    <DashboardLayout title="Preços de Combustível">
+    <DashboardLayout title="Preços Combustível">
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -273,7 +254,7 @@ export default function PrecosCombustivel() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-green-600" />
-                Preço por Posto
+                Preço por Posto — Seus Abastecimentos
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -369,54 +350,51 @@ export default function PrecosCombustivel() {
                 <MapPin className="h-4 w-4 text-red-600" />
                 Postos Próximos — Guaratinguetá / Aparecida
               </CardTitle>
-              <Button variant="outline" size="sm" onClick={searchStations} disabled={loadingMap || !scriptLoaded}>
+              <Button variant="outline" size="sm" onClick={searchStations} disabled={loadingMap}>
                 <RefreshCw className={`h-4 w-4 mr-1 ${loadingMap ? "animate-spin" : ""}`} />
                 Atualizar
               </Button>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Postos de combustível num raio de {SEARCH_RADIUS / 1000}km da base da FC Engenharia
+              Postos de combustível num raio de 15km da base da FC Engenharia (dados OpenStreetMap)
             </p>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div
                 ref={mapRef}
-                className="rounded-lg border bg-muted/30 min-h-[400px]"
+                className="rounded-lg border min-h-[400px] z-0"
                 style={{ height: 400 }}
               />
               <div className="space-y-2 max-h-[400px] overflow-y-auto">
                 <div className="text-xs font-medium text-muted-foreground mb-2">
-                  {stations.length > 0 ? `${stations.length} postos encontrados` : loadingMap ? "Buscando postos..." : "Clique em Atualizar"}
+                  {stations.length > 0 ? `${stations.length} postos encontrados` : loadingMap ? "Buscando postos..." : "Carregando..."}
                 </div>
                 {mapError && <p className="text-sm text-red-500">{mapError}</p>}
                 {stations.map((s, i) => (
                   <div
-                    key={s.placeId}
+                    key={s.id}
                     className="p-3 border rounded-lg hover:bg-muted/30 cursor-pointer transition-colors"
                     onClick={() => {
                       if (mapInstanceRef.current) {
-                        mapInstanceRef.current.panTo({ lat: s.lat, lng: s.lng });
-                        mapInstanceRef.current.setZoom(16);
+                        mapInstanceRef.current.setView([s.lat, s.lng], 16);
                       }
                     }}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-muted-foreground">#{i + 1}</span>
+                          <span className="text-xs font-bold text-muted-foreground w-5">#{i + 1}</span>
                           <span className="font-medium text-sm">{s.name}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{s.address}</p>
-                      </div>
-                      <div className="text-right">
-                        <Badge variant="outline" className="text-xs">
-                          {((s.distance || 0) / 1000).toFixed(1)} km
-                        </Badge>
-                        {s.rating && (
-                          <p className="text-xs text-amber-500 mt-1">⭐ {s.rating}</p>
+                        {s.brand && s.brand !== s.name && (
+                          <p className="text-xs text-muted-foreground mt-0.5 ml-7">{s.brand}</p>
                         )}
                       </div>
+                      <Badge variant="outline" className="text-xs shrink-0">
+                        <Navigation className="h-3 w-3 mr-1" />
+                        {(s.distance / 1000).toFixed(1)} km
+                      </Badge>
                     </div>
                   </div>
                 ))}
@@ -427,9 +405,9 @@ export default function PrecosCombustivel() {
               <div className="flex items-start gap-2">
                 <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
                 <div className="text-xs text-blue-800 dark:text-blue-300">
-                  <strong>Dica:</strong> Para comparar preços, ligue diretamente para os postos listados ou consulte o app da ANP
-                  (Preço da Hora) para ver os preços atualizados na sua região. Seus preços atuais estão nos cards acima — compare
-                  com os valores do mercado para negociar melhores condições.
+                  <strong>Dica:</strong> Consulte o app da ANP (Preço da Hora) ou o site precodoscombustiveis.com.br
+                  para ver os preços atualizados na sua região. Compare com os valores dos seus abastecimentos acima
+                  para negociar melhores condições com outros postos da lista.
                 </div>
               </div>
             </div>
