@@ -276,9 +276,12 @@ export default function FrotasAnalitico() {
   const [tblExpanded, setTblExpanded] = useState<Set<number>>(new Set());
   const [mesSel, setMesSel] = useState<number | null>(null);
   const [drillCombTipo, setDrillCombTipo] = useState<string | null>(null);
+  const [drillCusto, setDrillCusto] = useState<string | null>(null);
 
   const dash = trpc.frotas.getDashboard.useQuery({ companyId: cId, ano: anoDash }, { enabled: cId > 0 });
   const fuel = trpc.frotas.listFuelRecords.useQuery({ companyId: cId }, { enabled: cId > 0 });
+  const maintenances = trpc.frotas.listMaintenances.useQuery({ companyId: cId }, { enabled: cId > 0 });
+  const fines = trpc.frotas.listFines.useQuery({ companyId: cId }, { enabled: cId > 0 });
 
   const MESES_NOME = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
   const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -502,6 +505,36 @@ export default function FrotasAnalitico() {
     return result;
   }, [allFuel]);
 
+  const drillMaintenances = useMemo(() => {
+    const allM = (maintenances.data || []) as any[];
+    const filtered = anoDash
+      ? allM.filter((m: any) => parseInt(((m.data_manutencao || "").toString()).substring(0, 4)) === anoDash)
+      : allM;
+    return filtered.sort((a: any, b: any) => ((b.data_manutencao || "") > (a.data_manutencao || "") ? 1 : -1));
+  }, [maintenances.data, anoDash]);
+
+  const drillFuelByMotorista = useMemo(() => {
+    const mots: Record<string, { litros: number; valor: number; abastecimentos: number }> = {};
+    for (const f of allFuel as any[]) {
+      const nome = (f.motorista || "Não informado").toString().trim();
+      if (!mots[nome]) mots[nome] = { litros: 0, valor: 0, abastecimentos: 0 };
+      mots[nome].litros += parseFloat(f.litros || "0");
+      mots[nome].valor += parseFloat(f.valorTotal || f.valor_total || "0");
+      mots[nome].abastecimentos += 1;
+    }
+    return Object.entries(mots)
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.valor - a.valor);
+  }, [allFuel]);
+
+  const drillFines = useMemo(() => {
+    const allF = (fines.data || []) as any[];
+    const filtered = anoDash
+      ? allF.filter((f: any) => parseInt(((f.data_infracao || "").toString()).substring(0, 4)) === anoDash)
+      : allF;
+    return filtered.sort((a: any, b: any) => ((b.data_infracao || "") > (a.data_infracao || "") ? 1 : -1));
+  }, [fines.data, anoDash]);
+
   const evolucaoMensal = Object.entries(d.custosTotaisByMonth)
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(-12)
@@ -653,29 +686,205 @@ export default function FrotasAnalitico() {
 
           <Card>
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm flex items-center gap-2"><PieIcon className="h-4 w-4 text-blue-500" /> Distribuição de Custos</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <PieIcon className="h-4 w-4 text-blue-500" /> Distribuição de Custos
+                <span className="text-[10px] text-muted-foreground ml-auto font-normal">Clique para detalhar</span>
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center">
-              <ResponsiveContainer width="100%" height={180}>
-                <PieChart>
-                  <Pie data={distCusto} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={3} dataKey="value">
-                    {distCusto.map((_, i) => <Cell key={i} fill={["#3b82f6", "#10b981", "#ef4444"][i]} />)}
-                  </Pie>
-                  <Tooltip content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const dd = payload[0].payload;
-                    return <div className="bg-popover border rounded-lg shadow-lg p-2 text-xs"><strong>{dd.name}</strong>: {fmt(dd.value)} ({dd.pct}%)</div>;
-                  }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex flex-wrap gap-3 text-xs">
-                {distCusto.map((item, i) => (
-                  <span key={i} className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded" style={{ backgroundColor: ["#3b82f6", "#10b981", "#ef4444"][i] }} />
-                    {item.name}: <strong>{item.pct}%</strong> ({fmt(item.value)})
-                  </span>
-                ))}
-              </div>
+              <InteractivePie
+                data={distCusto}
+                colorOffset={0}
+                unit="R$"
+                valueFormatter={(v) => fmt(v)}
+                onSliceClick={(name) => setDrillCusto(prev => prev === name ? null : name)}
+              />
+
+              {drillCusto === "Manutenção" && drillMaintenances.length > 0 && (
+                <div className="w-full mt-4 border rounded-xl overflow-hidden animate-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-muted/50 border-b">
+                    <div className="flex items-center gap-2">
+                      <Wrench className="h-4 w-4 text-emerald-500" />
+                      <span className="text-xs font-semibold">Manutenções{anoDash ? ` — ${anoDash}` : ""}</span>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{drillMaintenances.length} registro{drillMaintenances.length !== 1 ? "s" : ""}</Badge>
+                    </div>
+                    <button onClick={() => setDrillCusto(null)} className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-md hover:bg-muted"><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                  <div className="max-h-[340px] overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-background z-10">
+                        <tr className="border-b text-muted-foreground">
+                          <th className="text-left px-3 py-2 font-medium">Data</th>
+                          <th className="text-left px-2 py-2 font-medium">Veículo</th>
+                          <th className="text-left px-2 py-2 font-medium">Tipo</th>
+                          <th className="text-left px-2 py-2 font-medium">Descrição</th>
+                          <th className="text-right px-2 py-2 font-medium">Custo</th>
+                          <th className="text-left px-2 py-2 font-medium">Fornecedor</th>
+                          <th className="text-center px-3 py-2 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {drillMaintenances.map((m: any, idx: number) => {
+                          const maxCusto = Math.max(...drillMaintenances.map((x: any) => parseFloat(x.custo || "0")), 1);
+                          const custo = parseFloat(m.custo || "0");
+                          return (
+                            <tr key={m.id || idx} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                              <td className="px-3 py-2 whitespace-nowrap">{m.data_manutencao ? new Date(m.data_manutencao + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</td>
+                              <td className="px-2 py-2">
+                                <span className="font-medium">{m.placa || "—"}</span>
+                                {m.modelo && <span className="text-muted-foreground ml-1">{m.modelo}</span>}
+                              </td>
+                              <td className="px-2 py-2">
+                                <Badge variant={m.tipo === "preventiva" ? "default" : "destructive"} className="text-[10px] px-1.5 py-0">
+                                  {m.tipo === "preventiva" ? "Preventiva" : "Corretiva"}
+                                </Badge>
+                              </td>
+                              <td className="px-2 py-2 max-w-[180px] truncate" title={m.descricao}>{m.descricao || "—"}</td>
+                              <td className="px-2 py-2 text-right tabular-nums">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <div className="w-10 h-1 bg-muted/50 rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full bg-emerald-500/60" style={{ width: `${(custo / maxCusto) * 100}%` }} />
+                                  </div>
+                                  {fmt(custo)}
+                                </div>
+                              </td>
+                              <td className="px-2 py-2 max-w-[100px] truncate text-muted-foreground" title={m.fornecedor}>{m.fornecedor || "—"}</td>
+                              <td className="px-3 py-2 text-center">
+                                <Badge variant={m.status === "realizada" ? "default" : m.status === "em_andamento" ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0">
+                                  {m.status === "realizada" ? "Realizada" : m.status === "em_andamento" ? "Em andamento" : m.status === "agendada" ? "Agendada" : m.status || "—"}
+                                </Badge>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="border-t bg-muted/30 font-semibold">
+                        <tr>
+                          <td className="px-3 py-2" colSpan={4}>Total</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{fmt(drillMaintenances.reduce((s: number, m: any) => s + parseFloat(m.custo || "0"), 0))}</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {drillCusto === "Combustível" && drillFuelByMotorista.length > 0 && (
+                <div className="w-full mt-4 border rounded-xl overflow-hidden animate-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-muted/50 border-b">
+                    <div className="flex items-center gap-2">
+                      <Fuel className="h-4 w-4 text-blue-500" />
+                      <span className="text-xs font-semibold">Combustível por Motorista{anoDash ? ` — ${anoDash}` : ""}</span>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{drillFuelByMotorista.length} motorista{drillFuelByMotorista.length !== 1 ? "s" : ""}</Badge>
+                    </div>
+                    <button onClick={() => setDrillCusto(null)} className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-md hover:bg-muted"><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                  <div className="max-h-[280px] overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-background">
+                        <tr className="border-b text-muted-foreground">
+                          <th className="text-left px-4 py-2 font-medium">Motorista</th>
+                          <th className="text-right px-3 py-2 font-medium">Litros</th>
+                          <th className="text-right px-3 py-2 font-medium">Valor (R$)</th>
+                          <th className="text-right px-4 py-2 font-medium">Abast.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {drillFuelByMotorista.map((m, idx) => {
+                          const maxVal = drillFuelByMotorista[0]?.valor || 1;
+                          return (
+                            <tr key={m.name} className={`border-b last:border-0 hover:bg-muted/30 transition-colors ${idx === 0 ? "bg-blue-50/40 dark:bg-blue-950/20" : ""}`}>
+                              <td className="px-4 py-2 font-medium flex items-center gap-2">
+                                {idx === 0 && <Trophy className="h-3 w-3 text-amber-500 flex-shrink-0" />}
+                                <span className="truncate max-w-[140px]">{m.name}</span>
+                              </td>
+                              <td className="text-right px-3 py-2 tabular-nums">{fmtNum(m.litros, 1)}</td>
+                              <td className="text-right px-3 py-2 tabular-nums">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <div className="w-12 h-1 bg-muted/50 rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full bg-blue-500/60" style={{ width: `${(m.valor / maxVal) * 100}%` }} />
+                                  </div>
+                                  {fmt(m.valor)}
+                                </div>
+                              </td>
+                              <td className="text-right px-4 py-2 tabular-nums text-muted-foreground">{m.abastecimentos}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="border-t bg-muted/30 font-semibold">
+                        <tr>
+                          <td className="px-4 py-2">Total</td>
+                          <td className="text-right px-3 py-2 tabular-nums">{fmtNum(drillFuelByMotorista.reduce((s, m) => s + m.litros, 0), 1)}</td>
+                          <td className="text-right px-3 py-2 tabular-nums">{fmt(drillFuelByMotorista.reduce((s, m) => s + m.valor, 0))}</td>
+                          <td className="text-right px-4 py-2 tabular-nums">{drillFuelByMotorista.reduce((s, m) => s + m.abastecimentos, 0)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {drillCusto === "Multas" && drillFines.length > 0 && (
+                <div className="w-full mt-4 border rounded-xl overflow-hidden animate-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-muted/50 border-b">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                      <span className="text-xs font-semibold">Multas{anoDash ? ` — ${anoDash}` : ""}</span>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{drillFines.length} multa{drillFines.length !== 1 ? "s" : ""}</Badge>
+                    </div>
+                    <button onClick={() => setDrillCusto(null)} className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-md hover:bg-muted"><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                  <div className="max-h-[280px] overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-background">
+                        <tr className="border-b text-muted-foreground">
+                          <th className="text-left px-3 py-2 font-medium">Data</th>
+                          <th className="text-left px-2 py-2 font-medium">Veículo</th>
+                          <th className="text-left px-2 py-2 font-medium">Descrição</th>
+                          <th className="text-left px-2 py-2 font-medium">Motorista</th>
+                          <th className="text-right px-2 py-2 font-medium">Valor</th>
+                          <th className="text-center px-3 py-2 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {drillFines.map((f: any, idx: number) => (
+                          <tr key={f.id || idx} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                            <td className="px-3 py-2 whitespace-nowrap">{f.data_infracao ? new Date(f.data_infracao + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</td>
+                            <td className="px-2 py-2 font-medium">{f.placa || "—"}</td>
+                            <td className="px-2 py-2 max-w-[150px] truncate" title={f.descricao}>{f.descricao || "—"}</td>
+                            <td className="px-2 py-2 text-muted-foreground">{f.motorista || "—"}</td>
+                            <td className="px-2 py-2 text-right tabular-nums">{fmt(parseFloat(f.valor_original || f.valorOriginal || "0"))}</td>
+                            <td className="px-3 py-2 text-center">
+                              <Badge variant={f.status === "paga" ? "default" : f.status === "vencida" ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
+                                {f.status === "paga" ? "Paga" : f.status === "vencida" ? "Vencida" : f.status === "pendente" ? "Pendente" : f.status || "—"}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="border-t bg-muted/30 font-semibold">
+                        <tr>
+                          <td className="px-3 py-2" colSpan={4}>Total</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{fmt(drillFines.reduce((s: number, f: any) => s + parseFloat(f.valor_original || f.valorOriginal || "0"), 0))}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {drillCusto && (
+                (drillCusto === "Manutenção" && drillMaintenances.length === 0) ||
+                (drillCusto === "Combustível" && drillFuelByMotorista.length === 0) ||
+                (drillCusto === "Multas" && drillFines.length === 0)
+              ) && (
+                <div className="w-full mt-4 text-center text-xs text-muted-foreground py-6 border rounded-xl">
+                  Sem registros detalhados para "{drillCusto}"{anoDash ? ` em ${anoDash}` : ""}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

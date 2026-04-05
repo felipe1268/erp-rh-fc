@@ -8014,4 +8014,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 23:55:00",
   },
+  {
+    version: 1033,
+    titulo: "Drill-down Distribuição de Custos — Manutenção, Combustível e Multas",
+    descricao:
+      "Gráfico 'Distribuição de Custos' agora é interativo com drill-down. " +
+      "Ao clicar na fatia 'Manutenção', abre tabela com todas as manutenções do ano: data, veículo, tipo (preventiva/corretiva), " +
+      "descrição, custo com barra proporcional, fornecedor e status. " +
+      "Ao clicar em 'Combustível', mostra todos os motoristas com litros, valor e abastecimentos. " +
+      "Ao clicar em 'Multas', mostra todas as multas com data, veículo, descrição, motorista, valor e status. " +
+      "Todos os painéis com animação de entrada, scroll interno, totalizadores e filtragem por ano.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 00:05:00",
+  },
 ];
