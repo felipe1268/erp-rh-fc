@@ -474,13 +474,13 @@ export default function FrotasAnalitico() {
             { icon: Activity, label: "Custo/km", value: `R$ ${fmtNum(kpiCustoKm, 2)}`, color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950", sub: `${fmtNum(kpiTotalKm, 0)} km`, tip: "Custo operacional total dividido pela quilometragem rodada — quanto menor, mais eficiente" },
             { icon: Gauge, label: "Consumo Médio", value: kpiConsumoMedio > 0 ? `${fmtNum(kpiConsumoMedio)} km/l` : "—", color: "text-cyan-600", bg: "bg-cyan-50 dark:bg-cyan-950", tip: "Quilômetros percorridos por litro de combustível — quanto maior, mais econômico" },
           ].map((k, i) => (
-            <div key={i} className={`${k.bg} border rounded-xl p-3 cursor-default group relative`} title={k.tip}>
-              <div className="flex items-center gap-1.5 mb-1">
-                <k.icon className={`h-3.5 w-3.5 ${k.color}`} />
-                <span className="text-[10px] text-muted-foreground uppercase font-medium">{k.label}</span>
+            <div key={i} className={`${k.bg} border rounded-xl p-3 cursor-default group relative h-[76px] flex flex-col justify-between`} title={k.tip}>
+              <div className="flex items-center gap-1.5">
+                <k.icon className={`h-3.5 w-3.5 ${k.color} shrink-0`} />
+                <span className="text-[10px] text-muted-foreground uppercase font-medium truncate">{k.label}</span>
               </div>
-              <p className="text-sm font-bold">{k.value}</p>
-              {(k as any).sub && <p className="text-[10px] text-muted-foreground">{(k as any).sub}</p>}
+              <p className="text-sm font-bold truncate">{k.value}</p>
+              <p className="text-[10px] text-muted-foreground truncate h-[14px]">{(k as any).sub || "\u00A0"}</p>
             </div>
           ))}
         </div>
