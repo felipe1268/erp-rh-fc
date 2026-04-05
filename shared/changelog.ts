@@ -8156,4 +8156,16 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 18:00:00",
   },
+  {
+    version: 1042,
+    titulo: "Importação de KM e Consumo do Relatório do Posto",
+    descricao:
+      "Dados de KM Anterior, KM Atual e Consumo (km/l) importados do relatório PDF do Auto Posto Umuarama para 62 registros de abastecimento. " +
+      "11 veículos agora possuem km_atual atualizado na tabela de veículos. Gráficos de consumo km/l passam a funcionar com dados reais " +
+      "para EAM2G13, DSR6I25, EVW9H23, FFI4B12, EVY2H85, EIN8H18, FJH5A24, FZG2747, EUY7E02, GBA1E07 e FSB1H05.",
+    tipo: "melhoria",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 20:30:00",
+  },
 ];

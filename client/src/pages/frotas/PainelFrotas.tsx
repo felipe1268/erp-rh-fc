@@ -565,18 +565,18 @@ export default function PainelFrotas() {
                   <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm flex items-center gap-2">
-                        <Droplets className="h-4 w-4 text-green-500" /> Ranking Eficiência (km/l)
+                        <Droplets className="h-4 w-4 text-green-500" />
+                        {(d.custoPorVeiculo || []).some((v: any) => v.consumo > 0) ? "Ranking Eficiência (km/l)" : "Ranking Litros Consumidos"}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-2">
-                        {(d.custoPorVeiculo || [])
-                          .filter((v: any) => v.consumo > 0)
-                          .sort((a: any, b: any) => b.consumo - a.consumo)
-                          .slice(0, 8)
-                          .map((v: any, i: number) => {
-                            const maxCons = d.custoPorVeiculo.filter((x: any) => x.consumo > 0).sort((a: any, b: any) => b.consumo - a.consumo)[0]?.consumo || 1;
-                            return (
+                        {(() => {
+                          const hasKmL = (d.custoPorVeiculo || []).some((v: any) => v.consumo > 0);
+                          if (hasKmL) {
+                            const list = (d.custoPorVeiculo || []).filter((v: any) => v.consumo > 0).sort((a: any, b: any) => b.consumo - a.consumo).slice(0, 8);
+                            const maxCons = list[0]?.consumo || 1;
+                            return list.map((v: any, i: number) => (
                               <div key={v.id} className="flex items-center gap-3">
                                 <span className="text-xs font-bold w-5 text-muted-foreground">#{i + 1}</span>
                                 <div className="flex-1">
@@ -592,11 +592,29 @@ export default function PainelFrotas() {
                                   </div>
                                 </div>
                               </div>
-                            );
-                          })}
-                        {(d.custoPorVeiculo || []).filter((v: any) => v.consumo > 0).length === 0 && (
-                          <p className="text-muted-foreground text-sm">Sem dados de consumo registrados</p>
-                        )}
+                            ));
+                          }
+                          const litrosList = (d.custoPorVeiculo || []).filter((v: any) => v.litros > 0).sort((a: any, b: any) => b.litros - a.litros).slice(0, 8);
+                          if (litrosList.length === 0) return <p className="text-muted-foreground text-sm">Sem dados de consumo registrados</p>;
+                          const maxLitros = litrosList[0]?.litros || 1;
+                          return litrosList.map((v: any, i: number) => (
+                            <div key={v.id} className="flex items-center gap-3">
+                              <span className="text-xs font-bold w-5 text-muted-foreground">#{i + 1}</span>
+                              <div className="flex-1">
+                                <div className="flex justify-between text-xs mb-0.5">
+                                  <span className="font-medium">{v.placa} - {v.modelo}</span>
+                                  <span className="font-semibold text-sky-600">
+                                    {Math.round(v.litros).toLocaleString("pt-BR")}L
+                                  </span>
+                                </div>
+                                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full bg-sky-500" style={{ width: `${(v.litros / maxLitros) * 100}%` }} />
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">{v.abastecimentos} abastecimentos · R$ {Number(v.custoComb || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                              </div>
+                            </div>
+                          ));
+                        })()}
                       </div>
                     </CardContent>
                   </Card>

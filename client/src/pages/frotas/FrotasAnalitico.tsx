@@ -1352,17 +1352,20 @@ export default function FrotasAnalitico() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pb-1">
-              <SectionTitle icon={Gauge} title="Consumo por Veículo (km/l)" color="text-green-500" />
+              {(() => {
+                const hasKmL = custosPorVeiculo.some((v: any) => v.consumo > 0);
+                return <SectionTitle icon={Gauge} title={hasKmL ? "Consumo por Veículo (km/l)" : "Litros Consumidos por Veículo"} color="text-green-500" />;
+              })()}
             </CardHeader>
             <CardContent>
               {(() => {
-                const data = custosPorVeiculo
+                const dataKmL = custosPorVeiculo
                   .filter((v: any) => v.consumo > 0)
                   .map((v: any) => ({ name: v.placa || v.modelo, consumo: Math.round(v.consumo * 100) / 100 }))
                   .sort((a: any, b: any) => b.consumo - a.consumo);
-                return data.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={Math.max(200, data.length * 28)}>
-                    <BarChart data={data} layout="vertical" margin={{ left: 5 }}>
+                if (dataKmL.length > 0) return (
+                  <ResponsiveContainer width="100%" height={Math.max(200, dataKmL.length * 28)}>
+                    <BarChart data={dataKmL} layout="vertical" margin={{ left: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                       <XAxis type="number" tick={{ fontSize: 10 }} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={70} />
@@ -1371,8 +1374,31 @@ export default function FrotasAnalitico() {
                         return <div className="bg-popover border rounded-lg shadow-lg p-2 text-xs"><strong>{payload[0].payload.name}</strong>: {fmtNum(payload[0].value as number, 2)} km/l</div>;
                       }} />
                       <Bar dataKey="consumo" name="km/l" radius={[0, 4, 4, 0]}>
-                        {data.map((v: any, i: number) => (
+                        {dataKmL.map((v: any, i: number) => (
                           <Cell key={i} fill={v.consumo >= 10 ? "#10b981" : v.consumo >= 6 ? "#3b82f6" : v.consumo >= 3 ? "#f59e0b" : "#ef4444"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                );
+                const dataLitros = custosPorVeiculo
+                  .filter((v: any) => v.litros > 0)
+                  .map((v: any) => ({ name: v.placa || v.modelo, litros: Math.round(v.litros), abast: v.abastecimentos }))
+                  .sort((a: any, b: any) => b.litros - a.litros);
+                return dataLitros.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={Math.max(200, dataLitros.length * 28)}>
+                    <BarChart data={dataLitros} layout="vertical" margin={{ left: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${fmtNum(v, 0)}L`} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={70} />
+                      <Tooltip content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const v = payload[0].payload;
+                        return <div className="bg-popover border rounded-lg shadow-lg p-2 text-xs"><strong>{v.name}</strong>: {fmtNum(v.litros, 0)} litros · {v.abast} abastecimentos</div>;
+                      }} />
+                      <Bar dataKey="litros" name="Litros" radius={[0, 4, 4, 0]}>
+                        {dataLitros.map((_: any, i: number) => (
+                          <Cell key={i} fill={["#0ea5e9", "#06b6d4", "#14b8a6", "#10b981", "#22c55e", "#84cc16", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#6366f1"][i % 13]} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -1384,17 +1410,20 @@ export default function FrotasAnalitico() {
 
           <Card>
             <CardHeader className="pb-1">
-              <SectionTitle icon={Activity} title="Custo por Km (R$/km)" color="text-orange-500" />
+              {(() => {
+                const hasKm = custosPorVeiculo.some((v: any) => v.km > 0 && v.custoKmV > 0);
+                return <SectionTitle icon={Activity} title={hasKm ? "Custo por Km (R$/km)" : "Gasto com Combustível por Veículo"} color="text-orange-500" />;
+              })()}
             </CardHeader>
             <CardContent>
               {(() => {
-                const data = custosPorVeiculo
+                const dataKm = custosPorVeiculo
                   .filter((v: any) => v.km > 0 && v.custoKmV > 0)
                   .map((v: any) => ({ name: v.placa || v.modelo, custoKm: Math.round(v.custoKmV * 100) / 100, km: v.km }))
                   .sort((a: any, b: any) => b.custoKm - a.custoKm);
-                return data.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={Math.max(200, data.length * 28)}>
-                    <BarChart data={data} layout="vertical" margin={{ left: 5 }}>
+                if (dataKm.length > 0) return (
+                  <ResponsiveContainer width="100%" height={Math.max(200, dataKm.length * 28)}>
+                    <BarChart data={dataKm} layout="vertical" margin={{ left: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                       <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `R$ ${fmtNum(v, 2)}`} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={70} />
@@ -1404,13 +1433,36 @@ export default function FrotasAnalitico() {
                         return <div className="bg-popover border rounded-lg shadow-lg p-2 text-xs"><strong>{v.name}</strong>: R$ {fmtNum(v.custoKm, 2)}/km · {fmtNum(v.km, 0)} km</div>;
                       }} />
                       <Bar dataKey="custoKm" name="R$/km" radius={[0, 4, 4, 0]}>
-                        {data.map((v: any, i: number) => (
+                        {dataKm.map((v: any, i: number) => (
                           <Cell key={i} fill={v.custoKm <= 0.1 ? "#10b981" : v.custoKm <= 0.2 ? "#3b82f6" : v.custoKm <= 0.4 ? "#f59e0b" : "#ef4444"} />
                         ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                ) : <p className="text-xs text-muted-foreground text-center py-4">Sem dados de km</p>;
+                );
+                const dataComb = custosPorVeiculo
+                  .filter((v: any) => v.custoComb > 0)
+                  .map((v: any) => ({ name: v.placa || v.modelo, gasto: Math.round(v.custoComb * 100) / 100, litros: Math.round(v.litros), abast: v.abastecimentos }))
+                  .sort((a: any, b: any) => b.gasto - a.gasto);
+                return dataComb.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={Math.max(200, dataComb.length * 28)}>
+                    <BarChart data={dataComb} layout="vertical" margin={{ left: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `R$ ${fmtNum(v, 0)}`} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={70} />
+                      <Tooltip content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const v = payload[0].payload;
+                        return <div className="bg-popover border rounded-lg shadow-lg p-2 text-xs"><strong>{v.name}</strong>: R$ {fmtNum(v.gasto, 2)} · {fmtNum(v.litros, 0)}L · {v.abast} abast.</div>;
+                      }} />
+                      <Bar dataKey="gasto" name="R$ Combustível" radius={[0, 4, 4, 0]}>
+                        {dataComb.map((_: any, i: number) => (
+                          <Cell key={i} fill={["#f97316", "#ea580c", "#fb923c", "#fdba74", "#c2410c", "#fb923c", "#f59e0b", "#d97706", "#b45309", "#92400e", "#fbbf24", "#eab308", "#a16207"][i % 13]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : <p className="text-xs text-muted-foreground text-center py-4">Sem dados de combustível</p>;
               })()}
             </CardContent>
           </Card>
