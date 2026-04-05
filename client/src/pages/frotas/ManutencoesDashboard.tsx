@@ -35,17 +35,13 @@ export default function ManutencoesDashboard() {
 
   const d = dash.data;
 
-  if (!d) {
-    return (
-      <DashboardLayout>
-        <div className="p-4 flex items-center justify-center h-64">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  const { kpi, porMes, porVeiculo, porFornecedor, topItens, itensPorVeiculo, custoMesPorTipo } = d;
+  const porMes = d?.porMes || [];
+  const custoMesPorTipo = d?.custoMesPorTipo || [];
+  const porVeiculo = d?.porVeiculo || [];
+  const itensPorVeiculo = d?.itensPorVeiculo || [];
+  const topItens = d?.topItens || [];
+  const porFornecedor = d?.porFornecedor || [];
+  const kpi = d?.kpi || { totalManutencoes: 0, preventivas: 0, corretivas: 0, custoTotal: 0, custoMedio: 0, veiculosAtendidos: 0, custoPecas: 0, custoServicos: 0 };
 
   const evolucaoData = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => {
@@ -99,6 +95,16 @@ export default function ManutencoesDashboard() {
     if (sortVeiculo.col !== col) return <ArrowUpDown className="h-3 w-3 opacity-40" />;
     return sortVeiculo.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
   };
+
+  if (!d) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 flex items-center justify-center h-64">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
