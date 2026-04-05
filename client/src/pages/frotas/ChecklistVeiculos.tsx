@@ -11,9 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   ClipboardCheck, Plus, Trash2, FileText, CheckCircle, XCircle, AlertCircle,
-  ChevronDown, ChevronUp, Eye, Settings, Truck, Camera,
+  ChevronDown, ChevronUp, Eye, Settings, Truck, Camera, ArrowLeft,
 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 function fmtDate(d: any) { if (!d) return "—"; return String(d).split("T")[0].split("-").reverse().join("/"); }
@@ -28,6 +29,7 @@ export default function ChecklistVeiculos() {
   const { selectedCompany } = useCompany();
   const cId = selectedCompany?.id ?? 0;
   const utils = trpc.useUtils();
+  const [, navigate] = useLocation();
 
   const [view, setView] = useState<View>("checklists");
   const [filterVehicle, setFilterVehicle] = useState<string>("todos");
@@ -121,6 +123,9 @@ export default function ChecklistVeiculos() {
       <div className="bg-gradient-to-r from-[#1e3a5f] to-[#2c5282] text-white p-6 rounded-b-2xl shadow-lg">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center gap-3 mb-3">
+            <button onClick={() => navigate("/frotas")} className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition-colors" title="Voltar">
+              <ArrowLeft className="h-5 w-5" />
+            </button>
             <div className="p-2 rounded-xl bg-white/10"><ClipboardCheck className="h-6 w-6" /></div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Checklist de Veículos</h1>
