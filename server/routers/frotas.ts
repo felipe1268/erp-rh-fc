@@ -4550,7 +4550,7 @@ Sempre retorne JSON válido, sem markdown.`;
 
       const vehicleIds = [...new Set(input.items.map(it => it.vehicleId))];
       if (vehicleIds.length > 0) {
-        const validVehicles = await db.execute(sql`SELECT id FROM vehicles WHERE "companyId" = ${input.companyId} AND id = ANY(${vehicleIds})`);
+        const validVehicles = await db.execute(sql`SELECT id FROM vehicles WHERE "companyId" = ${input.companyId} AND id IN (${sql.join(vehicleIds.map(id => sql`${id}`), sql`, `)})`);
         const validIds = new Set((validVehicles.rows as any[]).map(r => r.id));
         const invalidIds = vehicleIds.filter(id => !validIds.has(id));
         if (invalidIds.length > 0) {
