@@ -91,8 +91,8 @@ export default function PainelOperacional() {
             onClick={() => setLocation(mod.path)}
             className="group relative flex flex-col items-center justify-center text-center rounded-2xl p-3 cursor-pointer transition-all duration-200 hover:scale-[1.04] select-none"
             style={{
-              width: '115px',
-              minHeight: '96px',
+              width: '140px',
+              minHeight: '120px',
               background: `linear-gradient(145deg, ${mod.accentFrom}16, ${mod.accentTo}0a)`,
               border: `1.5px solid ${mod.accentFrom}38`,
               boxShadow: `0 4px 20px -6px ${mod.accentFrom}28`,
@@ -103,16 +103,16 @@ export default function PainelOperacional() {
               style={{ background: `radial-gradient(ellipse at 50% 60%, ${mod.accentFrom}20 0%, transparent 70%)` }}
             />
             <div
-              className="h-11 w-11 rounded-xl flex items-center justify-center mb-2 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5"
+              className="h-14 w-14 rounded-2xl flex items-center justify-center mb-2.5 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5"
               style={{
                 background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
                 boxShadow: `0 4px 12px -3px ${mod.accentFrom}55`,
               }}
             >
-              <mod.icon className="h-5 w-5 text-white" />
+              <mod.icon className="h-7 w-7 text-white" />
             </div>
-            <p className="text-[12px] font-extrabold leading-tight text-[#1B2A4A] dark:text-white tracking-tight w-full truncate">{mod.titulo}</p>
-            <p className="text-[9.5px] text-gray-400 leading-tight mt-0.5 w-full truncate">{mod.subtitulo}</p>
+            <p className="text-[13px] font-extrabold leading-tight text-[#1B2A4A] dark:text-white tracking-tight w-full truncate">{mod.titulo}</p>
+            <p className="text-[10px] text-gray-400 leading-tight mt-0.5 w-full truncate">{mod.subtitulo}</p>
           </div>
         ))}
       </div>
