@@ -7888,4 +7888,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 18:00:00",
   },
+  {
+    version: 1025,
+    titulo: "Ranking Motoristas — Gráficos de Barras Verticais + Normalização de Nomes",
+    descricao:
+      "Gráficos de Ranking de Motoristas (Gasto R$ e Litros) no Analítico de Frotas " +
+      "convertidos de barras horizontais (RankBar) para barras verticais (Recharts BarChart) " +
+      "com cores individuais por motorista, labels rotacionados 45°, tooltips com valores " +
+      "formatados e eixo Y com unidades (R$k / L). Nomes de 444 colaboradores existentes " +
+      "normalizados para MAIÚSCULAS no banco de dados.",
+    tipo: "melhoria",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 19:00:00",
+  },
 ];

@@ -258,9 +258,8 @@ export default function FrotasAnalitico() {
     .sort((a: any, b: any) => b.deprecReal - a.deprecReal)
     .slice(0, 8);
 
+  const topMotoristasPorLitros = useMemo(() => [...topMotoristas].sort((a, b) => b.litros - a.litros), [topMotoristas]);
   const maxCustoVeiculo = custosPorVeiculo[0]?.custoTotal || 1;
-  const maxMotoristaValor = topMotoristas[0]?.valor || 1;
-  const maxMotoristaLitros = topMotoristas[0]?.litros || 1;
   const maxPostoValor = topPostos[0]?.valor || 1;
   const maxDep = depTop[0]?.deprecReal || 1;
 
@@ -396,19 +395,34 @@ export default function FrotasAnalitico() {
             <CardHeader className="pb-1">
               <SectionTitle icon={Users} title="Ranking Motoristas — Gasto (R$)" color="text-purple-500" />
             </CardHeader>
-            <CardContent className="space-y-0.5">
-              {topMotoristas.length > 0 ? topMotoristas.map((m, i) => (
-                <RankBar
-                  key={i}
-                  rank={i + 1}
-                  name={m.name.length > 25 ? m.name.slice(0, 23) + "…" : m.name}
-                  value={m.valor}
-                  label={fmt(m.valor)}
-                  max={maxMotoristaValor}
-                  color="bg-gradient-to-r from-violet-400 to-purple-600"
-                  sub={`${m.abastecimentos} abast.`}
-                />
-              )) : <p className="text-xs text-muted-foreground text-center py-4">Sem dados</p>}
+            <CardContent>
+              {topMotoristas.length > 0 ? (
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={topMotoristas} margin={{ top: 5, right: 5, bottom: 60, left: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 9, fill: "#888" }}
+                      angle={-45}
+                      textAnchor="end"
+                      interval={0}
+                      height={70}
+                      tickFormatter={(v: string) => v.length > 15 ? v.slice(0, 13) + "…" : v}
+                    />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v.toFixed(0)}`} width={55} />
+                    <Tooltip
+                      formatter={(v: number, _: any, props: any) => [fmt(v), "Gasto"]}
+                      labelFormatter={(name: string) => name}
+                      contentStyle={{ fontSize: 12 }}
+                    />
+                    <Bar dataKey="valor" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                      {topMotoristas.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <p className="text-xs text-muted-foreground text-center py-4">Sem dados</p>}
             </CardContent>
           </Card>
         </div>
@@ -418,21 +432,34 @@ export default function FrotasAnalitico() {
             <CardHeader className="pb-1">
               <SectionTitle icon={Droplets} title="Ranking Motoristas — Litros" color="text-blue-500" />
             </CardHeader>
-            <CardContent className="space-y-0.5">
-              {topMotoristas.length > 0 ? topMotoristas
-                .sort((a, b) => b.litros - a.litros)
-                .map((m, i) => (
-                <RankBar
-                  key={i}
-                  rank={i + 1}
-                  name={m.name.length > 25 ? m.name.slice(0, 23) + "…" : m.name}
-                  value={m.litros}
-                  label={`${fmtNum(m.litros, 0)}L`}
-                  max={maxMotoristaLitros}
-                  color="bg-gradient-to-r from-blue-400 to-cyan-500"
-                  sub={`${m.abastecimentos} abast.`}
-                />
-              )) : <p className="text-xs text-muted-foreground text-center py-4">Sem dados</p>}
+            <CardContent>
+              {topMotoristas.length > 0 ? (
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={topMotoristasPorLitros} margin={{ top: 5, right: 5, bottom: 60, left: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 9, fill: "#888" }}
+                      angle={-45}
+                      textAnchor="end"
+                      interval={0}
+                      height={70}
+                      tickFormatter={(v: string) => v.length > 15 ? v.slice(0, 13) + "…" : v}
+                    />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${v.toFixed(0)}L`} width={50} />
+                    <Tooltip
+                      formatter={(v: number) => [`${fmtNum(v, 0)}L`, "Litros"]}
+                      labelFormatter={(name: string) => name}
+                      contentStyle={{ fontSize: 12 }}
+                    />
+                    <Bar dataKey="litros" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                      {topMotoristasPorLitros.map((_, i) => (
+                        <Cell key={i} fill={COLORS[(i + 3) % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <p className="text-xs text-muted-foreground text-center py-4">Sem dados</p>}
             </CardContent>
           </Card>
 
