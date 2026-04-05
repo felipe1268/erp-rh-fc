@@ -13,9 +13,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Wrench, Plus, Pencil, Trash2, AlertTriangle, Search,
   ChevronLeft, ChevronRight, Send, Undo2, DollarSign,
-  CheckCircle2, Loader2,
+  CheckCircle2, Loader2, ScanLine, FileUp, Eye, X, Check,
+  Sparkles, Upload,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
 
 function fmt(v: any) {
@@ -47,6 +48,13 @@ export default function Manutencoes() {
   const [mesAtual, setMesAtual] = useState(now.getMonth() + 1);
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [approveObs, setApproveObs] = useState("");
+  const [osDialogOpen, setOsDialogOpen] = useState(false);
+  const [osFile, setOsFile] = useState<File | null>(null);
+  const [osPreview, setOsPreview] = useState<string | null>(null);
+  const [osParsed, setOsParsed] = useState<any>(null);
+  const [osSelectedItems, setOsSelectedItems] = useState<Record<number, boolean>>({});
+  const [osSaving, setOsSaving] = useState(false);
+  const osFileRef = useRef<HTMLInputElement>(null);
 
   const vehicles = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
   const manut = trpc.frotas.listMaintenances.useQuery(
@@ -83,6 +91,110 @@ export default function Manutencoes() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  const parseMut = trpc.frotas.parseMaintenanceOS.useMutation();
+
+  const handleOsFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    if (!validTypes.includes(file.type)) {
+      toast.error("Formato inválido. Envie JPG, PNG, WebP ou PDF.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx 10MB).");
+      return;
+    }
+
+    setOsFile(file);
+    setOsParsed(null);
+    setOsSelectedItems({});
+
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = () => setOsPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setOsPreview(null);
+    }
+  }, []);
+
+  async function processOS() {
+    if (!osFile) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(",")[1];
+      try {
+        const result = await parseMut.mutateAsync({
+          companyId: cId,
+          base64,
+          mimeType: osFile.type,
+        });
+        setOsParsed(result);
+        if (result.items?.length > 0) {
+          const sel: Record<number, boolean> = {};
+          result.items.forEach((_: any, i: number) => { sel[i] = true; });
+          setOsSelectedItems(sel);
+        }
+      } catch (err: any) {
+        toast.error(err.message || "Erro ao processar OS");
+      }
+    };
+    reader.readAsDataURL(osFile);
+  }
+
+  async function saveOSItems() {
+    if (!osParsed?.items?.length) return;
+    setOsSaving(true);
+    let saved = 0;
+    let failed = 0;
+    const selected = Object.entries(osSelectedItems).filter(([, v]) => v).map(([k]) => parseInt(k));
+    for (const i of selected) {
+      const item = osParsed.items[i];
+      if (!item.vehicleId) {
+        toast.error(`Item ${i + 1}: veículo não identificado — pulando.`);
+        failed++;
+        continue;
+      }
+      try {
+        await createMut.mutateAsync({
+          companyId: cId,
+          vehicleId: item.vehicleId,
+          tipo: item.tipo || "corretiva",
+          descricao: item.descricao || "Manutenção importada via OS",
+          custo: String(item.custo || 0),
+          kmNaManutencao: item.kmNaManutencao ? String(item.kmNaManutencao) : undefined,
+          fornecedor: item.fornecedor || undefined,
+          dataManutencao: item.dataManutencao || new Date().toISOString().slice(0, 10),
+          status: "realizada",
+          observacoes: item.observacoes || undefined,
+          criadoPor: user?.name,
+        });
+        saved++;
+      } catch (err: any) {
+        failed++;
+        toast.error(`Item ${i + 1} falhou: ${err.message || "Erro"}`);
+      }
+    }
+    if (saved > 0) {
+      toast.success(`${saved} manutenção(ões) importada(s)${failed > 0 ? ` (${failed} falha(s))` : ""}`);
+      manut.refetch();
+      monthSummary.refetch();
+      if (failed === 0) {
+        setOsDialogOpen(false);
+        setOsFile(null);
+        setOsPreview(null);
+        setOsParsed(null);
+        setOsSelectedItems({});
+      }
+    } else if (failed > 0) {
+      toast.error(`Nenhum item importado (${failed} falha(s)).`);
+    }
+    setOsSaving(false);
+  }
 
   function openNew() {
     setEditing(null);
@@ -155,7 +267,12 @@ export default function Manutencoes() {
           <h1 className="text-xl font-bold flex items-center gap-2">
             <Wrench className="h-5 w-5 text-orange-600" /> Manutenções
           </h1>
-          <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova Manutenção</Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950" onClick={() => { setOsDialogOpen(true); setOsFile(null); setOsPreview(null); setOsParsed(null); setOsSelectedItems({}); }}>
+              <ScanLine className="h-4 w-4 mr-1" /> Importar OS (IA)
+            </Button>
+            <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova Manutenção</Button>
+          </div>
         </div>
 
         <div className="bg-card border rounded-xl p-3">
@@ -513,6 +630,165 @@ export default function Manutencoes() {
             </div>
           </DialogContent>
         </Dialog>
+        <Dialog open={osDialogOpen} onOpenChange={setOsDialogOpen}>
+          <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0" resizable={false} showCloseButton={false}>
+            <div className="sticky top-0 z-10 bg-background border-b px-6 py-4 flex items-center justify-between">
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                <ScanLine className="h-5 w-5 text-violet-600" />
+                Importar OS com IA
+              </DialogTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setOsDialogOpen(false)}>Fechar</Button>
+                {osParsed?.items?.length > 0 && (
+                  <Button
+                    className="bg-violet-600 hover:bg-violet-700"
+                    onClick={saveOSItems}
+                    disabled={osSaving || Object.values(osSelectedItems).filter(Boolean).length === 0}
+                  >
+                    {osSaving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+                    {osSaving ? "Salvando..." : `Criar ${Object.values(osSelectedItems).filter(Boolean).length} Manutenção(ões)`}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="px-6 py-4 max-w-6xl mx-auto w-full">
+              {!osFile && (
+                <div className="border-2 border-dashed border-violet-300 dark:border-violet-700 rounded-2xl p-12 text-center">
+                  <ScanLine className="h-16 w-16 mx-auto text-violet-400 mb-4" />
+                  <h3 className="text-lg font-bold mb-2">Envie a foto ou PDF da Ordem de Serviço</h3>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    A IA vai ler o documento, extrair automaticamente os dados (veículo, serviços, custos, fornecedor) e criar os lançamentos de manutenção.
+                  </p>
+                  <input
+                    ref={osFileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    className="hidden"
+                    onChange={handleOsFileChange}
+                  />
+                  <Button size="lg" className="bg-violet-600 hover:bg-violet-700" onClick={() => osFileRef.current?.click()}>
+                    <Upload className="h-5 w-5 mr-2" /> Escolher Arquivo
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-3">JPG, PNG, WebP ou PDF — máx. 10MB</p>
+                </div>
+              )}
+
+              {osFile && !osParsed && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-800 rounded-xl p-4">
+                    <FileUp className="h-8 w-8 text-violet-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{osFile.name}</p>
+                      <p className="text-xs text-muted-foreground">{(osFile.size / 1024).toFixed(0)} KB — {osFile.type}</p>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => { setOsFile(null); setOsPreview(null); }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {osPreview && (
+                    <div className="border rounded-xl overflow-hidden bg-muted/30 max-h-[400px] flex items-center justify-center">
+                      <img src={osPreview} alt="Preview da OS" className="max-h-[400px] object-contain" />
+                    </div>
+                  )}
+
+                  <Button
+                    size="lg"
+                    className="w-full bg-violet-600 hover:bg-violet-700"
+                    onClick={processOS}
+                    disabled={parseMut.isPending}
+                  >
+                    {parseMut.isPending ? (
+                      <>
+                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                        Analisando com IA... aguarde
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-5 w-5 mr-2" />
+                        Analisar com IA
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {osParsed && (
+                <div className="space-y-4">
+                  {osParsed.error && (
+                    <div className="bg-red-50 dark:bg-red-950 border border-red-200 rounded-xl p-4">
+                      <p className="text-sm font-medium text-red-700 dark:text-red-300 flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4" /> Erro: {osParsed.error}
+                      </p>
+                    </div>
+                  )}
+
+                  {osParsed.rawText && (
+                    <div className="bg-muted/40 border rounded-xl p-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Resumo Lido pela IA</p>
+                      <p className="text-sm">{osParsed.rawText}</p>
+                      {osParsed.confidence && (
+                        <Badge variant={osParsed.confidence === "alta" ? "default" : osParsed.confidence === "media" ? "secondary" : "destructive"} className="mt-2 text-[10px]">
+                          Confiança: {osParsed.confidence}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+
+                  {osParsed.items?.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-bold flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        {osParsed.items.length} item(ns) encontrado(s) — selecione para importar
+                      </h3>
+
+                      {osParsed.items.map((item: any, idx: number) => {
+                        const veh = (vehicles.data || []).find((v: any) => v.id === item.vehicleId);
+                        return (
+                          <div key={idx} className={`border rounded-xl p-4 transition-all ${osSelectedItems[idx] ? "border-violet-400 bg-violet-50/50 dark:bg-violet-950/30" : "border-muted opacity-60"}`}>
+                            <div className="flex items-start gap-3">
+                              <button
+                                className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${osSelectedItems[idx] ? "bg-violet-600 border-violet-600 text-white" : "border-muted-foreground/30"}`}
+                                onClick={() => setOsSelectedItems(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                              >
+                                {osSelectedItems[idx] && <Check className="h-3 w-3" />}
+                              </button>
+                              <div className="flex-1 space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant="outline" className="text-xs">
+                                    {veh ? `${veh.placa || veh.modelo} — ${veh.marca}` : item.vehiclePlaca || "Veículo não identificado"}
+                                  </Badge>
+                                  <Badge variant={item.tipo === "preventiva" ? "outline" : "secondary"} className="text-[10px]">{item.tipo}</Badge>
+                                  {!item.vehicleId && <Badge variant="destructive" className="text-[10px]">Veículo não encontrado</Badge>}
+                                </div>
+                                <p className="text-sm font-medium">{item.descricao}</p>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                  <div><span className="text-muted-foreground">Valor:</span> <strong className="text-emerald-700">{fmt(item.custo)}</strong></div>
+                                  <div><span className="text-muted-foreground">Data:</span> {item.dataManutencao ? item.dataManutencao.split("-").reverse().join("/") : "—"}</div>
+                                  <div><span className="text-muted-foreground">KM:</span> {item.kmNaManutencao ? parseFloat(item.kmNaManutencao).toLocaleString("pt-BR") : "—"}</div>
+                                  <div><span className="text-muted-foreground">Fornecedor:</span> {item.fornecedor || "—"}</div>
+                                </div>
+                                {item.observacoes && <p className="text-xs text-muted-foreground">{item.observacoes}</p>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" onClick={() => { setOsFile(null); setOsPreview(null); setOsParsed(null); setOsSelectedItems({}); }}>
+                      <Upload className="h-4 w-4 mr-1" /> Enviar Outra OS
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
       </div>
     </DashboardLayout>
   );

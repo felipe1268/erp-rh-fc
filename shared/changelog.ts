@@ -7800,4 +7800,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 05:30:00",
   },
+  {
+    version: 1019,
+    titulo: "Importar OS com IA — Leitura automática de Ordem de Serviço",
+    descricao:
+      "Novo botão 'Importar OS (IA)' na tela de Manutenções. Upload de foto (JPG/PNG/WebP) ou PDF da " +
+      "Ordem de Serviço, a IA (Claude Vision) analisa o documento e extrai automaticamente: veículo " +
+      "(associado por placa/modelo da frota), tipo de manutenção, descrição com número da OS, custo, " +
+      "quilometragem, fornecedor, data e observações. Preview dos dados extraídos com seleção individual " +
+      "e indicador de confiança. Suporta múltiplos serviços por OS. Endpoint parseMaintenanceOS no backend.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 13:00:00",
+  },
 ];

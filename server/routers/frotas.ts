@@ -9,7 +9,7 @@ import {
   fleetFines, fleetIpva, fleetLicensing, fleetInsurance,
   obras, employees,
 } from "../../drizzle/schema";
-import { invokeLLM } from "../_core/llm";
+import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { storagePut } from "../storage";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
@@ -620,6 +620,127 @@ export const frotasRouter = router({
       const errors = results.filter(r => r.status === "error").length;
 
       return { total: veiculos.length, updated, skipped, errors, results };
+    }),
+
+  parseMaintenanceOS: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      base64: z.string().max(15_000_000),
+      mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+
+      const userCompanyId = (ctx as any).user?.companyId;
+      if (userCompanyId && String(userCompanyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
+      }
+
+      const decodedSize = Math.ceil(input.base64.length * 3 / 4);
+      if (decodedSize > 10 * 1024 * 1024) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo muito grande (máx 10MB)." });
+      }
+
+      const db = await getDb();
+
+      const vRes = await db.execute(sql`
+        SELECT id, placa, modelo, marca, "tipoVeiculo" FROM vehicles
+        WHERE "companyId" = ${input.companyId} ORDER BY placa
+      `);
+      const veiculos = (vRes as any).rows || vRes;
+      const listaVeiculos = veiculos.map((v: any) =>
+        `ID:${v.id} | Placa: ${v.placa || "S/P"} | ${v.marca} ${v.modelo} (${v.tipoVeiculo})`
+      ).join("\n");
+
+      const prompt = `Analise esta Ordem de Serviço (OS) de manutenção de veículo e extraia as informações.
+
+VEÍCULOS CADASTRADOS NA FROTA (use o ID correspondente):
+${listaVeiculos}
+
+Retorne APENAS um JSON válido (sem markdown, sem \`\`\`) com esta estrutura:
+{
+  "success": true,
+  "items": [
+    {
+      "vehicleId": <number - ID do veículo da lista acima que corresponde à placa/modelo da OS>,
+      "vehiclePlaca": "<placa encontrada na OS>",
+      "vehicleModelo": "<modelo encontrado na OS>",
+      "tipo": "corretiva" ou "preventiva",
+      "descricao": "<descrição do serviço realizado - inclua o número da OS se houver>",
+      "custo": <number - valor total em R$, 0 se não informado>,
+      "kmNaManutencao": <number ou null>,
+      "fornecedor": "<nome da oficina/fornecedor>",
+      "dataManutencao": "<data no formato YYYY-MM-DD>",
+      "observacoes": "<detalhes extras, peças trocadas, garantia etc>"
+    }
+  ],
+  "rawText": "<resumo do que foi lido na OS>",
+  "confidence": "alta" | "media" | "baixa"
+}
+
+Se houver múltiplos serviços/itens na OS, crie um item para cada.
+Se não encontrar o veículo na lista, coloque vehicleId: null e preencha placa/modelo encontrados.
+Se a data não estiver clara, use a data de hoje: ${new Date().toISOString().slice(0, 10)}.
+Se o tipo não estiver claro, assuma "corretiva".
+Na descrição, inclua "OS #XXXX — " com o número se houver.`;
+
+      const systemPrompt = `Você é um assistente especialista em manutenção de frotas veiculares no Brasil.
+Analise documentos de Ordem de Serviço (OS) de oficinas mecânicas e extraia dados estruturados.
+Seja preciso com valores monetários, datas e identificação de veículos.
+Sempre retorne JSON válido, sem markdown.`;
+
+      const osItemSchema = z.object({
+        vehicleId: z.number().nullable().optional(),
+        vehiclePlaca: z.string().optional().default(""),
+        vehicleModelo: z.string().optional().default(""),
+        tipo: z.string().optional().default("corretiva"),
+        descricao: z.string().optional().default("Manutenção importada via OS"),
+        custo: z.number().optional().default(0),
+        kmNaManutencao: z.number().nullable().optional(),
+        fornecedor: z.string().optional().default(""),
+        dataManutencao: z.string().optional().default(new Date().toISOString().slice(0, 10)),
+        observacoes: z.string().optional().default(""),
+      });
+
+      const osResultSchema = z.object({
+        success: z.boolean().optional().default(true),
+        items: z.array(osItemSchema).optional().default([]),
+        rawText: z.string().optional().default(""),
+        confidence: z.enum(["alta", "media", "baixa"]).optional().default("media"),
+      });
+
+      try {
+        const result = await invokeAnthropicVision({
+          prompt,
+          base64: input.base64,
+          mimeType: input.mimeType,
+          systemPrompt,
+          maxTokens: 2048,
+        });
+
+        let cleaned = result.trim();
+        if (cleaned.startsWith("```")) {
+          cleaned = cleaned.replace(/^```(?:json)?\s*/, "").replace(/```\s*$/, "");
+        }
+        const rawParsed = JSON.parse(cleaned);
+        const validated = osResultSchema.parse(rawParsed);
+
+        const vehicleIds = new Set(veiculos.map((v: any) => v.id));
+        validated.items = validated.items.map(item => ({
+          ...item,
+          vehicleId: item.vehicleId && vehicleIds.has(item.vehicleId) ? item.vehicleId : null,
+        }));
+
+        return validated;
+      } catch (e: any) {
+        return {
+          success: false,
+          error: e.message || "Erro ao processar a OS",
+          items: [],
+          rawText: "",
+          confidence: "baixa" as const,
+        };
+      }
     }),
 
   listMaintenances: protectedProcedure
