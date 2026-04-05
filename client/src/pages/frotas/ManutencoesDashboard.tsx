@@ -228,11 +228,11 @@ export default function ManutencoesDashboard() {
             </CardHeader>
             <CardContent>
               {topPecas.length > 0 ? (
-                <ResponsiveContainer width="100%" height={Math.max(180, topPecas.length * 26)}>
-                  <BarChart data={topPecas} layout="vertical" margin={{ left: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                    <XAxis type="number" tick={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="nome" tick={{ fontSize: 9 }} width={140} />
+                <ResponsiveContainer width="100%" height={Math.max(200, topPecas.length * 32)}>
+                  <BarChart data={topPecas} layout="vertical" margin={{ left: 0, right: 10, top: 5, bottom: 5 }} barCategoryGap="20%">
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                    <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} width={160} tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 20) + "…" : v} />
                     <Tooltip content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
                       const d = payload[0].payload;
@@ -262,11 +262,11 @@ export default function ManutencoesDashboard() {
             </CardHeader>
             <CardContent>
               {topServicos.length > 0 ? (
-                <ResponsiveContainer width="100%" height={Math.max(180, topServicos.length * 26)}>
-                  <BarChart data={topServicos} layout="vertical" margin={{ left: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                    <XAxis type="number" tick={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="nome" tick={{ fontSize: 9 }} width={140} />
+                <ResponsiveContainer width="100%" height={Math.max(200, topServicos.length * 32)}>
+                  <BarChart data={topServicos} layout="vertical" margin={{ left: 0, right: 10, top: 5, bottom: 5 }} barCategoryGap="20%">
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                    <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} width={160} tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 20) + "…" : v} />
                     <Tooltip content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
                       const d = payload[0].payload;
