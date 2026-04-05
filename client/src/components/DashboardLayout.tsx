@@ -496,6 +496,7 @@ const menuSectionsFrotas: MenuSection[] = [
     items: [
       { icon: Wrench, label: "Manutenções", path: "/frotas/manutencoes" },
       { icon: Construction, label: "Combustível", path: "/frotas/combustivel" },
+      { icon: DollarSign, label: "Preços Combustível", path: "/frotas/precos-combustivel" },
       { icon: Milestone, label: "Pedágios", path: "/frotas/pedagios" },
     ],
   },

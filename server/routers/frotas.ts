@@ -2531,6 +2531,61 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       };
     }),
 
+  getGoogleMapsKey: protectedProcedure
+    .query(async () => {
+      return { key: process.env.GOOGLE_API_KEY || "" };
+    }),
+
+  getFuelPrices: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .query(async ({ input }) => {
+      const pool = getPool();
+      const anoFiltro = input.ano || new Date().getFullYear();
+      const startDate = `${anoFiltro}-01-01`;
+      const endDate = `${anoFiltro + 1}-01-01`;
+
+      const byType = (await pool.query(`
+        SELECT tipo_combustivel,
+               COUNT(*)::int as qtd,
+               ROUND(AVG(CASE WHEN litros::numeric > 0 THEN valor_total::numeric / litros::numeric END), 4) as preco_medio,
+               ROUND(MIN(CASE WHEN litros::numeric > 0 THEN valor_total::numeric / litros::numeric END), 4) as preco_min,
+               ROUND(MAX(CASE WHEN litros::numeric > 0 THEN valor_total::numeric / litros::numeric END), 4) as preco_max,
+               ROUND(SUM(valor_total::numeric), 2) as total_gasto,
+               ROUND(SUM(litros::numeric), 2) as total_litros
+        FROM fleet_fuel_records
+        WHERE company_id = $1 AND data >= $2 AND data < $3
+        GROUP BY tipo_combustivel
+        ORDER BY total_litros DESC
+      `, [input.companyId, startDate, endDate])).rows;
+
+      const byMonth = (await pool.query(`
+        SELECT TO_CHAR(data, 'YYYY-MM') as mes,
+               tipo_combustivel,
+               ROUND(AVG(CASE WHEN litros::numeric > 0 THEN valor_total::numeric / litros::numeric END), 4) as preco_medio,
+               ROUND(SUM(litros::numeric), 2) as litros,
+               ROUND(SUM(valor_total::numeric), 2) as valor
+        FROM fleet_fuel_records
+        WHERE company_id = $1 AND data >= $2 AND data < $3
+        GROUP BY TO_CHAR(data, 'YYYY-MM'), tipo_combustivel
+        ORDER BY mes, tipo_combustivel
+      `, [input.companyId, startDate, endDate])).rows;
+
+      const byPosto = (await pool.query(`
+        SELECT COALESCE(posto, 'Não informado') as posto,
+               tipo_combustivel,
+               COUNT(*)::int as qtd,
+               ROUND(AVG(CASE WHEN litros::numeric > 0 THEN valor_total::numeric / litros::numeric END), 4) as preco_medio,
+               ROUND(SUM(litros::numeric), 2) as litros,
+               ROUND(SUM(valor_total::numeric), 2) as valor
+        FROM fleet_fuel_records
+        WHERE company_id = $1 AND data >= $2 AND data < $3
+        GROUP BY COALESCE(posto, 'Não informado'), tipo_combustivel
+        ORDER BY litros DESC
+      `, [input.companyId, startDate, endDate])).rows;
+
+      return { byType, byMonth, byPosto, ano: anoFiltro };
+    }),
+
   getMaintenanceAnalytics: protectedProcedure
     .input(z.object({
       companyId: z.number(),

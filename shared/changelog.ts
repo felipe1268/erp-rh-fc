@@ -7952,4 +7952,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 22:00:00",
   },
+  {
+    version: 1029,
+    titulo: "Análise de Preços de Combustível com Mapa de Postos",
+    descricao:
+      "Nova página 'Preços Combustível' no módulo Frotas: " +
+      "1) Cards com preço médio, mínimo e máximo por litro de cada tipo de combustível (Gasolina, Diesel S10, Etanol). " +
+      "2) Tabela de preços por posto com detalhamento por tipo de combustível. " +
+      "3) Gráfico de evolução do preço/litro mês a mês para análise de tendência. " +
+      "4) Mapa interativo com postos de combustível próximos a Guaratinguetá/Aparecida (raio de 15km) via Google Maps. " +
+      "5) Lista de postos ordenados por distância da base FC Engenharia com avaliações. " +
+      "Objetivo: comparar preços pagos com o mercado regional para encontrar condições melhores.",
+    tipo: "funcionalidade",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 23:00:00",
+  },
 ];
