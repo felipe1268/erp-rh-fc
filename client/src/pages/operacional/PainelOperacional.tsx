@@ -2,7 +2,7 @@ import { useLocation } from "wouter";
 import {
   ClipboardList, Blocks, AlertTriangle,
   CloudRain, ShieldCheck, ClipboardCheck,
-  HardHat, Users, FileBarChart, Lock,
+  HardHat,
 } from "lucide-react";
 
 const submodulos = [
@@ -60,36 +60,6 @@ const submodulos = [
     accentTo: "#4F46E5",
     path: "/operacional/rdo",
   },
-  {
-    id: "efetivo",
-    titulo: "Efetivo",
-    subtitulo: "Mão de Obra Diária",
-    icon: Users,
-    accentFrom: "#8B5CF6",
-    accentTo: "#7C3AED",
-    path: "/operacional/efetivo",
-    emBreve: true,
-  },
-  {
-    id: "medicao-obra",
-    titulo: "Medição",
-    subtitulo: "Avanço Físico da Obra",
-    icon: FileBarChart,
-    accentFrom: "#EC4899",
-    accentTo: "#DB2777",
-    path: "/operacional/medicao-obra",
-    emBreve: true,
-  },
-  {
-    id: "seguranca",
-    titulo: "Segurança",
-    subtitulo: "Permissão de Trabalho",
-    icon: Lock,
-    accentFrom: "#14B8A6",
-    accentTo: "#0D9488",
-    path: "/operacional/seguranca",
-    emBreve: true,
-  },
 ];
 
 export default function PainelOperacional() {
@@ -106,14 +76,11 @@ export default function PainelOperacional() {
       </div>
 
       <div className="flex flex-wrap gap-4">
-        {submodulos.map((mod) => {
-          const emBreve = (mod as any).emBreve;
-          return (
+        {submodulos.map((mod) => (
             <div
               key={mod.id}
-              onClick={() => !emBreve && setLocation(mod.path)}
-              className={`group relative flex flex-col items-center justify-center text-center rounded-2xl p-4 transition-all duration-200 select-none
-                ${emBreve ? "cursor-default opacity-50" : "cursor-pointer hover:scale-[1.04]"}`}
+              onClick={() => setLocation(mod.path)}
+              className="group relative flex flex-col items-center justify-center text-center rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:scale-[1.04] select-none"
               style={{
                 width: '155px',
                 minHeight: '140px',
@@ -122,11 +89,6 @@ export default function PainelOperacional() {
                 boxShadow: `0 4px 20px -6px ${mod.accentFrom}28`,
               }}
             >
-              {emBreve && (
-                <span className="absolute top-2 right-2 text-[8px] font-bold uppercase tracking-wider bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded-full">
-                  Em breve
-                </span>
-              )}
               <div
                 className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
                 style={{ background: `radial-gradient(ellipse at 50% 60%, ${mod.accentFrom}20 0%, transparent 70%)` }}
@@ -143,8 +105,7 @@ export default function PainelOperacional() {
               <p className="text-sm font-extrabold leading-tight text-[#1B2A4A] dark:text-white tracking-tight w-full truncate">{mod.titulo}</p>
               <p className="text-[10.5px] text-gray-400 leading-tight mt-0.5 w-full truncate">{mod.subtitulo}</p>
             </div>
-          );
-        })}
+        ))}
       </div>
     </div>
   );
