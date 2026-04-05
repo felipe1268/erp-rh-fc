@@ -172,57 +172,105 @@ export default function Manutencoes() {
         )}
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>{editing ? "Editar Manutenção" : "Nova Manutenção"}</DialogTitle></DialogHeader>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>Veículo *</Label>
-                <Select value={form.vehicleId ? String(form.vehicleId) : ""} onValueChange={v => setForm({ ...form, vehicleId: parseInt(v) })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {(vehicles.data || []).map((v: any) => (
-                      <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo} - {v.marca}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0">
+            <div className="sticky top-0 z-10 bg-background border-b px-6 py-4 flex items-center justify-between">
+              <DialogTitle className="text-xl font-bold">{editing ? "Editar Manutenção" : "Nova Manutenção"}</DialogTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+                <Button onClick={save} disabled={createMut.isPending || updateMut.isPending}>
+                  {(createMut.isPending || updateMut.isPending) ? "Salvando..." : "Salvar"}
+                </Button>
               </div>
-              <div>
-                <Label>Tipo</Label>
-                <Select value={form.tipo || "corretiva"} onValueChange={v => setForm({ ...form, tipo: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="preventiva">Preventiva</SelectItem>
-                    <SelectItem value="corretiva">Corretiva</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="md:col-span-2"><Label>Descrição *</Label><Input value={form.descricao || ""} onChange={e => setForm({ ...form, descricao: e.target.value })} /></div>
-              <div><Label>Data *</Label><Input type="date" value={form.dataManutencao || ""} onChange={e => setForm({ ...form, dataManutencao: e.target.value })} /></div>
-              <div><Label>Custo (R$)</Label><Input type="number" step="0.01" value={form.custo || ""} onChange={e => setForm({ ...form, custo: e.target.value })} /></div>
-              <div><Label>KM na Manutenção</Label><Input type="number" value={form.kmNaManutencao || ""} onChange={e => setForm({ ...form, kmNaManutencao: e.target.value })} /></div>
-              <div><Label>Fornecedor</Label><Input value={form.fornecedor || ""} onChange={e => setForm({ ...form, fornecedor: e.target.value })} /></div>
-              <div>
-                <Label>Status</Label>
-                <Select value={form.status || "realizada"} onValueChange={v => setForm({ ...form, status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="realizada">Realizada</SelectItem>
-                    <SelectItem value="agendada">Agendada</SelectItem>
-                    <SelectItem value="em_andamento">Em Andamento</SelectItem>
-                    <SelectItem value="cancelada">Cancelada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Próxima Manutenção</Label><Input type="date" value={form.dataProxima || ""} onChange={e => setForm({ ...form, dataProxima: e.target.value })} /></div>
-              <div><Label>KM Próxima</Label><Input type="number" value={form.kmProxima || ""} onChange={e => setForm({ ...form, kmProxima: e.target.value })} /></div>
-              <div className="md:col-span-2"><Label>Observações</Label><Textarea value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} /></div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-              <Button onClick={save} disabled={createMut.isPending || updateMut.isPending}>
-                {(createMut.isPending || updateMut.isPending) ? "Salvando..." : "Salvar"}
-              </Button>
-            </DialogFooter>
+
+            <div className="px-6 py-4 max-w-5xl mx-auto w-full space-y-6">
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Dados da Manutenção</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Veículo *</Label>
+                    <Select value={form.vehicleId ? String(form.vehicleId) : ""} onValueChange={v => setForm({ ...form, vehicleId: parseInt(v) })}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectContent>
+                        {(vehicles.data || []).map((v: any) => (
+                          <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo} - {v.marca}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Tipo</Label>
+                    <Select value={form.tipo || "corretiva"} onValueChange={v => setForm({ ...form, tipo: v })}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="preventiva">Preventiva</SelectItem>
+                        <SelectItem value="corretiva">Corretiva</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Data *</Label>
+                    <Input className="h-9" type="date" value={form.dataManutencao || ""} onChange={e => setForm({ ...form, dataManutencao: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Custo (R$)</Label>
+                    <Input className="h-9" type="number" step="0.01" value={form.custo || ""} onChange={e => setForm({ ...form, custo: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <div className="col-span-full">
+                  <Label className="text-xs text-muted-foreground">Descrição *</Label>
+                  <Input className="h-9" value={form.descricao || ""} onChange={e => setForm({ ...form, descricao: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Detalhes</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">KM na Manutenção</Label>
+                    <Input className="h-9" type="number" value={form.kmNaManutencao || ""} onChange={e => setForm({ ...form, kmNaManutencao: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Fornecedor</Label>
+                    <Input className="h-9" value={form.fornecedor || ""} onChange={e => setForm({ ...form, fornecedor: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Status</Label>
+                    <Select value={form.status || "realizada"} onValueChange={v => setForm({ ...form, status: v })}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="realizada">Realizada</SelectItem>
+                        <SelectItem value="agendada">Agendada</SelectItem>
+                        <SelectItem value="em_andamento">Em Andamento</SelectItem>
+                        <SelectItem value="cancelada">Cancelada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Próxima Manutenção</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Próxima Manutenção</Label>
+                    <Input className="h-9" type="date" value={form.dataProxima || ""} onChange={e => setForm({ ...form, dataProxima: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">KM Próxima</Label>
+                    <Input className="h-9" type="number" value={form.kmProxima || ""} onChange={e => setForm({ ...form, kmProxima: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <Label className="text-xs text-muted-foreground">Observações</Label>
+                <Textarea className="mt-1" rows={3} value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
