@@ -690,9 +690,13 @@ export default function Combustivel() {
         ))}
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>{editing ? "Editar Abastecimento" : "Novo Abastecimento"}</DialogTitle></DialogHeader>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <DialogContent
+            resizable={false}
+            className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none m-0 rounded-none flex flex-col p-6"
+          >
+            <DialogHeader className="flex-shrink-0 border-b pb-4"><DialogTitle className="text-xl font-bold">{editing ? "Editar Abastecimento" : "Novo Abastecimento"}</DialogTitle></DialogHeader>
+            <div className="flex-1 overflow-y-auto py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <Label>Veículo *</Label>
                 <Select value={form.vehicleId ? String(form.vehicleId) : ""} onValueChange={v => setForm({ ...form, vehicleId: parseInt(v) })}>
@@ -718,9 +722,10 @@ export default function Combustivel() {
               <div><Label>KM Atual</Label><Input type="number" value={form.kmAtual || ""} onChange={e => setForm({ ...form, kmAtual: e.target.value })} /></div>
               <div><Label>Posto</Label><Input value={form.posto || ""} onChange={e => setForm({ ...form, posto: e.target.value })} /></div>
               <div><Label>Motorista</Label><Input value={form.motorista || ""} onChange={e => setForm({ ...form, motorista: e.target.value })} /></div>
-              <div className="md:col-span-2"><Label>Observações</Label><Textarea value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} /></div>
+              <div className="md:col-span-2 lg:col-span-3"><Label>Observações</Label><Textarea value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} /></div>
             </div>
-            <DialogFooter>
+            </div>
+            <DialogFooter className="flex-shrink-0 border-t pt-4">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
               <Button onClick={save} disabled={createMut.isPending || updateMut.isPending}>
                 {(createMut.isPending || updateMut.isPending) ? "Salvando..." : "Salvar"}
@@ -730,7 +735,10 @@ export default function Combustivel() {
         </Dialog>
 
         <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-          <DialogContent className="w-screen h-screen max-w-none m-0 rounded-none flex flex-col">
+          <DialogContent
+            resizable={false}
+            className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none m-0 rounded-none flex flex-col p-6"
+          >
             <DialogHeader className="flex-shrink-0 flex flex-row items-center justify-between border-b pb-4">
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
@@ -740,7 +748,7 @@ export default function Combustivel() {
             </DialogHeader>
             {importResult && (
               <div className="flex-1 overflow-y-auto space-y-6 py-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-950 rounded-xl border border-green-200">
                     <CheckCircle2 className="h-8 w-8 text-green-600" />
                     <div>
@@ -774,13 +782,13 @@ export default function Combustivel() {
                 </div>
 
                 {importResult.totalParsed === 0 && importResult.inserted === 0 && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 max-w-3xl">
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
                     <p className="font-medium mb-1">Nenhum registro encontrado no PDF</p>
                     <p className="text-xs">Verifique se o PDF é do sistema do posto de combustível (Posto Gestor) e contém as placas cadastradas no sistema.</p>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {importResult.matchedDrivers?.length > 0 && (
                     <div className="border rounded-xl overflow-hidden">
                       <div className="bg-green-50 dark:bg-green-950 px-4 py-2.5 border-b border-green-200">
@@ -789,7 +797,7 @@ export default function Combustivel() {
                           Motoristas vinculados a funcionários ({importResult.matchedDrivers.length})
                         </p>
                       </div>
-                      <div className="divide-y max-h-[300px] overflow-y-auto">
+                      <div className="divide-y max-h-[40vh] overflow-y-auto">
                         {importResult.matchedDrivers.map((m: string, i: number) => (
                           <div key={i} className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/30">
                             <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
@@ -807,7 +815,7 @@ export default function Combustivel() {
                           Motoristas não encontrados no cadastro ({importResult.unmatchedDrivers.length})
                         </p>
                       </div>
-                      <div className="divide-y max-h-[300px] overflow-y-auto">
+                      <div className="divide-y max-h-[40vh] overflow-y-auto">
                         {importResult.unmatchedDrivers.map((d: string, i: number) => (
                           <div key={i} className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/30">
                             <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
@@ -934,13 +942,16 @@ export default function Combustivel() {
         </Dialog>
 
         <Dialog open={driverDialogOpen} onOpenChange={setDriverDialogOpen}>
-          <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+          <DialogContent
+            resizable={false}
+            className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none m-0 rounded-none flex flex-col p-6"
+          >
+            <DialogHeader className="flex-shrink-0 border-b pb-4">
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <Users className="h-5 w-5" /> Gestão de Motoristas — Mesclar Nomes
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto space-y-4">
               <p className="text-sm text-muted-foreground">
                 Selecione os nomes duplicados e defina o nome correto. O sistema lembrará e aplicará automaticamente nas próximas importações.
               </p>
@@ -949,7 +960,7 @@ export default function Combustivel() {
                 <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 <>
-                  <div className="space-y-1 max-h-[50vh] overflow-y-auto border rounded-lg p-3">
+                  <div className="space-y-1 flex-1 overflow-y-auto border rounded-lg p-3">
                     <p className="text-xs font-medium text-muted-foreground px-2 pb-1">Motoristas encontrados ({driverNames.data?.drivers?.length || 0})</p>
                     {driverNames.data?.drivers?.map((d: any) => {
                       const isSelected = selectedDrivers.includes(d.motorista);
@@ -1025,7 +1036,7 @@ export default function Combustivel() {
                   {driverNames.data?.aliases && driverNames.data.aliases.length > 0 && (
                     <div className="border rounded-lg p-3 space-y-2">
                       <p className="text-xs font-medium text-muted-foreground">Mapeamentos salvos ({driverNames.data.aliases.length})</p>
-                      <div className="space-y-1 max-h-[30vh] overflow-y-auto">
+                      <div className="space-y-1 overflow-y-auto">
                         {driverNames.data.aliases.map((a: any) => (
                           <div key={a.id} className="flex items-center gap-2 text-sm bg-muted/30 rounded-md px-2 py-1">
                             <span className="text-muted-foreground line-through">{a.alias_name}</span>
