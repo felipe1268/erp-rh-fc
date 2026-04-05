@@ -7686,4 +7686,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 00:00:00",
   },
+  {
+    version: 1012,
+    titulo: "Frotas — Lançamento de 5 Manutenções (Fichas do Mecânico Jefcar)",
+    descricao:
+      "Lançadas 5 ordens de serviço da Auto Peças Mecânica Guincho Jefcar: " +
+      "OS 7441 (Honda Fit, retífica motor completa, R$ 11.260), " +
+      "OS 6466 (Honda Fit, revisão motor, R$ 4.019), " +
+      "OS 7384 (VW Gol FFI4B12, embreagem/suspensão/freios, R$ 4.700), " +
+      "OS 6534 (VW Kombi, serviço eletricista, R$ 522), " +
+      "OS 6533 (Honda Fit, bomba combustível, R$ 1.000). " +
+      "Total lançado: R$ 21.501. KM atualizado: Fit 247.950, Gol 212.733, Kombi 245.500.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 00:30:00",
+  },
 ];
