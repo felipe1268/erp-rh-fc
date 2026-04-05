@@ -479,6 +479,62 @@ export default function Pedagios() {
           </Card>
         </div>
 
+        {list.length > 0 && (
+          <div className="bg-card border rounded-xl overflow-x-auto">
+            <div className="p-3 border-b bg-muted/30">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-emerald-600" />
+                Consolidação por Veículo — {MESES_ABREV[mesAtual - 1]}/{anoAtual}
+              </h2>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/20">
+                  <th className="text-left p-2.5 font-medium">Veículo</th>
+                  <th className="text-center p-2.5 font-medium">Pedágios</th>
+                  <th className="text-center p-2.5 font-medium">Sem Parar</th>
+                  <th className="text-center p-2.5 font-medium">Outros</th>
+                  <th className="text-center p-2.5 font-medium">Total Lanç.</th>
+                  <th className="text-right p-2.5 font-medium">Valor Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const byVehicle: Record<string, { placa: string; pedagio: number; sem_parar: number; outros: number; total: number; valor: number }> = {};
+                  list.forEach((r: any) => {
+                    const key = r.vehicle_id || "sem";
+                    if (!byVehicle[key]) byVehicle[key] = { placa: r.placa || r.modelo || "Sem veículo", pedagio: 0, sem_parar: 0, outros: 0, total: 0, valor: 0 };
+                    byVehicle[key].total++;
+                    byVehicle[key].valor += parseFloat(r.valor || "0");
+                    if (r.categoria === "pedagio") byVehicle[key].pedagio++;
+                    else if (r.categoria === "sem_parar") byVehicle[key].sem_parar++;
+                    else byVehicle[key].outros++;
+                  });
+                  const sorted = Object.values(byVehicle).sort((a, b) => b.valor - a.valor);
+                  return sorted.map((v, i) => (
+                    <tr key={i} className="border-b hover:bg-muted/20">
+                      <td className="p-2.5 font-semibold">{v.placa}</td>
+                      <td className="p-2.5 text-center">{v.pedagio}</td>
+                      <td className="p-2.5 text-center">{v.sem_parar}</td>
+                      <td className="p-2.5 text-center">{v.outros || "—"}</td>
+                      <td className="p-2.5 text-center font-medium">{v.total}</td>
+                      <td className="p-2.5 text-right font-bold text-emerald-700">{fmt(v.valor)}</td>
+                    </tr>
+                  ));
+                })()}
+                <tr className="bg-muted/30 font-bold">
+                  <td className="p-2.5">TOTAL</td>
+                  <td className="p-2.5 text-center">{totalPedagios}</td>
+                  <td className="p-2.5 text-center">{totalSemParar}</td>
+                  <td className="p-2.5 text-center">{list.filter((r: any) => r.categoria !== "pedagio" && r.categoria !== "sem_parar").length || "—"}</td>
+                  <td className="p-2.5 text-center">{list.length}</td>
+                  <td className="p-2.5 text-right text-emerald-700">{fmt(totalValor)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
         <div className="flex gap-2 flex-wrap items-center">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
