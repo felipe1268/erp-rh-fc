@@ -615,50 +615,50 @@ export default function FrotasAnalitico() {
                           }`}
                         >
                           <td className="py-2 px-3 font-medium">{row.mes}</td>
-                          <td className="py-2 px-2 text-right text-blue-600">
-                            {hasCur ? fmt(row.combustivel) : "—"}
+                          <td className="py-1 px-2 text-right text-blue-600">
+                            <div className="text-right">{hasCur ? fmt(row.combustivel) : "—"}</div>
                             {hasCur && hasPrev && row.varComb !== 0 && (
-                              <span className={`ml-1 text-[10px] ${row.varComb > 0 ? "text-red-500" : "text-green-500"}`}>
+                              <div className={`text-right text-[10px] ${row.varComb > 0 ? "text-red-500" : "text-green-500"}`}>
                                 {row.varComb > 0 ? "▲" : "▼"}{Math.abs(row.pctComb).toFixed(0)}%
-                              </span>
+                              </div>
                             )}
                           </td>
-                          <td className="py-2 px-2 text-right text-emerald-600">
-                            {hasCur ? fmt(row.manutencao) : "—"}
+                          <td className="py-1 px-2 text-right text-emerald-600">
+                            <div className="text-right">{hasCur ? fmt(row.manutencao) : "—"}</div>
                             {hasCur && hasPrev && row.varManut !== 0 && (
-                              <span className={`ml-1 text-[10px] ${row.varManut > 0 ? "text-red-500" : "text-green-500"}`}>
+                              <div className={`text-right text-[10px] ${row.varManut > 0 ? "text-red-500" : "text-green-500"}`}>
                                 {row.varManut > 0 ? "▲" : "▼"}{Math.abs(row.pctManut).toFixed(0)}%
-                              </span>
+                              </div>
                             )}
                           </td>
-                          <td className="py-2 px-2 text-right text-red-600">
-                            {hasCur && row.multas > 0 ? fmt(row.multas) : "—"}
+                          <td className="py-1 px-2 text-right text-red-600">
+                            <div className="text-right">{hasCur && row.multas > 0 ? fmt(row.multas) : "—"}</div>
                             {hasCur && hasPrev && row.varMultas !== 0 && (
-                              <span className={`ml-1 text-[10px] ${row.varMultas > 0 ? "text-red-500" : "text-green-500"}`}>
+                              <div className={`text-right text-[10px] ${row.varMultas > 0 ? "text-red-500" : "text-green-500"}`}>
                                 {row.varMultas > 0 ? "▲" : "▼"}{Math.abs(row.pctMultas).toFixed(0)}%
-                              </span>
+                              </div>
                             )}
                           </td>
-                          <td className="py-2 px-2 text-right font-bold">
-                            {hasCur ? fmt(row.total) : "—"}
+                          <td className="py-1 px-2 text-right font-bold">
+                            <div className="text-right">{hasCur ? fmt(row.total) : "—"}</div>
                           </td>
-                          <td className="py-2 px-2 text-right text-purple-600">
-                            {hasCur && row.custoKm > 0 ? `R$ ${row.custoKm.toFixed(2)}` : "—"}
+                          <td className="py-1 px-2 text-right text-purple-600">
+                            <div className="text-right">{hasCur && row.custoKm > 0 ? `R$ ${row.custoKm.toFixed(2)}` : "—"}</div>
                             {hasCur && hasPrev && row.prevCustoKm > 0 && row.varCustoKm !== 0 && (
-                              <span className={`ml-1 text-[10px] ${row.varCustoKm > 0 ? "text-red-500" : "text-green-500"}`}>
+                              <div className={`text-right text-[10px] ${row.varCustoKm > 0 ? "text-red-500" : "text-green-500"}`}>
                                 {row.varCustoKm > 0 ? "▲" : "▼"}{Math.abs(row.pctCustoKm).toFixed(0)}%
-                              </span>
+                              </div>
                             )}
                           </td>
-                          <td className="py-2 px-2 text-right text-cyan-600">
-                            {hasCur && row.consumoMes > 0 ? `${row.consumoMes.toFixed(1)}` : "—"}
+                          <td className="py-1 px-2 text-right text-cyan-600">
+                            <div className="text-right">{hasCur && row.consumoMes > 0 ? `${row.consumoMes.toFixed(1)}` : "—"}</div>
                           </td>
-                          <td className="py-2 px-2 text-right text-amber-600">
-                            {hasCur && row.litros > 0 ? fmtNum(Math.round(row.litros), 0) : "—"}
+                          <td className="py-1 px-2 text-right text-amber-600">
+                            <div className="text-right">{hasCur && row.litros > 0 ? fmtNum(Math.round(row.litros), 0) : "—"}</div>
                             {hasCur && row.prevLitros > 0 && row.varLitros !== 0 && (
-                              <span className={`ml-1 text-[10px] ${row.varLitros > 0 ? "text-red-500" : "text-green-500"}`}>
+                              <div className={`text-right text-[10px] ${row.varLitros > 0 ? "text-red-500" : "text-green-500"}`}>
                                 {row.varLitros > 0 ? "▲" : "▼"}{Math.abs(row.pctLitros).toFixed(0)}%
-                              </span>
+                              </div>
                             )}
                           </td>
                           <td className="py-2 px-2 text-right">
