@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Fuel, Plus, Pencil, Trash2, Upload, Search, FileText, CheckCircle2, AlertTriangle, XCircle, ChevronLeft, ChevronRight, Calendar, Send, Undo2, DollarSign, Loader2, Lock, Users, GitMerge, Check } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
 
 function fmt(v: any) {
@@ -47,6 +47,12 @@ export default function Combustivel() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<number | null>(null);
   const [pdfProgressLabel, setPdfProgressLabel] = useState("");
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [driverOverrides, setDriverOverrides] = useState<Record<string, string>>({});
+  const [rejectedMatches, setRejectedMatches] = useState<Set<string>>(new Set());
+  const [reviewSearch, setReviewSearch] = useState("");
+  const [reviewTab, setReviewTab] = useState<"matched" | "unmatched">("matched");
   const [consolidateDialogOpen, setConsolidateDialogOpen] = useState(false);
   const [consolidateObs, setConsolidateObs] = useState("");
   const [clearMonthDialogOpen, setClearMonthDialogOpen] = useState(false);
@@ -83,6 +89,26 @@ export default function Combustivel() {
       setImportDialogOpen(true);
     },
     onError: (err) => toast.error("Erro ao importar PDF: " + err.message),
+  });
+  const previewPdfMut = trpc.frotas.previewFuelPdf.useMutation({
+    onSuccess: (data) => {
+      setPreviewData(data);
+      setDriverOverrides({});
+      setRejectedMatches(new Set());
+      setReviewSearch("");
+      setReviewTab("matched");
+      setReviewDialogOpen(true);
+    },
+    onError: (err) => toast.error("Erro ao analisar PDF: " + err.message),
+  });
+  const confirmImportMut = trpc.frotas.confirmFuelImport.useMutation({
+    onSuccess: (data) => {
+      fuel.refetch();
+      setReviewDialogOpen(false);
+      setPreviewData(null);
+      toast.success(`${data.inserted} registros importados com sucesso!`);
+    },
+    onError: (err) => toast.error("Erro ao confirmar importação: " + err.message),
   });
 
   const fuelSummary = trpc.frotas.getFuelMonthSummary.useQuery(
@@ -225,16 +251,16 @@ export default function Combustivel() {
         }
       }, 300);
 
-      importPdfMut.mutate(
-        { companyId: cId, pdfBase64: base64, criadoPor: user?.name || "" },
+      previewPdfMut.mutate(
+        { companyId: cId, pdfBase64: base64 },
         {
           onSuccess: () => {
             clearInterval(progressInterval);
             setPdfProgress(95);
-            setPdfProgressLabel("Finalizando...");
+            setPdfProgressLabel("Análise concluída!");
             setTimeout(() => {
               setPdfProgress(100);
-              setPdfProgressLabel("Concluído!");
+              setPdfProgressLabel("Pronto para revisão!");
               setTimeout(() => { setPdfProgress(null); setPdfProgressLabel(""); }, 800);
             }, 400);
           },
@@ -251,6 +277,48 @@ export default function Combustivel() {
   }
 
   const allRecords = fuel.data || [];
+
+  function handleConfirmImport() {
+    if (!previewData) return;
+    const nonDupRecords = previewData.records.filter((r: any) => !r.isDuplicate);
+    const driverMappings: { pdfName: string; canonicalName: string }[] = [];
+    const finalRecords = nonDupRecords.map((r: any) => {
+      let motorista = r.driverPdf || null;
+      const pdfKey = r.driverPdf;
+
+      if (pdfKey && driverOverrides[pdfKey]) {
+        motorista = driverOverrides[pdfKey];
+        driverMappings.push({ pdfName: pdfKey, canonicalName: driverOverrides[pdfKey] });
+      } else if (pdfKey && r.driverMatched && !rejectedMatches.has(pdfKey)) {
+        motorista = r.driverMatched;
+      } else if (pdfKey && r.driverMatched && rejectedMatches.has(pdfKey)) {
+        motorista = r.driverPdf;
+      }
+
+      return {
+        vehicleId: r.vehicleId,
+        date: r.date,
+        litros: r.litros,
+        valorTotal: r.valorTotal,
+        precoLitro: r.precoLitro,
+        tipoCombustivel: r.tipoCombustivel,
+        motorista,
+        numDoc: r.numDoc || null,
+        desconto: r.desconto || null,
+      };
+    });
+
+    const uniqueMappings = Object.values(
+      driverMappings.reduce((acc: Record<string, any>, m) => { acc[m.pdfName.toUpperCase()] = m; return acc; }, {})
+    );
+
+    confirmImportMut.mutate({
+      companyId: cId,
+      records: finalRecords,
+      driverMappings: uniqueMappings,
+      criadoPor: user?.name || "",
+    });
+  }
 
   const mesRef = `${anoAtual}-${String(mesAtual).padStart(2, "0")}`;
   const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -826,6 +894,255 @@ export default function Combustivel() {
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+        <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+          <DialogContent
+            resizable={false}
+            className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none m-0 rounded-none flex flex-col p-0"
+          >
+            <DialogHeader className="flex-shrink-0 flex flex-row items-center justify-between border-b px-6 py-4">
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Revisão da Importação — Validar Motoristas
+              </DialogTitle>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => setReviewDialogOpen(false)}>Cancelar</Button>
+                <Button
+                  onClick={handleConfirmImport}
+                  disabled={confirmImportMut.isPending}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {confirmImportMut.isPending ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Importando...</>
+                  ) : (
+                    <><Check className="h-4 w-4 mr-2" />Confirmar Importação ({previewData?.records?.filter((r: any) => !r.isDuplicate).length || 0} registros)</>
+                  )}
+                </Button>
+              </div>
+            </DialogHeader>
+            {previewData && (
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-950 rounded-xl border border-green-200">
+                    <CheckCircle2 className="h-8 w-8 text-green-600" />
+                    <div>
+                      <p className="text-2xl font-bold text-green-700">{previewData.records.filter((r: any) => !r.isDuplicate).length}</p>
+                      <p className="text-xs text-green-600">Novos registros</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-950 rounded-xl border border-amber-200">
+                    <AlertTriangle className="h-8 w-8 text-amber-600" />
+                    <div>
+                      <p className="text-2xl font-bold text-amber-700">{previewData.duplicates}</p>
+                      <p className="text-xs text-amber-600">Duplicados (ignorados)</p>
+                    </div>
+                  </div>
+                  {previewData.noVehicle > 0 && (
+                    <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-950 rounded-xl border border-red-200">
+                      <XCircle className="h-8 w-8 text-red-600" />
+                      <div>
+                        <p className="text-2xl font-bold text-red-700">{previewData.noVehicle}</p>
+                        <p className="text-xs text-red-600">Sem veículo</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-950 rounded-xl border border-blue-200">
+                    <FileText className="h-8 w-8 text-blue-600" />
+                    <div>
+                      <p className="text-2xl font-bold text-blue-700">{previewData.totalParsed}</p>
+                      <p className="text-xs text-blue-600">Total no PDF</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 border-b pb-3">
+                  <Button
+                    variant={reviewTab === "matched" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setReviewTab("matched")}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                    Matches Automáticos ({previewData.matchedDrivers?.length || 0})
+                  </Button>
+                  <Button
+                    variant={reviewTab === "unmatched" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setReviewTab("unmatched")}
+                    className={reviewTab !== "unmatched" && previewData.unmatchedDrivers?.length > 0 ? "border-amber-400 text-amber-700" : ""}
+                  >
+                    <AlertTriangle className="h-4 w-4 mr-1.5" />
+                    Não Encontrados ({previewData.unmatchedDrivers?.length || 0})
+                  </Button>
+                  <div className="ml-auto flex items-center gap-2">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      className="h-8 w-60"
+                      placeholder="Buscar motorista..."
+                      value={reviewSearch}
+                      onChange={e => setReviewSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {reviewTab === "matched" && (
+                  <div className="border rounded-xl overflow-hidden">
+                    <div className="bg-green-50 dark:bg-green-950 px-4 py-2.5 border-b border-green-200">
+                      <p className="text-sm font-semibold text-green-800">
+                        Valide os matches — clique em "Rejeitar" para manter o nome original do PDF, ou selecione outro funcionário
+                      </p>
+                    </div>
+                    <div className="divide-y max-h-[55vh] overflow-y-auto">
+                      {(previewData.matchedDrivers || [])
+                        .filter((m: any) => {
+                          if (!reviewSearch) return true;
+                          const s = reviewSearch.toLowerCase();
+                          return m.pdfName.toLowerCase().includes(s) || m.employeeName.toLowerCase().includes(s);
+                        })
+                        .map((m: any, i: number) => {
+                          const isRejected = rejectedMatches.has(m.pdfName);
+                          const hasOverride = !!driverOverrides[m.pdfName];
+                          return (
+                            <div key={i} className={`flex items-center gap-3 px-4 py-3 ${isRejected ? "bg-red-50/50" : hasOverride ? "bg-blue-50/50" : "hover:bg-muted/30"}`}>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 text-sm">
+                                  <span className="font-medium text-muted-foreground truncate max-w-[200px]">{m.pdfName}</span>
+                                  <span className="text-muted-foreground">→</span>
+                                  {hasOverride ? (
+                                    <span className="font-semibold text-blue-700">{driverOverrides[m.pdfName]}</span>
+                                  ) : isRejected ? (
+                                    <span className="font-semibold text-red-600 line-through">{m.employeeName}</span>
+                                  ) : (
+                                    <span className="font-semibold text-green-700">{m.employeeName}</span>
+                                  )}
+                                  <Badge variant="outline" className="text-[10px] ml-1">
+                                    {m.source === 'alias' ? 'Alias' : 'Fuzzy'}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <Select
+                                  value={driverOverrides[m.pdfName] || "__none__"}
+                                  onValueChange={(v) => {
+                                    if (v === "__none__") {
+                                      const next = { ...driverOverrides };
+                                      delete next[m.pdfName];
+                                      setDriverOverrides(next);
+                                    } else {
+                                      setDriverOverrides({ ...driverOverrides, [m.pdfName]: v });
+                                      const next = new Set(rejectedMatches);
+                                      next.delete(m.pdfName);
+                                      setRejectedMatches(next);
+                                    }
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 w-52 text-xs">
+                                    <SelectValue placeholder="Alterar para..." />
+                                  </SelectTrigger>
+                                  <SelectContent className="max-h-60">
+                                    <SelectItem value="__none__">— Manter match original —</SelectItem>
+                                    {(previewData.employees || []).map((emp: any) => (
+                                      <SelectItem key={emp.id} value={emp.nomeCompleto}>{emp.nomeCompleto}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {!hasOverride && (
+                                  <Button
+                                    variant={isRejected ? "default" : "outline"}
+                                    size="sm"
+                                    className={`h-8 text-xs ${isRejected ? "bg-red-600 hover:bg-red-700" : "border-red-300 text-red-600 hover:bg-red-50"}`}
+                                    onClick={() => {
+                                      const next = new Set(rejectedMatches);
+                                      if (isRejected) next.delete(m.pdfName);
+                                      else next.add(m.pdfName);
+                                      setRejectedMatches(next);
+                                    }}
+                                  >
+                                    {isRejected ? "Restaurar" : "Rejeitar"}
+                                  </Button>
+                                )}
+                                {!isRejected && !hasOverride && (
+                                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      {(previewData.matchedDrivers || []).length === 0 && (
+                        <div className="p-6 text-center text-muted-foreground text-sm">
+                          Nenhum match automático encontrado
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {reviewTab === "unmatched" && (
+                  <div className="border rounded-xl overflow-hidden">
+                    <div className="bg-amber-50 dark:bg-amber-950 px-4 py-2.5 border-b border-amber-200">
+                      <p className="text-sm font-semibold text-amber-800">
+                        Motoristas do PDF que não foram encontrados — selecione um funcionário para vincular (ou deixe em branco para manter o nome original)
+                      </p>
+                    </div>
+                    <div className="divide-y max-h-[55vh] overflow-y-auto">
+                      {(previewData.unmatchedDrivers || [])
+                        .filter((d: string) => !reviewSearch || d.toLowerCase().includes(reviewSearch.toLowerCase()))
+                        .map((d: string, i: number) => {
+                          const hasOverride = !!driverOverrides[d];
+                          return (
+                            <div key={i} className={`flex items-center gap-3 px-4 py-3 ${hasOverride ? "bg-green-50/50" : "hover:bg-muted/30"}`}>
+                              <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-sm font-medium">{d}</span>
+                                {hasOverride && (
+                                  <span className="text-sm text-green-700 ml-2">→ {driverOverrides[d]}</span>
+                                )}
+                              </div>
+                              <Select
+                                value={driverOverrides[d] || "__none__"}
+                                onValueChange={(v) => {
+                                  if (v === "__none__") {
+                                    const next = { ...driverOverrides };
+                                    delete next[d];
+                                    setDriverOverrides(next);
+                                  } else {
+                                    setDriverOverrides({ ...driverOverrides, [d]: v });
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className={`h-8 w-64 text-xs ${hasOverride ? "border-green-400" : ""}`}>
+                                  <SelectValue placeholder="Vincular a funcionário..." />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-60">
+                                  <SelectItem value="__none__">— Manter nome do PDF —</SelectItem>
+                                  {(previewData.employees || []).map((emp: any) => (
+                                    <SelectItem key={emp.id} value={emp.nomeCompleto}>{emp.nomeCompleto}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {hasOverride && (
+                                <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      {(previewData.unmatchedDrivers || []).length === 0 && (
+                        <div className="p-6 text-center text-muted-foreground text-sm">
+                          Todos os motoristas foram encontrados no cadastro
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-muted/30 rounded-xl p-4 text-sm text-muted-foreground space-y-1">
+                  <p><strong>Resumo da validação:</strong></p>
+                  <p>• {(previewData.matchedDrivers || []).length - rejectedMatches.size} match(es) aprovado(s)</p>
+                  {rejectedMatches.size > 0 && <p>• {rejectedMatches.size} match(es) rejeitado(s) — nome do PDF será mantido</p>}
+                  {Object.keys(driverOverrides).length > 0 && <p>• {Object.keys(driverOverrides).length} vinculação(ões) manual(is) — serão salvas como alias para futuras importações</p>}
                 </div>
               </div>
             )}

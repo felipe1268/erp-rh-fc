@@ -1505,6 +1505,397 @@ Sempre retorne JSON válido, sem markdown.`;
       }
     }),
 
+  previewFuelPdf: protectedProcedure
+    .input(z.object({ companyId: z.number(), pdfBase64: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      let pdfParse: any;
+      try {
+        const mod = await import('pdf-parse');
+        pdfParse = mod.default || mod;
+      } catch (e: any) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Módulo pdf-parse não disponível.' });
+      }
+      const buf = Buffer.from(input.pdfBase64, 'base64');
+      if (buf.length < 100) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Arquivo PDF inválido ou muito pequeno.' });
+      let pdfData: any;
+      try { pdfData = await pdfParse(buf); } catch (e: any) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Erro ao ler o PDF.' });
+      }
+      const text = pdfData?.text || '';
+      if (!text || text.length < 10) throw new TRPCError({ code: 'BAD_REQUEST', message: 'PDF não contém texto legível.' });
+
+      const vRows = await db.execute(sql`SELECT id, placa, modelo, marca FROM vehicles WHERE "companyId" = ${input.companyId} AND placa IS NOT NULL`);
+      const vehicleList = (vRows as any).rows as { id: number; placa: string; modelo: string; marca: string }[];
+      const plateToVehicle: Record<string, { id: number; placa: string; modelo: string; marca: string }> = {};
+      for (const v of vehicleList) if (v.placa) plateToVehicle[v.placa.toUpperCase().replace(/[^A-Z0-9]/g, '')] = v;
+      const knownPlates = Object.keys(plateToVehicle);
+      if (knownPlates.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum veículo com placa cadastrada' });
+
+      const eRows = await db.execute(sql`SELECT id, "nomeCompleto" FROM employees WHERE "companyId" = ${input.companyId}`);
+      const empList = (eRows as any).rows as { id: number; nomeCompleto: string }[];
+
+      const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+      function matchEmployee(pdfName: string) {
+        if (!pdfName || pdfName.length < 2) return null;
+        const pn = norm(pdfName);
+        const pTokens = pn.split(/\s+/).filter((t: string) => t.length > 2);
+        if (pTokens.length === 0) return null;
+        let best: { id: number; nomeCompleto: string } | null = null;
+        let bestScore = 0;
+        for (const emp of empList) {
+          const en = norm(emp.nomeCompleto);
+          const eTokens = en.split(/\s+/);
+          let matchCount = 0;
+          for (const pt of pTokens) {
+            for (const et of eTokens) {
+              if (pt === et || (pt.length > 3 && et.length > 3 && (pt.includes(et) || et.includes(pt)))) { matchCount++; break; }
+            }
+          }
+          const score = matchCount / pTokens.length;
+          if (score > bestScore && matchCount >= Math.min(2, pTokens.length)) { bestScore = score; best = emp; }
+        }
+        return best;
+      }
+
+      const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+      const dateRe = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+      const timeRe = /^\d{2}:\d{2}/;
+      const platePattern = knownPlates.map((p: string) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+      const plateRe = new RegExp(`(${platePattern})`);
+      const skipRe = /^(logo|Auto Posto|Relatorio|Numero de registros|Data$|Num\.$|Doc\.$|MotoristaPlaca|KM$|Ant\.$|Atual$|MediaProdutoQuantidade|Valor$|unit\.$|Valor desc|https:|postogestor|\d+\/\d+$)/;
+
+      interface ParsedRecord {
+        date: string; numDoc: string; driver: string; plate: string;
+        tipoCombustivel: string; litros: string; precoLitro: string;
+        desconto: string; valorTotal: string;
+      }
+      const parsed: ParsedRecord[] = [];
+
+      let i = 0;
+      while (i < lines.length) {
+        if (skipRe.test(lines[i]) || /^Totais Placa:/.test(lines[i])) { i++; continue; }
+        const dm = lines[i].match(dateRe);
+        if (!dm) { i++; continue; }
+        const dateStr = `${dm[3]}-${dm[2]}-${dm[1]}`;
+        i++;
+        if (i >= lines.length) break;
+        if (!timeRe.test(lines[i])) continue;
+        i++;
+        if (i >= lines.length) break;
+
+        const bLines: string[] = [];
+        while (i < lines.length) {
+          const cl = lines[i];
+          if (dateRe.test(cl)) break;
+          if (/^Totais Placa:/.test(cl)) { i++; break; }
+          if (skipRe.test(cl)) { i++; continue; }
+          bLines.push(cl);
+          i++;
+        }
+        if (bLines.length === 0) continue;
+
+        const blockText = bLines.join('\u0000');
+        const pm = blockText.match(plateRe);
+        if (!pm) continue;
+        const plate = pm[1];
+
+        let numDoc = '';
+        const driverParts: string[] = [];
+        let valuesStr = '';
+        let productParts: string[] = [];
+        let foundValues = false;
+
+        for (const bl of bLines) {
+          const hasPl = plateRe.test(bl);
+          const rCount = (bl.match(/R\$/g) || []).length;
+
+          if (hasPl && rCount >= 2) {
+            const pidx = bl.indexOf(plate);
+            const before = bl.substring(0, pidx);
+            const after = bl.substring(pidx + plate.length);
+            const ndm = before.match(/^(\d+)/);
+            if (ndm && !numDoc) numDoc = ndm[1];
+            const nameInBefore = before.replace(/^\d+/, '').trim();
+            if (nameInBefore) driverParts.push(nameInBefore);
+            const firstR = after.indexOf('R$');
+            const beforeR = after.substring(0, firstR);
+            const rSection = after.substring(firstR);
+            let productInBefore = beforeR.replace(/^[\d,]+/, '');
+            const knownProducts = [
+              /OLEO\s*DIESEL\s*S10/i, /OLEO\s*DIESEL\s*S500/i, /OLEO\s*DIESEL/i,
+              /GASOLINA\s*ADITIVADA/i, /GASOLINA\s*COMUM/i, /GASOLINA/i,
+              /DIESEL\s*S10/i, /DIESEL\s*S500/i, /DIESEL/i,
+              /ETANOL/i, /GNV/i,
+            ];
+            let prodMatched = '';
+            for (const kp of knownProducts) {
+              const km = productInBefore.match(kp);
+              if (km) { prodMatched = km[0]; productInBefore = productInBefore.substring(productInBefore.indexOf(prodMatched) + prodMatched.length); break; }
+            }
+            const qm = productInBefore.match(/([\d.]+)\s*$/);
+            const qty = qm ? qm[1] : '0';
+            if (prodMatched) productParts.push(prodMatched);
+            else { const prodText = productInBefore.replace(/([\d.]+)\s*$/, '').trim(); if (prodText) productParts.push(prodText); }
+            valuesStr = qty + rSection;
+            foundValues = true;
+          } else if (hasPl) {
+            const pidx = bl.indexOf(plate);
+            const before = bl.substring(0, pidx);
+            const ndm = before.match(/^(\d+)/);
+            if (ndm && !numDoc) numDoc = ndm[1];
+            const nameInBefore = before.replace(/^\d+/, '').trim();
+            if (nameInBefore) driverParts.push(nameInBefore);
+          } else if (rCount >= 2 && !foundValues) {
+            valuesStr = bl; foundValues = true;
+          } else if (/GASOLINA|DIESEL|ETANOL|COMUM|GNV/i.test(bl) && !foundValues) {
+            productParts.push(bl);
+          } else if (/^\d+$/.test(bl) && !numDoc) {
+            numDoc = bl;
+          } else if (/^\d+[A-Z]/.test(bl) && !numDoc) {
+            const ndm = bl.match(/^(\d+)/);
+            if (ndm) numDoc = ndm[1];
+            const rest = bl.replace(/^\d+/, '').trim();
+            if (rest && !plateRe.test(rest)) driverParts.push(rest);
+          } else if (/^[A-ZÀ-Ú\s]+$/i.test(bl) && bl.length > 1 && !foundValues) {
+            if (!/GASOLINA|DIESEL|ETANOL|COMUM|GNV|LUBRAX|CASTROL|FILTRO|ARLA/i.test(bl)) driverParts.push(bl);
+            else productParts.push(bl);
+          } else if (/^[\d.]+$/.test(bl) && !foundValues) {
+            valuesStr = bl;
+          }
+        }
+
+        if (!foundValues && valuesStr) {
+          const nextBLines: string[] = [];
+          let j = i;
+          while (j < lines.length && nextBLines.length < 3) {
+            if (dateRe.test(lines[j]) || /^Totais Placa:/.test(lines[j])) break;
+            if (skipRe.test(lines[j])) { j++; continue; }
+            nextBLines.push(lines[j]); j++;
+          }
+          for (const nb of nextBLines) {
+            if ((nb.match(/R\$/g) || []).length >= 2) { valuesStr = valuesStr + nb; foundValues = true; break; }
+          }
+        }
+
+        if (!foundValues) continue;
+
+        const productText = productParts.join(' ').toUpperCase();
+        let tipoCombustivel = '';
+        if (/DIESEL\s*S10|OLEO\s*DIESEL\s*S10/i.test(productText)) tipoCombustivel = 'Diesel S10';
+        else if (/DIESEL/i.test(productText)) tipoCombustivel = 'Diesel';
+        else if (/GASOLINA/i.test(productText)) tipoCombustivel = 'Gasolina';
+        else if (/ETANOL/i.test(productText)) tipoCombustivel = 'Etanol';
+        else if (/GNV/i.test(productText)) tipoCombustivel = 'GNV';
+        else continue;
+
+        const rMatches = [...valuesStr.matchAll(/R\$\s*([\d.,]+)/g)].map((m: RegExpMatchArray) => m[1]);
+        if (rMatches.length < 2) continue;
+        const firstR = valuesStr.indexOf('R$');
+        const qtyStr = valuesStr.substring(0, firstR).trim();
+
+        const normVal = (v: string) => v.replace(/\./g, '').replace(',', '.');
+        let valorUnit = '0', valorDesc = '0', valorTotal = '0';
+        if (rMatches.length >= 3) {
+          valorUnit = normVal(rMatches[rMatches.length - 3]);
+          valorDesc = normVal(rMatches[rMatches.length - 2]);
+          valorTotal = normVal(rMatches[rMatches.length - 1]);
+        } else {
+          valorDesc = normVal(rMatches[0]);
+          valorTotal = normVal(rMatches[1]);
+        }
+
+        parsed.push({
+          date: dateStr, numDoc,
+          driver: driverParts.join(' ').replace(/\s+/g, ' ').trim(),
+          plate, tipoCombustivel,
+          litros: qtyStr.replace(',', '.') || '0',
+          precoLitro: valorUnit, desconto: valorDesc, valorTotal,
+        });
+      }
+
+      const aliasRes = await db.execute(sql`SELECT alias_name, canonical_name FROM fleet_driver_aliases WHERE company_id = ${input.companyId}`);
+      const aliasMap: Record<string, string> = {};
+      for (const a of ((aliasRes as any).rows || aliasRes) as any[]) {
+        aliasMap[a.alias_name.trim().toUpperCase()] = a.canonical_name;
+      }
+
+      const existingRes = await db.execute(
+        sql`SELECT vehicle_id, data, num_doc FROM fleet_fuel_records WHERE company_id = ${input.companyId} AND num_doc IS NOT NULL`
+      );
+      const existingSet = new Set(
+        ((existingRes as any).rows || []).map((r: any) => `${r.vehicle_id}|${r.data}|${r.num_doc}`)
+      );
+
+      const matchedDriversMap: Record<string, { employeeName: string; source: string }> = {};
+      const unmatchedDriversSet = new Set<string>();
+
+      const previewRecords: any[] = [];
+      let duplicates = 0, noVehicle = 0;
+
+      for (const rec of parsed) {
+        const veh = plateToVehicle[rec.plate];
+        if (!veh) { noVehicle++; continue; }
+
+        const isDuplicate = !!(rec.numDoc && existingSet.has(`${veh.id}|${rec.date}|${rec.numDoc}`));
+        if (isDuplicate) { duplicates++; }
+
+        const litros = parseFloat(rec.litros);
+        if (litros <= 0 || litros > 1000) continue;
+
+        let driverMatched: string | null = null;
+        let matchSource: string | null = null;
+
+        if (rec.driver) {
+          const driverUpper = rec.driver.trim().toUpperCase();
+          if (aliasMap[driverUpper]) {
+            driverMatched = aliasMap[driverUpper];
+            matchSource = 'alias';
+            matchedDriversMap[rec.driver] = { employeeName: aliasMap[driverUpper], source: 'alias' };
+          } else {
+            const emp = matchEmployee(rec.driver);
+            if (emp) {
+              driverMatched = emp.nomeCompleto;
+              matchSource = 'fuzzy';
+              matchedDriversMap[rec.driver] = { employeeName: emp.nomeCompleto, source: 'fuzzy' };
+            } else {
+              unmatchedDriversSet.add(rec.driver);
+            }
+          }
+        }
+
+        previewRecords.push({
+          date: rec.date, numDoc: rec.numDoc, plate: rec.plate,
+          vehicleId: veh.id, vehicleLabel: `${veh.placa} - ${veh.marca || ''} ${veh.modelo || ''}`.trim(),
+          tipoCombustivel: rec.tipoCombustivel,
+          litros: rec.litros, precoLitro: rec.precoLitro,
+          desconto: rec.desconto, valorTotal: rec.valorTotal,
+          driverPdf: rec.driver, driverMatched, matchSource,
+          isDuplicate,
+        });
+      }
+
+      const matchedDrivers = Object.entries(matchedDriversMap).map(([pdf, m]) => ({
+        pdfName: pdf, employeeName: m.employeeName, source: m.source,
+      }));
+
+      return {
+        totalParsed: parsed.length,
+        duplicates,
+        noVehicle,
+        records: previewRecords,
+        matchedDrivers,
+        unmatchedDrivers: [...unmatchedDriversSet],
+        employees: empList.map(e => ({ id: e.id, nomeCompleto: e.nomeCompleto })).sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto)),
+      };
+      } catch (outerErr: any) {
+        if (outerErr instanceof TRPCError) throw outerErr;
+        console.error('[FuelPDF Preview] Unexpected error:', outerErr.message);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Erro ao analisar PDF: ' + (outerErr.message || 'Erro desconhecido') });
+      }
+    }),
+
+  confirmFuelImport: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      records: z.array(z.object({
+        vehicleId: z.number(),
+        date: z.string(),
+        litros: z.string(),
+        valorTotal: z.string(),
+        precoLitro: z.string(),
+        tipoCombustivel: z.string(),
+        motorista: z.string().nullable(),
+        numDoc: z.string().nullable(),
+        desconto: z.string().nullable(),
+      })),
+      driverMappings: z.array(z.object({
+        pdfName: z.string(),
+        canonicalName: z.string(),
+      })),
+      criadoPor: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+
+      const vRows = await db.execute(sql`SELECT id FROM vehicles WHERE "companyId" = ${input.companyId}`);
+      const validVehicleIds = new Set(((vRows as any).rows || []).map((r: any) => r.id));
+      const validRecords = input.records.filter(r => validVehicleIds.has(r.vehicleId));
+
+      const existingRes = await db.execute(
+        sql`SELECT vehicle_id, data, num_doc FROM fleet_fuel_records WHERE company_id = ${input.companyId} AND num_doc IS NOT NULL`
+      );
+      const existingSet = new Set(
+        ((existingRes as any).rows || []).map((r: any) => `${r.vehicle_id}|${r.data}|${r.num_doc}`)
+      );
+      const nonDupRecords = validRecords.filter(r => !(r.numDoc && existingSet.has(`${r.vehicleId}|${r.date}|${r.numDoc}`)));
+
+      for (const mapping of input.driverMappings) {
+        if (!mapping.pdfName || !mapping.canonicalName) continue;
+        const aliasUpper = mapping.pdfName.trim().toUpperCase();
+        const existing = await db.execute(sql`
+          SELECT id FROM fleet_driver_aliases WHERE company_id = ${input.companyId} AND alias_name = ${aliasUpper}
+        `);
+        if (((existing as any).rows || []).length === 0) {
+          await db.execute(sql`
+            INSERT INTO fleet_driver_aliases (company_id, alias_name, canonical_name)
+            VALUES (${input.companyId}, ${aliasUpper}, ${mapping.canonicalName})
+          `);
+        }
+      }
+
+      let inserted = 0;
+      const BATCH = 50;
+      const toInsert = nonDupRecords.map(r => ({
+        companyId: input.companyId,
+        vehicleId: r.vehicleId,
+        data: r.date,
+        litros: r.litros,
+        valorTotal: r.valorTotal,
+        precoLitro: parseFloat(r.precoLitro) > 0 ? r.precoLitro : (parseFloat(r.litros) > 0 ? (parseFloat(r.valorTotal) / parseFloat(r.litros)).toFixed(4) : null),
+        tipoCombustivel: r.tipoCombustivel,
+        motorista: r.motorista || null,
+        posto: 'Auto Posto Umuarama',
+        numDoc: r.numDoc || null,
+        desconto: r.desconto && parseFloat(r.desconto) > 0 ? r.desconto : null,
+        criadoPor: input.criadoPor || 'PDF Import',
+      }));
+
+      for (let b = 0; b < toInsert.length; b += BATCH) {
+        const chunk = toInsert.slice(b, b + BATCH);
+        try {
+          await db.insert(fleetFuelRecords).values(chunk as any);
+          inserted += chunk.length;
+        } catch (dbErr: any) {
+          for (const row of chunk) {
+            try {
+              await db.insert(fleetFuelRecords).values(row as any);
+              inserted++;
+            } catch (singleErr: any) {
+              console.error('[FuelImport] Insert error:', singleErr.message);
+            }
+          }
+        }
+      }
+
+      return { inserted, aliasesCreated: input.driverMappings.length };
+      } catch (outerErr: any) {
+        if (outerErr instanceof TRPCError) throw outerErr;
+        console.error('[FuelImport Confirm] Unexpected error:', outerErr.message);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Erro ao importar: ' + (outerErr.message || 'Erro desconhecido') });
+      }
+    }),
+
   listFines: protectedProcedure
     .input(z.object({ companyId: z.number(), vehicleId: z.number().optional(), status: z.string().optional() }))
     .query(async ({ input }) => {

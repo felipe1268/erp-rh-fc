@@ -7873,4 +7873,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 17:00:00",
   },
+  {
+    version: 1024,
+    titulo: "Importação PDF Combustível — Validação de Motoristas em 2 Etapas",
+    descricao:
+      "Importação de PDF de combustível agora funciona em duas etapas: " +
+      "1) Análise/Preview — o sistema lê o PDF e mostra os matches propostos SEM salvar; " +
+      "2) Revisão/Validação — o usuário pode aprovar ou rejeitar cada match automático, " +
+      "vincular manualmente motoristas não encontrados a funcionários cadastrados, " +
+      "e só então confirmar a importação. Vinculações manuais são salvas como aliases " +
+      "para futuras importações automáticas. Endpoints: previewFuelPdf + confirmFuelImport.",
+    tipo: "melhoria",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 18:00:00",
+  },
 ];
