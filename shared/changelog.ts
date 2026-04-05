@@ -7968,4 +7968,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 23:00:00",
   },
+  {
+    version: 1030,
+    titulo: "Preços de Mercado — Comparação Diária com Postos da Região",
+    descricao:
+      "Nova seção 'Preços de Mercado — Atualização Diária' na página Preços Combustível: " +
+      "1) Cards de comparação mostrando Seu Preço vs Mercado para cada tipo de combustível com indicadores visuais (Acima/Abaixo/Na faixa). " +
+      "2) Tabela de preços pesquisados por posto com tipo, R$/litro, cidade, fonte e data. " +
+      "3) Formulário para registrar preços encontrados nos postos da região (tipo, preço, posto, cidade). " +
+      "4) Cálculo automático de diferença em R$ e % entre preço pago e preço de mercado. " +
+      "5) Possibilidade de excluir registros de preço desatualizados. " +
+      "Objetivo: permitir atualização diária dos preços praticados na região para negociar melhores condições.",
+    tipo: "funcionalidade",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 23:30:00",
+  },
 ];

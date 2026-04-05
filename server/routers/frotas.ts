@@ -285,6 +285,20 @@ async function ensureFleetTables() {
       UNIQUE(company_id, mes, ano)
     )
   `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fuel_market_prices (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      tipo_combustivel VARCHAR(50) NOT NULL,
+      preco NUMERIC(10,4) NOT NULL,
+      posto VARCHAR(200),
+      cidade VARCHAR(100) DEFAULT 'Guaratinguetá',
+      fonte VARCHAR(100) DEFAULT 'Manual',
+      data DATE NOT NULL DEFAULT CURRENT_DATE,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
 }
 let tablesReady = false;
 
@@ -2531,15 +2545,74 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       };
     }),
 
+  getMarketPrices: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const latest = (await db.execute(sql`
+        SELECT DISTINCT ON (tipo_combustivel, posto)
+          id, tipo_combustivel, preco, posto, cidade, fonte,
+          data, created_at
+        FROM fuel_market_prices
+        WHERE company_id = ${input.companyId}
+        ORDER BY tipo_combustivel, posto, data DESC, id DESC
+      `)).rows;
+
+      const avgByType = (await db.execute(sql`
+        SELECT tipo_combustivel,
+               ROUND(AVG(preco), 4) as preco_medio,
+               ROUND(MIN(preco), 4) as preco_min,
+               ROUND(MAX(preco), 4) as preco_max,
+               COUNT(DISTINCT posto) as qtd_postos,
+               MAX(data) as ultima_data
+        FROM fuel_market_prices
+        WHERE company_id = ${input.companyId}
+          AND data >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY tipo_combustivel
+        ORDER BY tipo_combustivel
+      `)).rows;
+
+      return { latest, avgByType };
+    }),
+
+  saveMarketPrice: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      tipo_combustivel: z.string(),
+      preco: z.number(),
+      posto: z.string().optional(),
+      cidade: z.string().optional(),
+      fonte: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const posto = input.posto || 'Pesquisa geral';
+      const cidade = input.cidade || 'Guaratinguetá';
+      const fonte = input.fonte || 'Manual';
+      await db.execute(sql`
+        INSERT INTO fuel_market_prices (company_id, tipo_combustivel, preco, posto, cidade, fonte, data)
+        VALUES (${input.companyId}, ${input.tipo_combustivel}, ${input.preco}, ${posto}, ${cidade}, ${fonte}, CURRENT_DATE)
+      `);
+      return { ok: true };
+    }),
+
+  deleteMarketPrice: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`DELETE FROM fuel_market_prices WHERE id = ${input.id} AND company_id = ${input.companyId}`);
+      return { ok: true };
+    }),
+
   getFuelPrices: protectedProcedure
     .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
     .query(async ({ input }) => {
-      const pool = getPool();
+      const db = await getDb();
       const anoFiltro = input.ano || new Date().getFullYear();
       const startDate = `${anoFiltro}-01-01`;
       const endDate = `${anoFiltro + 1}-01-01`;
 
-      const byType = (await pool.query(`
+      const byType = (await db.execute(sql`
         SELECT tipo_combustivel,
                COUNT(*)::int as qtd,
                ROUND(AVG(CASE WHEN litros::numeric > 0 THEN valor_total::numeric / litros::numeric END), 4) as preco_medio,
@@ -2548,24 +2621,24 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
                ROUND(SUM(valor_total::numeric), 2) as total_gasto,
                ROUND(SUM(litros::numeric), 2) as total_litros
         FROM fleet_fuel_records
-        WHERE company_id = $1 AND data >= $2 AND data < $3
+        WHERE company_id = ${input.companyId} AND data >= ${startDate} AND data < ${endDate}
         GROUP BY tipo_combustivel
         ORDER BY total_litros DESC
-      `, [input.companyId, startDate, endDate])).rows;
+      `)).rows;
 
-      const byMonth = (await pool.query(`
+      const byMonth = (await db.execute(sql`
         SELECT TO_CHAR(data, 'YYYY-MM') as mes,
                tipo_combustivel,
                ROUND(AVG(CASE WHEN litros::numeric > 0 THEN valor_total::numeric / litros::numeric END), 4) as preco_medio,
                ROUND(SUM(litros::numeric), 2) as litros,
                ROUND(SUM(valor_total::numeric), 2) as valor
         FROM fleet_fuel_records
-        WHERE company_id = $1 AND data >= $2 AND data < $3
+        WHERE company_id = ${input.companyId} AND data >= ${startDate} AND data < ${endDate}
         GROUP BY TO_CHAR(data, 'YYYY-MM'), tipo_combustivel
         ORDER BY mes, tipo_combustivel
-      `, [input.companyId, startDate, endDate])).rows;
+      `)).rows;
 
-      const byPosto = (await pool.query(`
+      const byPosto = (await db.execute(sql`
         SELECT COALESCE(posto, 'Não informado') as posto,
                tipo_combustivel,
                COUNT(*)::int as qtd,
@@ -2573,10 +2646,10 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
                ROUND(SUM(litros::numeric), 2) as litros,
                ROUND(SUM(valor_total::numeric), 2) as valor
         FROM fleet_fuel_records
-        WHERE company_id = $1 AND data >= $2 AND data < $3
+        WHERE company_id = ${input.companyId} AND data >= ${startDate} AND data < ${endDate}
         GROUP BY COALESCE(posto, 'Não informado'), tipo_combustivel
         ORDER BY litros DESC
-      `, [input.companyId, startDate, endDate])).rows;
+      `)).rows;
 
       return { byType, byMonth, byPosto, ano: anoFiltro };
     }),

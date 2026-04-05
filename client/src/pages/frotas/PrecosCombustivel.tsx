@@ -4,9 +4,14 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Fuel, MapPin, DollarSign, BarChart3, RefreshCw, Info, Navigation,
+  Plus, Trash2, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
+  AlertTriangle, CheckCircle2,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -57,10 +62,47 @@ export default function PrecosCombustivel() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
 
+  const [showAddPrice, setShowAddPrice] = useState(false);
+  const [newTipo, setNewTipo] = useState("Gasolina");
+  const [newPreco, setNewPreco] = useState("");
+  const [newPosto, setNewPosto] = useState("");
+  const [newCidade, setNewCidade] = useState("Guaratinguetá");
+
   const { data: prices } = trpc.frotas.getFuelPrices.useQuery(
     { companyId, ano },
     { enabled: companyId > 0 }
   );
+
+  const { data: market, refetch: refetchMarket } = trpc.frotas.getMarketPrices.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+
+  const saveMutation = trpc.frotas.saveMarketPrice.useMutation({
+    onSuccess: () => { refetchMarket(); setShowAddPrice(false); setNewPreco(""); setNewPosto(""); },
+  });
+  const deleteMutation = trpc.frotas.deleteMarketPrice.useMutation({
+    onSuccess: () => refetchMarket(),
+  });
+
+  const comparison = useMemo(() => {
+    if (!prices?.byType || !market?.avgByType) return [];
+    return prices.byType.map((ft: any) => {
+      const mkt = market.avgByType.find((m: any) => m.tipo_combustivel === ft.tipo_combustivel);
+      const seuPreco = parseFloat(ft.preco_medio);
+      const mktPreco = mkt ? parseFloat(mkt.preco_medio) : null;
+      const diff = mktPreco ? seuPreco - mktPreco : null;
+      const pct = mktPreco && mktPreco > 0 ? ((seuPreco - mktPreco) / mktPreco) * 100 : null;
+      return {
+        tipo: ft.tipo_combustivel,
+        seuPreco,
+        mktPreco,
+        diff,
+        pct,
+        status: diff === null ? 'sem_dados' : diff > 0.05 ? 'acima' : diff < -0.05 ? 'abaixo' : 'ok',
+      };
+    });
+  }, [prices?.byType, market?.avgByType]);
 
   const initMap = useCallback(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -248,6 +290,237 @@ export default function PrecosCombustivel() {
             </Card>
           ))}
         </div>
+
+        <Card className="border-t-4 border-t-emerald-500">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-emerald-600" />
+                Preços de Mercado — Atualização Diária
+              </CardTitle>
+              <Button size="sm" onClick={() => setShowAddPrice(true)} className="gap-1">
+                <Plus className="h-4 w-4" />
+                Registrar Preço
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Compare seus preços de abastecimento com os preços pesquisados na região
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {comparison.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {comparison.map((c) => {
+                  const color = FUEL_COLORS[c.tipo] || "#94a3b8";
+                  return (
+                    <div key={c.tipo} className="p-4 rounded-xl border bg-gradient-to-br from-background to-muted/30">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Fuel className="h-4 w-4" style={{ color }} />
+                        <span className="font-bold text-sm">{c.tipo}</span>
+                        {c.status === 'acima' && (
+                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0 ml-auto">
+                            <ArrowUpRight className="h-3 w-3 mr-0.5" /> Acima
+                          </Badge>
+                        )}
+                        {c.status === 'abaixo' && (
+                          <Badge className="text-[10px] px-1.5 py-0 ml-auto bg-emerald-600">
+                            <ArrowDownRight className="h-3 w-3 mr-0.5" /> Abaixo
+                          </Badge>
+                        )}
+                        {c.status === 'ok' && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-auto">
+                            <CheckCircle2 className="h-3 w-3 mr-0.5" /> Na faixa
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Seu Preço</p>
+                          <p className="text-lg font-bold" style={{ color }}>
+                            R$ {c.seuPreco.toFixed(4)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Mercado</p>
+                          <p className="text-lg font-bold text-foreground">
+                            {c.mktPreco ? `R$ ${c.mktPreco.toFixed(4)}` : '—'}
+                          </p>
+                        </div>
+                      </div>
+                      {c.diff !== null && (
+                        <div className={`mt-3 pt-2 border-t flex items-center gap-2 text-xs ${
+                          c.diff > 0 ? 'text-red-600' : c.diff < 0 ? 'text-emerald-600' : 'text-muted-foreground'
+                        }`}>
+                          {c.diff > 0 ? <TrendingUp className="h-3 w-3" /> : c.diff < 0 ? <TrendingDown className="h-3 w-3" /> : null}
+                          <span className="font-semibold">
+                            {c.diff > 0 ? '+' : ''}{c.diff.toFixed(4)} ({c.pct!.toFixed(1)}%)
+                          </span>
+                          <span className="text-muted-foreground">
+                            {c.diff > 0 ? 'pagando a mais' : c.diff < 0 ? 'pagando a menos' : 'preço igual'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {market?.latest && market.latest.length > 0 && (
+              <div className="overflow-auto">
+                <div className="text-sm font-semibold mb-2 flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-emerald-600" />
+                  Preços Pesquisados por Posto
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-emerald-50/50 dark:bg-emerald-950/20">
+                      <th className="py-2 px-3 text-left font-semibold">Posto</th>
+                      <th className="py-2 px-2 text-left font-semibold">Combustível</th>
+                      <th className="py-2 px-2 text-right font-semibold">R$/Litro</th>
+                      <th className="py-2 px-2 text-left font-semibold">Cidade</th>
+                      <th className="py-2 px-2 text-left font-semibold">Fonte</th>
+                      <th className="py-2 px-2 text-right font-semibold">Data</th>
+                      <th className="py-2 px-2 text-center font-semibold w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {market.latest.map((row: any) => (
+                      <tr key={row.id} className="border-b hover:bg-muted/30">
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-3 w-3 text-emerald-500" />
+                            {row.posto}
+                          </div>
+                        </td>
+                        <td className="py-2 px-2">
+                          <Badge variant="outline" style={{ borderColor: FUEL_COLORS[row.tipo_combustivel] || "#94a3b8", color: FUEL_COLORS[row.tipo_combustivel] || "#94a3b8" }}>
+                            {row.tipo_combustivel}
+                          </Badge>
+                        </td>
+                        <td className="py-2 px-2 text-right font-bold" style={{ color: FUEL_COLORS[row.tipo_combustivel] || "#94a3b8" }}>
+                          R$ {parseFloat(row.preco).toFixed(4)}
+                        </td>
+                        <td className="py-2 px-2 text-sm">{row.cidade}</td>
+                        <td className="py-2 px-2 text-xs text-muted-foreground">{row.fonte}</td>
+                        <td className="py-2 px-2 text-right text-xs">
+                          {new Date(row.data).toLocaleDateString("pt-BR")}
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
+                            onClick={() => deleteMutation.mutate({ id: row.id, companyId })}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {(!market?.latest || market.latest.length === 0) && (
+              <div className="text-center py-8 text-muted-foreground">
+                <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-amber-400" />
+                <p className="font-medium">Nenhum preço de mercado registrado</p>
+                <p className="text-xs mt-1">Clique em "Registrar Preço" para adicionar os preços praticados pelos postos da região</p>
+              </div>
+            )}
+
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg border border-emerald-200 dark:border-emerald-800">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-emerald-800 dark:text-emerald-300">
+                  <strong>Como usar:</strong> Pesquise os preços nos postos da região (app ANP "Preço da Hora", ligação ou visita)
+                  e registre aqui para comparar automaticamente com seus abastecimentos. Atualize diariamente para ter
+                  a melhor referência de negociação.
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Dialog open={showAddPrice} onOpenChange={setShowAddPrice}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Plus className="h-5 w-5 text-emerald-600" />
+                Registrar Preço de Mercado
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Tipo de Combustível</label>
+                <Select value={newTipo} onValueChange={setNewTipo}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Gasolina">Gasolina</SelectItem>
+                    <SelectItem value="Diesel S10">Diesel S10</SelectItem>
+                    <SelectItem value="Etanol">Etanol</SelectItem>
+                    <SelectItem value="Diesel">Diesel Comum</SelectItem>
+                    <SelectItem value="GNV">GNV</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Preço por Litro (R$)</label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  placeholder="Ex: 6.2900"
+                  value={newPreco}
+                  onChange={(e) => setNewPreco(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Posto</label>
+                <Input
+                  placeholder="Ex: Posto Shell Centro"
+                  value={newPosto}
+                  onChange={(e) => setNewPosto(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Cidade</label>
+                <Select value={newCidade} onValueChange={setNewCidade}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Guaratinguetá">Guaratinguetá</SelectItem>
+                    <SelectItem value="Aparecida">Aparecida</SelectItem>
+                    <SelectItem value="Lorena">Lorena</SelectItem>
+                    <SelectItem value="Canas">Canas</SelectItem>
+                    <SelectItem value="Potim">Potim</SelectItem>
+                    <SelectItem value="Roseira">Roseira</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                className="w-full"
+                disabled={!newPreco || parseFloat(newPreco) <= 0 || saveMutation.isPending}
+                onClick={() => {
+                  saveMutation.mutate({
+                    companyId,
+                    tipo_combustivel: newTipo,
+                    preco: parseFloat(newPreco),
+                    posto: newPosto || undefined,
+                    cidade: newCidade || undefined,
+                    fonte: 'Manual',
+                  });
+                }}
+              >
+                {saveMutation.isPending ? 'Salvando...' : 'Salvar Preço'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {postos.length > 0 && (
           <Card>
