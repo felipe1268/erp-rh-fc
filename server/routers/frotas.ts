@@ -1237,16 +1237,33 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       const totalIpvaPendente = allIpva.filter((i: any) => i.status === "pendente").reduce((s: number, i: any) => s + n(i.valor_total) - n(i.valor_pago), 0);
 
       const now = new Date();
-      const depreciacao = allVehicles.reduce((s: number, v: any) => {
+      const depreciacaoPorVeiculo = allVehicles.map((v: any) => {
         const valorC = n(v.valor_compra);
-        if (!valorC || !v.data_aquisicao) return s;
-        const anos = (now.getTime() - new Date(v.data_aquisicao).getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-        const deprecAnos = v.depreciacao_anos || 5;
+        const fipe = n(v.valor_fipe);
         const residual = n(v.valor_residual);
-        const deprecAnual = (valorC - residual) / deprecAnos;
-        const deprecTotal = Math.min(deprecAnual * anos, valorC - residual);
-        return s + deprecTotal;
-      }, 0);
+        const deprecAnos = v.depreciacao_anos || 5;
+        let anos = 0;
+        if (v.data_aquisicao) {
+          anos = (now.getTime() - new Date(v.data_aquisicao).getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+        } else if (v.anoFabricacao) {
+          anos = now.getFullYear() - parseInt(v.anoFabricacao);
+        }
+        const deprecAnual = valorC > 0 ? (valorC - residual) / deprecAnos : 0;
+        const deprecTotal = Math.min(Math.max(deprecAnual * anos, 0), Math.max(valorC - residual, 0));
+        const contabil = Math.max(valorC - deprecTotal, residual);
+        const statusDep = anos >= deprecAnos ? 'totalmente' : anos > deprecAnos * 0.8 ? 'quase' : 'parcial';
+        return {
+          id: v.id, placa: v.placa, modelo: v.modelo, marca: v.marca,
+          tipo: v.tipoVeiculo, anoFab: v.anoFabricacao,
+          valorCompra: valorC, valorFipe: fipe, valorResidual: residual,
+          deprecAnos, idadeAnos: Math.round(anos * 10) / 10,
+          deprecAnual: Math.round(deprecAnual),
+          deprecAcumulada: Math.round(deprecTotal),
+          valorContabil: Math.round(contabil),
+          statusDep,
+        };
+      });
+      const depreciacao = depreciacaoPorVeiculo.reduce((s: number, v: any) => s + v.deprecAcumulada, 0);
 
       const fuelByMonth: Record<string, number> = {};
       for (const f of allFuel) {
@@ -1345,6 +1362,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         fuelByMonth, maintByMonth,
         alertas, alertasCriticos, alertasAlerta, alertasInfo,
         veiculosEmManutencao: allMaint.filter((m: any) => m.status === "em_andamento").length,
+        depreciacaoPorVeiculo,
       };
     }),
 });

@@ -7672,4 +7672,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-04 12:00:00",
   },
+  {
+    version: 1011,
+    titulo: "Frotas — Cálculo de Depreciação Estimada por Veículo",
+    descricao:
+      "Estimativa de valor de compra para todos os 14 veículos da frota baseada no preço de mercado na época da fabricação. " +
+      "Cálculo de depreciação linear com valor residual de 10% e vida útil configurável por tipo (5 anos carros, 10 anos caminhões/máquinas). " +
+      "Nova tabela 'Depreciação por Veículo' no Painel de Frotas com valor de compra, FIPE, depreciação anual/acumulada, " +
+      "valor contábil e status (totalmente depreciado, quase, parcial). " +
+      "Resumo Patrimônio atualizado: Compra total R$ 1.900.800, Dep. acumulada R$ 1.278.270, Valor contábil R$ 622.530.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 00:00:00",
+  },
 ];

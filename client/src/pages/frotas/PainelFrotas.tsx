@@ -370,6 +370,80 @@ export default function PainelFrotas() {
                 </CardContent>
               </Card>
             </div>
+
+            {d.depreciacaoPorVeiculo && d.depreciacaoPorVeiculo.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <TrendingDown className="h-4 w-4 text-red-500" /> Depreciação por Veículo
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b text-left">
+                          <th className="py-2 px-1 font-semibold">Veículo</th>
+                          <th className="py-2 px-1 font-semibold text-center">Ano</th>
+                          <th className="py-2 px-1 font-semibold text-center">Idade</th>
+                          <th className="py-2 px-1 font-semibold text-right">Valor Compra</th>
+                          <th className="py-2 px-1 font-semibold text-right">Valor FIPE</th>
+                          <th className="py-2 px-1 font-semibold text-right">Dep. Anual</th>
+                          <th className="py-2 px-1 font-semibold text-right">Dep. Acumulada</th>
+                          <th className="py-2 px-1 font-semibold text-right">Valor Contábil</th>
+                          <th className="py-2 px-1 font-semibold text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {d.depreciacaoPorVeiculo.map((v: any) => (
+                          <tr key={v.id} className="border-b border-border/50 hover:bg-muted/30">
+                            <td className="py-2 px-1">
+                              <div className="font-medium">{v.placa || "—"}</div>
+                              <div className="text-[10px] text-muted-foreground truncate max-w-[180px]">{v.modelo}</div>
+                            </td>
+                            <td className="py-2 px-1 text-center">{v.anoFab}</td>
+                            <td className="py-2 px-1 text-center">{v.idadeAnos}a</td>
+                            <td className="py-2 px-1 text-right">{fmt(v.valorCompra)}</td>
+                            <td className="py-2 px-1 text-right text-green-600">{fmt(v.valorFipe)}</td>
+                            <td className="py-2 px-1 text-right text-muted-foreground">{fmt(v.deprecAnual)}/ano</td>
+                            <td className="py-2 px-1 text-right text-red-600 font-medium">{fmt(v.deprecAcumulada)}</td>
+                            <td className="py-2 px-1 text-right font-semibold">{fmt(v.valorContabil)}</td>
+                            <td className="py-2 px-1 text-center">
+                              <Badge className={`text-[9px] ${
+                                v.statusDep === 'totalmente' ? 'bg-red-100 text-red-700 hover:bg-red-100' :
+                                v.statusDep === 'quase' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' :
+                                'bg-green-100 text-green-700 hover:bg-green-100'
+                              }`}>
+                                {v.statusDep === 'totalmente' ? '100%' : v.statusDep === 'quase' ? '>80%' : 'Parcial'}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 font-semibold">
+                          <td className="py-2 px-1" colSpan={3}>TOTAL ({d.depreciacaoPorVeiculo.length} veículos)</td>
+                          <td className="py-2 px-1 text-right">{fmt(d.totalCompra)}</td>
+                          <td className="py-2 px-1 text-right text-green-600">{fmt(d.totalFipe)}</td>
+                          <td className="py-2 px-1 text-right text-muted-foreground">—</td>
+                          <td className="py-2 px-1 text-right text-red-600">{fmt(d.depreciacao)}</td>
+                          <td className="py-2 px-1 text-right">{fmt(d.totalCompra - d.depreciacao)}</td>
+                          <td className="py-2 px-1"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                  <div className="mt-3 flex gap-4 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span> Totalmente depreciado</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span> Quase totalmente (&gt;80%)</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Depreciação parcial</span>
+                  </div>
+                  <p className="mt-2 text-[10px] text-muted-foreground italic">
+                    * Valores de compra estimados com base no preço de mercado na época da fabricação. Depreciação linear com valor residual de 10%.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>
