@@ -9,53 +9,74 @@ import {
   ClipboardList, CheckSquare, Blocks, AlertTriangle, Camera,
   LayoutDashboard, Plus, ArrowRight, CloudRain,
   Loader2, ShieldCheck, ClipboardCheck,
-  BookOpen, HardHat,
+  HardHat,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 
 const submodulos = [
   {
-    id: "diario",
-    titulo: "Diário de Obra",
-    descricao: "RDO, Registro Fotográfico e Clima",
-    icon: BookOpen,
-    cor: "from-amber-500 to-orange-500",
-    corBg: "bg-amber-50 dark:bg-amber-950/30",
-    corBorda: "border-amber-200 dark:border-amber-800",
-    corTexto: "text-amber-700 dark:text-amber-400",
-    items: [
-      { label: "RDO", path: "/operacional/rdo", icon: ClipboardList },
-      { label: "Registro Fotográfico", path: "/operacional/fotos", icon: Camera },
-    ],
+    id: "rdo",
+    titulo: "RDO",
+    subtitulo: "Relatório Diário...",
+    icon: ClipboardList,
+    accentFrom: "#F59E0B",
+    accentTo: "#D97706",
+    path: "/operacional/rdo",
   },
   {
-    id: "concreto",
-    titulo: "Controle de Qualidade de Concreto",
-    descricao: "Concretagem e Não Conformidades",
+    id: "fotos",
+    titulo: "Fotos",
+    subtitulo: "Registro Fotogr...",
+    icon: Camera,
+    accentFrom: "#8B5CF6",
+    accentTo: "#7C3AED",
+    path: "/operacional/fotos",
+  },
+  {
+    id: "concretagem",
+    titulo: "Concretagem",
+    subtitulo: "Controle de Con...",
     icon: Blocks,
-    cor: "from-blue-500 to-cyan-500",
-    corBg: "bg-blue-50 dark:bg-blue-950/30",
-    corBorda: "border-blue-200 dark:border-blue-800",
-    corTexto: "text-blue-700 dark:text-blue-400",
-    items: [
-      { label: "Concretagem", path: "/operacional/concretagem", icon: Blocks },
-      { label: "Não Conformidades", path: "/operacional/nc", icon: AlertTriangle },
-    ],
+    accentFrom: "#3B82F6",
+    accentTo: "#2563EB",
+    path: "/operacional/concretagem",
   },
   {
-    id: "checklist",
-    titulo: "Checklist",
-    descricao: "Qualidade e Liberação de Serviços",
-    icon: CheckSquare,
-    cor: "from-emerald-500 to-teal-500",
-    corBg: "bg-emerald-50 dark:bg-emerald-950/30",
-    corBorda: "border-emerald-200 dark:border-emerald-800",
-    corTexto: "text-emerald-700 dark:text-emerald-400",
-    items: [
-      { label: "Checklists de Qualidade", path: "/operacional/checklists", icon: ClipboardCheck },
-      { label: "Liberação de Serviços", path: "/operacional/liberacao-servicos", icon: ShieldCheck },
-    ],
+    id: "nc",
+    titulo: "Não Conform.",
+    subtitulo: "Controle de NCs",
+    icon: AlertTriangle,
+    accentFrom: "#EF4444",
+    accentTo: "#DC2626",
+    path: "/operacional/nc",
+  },
+  {
+    id: "checklists",
+    titulo: "Checklists",
+    subtitulo: "Qualidade",
+    icon: ClipboardCheck,
+    accentFrom: "#10B981",
+    accentTo: "#059669",
+    path: "/operacional/checklists",
+  },
+  {
+    id: "liberacao",
+    titulo: "Liberação",
+    subtitulo: "Liberação de Se...",
+    icon: ShieldCheck,
+    accentFrom: "#0EA5E9",
+    accentTo: "#0284C7",
+    path: "/operacional/liberacao-servicos",
+  },
+  {
+    id: "clima",
+    titulo: "Clima",
+    subtitulo: "Condições Clim...",
+    icon: CloudRain,
+    accentFrom: "#6366F1",
+    accentTo: "#4F46E5",
+    path: "/operacional/rdo",
   },
 ];
 
@@ -93,7 +114,7 @@ export default function PainelOperacional() {
             <HardHat className="h-7 w-7 text-amber-500" />
             Painel Operacional
           </h1>
-          <p className="text-sm text-gray-500">Gestão completa da obra</p>
+          <p className="text-sm text-gray-500">Visão consolidada da obra</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={filtroStatus} onValueChange={(v) => { setFiltroStatus(v); setObraId(null); }}>
@@ -120,43 +141,35 @@ export default function PainelOperacional() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {submodulos.map((sub) => (
+      <div className="flex flex-wrap gap-3">
+        {submodulos.map((mod) => (
           <div
-            key={sub.id}
-            className={`group relative rounded-2xl border ${sub.corBorda} ${sub.corBg} p-5 transition-all hover:shadow-lg hover:scale-[1.02] cursor-default`}
+            key={mod.id}
+            onClick={() => setLocation(selectedObraId ? `${mod.path}?obra=${selectedObraId}` : mod.path)}
+            className="group relative flex flex-col items-center justify-center text-center rounded-2xl p-3 cursor-pointer transition-all duration-200 hover:scale-[1.04] select-none"
+            style={{
+              width: '115px',
+              minHeight: '96px',
+              background: `linear-gradient(145deg, ${mod.accentFrom}16, ${mod.accentTo}0a)`,
+              border: `1.5px solid ${mod.accentFrom}38`,
+              boxShadow: `0 4px 20px -6px ${mod.accentFrom}28`,
+            }}
           >
-            <div className="flex items-start gap-4 mb-4">
-              <div className={`p-3 rounded-xl bg-gradient-to-br ${sub.cor} text-white shadow-lg`}>
-                <sub.icon className="h-7 w-7" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-base font-bold text-slate-800 dark:text-white leading-tight">{sub.titulo}</h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">{sub.descricao}</p>
-              </div>
+            <div
+              className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+              style={{ background: `radial-gradient(ellipse at 50% 60%, ${mod.accentFrom}20 0%, transparent 70%)` }}
+            />
+            <div
+              className="h-11 w-11 rounded-xl flex items-center justify-center mb-2 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5"
+              style={{
+                background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
+                boxShadow: `0 4px 12px -3px ${mod.accentFrom}55`,
+              }}
+            >
+              <mod.icon className="h-5 w-5 text-white" />
             </div>
-            <div className="space-y-1.5">
-              {sub.items.map((item) => (
-                <button
-                  key={item.path}
-                  disabled={!selectedObraId}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all
-                    bg-white/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-700 
-                    border border-transparent hover:border-slate-200 dark:hover:border-slate-600
-                    hover:shadow-sm group/item
-                    disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white/60 disabled:hover:shadow-none`}
-                  onClick={() => selectedObraId && setLocation(`${item.path}?obra=${selectedObraId}`)}
-                >
-                  <div className={`p-1.5 rounded-lg ${sub.corBg}`}>
-                    <item.icon className={`h-4 w-4 ${sub.corTexto}`} />
-                  </div>
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover/item:text-slate-900 dark:group-hover/item:text-white">
-                    {item.label}
-                  </span>
-                  <ArrowRight className="h-3.5 w-3.5 text-slate-300 ml-auto opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                </button>
-              ))}
-            </div>
+            <p className="text-[12px] font-extrabold leading-tight text-[#1B2A4A] dark:text-white tracking-tight w-full truncate">{mod.titulo}</p>
+            <p className="text-[9.5px] text-gray-400 leading-tight mt-0.5 w-full truncate">{mod.subtitulo}</p>
           </div>
         ))}
       </div>
@@ -164,7 +177,7 @@ export default function PainelOperacional() {
       {!selectedObraId ? (
         <div className="text-center py-12 text-gray-400">
           <LayoutDashboard className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Selecione uma obra acima para ver os indicadores</p>
+          <p className="text-sm">Selecione uma obra para visualizar o painel</p>
         </div>
       ) : dashboard.isLoading ? (
         <div className="flex items-center justify-center py-12">
