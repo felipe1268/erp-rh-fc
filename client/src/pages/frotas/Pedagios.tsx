@@ -301,7 +301,7 @@ export default function Pedagios() {
     }
 
     try {
-      const batchSize = 50;
+      const batchSize = 500;
       let totalInserted = 0;
       for (let i = 0; i < items.length; i += batchSize) {
         const batch = items.slice(i, i + batchSize);

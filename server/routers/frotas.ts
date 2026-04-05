@@ -4558,18 +4558,17 @@ Sempre retorne JSON válido, sem markdown.`;
         }
       }
 
-      let inserted = 0;
-      for (const item of input.items) {
-        await db.execute(sql`
-          INSERT INTO fleet_toll_records (company_id, vehicle_id, data, categoria, descricao, praca_pedagio, rodovia, valor, tag_id, eixos, observacoes, criado_por)
-          VALUES (${input.companyId}, ${item.vehicleId}, ${item.data}::date, ${item.categoria},
-            ${item.descricao || null}, ${item.pracaPedagio || null}, ${item.rodovia || null},
-            ${item.valor}, ${item.tagId || null}, ${item.eixos || null},
-            ${item.observacoes || null}, ${input.criadoPor || 'IA Import'})
-        `);
-        inserted++;
-      }
-      return { inserted };
+      const valueRows = input.items.map(item =>
+        sql`(${input.companyId}, ${item.vehicleId}, ${item.data}::date, ${item.categoria},
+          ${item.descricao || null}, ${item.pracaPedagio || null}, ${item.rodovia || null},
+          ${item.valor}, ${item.tagId || null}, ${item.eixos || null},
+          ${item.observacoes || null}, ${input.criadoPor || 'IA Import'})`
+      );
+      await db.execute(sql`
+        INSERT INTO fleet_toll_records (company_id, vehicle_id, data, categoria, descricao, praca_pedagio, rodovia, valor, tag_id, eixos, observacoes, criado_por)
+        VALUES ${sql.join(valueRows, sql`, `)}
+      `);
+      return { inserted: input.items.length };
     }),
 
   clearFuelMonth: protectedProcedure
