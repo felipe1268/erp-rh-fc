@@ -344,8 +344,8 @@ export default function PainelFrotas() {
                         </div>
                         <div className="space-y-1.5">
                           {Object.entries(d.custosTotaisByMonth)
-                            .sort(([a], [b]) => a.localeCompare(b))
-                            .slice(-12)
+                            .sort(([a], [b]) => b.localeCompare(a))
+                            .slice(0, 12)
                             .map(([m, costs]) => {
                               const c = costs as any;
                               const total = c.combustivel + c.manutencao + c.multas;
