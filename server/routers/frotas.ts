@@ -1304,7 +1304,8 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
 
       for (const f of allFines) {
         if (f.status === "pendente" && f.data_vencimento && f.data_vencimento <= in30) {
-          alertas.push({ tipo: "multa", msg: `Multa pendente: ${f.descricao} - R$ ${n(f.valor_original).toFixed(2)}`, veiculoId: f.vehicle_id, placa: f.placa, urgencia: f.data_vencimento <= today ? "critico" : "alerta" });
+          const fVehicle = allVehicles.find((v: any) => v.id === f.vehicle_id);
+          alertas.push({ tipo: "multa", msg: `Multa pendente: ${f.descricao} - R$ ${n(f.valor_original).toFixed(2)}`, veiculoId: f.vehicle_id, placa: fVehicle?.placa || f.placa, urgencia: f.data_vencimento <= today ? "critico" : "alerta" });
         }
       }
 
@@ -1345,22 +1346,101 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       const alertasAlerta = alertas.filter(a => a.urgencia === "alerta").length;
       const alertasInfo = alertas.filter(a => a.urgencia === "info").length;
 
-      const consumoMedio = allFuel.length > 0
-        ? allFuel.reduce((s: number, f: any) => s + n(f.consumo_km_l), 0) / allFuel.filter((f: any) => n(f.consumo_km_l) > 0).length || 0
+      const fuelWithConsumo = allFuel.filter((f: any) => n(f.consumo_km_l) > 0);
+      const consumoMedio = fuelWithConsumo.length > 0
+        ? fuelWithConsumo.reduce((s: number, f: any) => s + n(f.consumo_km_l), 0) / fuelWithConsumo.length
         : 0;
 
       const totalKm = allVehicles.reduce((s: number, v: any) => s + n(v.km_atual), 0);
       const custoKm = totalKm > 0 ? (totalManutCusto + totalCombustivel) / totalKm : 0;
+      const totalLitros = allFuel.reduce((s: number, f: any) => s + n(f.litros), 0);
+
+      const custoPorVeiculo = allVehicles.map((v: any) => {
+        const vFuel = allFuel.filter((f: any) => f.vehicle_id === v.id);
+        const vMaint = allMaint.filter((m: any) => m.vehicle_id === v.id);
+        const vFines = allFines.filter((f: any) => f.vehicle_id === v.id);
+        const custoManut = vMaint.reduce((s: number, m: any) => s + n(m.custo), 0);
+        const custoComb = vFuel.reduce((s: number, f: any) => s + n(f.valor_total), 0);
+        const custoMultas = vFines.reduce((s: number, f: any) => s + n(f.valor_original), 0);
+        const litros = vFuel.reduce((s: number, f: any) => s + n(f.litros), 0);
+        const fuelRecs = vFuel.filter((f: any) => n(f.consumo_km_l) > 0);
+        const consumo = fuelRecs.length > 0 ? fuelRecs.reduce((s: number, f: any) => s + n(f.consumo_km_l), 0) / fuelRecs.length : 0;
+        const km = n(v.km_atual);
+        const custoTotal = custoManut + custoComb + custoMultas;
+        const custoKmV = km > 0 ? custoTotal / km : 0;
+        return {
+          id: v.id, placa: v.placa, modelo: v.modelo, marca: v.marca,
+          tipo: v.tipoVeiculo, km,
+          custoManut, custoComb, custoMultas, custoTotal, custoKmV,
+          litros, consumo, abastecimentos: vFuel.length, manutencoes: vMaint.length,
+          multasPend: vFines.filter((f: any) => f.status === "pendente").length,
+        };
+      }).sort((a: any, b: any) => b.custoTotal - a.custoTotal);
+
+      const idadeDistribuicao: Record<string, number> = {};
+      for (const v of allVehicles) {
+        const ano = parseInt(v.anoFabricacao) || 0;
+        const idade = ano > 0 ? now.getFullYear() - ano : 0;
+        const faixa = idade <= 2 ? "0-2 anos" : idade <= 5 ? "3-5 anos" : idade <= 10 ? "6-10 anos" : "10+ anos";
+        idadeDistribuicao[faixa] = (idadeDistribuicao[faixa] || 0) + 1;
+      }
+
+      const statusVeiculos: Record<string, number> = {};
+      for (const v of allVehicles) {
+        const st = v.statusVeiculo || "Em operação";
+        statusVeiculos[st] = (statusVeiculos[st] || 0) + 1;
+      }
+
+      const totalSegurosPremio = allIns.filter((i: any) => i.status === "ativa").reduce((s: number, i: any) => s + n(i.valor_premio), 0);
+      const segurosAtivos = allIns.filter((i: any) => i.status === "ativa").length;
+      const veiculosSemSeguro = allVehicles.filter((v: any) => !allIns.some((i: any) => i.vehicle_id === v.id && i.status === "ativa")).length;
+
+      const totalLicenciamento = allLic.reduce((s: number, l: any) => s + n(l.valor), 0);
+      const totalIpvaGeral = allIpva.reduce((s: number, i: any) => s + n(i.valor_total), 0);
+
+      const custosTotaisByMonth: Record<string, { combustivel: number; manutencao: number; multas: number }> = {};
+      for (const f of allFuel) {
+        const m = (f.data || "").substring(0, 7);
+        if (!custosTotaisByMonth[m]) custosTotaisByMonth[m] = { combustivel: 0, manutencao: 0, multas: 0 };
+        custosTotaisByMonth[m].combustivel += n(f.valor_total);
+      }
+      for (const m of allMaint) {
+        const mo = (m.data_manutencao || "").substring(0, 7);
+        if (!custosTotaisByMonth[mo]) custosTotaisByMonth[mo] = { combustivel: 0, manutencao: 0, multas: 0 };
+        custosTotaisByMonth[mo].manutencao += n(m.custo);
+      }
+      for (const f of allFines) {
+        const mo = (f.data_infracao || "").substring(0, 7);
+        if (!custosTotaisByMonth[mo]) custosTotaisByMonth[mo] = { combustivel: 0, manutencao: 0, multas: 0 };
+        custosTotaisByMonth[mo].multas += n(f.valor_original);
+      }
+
+      const tipoCombustivel: Record<string, number> = {};
+      for (const f of allFuel) {
+        const t = f.tipo_combustivel || "Não informado";
+        tipoCombustivel[t] = (tipoCombustivel[t] || 0) + n(f.litros);
+      }
+
+      const idadeFrota = allVehicles.length > 0
+        ? allVehicles.reduce((s: number, v: any) => s + (now.getFullYear() - (parseInt(v.anoFabricacao) || now.getFullYear())), 0) / allVehicles.length
+        : 0;
+
+      const custoOperTotal = totalManutCusto + totalCombustivel + totalMultas;
 
       return {
         totalVehicles, totalFipe, totalCompra, depreciacao,
         totalManutCusto, totalCombustivel, totalMultas, multasPendentes,
-        totalIpvaPendente, consumoMedio, custoKm, totalKm,
+        totalIpvaPendente, consumoMedio, custoKm, totalKm, totalLitros,
         tipoCount, marcaCount,
-        fuelByMonth, maintByMonth,
+        fuelByMonth, maintByMonth, custosTotaisByMonth,
         alertas, alertasCriticos, alertasAlerta, alertasInfo,
         veiculosEmManutencao: allMaint.filter((m: any) => m.status === "em_andamento").length,
         depreciacaoPorVeiculo,
+        custoPorVeiculo,
+        idadeDistribuicao, statusVeiculos,
+        totalSegurosPremio, segurosAtivos, veiculosSemSeguro,
+        totalLicenciamento, totalIpvaGeral,
+        tipoCombustivel, idadeFrota, custoOperTotal,
       };
     }),
 });

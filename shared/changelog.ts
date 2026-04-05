@@ -7716,4 +7716,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 01:00:00",
   },
+  {
+    version: 1014,
+    titulo: "Dashboard Frotas Completo — Gestão Integrada com Indicadores Avançados",
+    descricao:
+      "Dashboard totalmente redesenhado com abas: Visão Geral, Custos por Veículo, Patrimônio, Combustível e Alertas. " +
+      "11 KPIs principais (veículos, FIPE, depreciação, km, consumo, idade média, custo operacional, custo/km). " +
+      "Custo por veículo com tabela detalhada (manutenção, combustível, multas, R$/km, km/l). " +
+      "Ranking Top 5 maior custo e ranking de eficiência (km/l). Evolução mensal empilhada (combustível + manutenção + multas). " +
+      "Composição por tipo, marca e distribuição por idade da frota. " +
+      "Resumo financeiro completo (seguros, IPVA, licenciamento). Consumo por tipo de combustível. " +
+      "Central de alertas reorganizada por categoria com cards dedicados.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 02:00:00",
+  },
 ];
