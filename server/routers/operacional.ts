@@ -125,6 +125,39 @@ export const operacionalRouter = router({
       return { ok: true };
     }),
 
+  deletarRDO: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const ownership = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
+      if (ownership.length === 0) throw new Error("RDO não encontrado ou sem permissão");
+      await db.execute(sql`BEGIN`);
+      try {
+        await db.execute(sql`DELETE FROM rdo_fotos WHERE rdo_id = ${input.id}`);
+        await db.execute(sql`DELETE FROM rdo_materiais WHERE rdo_id = ${input.id}`);
+        await db.execute(sql`DELETE FROM rdo_atividades WHERE rdo_id = ${input.id}`);
+        await db.execute(sql`DELETE FROM rdo_equipamentos WHERE rdo_id = ${input.id}`);
+        await db.execute(sql`DELETE FROM rdo_mao_obra WHERE rdo_id = ${input.id}`);
+        await db.execute(sql`DELETE FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`);
+        await db.execute(sql`COMMIT`);
+      } catch (e) {
+        await db.execute(sql`ROLLBACK`);
+        throw e;
+      }
+      return { ok: true };
+    }),
+
+  reabrirRDO: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        UPDATE rdo_relatorios SET status = 'rascunho', updated_at = NOW()
+        WHERE id = ${input.id} AND company_id = ${input.companyId} AND status = 'finalizado'
+      `);
+      return { ok: true };
+    }),
+
   adicionarMaoObra: protectedProcedure
     .input(z.object({
       rdoId: z.number(),

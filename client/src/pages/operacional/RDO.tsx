@@ -15,8 +15,11 @@ import { toast } from "sonner";
 import {
   ClipboardList, Plus, Loader2, CheckCircle, ArrowLeft,
   Sun, CloudRain, CloudSun, Cloud, Trash2, Users, Wrench,
-  FileText, Camera, Save, Send,
+  FileText, Camera, Save, Send, Pencil, RotateCcw, MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const CLIMAS = ["Ensolarado", "Parcialmente Nublado", "Nublado", "Chuvoso", "Tempestade", "Garoa"];
 
@@ -67,6 +70,12 @@ export default function RDO() {
   const remEquip = trpc.operacional.removerEquipamento.useMutation({ onSuccess: () => rdoDetalhe.refetch() });
   const addMaterial = trpc.operacional.adicionarMaterial.useMutation({ onSuccess: () => rdoDetalhe.refetch() });
   const remMaterial = trpc.operacional.removerMaterial.useMutation({ onSuccess: () => rdoDetalhe.refetch() });
+  const deletarRDO = trpc.operacional.deletarRDO.useMutation({
+    onSuccess: () => { toast.success("RDO excluído"); rdos.refetch(); },
+  });
+  const reabrirRDO = trpc.operacional.reabrirRDO.useMutation({
+    onSuccess: () => { toast.success("RDO reaberto como rascunho"); rdos.refetch(); },
+  });
 
   const [form, setForm] = useState<any>({});
   const [addDialog, setAddDialog] = useState<string | null>(null);
@@ -387,10 +396,10 @@ export default function RDO() {
         <div className="space-y-2">
           {(rdos.data as any[])?.map((r: any) => (
             <div key={r.id}
-              className="border rounded-lg p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer"
-              onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}`)}>
-              <div className="flex items-center gap-4">
-                <div className="text-center">
+              className="border rounded-lg p-4 flex items-center justify-between hover:bg-gray-50 group">
+              <div className="flex items-center gap-4 flex-1 cursor-pointer"
+                onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}`)}>
+                <div className="text-center min-w-[50px]">
                   <p className="text-lg font-bold">{new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit" })}</p>
                   <p className="text-xs text-gray-500">{new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR", { month: "short", year: "numeric" })}</p>
                 </div>
@@ -402,9 +411,39 @@ export default function RDO() {
                   {r.responsavel_nome && <p className="text-xs text-gray-400">{r.responsavel_nome}</p>}
                 </div>
               </div>
-              <Badge variant={r.status === "finalizado" ? "default" : "secondary"}>
-                {r.status === "finalizado" ? "Finalizado" : "Rascunho"}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant={r.status === "finalizado" ? "default" : "secondary"}>
+                  {r.status === "finalizado" ? "Finalizado" : "Rascunho"}
+                </Badge>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}`)}>
+                      <Pencil className="h-4 w-4 mr-2" /> Editar
+                    </DropdownMenuItem>
+                    {r.status === "finalizado" && (
+                      <DropdownMenuItem onClick={() => {
+                        if (confirm("Deseja reabrir este RDO como rascunho?")) {
+                          reabrirRDO.mutate({ id: r.id, companyId });
+                        }
+                      }}>
+                        <RotateCcw className="h-4 w-4 mr-2" /> Reabrir
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => {
+                      if (confirm(`Excluir RDO de ${new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR")}? Esta ação não pode ser desfeita.`)) {
+                        deletarRDO.mutate({ id: r.id, companyId });
+                      }
+                    }}>
+                      <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           ))}
         </div>

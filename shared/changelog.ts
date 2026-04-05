@@ -8231,4 +8231,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 23:00:00",
   },
+  {
+    version: 1047,
+    titulo: "RDO — Editar, Reabrir e Excluir",
+    descricao:
+      "Menu de ações em cada RDO na listagem (3 pontos ao passar o mouse): " +
+      "Editar (abre o detalhe), Reabrir (volta RDO finalizado para rascunho, com confirmação), " +
+      "Excluir (remove RDO e todos os sub-itens com confirmação e cascata transacional). " +
+      "Backend com validação de propriedade por company_id antes de excluir, " +
+      "transação atômica para cascata (fotos, materiais, atividades, equipamentos, mão de obra) " +
+      "e guarda de status no reabrir (só permite reabrir RDOs finalizados).",
+    tipo: "feature",
+    modulos: "Operacional",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 23:30:00",
+  },
 ];
