@@ -354,46 +354,48 @@ export default function Combustivel() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="relative flex-1 min-w-[180px]">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
+          <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar placa, posto, motorista..." className="pl-9 h-9" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <Select value={filterDay} onValueChange={setFilterDay}>
-            <SelectTrigger className="w-[100px] h-9"><SelectValue placeholder="Dia" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos dias</SelectItem>
-              {availableDaysForMonth.map(d => <SelectItem key={d} value={d}>Dia {d}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterVehicle} onValueChange={setFilterVehicle}>
-            <SelectTrigger className="w-[150px] h-9"><SelectValue placeholder="Veículo" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos veículos</SelectItem>
-              {(vehicles.data || []).map((v: any) => (
-                <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterFuel} onValueChange={setFilterFuel}>
-            <SelectTrigger className="w-[120px] h-9"><SelectValue placeholder="Combustível" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos tipos</SelectItem>
-              {COMBUSTIVEIS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterDriver} onValueChange={setFilterDriver}>
-            <SelectTrigger className="w-[150px] h-9"><SelectValue placeholder="Motorista" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos motoristas</SelectItem>
-              {availableDrivers.map(d => <SelectItem key={d} value={d}>{d.length > 25 ? d.slice(0, 25) + "…" : d}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {(filterDay !== "all" || filterVehicle !== "all" || filterFuel !== "all" || filterDriver !== "all" || search) && (
-            <Button variant="ghost" size="sm" className="h-9 text-xs text-red-600 hover:text-red-700" onClick={() => { setFilterDay("all"); setFilterVehicle("all"); setFilterFuel("all"); setFilterDriver("all"); setSearch(""); }}>
-              <XCircle className="h-3.5 w-3.5 mr-1" /> Limpar
-            </Button>
-          )}
+          <div className="flex gap-2 flex-wrap">
+            <Select value={filterDay} onValueChange={setFilterDay}>
+              <SelectTrigger className="w-[110px] h-9 text-xs"><SelectValue placeholder="Dia" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os dias</SelectItem>
+                {availableDaysForMonth.map(d => <SelectItem key={d} value={d}>Dia {d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterVehicle} onValueChange={setFilterVehicle}>
+              <SelectTrigger className="w-[140px] h-9 text-xs"><SelectValue placeholder="Veículo" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os veículos</SelectItem>
+                {(vehicles.data || []).map((v: any) => (
+                  <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterFuel} onValueChange={setFilterFuel}>
+              <SelectTrigger className="w-[130px] h-9 text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os tipos</SelectItem>
+                {COMBUSTIVEIS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterDriver} onValueChange={setFilterDriver}>
+              <SelectTrigger className="w-[160px] h-9 text-xs"><SelectValue placeholder="Motorista" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os motoristas</SelectItem>
+                {availableDrivers.map(d => <SelectItem key={d} value={d}>{d.length > 30 ? d.slice(0, 30) + "…" : d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {(filterDay !== "all" || filterVehicle !== "all" || filterFuel !== "all" || filterDriver !== "all" || search) && (
+              <Button variant="ghost" size="sm" className="h-9 text-xs text-red-600 hover:text-red-700 px-2" onClick={() => { setFilterDay("all"); setFilterVehicle("all"); setFilterFuel("all"); setFilterDriver("all"); setSearch(""); }}>
+                <XCircle className="h-3.5 w-3.5 mr-1" /> Limpar
+              </Button>
+            )}
+          </div>
         </div>
 
         {list.length > 0 && (
