@@ -211,6 +211,16 @@ async function ensureFleetTables() {
     )
   `);
   await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_driver_aliases (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      alias_name VARCHAR(255) NOT NULL,
+      canonical_name VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      UNIQUE(company_id, alias_name)
+    )
+  `);
+  await db.execute(sql`
     CREATE TABLE IF NOT EXISTS fleet_consolidations (
       id SERIAL PRIMARY KEY,
       company_id INTEGER NOT NULL,
@@ -941,6 +951,15 @@ Sempre retorne JSON válido, sem markdown.`;
     .mutation(async ({ input }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
+
+      const aliasRes = await db.execute(sql`
+        SELECT alias_name, canonical_name FROM fleet_driver_aliases WHERE company_id = ${input.companyId}
+      `);
+      const aliasMap: Record<string, string> = {};
+      for (const a of ((aliasRes as any).rows || aliasRes) as any[]) {
+        aliasMap[a.alias_name.trim().toUpperCase()] = a.canonical_name;
+      }
+
       let inserted = 0;
       for (const r of input.data) {
         let consumo: string | null = null;
@@ -949,12 +968,17 @@ Sempre retorne JSON válido, sem markdown.`;
           const lit = n(r.litros);
           if (dist > 0 && lit > 0) consumo = (dist / lit).toFixed(2);
         }
+        let motorista = r.motorista || null;
+        if (motorista) {
+          const key = motorista.trim().toUpperCase();
+          if (aliasMap[key]) motorista = aliasMap[key];
+        }
         await db.insert(fleetFuelRecords).values({
           companyId: input.companyId, vehicleId: r.vehicleId, data: r.data,
           litros: r.litros, valorTotal: r.valorTotal,
           precoLitro: r.precoLitro || null, kmAtual: r.kmAtual || null, kmAnterior: r.kmAnterior || null,
           consumoKmL: consumo, tipoCombustivel: r.tipoCombustivel || "gasolina",
-          motorista: r.motorista || null, posto: r.posto || null,
+          motorista, posto: r.posto || null,
           criadoPor: input.criadoPor || null,
         });
         inserted++;
@@ -1221,6 +1245,14 @@ Sempre retorne JSON válido, sem markdown.`;
         ((existingRes as any).rows || []).map((r: any) => `${r.vehicle_id}|${r.data}|${r.num_doc}`)
       );
 
+      const aliasRes = await db.execute(sql`
+        SELECT alias_name, canonical_name FROM fleet_driver_aliases WHERE company_id = ${input.companyId}
+      `);
+      const aliasMap: Record<string, string> = {};
+      for (const a of ((aliasRes as any).rows || aliasRes) as any[]) {
+        aliasMap[a.alias_name.trim().toUpperCase()] = a.canonical_name;
+      }
+
       const toInsert: any[] = [];
       for (const rec of parsed) {
         const vehicleId = plateToVehicle[rec.plate];
@@ -1233,12 +1265,18 @@ Sempre retorne JSON válido, sem markdown.`;
 
         let motoristaFinal = rec.driver;
         if (rec.driver) {
-          const emp = matchEmployee(rec.driver);
-          if (emp) {
-            motoristaFinal = emp.nomeCompleto;
-            matchedDrivers[rec.driver] = emp.nomeCompleto;
+          const driverUpper = rec.driver.trim().toUpperCase();
+          if (aliasMap[driverUpper]) {
+            motoristaFinal = aliasMap[driverUpper];
+            matchedDrivers[rec.driver] = aliasMap[driverUpper];
           } else {
-            unmatchedDrivers.add(rec.driver);
+            const emp = matchEmployee(rec.driver);
+            if (emp) {
+              motoristaFinal = emp.nomeCompleto;
+              matchedDrivers[rec.driver] = emp.nomeCompleto;
+            } else {
+              unmatchedDrivers.add(rec.driver);
+            }
           }
         }
 
@@ -2604,5 +2642,86 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       `);
 
       return { deleted: total };
+    }),
+
+  listDriverNames: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const driversRes = await db.execute(sql`
+        SELECT motorista, COUNT(*) as qtd, MAX(data) as ultimo_uso
+        FROM fleet_fuel_records
+        WHERE company_id = ${input.companyId} AND motorista IS NOT NULL AND motorista != ''
+        GROUP BY motorista
+        ORDER BY motorista
+      `);
+      const drivers = ((driversRes as any).rows || driversRes) as Array<{ motorista: string; qtd: string; ultimo_uso: string }>;
+
+      const aliasesRes = await db.execute(sql`
+        SELECT id, alias_name, canonical_name FROM fleet_driver_aliases WHERE company_id = ${input.companyId} ORDER BY canonical_name
+      `);
+      const aliases = ((aliasesRes as any).rows || aliasesRes) as Array<{ id: number; alias_name: string; canonical_name: string }>;
+
+      return { drivers, aliases };
+    }),
+
+  mergeDriverNames: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      canonicalName: z.string().min(1),
+      aliasNames: z.array(z.string().min(1)),
+      updateExisting: z.boolean().default(true),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const userCid = (ctx as any).user?.companyId;
+      if (userCid && String(userCid) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+
+      let aliasesCreated = 0;
+      let recordsUpdated = 0;
+
+      for (const alias of input.aliasNames) {
+        if (alias.trim().toUpperCase() === input.canonicalName.trim().toUpperCase()) continue;
+
+        await db.execute(sql`
+          INSERT INTO fleet_driver_aliases (company_id, alias_name, canonical_name)
+          VALUES (${input.companyId}, ${alias.trim().toUpperCase()}, ${input.canonicalName.trim().toUpperCase()})
+          ON CONFLICT (company_id, alias_name) DO UPDATE SET canonical_name = ${input.canonicalName.trim().toUpperCase()}
+        `);
+        aliasesCreated++;
+
+        if (input.updateExisting) {
+          const upd = await db.execute(sql`
+            UPDATE fleet_fuel_records SET motorista = ${input.canonicalName.trim().toUpperCase()}
+            WHERE company_id = ${input.companyId} AND UPPER(TRIM(motorista)) = ${alias.trim().toUpperCase()}
+          `);
+          recordsUpdated += (upd as any).rowCount || 0;
+
+          const updFines = await db.execute(sql`
+            UPDATE fleet_fines SET motorista = ${input.canonicalName.trim().toUpperCase()}
+            WHERE company_id = ${input.companyId} AND UPPER(TRIM(motorista)) = ${alias.trim().toUpperCase()}
+          `);
+          recordsUpdated += (updFines as any).rowCount || 0;
+        }
+      }
+
+      return { aliasesCreated, recordsUpdated };
+    }),
+
+  deleteDriverAlias: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const userCid = (ctx as any).user?.companyId;
+      if (userCid && String(userCid) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      await db.execute(sql`DELETE FROM fleet_driver_aliases WHERE id = ${input.id} AND company_id = ${input.companyId}`);
+      return { ok: true };
     }),
 });

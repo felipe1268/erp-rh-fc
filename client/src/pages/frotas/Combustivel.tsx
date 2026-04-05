@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Fuel, Plus, Pencil, Trash2, Upload, Search, FileText, CheckCircle2, AlertTriangle, XCircle, ChevronLeft, ChevronRight, Calendar, Send, Undo2, DollarSign, Loader2, Lock } from "lucide-react";
+import { Fuel, Plus, Pencil, Trash2, Upload, Search, FileText, CheckCircle2, AlertTriangle, XCircle, ChevronLeft, ChevronRight, Calendar, Send, Undo2, DollarSign, Loader2, Lock, Users, GitMerge, Check } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 
@@ -50,6 +51,9 @@ export default function Combustivel() {
   const [clearMonthDialogOpen, setClearMonthDialogOpen] = useState(false);
   const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
   const [clearAllPassword, setClearAllPassword] = useState("");
+  const [driverDialogOpen, setDriverDialogOpen] = useState(false);
+  const [selectedDrivers, setSelectedDrivers] = useState<string[]>([]);
+  const [canonicalName, setCanonicalName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
 
@@ -108,6 +112,24 @@ export default function Combustivel() {
       fuelSummary.refetch();
       setClearMonthDialogOpen(false);
     },
+    onError: (e) => toast.error(e.message),
+  });
+  const driverNames = trpc.frotas.listDriverNames.useQuery(
+    { companyId: cId },
+    { enabled: cId > 0 && driverDialogOpen }
+  );
+  const mergeDriversMut = trpc.frotas.mergeDriverNames.useMutation({
+    onSuccess: (r) => {
+      toast.success(`${r.aliasesCreated} alias(es) criado(s), ${r.recordsUpdated} registro(s) atualizado(s)`);
+      driverNames.refetch();
+      fuel.refetch();
+      setSelectedDrivers([]);
+      setCanonicalName("");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteAliasMut = trpc.frotas.deleteDriverAlias.useMutation({
+    onSuccess: () => { toast.success("Alias removido"); driverNames.refetch(); },
     onError: (e) => toast.error(e.message),
   });
   const clearAllMut = trpc.frotas.clearAllFuelRecords.useMutation({
@@ -325,6 +347,9 @@ export default function Combustivel() {
           <div className="flex gap-2">
             <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={handleCsv} />
             <input type="file" accept=".pdf" ref={pdfRef} className="hidden" onChange={handlePdf} />
+            <Button variant="outline" size="sm" onClick={() => { setDriverDialogOpen(true); setSelectedDrivers([]); setCanonicalName(""); }}>
+              <Users className="h-4 w-4 mr-1" /> Motoristas
+            </Button>
             <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setClearMonthDialogOpen(true)} disabled={list.length === 0}>
               <Trash2 className="h-4 w-4 mr-1" /> Limpar Mês
             </Button>
@@ -904,6 +929,124 @@ export default function Combustivel() {
                 {clearAllMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
                 {clearAllMut.isPending ? "Excluindo..." : "Excluir TUDO"}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={driverDialogOpen} onOpenChange={setDriverDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" /> Gestão de Motoristas — Mesclar Nomes
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Selecione os nomes duplicados e defina o nome correto. O sistema lembrará e aplicará automaticamente nas próximas importações.
+              </p>
+
+              {driverNames.isLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <>
+                  <div className="space-y-1 max-h-[250px] overflow-y-auto border rounded-lg p-2">
+                    <p className="text-xs font-medium text-muted-foreground px-2 pb-1">Motoristas encontrados ({driverNames.data?.drivers?.length || 0})</p>
+                    {driverNames.data?.drivers?.map((d: any) => {
+                      const isSelected = selectedDrivers.includes(d.motorista);
+                      return (
+                        <div
+                          key={d.motorista}
+                          className={`flex items-center gap-3 rounded-md px-2 py-1.5 cursor-pointer transition-colors ${isSelected ? "bg-blue-50 border border-blue-200" : "hover:bg-muted/50"}`}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedDrivers(prev => prev.filter(x => x !== d.motorista));
+                            } else {
+                              setSelectedDrivers(prev => [...prev, d.motorista]);
+                              if (!canonicalName) setCanonicalName(d.motorista);
+                            }
+                          }}
+                        >
+                          <Checkbox checked={isSelected} />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium">{d.motorista}</span>
+                          </div>
+                          <Badge variant="secondary" className="text-xs">{d.qtd}x</Badge>
+                        </div>
+                      );
+                    })}
+                    {(!driverNames.data?.drivers || driverNames.data.drivers.length === 0) && (
+                      <p className="text-sm text-muted-foreground text-center py-4">Nenhum motorista encontrado</p>
+                    )}
+                  </div>
+
+                  {selectedDrivers.length >= 2 && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                      <Label className="text-sm font-medium flex items-center gap-2">
+                        <GitMerge className="h-4 w-4" /> Nome correto (canônico)
+                      </Label>
+                      <Input
+                        value={canonicalName}
+                        onChange={e => setCanonicalName(e.target.value)}
+                        placeholder="Digite o nome correto do motorista"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Os {selectedDrivers.length} nomes selecionados serão mesclados para: <strong>{canonicalName || "..."}</strong>
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedDrivers.map(s => (
+                          <Badge key={s} variant="outline" className="text-xs cursor-pointer" onClick={() => setCanonicalName(s)}>
+                            {s === canonicalName ? <Check className="h-3 w-3 mr-1 text-green-600" /> : null}
+                            {s}
+                          </Badge>
+                        ))}
+                      </div>
+                      <Button
+                        className="w-full"
+                        disabled={!canonicalName || mergeDriversMut.isPending}
+                        onClick={() => mergeDriversMut.mutate({
+                          companyId: cId,
+                          canonicalName: canonicalName.trim(),
+                          aliasNames: selectedDrivers.filter(s => s.trim().toUpperCase() !== canonicalName.trim().toUpperCase()),
+                          updateExisting: true,
+                        })}
+                      >
+                        {mergeDriversMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <GitMerge className="h-4 w-4 mr-1" />}
+                        {mergeDriversMut.isPending ? "Mesclando..." : "Mesclar Nomes Selecionados"}
+                      </Button>
+                    </div>
+                  )}
+
+                  {selectedDrivers.length === 1 && (
+                    <p className="text-sm text-amber-600 flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" /> Selecione pelo menos 2 nomes para mesclar.
+                    </p>
+                  )}
+
+                  {driverNames.data?.aliases && driverNames.data.aliases.length > 0 && (
+                    <div className="border rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Mapeamentos salvos ({driverNames.data.aliases.length})</p>
+                      <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                        {driverNames.data.aliases.map((a: any) => (
+                          <div key={a.id} className="flex items-center gap-2 text-sm bg-muted/30 rounded-md px-2 py-1">
+                            <span className="text-muted-foreground line-through">{a.alias_name}</span>
+                            <span className="text-muted-foreground">→</span>
+                            <span className="font-medium text-green-700">{a.canonical_name}</span>
+                            <Button
+                              variant="ghost" size="sm" className="ml-auto h-6 w-6 p-0 text-red-400 hover:text-red-600"
+                              onClick={() => deleteAliasMut.mutate({ companyId: cId, id: a.id })}
+                            >
+                              <XCircle className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDriverDialogOpen(false)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
