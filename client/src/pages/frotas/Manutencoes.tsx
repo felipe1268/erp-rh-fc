@@ -91,7 +91,7 @@ export default function Manutencoes() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-4">
+      <div className="p-2 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Wrench className="h-6 w-6 text-orange-600" /> Manutenções
