@@ -177,7 +177,7 @@ export default function Colaboradores() {
     { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined },
     { enabled: hasValidSelection }
   );
-  const serverStatus = statusFilter !== "Todos" && statusFilter !== "CLT" && statusFilter !== "PJ" ? statusFilter : undefined;
+  const serverStatus = statusFilter !== "Todos" && statusFilter !== "CLT" && statusFilter !== "PJ" && statusFilter !== "Socio" ? statusFilter : undefined;
   const { data: employees, isLoading } = trpc.employees.list.useQuery(
     { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined, search: search || undefined, status: serverStatus },
     { enabled: hasValidSelection }
@@ -200,6 +200,7 @@ export default function Colaboradores() {
     if (skillEmployeeIds) list = list.filter(e => skillEmployeeIds.has(e.id));
     if (statusFilter === "CLT") list = list.filter(e => (e as any).tipoContrato === "CLT");
     if (statusFilter === "PJ") list = list.filter(e => (e as any).tipoContrato === "PJ");
+    if (statusFilter === "Socio") list = list.filter(e => (e as any).tipoContrato === "Socio");
     if (statusFilter === "Desligado" && (desligDe || desligAte)) {
       list = list.filter(e => {
         const d = (e as any).dataDesligamentoEfetiva;
@@ -687,6 +688,7 @@ export default function Colaboradores() {
               <SelectItem value="Todos">Todos</SelectItem>
               <SelectItem value="CLT">CLT</SelectItem>
               <SelectItem value="PJ">PJ</SelectItem>
+              <SelectItem value="Socio">Sócio</SelectItem>
               {EMPLOYEE_STATUS.map(s => (
                 <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
               ))}
@@ -1327,7 +1329,7 @@ export default function Colaboradores() {
                       <SelectItem value="Temporario">Temporário</SelectItem>
                       <SelectItem value="Estagio">Estágio</SelectItem>
                       <SelectItem value="Aprendiz">Aprendiz</SelectItem>
-
+                      <SelectItem value="Socio">Sócio</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
