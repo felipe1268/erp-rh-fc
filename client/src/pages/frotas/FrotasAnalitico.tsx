@@ -919,9 +919,10 @@ export default function FrotasAnalitico() {
                   <thead className="sticky top-0 bg-background z-10">
                     <tr className="border-b bg-muted/40">
                       <th className="py-2 px-3 text-left font-semibold">Mês</th>
-                      <th className="py-2 px-2 text-right font-semibold text-blue-600">Combustível</th>
+                      <th className="py-2 px-2 text-right font-semibold text-sky-600">Combustível</th>
                       <th className="py-2 px-2 text-right font-semibold text-emerald-600">Manutenção</th>
-                      <th className="py-2 px-2 text-right font-semibold text-red-600">Multas</th>
+                      <th className="py-2 px-2 text-right font-semibold text-rose-600">Multas</th>
+                      <th className="py-2 px-2 text-right font-semibold text-violet-600">Pedágios</th>
                       <th className="py-2 px-2 text-right font-semibold">Total</th>
                       <th className="py-2 px-2 text-right font-semibold text-purple-600">R$/km</th>
                       <th className="py-2 px-2 text-right font-semibold text-cyan-600">km/l</th>
@@ -950,7 +951,7 @@ export default function FrotasAnalitico() {
                           }`}
                         >
                           <td className="py-2 px-3 font-medium">{row.mes}</td>
-                          <td className="py-1 px-2 text-right text-blue-600">
+                          <td className="py-1 px-2 text-right text-sky-600">
                             <div className="text-right">{hasCur ? fmt(row.combustivel) : "—"}</div>
                             {hasCur && hasPrev && row.varComb !== 0 && (
                               <div className={`text-right text-[10px] ${row.varComb > 0 ? "text-red-500" : "text-green-500"}`}>
@@ -966,11 +967,19 @@ export default function FrotasAnalitico() {
                               </div>
                             )}
                           </td>
-                          <td className="py-1 px-2 text-right text-red-600">
+                          <td className="py-1 px-2 text-right text-rose-600">
                             <div className="text-right">{hasCur && row.multas > 0 ? fmt(row.multas) : "—"}</div>
                             {hasCur && hasPrev && row.varMultas !== 0 && (
                               <div className={`text-right text-[10px] ${row.varMultas > 0 ? "text-red-500" : "text-green-500"}`}>
                                 {row.varMultas > 0 ? "▲" : "▼"}{Math.abs(row.pctMultas).toFixed(0)}%
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-1 px-2 text-right text-violet-600">
+                            <div className="text-right">{hasCur && row.pedagios > 0 ? fmt(row.pedagios) : "—"}</div>
+                            {hasCur && hasPrev && row.varPedag !== 0 && (
+                              <div className={`text-right text-[10px] ${row.varPedag > 0 ? "text-red-500" : "text-green-500"}`}>
+                                {row.varPedag > 0 ? "▲" : "▼"}{Math.abs(row.pctPedag).toFixed(0)}%
                               </div>
                             )}
                           </td>
@@ -1034,9 +1043,10 @@ export default function FrotasAnalitico() {
                   <tfoot>
                     <tr className="border-t-2 bg-muted/30 font-bold">
                       <td className="py-2 px-3">TOTAL {anoDash}</td>
-                      <td className="py-2 px-2 text-right text-blue-600">{fmt(comparativoMensal.reduce((s, r) => s + r.combustivel, 0))}</td>
+                      <td className="py-2 px-2 text-right text-sky-600">{fmt(comparativoMensal.reduce((s, r) => s + r.combustivel, 0))}</td>
                       <td className="py-2 px-2 text-right text-emerald-600">{fmt(comparativoMensal.reduce((s, r) => s + r.manutencao, 0))}</td>
-                      <td className="py-2 px-2 text-right text-red-600">{fmt(comparativoMensal.reduce((s, r) => s + r.multas, 0))}</td>
+                      <td className="py-2 px-2 text-right text-rose-600">{fmt(comparativoMensal.reduce((s, r) => s + r.multas, 0))}</td>
+                      <td className="py-2 px-2 text-right text-violet-600">{fmt(comparativoMensal.reduce((s, r) => s + r.pedagios, 0))}</td>
                       <td className="py-2 px-2 text-right">{fmt(comparativoMensal.reduce((s, r) => s + r.total, 0))}</td>
                       <td className="py-2 px-2 text-right text-purple-600">{(() => { const t = comparativoMensal.reduce((s, r) => s + r.total, 0); const k = comparativoMensal.reduce((s, r) => s + r.kmEstimado, 0); return k > 0 ? `R$ ${(t / k).toFixed(2)}` : "—"; })()}</td>
                       <td className="py-2 px-2 text-right text-cyan-600">{(() => { const l = comparativoMensal.reduce((s, r) => s + r.litros, 0); const k = comparativoMensal.reduce((s, r) => s + r.kmEstimado, 0); return l > 0 && k > 0 ? `${(k / l).toFixed(1)}` : "—"; })()}</td>
