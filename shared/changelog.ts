@@ -7984,4 +7984,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 23:30:00",
   },
+  {
+    version: 1031,
+    titulo: "Preços de Mercado Automáticos — 20 Postos Reais via Gaspedia/ANP",
+    descricao:
+      "Dados reais de preços de 20 postos de combustível da região de Guaratinguetá " +
+      "agora são carregados automaticamente via Gaspedia/ANP. " +
+      "1) 66 registros de preços incluindo Gasolina (R$5.59-6.49), Etanol (R$3.69-4.96), Diesel (R$5.42-6.61) e Diesel S10 (R$5.99-6.75). " +
+      "2) Badge 'Atualizado' com data da última coleta. " +
+      "3) Seção de mercado atualizada com contador de postos pesquisados. " +
+      "4) Endpoint saveMarketPricesBatch para importação em lote. " +
+      "5) Dicas atualizadas informando sobre dados automáticos. " +
+      "O usuário não precisa mais digitar preços manualmente — a base já vem preenchida automaticamente.",
+    tipo: "funcionalidade",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 23:45:00",
+  },
 ];

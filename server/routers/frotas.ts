@@ -2545,6 +2545,68 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       };
     }),
 
+  fetchMarketPricesAuto: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new Error('Acesso negado: empresa inválida');
+      }
+      const db = await getDb();
+      const countRes = (await db.execute(sql`
+        SELECT COUNT(*) as cnt, MAX(data) as last_date, MAX(created_at) as last_fetch
+        FROM fuel_market_prices
+        WHERE company_id = ${input.companyId}
+      `)).rows[0];
+
+      const count = parseInt(String(countRes?.cnt || '0'));
+      const lastDate = countRes?.last_date ? String(countRes.last_date) : null;
+
+      return {
+        ok: true,
+        source: count > 0 ? 'database' : 'empty',
+        count,
+        lastDate,
+        message: count > 0
+          ? `${count} preços de mercado disponíveis (última data: ${lastDate})`
+          : 'Nenhum preço de mercado encontrado. Use "Registrar Preço" para adicionar.',
+      };
+    }),
+
+  saveMarketPricesBatch: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      prices: z.array(z.object({
+        tipo: z.string(),
+        preco: z.number(),
+        posto: z.string(),
+        cidade: z.string(),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new Error('Acesso negado: empresa inválida');
+      }
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM fuel_market_prices
+        WHERE company_id = ${input.companyId}
+          AND fonte = 'Auto - Pesquisa Web'
+          AND data = CURRENT_DATE
+      `);
+
+      let count = 0;
+      for (const p of input.prices) {
+        if (p.preco > 0 && p.preco < 15) {
+          await db.execute(sql`
+            INSERT INTO fuel_market_prices (company_id, tipo_combustivel, preco, posto, cidade, fonte, data)
+            VALUES (${input.companyId}, ${p.tipo}, ${p.preco}, ${p.posto}, ${p.cidade}, 'Auto - Pesquisa Web', CURRENT_DATE)
+          `);
+          count++;
+        }
+      }
+      return { ok: true, inserted: count };
+    }),
+
   getMarketPrices: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
@@ -2581,7 +2643,14 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         ORDER BY tipo_combustivel, preco ASC, data DESC
       `)).rows;
 
-      return { latest, avgByType, bestByType };
+      const distinctPostosRes = (await db.execute(sql`
+        SELECT COUNT(DISTINCT posto) as cnt
+        FROM fuel_market_prices
+        WHERE company_id = ${input.companyId}
+      `)).rows[0];
+      const distinctPostos = parseInt(String(distinctPostosRes?.cnt || '0'));
+
+      return { latest, avgByType, bestByType, distinctPostos };
     }),
 
   saveMarketPrice: protectedProcedure

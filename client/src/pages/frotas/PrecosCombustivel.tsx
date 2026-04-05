@@ -300,16 +300,26 @@ export default function PrecosCombustivel() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-emerald-600" />
-                Preços de Mercado — Atualização Diária
+                Preços de Mercado — {market?.distinctPostos || 0} Postos Pesquisados
               </CardTitle>
-              <Button size="sm" onClick={() => setShowAddPrice(true)} className="gap-1">
-                <Plus className="h-4 w-4" />
-                Registrar Preço
-              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setShowAddPrice(true)} className="gap-1">
+                  <Plus className="h-4 w-4" />
+                  Manual
+                </Button>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Compare seus preços de abastecimento com os preços pesquisados na região
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-muted-foreground">
+                Preços reais de postos em Guaratinguetá e região (fonte: Gaspedia/ANP)
+              </p>
+              {market?.latest && market.latest.length > 0 && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-emerald-600 border-emerald-300">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Atualizado {new Date(market.latest[0]?.data).toLocaleDateString("pt-BR")}
+                </Badge>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {comparison.length > 0 && (
@@ -460,8 +470,8 @@ export default function PrecosCombustivel() {
             {(!market?.latest || market.latest.length === 0) && (
               <div className="text-center py-8 text-muted-foreground">
                 <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-amber-400" />
-                <p className="font-medium">Nenhum preço de mercado registrado</p>
-                <p className="text-xs mt-1">Clique em "Registrar Preço" para adicionar os preços praticados pelos postos da região</p>
+                <p className="font-medium">Nenhum preço de mercado disponível</p>
+                <p className="text-xs mt-1">Clique em "Manual" para adicionar preços ou aguarde a próxima atualização automática</p>
               </div>
             )}
 
@@ -469,9 +479,9 @@ export default function PrecosCombustivel() {
               <div className="flex items-start gap-2">
                 <Info className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
                 <div className="text-xs text-emerald-800 dark:text-emerald-300">
-                  <strong>Como usar:</strong> Pesquise os preços nos postos da região (app ANP "Preço da Hora", ligação ou visita)
-                  e registre aqui para comparar automaticamente com seus abastecimentos. Atualize diariamente para ter
-                  a melhor referência de negociação.
+                  <strong>Dados automáticos:</strong> Preços coletados de 20 postos da região de Guaratinguetá
+                  via Gaspedia/ANP. Compare com os valores dos seus abastecimentos para negociar melhores condições.
+                  Você também pode adicionar preços manualmente clicando em "Manual".
                 </div>
               </div>
             </div>
@@ -712,9 +722,9 @@ export default function PrecosCombustivel() {
               <div className="flex items-start gap-2">
                 <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
                 <div className="text-xs text-blue-800 dark:text-blue-300">
-                  <strong>Dica:</strong> Consulte o app da ANP (Preço da Hora) ou o site precodoscombustiveis.com.br
-                  para ver os preços atualizados na sua região. Compare com os valores dos seus abastecimentos acima
-                  para negociar melhores condições com outros postos da lista.
+                  <strong>Dica:</strong> Clique em qualquer posto no mapa para ver detalhes.
+                  Os preços de mercado na seção acima são atualizados automaticamente com dados de 20 postos
+                  da região via Gaspedia/ANP.
                 </div>
               </div>
             </div>
