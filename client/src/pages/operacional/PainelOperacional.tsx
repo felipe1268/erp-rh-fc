@@ -1,8 +1,8 @@
 import { useLocation } from "wouter";
 import {
-  ClipboardList, Blocks, AlertTriangle,
+  ClipboardList, AlertTriangle,
   CloudRain, ShieldCheck, ClipboardCheck,
-  HardHat,
+  HardHat, FlaskConical,
 } from "lucide-react";
 
 const submodulos = [
@@ -16,13 +16,13 @@ const submodulos = [
     path: "/operacional/rdo",
   },
   {
-    id: "concretagem",
-    titulo: "Concretagem",
-    subtitulo: "Controle de Concreto",
-    icon: Blocks,
+    id: "ensaios",
+    titulo: "Ensaios",
+    subtitulo: "Ensaios Tecnológicos",
+    icon: FlaskConical,
     accentFrom: "#3B82F6",
     accentTo: "#2563EB",
-    path: "/operacional/concretagem",
+    path: "/operacional/ensaios",
   },
   {
     id: "nc",
