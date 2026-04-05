@@ -263,20 +263,20 @@ export default function PainelFrotas() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Valor de Compra (total)</span>
+                    <span className="text-sm text-muted-foreground">Valor de Compra (est.)</span>
                     <span className="font-semibold">{fmt(d.totalCompra)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Valor FIPE (total)</span>
+                    <span className="text-sm text-muted-foreground">Valor FIPE atual</span>
                     <span className="font-semibold text-green-600">{fmt(d.totalFipe)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Depreciação acumulada</span>
+                    <span className="text-sm text-muted-foreground">Perda de valor (compra→FIPE)</span>
                     <span className="font-semibold text-red-600">{fmt(d.depreciacao)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Valor contábil estimado</span>
-                    <span className="font-semibold">{fmt(d.totalCompra - d.depreciacao)}</span>
+                    <span className="text-sm text-muted-foreground">% retido do investimento</span>
+                    <span className="font-semibold text-blue-600">{d.totalCompra > 0 ? `${Math.round((d.totalFipe / d.totalCompra) * 100)}%` : "—"}</span>
                   </div>
                   <div className="flex justify-between border-t pt-2">
                     <span className="text-sm text-muted-foreground">Custo total (manut + comb)</span>
@@ -386,16 +386,17 @@ export default function PainelFrotas() {
                           <th className="py-2 px-1 font-semibold">Veículo</th>
                           <th className="py-2 px-1 font-semibold text-center">Ano</th>
                           <th className="py-2 px-1 font-semibold text-center">Idade</th>
-                          <th className="py-2 px-1 font-semibold text-right">Valor Compra</th>
-                          <th className="py-2 px-1 font-semibold text-right">Valor FIPE</th>
-                          <th className="py-2 px-1 font-semibold text-right">Dep. Anual</th>
-                          <th className="py-2 px-1 font-semibold text-right">Dep. Acumulada</th>
-                          <th className="py-2 px-1 font-semibold text-right">Valor Contábil</th>
-                          <th className="py-2 px-1 font-semibold text-center">Status</th>
+                          <th className="py-2 px-1 font-semibold text-right">Compra (est.)</th>
+                          <th className="py-2 px-1 font-semibold text-right">FIPE Atual</th>
+                          <th className="py-2 px-1 font-semibold text-right">Perda de Valor</th>
+                          <th className="py-2 px-1 font-semibold text-right">Perda/Ano</th>
+                          <th className="py-2 px-1 font-semibold text-center">% Retido</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {d.depreciacaoPorVeiculo.map((v: any) => (
+                        {d.depreciacaoPorVeiculo.map((v: any) => {
+                          const pctRetido = v.valorCompra > 0 ? Math.round((v.valorFipe / v.valorCompra) * 100) : 0;
+                          return (
                           <tr key={v.id} className="border-b border-border/50 hover:bg-muted/30">
                             <td className="py-2 px-1">
                               <div className="font-medium">{v.placa || "—"}</div>
@@ -404,42 +405,46 @@ export default function PainelFrotas() {
                             <td className="py-2 px-1 text-center">{v.anoFab}</td>
                             <td className="py-2 px-1 text-center">{v.idadeAnos}a</td>
                             <td className="py-2 px-1 text-right">{fmt(v.valorCompra)}</td>
-                            <td className="py-2 px-1 text-right text-green-600">{fmt(v.valorFipe)}</td>
+                            <td className="py-2 px-1 text-right text-green-600 font-medium">{fmt(v.valorFipe)}</td>
+                            <td className="py-2 px-1 text-right text-red-600">{fmt(v.deprecReal)}</td>
                             <td className="py-2 px-1 text-right text-muted-foreground">{fmt(v.deprecAnual)}/ano</td>
-                            <td className="py-2 px-1 text-right text-red-600 font-medium">{fmt(v.deprecAcumulada)}</td>
-                            <td className="py-2 px-1 text-right font-semibold">{fmt(v.valorContabil)}</td>
                             <td className="py-2 px-1 text-center">
-                              <Badge className={`text-[9px] ${
-                                v.statusDep === 'totalmente' ? 'bg-red-100 text-red-700 hover:bg-red-100' :
-                                v.statusDep === 'quase' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' :
-                                'bg-green-100 text-green-700 hover:bg-green-100'
-                              }`}>
-                                {v.statusDep === 'totalmente' ? '100%' : v.statusDep === 'quase' ? '>80%' : 'Parcial'}
-                              </Badge>
+                              <div className="flex items-center gap-1 justify-center">
+                                <div className="w-12 h-2 bg-muted rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${
+                                    pctRetido >= 70 ? 'bg-green-500' : pctRetido >= 40 ? 'bg-amber-500' : 'bg-red-500'
+                                  }`} style={{ width: `${Math.min(pctRetido, 100)}%` }} />
+                                </div>
+                                <span className={`text-[10px] font-semibold ${
+                                  pctRetido >= 70 ? 'text-green-600' : pctRetido >= 40 ? 'text-amber-600' : 'text-red-600'
+                                }`}>{pctRetido}%</span>
+                              </div>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                       <tfoot>
                         <tr className="border-t-2 font-semibold">
                           <td className="py-2 px-1" colSpan={3}>TOTAL ({d.depreciacaoPorVeiculo.length} veículos)</td>
                           <td className="py-2 px-1 text-right">{fmt(d.totalCompra)}</td>
                           <td className="py-2 px-1 text-right text-green-600">{fmt(d.totalFipe)}</td>
-                          <td className="py-2 px-1 text-right text-muted-foreground">—</td>
                           <td className="py-2 px-1 text-right text-red-600">{fmt(d.depreciacao)}</td>
-                          <td className="py-2 px-1 text-right">{fmt(d.totalCompra - d.depreciacao)}</td>
-                          <td className="py-2 px-1"></td>
+                          <td className="py-2 px-1 text-right text-muted-foreground">—</td>
+                          <td className="py-2 px-1 text-center">
+                            <span className="text-blue-600 font-bold">{d.totalCompra > 0 ? `${Math.round((d.totalFipe / d.totalCompra) * 100)}%` : "—"}</span>
+                          </td>
                         </tr>
                       </tfoot>
                     </table>
                   </div>
                   <div className="mt-3 flex gap-4 text-[10px] text-muted-foreground">
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span> Totalmente depreciado</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span> Quase totalmente (&gt;80%)</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Depreciação parcial</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Retém 70%+ do valor</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span> Retém 40-69%</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span> Retém menos de 40%</span>
                   </div>
                   <p className="mt-2 text-[10px] text-muted-foreground italic">
-                    * Valores de compra estimados com base no preço de mercado na época da fabricação. Depreciação linear com valor residual de 10%.
+                    * Perda de valor = diferença entre preço de compra estimado e valor FIPE atual. Quanto mais o veículo retém, melhor o investimento.
                   </p>
                 </CardContent>
               </Card>

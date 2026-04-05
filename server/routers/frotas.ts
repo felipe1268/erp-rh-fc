@@ -1240,30 +1240,28 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       const depreciacaoPorVeiculo = allVehicles.map((v: any) => {
         const valorC = n(v.valor_compra);
         const fipe = n(v.valor_fipe);
-        const residual = n(v.valor_residual);
-        const deprecAnos = v.depreciacao_anos || 5;
         let anos = 0;
         if (v.data_aquisicao) {
           anos = (now.getTime() - new Date(v.data_aquisicao).getTime()) / (365.25 * 24 * 60 * 60 * 1000);
         } else if (v.anoFabricacao) {
           anos = now.getFullYear() - parseInt(v.anoFabricacao);
         }
-        const deprecAnual = valorC > 0 ? (valorC - residual) / deprecAnos : 0;
-        const deprecTotal = Math.min(Math.max(deprecAnual * anos, 0), Math.max(valorC - residual, 0));
-        const contabil = Math.max(valorC - deprecTotal, residual);
-        const statusDep = anos >= deprecAnos ? 'totalmente' : anos > deprecAnos * 0.8 ? 'quase' : 'parcial';
+        const deprecReal = valorC > 0 ? Math.max(valorC - fipe, 0) : 0;
+        const deprecAnual = anos > 0 ? Math.round(deprecReal / anos) : 0;
+        const pctDep = valorC > 0 ? Math.round((deprecReal / valorC) * 100) : 0;
+        const statusDep = pctDep >= 80 ? 'alta' : pctDep >= 50 ? 'media' : pctDep >= 20 ? 'moderada' : 'baixa';
         return {
           id: v.id, placa: v.placa, modelo: v.modelo, marca: v.marca,
           tipo: v.tipoVeiculo, anoFab: v.anoFabricacao,
-          valorCompra: valorC, valorFipe: fipe, valorResidual: residual,
-          deprecAnos, idadeAnos: Math.round(anos * 10) / 10,
-          deprecAnual: Math.round(deprecAnual),
-          deprecAcumulada: Math.round(deprecTotal),
-          valorContabil: Math.round(contabil),
+          valorCompra: valorC, valorFipe: fipe,
+          idadeAnos: Math.round(anos * 10) / 10,
+          deprecAnual,
+          deprecReal: Math.round(deprecReal),
+          pctDep,
           statusDep,
         };
       });
-      const depreciacao = depreciacaoPorVeiculo.reduce((s: number, v: any) => s + v.deprecAcumulada, 0);
+      const depreciacao = depreciacaoPorVeiculo.reduce((s: number, v: any) => s + v.deprecReal, 0);
 
       const fuelByMonth: Record<string, number> = {};
       for (const f of allFuel) {

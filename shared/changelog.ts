@@ -7702,4 +7702,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 00:30:00",
   },
+  {
+    version: 1013,
+    titulo: "Frotas — Depreciação Real (Compra vs FIPE) no lugar de Depreciação Contábil",
+    descricao:
+      "Depreciação reformulada: agora mostra a perda REAL de valor (Compra - FIPE atual) em vez de depreciação linear contábil. " +
+      "Tabela atualizada com colunas: Compra estimada, FIPE atual, Perda de valor, Perda/ano, % Retido (com barra visual). " +
+      "Card Patrimônio mostra: valor de compra, FIPE atual, perda total e % retido do investimento. " +
+      "Frota retém 86% do investimento total (R$ 1.636.910 FIPE vs R$ 1.900.800 compra). " +
+      "Veículos que valorizaram (HR, Yamaha) mostram 100%+ retido e perda zero.",
+    tipo: "melhoria",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 01:00:00",
+  },
 ];
