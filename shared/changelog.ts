@@ -8197,4 +8197,22 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 22:00:00",
   },
+  {
+    version: 1045,
+    titulo: "Captura de Fotos e Vídeos no Checklist",
+    descricao:
+      "Cada item do checklist agora permite anexar fotos e vídeos como evidência de inspeção. " +
+      "Botões 'Foto' e 'Vídeo' em cada item — no celular, abre câmera diretamente (capture=environment). " +
+      "Preview em miniatura com contagem de mídias anexadas. " +
+      "Clique na miniatura para ver foto em tela cheia ou reproduzir vídeo. " +
+      "Botão X para remover mídia antes de salvar. " +
+      "Spinner de carregamento durante upload. " +
+      "Na visualização do checklist preenchido, fotos/vídeos aparecem em cada item. " +
+      "Suporte a múltiplas fotos e vídeos por item (armazenados em JSONB). " +
+      "Limites: fotos até 10MB, vídeos até 50MB.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 22:30:00",
+  },
 ];

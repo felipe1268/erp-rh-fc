@@ -12,8 +12,9 @@ import { Switch } from "@/components/ui/switch";
 import {
   ClipboardCheck, Plus, Trash2, FileText, CheckCircle, XCircle, AlertCircle,
   ChevronDown, ChevronUp, Eye, Settings, Truck, Camera, ArrowLeft,
+  Video, X, Image as ImageIcon, Loader2, Maximize2,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -40,7 +41,12 @@ export default function ChecklistVeiculos() {
   const [fillKm, setFillKm] = useState("");
   const [fillMotorista, setFillMotorista] = useState("");
   const [fillObs, setFillObs] = useState("");
-  const [fillResponses, setFillResponses] = useState<{ templateItemId?: number; categoria: string; descricao: string; resposta: string; observacao: string; fotoUrl: string }[]>([]);
+  const [fillResponses, setFillResponses] = useState<{ templateItemId?: number; categoria: string; descricao: string; resposta: string; observacao: string; fotoUrl: string; midias: { url: string; tipo: string; preview?: string }[] }[]>([]);
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<{ url: string; tipo: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const [activeItemIdx, setActiveItemIdx] = useState<number | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
 
   const [tplNome, setTplNome] = useState("");
@@ -78,6 +84,54 @@ export default function ChecklistVeiculos() {
     onError: (e) => toast.error(e.message),
   });
 
+  const uploadMedia = trpc.frotas.uploadChecklistMedia.useMutation();
+
+  const handleMediaCapture = useCallback(async (file: File, globalIdx: number) => {
+    if (!file) return;
+    const maxSize = file.type.startsWith('video') ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error(file.type.startsWith('video') ? "Vídeo muito grande (máx 50MB)" : "Foto muito grande (máx 10MB)");
+      return;
+    }
+    setUploadingIdx(globalIdx);
+    try {
+      const preview = file.type.startsWith('image') ? URL.createObjectURL(file) : undefined;
+      const reader = new FileReader();
+      const b64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const tipo = file.type.startsWith('video') ? 'video' : 'foto';
+      const result = await uploadMedia.mutateAsync({
+        companyId: cId,
+        base64: b64,
+        contentType: file.type,
+        filename: file.name,
+      });
+      const copy = [...fillResponses];
+      copy[globalIdx] = {
+        ...copy[globalIdx],
+        midias: [...copy[globalIdx].midias, { url: result.url, tipo, preview }],
+      };
+      setFillResponses(copy);
+      toast.success(tipo === 'video' ? "Vídeo anexado!" : "Foto anexada!");
+    } catch (e: any) {
+      toast.error("Erro ao enviar: " + (e.message || "tente novamente"));
+    } finally {
+      setUploadingIdx(null);
+    }
+  }, [fillResponses, cId, uploadMedia]);
+
+  function removeMedia(globalIdx: number, mediaIdx: number) {
+    const copy = [...fillResponses];
+    const newMidias = [...copy[globalIdx].midias];
+    if (newMidias[mediaIdx]?.preview) URL.revokeObjectURL(newMidias[mediaIdx].preview!);
+    newMidias.splice(mediaIdx, 1);
+    copy[globalIdx] = { ...copy[globalIdx], midias: newMidias };
+    setFillResponses(copy);
+  }
+
   function resetTplForm() {
     setTplNome(""); setTplDescricao(""); setTplTipoVeiculo(""); setTplItems([]); setTplNewCat(""); setTplNewDesc("");
   }
@@ -113,7 +167,8 @@ export default function ChecklistVeiculos() {
         descricao: r.descricao,
         resposta: r.resposta,
         observacao: r.observacao || undefined,
-        fotoUrl: r.fotoUrl || undefined,
+        fotoUrl: r.fotoUrl || r.midias.find(m => m.tipo === 'foto')?.url || undefined,
+        midiasUrls: r.midias.map(m => ({ url: m.url, tipo: m.tipo })),
       })),
     });
   }
@@ -314,6 +369,7 @@ export default function ChecklistVeiculos() {
                       resposta: "conforme",
                       observacao: "",
                       fotoUrl: "",
+                      midias: [],
                     })));
                   }, 0);
                 }
@@ -331,46 +387,103 @@ export default function ChecklistVeiculos() {
                       <div className="space-y-2">
                         {catItems.map((resp, idx) => {
                           const globalIdx = fillResponses.indexOf(resp);
+                          const isUploading = uploadingIdx === globalIdx;
                           return (
-                            <div key={idx} className={`flex items-start gap-2 p-2 rounded-lg ${resp.resposta === "conforme" ? "bg-green-50 dark:bg-green-950" : resp.resposta === "nao_conforme" ? "bg-red-50 dark:bg-red-950" : "bg-gray-50 dark:bg-gray-800"}`}>
-                              <div className="flex-1">
-                                <p className="text-xs text-slate-700 dark:text-slate-300">{resp.descricao}</p>
-                                {resp.resposta === "nao_conforme" && (
-                                  <Input className="mt-1 h-7 text-[10px]" placeholder="Observação da não conformidade..."
-                                    value={resp.observacao}
-                                    onChange={e => {
+                            <div key={idx} className={`p-2 rounded-lg ${resp.resposta === "conforme" ? "bg-green-50 dark:bg-green-950" : resp.resposta === "nao_conforme" ? "bg-red-50 dark:bg-red-950" : "bg-gray-50 dark:bg-gray-800"}`}>
+                              <div className="flex items-start gap-2">
+                                <div className="flex-1">
+                                  <p className="text-xs text-slate-700 dark:text-slate-300">{resp.descricao}</p>
+                                  {resp.resposta === "nao_conforme" && (
+                                    <Input className="mt-1 h-7 text-[10px]" placeholder="Observação da não conformidade..."
+                                      value={resp.observacao}
+                                      onChange={e => {
+                                        const copy = [...fillResponses];
+                                        copy[globalIdx] = { ...copy[globalIdx], observacao: e.target.value };
+                                        setFillResponses(copy);
+                                      }} />
+                                  )}
+                                </div>
+                                <div className="flex gap-1 shrink-0">
+                                  <button className={`p-1.5 rounded-lg transition-colors ${resp.resposta === "conforme" ? "bg-green-500 text-white" : "bg-white text-green-500 border border-green-200"}`}
+                                    onClick={() => {
                                       const copy = [...fillResponses];
-                                      copy[globalIdx] = { ...copy[globalIdx], observacao: e.target.value };
+                                      copy[globalIdx] = { ...copy[globalIdx], resposta: "conforme" };
                                       setFillResponses(copy);
-                                    }} />
+                                    }}>
+                                    <CheckCircle className="h-4 w-4" />
+                                  </button>
+                                  <button className={`p-1.5 rounded-lg transition-colors ${resp.resposta === "nao_conforme" ? "bg-red-500 text-white" : "bg-white text-red-500 border border-red-200"}`}
+                                    onClick={() => {
+                                      const copy = [...fillResponses];
+                                      copy[globalIdx] = { ...copy[globalIdx], resposta: "nao_conforme" };
+                                      setFillResponses(copy);
+                                    }}>
+                                    <XCircle className="h-4 w-4" />
+                                  </button>
+                                  <button className={`p-1.5 rounded-lg transition-colors ${resp.resposta === "na" ? "bg-gray-500 text-white" : "bg-white text-gray-400 border border-gray-200"}`}
+                                    onClick={() => {
+                                      const copy = [...fillResponses];
+                                      copy[globalIdx] = { ...copy[globalIdx], resposta: "na" };
+                                      setFillResponses(copy);
+                                    }}>
+                                    <AlertCircle className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                <button
+                                  className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-400 border border-blue-200 dark:border-blue-800 transition-colors"
+                                  disabled={isUploading}
+                                  onClick={() => { setActiveItemIdx(globalIdx); fileInputRef.current?.click(); }}
+                                >
+                                  {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+                                  Foto
+                                </button>
+                                <button
+                                  className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md bg-purple-50 text-purple-600 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-400 border border-purple-200 dark:border-purple-800 transition-colors"
+                                  disabled={isUploading}
+                                  onClick={() => { setActiveItemIdx(globalIdx); videoInputRef.current?.click(); }}
+                                >
+                                  {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Video className="h-3 w-3" />}
+                                  Vídeo
+                                </button>
+                                {resp.midias.length > 0 && (
+                                  <span className="text-[10px] text-slate-500 ml-1">
+                                    {resp.midias.filter(m => m.tipo === 'foto').length > 0 && `${resp.midias.filter(m => m.tipo === 'foto').length} foto(s)`}
+                                    {resp.midias.filter(m => m.tipo === 'foto').length > 0 && resp.midias.filter(m => m.tipo === 'video').length > 0 && ' · '}
+                                    {resp.midias.filter(m => m.tipo === 'video').length > 0 && `${resp.midias.filter(m => m.tipo === 'video').length} vídeo(s)`}
+                                  </span>
                                 )}
                               </div>
-                              <div className="flex gap-1 shrink-0">
-                                <button className={`p-1.5 rounded-lg transition-colors ${resp.resposta === "conforme" ? "bg-green-500 text-white" : "bg-white text-green-500 border border-green-200"}`}
-                                  onClick={() => {
-                                    const copy = [...fillResponses];
-                                    copy[globalIdx] = { ...copy[globalIdx], resposta: "conforme" };
-                                    setFillResponses(copy);
-                                  }}>
-                                  <CheckCircle className="h-4 w-4" />
-                                </button>
-                                <button className={`p-1.5 rounded-lg transition-colors ${resp.resposta === "nao_conforme" ? "bg-red-500 text-white" : "bg-white text-red-500 border border-red-200"}`}
-                                  onClick={() => {
-                                    const copy = [...fillResponses];
-                                    copy[globalIdx] = { ...copy[globalIdx], resposta: "nao_conforme" };
-                                    setFillResponses(copy);
-                                  }}>
-                                  <XCircle className="h-4 w-4" />
-                                </button>
-                                <button className={`p-1.5 rounded-lg transition-colors ${resp.resposta === "na" ? "bg-gray-500 text-white" : "bg-white text-gray-400 border border-gray-200"}`}
-                                  onClick={() => {
-                                    const copy = [...fillResponses];
-                                    copy[globalIdx] = { ...copy[globalIdx], resposta: "na" };
-                                    setFillResponses(copy);
-                                  }}>
-                                  <AlertCircle className="h-4 w-4" />
-                                </button>
-                              </div>
+                              {resp.midias.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                  {resp.midias.map((m, mi) => (
+                                    <div key={mi} className="relative group">
+                                      {m.tipo === 'foto' ? (
+                                        <div
+                                          className="w-14 h-14 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:ring-2 ring-blue-400 transition-all"
+                                          onClick={() => setPreviewMedia({ url: m.preview || m.url, tipo: m.tipo })}
+                                        >
+                                          <img src={m.preview || m.url} alt="Evidência" className="w-full h-full object-cover" />
+                                        </div>
+                                      ) : (
+                                        <div
+                                          className="w-14 h-14 rounded-lg overflow-hidden border border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-950 flex items-center justify-center cursor-pointer hover:ring-2 ring-purple-400 transition-all"
+                                          onClick={() => setPreviewMedia({ url: m.url, tipo: m.tipo })}
+                                        >
+                                          <Video className="h-5 w-5 text-purple-500" />
+                                        </div>
+                                      )}
+                                      <button
+                                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => removeMedia(globalIdx, mi)}
+                                      >
+                                        <X className="h-2.5 w-2.5" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -441,15 +554,42 @@ export default function ChecklistVeiculos() {
                         </Badge>
                       </div>
                       <div className="space-y-1">
-                        {catItems.map((r: any, i: number) => (
-                          <div key={i} className={`flex items-center gap-2 p-2 rounded-lg ${r.resposta === "conforme" ? "bg-green-50 dark:bg-green-950" : r.resposta === "nao_conforme" ? "bg-red-50 dark:bg-red-950" : "bg-gray-50 dark:bg-gray-800"}`}>
-                            {r.resposta === "conforme" ? <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" /> : r.resposta === "nao_conforme" ? <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" /> : <AlertCircle className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
-                            <div className="flex-1">
-                              <p className="text-xs text-slate-700 dark:text-slate-300">{r.descricao}</p>
-                              {r.observacao && <p className="text-[10px] text-red-600 mt-0.5">{r.observacao}</p>}
+                        {catItems.map((r: any, i: number) => {
+                          const midias: any[] = r.midias_urls || (r.foto_url ? [{ url: r.foto_url, tipo: 'foto' }] : []);
+                          return (
+                            <div key={i} className={`p-2 rounded-lg ${r.resposta === "conforme" ? "bg-green-50 dark:bg-green-950" : r.resposta === "nao_conforme" ? "bg-red-50 dark:bg-red-950" : "bg-gray-50 dark:bg-gray-800"}`}>
+                              <div className="flex items-center gap-2">
+                                {r.resposta === "conforme" ? <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" /> : r.resposta === "nao_conforme" ? <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" /> : <AlertCircle className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
+                                <div className="flex-1">
+                                  <p className="text-xs text-slate-700 dark:text-slate-300">{r.descricao}</p>
+                                  {r.observacao && <p className="text-[10px] text-red-600 mt-0.5">{r.observacao}</p>}
+                                </div>
+                                {midias.length > 0 && (
+                                  <span className="text-[9px] text-blue-500 flex items-center gap-0.5">
+                                    <Camera className="h-3 w-3" /> {midias.length}
+                                  </span>
+                                )}
+                              </div>
+                              {midias.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-1.5 ml-6">
+                                  {midias.map((m: any, mi: number) => (
+                                    <div key={mi} className="cursor-pointer" onClick={() => setPreviewMedia({ url: m.url, tipo: m.tipo || 'foto' })}>
+                                      {(m.tipo || 'foto') === 'foto' ? (
+                                        <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 hover:ring-2 ring-blue-400 transition-all">
+                                          <img src={m.url} alt="Evidência" className="w-full h-full object-cover" />
+                                        </div>
+                                      ) : (
+                                        <div className="w-12 h-12 rounded-lg overflow-hidden border border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-950 flex items-center justify-center hover:ring-2 ring-purple-400 transition-all">
+                                          <Video className="h-4 w-4 text-purple-500" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   );
@@ -542,6 +682,48 @@ export default function ChecklistVeiculos() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0];
+          if (file && activeItemIdx !== null) handleMediaCapture(file, activeItemIdx);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/*"
+        capture="environment"
+        className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0];
+          if (file && activeItemIdx !== null) handleMediaCapture(file, activeItemIdx);
+          e.target.value = '';
+        }}
+      />
+
+      {previewMedia && (
+        <Dialog open={!!previewMedia} onOpenChange={() => setPreviewMedia(null)}>
+          <DialogContent className="max-w-3xl max-h-[90vh] p-2 bg-black/95">
+            <div className="flex justify-end mb-1">
+              <button onClick={() => setPreviewMedia(null)} className="text-white/70 hover:text-white p-1">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {previewMedia.tipo === 'foto' ? (
+              <img src={previewMedia.url} alt="Evidência" className="w-full max-h-[80vh] object-contain rounded" />
+            ) : (
+              <video src={previewMedia.url} controls autoPlay className="w-full max-h-[80vh] rounded" />
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

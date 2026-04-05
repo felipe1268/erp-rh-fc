@@ -353,9 +353,11 @@ async function ensureFleetTables() {
       resposta VARCHAR(20) NOT NULL DEFAULT 'na',
       observacoes TEXT,
       foto_url TEXT,
+      midias_urls JSONB DEFAULT '[]'::jsonb,
       created_at TIMESTAMP DEFAULT NOW() NOT NULL
     )
   `);
+  await db.execute(sql`ALTER TABLE fleet_checklist_responses ADD COLUMN IF NOT EXISTS midias_urls JSONB DEFAULT '[]'::jsonb`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS fleet_washes (
       id SERIAL PRIMARY KEY,
@@ -637,6 +639,30 @@ export const frotasRouter = router({
       const setFields: any = { ...data, updatedAt: new Date().toISOString() };
       await db.update(vehicles).set(setFields).where(and(eq(vehicles.id, id), eq(vehicles.companyId, companyId)));
       return { success: true };
+    }),
+
+  uploadChecklistMedia: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      base64: z.string(),
+      contentType: z.string().default("image/jpeg"),
+      filename: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime'];
+      if (!allowedMimes.includes(input.contentType)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo de arquivo não permitido. Use JPEG, PNG, WebP, MP4 ou WebM." });
+      }
+      const buf = Buffer.from(input.base64, 'base64');
+      const isVideo = input.contentType.startsWith('video');
+      const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+      if (buf.length > maxSize) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: isVideo ? "Vídeo muito grande (máx 50MB)" : "Foto muito grande (máx 10MB)" });
+      }
+      const ext = input.contentType.includes('png') ? 'png' : input.contentType.includes('webp') ? 'webp' : isVideo ? (input.contentType.includes('webm') ? 'webm' : 'mp4') : 'jpg';
+      const key = `checklists/${input.companyId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { url } = await storagePut(key, buf, input.contentType);
+      return { url: url || `/api/files/${key}`, key };
     }),
 
   uploadVehiclePhoto: protectedProcedure
@@ -5281,6 +5307,7 @@ Sempre retorne JSON válido, sem markdown.`;
         resposta: z.string().default('conforme'),
         observacao: z.string().optional(),
         fotoUrl: z.string().optional(),
+        midiasUrls: z.array(z.object({ url: z.string(), tipo: z.string() })).optional(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -5297,7 +5324,8 @@ Sempre retorne JSON válido, sem markdown.`;
 
       if (checklist) {
         for (const resp of input.responses) {
-          await db.execute(sql`INSERT INTO fleet_checklist_responses (checklist_id, template_item_id, categoria, descricao, resposta, observacao, foto_url) VALUES (${checklist.id}, ${resp.templateItemId ?? null}, ${resp.categoria}, ${resp.descricao}, ${resp.resposta}, ${resp.observacao ?? null}, ${resp.fotoUrl ?? null})`);
+          const midiasJson = resp.midiasUrls && resp.midiasUrls.length > 0 ? JSON.stringify(resp.midiasUrls) : '[]';
+          await db.execute(sql`INSERT INTO fleet_checklist_responses (checklist_id, template_item_id, categoria, descricao, resposta, observacao, foto_url, midias_urls) VALUES (${checklist.id}, ${resp.templateItemId ?? null}, ${resp.categoria}, ${resp.descricao}, ${resp.resposta}, ${resp.observacao ?? null}, ${resp.fotoUrl ?? null}, ${midiasJson}::jsonb)`);
         }
         if (input.kmAtual) {
           await db.execute(sql`UPDATE vehicles SET km_atual = ${String(input.kmAtual)}, updated_at = NOW() WHERE id = ${input.vehicleId} AND company_id = ${input.companyId}`);
