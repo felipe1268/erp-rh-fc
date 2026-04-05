@@ -663,57 +663,48 @@ export default function Pedagios() {
           </DialogContent>
         </Dialog>
         <Dialog open={excelDialogOpen} onOpenChange={(o) => { if (!parseExcelMut.isPending && !excelSaving) setExcelDialogOpen(o); }}>
-          <DialogContent resizable={false} className="!w-[96vw] !max-w-[96vw] !h-[94vh] !max-h-[94vh] flex flex-col p-0 gap-0">
-            <div className="flex items-center gap-2 px-5 py-3 border-b shrink-0">
-              <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
-              <h2 className="text-lg font-bold">Importar Pedágios — Excel Sem Parar</h2>
-              {excelFiles.length > 0 && (
-                <div className="ml-auto flex items-center gap-2">
-                  <Badge className="bg-emerald-100 text-emerald-700">{excelFiles.length} arquivo(s)</Badge>
-                  <Badge variant="outline" className="text-xs">{(excelFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(0)} KB</Badge>
-                </div>
-              )}
-            </div>
+          <DialogContent resizable={false} className={`flex flex-col p-0 gap-0 ${excelParsed ? "!w-[96vw] !max-w-[96vw] !h-[90vh] !max-h-[90vh]" : "!w-[480px] !max-w-[90vw]"}`}>
+            <DialogHeader className="px-5 pt-4 pb-3 border-b shrink-0">
+              <DialogTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5 text-emerald-600" /> Importar Pedágios — Excel Sem Parar
+              </DialogTitle>
+            </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto px-5 py-3">
+            <div className={`${excelParsed ? "flex-1 overflow-hidden" : ""} px-5 py-4`}>
               {excelFiles.length > 0 && !excelParsed && excelStage === "idle" && (
-                <div className="flex flex-col items-center justify-center h-full gap-4">
-                  <div className="bg-emerald-50 rounded-xl p-6 border border-emerald-200 max-w-lg w-full">
-                    <div className="text-center mb-4">
-                      <FileSpreadsheet className="h-10 w-10 text-emerald-500 mx-auto mb-2" />
-                      <h3 className="font-semibold text-emerald-800">Pronto para processar</h3>
-                      <p className="text-sm text-emerald-600 mt-1">{excelFiles.length} planilha(s) selecionada(s)</p>
-                    </div>
-                    <div className="flex flex-wrap gap-1 justify-center mb-4">
-                      {excelFiles.map((f, i) => (
-                        <Badge key={i} className="bg-white text-emerald-700 border border-emerald-300 text-[10px]">{f.name}</Badge>
-                      ))}
-                    </div>
-                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700 h-11 text-base" onClick={processExcel} disabled={parseExcelMut.isPending}>
-                      {parseExcelMut.isPending ? <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Processando...</> : <><Upload className="h-5 w-5 mr-2" /> Processar {excelFiles.length > 1 ? `${excelFiles.length} Planilhas` : "Planilha"}</>}
-                    </Button>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+                    <span className="font-semibold">{excelFiles.length} arquivo(s) selecionado(s)</span>
+                    <Badge variant="outline" className="text-xs ml-auto">{(excelFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(0)} KB</Badge>
                   </div>
+                  <div className="flex flex-wrap gap-1">
+                    {excelFiles.map((f, i) => (
+                      <Badge key={i} className="bg-emerald-100 text-emerald-700 text-[10px]">{f.name}</Badge>
+                    ))}
+                  </div>
+                  <Button className="w-full bg-emerald-600 hover:bg-emerald-700 h-10" onClick={processExcel} disabled={parseExcelMut.isPending}>
+                    {parseExcelMut.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processando...</> : <><Upload className="h-4 w-4 mr-2" /> Processar {excelFiles.length > 1 ? `${excelFiles.length} Planilhas` : "Planilha"}</>}
+                  </Button>
                 </div>
               )}
 
               {(excelStage !== "idle" && excelStage !== "done") && (
-                <div className="flex flex-col items-center justify-center h-full gap-4">
-                  <div className="max-w-lg w-full space-y-3">
-                    <div className="flex items-center gap-3 text-sm">
-                      <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
-                      <div>
-                        <span className="font-medium">
-                          {excelStage === "reading" && "Lendo arquivo..."}
-                          {excelStage === "parsing" && "Interpretando planilha..."}
-                          {excelStage === "matching" && "Vinculando placas aos veículos..."}
-                          {excelStage === "saving" && "Salvando lançamentos..."}
-                        </span>
-                        {excelFileProgress && <div className="text-xs text-muted-foreground mt-0.5">{excelFileProgress}</div>}
-                      </div>
+                <div className="space-y-3 py-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+                    <div>
+                      <span className="font-medium">
+                        {excelStage === "reading" && "Lendo arquivo..."}
+                        {excelStage === "parsing" && "Interpretando planilha..."}
+                        {excelStage === "matching" && "Vinculando placas aos veículos..."}
+                        {excelStage === "saving" && "Salvando lançamentos..."}
+                      </span>
+                      {excelFileProgress && <div className="text-xs text-muted-foreground mt-0.5">{excelFileProgress}</div>}
                     </div>
-                    <Progress value={excelProgress} className="h-3" />
-                    <div className="text-right text-sm font-medium text-emerald-700">{excelProgress}%</div>
                   </div>
+                  <Progress value={excelProgress} className="h-2" />
+                  <div className="text-right text-xs text-muted-foreground">{excelProgress}%</div>
                 </div>
               )}
 
