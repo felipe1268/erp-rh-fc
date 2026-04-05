@@ -352,12 +352,20 @@ export default function Pedagios() {
   const totalSemParar = list.filter((r: any) => r.categoria === "sem_parar").length;
   const veiculosUnicos = new Set(list.map((r: any) => r.vehicle_id)).size;
 
-  const monthHasData = (m: number) => {
-    return allRecords.some((r: any) => {
-      const d = new Date(r.data);
-      return d.getFullYear() === anoAtual && d.getMonth() + 1 === m;
+  const mesesComDados = (() => {
+    const map: Record<number, number> = {};
+    allRecords.forEach((r: any) => {
+      if (r.data) {
+        const d = new Date(r.data);
+        const y = d.getFullYear();
+        if (y === anoAtual) {
+          const mi = d.getMonth() + 1;
+          map[mi] = (map[mi] || 0) + 1;
+        }
+      }
     });
-  };
+    return map;
+  })();
 
   return (
     <DashboardLayout>
@@ -382,27 +390,46 @@ export default function Pedagios() {
         </div>
 
         <div className="bg-card border rounded-xl p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAnoAtual(a => a - 1)}><ChevronLeft className="h-4 w-4" /></Button>
-            <span className="font-semibold text-sm min-w-[50px] text-center">{anoAtual}</span>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAnoAtual(a => a + 1)}><ChevronRight className="h-4 w-4" /></Button>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAnoAtual(a => a - 1)}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm font-bold min-w-[50px] text-center">{anoAtual}</span>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAnoAtual(a => a + 1)}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" /> Com dados</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-muted inline-block border" /> Sem dados</span>
+            </div>
           </div>
-          <div className="flex gap-1 flex-wrap">
+          <div className="grid grid-cols-12 gap-1">
             {MESES_ABREV.map((m, i) => {
               const mes = i + 1;
-              const isActive = mesAtual === mes;
-              const hasData = monthHasData(mes);
+              const isSelected = mesAtual === mes;
+              const hasData = !!mesesComDados[mes];
+              const count = mesesComDados[mes] || 0;
               return (
-                <button key={m} onClick={() => setMesAtual(mes)}
-                  className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
-                    isActive ? "bg-indigo-600 text-white" : hasData ? "bg-indigo-100 text-indigo-700" : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  }`}>{m}</button>
+                <button
+                  key={m}
+                  onClick={() => setMesAtual(mes)}
+                  className={`relative rounded-lg py-2 text-xs font-medium transition-all ${
+                    isSelected
+                      ? "bg-indigo-600 text-white shadow-md ring-2 ring-indigo-300"
+                      : hasData
+                        ? "bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200 hover:bg-indigo-200 dark:hover:bg-indigo-900/60"
+                        : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {m}
+                  {hasData && !isSelected && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">{count > 99 ? "99+" : count}</span>
+                  )}
+                </button>
               );
             })}
-          </div>
-          <div className="flex gap-3 mt-2 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500" /> Com dados</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-muted" /> Sem dados</span>
           </div>
         </div>
 
