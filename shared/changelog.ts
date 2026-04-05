@@ -8001,4 +8001,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 23:45:00",
   },
+  {
+    version: 1032,
+    titulo: "Drill-down Tipo de Combustível — Motoristas por Fatia",
+    descricao:
+      "Ao clicar em uma fatia do gráfico 'Tipo de Combustível', abre um painel detalhado " +
+      "mostrando todos os motoristas que abasteceram aquele tipo, com litros, valor total " +
+      "e quantidade de abastecimentos. Tabela ordenada por valor, com barras de progresso, " +
+      "destaque para o motorista com maior gasto (troféu), totalizador no rodapé e animação de entrada.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 23:55:00",
+  },
 ];

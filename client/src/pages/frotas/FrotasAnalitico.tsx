@@ -23,11 +23,12 @@ const GRADIENTS: Array<[string, string]> = [
   ["#6366f1", "#4f46e5"], ["#14b8a6", "#0d9488"], ["#e11d48", "#be123c"],
 ];
 
-function InteractivePie({ data, colorOffset = 0, unit = "", valueFormatter }: {
+function InteractivePie({ data, colorOffset = 0, unit = "", valueFormatter, onSliceClick }: {
   data: Array<{ name: string; value: number; pct: number }>;
   colorOffset?: number;
   unit?: string;
   valueFormatter?: (v: number) => string;
+  onSliceClick?: (name: string) => void;
 }) {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -120,6 +121,9 @@ function InteractivePie({ data, colorOffset = 0, unit = "", valueFormatter }: {
               activeShape={renderActiveShape}
               onMouseEnter={(_, i) => setActiveIndex(i)}
               onMouseLeave={() => setActiveIndex(null)}
+              onClick={(_, i) => {
+                if (onSliceClick && enriched[i]) onSliceClick(enriched[i].name);
+              }}
               style={{ filter: "url(#pie-shadow)" }}
               animationBegin={0}
               animationDuration={800}
@@ -134,7 +138,7 @@ function InteractivePie({ data, colorOffset = 0, unit = "", valueFormatter }: {
                     fill={`url(#pie-grad-${gIdx})`}
                     stroke="rgba(255,255,255,0.8)"
                     strokeWidth={2}
-                    style={{ cursor: "pointer", transition: "all 0.2s" }}
+                    style={{ cursor: onSliceClick ? "pointer" : "default", transition: "all 0.2s" }}
                   />
                 );
               })}
@@ -271,6 +275,7 @@ export default function FrotasAnalitico() {
   const [tblFilter, setTblFilter] = useState<string>("todos");
   const [tblExpanded, setTblExpanded] = useState<Set<number>>(new Set());
   const [mesSel, setMesSel] = useState<number | null>(null);
+  const [drillCombTipo, setDrillCombTipo] = useState<string | null>(null);
 
   const dash = trpc.frotas.getDashboard.useQuery({ companyId: cId, ano: anoDash }, { enabled: cId > 0 });
   const fuel = trpc.frotas.listFuelRecords.useQuery({ companyId: cId }, { enabled: cId > 0 });
@@ -476,6 +481,26 @@ export default function FrotasAnalitico() {
   const distCombustivel = Object.entries(d.tipoCombustivel)
     .map(([name, value]) => ({ name, value: value as number, pct: d.totalLitros > 0 ? Math.round(((value as number) / d.totalLitros) * 100) : 0 }))
     .sort((a, b) => b.value - a.value);
+
+  const motoristasPorTipoCombustivel = useMemo(() => {
+    const map: Record<string, Record<string, { litros: number; valor: number; abastecimentos: number }>> = {};
+    for (const f of allFuel as any[]) {
+      const tipo = (f.tipoCombustivel || f.tipo_combustivel || "Não informado").toString().trim();
+      const mot = (f.motorista || "Não informado").toString().trim();
+      if (!map[tipo]) map[tipo] = {};
+      if (!map[tipo][mot]) map[tipo][mot] = { litros: 0, valor: 0, abastecimentos: 0 };
+      map[tipo][mot].litros += parseFloat(f.litros || "0");
+      map[tipo][mot].valor += parseFloat(f.valorTotal || f.valor_total || "0");
+      map[tipo][mot].abastecimentos += 1;
+    }
+    const result: Record<string, Array<{ motorista: string; litros: number; valor: number; abastecimentos: number }>> = {};
+    for (const [tipo, mots] of Object.entries(map)) {
+      result[tipo] = Object.entries(mots)
+        .map(([motorista, v]) => ({ motorista, ...v }))
+        .sort((a, b) => b.valor - a.valor);
+    }
+    return result;
+  }, [allFuel]);
 
   const evolucaoMensal = Object.entries(d.custosTotaisByMonth)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -1011,11 +1036,83 @@ export default function FrotasAnalitico() {
 
           <Card className="lg:col-span-2">
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm flex items-center gap-2"><Droplets className="h-4 w-4 text-amber-500" /> Tipo de Combustível</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Droplets className="h-4 w-4 text-amber-500" /> Tipo de Combustível
+                {drillCombTipo && (
+                  <span className="text-xs text-muted-foreground ml-auto">Clique na fatia para detalhar</span>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {distCombustivel.length > 0 ? (
-                <InteractivePie data={distCombustivel} colorOffset={6} unit="litros" valueFormatter={(v) => fmtNum(v, 2)} />
+                <>
+                  <InteractivePie
+                    data={distCombustivel}
+                    colorOffset={6}
+                    unit="litros"
+                    valueFormatter={(v) => fmtNum(v, 2)}
+                    onSliceClick={(name) => setDrillCombTipo(prev => prev === name ? null : name)}
+                  />
+                  {drillCombTipo && motoristasPorTipoCombustivel[drillCombTipo] && (
+                    <div className="mt-4 border rounded-xl overflow-hidden animate-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-muted/50 border-b">
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-blue-500" />
+                          <span className="text-xs font-semibold">Motoristas — {drillCombTipo}</span>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                            {motoristasPorTipoCombustivel[drillCombTipo].length} motorista{motoristasPorTipoCombustivel[drillCombTipo].length !== 1 ? "s" : ""}
+                          </Badge>
+                        </div>
+                        <button onClick={() => setDrillCombTipo(null)} className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-md hover:bg-muted">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="max-h-[280px] overflow-y-auto">
+                        <table className="w-full text-xs">
+                          <thead className="sticky top-0 bg-background">
+                            <tr className="border-b text-muted-foreground">
+                              <th className="text-left px-4 py-2 font-medium">Motorista</th>
+                              <th className="text-right px-3 py-2 font-medium">Litros</th>
+                              <th className="text-right px-3 py-2 font-medium">Valor (R$)</th>
+                              <th className="text-right px-4 py-2 font-medium">Abast.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {motoristasPorTipoCombustivel[drillCombTipo].map((m, idx) => {
+                              const maxVal = motoristasPorTipoCombustivel[drillCombTipo][0]?.valor || 1;
+                              return (
+                                <tr key={m.motorista} className={`border-b last:border-0 hover:bg-muted/30 transition-colors ${idx === 0 ? "bg-amber-50/40 dark:bg-amber-950/20" : ""}`}>
+                                  <td className="px-4 py-2 font-medium flex items-center gap-2">
+                                    {idx === 0 && <Trophy className="h-3 w-3 text-amber-500 flex-shrink-0" />}
+                                    <span className="truncate max-w-[140px]">{m.motorista}</span>
+                                  </td>
+                                  <td className="text-right px-3 py-2 tabular-nums">{fmtNum(m.litros, 1)}</td>
+                                  <td className="text-right px-3 py-2 tabular-nums">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <div className="w-12 h-1 bg-muted/50 rounded-full overflow-hidden">
+                                        <div className="h-full rounded-full bg-blue-500/60" style={{ width: `${(m.valor / maxVal) * 100}%` }} />
+                                      </div>
+                                      {fmt(m.valor)}
+                                    </div>
+                                  </td>
+                                  <td className="text-right px-4 py-2 tabular-nums text-muted-foreground">{m.abastecimentos}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot className="border-t bg-muted/30 font-semibold">
+                            <tr>
+                              <td className="px-4 py-2">Total</td>
+                              <td className="text-right px-3 py-2 tabular-nums">{fmtNum(motoristasPorTipoCombustivel[drillCombTipo].reduce((s, m) => s + m.litros, 0), 1)}</td>
+                              <td className="text-right px-3 py-2 tabular-nums">{fmt(motoristasPorTipoCombustivel[drillCombTipo].reduce((s, m) => s + m.valor, 0))}</td>
+                              <td className="text-right px-4 py-2 tabular-nums">{motoristasPorTipoCombustivel[drillCombTipo].reduce((s, m) => s + m.abastecimentos, 0)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : <p className="text-xs text-muted-foreground text-center py-8">Sem dados</p>}
             </CardContent>
           </Card>
