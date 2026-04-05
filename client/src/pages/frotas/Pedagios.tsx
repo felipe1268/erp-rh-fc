@@ -689,7 +689,7 @@ export default function Pedagios() {
                 </div>
               )}
 
-              {(excelStage !== "idle" && excelStage !== "done") && (
+              {(excelStage !== "idle" && excelStage !== "done" && excelStage !== "saving") && (
                 <div className="space-y-3 py-2">
                   <div className="flex items-center gap-2 text-sm">
                     <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
@@ -698,7 +698,6 @@ export default function Pedagios() {
                         {excelStage === "reading" && "Lendo arquivo..."}
                         {excelStage === "parsing" && "Interpretando planilha..."}
                         {excelStage === "matching" && "Vinculando placas aos veículos..."}
-                        {excelStage === "saving" && "Salvando lançamentos..."}
                       </span>
                       {excelFileProgress && <div className="text-xs text-muted-foreground mt-0.5">{excelFileProgress}</div>}
                     </div>
@@ -814,9 +813,15 @@ export default function Pedagios() {
                   </div>
 
                   {excelStage === "saving" && (
-                    <div className="space-y-1 shrink-0">
-                      <Progress value={excelProgress} className="h-2" />
-                      <div className="text-right text-xs text-muted-foreground">Salvando... {excelProgress}%</div>
+                    <div className="space-y-2 shrink-0 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Salvando lançamentos...
+                        </div>
+                        <span className="text-sm font-bold text-emerald-700">{excelProgress}%</span>
+                      </div>
+                      <Progress value={excelProgress} className="h-3" />
                     </div>
                   )}
                 </div>
