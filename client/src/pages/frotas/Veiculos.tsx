@@ -299,7 +299,7 @@ export default function Veiculos() {
         <input type="file" accept="image/*" ref={dialogPhotoRef} className="hidden" onChange={handlePhotoChange} />
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0">
+          <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0" resizable={false} showCloseButton={false}>
             <div className="sticky top-0 z-10 bg-background border-b px-6 py-4 flex items-center justify-between">
               <DialogTitle className="text-xl font-bold">{editing ? "Editar Veículo" : "Novo Veículo"}</DialogTitle>
               <div className="flex gap-2">
@@ -310,10 +310,10 @@ export default function Veiculos() {
               </div>
             </div>
 
-            <div className="px-6 py-4 max-w-6xl mx-auto w-full space-y-6">
+            <div className="px-8 py-4 w-full space-y-6">
               <div className="flex flex-col md:flex-row gap-6">
                 <div
-                  className="w-full md:w-56 h-44 flex-shrink-0 bg-muted rounded-xl flex items-center justify-center overflow-hidden relative group cursor-pointer border-2 border-dashed border-muted-foreground/20 hover:border-primary/40 transition-colors"
+                  className="w-full md:w-72 h-52 flex-shrink-0 bg-muted rounded-xl flex items-center justify-center overflow-hidden relative group cursor-pointer border-2 border-dashed border-muted-foreground/20 hover:border-primary/40 transition-colors"
                   onClick={handleDialogPhotoClick}
                   title="Clique para alterar a foto"
                 >
@@ -340,7 +340,7 @@ export default function Veiculos() {
 
                 <div className="flex-1 space-y-1">
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Identificação</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-8 gap-x-4 gap-y-3">
                     <div>
                       <Label className="text-xs text-muted-foreground">Tipo *</Label>
                       <Select value={form.tipoVeiculo || ""} onValueChange={v => setForm({ ...form, tipoVeiculo: v })}>
@@ -385,7 +385,7 @@ export default function Veiculos() {
 
               <div className="border-t pt-4">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Documentação</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-3">
                   <div>
                     <Label className="text-xs text-muted-foreground">RENAVAM</Label>
                     <Input className="h-9 font-mono" value={form.renavam || ""} onChange={e => setForm({ ...form, renavam: e.target.value })} />
@@ -415,7 +415,7 @@ export default function Veiculos() {
 
               <div className="border-t pt-4">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Financeiro</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-3">
                   <div>
                     <Label className="text-xs text-muted-foreground">Data Aquisição</Label>
                     <Input className="h-9" type="date" value={form.dataAquisicao || ""} onChange={e => setForm({ ...form, dataAquisicao: e.target.value })} />
@@ -436,7 +436,7 @@ export default function Veiculos() {
                   <DollarSign className="h-4 w-4 text-green-600 inline mr-1" />
                   Consulta FIPE
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-3">
                   <div>
                     <Label className="text-xs text-muted-foreground">Marca FIPE</Label>
                     <Select value={form.fipeCodigoMarca || ""} onValueChange={v => setForm({ ...form, fipeCodigoMarca: v, fipeCodigoModelo: "", fipeCodigoAno: "" })}>
