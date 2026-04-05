@@ -16,6 +16,13 @@ import {
 
 const COLORS = ["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1", "#14b8a6", "#e11d48"];
 
+const GRADIENTS: Array<[string, string]> = [
+  ["#3b82f6", "#1d4ed8"], ["#10b981", "#059669"], ["#ef4444", "#dc2626"],
+  ["#f59e0b", "#d97706"], ["#8b5cf6", "#7c3aed"], ["#ec4899", "#db2777"],
+  ["#06b6d4", "#0891b2"], ["#84cc16", "#65a30d"], ["#f97316", "#ea580c"],
+  ["#6366f1", "#4f46e5"], ["#14b8a6", "#0d9488"], ["#e11d48", "#be123c"],
+];
+
 function InteractivePie({ data, colorOffset = 0, unit = "", valueFormatter }: {
   data: Array<{ name: string; value: number; pct: number }>;
   colorOffset?: number;
@@ -45,65 +52,147 @@ function InteractivePie({ data, colorOffset = 0, unit = "", valueFormatter }: {
 
   const renderActiveShape = (props: any) => {
     const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload } = props;
+    const origIdx = data.findIndex(d => d.name === payload.name);
+    const gradId = `grad-active-${(origIdx + colorOffset) % GRADIENTS.length}`;
     return (
       <g>
-        <text x={cx} y={cy - 8} textAnchor="middle" className="text-base font-bold fill-foreground">{payload.name}</text>
-        <text x={cx} y={cy + 12} textAnchor="middle" className="text-sm fill-muted-foreground">{fmtVal(payload.value)}{unit ? ` ${unit}` : ""}</text>
-        <text x={cx} y={cy + 28} textAnchor="middle" className="text-xs fill-muted-foreground">{payload.pct}%</text>
-        <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius + 8} startAngle={startAngle} endAngle={endAngle} fill={fill} />
-        <Sector cx={cx} cy={cy} innerRadius={outerRadius + 12} outerRadius={outerRadius + 16} startAngle={startAngle} endAngle={endAngle} fill={fill} opacity={0.4} />
+        <defs>
+          <filter id="glow-active">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <Sector cx={cx} cy={cy + 4} innerRadius={innerRadius} outerRadius={outerRadius + 6} startAngle={startAngle} endAngle={endAngle} fill="rgba(0,0,0,0.15)" />
+        <Sector cx={cx} cy={cy} innerRadius={innerRadius - 2} outerRadius={outerRadius + 10} startAngle={startAngle} endAngle={endAngle} fill={`url(#${gradId})`} filter="url(#glow-active)" />
+        <Sector cx={cx} cy={cy} innerRadius={outerRadius + 14} outerRadius={outerRadius + 17} startAngle={startAngle} endAngle={endAngle} fill={fill} opacity={0.3} />
+        <text x={cx} y={cy - 12} textAnchor="middle" style={{ fontSize: 15, fontWeight: 700 }} className="fill-foreground">{payload.name}</text>
+        <text x={cx} y={cy + 8} textAnchor="middle" style={{ fontSize: 18, fontWeight: 800 }} fill={fill}>{fmtVal(payload.value)}</text>
+        <text x={cx} y={cy + 26} textAnchor="middle" style={{ fontSize: 12, fontWeight: 500 }} className="fill-muted-foreground">{payload.pct}% {unit ? `· ${unit}` : ""}</text>
       </g>
     );
   };
 
+  const sorted = useMemo(() =>
+    [...data].sort((a, b) => b.value - a.value),
+    [data]
+  );
+
   return (
     <div className="flex flex-col items-center w-full">
-      <ResponsiveContainer width="100%" height={320}>
-        <PieChart>
-          <Pie
-            data={enriched}
-            cx="50%" cy="50%"
-            innerRadius="45%"
-            outerRadius="75%"
-            paddingAngle={3}
-            dataKey="value"
-            activeIndex={activeIndex !== null ? activeIndex : undefined}
-            activeShape={renderActiveShape}
-            onMouseEnter={(_, i) => setActiveIndex(i)}
-            onMouseLeave={() => setActiveIndex(null)}
-          >
-            {enriched.map((entry, i) => {
-              const origIdx = data.findIndex(d => d.name === entry.name);
-              return <Cell key={entry.name} fill={COLORS[(origIdx + colorOffset) % COLORS.length]} stroke="white" strokeWidth={2} />;
-            })}
-          </Pie>
-          {activeIndex === null && (
-            <>
-              <text x="50%" y="46%" textAnchor="middle" className="text-lg font-bold fill-foreground">{fmtVal(totalVisible)}</text>
-              <text x="50%" y="54%" textAnchor="middle" className="text-xs fill-muted-foreground">{unit || "total"}</text>
-            </>
-          )}
-        </PieChart>
-      </ResponsiveContainer>
-      <div className="flex flex-wrap justify-center gap-2 mt-2 px-2">
-        {data.map((d, i) => {
+      <div className="relative w-full">
+        <ResponsiveContainer width="100%" height={280}>
+          <PieChart>
+            <defs>
+              {GRADIENTS.map(([c1, c2], i) => (
+                <linearGradient key={i} id={`grad-active-${i}`} x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor={c1} />
+                  <stop offset="100%" stopColor={c2} />
+                </linearGradient>
+              ))}
+              {GRADIENTS.map(([c1, c2], i) => (
+                <linearGradient key={`p-${i}`} id={`pie-grad-${i}`} x1="0" y1="0" x2="0.5" y2="1">
+                  <stop offset="0%" stopColor={c1} stopOpacity={0.95} />
+                  <stop offset="100%" stopColor={c2} stopOpacity={1} />
+                </linearGradient>
+              ))}
+              <filter id="pie-shadow">
+                <feDropShadow dx="0" dy="3" stdDeviation="4" floodOpacity="0.15" />
+              </filter>
+              <filter id="inner-glow">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <Pie
+              data={enriched}
+              cx="50%" cy="50%"
+              innerRadius="48%"
+              outerRadius="78%"
+              paddingAngle={2}
+              dataKey="value"
+              activeIndex={activeIndex !== null ? activeIndex : undefined}
+              activeShape={renderActiveShape}
+              onMouseEnter={(_, i) => setActiveIndex(i)}
+              onMouseLeave={() => setActiveIndex(null)}
+              style={{ filter: "url(#pie-shadow)" }}
+              animationBegin={0}
+              animationDuration={800}
+              animationEasing="ease-out"
+            >
+              {enriched.map((entry) => {
+                const origIdx = data.findIndex(d => d.name === entry.name);
+                const gIdx = (origIdx + colorOffset) % GRADIENTS.length;
+                return (
+                  <Cell
+                    key={entry.name}
+                    fill={`url(#pie-grad-${gIdx})`}
+                    stroke="rgba(255,255,255,0.8)"
+                    strokeWidth={2}
+                    style={{ cursor: "pointer", transition: "all 0.2s" }}
+                  />
+                );
+              })}
+            </Pie>
+            {activeIndex === null && (
+              <>
+                <text x="50%" y="44%" textAnchor="middle" style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }} className="fill-foreground">{fmtVal(totalVisible)}</text>
+                <text x="50%" y="56%" textAnchor="middle" style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" as const }} className="fill-muted-foreground">{unit || "total"}</text>
+              </>
+            )}
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="w-full mt-3 space-y-1.5 px-1">
+        {sorted.map((d, i) => {
           const isHidden = hidden.has(d.name);
+          const origIdx = data.findIndex(x => x.name === d.name);
+          const gIdx = (origIdx + colorOffset) % GRADIENTS.length;
+          const [c1, c2] = GRADIENTS[gIdx];
+          const pct = totalVisible > 0 ? Math.round((d.value / totalVisible) * 100) : 0;
           return (
             <button
               key={d.name}
               onClick={() => toggle(d.name)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${
+              onMouseEnter={() => {
+                const eIdx = enriched.findIndex(e => e.name === d.name);
+                if (eIdx >= 0) setActiveIndex(eIdx);
+              }}
+              onMouseLeave={() => setActiveIndex(null)}
+              className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all group ${
                 isHidden
-                  ? "bg-muted/40 text-muted-foreground border-muted line-through opacity-50"
-                  : "bg-white hover:bg-muted/30 border-border shadow-sm"
+                  ? "opacity-40 line-through"
+                  : "hover:bg-muted/40"
               }`}
             >
               <span
-                className="w-3 h-3 rounded-full flex-shrink-0"
-                style={{ backgroundColor: isHidden ? "#d1d5db" : COLORS[(i + colorOffset) % COLORS.length] }}
+                className="w-3 h-3 rounded-sm flex-shrink-0 shadow-sm"
+                style={{
+                  background: isHidden ? "#d1d5db" : `linear-gradient(135deg, ${c1}, ${c2})`,
+                }}
               />
-              {d.name}
-              <span className={`ml-0.5 ${isHidden ? "" : "font-semibold"}`}>{fmtVal(d.value)}</span>
+              <span className="flex-1 text-left font-medium truncate">{d.name}</span>
+              <div className="flex-shrink-0 w-20 h-1.5 bg-muted/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${isHidden ? 0 : pct}%`,
+                    background: `linear-gradient(90deg, ${c1}, ${c2})`,
+                  }}
+                />
+              </div>
+              <span className="flex-shrink-0 w-8 text-right font-bold tabular-nums" style={{ color: isHidden ? "#9ca3af" : c1 }}>
+                {isHidden ? "" : `${pct}%`}
+              </span>
+              <span className="flex-shrink-0 text-right text-muted-foreground w-12 tabular-nums">
+                {fmtVal(d.value)}
+              </span>
             </button>
           );
         })}
