@@ -527,12 +527,6 @@ const menuSectionsFrotas: MenuSection[] = [
     ],
   },
   {
-    title: "Financeiro",
-    items: [
-      { icon: FileCheck2, label: "Consolidação", path: "/frotas/consolidacao" },
-    ],
-  },
-  {
     title: "Inspeções",
     items: [
       { icon: UserSearch, label: "Raio-X do Veículo", path: "/frotas/raio-x" },

@@ -210,7 +210,6 @@ const FrotasAnalitico = lazy(() => import("./pages/frotas/FrotasAnalitico"));
 const ManutencoesDashboard = lazy(() => import("./pages/frotas/ManutencoesDashboard"));
 const PrecosCombustivel = lazy(() => import("./pages/frotas/PrecosCombustivel"));
 const FrotasPedagios = lazy(() => import("./pages/frotas/Pedagios"));
-const FrotasConsolidacao = lazy(() => import("./pages/frotas/FrotasConsolidacao"));
 const FrotasRaioX = lazy(() => import("./pages/frotas/RaioXVeiculo"));
 const FrotasChecklist = lazy(() => import("./pages/frotas/ChecklistVeiculos"));
 
@@ -435,7 +434,6 @@ function Router() {
         <Route path="/frotas/analitico" component={FrotasAnalitico} />
         <Route path="/frotas/manutencoes-dashboard" component={ManutencoesDashboard} />
         <Route path="/frotas/precos-combustivel" component={PrecosCombustivel} />
-        <Route path="/frotas/consolidacao" component={FrotasConsolidacao} />
         <Route path="/frotas/raio-x" component={FrotasRaioX} />
         <Route path="/frotas/checklist" component={FrotasChecklist} />
         {/* Operacional */}
