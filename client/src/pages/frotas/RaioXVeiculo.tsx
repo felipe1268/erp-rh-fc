@@ -7,9 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Truck, Wrench, Fuel, Shield, FileText, AlertTriangle, DollarSign, ArrowLeft,
   Activity, ClipboardCheck, Droplets, ParkingCircle, Car, Heart, Calendar,
-  TrendingUp, ChevronDown, ChevronUp, ShoppingCart, Scale, Receipt, Camera,
+  TrendingUp, ChevronDown, ChevronUp, ShoppingCart, Scale, Receipt, Camera, Printer,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 
 function fmt(v: any) { return Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtDate(d: any) { if (!d) return "—"; const s = String(d).split("T")[0]; return s.split("-").reverse().join("/"); }
@@ -82,6 +82,244 @@ export default function RaioXVeiculo() {
     { key: "documentos", label: "Documentos", icon: FileText },
   ];
 
+  const handlePrintPDF = useCallback(() => {
+    if (!v || !raioX) return;
+    const logoUrl = selectedCompany?.logoUrl || "";
+    const companyName = selectedCompany?.name || selectedCompany?.nome || "Empresa";
+    const now = new Date();
+    const dataEmissao = now.toLocaleDateString("pt-BR") + " " + now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+    const manutRows = (raioX.manutencoes || []).map((m: any) => `
+      <tr>
+        <td>${fmtDate(m.data_manutencao)}</td>
+        <td>${m.tipo || "—"}</td>
+        <td>${m.descricao || "—"}</td>
+        <td class="r">${m.km_na_manutencao ? Number(m.km_na_manutencao).toLocaleString("pt-BR") : "—"}</td>
+        <td class="r">R$ ${fmt(m.custo)}</td>
+        <td>${m.status || "—"}</td>
+      </tr>`).join("");
+
+    const combRows = (raioX.combustivel || []).slice(0, 100).map((f: any) => `
+      <tr>
+        <td>${fmtDate(f.data)}</td>
+        <td class="r">${Number(f.litros || 0).toFixed(1)}</td>
+        <td class="r">${f.preco_litro ? Number(f.preco_litro).toFixed(3) : "—"}</td>
+        <td class="r">R$ ${fmt(f.valor_total)}</td>
+        <td class="r">${f.km_atual ? Number(f.km_atual).toLocaleString("pt-BR") : "—"}</td>
+        <td>${f.posto || "—"}</td>
+      </tr>`).join("");
+
+    const pedagRows = (raioX.pedagios || []).slice(0, 100).map((t: any) => `
+      <tr>
+        <td>${fmtDate(t.data)}</td>
+        <td>${t.descricao || t.praca_pedagio || "Pedágio"}</td>
+        <td>${t.rodovia || "—"}</td>
+        <td class="r">R$ ${fmt(t.valor)}</td>
+      </tr>`).join("");
+
+    const multaRows = (raioX.multas || []).map((m: any) => `
+      <tr>
+        <td>${fmtDate(m.data_infracao)}</td>
+        <td>${m.descricao || "—"}</td>
+        <td>${m.gravidade || "—"}</td>
+        <td class="r">R$ ${fmt(m.valor_original)}</td>
+        <td>${m.status || "—"}</td>
+      </tr>`).join("");
+
+    const seguroRows = (raioX.seguros || []).map((s: any) => `
+      <tr>
+        <td>${s.seguradora || "—"}</td>
+        <td>${s.numero_apolice || "—"}</td>
+        <td>${fmtDate(s.data_inicio)} a ${fmtDate(s.data_fim)}</td>
+        <td class="r">R$ ${fmt(s.valor_premio)}</td>
+        <td>${s.status || "—"}</td>
+      </tr>`).join("");
+
+    const checkRows = (raioX.checklists || []).map((c: any) => `
+      <tr>
+        <td>${fmtDate(c.data_checklist)}</td>
+        <td>${c.motorista_nome || "—"}</td>
+        <td class="r">${Number(c.score_geral || 0).toFixed(0)}%</td>
+        <td>${c.ok_count}/${c.total_count}</td>
+        <td>${c.status || "—"}</td>
+      </tr>`).join("");
+
+    const tcoItems = tcoPie.map(item => `
+      <tr>
+        <td><span class="dot" style="background:${item.color}"></span> ${item.label}</td>
+        <td class="r">R$ ${fmt(item.value)}</td>
+        <td class="r">${tcoTotal > 0 ? ((item.value / tcoTotal) * 100).toFixed(1) : 0}%</td>
+      </tr>`).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Ficha do Veículo — ${v.placa}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; font-size: 11px; line-height: 1.4; }
+    @page { size: A4; margin: 15mm 12mm; }
+    @media print { .no-print { display: none !important; } }
+    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1e3a5f; padding-bottom: 10px; margin-bottom: 15px; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header img { height: 50px; max-width: 160px; object-fit: contain; }
+    .header-company { font-size: 14px; font-weight: 700; color: #1e3a5f; }
+    .header-right { text-align: right; font-size: 9px; color: #64748b; }
+    .title-bar { background: #1e3a5f; color: white; padding: 10px 16px; border-radius: 6px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .title-bar h1 { font-size: 16px; font-weight: 700; }
+    .title-bar .score { background: white; color: #1e3a5f; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+    .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; }
+    .info-box label { display: block; font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 2px; }
+    .info-box span { font-size: 12px; font-weight: 700; color: #1e293b; }
+    .section { margin-bottom: 14px; page-break-inside: avoid; }
+    .section-title { font-size: 12px; font-weight: 700; color: #1e3a5f; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    th { background: #f1f5f9; padding: 5px 6px; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 4px 6px; border-bottom: 1px solid #f1f5f9; }
+    tr:nth-child(even) { background: #fafbfc; }
+    .r { text-align: right; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+    .tco-total { font-size: 18px; font-weight: 900; color: #1e3a5f; text-align: center; margin: 8px 0; }
+    .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 14px; }
+    .kpi-box { text-align: center; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; }
+    .kpi-box .val { font-size: 16px; font-weight: 800; }
+    .kpi-box .lab { font-size: 8px; color: #64748b; text-transform: uppercase; font-weight: 600; }
+    .footer { margin-top: 20px; padding-top: 8px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; }
+    .btn-print { position: fixed; top: 20px; right: 20px; padding: 10px 24px; background: #1e3a5f; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; z-index: 999; }
+    .btn-print:hover { background: #2c5282; }
+    .empty { color: #94a3b8; text-align: center; padding: 12px; font-style: italic; }
+  </style>
+</head>
+<body>
+  <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+
+  <div class="header">
+    <div class="header-left">
+      ${logoUrl ? `<img src="${logoUrl}" alt="Logo" />` : ""}
+      <div>
+        <div class="header-company">${companyName}</div>
+        <div style="font-size:10px;color:#64748b;">Ficha Completa do Veículo</div>
+      </div>
+    </div>
+    <div class="header-right">
+      Emitido em: ${dataEmissao}<br/>
+      Sistema ERP — Gestão de Frotas
+    </div>
+  </div>
+
+  <div class="title-bar">
+    <div>
+      <h1>${v.placa}</h1>
+      <div style="font-size:11px;opacity:0.8">${v.marca || ""} ${v.modelo || ""} • ${v.ano_fabricacao || v.anoFabricacao || "—"} • ${v.tipo_veiculo || v.tipoVeiculo || "—"}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="text-align:right;font-size:10px;">
+        <div>KM Atual</div>
+        <div style="font-size:14px;font-weight:700;">${Number(v.km_atual || v.kmAtual || 0).toLocaleString("pt-BR")} km</div>
+      </div>
+      <div class="score">${score}</div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box"><label>Chassi</label><span>${v.chassi || "—"}</span></div>
+    <div class="info-box"><label>Renavam</label><span>${v.renavam || "—"}</span></div>
+    <div class="info-box"><label>Cor</label><span>${v.cor || "—"}</span></div>
+    <div class="info-box"><label>Combustível</label><span>${v.tipo_combustivel || v.tipoCombustivel || "—"}</span></div>
+    <div class="info-box"><label>Status</label><span>${v.status_veiculo || v.statusVeiculo || "Ativo"}</span></div>
+    <div class="info-box"><label>Lotação</label><span>${v.lotacao || v.obra_nome || "—"}</span></div>
+    <div class="info-box"><label>Proprietário</label><span>${v.proprietario || "Próprio"}</span></div>
+    <div class="info-box"><label>Tag Sem Parar</label><span>${v.tag_sem_parar || v.tagSemParar || "—"}</span></div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi-box" style="background:#fff7ed;border-color:#fdba74;"><div class="val" style="color:#ea580c;">${raioX.manutencoes?.length || 0}</div><div class="lab">Manutenções</div></div>
+    <div class="kpi-box" style="background:#fffbeb;border-color:#fcd34d;"><div class="val" style="color:#d97706;">${raioX.combustivel?.length || 0}</div><div class="lab">Abastecimentos</div></div>
+    <div class="kpi-box" style="background:#fef2f2;border-color:#fca5a5;"><div class="val" style="color:#dc2626;">${raioX.multas?.length || 0}</div><div class="lab">Multas</div></div>
+    <div class="kpi-box" style="background:#f0fdf4;border-color:#86efac;"><div class="val" style="color:#16a34a;">${raioX.checklists?.length || 0}</div><div class="lab">Checklists</div></div>
+    <div class="kpi-box" style="background:#eff6ff;border-color:#93c5fd;"><div class="val" style="color:#1e3a5f;">R$ ${fmt(tcoTotal)}</div><div class="lab">TCO Total</div></div>
+  </div>
+
+  ${tcoItems ? `
+  <div class="section">
+    <div class="section-title">💰 Composição do TCO (Custo Total de Propriedade)</div>
+    <div class="tco-total">R$ ${fmt(tcoTotal)}</div>
+    <table>
+      <thead><tr><th>Categoria</th><th class="r">Valor</th><th class="r">%</th></tr></thead>
+      <tbody>${tcoItems}</tbody>
+    </table>
+  </div>` : ""}
+
+  ${manutRows ? `
+  <div class="section">
+    <div class="section-title">🔧 Histórico de Manutenções (${raioX.manutencoes?.length || 0})</div>
+    <table>
+      <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th class="r">KM</th><th class="r">Custo</th><th>Status</th></tr></thead>
+      <tbody>${manutRows}</tbody>
+    </table>
+  </div>` : `<div class="section"><div class="section-title">🔧 Manutenções</div><div class="empty">Nenhuma manutenção registrada</div></div>`}
+
+  ${combRows ? `
+  <div class="section">
+    <div class="section-title">⛽ Histórico de Abastecimentos (${raioX.combustivel?.length || 0})</div>
+    <table>
+      <thead><tr><th>Data</th><th class="r">Litros</th><th class="r">R$/L</th><th class="r">Total</th><th class="r">KM</th><th>Posto</th></tr></thead>
+      <tbody>${combRows}</tbody>
+    </table>
+  </div>` : `<div class="section"><div class="section-title">⛽ Abastecimentos</div><div class="empty">Nenhum abastecimento registrado</div></div>`}
+
+  ${pedagRows ? `
+  <div class="section">
+    <div class="section-title">🛣️ Pedágios (${raioX.pedagios?.length || 0})</div>
+    <table>
+      <thead><tr><th>Data</th><th>Descrição</th><th>Rodovia</th><th class="r">Valor</th></tr></thead>
+      <tbody>${pedagRows}</tbody>
+    </table>
+  </div>` : ""}
+
+  ${multaRows ? `
+  <div class="section">
+    <div class="section-title">🚨 Multas (${raioX.multas?.length || 0})</div>
+    <table>
+      <thead><tr><th>Data</th><th>Descrição</th><th>Gravidade</th><th class="r">Valor</th><th>Status</th></tr></thead>
+      <tbody>${multaRows}</tbody>
+    </table>
+  </div>` : ""}
+
+  ${seguroRows ? `
+  <div class="section">
+    <div class="section-title">🛡️ Seguros (${raioX.seguros?.length || 0})</div>
+    <table>
+      <thead><tr><th>Seguradora</th><th>Apólice</th><th>Vigência</th><th class="r">Prêmio</th><th>Status</th></tr></thead>
+      <tbody>${seguroRows}</tbody>
+    </table>
+  </div>` : ""}
+
+  ${checkRows ? `
+  <div class="section">
+    <div class="section-title">✅ Checklists (${raioX.checklists?.length || 0})</div>
+    <table>
+      <thead><tr><th>Data</th><th>Motorista</th><th class="r">Score</th><th>Conformes</th><th>Status</th></tr></thead>
+      <tbody>${checkRows}</tbody>
+    </table>
+  </div>` : ""}
+
+  <div class="footer">
+    <span>${companyName} — Gestão de Frotas</span>
+    <span>Veículo: ${v.placa} | Emitido: ${dataEmissao}</span>
+  </div>
+</body>
+</html>`;
+
+    const printWin = window.open("", "_blank");
+    if (printWin) {
+      printWin.document.write(html);
+      printWin.document.close();
+    }
+  }, [v, raioX, selectedCompany, score, tcoPie, tcoTotal]);
+
   if (!vehicleId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
@@ -133,6 +371,10 @@ export default function RaioXVeiculo() {
             </div>
             {v && (
               <div className="ml-auto flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 rounded-xl gap-1.5" onClick={handlePrintPDF}>
+                  <Printer className="h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">Imprimir PDF</span>
+                </Button>
                 <div className="text-right">
                   <p className="text-xs text-cyan-200">KM Atual</p>
                   <p className="text-lg font-bold">{Number(v.km_atual || v.kmAtual || 0).toLocaleString("pt-BR")} km</p>
