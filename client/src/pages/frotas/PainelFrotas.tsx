@@ -43,6 +43,7 @@ export default function PainelFrotas() {
   const [custoMesDialog, setCustoMesDialog] = useState<string | null>(null);
 
   const [maintTab, setMaintTab] = useState<string>("pecas");
+  const [hiddenCustos, setHiddenCustos] = useState<Set<string>>(new Set());
   const [filtroAno, setFiltroAno] = useState<number | undefined>();
   const [filtroMes, setFiltroMes] = useState<number | undefined>();
   const [filtroVeiculo, setFiltroVeiculo] = useState<string | undefined>();
@@ -364,9 +365,27 @@ export default function PainelFrotas() {
                     ) : (
                       <>
                         <div className="flex gap-4 mb-3 text-[10px]">
-                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" /> Combustível</span>
-                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> Manutenção</span>
-                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-500 inline-block" /> Multas</span>
+                          {([
+                            { key: "combustivel", label: "Combustível", bg: "bg-blue-500" },
+                            { key: "manutencao", label: "Manutenção", bg: "bg-emerald-500" },
+                            { key: "multas", label: "Multas", bg: "bg-red-500" },
+                          ] as const).map((item) => {
+                            const hidden = hiddenCustos.has(item.key);
+                            return (
+                              <span
+                                key={item.key}
+                                className={`flex items-center gap-1 cursor-pointer select-none transition-opacity ${hidden ? "opacity-40 line-through" : ""}`}
+                                onClick={() => setHiddenCustos((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(item.key)) next.delete(item.key); else next.add(item.key);
+                                  return next;
+                                })}
+                              >
+                                <span className={`w-2.5 h-2.5 rounded inline-block ${hidden ? "bg-gray-300" : item.bg}`} />
+                                {item.label}
+                              </span>
+                            );
+                          })}
                         </div>
                         <div className="space-y-1.5">
                           {Object.entries(d.custosTotaisByMonth)
@@ -374,12 +393,19 @@ export default function PainelFrotas() {
                             .slice(0, 12)
                             .map(([m, costs]) => {
                               const c = costs as any;
-                              const total = c.combustivel + c.manutencao + c.multas;
-                              const allTotals = Object.values(d.custosTotaisByMonth).map((x: any) => x.combustivel + x.manutencao + x.multas);
-                              const max = Math.max(...allTotals);
-                              const pctComb = max > 0 ? (c.combustivel / max) * 100 : 0;
-                              const pctManut = max > 0 ? (c.manutencao / max) * 100 : 0;
-                              const pctMultas = max > 0 ? (c.multas / max) * 100 : 0;
+                              const vComb = hiddenCustos.has("combustivel") ? 0 : c.combustivel;
+                              const vManut = hiddenCustos.has("manutencao") ? 0 : c.manutencao;
+                              const vMultas = hiddenCustos.has("multas") ? 0 : c.multas;
+                              const total = vComb + vManut + vMultas;
+                              const allTotals = Object.values(d.custosTotaisByMonth).map((x: any) => {
+                                return (hiddenCustos.has("combustivel") ? 0 : x.combustivel)
+                                  + (hiddenCustos.has("manutencao") ? 0 : x.manutencao)
+                                  + (hiddenCustos.has("multas") ? 0 : x.multas);
+                              });
+                              const max = Math.max(...allTotals, 1);
+                              const pctComb = max > 0 ? (vComb / max) * 100 : 0;
+                              const pctManut = max > 0 ? (vManut / max) * 100 : 0;
+                              const pctMultas = max > 0 ? (vMultas / max) * 100 : 0;
                               return (
                                 <div
                                   key={m}
@@ -388,9 +414,9 @@ export default function PainelFrotas() {
                                 >
                                   <span className="text-[11px] w-20 text-muted-foreground font-mono">{fmtMesAno(m)}</span>
                                   <div className="flex-1 h-5 bg-muted rounded overflow-hidden flex">
-                                    {pctComb > 0 && <div className="h-full bg-blue-500" style={{ width: `${pctComb}%` }} />}
-                                    {pctManut > 0 && <div className="h-full bg-emerald-500" style={{ width: `${pctManut}%` }} />}
-                                    {pctMultas > 0 && <div className="h-full bg-red-500" style={{ width: `${pctMultas}%` }} />}
+                                    {pctComb > 0 && <div className="h-full bg-blue-500 transition-all" style={{ width: `${pctComb}%` }} />}
+                                    {pctManut > 0 && <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pctManut}%` }} />}
+                                    {pctMultas > 0 && <div className="h-full bg-red-500 transition-all" style={{ width: `${pctMultas}%` }} />}
                                   </div>
                                   <span className="text-[11px] font-medium w-24 text-right">{fmt(total)}</span>
                                 </div>
