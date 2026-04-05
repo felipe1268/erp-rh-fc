@@ -7919,4 +7919,24 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 20:00:00",
   },
+  {
+    version: 1027,
+    titulo: "Timeline de Meses + Comparativo Mês a Mês com Análise de Variação",
+    descricao:
+      "Analítico de Frotas agora inclui: " +
+      "1) Timeline de meses (Jan-Dez) no topo com indicação visual de meses com dados (laranja) e sem dados (cinza), " +
+      "mês selecionável por clique, navegação de ano com setas. " +
+      "2) Tabela Comparativo Mês a Mês: mostra custo de combustível, manutenção e multas por mês " +
+      "com indicadores de variação (▲ aumento em vermelho, ▼ redução em verde), " +
+      "coluna de variação percentual total com badge colorido, " +
+      "coluna de principal impacto (qual categoria mais subiu/desceu), " +
+      "rodapé com totais do ano. " +
+      "3) Painel de detalhe do mês selecionado com 4 cards (Combustível, Manutenção, Multas, Total) " +
+      "mostrando valor, diferença absoluta e percentual vs mês anterior. " +
+      "4) Alerta automático quando custos variam mais de 5% indicando a causa principal.",
+    tipo: "melhoria",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 21:00:00",
+  },
 ];

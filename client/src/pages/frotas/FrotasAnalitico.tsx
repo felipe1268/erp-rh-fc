@@ -5,8 +5,8 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart3, PieChart as PieIcon, Fuel, Wrench, AlertTriangle,
-  Truck, DollarSign, Activity, Users, Gauge, TrendingDown, Trophy, MapPin, Droplets, Calendar, X,
-  Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Filter
+  Truck, DollarSign, Activity, Users, Gauge, TrendingDown, TrendingUp, Trophy, MapPin, Droplets, Calendar, X,
+  Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, ChevronLeft, Filter, Minus
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -181,6 +181,7 @@ export default function FrotasAnalitico() {
   const [tblSort, setTblSort] = useState<{ col: string; dir: "asc" | "desc" }>({ col: "custoTotal", dir: "desc" });
   const [tblFilter, setTblFilter] = useState<string>("todos");
   const [tblExpanded, setTblExpanded] = useState<Set<number>>(new Set());
+  const [mesSel, setMesSel] = useState<number>(new Date().getMonth());
 
   const dash = trpc.frotas.getDashboard.useQuery({ companyId: cId, ano: anoDash }, { enabled: cId > 0 });
   const fuel = trpc.frotas.listFuelRecords.useQuery({ companyId: cId }, { enabled: cId > 0 });
@@ -238,13 +239,77 @@ export default function FrotasAnalitico() {
     .map(([name, value]) => ({ name, value: value as number, pct: d.totalLitros > 0 ? Math.round(((value as number) / d.totalLitros) * 100) : 0 }))
     .sort((a, b) => b.value - a.value);
 
+  const MESES_NOME = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
   const evolucaoMensal = Object.entries(d.custosTotaisByMonth)
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(-12)
     .map(([m, costs]) => {
       const c = costs as any;
-      return { name: fmtMesAno(m), combustivel: c.combustivel, manutencao: c.manutencao, multas: c.multas, total: c.combustivel + c.manutencao + c.multas };
+      return { name: fmtMesAno(m), key: m, combustivel: c.combustivel, manutencao: c.manutencao, multas: c.multas, total: c.combustivel + c.manutencao + c.multas };
     });
+
+  const mesesComDados = useMemo(() => {
+    const set = new Set<number>();
+    Object.keys(d.custosTotaisByMonth).forEach(k => {
+      const parts = k.split("-");
+      const y = parseInt(parts[0]);
+      const m = parseInt(parts[1]) - 1;
+      if (!anoDash || y === anoDash) set.add(m);
+    });
+    return set;
+  }, [d.custosTotaisByMonth, anoDash]);
+
+  const comparativoMensal = useMemo(() => {
+    const ano = anoDash || new Date().getFullYear();
+    const rows: Array<{
+      mes: string; mesIdx: number;
+      combustivel: number; manutencao: number; multas: number; total: number;
+      prevComb: number; prevManut: number; prevMultas: number; prevTotal: number;
+      varComb: number; varManut: number; varMultas: number; varTotal: number;
+      pctComb: number; pctManut: number; pctMultas: number; pctTotal: number;
+      maiorAumento: string; maiorReducao: string;
+    }> = [];
+
+    for (let m = 0; m < 12; m++) {
+      const key = `${ano}-${String(m + 1).padStart(2, "0")}`;
+      const prevKey = m > 0 ? `${ano}-${String(m).padStart(2, "0")}` : `${ano - 1}-12`;
+      const raw = (d.custosTotaisByMonth[key] as any) || {};
+      const rawPrev = (d.custosTotaisByMonth[prevKey] as any) || {};
+      const cur = { combustivel: Number(raw.combustivel ?? 0), manutencao: Number(raw.manutencao ?? 0), multas: Number(raw.multas ?? 0) };
+      const prev = { combustivel: Number(rawPrev.combustivel ?? 0), manutencao: Number(rawPrev.manutencao ?? 0), multas: Number(rawPrev.multas ?? 0) };
+      const total = cur.combustivel + cur.manutencao + cur.multas;
+      const prevTotal = prev.combustivel + prev.manutencao + prev.multas;
+      const varComb = cur.combustivel - prev.combustivel;
+      const varManut = cur.manutencao - prev.manutencao;
+      const varMultas = cur.multas - prev.multas;
+      const varTotal = total - prevTotal;
+      const pctTotal = prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : 0;
+      const pctComb = prev.combustivel > 0 ? ((cur.combustivel - prev.combustivel) / prev.combustivel) * 100 : 0;
+      const pctManut = prev.manutencao > 0 ? ((cur.manutencao - prev.manutencao) / prev.manutencao) * 100 : 0;
+      const pctMultas = prev.multas > 0 ? ((cur.multas - prev.multas) / prev.multas) * 100 : 0;
+
+      const diffs = [
+        { cat: "Combustível", val: varComb },
+        { cat: "Manutenção", val: varManut },
+        { cat: "Multas", val: varMultas },
+      ];
+      const aumentos = diffs.filter(d => d.val > 0).sort((a, b) => b.val - a.val);
+      const reducoes = diffs.filter(d => d.val < 0).sort((a, b) => a.val - b.val);
+
+      rows.push({
+        mes: MESES_FULL[m], mesIdx: m,
+        combustivel: cur.combustivel, manutencao: cur.manutencao, multas: cur.multas, total,
+        prevComb: prev.combustivel, prevManut: prev.manutencao, prevMultas: prev.multas, prevTotal,
+        varComb, varManut, varMultas, varTotal,
+        pctComb, pctManut, pctMultas, pctTotal,
+        maiorAumento: aumentos.length > 0 ? `${aumentos[0].cat} (+${fmt(aumentos[0].val)})` : "",
+        maiorReducao: reducoes.length > 0 ? `${reducoes[0].cat} (${fmt(reducoes[0].val)})` : "",
+      });
+    }
+    return rows;
+  }, [d.custosTotaisByMonth, anoDash]);
 
   const postosFrequentes: Record<string, { litros: number; valor: number; count: number }> = {};
   for (const f of allFuel as any[]) {
@@ -326,6 +391,47 @@ export default function FrotasAnalitico() {
           </div>
         </div>
 
+        {anoDash && (
+          <Card className="overflow-hidden">
+            <CardContent className="py-2 px-3">
+              <div className="flex items-center gap-1">
+                <button onClick={() => setAnoDash(prev => (prev || new Date().getFullYear()) - 1)} className="p-1 hover:bg-muted rounded-md">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm font-bold min-w-[50px] text-center">{anoDash}</span>
+                <button onClick={() => setAnoDash(prev => (prev || new Date().getFullYear()) + 1)} className="p-1 hover:bg-muted rounded-md">
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+                <div className="flex-1 grid grid-cols-12 gap-0.5 ml-2">
+                  {MESES_NOME.map((m, i) => {
+                    const temDados = mesesComDados.has(i);
+                    const isSel = mesSel === i;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setMesSel(i)}
+                        className={`py-1.5 text-[11px] font-medium rounded-md transition-all ${
+                          isSel
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : temDados
+                              ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 hover:bg-orange-200"
+                              : "bg-muted/40 text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-2 ml-3 text-[10px]">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" />Com dados</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-muted" />Sem dados</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {[
             { icon: Truck, label: "Veículos Ativos", value: String(d.totalVehicles), color: "text-slate-600", bg: "bg-slate-50 dark:bg-slate-900" },
@@ -402,6 +508,191 @@ export default function FrotasAnalitico() {
             </CardContent>
           </Card>
         </div>
+
+        {anoDash && (
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <SectionTitle icon={TrendingUp} title={`Comparativo Mês a Mês — ${anoDash}`} color="text-indigo-500" />
+                <div className="flex items-center gap-1 text-[10px]">
+                  <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3 text-red-500" />Aumento</span>
+                  <span className="flex items-center gap-1"><TrendingDown className="h-3 w-3 text-green-500" />Redução</span>
+                  <span className="flex items-center gap-1"><Minus className="h-3 w-3 text-muted-foreground" />Estável</span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-0 pb-2">
+              <div className="overflow-auto">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-background z-10">
+                    <tr className="border-b bg-muted/40">
+                      <th className="py-2 px-3 text-left font-semibold">Mês</th>
+                      <th className="py-2 px-2 text-right font-semibold text-blue-600">Combustível</th>
+                      <th className="py-2 px-2 text-right font-semibold text-emerald-600">Manutenção</th>
+                      <th className="py-2 px-2 text-right font-semibold text-red-600">Multas</th>
+                      <th className="py-2 px-2 text-right font-semibold">Total</th>
+                      <th className="py-2 px-2 text-center font-semibold">Variação</th>
+                      <th className="py-2 px-2 text-left font-semibold">Principal Impacto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparativoMensal.map((row, i) => {
+                      const isActive = mesSel === row.mesIdx;
+                      const hasCur = row.total > 0;
+                      const hasPrev = row.prevTotal > 0;
+                      const statusIcon = !hasCur ? null : row.pctTotal > 5
+                        ? <TrendingUp className="h-3.5 w-3.5 text-red-500" />
+                        : row.pctTotal < -5
+                          ? <TrendingDown className="h-3.5 w-3.5 text-green-500" />
+                          : <Minus className="h-3.5 w-3.5 text-muted-foreground" />;
+                      return (
+                        <tr
+                          key={i}
+                          onClick={() => setMesSel(row.mesIdx)}
+                          className={`border-b cursor-pointer transition-colors ${
+                            isActive ? "bg-primary/10 font-medium" : hasCur ? "hover:bg-muted/30" : "opacity-40"
+                          }`}
+                        >
+                          <td className="py-2 px-3 font-medium">{row.mes}</td>
+                          <td className="py-2 px-2 text-right text-blue-600">
+                            {hasCur ? fmt(row.combustivel) : "—"}
+                            {hasCur && hasPrev && row.varComb !== 0 && (
+                              <span className={`ml-1 text-[10px] ${row.varComb > 0 ? "text-red-500" : "text-green-500"}`}>
+                                {row.varComb > 0 ? "▲" : "▼"}{Math.abs(row.pctComb).toFixed(0)}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-2 text-right text-emerald-600">
+                            {hasCur ? fmt(row.manutencao) : "—"}
+                            {hasCur && hasPrev && row.varManut !== 0 && (
+                              <span className={`ml-1 text-[10px] ${row.varManut > 0 ? "text-red-500" : "text-green-500"}`}>
+                                {row.varManut > 0 ? "▲" : "▼"}{Math.abs(row.pctManut).toFixed(0)}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-2 text-right text-red-600">
+                            {hasCur && row.multas > 0 ? fmt(row.multas) : "—"}
+                            {hasCur && hasPrev && row.varMultas !== 0 && (
+                              <span className={`ml-1 text-[10px] ${row.varMultas > 0 ? "text-red-500" : "text-green-500"}`}>
+                                {row.varMultas > 0 ? "▲" : "▼"}{Math.abs(row.pctMultas).toFixed(0)}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-2 text-right font-bold">
+                            {hasCur ? fmt(row.total) : "—"}
+                          </td>
+                          <td className="py-2 px-2 text-center">
+                            {hasCur && hasPrev ? (
+                              <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                row.pctTotal > 5 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                                : row.pctTotal < -5 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                : "bg-muted text-muted-foreground"
+                              }`}>
+                                {statusIcon}
+                                {row.pctTotal > 0 ? "+" : ""}{row.pctTotal.toFixed(1)}%
+                              </span>
+                            ) : hasCur ? (
+                              <span className="text-[10px] text-muted-foreground">Sem ref.</span>
+                            ) : "—"}
+                          </td>
+                          <td className="py-2 px-2">
+                            {hasCur && hasPrev && row.varTotal !== 0 ? (
+                              <div className="text-[10px] space-y-0.5">
+                                {row.maiorAumento && <span className="text-red-600">↑ {row.maiorAumento}</span>}
+                                {row.maiorReducao && <span className="text-green-600 block">↓ {row.maiorReducao}</span>}
+                              </div>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 bg-muted/30 font-bold">
+                      <td className="py-2 px-3">TOTAL {anoDash}</td>
+                      <td className="py-2 px-2 text-right text-blue-600">{fmt(comparativoMensal.reduce((s, r) => s + r.combustivel, 0))}</td>
+                      <td className="py-2 px-2 text-right text-emerald-600">{fmt(comparativoMensal.reduce((s, r) => s + r.manutencao, 0))}</td>
+                      <td className="py-2 px-2 text-right text-red-600">{fmt(comparativoMensal.reduce((s, r) => s + r.multas, 0))}</td>
+                      <td className="py-2 px-2 text-right">{fmt(comparativoMensal.reduce((s, r) => s + r.total, 0))}</td>
+                      <td className="py-2 px-2" colSpan={2}></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {(() => {
+                const sel = comparativoMensal[mesSel];
+                if (!sel || sel.total === 0) return null;
+                return (
+                  <div className="px-4 pt-3 border-t mt-2">
+                    <h4 className="text-sm font-bold mb-2 flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-indigo-500" />
+                      Detalhe: {sel.mes} {anoDash}
+                      {sel.prevTotal > 0 && (
+                        <Badge variant={sel.pctTotal > 5 ? "destructive" : sel.pctTotal < -5 ? "default" : "secondary"} className="text-[10px] ml-1">
+                          {sel.pctTotal > 0 ? "+" : ""}{sel.pctTotal.toFixed(1)}% vs {mesSel > 0 ? MESES_NOME[mesSel - 1] : "Dez/" + (anoDash - 1)}
+                        </Badge>
+                      )}
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-blue-50 dark:bg-blue-950/50 rounded-lg p-2.5 border border-blue-200 dark:border-blue-800">
+                        <p className="text-[10px] text-blue-600 uppercase font-medium">Combustível</p>
+                        <p className="text-sm font-bold text-blue-700">{fmt(sel.combustivel)}</p>
+                        {sel.prevComb > 0 && sel.varComb !== 0 && (
+                          <p className={`text-[10px] mt-0.5 ${sel.varComb > 0 ? "text-red-500" : "text-green-500"}`}>
+                            {sel.varComb > 0 ? "▲" : "▼"} {fmt(Math.abs(sel.varComb))} ({sel.pctComb > 0 ? "+" : ""}{sel.pctComb.toFixed(1)}%)
+                          </p>
+                        )}
+                      </div>
+                      <div className="bg-emerald-50 dark:bg-emerald-950/50 rounded-lg p-2.5 border border-emerald-200 dark:border-emerald-800">
+                        <p className="text-[10px] text-emerald-600 uppercase font-medium">Manutenção</p>
+                        <p className="text-sm font-bold text-emerald-700">{fmt(sel.manutencao)}</p>
+                        {sel.prevManut > 0 && sel.varManut !== 0 && (
+                          <p className={`text-[10px] mt-0.5 ${sel.varManut > 0 ? "text-red-500" : "text-green-500"}`}>
+                            {sel.varManut > 0 ? "▲" : "▼"} {fmt(Math.abs(sel.varManut))} ({sel.pctManut > 0 ? "+" : ""}{sel.pctManut.toFixed(1)}%)
+                          </p>
+                        )}
+                      </div>
+                      <div className="bg-red-50 dark:bg-red-950/50 rounded-lg p-2.5 border border-red-200 dark:border-red-800">
+                        <p className="text-[10px] text-red-600 uppercase font-medium">Multas</p>
+                        <p className="text-sm font-bold text-red-700">{sel.multas > 0 ? fmt(sel.multas) : "R$ 0,00"}</p>
+                        {sel.prevMultas > 0 && sel.varMultas !== 0 && (
+                          <p className={`text-[10px] mt-0.5 ${sel.varMultas > 0 ? "text-red-500" : "text-green-500"}`}>
+                            {sel.varMultas > 0 ? "▲" : "▼"} {fmt(Math.abs(sel.varMultas))} ({sel.pctMultas > 0 ? "+" : ""}{sel.pctMultas.toFixed(1)}%)
+                          </p>
+                        )}
+                      </div>
+                      <div className="bg-indigo-50 dark:bg-indigo-950/50 rounded-lg p-2.5 border border-indigo-200 dark:border-indigo-800">
+                        <p className="text-[10px] text-indigo-600 uppercase font-medium">Total</p>
+                        <p className="text-sm font-bold text-indigo-700">{fmt(sel.total)}</p>
+                        {sel.prevTotal > 0 && sel.varTotal !== 0 && (
+                          <p className={`text-[10px] mt-0.5 ${sel.varTotal > 0 ? "text-red-500" : "text-green-500"}`}>
+                            {sel.varTotal > 0 ? "▲" : "▼"} {fmt(Math.abs(sel.varTotal))} ({sel.pctTotal > 0 ? "+" : ""}{sel.pctTotal.toFixed(1)}%)
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {sel.prevTotal > 0 && Math.abs(sel.pctTotal) > 5 && (
+                      <div className={`mt-3 p-2.5 rounded-lg border text-xs ${
+                        sel.pctTotal > 0
+                          ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800"
+                          : "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
+                      }`}>
+                        <p className="font-bold mb-1">
+                          {sel.pctTotal > 0 ? "⚠️ Custos aumentaram" : "✅ Custos reduziram"} {Math.abs(sel.pctTotal).toFixed(1)}% em relação a {mesSel > 0 ? MESES_NOME[mesSel - 1] : `Dez/${anoDash - 1}`}
+                        </p>
+                        <div className="space-y-0.5 text-muted-foreground">
+                          {sel.maiorAumento && <p>📈 Maior aumento: <strong className="text-red-600">{sel.maiorAumento}</strong></p>}
+                          {sel.maiorReducao && <p>📉 Maior redução: <strong className="text-green-600">{sel.maiorReducao}</strong></p>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
