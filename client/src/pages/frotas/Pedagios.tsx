@@ -663,95 +663,104 @@ export default function Pedagios() {
           </DialogContent>
         </Dialog>
         <Dialog open={excelDialogOpen} onOpenChange={(o) => { if (!parseExcelMut.isPending && !excelSaving) setExcelDialogOpen(o); }}>
-          <DialogContent className="max-w-[95vw] w-[95vw] max-h-[95vh] h-[95vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <FileSpreadsheet className="h-5 w-5 text-emerald-600" /> Importar Pedágios — Excel Sem Parar
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
+          <DialogContent resizable={false} className="!w-[96vw] !max-w-[96vw] !h-[94vh] !max-h-[94vh] flex flex-col p-0 gap-0">
+            <div className="flex items-center gap-2 px-5 py-3 border-b shrink-0">
+              <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+              <h2 className="text-lg font-bold">Importar Pedágios — Excel Sem Parar</h2>
               {excelFiles.length > 0 && (
-                <div className="bg-muted/30 rounded-lg p-3">
-                  <div className="flex items-center gap-2 text-sm mb-1">
-                    <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
-                    <span className="font-semibold">{excelFiles.length} arquivo(s) selecionado(s)</span>
-                    <Badge variant="outline" className="text-xs">{(excelFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(0)} KB total</Badge>
-                  </div>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {excelFiles.map((f, i) => (
-                      <Badge key={i} className="bg-emerald-100 text-emerald-700 text-[10px]">{f.name}</Badge>
-                    ))}
+                <div className="ml-auto flex items-center gap-2">
+                  <Badge className="bg-emerald-100 text-emerald-700">{excelFiles.length} arquivo(s)</Badge>
+                  <Badge variant="outline" className="text-xs">{(excelFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(0)} KB</Badge>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-3">
+              {excelFiles.length > 0 && !excelParsed && excelStage === "idle" && (
+                <div className="flex flex-col items-center justify-center h-full gap-4">
+                  <div className="bg-emerald-50 rounded-xl p-6 border border-emerald-200 max-w-lg w-full">
+                    <div className="text-center mb-4">
+                      <FileSpreadsheet className="h-10 w-10 text-emerald-500 mx-auto mb-2" />
+                      <h3 className="font-semibold text-emerald-800">Pronto para processar</h3>
+                      <p className="text-sm text-emerald-600 mt-1">{excelFiles.length} planilha(s) selecionada(s)</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1 justify-center mb-4">
+                      {excelFiles.map((f, i) => (
+                        <Badge key={i} className="bg-white text-emerald-700 border border-emerald-300 text-[10px]">{f.name}</Badge>
+                      ))}
+                    </div>
+                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700 h-11 text-base" onClick={processExcel} disabled={parseExcelMut.isPending}>
+                      {parseExcelMut.isPending ? <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Processando...</> : <><Upload className="h-5 w-5 mr-2" /> Processar {excelFiles.length > 1 ? `${excelFiles.length} Planilhas` : "Planilha"}</>}
+                    </Button>
                   </div>
                 </div>
               )}
 
               {(excelStage !== "idle" && excelStage !== "done") && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
-                    <span className="text-muted-foreground">
-                      {excelStage === "reading" && "Lendo arquivo..."}
-                      {excelStage === "parsing" && "Interpretando planilha..."}
-                      {excelStage === "matching" && "Vinculando placas aos veículos..."}
-                      {excelStage === "saving" && "Salvando lançamentos..."}
-                    </span>
+                <div className="flex flex-col items-center justify-center h-full gap-4">
+                  <div className="max-w-lg w-full space-y-3">
+                    <div className="flex items-center gap-3 text-sm">
+                      <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                      <div>
+                        <span className="font-medium">
+                          {excelStage === "reading" && "Lendo arquivo..."}
+                          {excelStage === "parsing" && "Interpretando planilha..."}
+                          {excelStage === "matching" && "Vinculando placas aos veículos..."}
+                          {excelStage === "saving" && "Salvando lançamentos..."}
+                        </span>
+                        {excelFileProgress && <div className="text-xs text-muted-foreground mt-0.5">{excelFileProgress}</div>}
+                      </div>
+                    </div>
+                    <Progress value={excelProgress} className="h-3" />
+                    <div className="text-right text-sm font-medium text-emerald-700">{excelProgress}%</div>
                   </div>
-                  {excelFileProgress && <div className="text-xs text-muted-foreground">{excelFileProgress}</div>}
-                  <Progress value={excelProgress} className="h-2" />
-                  <div className="text-right text-xs text-muted-foreground">{excelProgress}%</div>
                 </div>
               )}
 
-              {!excelParsed && excelStage === "idle" && (
-                <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={processExcel} disabled={parseExcelMut.isPending}>
-                  {parseExcelMut.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-4 w-4 mr-1" /> Processar {excelFiles.length > 1 ? `${excelFiles.length} Planilhas` : "Planilha"}</>}
-                </Button>
-              )}
-
               {excelParsed && (
-                <>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="flex flex-col h-full gap-3">
+                  <div className="grid grid-cols-4 gap-2 shrink-0">
                     <Card className="border-emerald-200 bg-emerald-50/50">
                       <CardContent className="p-2 text-center">
-                        <div className="text-lg font-bold text-emerald-700">{excelParsed.summary?.total || 0}</div>
+                        <div className="text-xl font-bold text-emerald-700">{excelParsed.summary?.total || 0}</div>
                         <div className="text-[10px] text-emerald-600 uppercase font-semibold">Total Registros</div>
                       </CardContent>
                     </Card>
                     <Card className="border-blue-200 bg-blue-50/50">
                       <CardContent className="p-2 text-center">
-                        <div className="text-lg font-bold text-blue-700">{fmt(excelParsed.summary?.totalValor || 0)}</div>
+                        <div className="text-xl font-bold text-blue-700">{fmt(excelParsed.summary?.totalValor || 0)}</div>
                         <div className="text-[10px] text-blue-600 uppercase font-semibold">Valor Total</div>
                       </CardContent>
                     </Card>
                     <Card className="border-green-200 bg-green-50/50">
                       <CardContent className="p-2 text-center">
-                        <div className="text-lg font-bold text-green-700">{excelParsed.summary?.matched || 0}</div>
+                        <div className="text-xl font-bold text-green-700">{excelParsed.summary?.matched || 0}</div>
                         <div className="text-[10px] text-green-600 uppercase font-semibold">Veículos OK</div>
                       </CardContent>
                     </Card>
                     <Card className={`${(excelParsed.summary?.unmatched || 0) > 0 ? "border-amber-200 bg-amber-50/50" : "border-gray-200 bg-gray-50/50"}`}>
                       <CardContent className="p-2 text-center">
-                        <div className={`text-lg font-bold ${(excelParsed.summary?.unmatched || 0) > 0 ? "text-amber-700" : "text-gray-500"}`}>{excelParsed.summary?.unmatched || 0}</div>
+                        <div className={`text-xl font-bold ${(excelParsed.summary?.unmatched || 0) > 0 ? "text-amber-700" : "text-gray-500"}`}>{excelParsed.summary?.unmatched || 0}</div>
                         <div className="text-[10px] text-amber-600 uppercase font-semibold">Sem Veículo</div>
                       </CardContent>
                     </Card>
                   </div>
 
                   {(excelParsed.summary?.placasNaoEncontradas?.length > 0) && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-                      <div className="flex items-center gap-2 text-amber-700 font-medium mb-1">
-                        <AlertCircle className="h-4 w-4" /> Placas não encontradas no cadastro:
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-sm shrink-0">
+                      <div className="flex items-center gap-2 text-amber-700 font-medium">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>Placas não cadastradas:</span>
+                        <div className="flex gap-1 flex-wrap">
+                          {excelParsed.summary.placasNaoEncontradas.map((p: string) => (
+                            <Badge key={p} variant="outline" className="text-amber-700 border-amber-300 text-[10px]">{p}</Badge>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex gap-1 flex-wrap">
-                        {excelParsed.summary.placasNaoEncontradas.map((p: string) => (
-                          <Badge key={p} variant="outline" className="text-amber-700 border-amber-300">{p}</Badge>
-                        ))}
-                      </div>
-                      <p className="text-xs text-amber-600 mt-1">Cadastre estes veículos no módulo Frotas para incluí-los na importação.</p>
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2 border-b pb-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Button variant="ghost" size="sm" onClick={excelToggleAll} className="text-xs">
                       <CheckCheck className="h-3.5 w-3.5 mr-1" />
                       {excelSelectedItems.size === excelParsed.items?.length ? "Desmarcar Todos" : "Marcar Todos"}
@@ -761,66 +770,82 @@ export default function Pedagios() {
                     </span>
                   </div>
 
-                  <div className="space-y-1 max-h-[calc(95vh-380px)] overflow-y-auto">
-                    {excelParsed.items?.map((item: any, idx: number) => {
-                      const isSelected = excelSelectedItems.has(idx);
-                      const catInfo = CATEGORIAS[item.categoria] || { label: item.categoria, color: "bg-gray-100 text-gray-700" };
-                      return (
-                        <div key={idx}
-                          className={`rounded-lg border p-2 cursor-pointer transition-colors text-sm ${
-                            isSelected
-                              ? item.matched ? "border-emerald-300 bg-emerald-50/50" : "border-amber-300 bg-amber-50/50"
-                              : "border-muted bg-muted/20 opacity-50"
-                          }`}
-                          onClick={() => {
-                            const next = new Set(excelSelectedItems);
-                            if (next.has(idx)) next.delete(idx); else next.add(idx);
-                            setExcelSelectedItems(next);
-                          }}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Checkbox checked={isSelected} className="mt-0" />
-                            <div className="flex-1 flex items-center gap-2 flex-wrap">
-                              <span className="text-xs text-muted-foreground w-[75px]">{new Date(item.data + "T12:00:00").toLocaleDateString("pt-BR")}</span>
-                              {item.horario && <span className="text-[10px] text-muted-foreground">{item.horario}</span>}
-                              <Badge className={`text-[10px] ${catInfo.color}`}>{catInfo.label}</Badge>
-                              <span className="font-medium text-xs">{item.vehiclePlaca}</span>
-                              {item.matched ? (
-                                <span className="text-[10px] text-emerald-600">{item.vehicleInfo}</span>
-                              ) : (
-                                <Badge className="bg-amber-100 text-amber-700 text-[10px]">Não cadastrada</Badge>
-                              )}
-                              <span className="text-xs text-muted-foreground flex-1 truncate">{item.pracaPedagio || item.descricao}</span>
-                              <span className="font-semibold text-xs ml-auto">{fmt(item.valor)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="flex-1 overflow-y-auto border rounded-lg min-h-0">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
+                        <tr className="border-b">
+                          <th className="p-2 w-8"></th>
+                          <th className="p-2 text-left font-medium">Data</th>
+                          <th className="p-2 text-left font-medium">Hora</th>
+                          <th className="p-2 text-left font-medium">Categoria</th>
+                          <th className="p-2 text-left font-medium">Placa</th>
+                          <th className="p-2 text-left font-medium">Veículo</th>
+                          <th className="p-2 text-left font-medium">Praça / Descrição</th>
+                          <th className="p-2 text-right font-medium">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {excelParsed.items?.map((item: any, idx: number) => {
+                          const isSelected = excelSelectedItems.has(idx);
+                          const catInfo = CATEGORIAS[item.categoria] || { label: item.categoria, color: "bg-gray-100 text-gray-700" };
+                          return (
+                            <tr key={idx}
+                              className={`border-b cursor-pointer transition-colors ${
+                                isSelected
+                                  ? item.matched ? "bg-emerald-50/70 hover:bg-emerald-50" : "bg-amber-50/70 hover:bg-amber-50"
+                                  : "bg-muted/10 opacity-50 hover:opacity-70"
+                              }`}
+                              onClick={() => {
+                                const next = new Set(excelSelectedItems);
+                                if (next.has(idx)) next.delete(idx); else next.add(idx);
+                                setExcelSelectedItems(next);
+                              }}
+                            >
+                              <td className="p-2 text-center"><Checkbox checked={isSelected} /></td>
+                              <td className="p-2 whitespace-nowrap">{new Date(item.data + "T12:00:00").toLocaleDateString("pt-BR")}</td>
+                              <td className="p-2 text-muted-foreground">{item.horario || "—"}</td>
+                              <td className="p-2"><Badge className={`text-[10px] ${catInfo.color}`}>{catInfo.label}</Badge></td>
+                              <td className="p-2 font-medium">{item.vehiclePlaca}</td>
+                              <td className="p-2">
+                                {item.matched ? (
+                                  <span className="text-emerald-600">{item.vehicleInfo}</span>
+                                ) : (
+                                  <Badge className="bg-amber-100 text-amber-700 text-[10px]">Não cadastrada</Badge>
+                                )}
+                              </td>
+                              <td className="p-2 text-muted-foreground truncate max-w-[200px]">{item.pracaPedagio || item.descricao || "—"}</td>
+                              <td className="p-2 text-right font-semibold whitespace-nowrap">{fmt(item.valor)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
 
                   {excelStage === "saving" && (
-                    <div className="space-y-1">
+                    <div className="space-y-1 shrink-0">
                       <Progress value={excelProgress} className="h-2" />
                       <div className="text-right text-xs text-muted-foreground">Salvando... {excelProgress}%</div>
                     </div>
                   )}
-
-                  <div className="flex gap-2 justify-between items-center pt-2 border-t">
-                    <div className="text-sm text-muted-foreground">
-                      {excelSelectedItems.size} selecionado(s) ·
-                      Total: {fmt(excelParsed.items?.filter((_: any, i: number) => excelSelectedItems.has(i)).reduce((s: number, it: any) => s + (it.valor || 0), 0))}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => { setExcelDialogOpen(false); setExcelParsed(null); setExcelFiles([]); setExcelStage("idle"); }}>Cancelar</Button>
-                      <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={saveExcelItems} disabled={excelSaving || excelSelectedItems.size === 0}>
-                        {excelSaving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando...</> : <><Check className="h-4 w-4 mr-1" /> Importar Selecionados</>}
-                      </Button>
-                    </div>
-                  </div>
-                </>
+                </div>
               )}
             </div>
+
+            {excelParsed && (
+              <div className="flex gap-2 justify-between items-center px-5 py-3 border-t shrink-0 bg-muted/30">
+                <div className="text-sm font-medium">
+                  {excelSelectedItems.size} selecionado(s) ·
+                  Total: <span className="text-emerald-700">{fmt(excelParsed.items?.filter((_: any, i: number) => excelSelectedItems.has(i)).reduce((s: number, it: any) => s + (it.valor || 0), 0))}</span>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => { setExcelDialogOpen(false); setExcelParsed(null); setExcelFiles([]); setExcelStage("idle"); }}>Cancelar</Button>
+                  <Button className="bg-emerald-600 hover:bg-emerald-700 h-10 px-6" onClick={saveExcelItems} disabled={excelSaving || excelSelectedItems.size === 0}>
+                    {excelSaving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando...</> : <><Check className="h-4 w-4 mr-1" /> Importar Selecionados</>}
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
