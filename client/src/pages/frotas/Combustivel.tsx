@@ -466,72 +466,96 @@ export default function Combustivel() {
         </Dialog>
 
         <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Resultado da Importação PDF</DialogTitle></DialogHeader>
+          <DialogContent className="w-screen h-screen max-w-none m-0 rounded-none flex flex-col">
+            <DialogHeader className="flex-shrink-0 flex flex-row items-center justify-between border-b pb-4">
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Resultado da Importação PDF
+              </DialogTitle>
+              <Button variant="outline" onClick={() => setImportDialogOpen(false)}>Fechar</Button>
+            </DialogHeader>
             {importResult && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950 rounded-lg">
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <div className="flex-1 overflow-y-auto space-y-6 py-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl">
+                  <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-950 rounded-xl border border-green-200">
+                    <CheckCircle2 className="h-8 w-8 text-green-600" />
                     <div>
-                      <p className="text-lg font-bold text-green-700">{importResult.inserted}</p>
+                      <p className="text-2xl font-bold text-green-700">{importResult.inserted}</p>
                       <p className="text-xs text-green-600">Importados</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950 rounded-lg">
-                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-950 rounded-xl border border-amber-200">
+                    <AlertTriangle className="h-8 w-8 text-amber-600" />
                     <div>
-                      <p className="text-lg font-bold text-amber-700">{importResult.duplicates}</p>
+                      <p className="text-2xl font-bold text-amber-700">{importResult.duplicates}</p>
                       <p className="text-xs text-amber-600">Duplicados (ignorados)</p>
                     </div>
                   </div>
+                  {importResult.noVehicle > 0 && (
+                    <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-950 rounded-xl border border-red-200">
+                      <XCircle className="h-8 w-8 text-red-600" />
+                      <div>
+                        <p className="text-2xl font-bold text-red-700">{importResult.noVehicle}</p>
+                        <p className="text-xs text-red-600">Sem veículo</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-950 rounded-xl border border-blue-200">
+                    <FileText className="h-8 w-8 text-blue-600" />
+                    <div>
+                      <p className="text-2xl font-bold text-blue-700">{importResult.totalParsed}</p>
+                      <p className="text-xs text-blue-600">Total no PDF</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Total lido do PDF: <strong>{importResult.totalParsed}</strong> registros de combustível
-                </div>
+
                 {importResult.totalParsed === 0 && importResult.inserted === 0 && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 max-w-3xl">
                     <p className="font-medium mb-1">Nenhum registro encontrado no PDF</p>
                     <p className="text-xs">Verifique se o PDF é do sistema do posto de combustível (Posto Gestor) e contém as placas cadastradas no sistema.</p>
                   </div>
                 )}
-                {importResult.noVehicle > 0 && (
-                  <div className="flex items-center gap-2 text-sm text-red-600">
-                    <XCircle className="h-4 w-4" />
-                    {importResult.noVehicle} registro(s) sem veículo correspondente
-                  </div>
-                )}
-                {importResult.matchedDrivers?.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium mb-1">Motoristas vinculados a funcionários:</p>
-                    <div className="text-xs space-y-1 max-h-[120px] overflow-y-auto bg-muted/50 rounded p-2">
-                      {importResult.matchedDrivers.map((m: string, i: number) => (
-                        <div key={i} className="flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
-                          <span>{m}</span>
-                        </div>
-                      ))}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl">
+                  {importResult.matchedDrivers?.length > 0 && (
+                    <div className="border rounded-xl overflow-hidden">
+                      <div className="bg-green-50 dark:bg-green-950 px-4 py-2.5 border-b border-green-200">
+                        <p className="text-sm font-semibold text-green-800 flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Motoristas vinculados a funcionários ({importResult.matchedDrivers.length})
+                        </p>
+                      </div>
+                      <div className="divide-y max-h-[300px] overflow-y-auto">
+                        {importResult.matchedDrivers.map((m: string, i: number) => (
+                          <div key={i} className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/30">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                            <span>{m}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-                {importResult.unmatchedDrivers?.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium mb-1">Motoristas não encontrados no cadastro:</p>
-                    <div className="text-xs space-y-1 max-h-[80px] overflow-y-auto bg-muted/50 rounded p-2">
-                      {importResult.unmatchedDrivers.map((d: string, i: number) => (
-                        <div key={i} className="flex items-center gap-1">
-                          <AlertTriangle className="h-3 w-3 text-amber-500 flex-shrink-0" />
-                          <span>{d}</span>
-                        </div>
-                      ))}
+                  )}
+                  {importResult.unmatchedDrivers?.length > 0 && (
+                    <div className="border rounded-xl overflow-hidden">
+                      <div className="bg-amber-50 dark:bg-amber-950 px-4 py-2.5 border-b border-amber-200">
+                        <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4" />
+                          Motoristas não encontrados no cadastro ({importResult.unmatchedDrivers.length})
+                        </p>
+                      </div>
+                      <div className="divide-y max-h-[300px] overflow-y-auto">
+                        {importResult.unmatchedDrivers.map((d: string, i: number) => (
+                          <div key={i} className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/30">
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                            <span>{d}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
-            <DialogFooter>
-              <Button onClick={() => setImportDialogOpen(false)}>Fechar</Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
