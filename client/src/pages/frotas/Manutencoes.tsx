@@ -61,6 +61,7 @@ export default function Manutencoes() {
   type MaintItem = { categoria: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number };
   const [maintItems, setMaintItems] = useState<MaintItem[]>([]);
   const [editingMaintId, setEditingMaintId] = useState<number | null>(null);
+  const [viewMaint, setViewMaint] = useState<any>(null);
 
   const vehicles = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
   const manut = trpc.frotas.listMaintenances.useQuery(
@@ -76,6 +77,10 @@ export default function Manutencoes() {
     { enabled: cId > 0 },
   );
   const maintConsolidatedSet = new Set(consolidatedMonths.data?.manutencao || []);
+  const viewItems = trpc.frotas.listMaintenanceItems.useQuery(
+    { companyId: cId, maintenanceId: viewMaint?.id },
+    { enabled: cId > 0 && !!viewMaint?.id },
+  );
   const createMut = trpc.frotas.createMaintenance.useMutation({
     onSuccess: () => { manut.refetch(); monthSummary.refetch(); setDialogOpen(false); toast.success("Manutenção registrada"); },
   });
@@ -586,7 +591,7 @@ export default function Manutencoes() {
                   const custo = parseFloat(m.custo || "0");
                   const maxCusto = Math.max(...list.map((x: any) => parseFloat(x.custo || "0")), 1);
                   return (
-                    <tr key={m.id} className={`hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors ${atrasada ? "bg-red-50/60 dark:bg-red-950/20" : idx % 2 === 0 ? "" : "bg-slate-50/50 dark:bg-slate-900/20"}`}>
+                    <tr key={m.id} className={`hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors cursor-pointer ${atrasada ? "bg-red-50/60 dark:bg-red-950/20" : idx % 2 === 0 ? "" : "bg-slate-50/50 dark:bg-slate-900/20"}`} onClick={() => setViewMaint(m)}>
                       <td className="p-3 whitespace-nowrap font-medium">{m.data_manutencao ? m.data_manutencao.split('-').reverse().join('/') : "—"}</td>
                       <td className="p-3">
                         <div className="flex flex-col">
@@ -632,7 +637,7 @@ export default function Manutencoes() {
                         </Badge>
                       </td>
                       <td className="p-3 text-xs whitespace-nowrap">{m.data_proxima ? m.data_proxima.split('-').reverse().join('/') : "—"}</td>
-                      <td className="p-3 text-right whitespace-nowrap">
+                      <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         {m.sc_numero ? (
                           <span className="inline-flex items-center gap-0.5 mr-1">
                             <Badge variant="outline" className="text-[10px] border-violet-300 text-violet-700 bg-violet-50 dark:bg-violet-950 dark:text-violet-300">
@@ -1131,6 +1136,188 @@ export default function Manutencoes() {
                 </div>
               )}
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!viewMaint} onOpenChange={(open) => { if (!open) setViewMaint(null); }}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            {viewMaint && (() => {
+              const m = viewMaint;
+              const items = (viewItems.data || []) as any[];
+              const pecas = items.filter((i: any) => i.categoria === "peca");
+              const servicos = items.filter((i: any) => i.categoria === "servico");
+              const totalPecas = pecas.reduce((s: number, i: any) => s + parseFloat(i.valor_total || i.valorTotal || "0"), 0);
+              const totalServico = servicos.reduce((s: number, i: any) => s + parseFloat(i.valor_total || i.valorTotal || "0"), 0);
+              const anexos = (m.anexos || []) as any[];
+              const atrasada = m.status === "agendada" && m.data_proxima && m.data_proxima < new Date().toISOString().split("T")[0];
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Wrench className="h-5 w-5 text-orange-500" />
+                      <span>Detalhes da Manutenção</span>
+                      <Badge className={`ml-2 text-[10px] font-semibold ${m.tipo === "preventiva" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
+                        {m.tipo === "preventiva" ? "Preventiva" : "Corretiva"}
+                      </Badge>
+                    </DialogTitle>
+                  </DialogHeader>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Veículo</p>
+                        <p className="font-mono font-bold text-[#1e3a5f] dark:text-blue-300">{m.placa || "—"}</p>
+                        <p className="text-xs text-muted-foreground">{m.modelo} {m.marca ? `· ${m.marca}` : ""}</p>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Status</p>
+                        <Badge className={`mt-1 text-xs font-semibold ${
+                          m.status === "realizada" ? "bg-emerald-100 text-emerald-700" :
+                          m.status === "em_andamento" ? "bg-amber-100 text-amber-700" :
+                          m.status === "agendada" ? "bg-blue-100 text-blue-700" :
+                          "bg-red-100 text-red-700"
+                        }`}>
+                          {atrasada && <AlertTriangle className="h-3 w-3 mr-1" />}
+                          {STATUS_MAP[m.status]?.label || m.status}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Data</p>
+                        <p className="font-medium text-sm">{m.data_manutencao ? m.data_manutencao.split("-").reverse().join("/") : "—"}</p>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">KM</p>
+                        <p className="font-medium text-sm">{m.km_na_manutencao ? parseFloat(m.km_na_manutencao).toLocaleString("pt-BR") : "—"}</p>
+                      </div>
+                      <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-3">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Custo Total</p>
+                        <p className="font-bold text-emerald-700 dark:text-emerald-400">{fmt(m.custo)}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Descrição</p>
+                      <p className="text-sm">{m.descricao || "—"}</p>
+                    </div>
+
+                    {m.fornecedor && (
+                      <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Fornecedor</p>
+                        <p className="text-sm font-medium">{m.fornecedor}</p>
+                      </div>
+                    )}
+
+                    {m.observacoes && (
+                      <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Observações</p>
+                        <p className="text-sm">{m.observacoes}</p>
+                      </div>
+                    )}
+
+                    {(m.data_proxima || m.km_proxima) && (
+                      <div className="grid grid-cols-2 gap-3">
+                        {m.data_proxima && (
+                          <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Próxima Manutenção</p>
+                            <p className="font-medium text-sm">{m.data_proxima.split("-").reverse().join("/")}</p>
+                          </div>
+                        )}
+                        {m.km_proxima && (
+                          <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">KM Próxima</p>
+                            <p className="font-medium text-sm">{parseFloat(m.km_proxima).toLocaleString("pt-BR")}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {(m.sc_numero || m.oc_numero) && (
+                      <div className="flex items-center gap-2">
+                        {m.sc_numero && (
+                          <Badge variant="outline" className="text-xs border-violet-300 text-violet-700 bg-violet-50">
+                            <Link2 className="h-3 w-3 mr-1" />SC {m.sc_numero}
+                          </Badge>
+                        )}
+                        {m.oc_numero && (
+                          <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50">
+                            <ShoppingCart className="h-3 w-3 mr-1" />OC {m.oc_numero}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    {items.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-[#1e3a5f] dark:text-blue-300 mb-2">Itens ({items.length})</p>
+                        <div className="border rounded-lg overflow-hidden">
+                          <table className="w-full text-xs">
+                            <thead className="bg-slate-100 dark:bg-slate-800">
+                              <tr>
+                                <th className="p-2 text-left font-medium">Tipo</th>
+                                <th className="p-2 text-left font-medium">Descrição</th>
+                                <th className="p-2 text-right font-medium">Qtd</th>
+                                <th className="p-2 text-right font-medium">Unit.</th>
+                                <th className="p-2 text-right font-medium">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((item: any, idx: number) => (
+                                <tr key={idx} className={idx % 2 === 0 ? "" : "bg-slate-50 dark:bg-slate-900/30"}>
+                                  <td className="p-2">
+                                    <Badge className={`text-[10px] ${item.categoria === "peca" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
+                                      {item.categoria === "peca" ? "Peça" : "Serviço"}
+                                    </Badge>
+                                  </td>
+                                  <td className="p-2 font-medium">{item.nome}</td>
+                                  <td className="p-2 text-right tabular-nums">{item.quantidade}</td>
+                                  <td className="p-2 text-right tabular-nums">{fmt(item.valor_unitario || item.valorUnitario)}</td>
+                                  <td className="p-2 text-right tabular-nums font-medium">{fmt(item.valor_total || item.valorTotal)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot className="bg-slate-100 dark:bg-slate-800 font-semibold">
+                              <tr>
+                                <td colSpan={4} className="p-2 text-right">Peças: {fmt(totalPecas)} · Serviço: {fmt(totalServico)}</td>
+                                <td className="p-2 text-right text-emerald-700 dark:text-emerald-400">{fmt(totalPecas + totalServico)}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {anexos.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-[#1e3a5f] dark:text-blue-300 mb-2">
+                          <Paperclip className="inline h-3.5 w-3.5 mr-1" />Anexos ({anexos.length})
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {anexos.map((a: any, idx: number) => (
+                            <a key={idx} href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 border rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors">
+                              <File className="h-4 w-4 text-blue-500 shrink-0" />
+                              <span className="text-xs truncate">{a.nome || a.name || `Anexo ${idx + 1}`}</span>
+                              <Download className="h-3 w-3 text-muted-foreground ml-auto shrink-0" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <DialogFooter className="gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setViewMaint(null)}>
+                      Fechar
+                    </Button>
+                    <Button onClick={() => { setViewMaint(null); openEdit(m); }}>
+                      <Pencil className="h-4 w-4 mr-1" /> Editar
+                    </Button>
+                  </DialogFooter>
+                </>
+              );
+            })()}
           </DialogContent>
         </Dialog>
 
