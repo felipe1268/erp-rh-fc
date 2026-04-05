@@ -1159,6 +1159,7 @@ Sempre retorne JSON válido, sem markdown.`;
   importFuelPdf: protectedProcedure
     .input(z.object({ companyId: z.number(), pdfBase64: z.string(), criadoPor: z.string().optional() }))
     .mutation(async ({ input }) => {
+      try {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
       let pdfParse: any;
@@ -1171,6 +1172,9 @@ Sempre retorne JSON válido, sem markdown.`;
       }
       const buf = Buffer.from(input.pdfBase64, 'base64');
       console.log('[FuelPDF] Buffer size:', buf.length);
+      if (buf.length < 100) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Arquivo PDF inválido ou muito pequeno.' });
+      }
       let pdfData: any;
       try {
         pdfData = await pdfParse(buf);
@@ -1178,7 +1182,10 @@ Sempre retorne JSON válido, sem markdown.`;
         console.error('[FuelPDF] Erro ao processar PDF:', e.message);
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Erro ao ler o PDF. Verifique se o arquivo não está corrompido ou protegido.' });
       }
-      const text = pdfData.text;
+      const text = pdfData?.text || '';
+      if (!text || text.length < 10) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'PDF não contém texto legível. Pode ser uma imagem/escaneado.' });
+      }
       console.log('[FuelPDF] Text length:', text.length, '| First 300 chars:', text.substring(0, 300));
 
       const vRows = await db.execute(sql`SELECT id, placa FROM vehicles WHERE "companyId" = ${input.companyId} AND placa IS NOT NULL`);
@@ -1491,6 +1498,11 @@ Sempre retorne JSON válido, sem markdown.`;
         matchedDrivers: Object.entries(matchedDrivers).map(([pdf, emp]) => `${pdf} → ${emp}`),
         unmatchedDrivers: [...unmatchedDrivers],
       };
+      } catch (outerErr: any) {
+        if (outerErr instanceof TRPCError) throw outerErr;
+        console.error('[FuelPDF] Unexpected error:', outerErr.message, outerErr.stack?.substring(0, 500));
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Erro inesperado ao processar PDF: ' + (outerErr.message || 'Erro desconhecido') });
+      }
     }),
 
   listFines: protectedProcedure
