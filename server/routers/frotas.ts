@@ -464,6 +464,164 @@ export const frotasRouter = router({
       } catch { return null; }
     }),
 
+  autoFillFipe: protectedProcedure
+    .input(z.object({ companyId: z.number(), vehicleId: z.number().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const userCompanyId = (ctx.user as any)?.companyId;
+      if (userCompanyId && userCompanyId !== input.companyId) {
+        throw new Error("Acesso negado: empresa inválida");
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      let vQuery = sql`SELECT id, modelo, marca, "anoFabricacao", ano_modelo, "tipoVeiculo", fipe_codigo_marca, fipe_codigo_modelo, fipe_codigo_ano, valor_fipe FROM vehicles WHERE "companyId" = ${input.companyId}`;
+      if (input.vehicleId) vQuery = sql`${vQuery} AND id = ${input.vehicleId}`;
+      const vRes = await db.execute(vQuery);
+      const veiculos = (vRes as any).rows || vRes;
+
+      function tipoFipe(tipo: string): string {
+        const t = (tipo || "").toLowerCase();
+        if (t.includes("caminh")) return "caminhoes";
+        if (t.includes("moto")) return "motos";
+        return "carros";
+      }
+
+      function normalize(s: string): string {
+        return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+      }
+
+      function similarity(a: string, b: string): number {
+        const na = normalize(a);
+        const nb = normalize(b);
+        if (na === nb) return 1;
+        const wordsA = na.split(" ");
+        const wordsB = nb.split(" ");
+        let matches = 0;
+        for (const w of wordsA) {
+          if (w.length < 2) continue;
+          if (wordsB.some(wb => wb.includes(w) || w.includes(wb))) matches++;
+        }
+        return wordsA.length > 0 ? matches / Math.max(wordsA.length, 1) : 0;
+      }
+
+      const marcasCache: Record<string, any[]> = {};
+      async function getMarcas(tipo: string) {
+        if (marcasCache[tipo]) return marcasCache[tipo];
+        try {
+          const res = await fetch(`https://parallelum.com.br/fipe/api/v1/${tipo}/marcas`);
+          if (!res.ok) return [];
+          marcasCache[tipo] = await res.json();
+          return marcasCache[tipo];
+        } catch { return []; }
+      }
+
+      const results: any[] = [];
+      const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+      for (const v of veiculos) {
+        const tipo = tipoFipe(v.tipoVeiculo);
+        const result: any = { id: v.id, modelo: v.modelo, marca: v.marca, status: "skipped", detail: "" };
+
+        try {
+          const marcas = await getMarcas(tipo);
+          if (!marcas.length) { result.detail = "Sem marcas na FIPE para tipo " + tipo; results.push(result); continue; }
+
+          let bestMarca: any = null;
+          let bestScore = 0;
+          const marcaSearch = (v.marca || "").split("/")[0].trim();
+          for (const m of marcas) {
+            const score = similarity(marcaSearch, m.nome);
+            if (score > bestScore) { bestScore = score; bestMarca = m; }
+          }
+          if (!bestMarca || bestScore < 0.3) {
+            result.detail = `Marca "${marcaSearch}" não encontrada (melhor: ${bestMarca?.nome} score: ${bestScore.toFixed(2)})`;
+            results.push(result);
+            continue;
+          }
+
+          await delay(200);
+          let modelosRes: any;
+          try {
+            const res = await fetch(`https://parallelum.com.br/fipe/api/v1/${tipo}/marcas/${bestMarca.codigo}/modelos`);
+            modelosRes = res.ok ? await res.json() : { modelos: [] };
+          } catch { modelosRes = { modelos: [] }; }
+
+          const modelos = modelosRes.modelos || [];
+          if (!modelos.length) { result.detail = `Sem modelos para marca ${bestMarca.nome}`; results.push(result); continue; }
+
+          let bestModelo: any = null;
+          let bestMScore = 0;
+          const modeloSearch = (v.modelo || "").replace(/^[A-Z]+\//, "").trim();
+          for (const m of modelos) {
+            const score = similarity(modeloSearch, m.nome);
+            if (score > bestMScore) { bestMScore = score; bestModelo = m; }
+          }
+          if (!bestModelo || bestMScore < 0.2) {
+            result.detail = `Modelo "${modeloSearch}" não encontrado em ${bestMarca.nome} (melhor: ${bestModelo?.nome} score: ${bestMScore.toFixed(2)})`;
+            results.push(result);
+            continue;
+          }
+
+          await delay(200);
+          let anosRes: any[];
+          try {
+            const res = await fetch(`https://parallelum.com.br/fipe/api/v1/${tipo}/marcas/${bestMarca.codigo}/modelos/${bestModelo.codigo}/anos`);
+            anosRes = res.ok ? await res.json() : [];
+          } catch { anosRes = []; }
+
+          if (!anosRes.length) { result.detail = `Sem anos para ${bestMarca.nome} ${bestModelo.nome}`; results.push(result); continue; }
+
+          const anoTarget = v.ano_modelo || v.anoFabricacao || "";
+          let bestAno = anosRes.find((a: any) => a.codigo.startsWith(anoTarget + "-"));
+          if (!bestAno) bestAno = anosRes.find((a: any) => a.nome.includes(anoTarget));
+          if (!bestAno) bestAno = anosRes[0];
+
+          await delay(200);
+          let valorData: any;
+          try {
+            const res = await fetch(`https://parallelum.com.br/fipe/api/v1/${tipo}/marcas/${bestMarca.codigo}/modelos/${bestModelo.codigo}/anos/${bestAno.codigo}`);
+            valorData = res.ok ? await res.json() : null;
+          } catch { valorData = null; }
+
+          if (!valorData || !valorData.Valor) {
+            result.detail = `Valor não encontrado para ${bestMarca.nome} ${bestModelo.nome} ${bestAno.nome}`;
+            results.push(result);
+            continue;
+          }
+
+          const valorFipe = parseFloat(valorData.Valor.replace(/[R$\s.]/g, "").replace(",", ".")) || 0;
+          const ref = valorData.MesReferencia || "";
+
+          await db.execute(sql`
+            UPDATE vehicles SET
+              fipe_codigo_marca = ${String(bestMarca.codigo)},
+              fipe_codigo_modelo = ${String(bestModelo.codigo)},
+              fipe_codigo_ano = ${bestAno.codigo},
+              valor_fipe = ${valorFipe},
+              fipe_referencia = ${ref}
+            WHERE id = ${v.id}
+          `);
+
+          result.status = "updated";
+          result.detail = `${bestMarca.nome} > ${bestModelo.nome} > ${bestAno.nome} = ${valorData.Valor} (ref: ${ref})`;
+          result.fipeMarca = bestMarca.nome;
+          result.fipeModelo = bestModelo.nome;
+          result.fipeAno = bestAno.nome;
+          result.valorFipe = valorFipe;
+          result.valorAnterior = parseFloat(v.valor_fipe) || 0;
+        } catch (e: any) {
+          result.status = "error";
+          result.detail = e.message || "Erro desconhecido";
+        }
+        results.push(result);
+      }
+
+      const updated = results.filter(r => r.status === "updated").length;
+      const skipped = results.filter(r => r.status === "skipped").length;
+      const errors = results.filter(r => r.status === "error").length;
+
+      return { total: veiculos.length, updated, skipped, errors, results };
+    }),
+
   listMaintenances: protectedProcedure
     .input(z.object({ companyId: z.number(), vehicleId: z.number().optional(), status: z.string().optional() }))
     .query(async ({ input }) => {

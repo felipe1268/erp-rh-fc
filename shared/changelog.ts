@@ -7769,4 +7769,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 04:30:00",
   },
+  {
+    version: 1017,
+    titulo: "Auto-preenchimento FIPE — Busca automática de códigos e valores",
+    descricao:
+      "Novo botão 'Preencher FIPE Automático' na tela de Veículos que consulta a API FIPE (parallelum.com.br) " +
+      "e preenche automaticamente os campos fipe_codigo_marca, fipe_codigo_modelo, fipe_codigo_ano e valor_fipe " +
+      "para todos os veículos da frota. Usa algoritmo de similaridade para match de marca/modelo por nome. " +
+      "Suporta carros, motos e caminhões. Máquinas (sem FIPE) são ignoradas automaticamente. " +
+      "Endpoint autoFillFipe com rate-limiting (200ms entre requests), cache de marcas por tipo, " +
+      "e relatório detalhado de resultados (atualizados, não encontrados, erros).",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 05:00:00",
+  },
 ];

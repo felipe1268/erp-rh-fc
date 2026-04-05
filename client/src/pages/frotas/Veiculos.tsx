@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image, Camera } from "lucide-react";
+import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image, Camera, Loader2, Sparkles } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 
@@ -96,6 +96,25 @@ export default function Veiculos() {
     e.target.value = "";
   }
 
+  const autoFipeMut = trpc.frotas.autoFillFipe.useMutation({
+    onSuccess: (data) => {
+      vehicles.refetch();
+      const msgs: string[] = [];
+      if (data.updated > 0) msgs.push(`${data.updated} veículo(s) atualizado(s)`);
+      if (data.skipped > 0) msgs.push(`${data.skipped} não encontrado(s)`);
+      if (data.errors > 0) msgs.push(`${data.errors} erro(s)`);
+      toast.success(`FIPE preenchido! ${msgs.join(" · ")}`);
+      for (const r of data.results) {
+        if (r.status === "updated") {
+          toast.info(`✅ ${r.marca} ${r.modelo}: ${r.detail}`, { duration: 8000 });
+        } else if (r.status === "skipped") {
+          toast.warning(`⚠ ${r.marca} ${r.modelo}: ${r.detail}`, { duration: 8000 });
+        }
+      }
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const fipeTipo = form.tipoVeiculo === "Caminhão" ? "caminhoes" : form.tipoVeiculo === "Moto" ? "motos" : "carros";
   const fipeMarcas = trpc.frotas.fipeMarcas.useQuery({ tipo: fipeTipo }, { enabled: dialogOpen });
   const fipeModelos = trpc.frotas.fipeModelos.useQuery(
@@ -167,7 +186,18 @@ export default function Veiculos() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Car className="h-6 w-6 text-cyan-600" /> Veículos
           </h1>
-          <Button onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo Veículo</Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => autoFipeMut.mutate({ companyId: cId })}
+              disabled={autoFipeMut.isPending}
+              className="border-green-300 text-green-700 hover:bg-green-50"
+            >
+              {autoFipeMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+              {autoFipeMut.isPending ? "Consultando FIPE..." : "Preencher FIPE Automático"}
+            </Button>
+            <Button onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo Veículo</Button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
