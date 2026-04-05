@@ -355,9 +355,14 @@ export default function RDO() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">RDO — Relatório Diário de Obra</h1>
-          <p className="text-sm text-gray-500">Relatórios diários de obra</p>
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/operacional")}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">RDO — Relatório Diário de Obra</h1>
+            <p className="text-sm text-gray-500">Relatórios diários de obra</p>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Select value={filtroStatusObra} onValueChange={(v) => { setFiltroStatusObra(v); setObraId(0); }}>
