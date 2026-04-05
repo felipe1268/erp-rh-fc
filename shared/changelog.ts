@@ -8061,4 +8061,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-06 00:30:00",
   },
+  {
+    version: 1036,
+    titulo: "Consolidação Mensal — Indicador Visual nos Botões de Mês",
+    descricao:
+      "Meses consolidados agora ficam verdes nos seletores de mês nas telas de Manutenções e Combustível. " +
+      "Botão do mês selecionado fica verde com anel emerald quando consolidado (em vez de laranja/âmbar). " +
+      "Badge ✓ verde aparece no canto superior dos meses consolidados (substitui o contador numérico). " +
+      "Novo endpoint getConsolidatedMonthsYear retorna todos os meses consolidados do ano para ambos os módulos " +
+      "em uma única consulta, mantendo a legenda 'Com dados / Consolidado / Sem dados' consistente.",
+    tipo: "melhoria",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 00:45:00",
+  },
 ];

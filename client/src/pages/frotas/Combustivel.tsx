@@ -115,10 +115,16 @@ export default function Combustivel() {
     { companyId: cId, mes: mesAtual, ano: anoAtual },
     { enabled: cId > 0 },
   );
+  const consolidatedMonths = trpc.frotas.getConsolidatedMonthsYear.useQuery(
+    { companyId: cId, ano: anoAtual },
+    { enabled: cId > 0 },
+  );
+  const fuelConsolidatedSet = new Set(consolidatedMonths.data?.combustivel || []);
   const consolidateMut = trpc.frotas.consolidateFuelMonth.useMutation({
     onSuccess: (r) => {
       toast.success(`Consolidado! Lançamento financeiro #${r.financialEntryId} criado — ${fmt(r.totalValor)} (${r.qtdAbastecimentos} abast.)`);
       fuelSummary.refetch();
+      consolidatedMonths.refetch();
       fuel.refetch();
       setConsolidateDialogOpen(false);
       setConsolidateObs("");
@@ -129,6 +135,7 @@ export default function Combustivel() {
     onSuccess: () => {
       toast.success("Consolidação revertida — lançamento financeiro cancelado.");
       fuelSummary.refetch();
+      consolidatedMonths.refetch();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -459,20 +466,28 @@ export default function Combustivel() {
               const isSelected = mesAtual === mes;
               const hasData = !!mesesComDados[mes];
               const count = mesesComDados[mes] || 0;
+              const isConsolidated = fuelConsolidatedSet.has(mes);
               return (
                 <button
                   key={m}
                   onClick={() => { setMesAtual(mes); setFilterDay("all"); }}
                   className={`relative rounded-lg py-2 text-xs font-medium transition-all ${
                     isSelected
-                      ? "bg-amber-600 text-white shadow-md ring-2 ring-amber-300"
-                      : hasData
-                        ? "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-900/60"
-                        : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                      ? isConsolidated
+                        ? "bg-emerald-600 text-white shadow-md ring-2 ring-emerald-300"
+                        : "bg-amber-600 text-white shadow-md ring-2 ring-amber-300"
+                      : isConsolidated
+                        ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200 dark:hover:bg-emerald-900/60"
+                        : hasData
+                          ? "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-900/60"
+                          : "bg-muted/50 text-muted-foreground hover:bg-muted"
                   }`}
                 >
                   {m}
-                  {hasData && !isSelected && (
+                  {isConsolidated && !isSelected && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[7px] font-bold rounded-full flex items-center justify-center">✓</span>
+                  )}
+                  {hasData && !isConsolidated && !isSelected && (
                     <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">{count > 99 ? "99+" : count}</span>
                   )}
                 </button>

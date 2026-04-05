@@ -3435,6 +3435,38 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       };
     }),
 
+  getConsolidatedMonthsYear: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, ano } = input;
+
+      const maintRes = await db.execute(sql`
+        SELECT EXTRACT(MONTH FROM data_competencia)::int as mes
+        FROM financial_entries
+        WHERE company_id = ${companyId}
+          AND origem_modulo = 'frotas'
+          AND descricao LIKE ${'Manutenções Frotas%'}
+          AND EXTRACT(YEAR FROM data_competencia) = ${ano}
+          AND status != 'cancelado'
+      `);
+      const maintMonths = ((maintRes as any).rows || maintRes).map((r: any) => r.mes);
+
+      const fuelRes = await db.execute(sql`
+        SELECT EXTRACT(MONTH FROM data_competencia)::int as mes
+        FROM financial_entries
+        WHERE company_id = ${companyId}
+          AND origem_modulo = 'frotas'
+          AND descricao LIKE ${'Combustível Frotas%'}
+          AND EXTRACT(YEAR FROM data_competencia) = ${ano}
+          AND status != 'cancelado'
+      `);
+      const fuelMonths = ((fuelRes as any).rows || fuelRes).map((r: any) => r.mes);
+
+      return { manutencao: maintMonths, combustivel: fuelMonths };
+    }),
+
   compareGasPrices: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
