@@ -7732,4 +7732,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 02:00:00",
   },
+  {
+    version: 1015,
+    titulo: "Tela Analítico de Frotas — Dashboard com Gráficos Comparativos",
+    descricao:
+      "Nova tela Analítico de Frotas com 4 abas (Custos, Combustível, Frota, Desempenho). " +
+      "Gráficos de pizza: distribuição de custos (combustível/manutenção/multas), composição por tipo, marca, status e tipo de combustível. " +
+      "Gráficos de colunas verticais empilhadas: evolução mensal de custos com linha de total. " +
+      "Gráficos de barras horizontais: top veículos mais caros, litros por veículo, gasto por motorista, postos mais utilizados, depreciação, consumo km/l, custo R$/km. " +
+      "Rankings tabelares: eficiência de veículos e motoristas com métricas detalhadas. " +
+      "Painel de patrimônio: FIPE vs depreciação com barra de proporção visual. " +
+      "Cores condicionais (verde/azul/amarelo/vermelho) por faixa de desempenho. " +
+      "Navegação de meses na tela de Combustível redesenhada com botões Jan-Dez e indicador de meses com dados.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 02:15:00",
+  },
 ];

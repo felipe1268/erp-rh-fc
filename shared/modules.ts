@@ -385,6 +385,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "frotas-licenciamento",  label: "Licenciamento",      route: "/frotas/licenciamento",  icon: "FileText" },
       { key: "frotas-seguros",        label: "Seguros",            route: "/frotas/seguros",        icon: "Shield" },
       { key: "frotas-rastreamento",   label: "Rastreamento",       route: "/frotas/rastreamento",   icon: "MapPin" },
+      { key: "frotas-analitico",     label: "Analítico",          route: "/frotas/analitico",      icon: "BarChart3" },
     ],
   },
 ];

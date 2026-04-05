@@ -482,6 +482,7 @@ const menuSectionsFrotas: MenuSection[] = [
     title: "Painel",
     items: [
       { icon: LayoutDashboard, label: "Dashboard Frotas", path: "/frotas/painel" },
+      { icon: BarChart3, label: "Analítico", path: "/frotas/analitico" },
     ],
   },
   {

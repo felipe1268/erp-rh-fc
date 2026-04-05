@@ -174,6 +174,7 @@ const ALL_ROUTES = [
     { path: "/frotas/licenciamento", label: "Licenciamento", icon: "FileText" },
     { path: "/frotas/seguros", label: "Seguros", icon: "Shield" },
     { path: "/frotas/rastreamento", label: "Rastreamento", icon: "MapPin" },
+    { path: "/frotas/analitico", label: "Analítico", icon: "BarChart3" },
   ]},
   { section: "Geral", color: "slate", routes: [
     { path: "/ajuda", label: "Biblioteca de Conhecimento", icon: "BookOpen" },

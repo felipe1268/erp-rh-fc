@@ -447,6 +447,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/frotas/licenciamento": "licenciamento",
     "/frotas/seguros":       "seguros",
     "/frotas/rastreamento":  "rastreamento",
+    "/frotas/analitico":     "painel",
   },
   "medicao": {},
 };
