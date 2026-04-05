@@ -2246,25 +2246,56 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
 
       const now = new Date();
 
+      const totalKmGeral = allVehicles.reduce((s: number, v: any) => s + n(v.km_atual), 0);
+
       const kmRodadoPorVeiculo: Record<number, number> = {};
+      let kmMetodo: 'odometro' | 'estimado' | 'misto' | null = null;
       let temDadosKmAbastecimento = false;
-      for (const v of allVehicles) {
-        const vFuelAll = allFuel.filter((f: any) => f.vehicle_id === v.id);
-        if (vFuelAll.length > 0) {
-          const kms = vFuelAll.map((f: any) => n(f.km_atual)).filter((k: number) => k > 0);
-          const kmsAnt = vFuelAll.map((f: any) => n(f.km_anterior)).filter((k: number) => k > 0);
-          if (kms.length > 0 && kmsAnt.length > 0) {
-            kmRodadoPorVeiculo[v.id] = Math.max(...kms) - Math.min(...kmsAnt);
-            temDadosKmAbastecimento = true;
-          } else if (kms.length >= 2) {
-            kmRodadoPorVeiculo[v.id] = Math.max(...kms) - Math.min(...kms);
-            temDadosKmAbastecimento = true;
+      if (anoFiltro) {
+        let veiculosOdometro = 0;
+        let veiculosEstimado = 0;
+        for (const v of allVehicles) {
+          const vFuelAno = allFuel.filter((f: any) => f.vehicle_id === v.id);
+          let kmResolvido = false;
+          if (vFuelAno.length > 0) {
+            const kms = vFuelAno.map((f: any) => n(f.km_atual)).filter((k: number) => k > 0);
+            const kmsAnt = vFuelAno.map((f: any) => n(f.km_anterior)).filter((k: number) => k > 0);
+            if (kms.length > 0 && kmsAnt.length > 0) {
+              const delta = Math.max(...kms) - Math.min(...kmsAnt);
+              if (delta > 0) {
+                kmRodadoPorVeiculo[v.id] = delta;
+                temDadosKmAbastecimento = true;
+                veiculosOdometro++;
+                kmResolvido = true;
+              }
+            } else if (kms.length >= 2) {
+              const delta = Math.max(...kms) - Math.min(...kms);
+              if (delta > 0) {
+                kmRodadoPorVeiculo[v.id] = delta;
+                temDadosKmAbastecimento = true;
+                veiculosOdometro++;
+                kmResolvido = true;
+              }
+            }
+          }
+          if (!kmResolvido) {
+            const kmV = n(v.km_atual);
+            if (kmV > 0) {
+              const litrosGeralV = allFuelRaw.filter((f: any) => f.vehicle_id === v.id).reduce((s: number, f: any) => s + n(f.litros), 0);
+              const litrosAnoV = vFuelAno.reduce((s: number, f: any) => s + n(f.litros), 0);
+              if (litrosGeralV > 0 && litrosAnoV > 0) {
+                kmRodadoPorVeiculo[v.id] = Math.round((litrosAnoV / litrosGeralV) * kmV);
+                veiculosEstimado++;
+              }
+            }
           }
         }
+        if (veiculosOdometro > 0 && veiculosEstimado > 0) kmMetodo = 'misto';
+        else if (veiculosOdometro > 0) kmMetodo = 'odometro';
+        else if (veiculosEstimado > 0) kmMetodo = 'estimado';
       }
       const kmRodadoPeriodo = Object.values(kmRodadoPorVeiculo).reduce((s, k) => s + Math.max(k, 0), 0);
-      const totalKmGeral = allVehicles.reduce((s: number, v: any) => s + n(v.km_atual), 0);
-      const totalKm = (anoFiltro && temDadosKmAbastecimento) ? kmRodadoPeriodo : totalKmGeral;
+      const totalKm = anoFiltro ? kmRodadoPeriodo : totalKmGeral;
 
       const depreciacaoPorVeiculo = allVehicles.map((v: any) => {
         const valorC = n(v.valor_compra);
@@ -2395,7 +2426,8 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         const litros = vFuel.reduce((s: number, f: any) => s + n(f.litros), 0);
         const fuelRecs = vFuel.filter((f: any) => n(f.consumo_km_l) > 0);
         const consumo = fuelRecs.length > 0 ? fuelRecs.reduce((s: number, f: any) => s + n(f.consumo_km_l), 0) / fuelRecs.length : 0;
-        const km = (anoFiltro && temDadosKmAbastecimento) ? (kmRodadoPorVeiculo[v.id] || 0) : n(v.km_atual);
+        const kmEst = kmRodadoPorVeiculo[v.id] || 0;
+        const km = (anoFiltro && kmEst > 0) ? kmEst : n(v.km_atual);
         const custoTotal = custoManut + custoComb + custoMultas;
         const custoKmV = km > 0 ? custoTotal / km : 0;
         return {
@@ -2493,7 +2525,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         totalLicenciamento, totalIpvaGeral,
         tipoCombustivel, idadeFrota, custoOperTotal,
         anosDisponiveis, anoSelecionado: anoFiltro || null,
-        temDadosKmAbastecimento,
+        temDadosKmAbastecimento, kmMetodo,
       };
     }),
 
