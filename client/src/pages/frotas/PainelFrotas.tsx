@@ -41,10 +41,15 @@ export default function PainelFrotas() {
   const [idadeDialog, setIdadeDialog] = useState<string | null>(null);
   const [custoMesDialog, setCustoMesDialog] = useState<string | null>(null);
 
+  const [maintTab, setMaintTab] = useState<string>("pecas");
   const initMut = trpc.frotas.initTables.useMutation();
   const dash = trpc.frotas.getDashboard.useQuery(
     { companyId: cId },
     { enabled: cId > 0, retry: 1 },
+  );
+  const maintAnalytics = trpc.frotas.getMaintenanceAnalytics.useQuery(
+    { companyId: cId },
+    { enabled: cId > 0 },
   );
 
   useEffect(() => {
@@ -125,6 +130,7 @@ export default function PainelFrotas() {
                 <TabsTrigger value="patrimonio" className="text-xs">Patrimônio</TabsTrigger>
                 <TabsTrigger value="combustivel" className="text-xs">Combustível</TabsTrigger>
                 <TabsTrigger value="alertas" className="text-xs">Alertas ({d.alertas.length})</TabsTrigger>
+                <TabsTrigger value="manutencao" className="text-xs">Análise Manutenção</TabsTrigger>
               </TabsList>
 
               <TabsContent value="visao-geral" className="space-y-6">
@@ -827,6 +833,313 @@ export default function PainelFrotas() {
                   </>
                 )}
               </TabsContent>
+
+              <TabsContent value="manutencao" className="space-y-6">
+                {maintAnalytics.isLoading ? (
+                  <Card><CardContent className="py-12 text-center"><p className="text-muted-foreground">Carregando análise...</p></CardContent></Card>
+                ) : maintAnalytics.data ? (() => {
+                  const ma = maintAnalytics.data;
+                  const totalGeral = ma.categoriaTotais.pecas + ma.categoriaTotais.servicos;
+                  const pctPecas = totalGeral > 0 ? Math.round((ma.categoriaTotais.pecas / totalGeral) * 100) : 0;
+                  const evolKeys = Object.keys(ma.evolucaoMensal).sort();
+                  const maxEvolTotal = evolKeys.length > 0 ? Math.max(...evolKeys.map(k => (ma.evolucaoMensal as any)[k].total)) : 1;
+                  return (
+                    <>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <MiniCard label="Total Manutenções" value={String(ma.totalManutencoes)} icon={Wrench} color="text-emerald-600" />
+                        <MiniCard label="Total Itens" value={String(ma.totalItens)} icon={Activity} color="text-blue-600" />
+                        <MiniCard label="Peças" value={fmt(ma.categoriaTotais.pecas)} icon={PieChart} color="text-orange-600" />
+                        <MiniCard label="Serviços (MO)" value={fmt(ma.categoriaTotais.servicos)} icon={DollarSign} color="text-violet-600" />
+                      </div>
+
+                      <div className="flex gap-1.5 flex-wrap">
+                        {[
+                          { key: "pecas", label: "Peças Mais Trocadas" },
+                          { key: "rapidas", label: "Trocas Rápidas" },
+                          { key: "veiculos", label: "Custo por Veículo" },
+                          { key: "fornecedores", label: "Fornecedores" },
+                          { key: "evolucao", label: "Evolução Mensal" },
+                        ].map(t => (
+                          <button key={t.key} onClick={() => setMaintTab(t.key)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                              maintTab === t.key ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-muted-foreground border-border hover:border-emerald-400"
+                            }`}>
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {maintTab === "pecas" && (
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                              <PieChart className="h-4 w-4 text-orange-600" />
+                              Top Peças Mais Trocadas
+                            </CardTitle>
+                            <p className="text-xs text-muted-foreground">Peças com maior frequência de troca na frota. Identifique padrões de desgaste e oportunidades de compra em lote.</p>
+                          </CardHeader>
+                          <CardContent>
+                            {ma.pecasMaisTrocadas.length === 0 ? (
+                              <p className="text-sm text-muted-foreground py-4 text-center">Nenhum item de peça cadastrado ainda.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {ma.pecasMaisTrocadas.map((p: any, i: number) => {
+                                  const maxCount = ma.pecasMaisTrocadas[0]?.count || 1;
+                                  const pct = Math.round((p.count / maxCount) * 100);
+                                  return (
+                                    <div key={i} className="group">
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-xs font-bold text-muted-foreground w-5 text-right">{i+1}.</span>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm font-medium truncate">{p.nome}</span>
+                                            <Badge variant="outline" className="text-[9px] h-4 shrink-0">{p.count}x</Badge>
+                                          </div>
+                                          <div className="h-1.5 bg-muted rounded-full mt-1 overflow-hidden">
+                                            <div className="h-full bg-orange-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                          </div>
+                                          <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
+                                            <span>{fmt(p.totalGasto)}</span>
+                                            <span>•</span>
+                                            <span>{p.numVeiculos} veículo{p.numVeiculos > 1 ? "s" : ""}</span>
+                                            <span>•</span>
+                                            <span>{p.veiculos.slice(0, 3).join(", ")}{p.veiculos.length > 3 ? ` +${p.veiculos.length - 3}` : ""}</span>
+                                          </div>
+                                        </div>
+                                        <span className="text-sm font-bold text-orange-600 shrink-0">{fmt(p.totalGasto)}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {maintTab === "rapidas" && (
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                              <AlertTriangle className="h-4 w-4 text-red-600" />
+                              Trocas Rápidas (menos de 6 meses)
+                            </CardTitle>
+                            <p className="text-xs text-muted-foreground">
+                              Peças que foram trocadas novamente em menos de 180 dias no mesmo veículo.
+                              Pode indicar peça de baixa qualidade, problema estrutural, ou uso inadequado.
+                            </p>
+                          </CardHeader>
+                          <CardContent>
+                            {ma.trocasRapidas.length === 0 ? (
+                              <div className="py-6 text-center">
+                                <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                                <p className="text-sm font-medium">Nenhuma troca rápida detectada</p>
+                                <p className="text-xs text-muted-foreground">Todas as peças mantiveram vida útil adequada</p>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {ma.trocasRapidas.map((t: any, i: number) => (
+                                  <div key={i} className={`flex items-center gap-3 p-3 rounded-lg border ${
+                                    t.dias <= 30 ? "bg-red-50 border-red-200" : t.dias <= 90 ? "bg-amber-50 border-amber-200" : "bg-yellow-50 border-yellow-200"
+                                  }`}>
+                                    <div className={`flex items-center justify-center h-10 w-10 rounded-lg text-xs font-bold ${
+                                      t.dias <= 30 ? "bg-red-100 text-red-700" : t.dias <= 90 ? "bg-amber-100 text-amber-700" : "bg-yellow-100 text-yellow-700"
+                                    }`}>
+                                      {t.dias}d
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium truncate">{t.peca}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        <span className="font-mono font-bold">{t.placa}</span> — {t.modelo}
+                                      </p>
+                                    </div>
+                                    <div className="text-right text-xs text-muted-foreground shrink-0">
+                                      <p>{t.de}</p>
+                                      <p>→ {t.ate}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {maintTab === "veiculos" && (
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                              <Truck className="h-4 w-4 text-blue-600" />
+                              Custo de Manutenção por Veículo (Peças vs Serviços)
+                            </CardTitle>
+                            <p className="text-xs text-muted-foreground">Composição detalhada do gasto. Veículos com alta proporção de serviços podem indicar problemas complexos ou recorrentes.</p>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="border rounded-lg overflow-hidden">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-muted/50 text-xs">
+                                    <th className="text-left p-2.5 font-medium">Veículo</th>
+                                    <th className="text-right p-2.5 font-medium text-orange-600">Peças</th>
+                                    <th className="text-right p-2.5 font-medium text-violet-600">Serviços</th>
+                                    <th className="text-right p-2.5 font-medium">Total</th>
+                                    <th className="text-center p-2.5 font-medium">OS</th>
+                                    <th className="p-2.5 font-medium w-32">Composição</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {ma.custoPorVeiculoManut.map((v: any, i: number) => {
+                                    const pctP = v.total > 0 ? Math.round((v.totalPecas / v.total) * 100) : 0;
+                                    return (
+                                      <tr key={i} className="border-t hover:bg-muted/30 transition-colors">
+                                        <td className="p-2.5">
+                                          <span className="font-mono text-xs font-bold">{v.placa}</span>
+                                          <span className="text-xs text-muted-foreground ml-2 truncate">{v.modelo?.substring(0, 25)}</span>
+                                        </td>
+                                        <td className="p-2.5 text-right text-orange-600 font-medium">{fmt(v.totalPecas)}</td>
+                                        <td className="p-2.5 text-right text-violet-600 font-medium">{fmt(v.totalServicos)}</td>
+                                        <td className="p-2.5 text-right font-bold">{fmt(v.total)}</td>
+                                        <td className="p-2.5 text-center">{v.numOS}</td>
+                                        <td className="p-2.5">
+                                          <div className="h-2 bg-muted rounded-full overflow-hidden flex">
+                                            <div className="h-full bg-orange-500" style={{ width: `${pctP}%` }} />
+                                            <div className="h-full bg-violet-500" style={{ width: `${100-pctP}%` }} />
+                                          </div>
+                                          <div className="flex justify-between text-[9px] text-muted-foreground mt-0.5">
+                                            <span>{pctP}% peças</span>
+                                            <span>{100-pctP}% MO</span>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {maintTab === "fornecedores" && (
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-teal-600" />
+                              Análise por Fornecedor
+                            </CardTitle>
+                            <p className="text-xs text-muted-foreground">Compare fornecedores por volume de gasto, ticket médio e variedade de veículos atendidos.</p>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {ma.fornecedores.map((f: any, i: number) => {
+                                const maxGasto = ma.fornecedores[0]?.totalGasto || 1;
+                                const pct = Math.round((f.totalGasto / maxGasto) * 100);
+                                return (
+                                  <div key={i} className="p-3 rounded-lg border bg-muted/20 hover:bg-muted/40 transition-colors">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="font-medium text-sm">{f.nome}</span>
+                                      <span className="font-bold text-teal-700">{fmt(f.totalGasto)}</span>
+                                    </div>
+                                    <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-1.5">
+                                      <div className="h-full bg-teal-500 rounded-full" style={{ width: `${pct}%` }} />
+                                    </div>
+                                    <div className="flex gap-4 text-[10px] text-muted-foreground">
+                                      <span>{f.numOS} OS</span>
+                                      <span>Ticket médio: {fmt(f.ticketMedio)}</span>
+                                      <span>{f.numVeiculos} veículo{f.numVeiculos > 1 ? "s" : ""}: {f.veiculos.slice(0, 3).join(", ")}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {maintTab === "evolucao" && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <Card>
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm flex items-center gap-2">
+                                <BarChart3 className="h-4 w-4 text-emerald-600" />
+                                Evolução Mensal de Manutenção
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-2">
+                                {evolKeys.map(mes => {
+                                  const ev = (ma.evolucaoMensal as any)[mes];
+                                  const pctMes = Math.round((ev.total / maxEvolTotal) * 100);
+                                  const pctP = ev.total > 0 ? Math.round((ev.pecas / ev.total) * 100) : 0;
+                                  return (
+                                    <div key={mes}>
+                                      <div className="flex items-center justify-between text-xs mb-0.5">
+                                        <span className="font-medium">{fmtMesAno(mes)}</span>
+                                        <span className="font-bold">{fmt(ev.total)} <span className="text-muted-foreground font-normal">({ev.numOS} OS)</span></span>
+                                      </div>
+                                      <div className="h-3 bg-muted rounded-full overflow-hidden flex" style={{ width: `${Math.max(pctMes, 5)}%` }}>
+                                        <div className="h-full bg-orange-500" style={{ width: `${pctP}%` }} title={`Peças: ${fmt(ev.pecas)}`} />
+                                        <div className="h-full bg-violet-500" style={{ width: `${100-pctP}%` }} title={`Serviços: ${fmt(ev.servicos)}`} />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          <Card>
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm flex items-center gap-2">
+                                <PieChart className="h-4 w-4 text-orange-600" />
+                                Composição Geral
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                              <div className="flex items-center gap-4">
+                                <div className="relative h-28 w-28 mx-auto">
+                                  <svg viewBox="0 0 36 36" className="h-28 w-28 transform -rotate-90">
+                                    <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
+                                    <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3"
+                                      className="text-orange-500" strokeDasharray={`${pctPecas} ${100-pctPecas}`} strokeLinecap="round" />
+                                  </svg>
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-lg font-bold">{pctPecas}%</span>
+                                  </div>
+                                </div>
+                                <div className="space-y-3 flex-1">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-3 w-3 rounded-full bg-orange-500" />
+                                      <span className="text-sm font-medium">Peças</span>
+                                    </div>
+                                    <p className="text-lg font-bold ml-5">{fmt(ma.categoriaTotais.pecas)}</p>
+                                    <p className="text-[10px] text-muted-foreground ml-5">{ma.categoriaTotais.pecasCount} unidades</p>
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-3 w-3 rounded-full bg-violet-500" />
+                                      <span className="text-sm font-medium">Serviços / MO</span>
+                                    </div>
+                                    <p className="text-lg font-bold ml-5">{fmt(ma.categoriaTotais.servicos)}</p>
+                                    <p className="text-[10px] text-muted-foreground ml-5">{ma.categoriaTotais.servicosCount} lançamentos</p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="border-t pt-3">
+                                <FinRow label="Total Geral" value={fmt(totalGeral)} bold />
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      )}
+                    </>
+                  );
+                })() : (
+                  <Card><CardContent className="py-8 text-center"><p className="text-muted-foreground text-sm">Dados indisponíveis</p></CardContent></Card>
+                )}
+              </TabsContent>
+
             </Tabs>
           </>
         )}

@@ -2050,6 +2050,134 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       };
     }),
 
+  getMaintenanceAnalytics: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para esta empresa' });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+
+      const itemsRes = await db.execute(sql`
+        SELECT mi.*, fm.vehicle_id, fm.data_manutencao, fm.fornecedor, fm.tipo as manut_tipo,
+               v.placa, v.modelo, v.marca
+        FROM fleet_maintenance_items mi
+        JOIN fleet_maintenances fm ON fm.id = mi.maintenance_id
+        JOIN vehicles v ON v.id = fm.vehicle_id
+        WHERE mi.company_id = ${input.companyId}
+        ORDER BY fm.data_manutencao DESC
+      `);
+      const allItems = (itemsRes as any).rows || [];
+
+      const maintRes = await db.execute(sql`
+        SELECT fm.*, v.placa, v.modelo, v.marca
+        FROM fleet_maintenances fm
+        JOIN vehicles v ON v.id = fm.vehicle_id
+        WHERE fm.company_id = ${input.companyId}
+        ORDER BY fm.data_manutencao DESC
+      `);
+      const allMaint = (maintRes as any).rows || [];
+
+      const pecaFreq: Record<string, { nome: string; count: number; totalGasto: number; veiculos: Set<string>; datas: string[] }> = {};
+      for (const item of allItems) {
+        if (item.categoria !== 'peca') continue;
+        const key = item.nome.toLowerCase().trim();
+        if (!pecaFreq[key]) pecaFreq[key] = { nome: item.nome, count: 0, totalGasto: 0, veiculos: new Set(), datas: [] };
+        pecaFreq[key].count += parseInt(item.quantidade) || 1;
+        pecaFreq[key].totalGasto += n(item.valor_total);
+        pecaFreq[key].veiculos.add(item.placa);
+        pecaFreq[key].datas.push(item.data_manutencao);
+      }
+
+      const pecasMaisTrocadas = Object.values(pecaFreq)
+        .map((p: any) => ({ ...p, veiculos: Array.from(p.veiculos), numVeiculos: p.veiculos.size }))
+        .sort((a: any, b: any) => b.count - a.count)
+        .slice(0, 20);
+
+      const trocasRapidas: any[] = [];
+      const pecaPorVeiculo: Record<string, { nome: string; placa: string; modelo: string; datas: string[] }> = {};
+      for (const item of allItems) {
+        if (item.categoria !== 'peca') continue;
+        const key = `${item.nome.toLowerCase().trim()}::${item.placa}`;
+        if (!pecaPorVeiculo[key]) pecaPorVeiculo[key] = { nome: item.nome, placa: item.placa, modelo: item.modelo, datas: [] };
+        pecaPorVeiculo[key].datas.push(item.data_manutencao);
+      }
+      for (const entry of Object.values(pecaPorVeiculo)) {
+        if (entry.datas.length < 2) continue;
+        const sorted = entry.datas.map(d => new Date(d)).sort((a, b) => a.getTime() - b.getTime());
+        for (let i = 1; i < sorted.length; i++) {
+          const dias = Math.round((sorted[i].getTime() - sorted[i-1].getTime()) / (1000 * 60 * 60 * 24));
+          if (dias <= 180) {
+            trocasRapidas.push({
+              peca: entry.nome, placa: entry.placa, modelo: entry.modelo, dias,
+              de: sorted[i-1].toISOString().slice(0,10), ate: sorted[i].toISOString().slice(0,10),
+            });
+          }
+        }
+      }
+      trocasRapidas.sort((a, b) => a.dias - b.dias);
+
+      const fornecedorStats: Record<string, { nome: string; totalGasto: number; numOS: number; veiculos: Set<string> }> = {};
+      for (const m of allMaint) {
+        const forn = m.fornecedor || 'Não informado';
+        if (!fornecedorStats[forn]) fornecedorStats[forn] = { nome: forn, totalGasto: 0, numOS: 0, veiculos: new Set() };
+        fornecedorStats[forn].totalGasto += n(m.custo);
+        fornecedorStats[forn].numOS += 1;
+        fornecedorStats[forn].veiculos.add(m.placa);
+      }
+      const fornecedores = Object.values(fornecedorStats)
+        .map((f: any) => ({ ...f, veiculos: Array.from(f.veiculos), numVeiculos: f.veiculos.size, ticketMedio: f.totalGasto / f.numOS }))
+        .sort((a: any, b: any) => b.totalGasto - a.totalGasto);
+
+      const categoriaTotais = { pecas: 0, servicos: 0, pecasCount: 0, servicosCount: 0 };
+      for (const item of allItems) {
+        if (item.categoria === 'peca') { categoriaTotais.pecas += n(item.valor_total); categoriaTotais.pecasCount += parseInt(item.quantidade) || 1; }
+        else { categoriaTotais.servicos += n(item.valor_total); categoriaTotais.servicosCount += 1; }
+      }
+
+      const custoVeiculo: Record<string, { placa: string; modelo: string; marca: string; totalPecas: number; totalServicos: number; numOS: number }> = {};
+      for (const m of allMaint) {
+        if (!custoVeiculo[m.placa]) custoVeiculo[m.placa] = { placa: m.placa, modelo: m.modelo, marca: m.marca, totalPecas: 0, totalServicos: 0, numOS: 0 };
+        custoVeiculo[m.placa].numOS += 1;
+      }
+      for (const item of allItems) {
+        if (!custoVeiculo[item.placa]) custoVeiculo[item.placa] = { placa: item.placa, modelo: item.modelo, marca: item.marca, totalPecas: 0, totalServicos: 0, numOS: 0 };
+        if (item.categoria === 'peca') custoVeiculo[item.placa].totalPecas += n(item.valor_total);
+        else custoVeiculo[item.placa].totalServicos += n(item.valor_total);
+      }
+      const custoPorVeiculoManut = Object.values(custoVeiculo)
+        .map((v: any) => ({ ...v, total: v.totalPecas + v.totalServicos }))
+        .sort((a: any, b: any) => b.total - a.total);
+
+      const evolucaoMensal: Record<string, { pecas: number; servicos: number; total: number; numOS: number }> = {};
+      for (const item of allItems) {
+        const mes = item.data_manutencao?.substring(0, 7) || '';
+        if (!mes) continue;
+        if (!evolucaoMensal[mes]) evolucaoMensal[mes] = { pecas: 0, servicos: 0, total: 0, numOS: 0 };
+        if (item.categoria === 'peca') evolucaoMensal[mes].pecas += n(item.valor_total);
+        else evolucaoMensal[mes].servicos += n(item.valor_total);
+        evolucaoMensal[mes].total += n(item.valor_total);
+      }
+      for (const m of allMaint) {
+        const mes = m.data_manutencao?.substring(0, 7) || '';
+        if (!mes) continue;
+        if (!evolucaoMensal[mes]) evolucaoMensal[mes] = { pecas: 0, servicos: 0, total: 0, numOS: 0 };
+        evolucaoMensal[mes].numOS += 1;
+      }
+
+      return {
+        pecasMaisTrocadas,
+        trocasRapidas,
+        fornecedores,
+        categoriaTotais,
+        custoPorVeiculoManut,
+        evolucaoMensal,
+        totalItens: allItems.length,
+        totalManutencoes: allMaint.length,
+      };
+    }),
+
   getConsolidationData: protectedProcedure
     .input(z.object({ companyId: z.number(), mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100) }))
     .query(async ({ input }) => {
