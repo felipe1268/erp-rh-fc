@@ -114,7 +114,7 @@ export default function Rastreamento() {
 
             marker.bindPopup(
               `<div style="font-size:12px"><strong>${p.placa || "Veículo " + vId}</strong><br/>` +
-              `${p.data_hora || ""}<br/>` +
+              `${p.data_hora ? new Date(p.data_hora).toLocaleString("pt-BR") : ""}<br/>` +
               `Vel: ${p.velocidade || "—"} km/h<br/>` +
               `${p.endereco || ""}</div>`,
             );
@@ -208,7 +208,7 @@ export default function Rastreamento() {
                     {tracking.data.slice(0, 100).map((p: any, i: number) => (
                       <tr key={i} className="border-t">
                         <td className="p-2 font-mono">{p.placa || p.vehicle_id}</td>
-                        <td className="p-2">{p.data_hora}</td>
+                        <td className="p-2">{p.data_hora ? new Date(p.data_hora).toLocaleString("pt-BR") : "—"}</td>
                         <td className="p-2 text-right">{parseFloat(p.latitude).toFixed(6)}</td>
                         <td className="p-2 text-right">{parseFloat(p.longitude).toFixed(6)}</td>
                         <td className="p-2 text-right">{p.velocidade || "—"}</td>

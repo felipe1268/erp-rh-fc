@@ -117,8 +117,8 @@ export default function Licenciamento() {
                     <td className="p-3 font-mono">{r.placa || "—"} <span className="text-muted-foreground">{r.modelo}</span></td>
                     <td className="p-3 font-semibold">{r.ano_exercicio}</td>
                     <td className="p-3 text-right font-medium">{fmt(r.valor)}</td>
-                    <td className="p-3">{r.data_vencimento || "—"}</td>
-                    <td className="p-3">{r.data_pagamento || "—"}</td>
+                    <td className="p-3">{r.data_vencimento ? r.data_vencimento.split('-').reverse().join('/') : "—"}</td>
+                    <td className="p-3">{r.data_pagamento ? r.data_pagamento.split('-').reverse().join('/') : "—"}</td>
                     <td className="p-3">{r.crlv_digital_url ? <Badge>Sim</Badge> : <Badge variant="outline">Não</Badge>}</td>
                     <td className="p-3">
                       <Badge variant={r.status === "pago" ? "default" : r.status === "pendente" ? "destructive" : "secondary"}>

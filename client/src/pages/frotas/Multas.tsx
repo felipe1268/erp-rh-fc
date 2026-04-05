@@ -138,7 +138,7 @@ export default function Multas() {
               <tbody>
                 {list.map((f: any) => (
                   <tr key={f.id} className={`border-t hover:bg-muted/30 ${f.status === "pendente" ? "bg-red-50/50" : ""}`}>
-                    <td className="p-3">{f.data_infracao}</td>
+                    <td className="p-3">{f.data_infracao ? f.data_infracao.split('-').reverse().join('/') : "—"}</td>
                     <td className="p-3 font-mono">{f.placa || "—"}</td>
                     <td className="p-3">{f.auto_infracao || "—"}</td>
                     <td className="p-3 max-w-[200px] truncate">{f.descricao}</td>
@@ -149,7 +149,7 @@ export default function Multas() {
                     </td>
                     <td className="p-3 text-right">{f.pontos || "—"}</td>
                     <td className="p-3 text-right font-medium">{fmt(f.valor_original)}</td>
-                    <td className="p-3">{f.data_vencimento || "—"}</td>
+                    <td className="p-3">{f.data_vencimento ? f.data_vencimento.split('-').reverse().join('/') : "—"}</td>
                     <td className="p-3">
                       <Badge variant={f.status === "paga" ? "default" : f.status === "pendente" ? "destructive" : "secondary"}>
                         {f.status}

@@ -143,7 +143,7 @@ export default function Manutencoes() {
                   const atrasada = m.status === "agendada" && m.data_proxima && m.data_proxima < today;
                   return (
                     <tr key={m.id} className={`border-t hover:bg-muted/30 ${atrasada ? "bg-red-50" : ""}`}>
-                      <td className="p-3">{m.data_manutencao}</td>
+                      <td className="p-3">{m.data_manutencao ? m.data_manutencao.split('-').reverse().join('/') : "—"}</td>
                       <td className="p-3 font-mono">{m.placa || "—"} <span className="text-muted-foreground">{m.modelo}</span></td>
                       <td className="p-3"><Badge variant={m.tipo === "preventiva" ? "outline" : "secondary"}>{m.tipo}</Badge></td>
                       <td className="p-3 max-w-[200px] truncate">{m.descricao}</td>
@@ -156,7 +156,7 @@ export default function Manutencoes() {
                           {STATUS_MAP[m.status]?.label || m.status}
                         </Badge>
                       </td>
-                      <td className="p-3 text-xs">{m.data_proxima || "—"}</td>
+                      <td className="p-3 text-xs">{m.data_proxima ? m.data_proxima.split('-').reverse().join('/') : "—"}</td>
                       <td className="p-3 text-right">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(m)}><Pencil className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir?")) deleteMut.mutate({ id: m.id, companyId: cId }); }}>

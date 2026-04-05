@@ -133,7 +133,7 @@ export default function Seguros() {
                       <td className="p-3 max-w-[150px] truncate">{r.tipo_cobertura || "—"}</td>
                       <td className="p-3 text-right">{fmt(r.valor_premio)}</td>
                       <td className="p-3 text-right">{fmt(r.franquia)}</td>
-                      <td className="p-3 text-xs">{r.data_inicio || "—"} a {r.data_fim || "—"}</td>
+                      <td className="p-3 text-xs">{r.data_inicio ? r.data_inicio.split('-').reverse().join('/') : "—"} a {r.data_fim ? r.data_fim.split('-').reverse().join('/') : "—"}</td>
                       <td className="p-3">
                         <Badge variant={r.status === "ativa" ? (vencido ? "destructive" : "default") : "secondary"}>
                           {vencido ? "Vencida" : r.status}
