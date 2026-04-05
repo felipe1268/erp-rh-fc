@@ -2318,25 +2318,48 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       const historico = (fuelRes as any).rows || fuelRes;
 
       let postosProximos: any[] = [];
+      let regiaoLabel = "";
       try {
         const apiKey = process.env.GOOGLE_API_KEY;
         if (apiKey) {
-          const lat = -23.7663;
-          const lng = -53.3252;
-          const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=15000&type=gas_station&language=pt-BR&key=${apiKey}`;
-          const resp = await fetch(url);
-          const data = await resp.json();
-          if (data.results) {
-            postosProximos = data.results.map((p: any) => ({
-              nome: p.name,
-              endereco: p.vicinity,
-              rating: p.rating || 0,
-              totalRatings: p.user_ratings_total || 0,
-              aberto: p.opening_hours?.open_now ?? null,
-              lat: p.geometry?.location?.lat,
-              lng: p.geometry?.location?.lng,
-              placeId: p.place_id,
-            }));
+          const companyRes = await db.execute(sql`
+            SELECT endereco, cidade, estado, cep FROM companies WHERE id = ${input.companyId} LIMIT 1
+          `);
+          const companyRow = ((companyRes as any).rows || companyRes)[0];
+          const cidade = companyRow?.cidade || "";
+          const estado = companyRow?.estado || "";
+          const endereco = companyRow?.endereco || "";
+          const cep = companyRow?.cep || "";
+          regiaoLabel = cidade && estado ? `${cidade}-${estado}` : cidade || "Região da Empresa";
+
+          let lat = 0, lng = 0;
+          const geoAddress = endereco && cidade ? `${endereco}, ${cidade}, ${estado}, Brasil` : cidade && estado ? `${cidade}, ${estado}, Brasil` : cep ? `${cep}, Brasil` : "";
+          if (geoAddress) {
+            const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(geoAddress)}&key=${apiKey}`;
+            const geoResp = await fetch(geoUrl);
+            const geoData = await geoResp.json();
+            if (geoData.results && geoData.results.length > 0) {
+              lat = geoData.results[0].geometry.location.lat;
+              lng = geoData.results[0].geometry.location.lng;
+            }
+          }
+
+          if (lat !== 0 && lng !== 0) {
+            const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=15000&type=gas_station&language=pt-BR&key=${apiKey}`;
+            const resp = await fetch(url);
+            const data = await resp.json();
+            if (data.results) {
+              postosProximos = data.results.map((p: any) => ({
+                nome: p.name,
+                endereco: p.vicinity,
+                rating: p.rating || 0,
+                totalRatings: p.user_ratings_total || 0,
+                aberto: p.opening_hours?.open_now ?? null,
+                lat: p.geometry?.location?.lat,
+                lng: p.geometry?.location?.lng,
+                placeId: p.place_id,
+              }));
+            }
           }
         }
       } catch (_e) {}
@@ -2354,7 +2377,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       `);
       const mediaGeral = (globalAvgRes as any).rows || globalAvgRes;
 
-      return { historico, postosProximos, mediaGeral };
+      return { historico, postosProximos, mediaGeral, regiaoLabel };
     }),
 
   getFuelMonthSummary: protectedProcedure
