@@ -14,7 +14,7 @@ import {
   Wrench, Plus, Pencil, Trash2, AlertTriangle, Search,
   ChevronLeft, ChevronRight, Send, Undo2, DollarSign,
   CheckCircle2, Loader2, ScanLine, FileUp, Eye, X, Check,
-  Sparkles, Upload, Lock,
+  Sparkles, Upload, Lock, Paperclip, Download, File,
 } from "lucide-react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "sonner";
@@ -106,6 +106,26 @@ export default function Manutencoes() {
     onSuccess: () => { manut.refetch(); toast.success("Itens salvos"); },
     onError: (e) => toast.error(e.message),
   });
+  const uploadAttachMut = trpc.frotas.uploadMaintenanceAttachment.useMutation({
+    onSuccess: () => { manut.refetch(); toast.success("Anexo enviado"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const removeAttachMut = trpc.frotas.removeMaintenanceAttachment.useMutation({
+    onSuccess: () => { manut.refetch(); toast.success("Anexo removido"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handleAttachUpload = useCallback(async (maintenanceId: number, files: FileList) => {
+    for (const file of Array.from(files)) {
+      if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name}: arquivo muito grande (máx 10MB)`); continue; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const b64 = (reader.result as string).split(",")[1];
+        uploadAttachMut.mutate({ companyId: cId, maintenanceId, fileName: file.name, fileData: b64, contentType: file.type });
+      };
+      reader.readAsDataURL(file);
+    }
+  }, [cId, uploadAttachMut]);
 
   useEffect(() => {
     if (maintItemsQuery.data && maintItemsQuery.data.length > 0) {
@@ -531,7 +551,10 @@ export default function Manutencoes() {
                       </td>
                       <td className="p-3"><Badge variant={m.tipo === "preventiva" ? "outline" : "secondary"} className="text-[10px]">{m.tipo}</Badge></td>
                       <td className="p-3 max-w-[220px]">
-                        <span className="truncate block" title={m.descricao}>{m.descricao}</span>
+                        <span className="truncate block" title={m.descricao}>
+                          {m.descricao}
+                          {(m.anexos as any[])?.length > 0 && <Paperclip className="inline h-3 w-3 ml-1 text-blue-500" />}
+                        </span>
                         {parseInt(m.items_count) > 0 && (
                           <span className="text-[10px] text-muted-foreground">
                             {m.items_count} itens • Peças {fmt(m.total_pecas)} • Serviço {fmt(m.total_servico)}
@@ -783,6 +806,51 @@ export default function Manutencoes() {
                 <Label className="text-xs text-muted-foreground">Observações</Label>
                 <Textarea className="mt-1" rows={3} value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
               </div>
+
+              {editingMaintId && (
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                    <Paperclip className="h-4 w-4" /> Anexos
+                  </h3>
+                  {(() => {
+                    const currentMaint = manut.data?.find((m: any) => m.id === editingMaintId);
+                    const anexos = (currentMaint?.anexos || []) as any[];
+                    return (
+                      <div className="space-y-2">
+                        {anexos.length > 0 && (
+                          <div className="space-y-1">
+                            {anexos.map((a: any, idx: number) => (
+                              <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded px-3 py-2 text-sm">
+                                <File className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                                <span className="truncate flex-1" title={a.nome}>{a.nome}</span>
+                                <span className="text-xs text-muted-foreground flex-shrink-0">
+                                  {a.tamanho ? (a.tamanho / 1024 < 1024 ? `${(a.tamanho / 1024).toFixed(0)} KB` : `${(a.tamanho / 1024 / 1024).toFixed(1)} MB`) : ''}
+                                </span>
+                                <a href={a.url} target="_blank" rel="noopener noreferrer" title="Baixar">
+                                  <Button variant="ghost" size="icon" className="h-7 w-7"><Download className="h-3.5 w-3.5" /></Button>
+                                </a>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                                  onClick={() => { if (confirm("Remover este anexo?")) removeAttachMut.mutate({ companyId: cId, maintenanceId: editingMaintId, key: a.key }); }}>
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <label className="flex items-center gap-2 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 hover:bg-muted/30 transition-colors">
+                          <Upload className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">
+                            {uploadAttachMut.isPending ? "Enviando..." : "Clique para anexar arquivo (PDF, imagem, doc)"}
+                          </span>
+                          <input type="file" className="hidden" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.xls,.xlsx"
+                            onChange={e => { if (e.target.files?.length) handleAttachUpload(editingMaintId, e.target.files); e.target.value = ""; }}
+                            disabled={uploadAttachMut.isPending} />
+                        </label>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>

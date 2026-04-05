@@ -56,10 +56,12 @@ async function ensureFleetTables() {
       status VARCHAR(30) NOT NULL DEFAULT 'realizada',
       observacoes TEXT,
       criado_por VARCHAR(255),
+      anexos JSONB DEFAULT '[]',
       created_at TIMESTAMP DEFAULT NOW() NOT NULL,
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     )
   `);
+  await db.execute(sql`ALTER TABLE fleet_maintenances ADD COLUMN IF NOT EXISTS anexos JSONB DEFAULT '[]'`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS fleet_maintenance_items (
       id SERIAL PRIMARY KEY,
@@ -895,6 +897,87 @@ Sempre retorne JSON válido, sem markdown.`;
         `);
       }
       return { success: true, count: input.items.length };
+    }),
+
+  uploadMaintenanceAttachment: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      maintenanceId: z.number(),
+      fileName: z.string(),
+      fileData: z.string(),
+      contentType: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para esta empresa' });
+      }
+
+      const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.webp', '.xls', '.xlsx', '.txt', '.csv'];
+      const ext = (input.fileName.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `Tipo de arquivo não permitido (${ext}). Use: ${ALLOWED_EXTENSIONS.join(', ')}` });
+      }
+
+      const buffer = Buffer.from(input.fileData, 'base64');
+      if (buffer.length > 10 * 1024 * 1024) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Arquivo muito grande (máximo 10MB)' });
+      }
+
+      const SAFE_CONTENT_TYPES: Record<string, string> = {
+        '.pdf': 'application/pdf', '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+        '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.txt': 'text/plain', '.csv': 'text/csv',
+      };
+      const ct = SAFE_CONTENT_TYPES[ext] || 'application/octet-stream';
+
+      const db = await getDb();
+      const existing = await db.execute(sql`SELECT anexos FROM fleet_maintenances WHERE id = ${input.maintenanceId} AND company_id = ${input.companyId}`);
+      const rows = (existing as any).rows || [];
+      if (rows.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: 'Manutenção não encontrada' });
+
+      const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storageKey = `manutencoes/${input.maintenanceId}/${Date.now()}_${safeFileName}`;
+      const { url } = await storagePut(storageKey, buffer, ct);
+
+      const currentAnexos = rows[0].anexos || [];
+      const newAnexo = { nome: input.fileName, url, key: storageKey, contentType: ct, tamanho: buffer.length, uploadedAt: new Date().toISOString() };
+      const updatedAnexos = [...currentAnexos, newAnexo];
+
+      await db.execute(sql`UPDATE fleet_maintenances SET anexos = ${JSON.stringify(updatedAnexos)}::jsonb, updated_at = NOW() WHERE id = ${input.maintenanceId} AND company_id = ${input.companyId}`);
+      return { success: true, anexo: newAnexo, total: updatedAnexos.length };
+    }),
+
+  removeMaintenanceAttachment: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      maintenanceId: z.number(),
+      key: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para esta empresa' });
+      }
+
+      const db = await getDb();
+      const existing = await db.execute(sql`SELECT anexos FROM fleet_maintenances WHERE id = ${input.maintenanceId} AND company_id = ${input.companyId}`);
+      const rows = (existing as any).rows || [];
+      if (rows.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: 'Manutenção não encontrada' });
+
+      const currentAnexos = (rows[0].anexos || []) as any[];
+      const removedAnexo = currentAnexos.find((a: any) => a.key === input.key);
+      const updatedAnexos = currentAnexos.filter((a: any) => a.key !== input.key);
+
+      await db.execute(sql`UPDATE fleet_maintenances SET anexos = ${JSON.stringify(updatedAnexos)}::jsonb, updated_at = NOW() WHERE id = ${input.maintenanceId} AND company_id = ${input.companyId}`);
+
+      if (removedAnexo?.key) {
+        try {
+          await db.execute(sql`DELETE FROM uploaded_files WHERE file_key = ${removedAnexo.key}`);
+        } catch (_e) {}
+      }
+
+      return { success: true, total: updatedAnexos.length };
     }),
 
   listFuelRecords: protectedProcedure
