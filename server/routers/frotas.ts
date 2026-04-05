@@ -906,15 +906,21 @@ export const frotasRouter = router({
       const matchedDrivers: Record<string, string> = {};
       const unmatchedDrivers: Set<string> = new Set();
 
+      const existingRes = await db.execute(
+        sql`SELECT vehicle_id, data, num_doc FROM fleet_fuel_records WHERE company_id = ${input.companyId} AND num_doc IS NOT NULL`
+      );
+      const existingSet = new Set(
+        ((existingRes as any).rows || []).map((r: any) => `${r.vehicle_id}|${r.data}|${r.num_doc}`)
+      );
+
+      const toInsert: any[] = [];
       for (const rec of parsed) {
         const vehicleId = plateToVehicle[rec.plate];
         if (!vehicleId) { noVehicle++; continue; }
 
-        if (rec.numDoc) {
-          const existing = await db.execute(
-            sql`SELECT id FROM fleet_fuel_records WHERE company_id = ${input.companyId} AND vehicle_id = ${vehicleId} AND data = ${rec.date} AND num_doc = ${rec.numDoc} LIMIT 1`
-          );
-          if ((existing as any).rows?.length > 0) { duplicates++; continue; }
+        if (rec.numDoc && existingSet.has(`${vehicleId}|${rec.date}|${rec.numDoc}`)) {
+          duplicates++;
+          continue;
         }
 
         let motoristaFinal = rec.driver;
@@ -931,24 +937,38 @@ export const frotasRouter = router({
         const litros = n(rec.litros);
         if (litros <= 0 || litros > 1000) continue;
 
+        toInsert.push({
+          companyId: input.companyId, vehicleId, data: rec.date,
+          litros: rec.litros, valorTotal: rec.valorTotal,
+          precoLitro: n(rec.precoLitro) > 0 ? rec.precoLitro : (litros > 0 ? (n(rec.valorTotal) / litros).toFixed(4) : null),
+          tipoCombustivel: rec.tipoCombustivel,
+          motorista: motoristaFinal || null,
+          posto: 'Auto Posto Umuarama',
+          numDoc: rec.numDoc || null,
+          desconto: n(rec.desconto) > 0 ? rec.desconto : null,
+          criadoPor: input.criadoPor || 'PDF Import',
+        });
+      }
+
+      const BATCH = 50;
+      for (let b = 0; b < toInsert.length; b += BATCH) {
+        const chunk = toInsert.slice(b, b + BATCH);
         try {
-          await db.insert(fleetFuelRecords).values({
-            companyId: input.companyId, vehicleId, data: rec.date,
-            litros: rec.litros, valorTotal: rec.valorTotal,
-            precoLitro: n(rec.precoLitro) > 0 ? rec.precoLitro : (litros > 0 ? (n(rec.valorTotal) / litros).toFixed(4) : null),
-            tipoCombustivel: rec.tipoCombustivel,
-            motorista: motoristaFinal || null,
-            posto: 'Auto Posto Umuarama',
-            numDoc: rec.numDoc || null,
-            desconto: n(rec.desconto) > 0 ? rec.desconto : null,
-            criadoPor: input.criadoPor || 'PDF Import',
-          } as any);
-          inserted++;
+          await db.insert(fleetFuelRecords).values(chunk as any);
+          inserted += chunk.length;
         } catch (dbErr: any) {
-          console.error('[FuelPDF] Insert error:', dbErr.message, '| Record:', JSON.stringify(rec));
+          for (const row of chunk) {
+            try {
+              await db.insert(fleetFuelRecords).values(row as any);
+              inserted++;
+            } catch (singleErr: any) {
+              console.error('[FuelPDF] Insert error:', singleErr.message);
+            }
+          }
         }
       }
 
+      console.log('[FuelPDF] Done:', inserted, 'inserted,', duplicates, 'duplicates,', noVehicle, 'noVehicle');
       return {
         inserted, duplicates, noVehicle,
         totalParsed: parsed.length,
