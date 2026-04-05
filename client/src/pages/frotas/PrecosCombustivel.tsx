@@ -32,8 +32,8 @@ const FUEL_COLORS: Record<string, string> = {
   "GNV": "#8b5cf6",
 };
 
-const BASE_LAT = -22.8117;
-const BASE_LNG = -45.1928;
+const BASE_LAT = -22.8169;
+const BASE_LNG = -45.2008;
 
 interface NearbyStation {
   id: number;
