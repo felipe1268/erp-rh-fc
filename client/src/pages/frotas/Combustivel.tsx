@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Fuel, Plus, Pencil, Trash2, Upload, Search, FileText, CheckCircle2, AlertTriangle, XCircle, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { Fuel, Plus, Pencil, Trash2, Upload, Search, FileText, CheckCircle2, AlertTriangle, XCircle, ChevronLeft, ChevronRight, Calendar, Send, Undo2, DollarSign, Loader2, Lock } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 
@@ -45,6 +45,8 @@ export default function Combustivel() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<number | null>(null);
   const [pdfProgressLabel, setPdfProgressLabel] = useState("");
+  const [consolidateDialogOpen, setConsolidateDialogOpen] = useState(false);
+  const [consolidateObs, setConsolidateObs] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
 
@@ -73,6 +75,28 @@ export default function Combustivel() {
       setImportDialogOpen(true);
     },
     onError: (err) => toast.error("Erro ao importar PDF: " + err.message),
+  });
+
+  const fuelSummary = trpc.frotas.getFuelMonthSummary.useQuery(
+    { companyId: cId, mes: mesAtual, ano: anoAtual },
+    { enabled: cId > 0 },
+  );
+  const consolidateMut = trpc.frotas.consolidateFuelMonth.useMutation({
+    onSuccess: (r) => {
+      toast.success(`Consolidado! Lançamento financeiro #${r.financialEntryId} criado — ${fmt(r.totalValor)} (${r.qtdAbastecimentos} abast.)`);
+      fuelSummary.refetch();
+      fuel.refetch();
+      setConsolidateDialogOpen(false);
+      setConsolidateObs("");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const revertFuelMut = trpc.frotas.revertFuelConsolidation.useMutation({
+    onSuccess: () => {
+      toast.success("Consolidação revertida — lançamento financeiro cancelado.");
+      fuelSummary.refetch();
+    },
+    onError: (e) => toast.error(e.message),
   });
 
   function openNew() {
@@ -303,6 +327,7 @@ export default function Combustivel() {
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Com dados</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Consolidado</span>
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-muted inline-block border" /> Sem dados</span>
             </div>
           </div>
@@ -333,6 +358,78 @@ export default function Combustivel() {
             })}
           </div>
         </div>
+
+        {(() => {
+          const fs = fuelSummary.data;
+          const isConsolidated = fs?.consolidated;
+          if (!fs || (fs.qtd === 0 && !isConsolidated)) return null;
+          return (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <Card className="bg-amber-50 dark:bg-amber-950 border-amber-200">
+                <CardContent className="p-3 text-center">
+                  <p className="text-2xl font-bold text-amber-700">{fs.qtd}</p>
+                  <p className="text-xs text-amber-600">Abastecimentos</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-green-50 dark:bg-green-950 border-green-200">
+                <CardContent className="p-3 text-center">
+                  <p className="text-lg font-bold text-green-700">{fmt(fs.totalValor)}</p>
+                  <p className="text-xs text-green-600">Custo Total</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200">
+                <CardContent className="p-3 text-center">
+                  <p className="text-lg font-bold text-blue-700">{fs.totalLitros.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}L</p>
+                  <p className="text-xs text-blue-600">Litros</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-purple-50 dark:bg-purple-950 border-purple-200">
+                <CardContent className="p-3 text-center">
+                  <p className="text-2xl font-bold text-purple-700">{fs.veiculos}</p>
+                  <p className="text-xs text-purple-600">Veículos</p>
+                </CardContent>
+              </Card>
+              <Card className={`${isConsolidated ? "bg-emerald-50 dark:bg-emerald-950 border-emerald-300" : "bg-slate-50 dark:bg-slate-950 border-slate-200"}`}>
+                <CardContent className="p-3 text-center">
+                  {isConsolidated ? (
+                    <>
+                      <div className="flex items-center justify-center gap-1">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                        <p className="text-sm font-bold text-emerald-700">Consolidado</p>
+                      </div>
+                      <p className="text-[10px] text-emerald-600 mt-0.5">#{fs.financialEntryId} · {fs.financialStatus}</p>
+                      <Button
+                        variant="ghost" size="sm"
+                        className="mt-1 h-6 text-[10px] text-red-600 hover:text-red-700 hover:bg-red-50 px-2"
+                        onClick={() => {
+                          if (confirm("Reverter consolidação e cancelar lançamento financeiro?")) {
+                            revertFuelMut.mutate({ companyId: cId, financialEntryId: fs.financialEntryId! });
+                          }
+                        }}
+                        disabled={revertFuelMut.isPending}
+                      >
+                        <Undo2 className="h-3 w-3 mr-1" /> Reverter
+                      </Button>
+                    </>
+                  ) : fs.totalValor > 0 ? (
+                    <>
+                      <p className="text-sm font-semibold text-slate-600">Pendente</p>
+                      <Button
+                        size="sm"
+                        className="mt-1 h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => setConsolidateDialogOpen(true)}
+                      >
+                        <Lock className="h-3 w-3 mr-1" /> Consolidar
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Sem custo</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })()}
 
         {pdfProgress !== null && (
           <div className="bg-card border rounded-lg p-4 space-y-2">
@@ -670,6 +767,44 @@ export default function Combustivel() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+        <Dialog open={consolidateDialogOpen} onOpenChange={setConsolidateDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-emerald-600" />
+                Consolidar Mês e Enviar ao Financeiro
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 rounded-lg p-4">
+                <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+                  Será criado um lançamento de despesa no módulo Financeiro:
+                </p>
+                <div className="mt-2 space-y-1 text-sm text-emerald-700 dark:text-emerald-300">
+                  <p><strong>Valor:</strong> {fmt(fuelSummary.data?.totalValor || 0)}</p>
+                  <p><strong>Litros:</strong> {(fuelSummary.data?.totalLitros || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}L</p>
+                  <p><strong>Abastecimentos:</strong> {fuelSummary.data?.qtd || 0} ({fuelSummary.data?.veiculos || 0} veículos)</p>
+                  <p><strong>Competência:</strong> {MESES_ABREV[mesAtual - 1]}/{anoAtual}</p>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Observações (opcional)</Label>
+                <Textarea className="mt-1" rows={3} value={consolidateObs} onChange={e => setConsolidateObs(e.target.value)} placeholder="Observações adicionais..." />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConsolidateDialogOpen(false)}>Cancelar</Button>
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => consolidateMut.mutate({ companyId: cId, mes: mesAtual, ano: anoAtual, observacoes: consolidateObs || undefined })}
+                disabled={consolidateMut.isPending}
+              >
+                {consolidateMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <DollarSign className="h-4 w-4 mr-1" />}
+                {consolidateMut.isPending ? "Processando..." : "Confirmar Consolidação"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

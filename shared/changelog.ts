@@ -7814,4 +7814,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 13:00:00",
   },
+  {
+    version: 1020,
+    titulo: "Consolidação mensal padronizada — Manutenções e Combustível",
+    descricao:
+      "Fluxo de consolidação mensal padronizado em Manutenções e Combustível: botão 'Consolidar' " +
+      "confirma que o mês foi aferido e gera automaticamente um lançamento de despesa no módulo " +
+      "Financeiro. Cards de KPIs do mês em Combustível (abastecimentos, custo total, litros, veículos). " +
+      "Legenda no seletor de meses com indicador 'Consolidado'. Reverter consolidação cancela o " +
+      "lançamento financeiro. Endpoints getFuelMonthSummary, consolidateFuelMonth e revertFuelConsolidation. " +
+      "Renomeado 'Aprovar e Enviar' para 'Consolidar' em Manutenções para padronizar linguagem.",
+    tipo: "feature",
+    modulos: "Frotas, Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 14:00:00",
+  },
 ];

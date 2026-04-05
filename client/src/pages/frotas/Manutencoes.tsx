@@ -14,7 +14,7 @@ import {
   Wrench, Plus, Pencil, Trash2, AlertTriangle, Search,
   ChevronLeft, ChevronRight, Send, Undo2, DollarSign,
   CheckCircle2, Loader2, ScanLine, FileUp, Eye, X, Check,
-  Sparkles, Upload,
+  Sparkles, Upload, Lock,
 } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
@@ -76,7 +76,7 @@ export default function Manutencoes() {
   });
   const approveMut = trpc.frotas.approveMaintenanceMonth.useMutation({
     onSuccess: (r) => {
-      toast.success(`Aprovado! Lançamento financeiro #${r.financialEntryId} criado — ${fmt(r.custoTotal)} (${r.qtdManutencoes} OS)`);
+      toast.success(`Consolidado! Lançamento financeiro #${r.financialEntryId} criado — ${fmt(r.custoTotal)} (${r.qtdManutencoes} OS)`);
       monthSummary.refetch();
       manut.refetch();
       setApproveDialogOpen(false);
@@ -86,7 +86,7 @@ export default function Manutencoes() {
   });
   const revertMut = trpc.frotas.revertMaintenanceApproval.useMutation({
     onSuccess: () => {
-      toast.success("Aprovação revertida — lançamento financeiro cancelado.");
+      toast.success("Consolidação revertida — lançamento financeiro cancelado.");
       monthSummary.refetch();
     },
     onError: (e) => toast.error(e.message),
@@ -288,6 +288,7 @@ export default function Manutencoes() {
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" /> Com dados</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Consolidado</span>
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-muted inline-block border" /> Sem dados</span>
             </div>
           </div>
@@ -351,14 +352,14 @@ export default function Manutencoes() {
                   <>
                     <div className="flex items-center justify-center gap-1">
                       <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                      <p className="text-sm font-bold text-emerald-700">Aprovado</p>
+                      <p className="text-sm font-bold text-emerald-700">Consolidado</p>
                     </div>
                     <p className="text-[10px] text-emerald-600 mt-0.5">#{summary.financialEntryId} · {summary.financialStatus}</p>
                     <Button
                       variant="ghost" size="sm"
                       className="mt-1 h-6 text-[10px] text-red-600 hover:text-red-700 hover:bg-red-50 px-2"
                       onClick={() => {
-                        if (confirm("Reverter aprovação e cancelar lançamento financeiro?")) {
+                        if (confirm("Reverter consolidação e cancelar lançamento financeiro?")) {
                           revertMut.mutate({ companyId: cId, financialEntryId: summary.financialEntryId! });
                         }
                       }}
@@ -375,7 +376,7 @@ export default function Manutencoes() {
                       className="mt-1 h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
                       onClick={() => setApproveDialogOpen(true)}
                     >
-                      <Send className="h-3 w-3 mr-1" /> Aprovar e Enviar
+                      <Lock className="h-3 w-3 mr-1" /> Consolidar
                     </Button>
                   </>
                 ) : (
@@ -494,8 +495,8 @@ export default function Manutencoes() {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Send className="h-5 w-5 text-emerald-600" />
-                Aprovar e Enviar ao Financeiro
+                <Lock className="h-5 w-5 text-emerald-600" />
+                Consolidar Mês e Enviar ao Financeiro
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
@@ -522,7 +523,7 @@ export default function Manutencoes() {
                 disabled={approveMut.isPending}
               >
                 {approveMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <DollarSign className="h-4 w-4 mr-1" />}
-                {approveMut.isPending ? "Processando..." : "Confirmar Aprovação"}
+                {approveMut.isPending ? "Processando..." : "Confirmar Consolidação"}
               </Button>
             </DialogFooter>
           </DialogContent>

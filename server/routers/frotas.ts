@@ -2164,7 +2164,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       `);
       const existing = ((existingRes as any).rows || existingRes)[0];
       if (existing) {
-        throw new TRPCError({ code: "CONFLICT", message: "Este mês já possui aprovação ativa no Financeiro. Reverta antes de aprovar novamente." });
+        throw new TRPCError({ code: "CONFLICT", message: "Este mês já possui consolidação ativa no Financeiro. Reverta antes de consolidar novamente." });
       }
 
       const maintRes = await db.execute(sql`
@@ -2241,7 +2241,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       `);
       const entry = ((checkRes as any).rows || checkRes)[0];
       if (!entry) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento financeiro de manutenção não encontrado ou já cancelado." });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento financeiro de manutenção não encontrado ou já revertido." });
       }
 
       await db.execute(sql`
@@ -2355,5 +2355,152 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       const mediaGeral = (globalAvgRes as any).rows || globalAvgRes;
 
       return { historico, postosProximos, mediaGeral };
+    }),
+
+  getFuelMonthSummary: protectedProcedure
+    .input(z.object({ companyId: z.number(), mes: z.number(), ano: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const userCid = (ctx as any).user?.companyId;
+      if (userCid && String(userCid) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, mes, ano } = input;
+      const startDate = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const endDate = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+
+      const res = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_total::numeric),0) as total_valor,
+               COALESCE(SUM(litros::numeric),0) as total_litros,
+               COUNT(*) as qtd,
+               COUNT(DISTINCT vehicle_id) as veiculos
+        FROM fleet_fuel_records WHERE company_id = ${companyId}
+          AND data >= ${startDate}::date AND data < ${endDate}::date
+      `);
+      const row = ((res as any).rows || res)[0] || {};
+
+      const feRes = await db.execute(sql`
+        SELECT id, status, valor_previsto FROM financial_entries
+        WHERE company_id = ${companyId}
+          AND origem_modulo = 'frotas'
+          AND descricao LIKE ${'Combustível Frotas%'}
+          AND data_competencia >= ${startDate}::date AND data_competencia < ${endDate}::date
+          AND status != 'cancelado'
+        ORDER BY created_at DESC LIMIT 1
+      `);
+      const financialEntry = ((feRes as any).rows || feRes)[0] || null;
+
+      return {
+        totalValor: parseFloat(row.total_valor) || 0,
+        totalLitros: parseFloat(row.total_litros) || 0,
+        qtd: parseInt(row.qtd) || 0,
+        veiculos: parseInt(row.veiculos) || 0,
+        consolidated: !!financialEntry,
+        financialEntryId: financialEntry?.id || null,
+        financialStatus: financialEntry?.status || null,
+      };
+    }),
+
+  consolidateFuelMonth: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100),
+      observacoes: z.string().max(2000).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const userCid = (ctx as any).user?.companyId;
+      if (userCid && String(userCid) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, mes, ano } = input;
+      const startDate = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const endDate = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+
+      const existingRes = await db.execute(sql`
+        SELECT id FROM financial_entries
+        WHERE company_id = ${companyId} AND origem_modulo = 'frotas'
+          AND descricao LIKE ${'Combustível Frotas%'}
+          AND data_competencia >= ${startDate}::date AND data_competencia < ${endDate}::date
+          AND status != 'cancelado'
+        LIMIT 1
+      `);
+      const existing = ((existingRes as any).rows || existingRes)[0];
+      if (existing) {
+        throw new TRPCError({ code: "CONFLICT", message: "Este mês já possui consolidação ativa no Financeiro. Reverta antes de consolidar novamente." });
+      }
+
+      const fuelRes = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_total::numeric),0) as total,
+               COALESCE(SUM(litros::numeric),0) as litros,
+               COUNT(*) as qtd,
+               COUNT(DISTINCT vehicle_id) as veiculos
+        FROM fleet_fuel_records WHERE company_id = ${companyId}
+          AND data >= ${startDate}::date AND data < ${endDate}::date
+      `);
+      const fuel = ((fuelRes as any).rows || fuelRes)[0] || {};
+      const totalValor = parseFloat(fuel.total) || 0;
+      const totalLitros = parseFloat(fuel.litros) || 0;
+      const qtdAbastecimentos = parseInt(fuel.qtd) || 0;
+      const qtdVeiculos = parseInt(fuel.veiculos) || 0;
+
+      if (totalValor === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum abastecimento com valor encontrado para este mês." });
+      }
+
+      const meses = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+      const descricao = `Combustível Frotas - ${meses[mes]}/${ano} (${qtdAbastecimentos} abast., ${qtdVeiculos} veíc.)`;
+      const obsFinanceiro = input.observacoes || `${qtdAbastecimentos} abastecimentos, ${totalLitros.toFixed(0)}L, totalizando R$ ${totalValor.toFixed(2)}`;
+      const userId = ctx.user?.id ?? null;
+      const userName = ctx.user?.name ?? null;
+
+      await db.execute(sql`BEGIN`);
+      try {
+        const feRes = await db.execute(sql`
+          INSERT INTO financial_entries
+            (company_id, tipo, natureza, valor_previsto, data_competencia, data_vencimento,
+             status, descricao, observacoes, origem_modulo, criado_por_id, criado_por_nome, created_at, updated_at)
+          VALUES (${companyId}, 'despesa', 'variavel', ${totalValor}, ${startDate}::date, ${startDate}::date,
+            'previsto', ${descricao}, ${obsFinanceiro},
+            'frotas', ${userId}, ${userName}, NOW(), NOW())
+          RETURNING id
+        `);
+        const financialEntryId = ((feRes as any).rows || feRes)[0]?.id || null;
+        await db.execute(sql`COMMIT`);
+        return { financialEntryId, totalValor, totalLitros, qtdAbastecimentos };
+      } catch (err) {
+        await db.execute(sql`ROLLBACK`);
+        throw err;
+      }
+    }),
+
+  revertFuelConsolidation: protectedProcedure
+    .input(z.object({ companyId: z.number(), financialEntryId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const userCid = (ctx as any).user?.companyId;
+      if (userCid && String(userCid) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+
+      const checkRes = await db.execute(sql`
+        SELECT id FROM financial_entries
+        WHERE id = ${input.financialEntryId} AND company_id = ${input.companyId}
+          AND origem_modulo = 'frotas' AND descricao LIKE ${'Combustível Frotas%'}
+          AND status != 'cancelado'
+      `);
+      const entry = ((checkRes as any).rows || checkRes)[0];
+      if (!entry) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento financeiro de combustível não encontrado ou já cancelado." });
+      }
+
+      await db.execute(sql`
+        UPDATE financial_entries SET status = 'cancelado', updated_at = NOW()
+        WHERE id = ${input.financialEntryId} AND company_id = ${input.companyId}
+          AND origem_modulo = 'frotas'
+      `);
+      return { ok: true };
     }),
 });
