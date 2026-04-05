@@ -7784,4 +7784,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 05:00:00",
   },
+  {
+    version: 1018,
+    titulo: "Manutenções — Seletor de meses + Aprovação para Financeiro",
+    descricao:
+      "Tela de Manutenções redesenhada seguindo o padrão visual do Combustível: " +
+      "seletor de meses Jan-Dez com indicadores de dados, filtros por veículo/tipo/status, " +
+      "resumo com cards de KPIs (total, custo, preventivas, corretivas) e rodapé totalizador na tabela. " +
+      "Novo fluxo de aprovação mensal: botão 'Aprovar e Enviar ao Financeiro' gera lançamento de despesa " +
+      "automático no módulo Financeiro com detalhamento das OS. Card de status mostra aprovação e permite " +
+      "reverter (cancela o lançamento financeiro). Endpoints approveMaintenanceMonth, revertMaintenanceApproval " +
+      "e getMaintenanceMonthSummary no backend com transações BEGIN/COMMIT/ROLLBACK.",
+    tipo: "feature",
+    modulos: "Frotas, Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 05:30:00",
+  },
 ];

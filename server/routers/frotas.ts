@@ -2021,6 +2021,157 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       return { ok: true };
     }),
 
+  approveMaintenanceMonth: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100),
+      observacoes: z.string().max(2000).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, mes, ano } = input;
+      const startDate = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const endDate = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+
+      const existingRes = await db.execute(sql`
+        SELECT id FROM financial_entries
+        WHERE company_id = ${companyId} AND origem_modulo = 'frotas'
+          AND descricao LIKE ${'Manutenções Frotas%'}
+          AND data_competencia >= ${startDate}::date AND data_competencia < ${endDate}::date
+          AND status != 'cancelado'
+        LIMIT 1
+      `);
+      const existing = ((existingRes as any).rows || existingRes)[0];
+      if (existing) {
+        throw new TRPCError({ code: "CONFLICT", message: "Este mês já possui aprovação ativa no Financeiro. Reverta antes de aprovar novamente." });
+      }
+
+      const maintRes = await db.execute(sql`
+        SELECT COALESCE(SUM(custo::numeric),0) as total, COUNT(*) as qtd
+        FROM fleet_maintenances WHERE company_id = ${companyId}
+          AND data_manutencao >= ${startDate}::date AND data_manutencao < ${endDate}::date
+          AND status != 'cancelada'
+      `);
+      const maint = ((maintRes as any).rows || maintRes)[0] || {};
+      const custoTotal = parseFloat(maint.total) || 0;
+      const qtdManutencoes = parseInt(maint.qtd) || 0;
+
+      if (custoTotal === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma manutenção com custo encontrada para este mês." });
+      }
+
+      const detailRes = await db.execute(sql`
+        SELECT fm.descricao, fm.custo, fm.tipo, v.placa, v.modelo
+        FROM fleet_maintenances fm
+        JOIN vehicles v ON v.id = fm.vehicle_id
+        WHERE fm.company_id = ${companyId}
+          AND fm.data_manutencao >= ${startDate}::date AND fm.data_manutencao < ${endDate}::date
+          AND fm.status != 'cancelada'
+          AND fm.custo IS NOT NULL AND fm.custo::numeric > 0
+        ORDER BY fm.custo::numeric DESC
+        LIMIT 10
+      `);
+      const details = (detailRes as any).rows || detailRes;
+      const detailLines = details.map((d: any) =>
+        `${d.placa || d.modelo} - ${d.descricao}: R$ ${parseFloat(d.custo).toFixed(2)} (${d.tipo})`
+      ).join(" | ");
+
+      const meses = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+      const descricao = `Manutenções Frotas - ${meses[mes]}/${ano} (${qtdManutencoes} OS)`;
+      const obsFinanceiro = detailLines || `${qtdManutencoes} manutenções totalizando R$ ${custoTotal.toFixed(2)}`;
+      const userId = ctx.user?.id ?? null;
+      const userName = ctx.user?.name ?? null;
+
+      await db.execute(sql`BEGIN`);
+      try {
+        const feRes = await db.execute(sql`
+          INSERT INTO financial_entries
+            (company_id, tipo, natureza, valor_previsto, data_competencia, data_vencimento,
+             status, descricao, observacoes, origem_modulo, criado_por_id, criado_por_nome, created_at, updated_at)
+          VALUES (${companyId}, 'despesa', 'variavel', ${custoTotal}, ${startDate}::date, ${startDate}::date,
+            'previsto', ${descricao}, ${input.observacoes || obsFinanceiro},
+            'frotas', ${userId}, ${userName}, NOW(), NOW())
+          RETURNING id
+        `);
+        const financialEntryId = ((feRes as any).rows || feRes)[0]?.id || null;
+
+        await db.execute(sql`COMMIT`);
+
+        return { financialEntryId, custoTotal, qtdManutencoes };
+      } catch (err) {
+        await db.execute(sql`ROLLBACK`);
+        throw err;
+      }
+    }),
+
+  revertMaintenanceApproval: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), financialEntryId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+
+      const checkRes = await db.execute(sql`
+        SELECT id FROM financial_entries
+        WHERE id = ${input.financialEntryId} AND company_id = ${input.companyId}
+          AND origem_modulo = 'frotas' AND descricao LIKE ${'Manutenções Frotas%'}
+          AND status != 'cancelado'
+      `);
+      const entry = ((checkRes as any).rows || checkRes)[0];
+      if (!entry) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento financeiro de manutenção não encontrado ou já cancelado." });
+      }
+
+      await db.execute(sql`
+        UPDATE financial_entries SET status = 'cancelado', updated_at = NOW()
+        WHERE id = ${input.financialEntryId} AND company_id = ${input.companyId}
+          AND origem_modulo = 'frotas'
+      `);
+      return { ok: true };
+    }),
+
+  getMaintenanceMonthSummary: protectedProcedure
+    .input(z.object({ companyId: z.number(), mes: z.number(), ano: z.number() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, mes, ano } = input;
+      const startDate = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const endDate = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+
+      const res = await db.execute(sql`
+        SELECT COALESCE(SUM(CASE WHEN status != 'cancelada' THEN custo::numeric ELSE 0 END),0) as total,
+               COUNT(CASE WHEN status != 'cancelada' THEN 1 END) as qtd,
+               COUNT(CASE WHEN tipo = 'preventiva' AND status != 'cancelada' THEN 1 END) as preventivas,
+               COUNT(CASE WHEN tipo = 'corretiva' AND status != 'cancelada' THEN 1 END) as corretivas
+        FROM fleet_maintenances WHERE company_id = ${companyId}
+          AND data_manutencao >= ${startDate}::date AND data_manutencao < ${endDate}::date
+      `);
+      const row = ((res as any).rows || res)[0] || {};
+
+      const feRes = await db.execute(sql`
+        SELECT id, status, valor_previsto FROM financial_entries
+        WHERE company_id = ${companyId}
+          AND origem_modulo = 'frotas'
+          AND descricao LIKE ${'Manutenções Frotas%'}
+          AND data_competencia >= ${startDate}::date AND data_competencia < ${endDate}::date
+          AND status != 'cancelado'
+        ORDER BY created_at DESC LIMIT 1
+      `);
+      const financialEntry = ((feRes as any).rows || feRes)[0] || null;
+
+      return {
+        total: parseFloat(row.total) || 0,
+        qtd: parseInt(row.qtd) || 0,
+        preventivas: parseInt(row.preventivas) || 0,
+        corretivas: parseInt(row.corretivas) || 0,
+        approved: !!financialEntry,
+        financialEntryId: financialEntry?.id || null,
+        financialStatus: financialEntry?.status || null,
+      };
+    }),
+
   compareGasPrices: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
