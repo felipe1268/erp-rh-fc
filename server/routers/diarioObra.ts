@@ -22,7 +22,13 @@ async function validateRelatorioOwnership(db: any, relatorioId: number, companyI
 function isAllowedUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    return u.protocol === 'https:' && (u.hostname.endsWith('diariodeobra.app') || u.hostname.endsWith('amazonaws.com') || u.hostname.endsWith('cloudfront.net'));
+    return u.protocol === 'https:' && (
+      u.hostname.endsWith('diariodeobra.app') ||
+      u.hostname.endsWith('amazonaws.com') ||
+      u.hostname.endsWith('cloudfront.net') ||
+      u.hostname.endsWith('blob.core.windows.net') ||
+      u.hostname.endsWith('azureedge.net')
+    );
   } catch { return false; }
 }
 
@@ -681,23 +687,22 @@ export const diarioObraRouter = router({
       let ignoradas = 0;
 
       for (const obra of (obras as any[])) {
+        const extId = obra._id;
+        if (!extId) continue;
+
         const existing = rows(await db.execute(sql`
-          SELECT id FROM diario_obra_obras WHERE company_id = ${input.companyId} AND external_id = ${obra.id}
+          SELECT id FROM diario_obra_obras WHERE company_id = ${input.companyId} AND external_id = ${extId}
         `));
         if (existing.length > 0) { ignoradas++; continue; }
 
+        const statusMap: Record<number, string> = { 1: 'em_andamento', 2: 'paralisada', 3: 'em_andamento', 4: 'concluida' };
+        const statusVal = statusMap[obra.status?.id] || 'em_andamento';
+
         await db.execute(sql`
-          INSERT INTO diario_obra_obras (company_id, external_id, nome, endereco, cidade, estado, cep, cliente, contrato, responsavel, status, data_inicio, data_previsao_fim, data_fim, prazo_contratual, dados_json)
+          INSERT INTO diario_obra_obras (company_id, external_id, nome, status, dados_json)
           VALUES (
-            ${input.companyId}, ${obra.id}, ${obra.nome || obra.name || 'Sem nome'},
-            ${obra.endereco || obra.address || null}, ${obra.cidade || obra.city || null},
-            ${obra.estado || obra.state || null}, ${obra.cep || obra.zipcode || null},
-            ${obra.cliente || obra.client || null}, ${obra.contrato || obra.contract || null},
-            ${obra.responsavel || obra.responsible || null},
-            ${obra.status === 'finished' ? 'concluida' : obra.status === 'paused' ? 'paralisada' : 'em_andamento'},
-            ${obra.data_inicio || obra.start_date || null}, ${obra.data_previsao_fim || obra.expected_end_date || null},
-            ${obra.data_fim || obra.end_date || null}, ${obra.prazo_contratual || obra.contractual_term || null},
-            ${JSON.stringify(obra)}
+            ${input.companyId}, ${extId}, ${obra.nome || 'Sem nome'},
+            ${statusVal}, ${JSON.stringify(obra)}
           )
         `);
         importadas++;
@@ -729,145 +734,169 @@ export const diarioObraRouter = router({
       let fotosImportadas = 0;
       let videosImportados = 0;
 
+      function parseDate(dateStr: string | null | undefined): string | null {
+        if (!dateStr) return null;
+        const m = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+        return dateStr;
+      }
+
       for (const rel of (relatorios as any[])) {
+        const relExtId = rel._id;
+        if (!relExtId) continue;
+
         const existing = rows(await db.execute(sql`
-          SELECT id FROM diario_obra_relatorios WHERE obra_id = ${input.obraId} AND external_id = ${rel.id}
+          SELECT id FROM diario_obra_relatorios WHERE obra_id = ${input.obraId} AND external_id = ${relExtId}
         `));
         if (existing.length > 0) { ignorados++; continue; }
 
         let detResp;
         try {
-          detResp = await fetch(`https://api.diariodeobra.app/v2/obras/${externalObraId}/relatorios/${rel.id}`, {
+          detResp = await fetch(`https://api.diariodeobra.app/v2/obras/${externalObraId}/relatorios/${relExtId}`, {
             headers: { 'token': token },
           });
         } catch { ignorados++; continue; }
         if (!detResp.ok) { ignorados++; continue; }
         const det = await detResp.json() as any;
 
+        const statusMap: Record<number, string> = { 1: 'rascunho', 2: 'finalizado', 3: 'aprovado', 4: 'pendente' };
+        const statusVal = statusMap[det.status?.id] || 'rascunho';
+        const hor = det.horarioDeTrabalho || {};
+
         const relRows = rows(await db.execute(sql`
           INSERT INTO diario_obra_relatorios (
             company_id, obra_id, external_id, numero, data, status, responsavel_nome,
             clima_manha, clima_tarde, clima_noite, condicao_manha, condicao_tarde, condicao_noite,
             indice_pluviometrico, hora_inicio, hora_fim, hora_intervalo_inicio, hora_intervalo_fim,
-            horas_trabalhadas, observacoes, visitantes, dds_realizado, dds_tema, pdf_url, dados_json, importado_em
+            horas_trabalhadas, pdf_url, dados_json, importado_em
           ) VALUES (
-            ${input.companyId}, ${input.obraId}, ${rel.id}, ${det.numero || rel.numero || null},
-            ${det.data || rel.data || new Date().toISOString().split('T')[0]},
-            ${det.status === 'approved' ? 'aprovado' : det.status === 'finished' ? 'finalizado' : det.status === 'pending' ? 'pendente' : 'rascunho'},
-            ${det.responsavel?.nome || det.responsavel_nome || null},
-            ${det.clima?.manha?.clima || det.clima_manha || null},
-            ${det.clima?.tarde?.clima || det.clima_tarde || null},
-            ${det.clima?.noite?.clima || det.clima_noite || null},
-            ${det.clima?.manha?.condicao || det.condicao_manha || null},
-            ${det.clima?.tarde?.condicao || det.condicao_tarde || null},
-            ${det.clima?.noite?.condicao || det.condicao_noite || null},
-            ${det.indice_pluviometrico || null},
-            ${det.horario?.inicio || det.hora_inicio || null},
-            ${det.horario?.fim || det.hora_fim || null},
-            ${det.horario?.intervalo_inicio || null},
-            ${det.horario?.intervalo_fim || null},
-            ${det.horas_trabalhadas || null},
-            ${det.observacoes || null}, ${det.visitantes || null},
-            ${det.dds?.realizado || false}, ${det.dds?.tema || null},
-            ${det.pdf_url || det.pdf || null},
+            ${input.companyId}, ${input.obraId}, ${relExtId}, ${det.numero || rel.numero || null},
+            ${parseDate(det.data || rel.data) || new Date().toISOString().split('T')[0]},
+            ${statusVal},
+            ${det.criadoPor?.usuario?.nome || null},
+            ${det.clima?.manha?.clima || null},
+            ${det.clima?.tarde?.clima || null},
+            ${det.clima?.noite?.clima || null},
+            ${det.clima?.manha?.condicao || null},
+            ${det.clima?.tarde?.condicao || null},
+            ${det.clima?.noite?.condicao || null},
+            ${det.clima?.indicePluviometrico || null},
+            ${hor.expedienteInicio || null},
+            ${hor.expedienteFim || null},
+            ${hor.intervaloInicio || null},
+            ${hor.intervaloFim || null},
+            ${hor.horasTrabalhadas || null},
+            ${det.linkPdf || null},
             ${JSON.stringify(det)}, NOW()
           ) RETURNING id
         `));
         const newRelId = relRows[0].id;
 
-        const maoObraList = det.mao_obra || det.maoObra || [];
+        const maoObraOpcao = det.maoDeObra?.opcaoSelecionada || 'personalizada';
+        const maoObraList = det.maoDeObra?.[maoObraOpcao] || det.maoDeObra?.personalizada || det.maoDeObra?.padrao || [];
         for (const mo of maoObraList) {
           await db.execute(sql`
             INSERT INTO diario_obra_mao_obra (relatorio_id, nome, funcao, categoria, empresa, tipo, presente, hora_inicio, hora_fim, hora_intervalo_inicio, hora_intervalo_fim, horas_trabalhadas, registro, observacao, dados_json)
-            VALUES (${newRelId}, ${mo.nome || mo.name || null}, ${mo.funcao || mo.function || null}, ${mo.categoria || mo.category || null}, ${mo.empresa || mo.company || null}, ${mo.tipo || mo.type || 'proprio'}, ${mo.presente ?? mo.present ?? true}, ${mo.hora_inicio || mo.start_time || null}, ${mo.hora_fim || mo.end_time || null}, ${mo.intervalo_inicio || null}, ${mo.intervalo_fim || null}, ${mo.horas_trabalhadas || mo.worked_hours || null}, ${mo.registro || mo.registration || null}, ${mo.observacao || mo.observation || null}, ${JSON.stringify(mo)})
+            VALUES (${newRelId}, ${mo.nome || null}, ${mo.funcao || null}, ${mo.categoria?.descricao || null}, ${mo.empresa || null}, ${maoObraOpcao === 'padrao' ? 'proprio' : 'proprio'}, ${mo.presenca ?? true}, ${mo.horaInicio || null}, ${mo.horaFim || null}, ${null}, ${null}, ${mo.horasTrabalhadas || null}, ${mo.registro || null}, ${null}, ${JSON.stringify(mo)})
           `);
         }
 
-        const equipList = det.equipamentos || det.equipment || [];
+        const equipList = det.equipamentos || [];
         for (const eq of equipList) {
           await db.execute(sql`
             INSERT INTO diario_obra_equipamentos (relatorio_id, nome, tipo, quantidade, hora_inicio, hora_fim, horas_trabalhadas, operativo, situacao, observacao, dados_json)
-            VALUES (${newRelId}, ${eq.nome || eq.name || null}, ${eq.tipo || eq.type || null}, ${eq.quantidade || eq.quantity || 1}, ${eq.hora_inicio || eq.start_time || null}, ${eq.hora_fim || eq.end_time || null}, ${eq.horas_trabalhadas || eq.worked_hours || null}, ${eq.operativo ?? eq.operative ?? true}, ${eq.situacao || eq.situation || null}, ${eq.observacao || eq.observation || null}, ${JSON.stringify(eq)})
+            VALUES (${newRelId}, ${eq.descricao || eq.nome || null}, ${eq.tipo || null}, ${eq.quantidade || 1}, ${eq.horaInicio || null}, ${eq.horaFim || null}, ${eq.horasTrabalhadas || null}, ${eq.operativo ?? true}, ${eq.situacao || null}, ${eq.observacao || null}, ${JSON.stringify(eq)})
           `);
         }
 
-        const atividadeList = det.atividades || det.activities || [];
+        const atividadeList = det.atividades || [];
         for (const at of atividadeList) {
+          const cp = at.controleDeProducao || {};
           await db.execute(sql`
             INSERT INTO diario_obra_atividades (relatorio_id, item, descricao, local, etapa, status, percentual_avanco, observacao, unidade, quantidade_prevista, quantidade_realizada, quantidade_acumulada, dados_json)
-            VALUES (${newRelId}, ${at.item || null}, ${at.descricao || at.description || null}, ${at.local || at.location || null}, ${at.etapa || at.stage || null}, ${at.status || null}, ${at.percentual_avanco || at.progress_percentage || null}, ${at.observacao || at.observation || null}, ${at.unidade || at.unit || null}, ${at.quantidade_prevista || at.planned_quantity || null}, ${at.quantidade_realizada || at.executed_quantity || null}, ${at.quantidade_acumulada || at.accumulated_quantity || null}, ${JSON.stringify(at)})
+            VALUES (${newRelId}, ${at.item || null}, ${at.descricao || null}, ${null}, ${at.etapa?.descricao || null}, ${null}, ${at.porcentagem || null}, ${at.observacao || null}, ${cp.unidade || null}, ${cp.quantidade || null}, ${cp.realizado || null}, ${cp.acumulado || null}, ${JSON.stringify(at)})
           `);
         }
 
-        const ocorrList = det.ocorrencias || det.occurrences || [];
+        const ocorrList = det.ocorrencias || [];
         for (const oc of ocorrList) {
           await db.execute(sql`
             INSERT INTO diario_obra_ocorrencias (relatorio_id, descricao, tipo, providencia, dados_json)
-            VALUES (${newRelId}, ${oc.descricao || oc.description || ''}, ${oc.tipo || oc.type || null}, ${oc.providencia || oc.action || null}, ${JSON.stringify(oc)})
+            VALUES (${newRelId}, ${oc.descricao || ''}, ${oc.tipo || null}, ${oc.providencia || null}, ${JSON.stringify(oc)})
           `);
         }
 
-        const matList = det.materiais || det.materials || [];
-        for (const m of matList) {
+        const matRecebido = det.controleDeMaterial?.recebido || [];
+        for (const m of matRecebido) {
           await db.execute(sql`
             INSERT INTO diario_obra_materiais (relatorio_id, tipo, descricao, quantidade, unidade, nota_fiscal, fornecedor, dados_json)
-            VALUES (${newRelId}, ${m.tipo || m.type || 'recebido'}, ${m.descricao || m.description || null}, ${m.quantidade || m.quantity || null}, ${m.unidade || m.unit || null}, ${m.nota_fiscal || m.invoice || null}, ${m.fornecedor || m.supplier || null}, ${JSON.stringify(m)})
+            VALUES (${newRelId}, ${'recebido'}, ${m.descricao || null}, ${m.quantidade || null}, ${m.unidade || null}, ${m.notaFiscal || null}, ${m.fornecedor || null}, ${JSON.stringify(m)})
+          `);
+        }
+        const matUtilizado = det.controleDeMaterial?.utilizado || [];
+        for (const m of matUtilizado) {
+          await db.execute(sql`
+            INSERT INTO diario_obra_materiais (relatorio_id, tipo, descricao, quantidade, unidade, nota_fiscal, fornecedor, dados_json)
+            VALUES (${newRelId}, ${'utilizado'}, ${m.descricao || null}, ${m.quantidade || null}, ${m.unidade || null}, ${m.notaFiscal || null}, ${m.fornecedor || null}, ${JSON.stringify(m)})
           `);
         }
 
-        const comentList = det.comentarios || det.comments || [];
+        const comentList = det.comentarios || [];
         for (const c of comentList) {
           await db.execute(sql`
             INSERT INTO diario_obra_comentarios (relatorio_id, texto, autor, data_hora, dados_json)
-            VALUES (${newRelId}, ${c.texto || c.text || c.content || ''}, ${c.autor || c.author || null}, ${c.data_hora || c.created_at || c.date || null}, ${JSON.stringify(c)})
+            VALUES (${newRelId}, ${c.texto || c.descricao || ''}, ${c.usuario?.nome || c.autor || null}, ${c.dataHora || c.created || null}, ${JSON.stringify(c)})
           `);
         }
 
         if (input.comMidia !== false) {
-          const fotoList = det.fotos || det.photos || [];
+          const fotoList = det.galeriaDeFotos || [];
           for (const f of fotoList) {
-            const fotoUrl = f.url || f.original_url || f.photo_url;
+            const fotoUrl = f.url;
             let fotoData = null;
             let thumbData = null;
-            let tamanho = 0;
+            let tamanho = f.tamanho || 0;
 
             if (fotoUrl) {
               fotoData = await safeFetch(fotoUrl);
-              tamanho = fotoData?.length || 0;
+              if (fotoData) tamanho = fotoData.length;
             }
 
-            const thumbUrl = f.thumbnail || f.thumb_url;
+            const thumbUrl = f.urlMiniatura;
             if (thumbUrl) {
               thumbData = await safeFetch(thumbUrl);
             }
 
+            const ext = (f.arquivo || '').split('.').pop()?.toLowerCase() || 'jpeg';
+            const mimeMap: Record<string, string> = { jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
+
             await db.execute(sql`
               INSERT INTO diario_obra_fotos (relatorio_id, external_id, descricao, url_original, foto_data, thumbnail_data, mime_type, tamanho_bytes, dados_json)
-              VALUES (${newRelId}, ${f.id || null}, ${f.descricao || f.description || f.caption || null}, ${fotoUrl || null}, ${fotoData}, ${thumbData}, ${f.mime_type || 'image/jpeg'}, ${tamanho}, ${JSON.stringify(f)})
+              VALUES (${newRelId}, ${f._id || null}, ${f.descricao || null}, ${fotoUrl || null}, ${fotoData}, ${thumbData}, ${mimeMap[ext] || 'image/jpeg'}, ${tamanho}, ${JSON.stringify(f)})
             `);
             if (fotoData) fotosImportadas++;
           }
 
           const videoList = det.videos || [];
           for (const v of videoList) {
-            const videoUrl = v.url || v.video_url;
+            const videoUrl = v.url;
             let videoData = null;
             let thumbData = null;
-            let tamanho = 0;
+            let tamanho = v.tamanho || 0;
 
             if (videoUrl) {
               videoData = await safeFetch(videoUrl, 120000);
-              tamanho = videoData?.length || 0;
+              if (videoData) tamanho = videoData.length;
             }
 
-            const thumbUrl = v.thumbnail || v.thumb_url;
+            const thumbUrl = v.urlMiniatura;
             if (thumbUrl) {
               thumbData = await safeFetch(thumbUrl);
             }
 
             await db.execute(sql`
               INSERT INTO diario_obra_videos (relatorio_id, external_id, descricao, url_original, video_data, thumbnail_data, mime_type, duracao, tamanho_bytes, dados_json)
-              VALUES (${newRelId}, ${v.id || null}, ${v.descricao || v.description || v.caption || null}, ${videoUrl || null}, ${videoData}, ${thumbData}, ${v.mime_type || 'video/mp4'}, ${v.duracao || v.duration || null}, ${tamanho}, ${JSON.stringify(v)})
+              VALUES (${newRelId}, ${v._id || null}, ${v.descricao || null}, ${videoUrl || null}, ${videoData}, ${thumbData}, ${v.mimeType || 'video/mp4'}, ${v.duracao || null}, ${tamanho}, ${JSON.stringify(v)})
             `);
             if (videoData) videosImportados++;
           }
