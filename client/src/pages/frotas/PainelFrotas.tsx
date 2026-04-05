@@ -133,18 +133,18 @@ export default function PainelFrotas() {
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
               <KpiCard icon={Truck} label="Veículos Ativos" value={d.totalVehicles} onClick={() => navigate("/frotas/veiculos")} color="text-cyan-600" bg="bg-cyan-50" />
               <KpiCard icon={DollarSign} label="Patrimônio FIPE" value={fmt(d.totalFipe)} color="text-green-600" bg="bg-green-50" />
-              <KpiCard icon={TrendingDown} label="Depreciação Real" value={fmt(d.depreciacao)} color="text-red-600" bg="bg-red-50" sub={`Retém ${pctRetidoGlobal}%`} />
-              <KpiCard icon={Gauge} label="Km Total Rodado" value={`${fmtN(d.totalKm)} km`} color="text-blue-600" bg="bg-blue-50" />
-              <KpiCard icon={Fuel} label="Consumo Médio" value={d.consumoMedio > 0 ? `${d.consumoMedio.toFixed(1)} km/l` : "—"} color="text-amber-600" bg="bg-amber-50" sub={d.totalLitros > 0 ? `${fmtN(Math.round(d.totalLitros))} litros` : undefined} />
+              <KpiCard icon={TrendingDown} label={anoDash ? `Depreciação ${anoDash}` : "Depreciação Real"} value={fmt(d.depreciacao)} color="text-red-600" bg="bg-red-50" sub={anoDash ? "Estimativa anual" : `Retém ${pctRetidoGlobal}%`} />
+              <KpiCard icon={Gauge} label={anoDash ? `Km Rodado ${anoDash}` : "Km Total Rodado"} value={`${fmtN(Math.round(d.totalKm))} km`} color="text-blue-600" bg="bg-blue-50" sub={anoDash ? "Baseado em abastecimentos" : undefined} />
+              <KpiCard icon={Fuel} label={anoDash ? `Consumo ${anoDash}` : "Consumo Médio"} value={d.consumoMedio > 0 ? `${d.consumoMedio.toFixed(1)} km/l` : "—"} color="text-amber-600" bg="bg-amber-50" sub={d.totalLitros > 0 ? `${fmtN(Math.round(d.totalLitros))} litros` : undefined} />
               <KpiCard icon={Clock} label="Idade Média" value={`${d.idadeFrota.toFixed(1)} anos`} color="text-slate-600" bg="bg-slate-50" />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
-              <KpiCard icon={Wrench} label="Manutenção" value={fmt(d.totalManutCusto)} onClick={() => navigate("/frotas/manutencoes")} color="text-emerald-600" bg="bg-emerald-50" sub={`${d.veiculosEmManutencao} em andamento`} />
-              <KpiCard icon={Fuel} label="Combustível" value={fmt(d.totalCombustivel)} onClick={() => navigate("/frotas/combustivel")} color="text-blue-600" bg="bg-blue-50" />
-              <KpiCard icon={AlertTriangle} label="Multas" value={fmt(d.totalMultas)} onClick={() => navigate("/frotas/multas")} color="text-red-600" bg="bg-red-50" sub={d.multasPendentes > 0 ? `${d.multasPendentes} pendentes` : "Nenhuma pendente"} />
-              <KpiCard icon={Receipt} label="IPVA Pendente" value={fmt(d.totalIpvaPendente)} onClick={() => navigate("/frotas/ipva")} color="text-purple-600" bg="bg-purple-50" />
-              <KpiCard icon={Activity} label="Custo/km (M+C)" value={d.custoKm > 0 ? `R$ ${d.custoKm.toFixed(2)}/km` : "—"} color="text-indigo-600" bg="bg-indigo-50" sub={`Oper. total: ${fmt(d.custoOperTotal)}`} />
+              <KpiCard icon={Wrench} label={anoDash ? `Manutenção ${anoDash}` : "Manutenção"} value={fmt(d.totalManutCusto)} onClick={() => navigate("/frotas/manutencoes")} color="text-emerald-600" bg="bg-emerald-50" sub={`${d.veiculosEmManutencao} em andamento`} />
+              <KpiCard icon={Fuel} label={anoDash ? `Combustível ${anoDash}` : "Combustível"} value={fmt(d.totalCombustivel)} onClick={() => navigate("/frotas/combustivel")} color="text-blue-600" bg="bg-blue-50" />
+              <KpiCard icon={AlertTriangle} label={anoDash ? `Multas ${anoDash}` : "Multas"} value={fmt(d.totalMultas)} onClick={() => navigate("/frotas/multas")} color="text-red-600" bg="bg-red-50" sub={d.multasPendentes > 0 ? `${d.multasPendentes} pendentes` : "Nenhuma pendente"} />
+              <KpiCard icon={Receipt} label={anoDash ? `IPVA ${anoDash}` : "IPVA Pendente"} value={fmt(d.totalIpvaPendente)} onClick={() => navigate("/frotas/ipva")} color="text-purple-600" bg="bg-purple-50" />
+              <KpiCard icon={Activity} label={anoDash ? `Custo/km ${anoDash}` : "Custo/km (M+C)"} value={d.custoKm > 0 ? `R$ ${d.custoKm.toFixed(2)}/km` : "—"} color="text-indigo-600" bg="bg-indigo-50" sub={`Oper. total: ${fmt(d.custoOperTotal)}`} />
             </div>
 
             <Tabs defaultValue="visao-geral" className="space-y-4">
