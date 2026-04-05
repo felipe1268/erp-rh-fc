@@ -2326,9 +2326,11 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       const depreciacao = anoFiltro ? depreciacaoAnual : depreciacaoTotal;
 
       const fuelByMonth: Record<string, number> = {};
+      const litrosByMonth: Record<string, number> = {};
       for (const f of allFuel) {
         const m = (f.data || "").substring(0, 7);
         fuelByMonth[m] = (fuelByMonth[m] || 0) + n(f.valor_total);
+        litrosByMonth[m] = (litrosByMonth[m] || 0) + n(f.litros);
       }
 
       const maintByMonth: Record<string, number> = {};
@@ -2515,7 +2517,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         totalManutCusto, totalCombustivel, totalMultas, multasPendentes,
         totalIpvaPendente, consumoMedio, custoKm, totalKm, totalLitros,
         tipoCount, marcaCount,
-        fuelByMonth, maintByMonth, custosTotaisByMonth, custosMensaisVeiculo,
+        fuelByMonth, maintByMonth, litrosByMonth, custosTotaisByMonth, custosMensaisVeiculo,
         alertas, alertasCriticos, alertasAlerta, alertasInfo,
         veiculosEmManutencao: allMaintRaw.filter((m: any) => m.status === "em_andamento").length,
         depreciacaoPorVeiculo,

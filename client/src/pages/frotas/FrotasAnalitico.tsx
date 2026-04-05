@@ -328,10 +328,27 @@ export default function FrotasAnalitico() {
   const custosPorVeiculo = custosPorVeiculoAll.slice(0, 15);
   const topMotoristas = topMotoristasPorLitrosData;
 
+  const mesKey = anoDash ? `${anoDash}-${String(mesSel + 1).padStart(2, "0")}` : null;
+  const mesDados = mesKey ? (custosTotaisByMonth[mesKey] as any) || null : null;
+  const mesLitros = mesKey ? ((d as any).litrosByMonth?.[mesKey] || 0) : 0;
+
+  const kpiCombustivel = mesDados ? Number(mesDados.combustivel || 0) : d.totalCombustivel;
+  const kpiManutencao = mesDados ? Number(mesDados.manutencao || 0) : d.totalManutCusto;
+  const kpiMultas = mesDados ? Number(mesDados.multas || 0) : d.totalMultas;
+  const kpiCustoOper = kpiCombustivel + kpiManutencao + kpiMultas;
+  const kpiLitros = mesDados ? mesLitros : d.totalLitros;
+  const kpiTotalKm = mesDados
+    ? (d.totalLitros > 0 && d.totalKm > 0 ? Math.round((kpiLitros / d.totalLitros) * d.totalKm) : 0)
+    : d.totalKm;
+  const kpiCustoKm = kpiTotalKm > 0 ? kpiCustoOper / kpiTotalKm : 0;
+  const kpiConsumoMedio = mesDados
+    ? (kpiLitros > 0 && kpiTotalKm > 0 ? kpiTotalKm / kpiLitros : 0)
+    : d.consumoMedio;
+
   const distCusto = [
-    { name: "Combustível", value: d.totalCombustivel, pct: d.custoOperTotal > 0 ? Math.round((d.totalCombustivel / d.custoOperTotal) * 100) : 0 },
-    { name: "Manutenção", value: d.totalManutCusto, pct: d.custoOperTotal > 0 ? Math.round((d.totalManutCusto / d.custoOperTotal) * 100) : 0 },
-    { name: "Multas", value: d.totalMultas, pct: d.custoOperTotal > 0 ? Math.round((d.totalMultas / d.custoOperTotal) * 100) : 0 },
+    { name: "Combustível", value: kpiCombustivel, pct: kpiCustoOper > 0 ? Math.round((kpiCombustivel / kpiCustoOper) * 100) : 0 },
+    { name: "Manutenção", value: kpiManutencao, pct: kpiCustoOper > 0 ? Math.round((kpiManutencao / kpiCustoOper) * 100) : 0 },
+    { name: "Multas", value: kpiMultas, pct: kpiCustoOper > 0 ? Math.round((kpiMultas / kpiCustoOper) * 100) : 0 },
   ].filter(x => x.value > 0);
 
   const distTipo = Object.entries(d.tipoCount).map(([name, value]) => ({
@@ -450,11 +467,11 @@ export default function FrotasAnalitico() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {[
             { icon: Truck, label: "Veículos Ativos", value: String(d.totalVehicles), color: "text-slate-600", bg: "bg-slate-50 dark:bg-slate-900" },
-            { icon: DollarSign, label: "Custo Operacional", value: fmt(d.custoOperTotal), color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950" },
-            { icon: Fuel, label: "Combustível", value: fmt(d.totalCombustivel), color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950", sub: `${fmtNum(d.totalLitros, 0)} litros` },
-            { icon: Wrench, label: "Manutenção", value: fmt(d.totalManutCusto), color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950" },
-            { icon: Activity, label: "Custo/km", value: `R$ ${fmtNum(d.custoKm, 2)}`, color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950", sub: `${fmtNum(d.totalKm, 0)} km` },
-            { icon: Gauge, label: "Consumo Médio", value: d.consumoMedio > 0 ? `${fmtNum(d.consumoMedio)} km/l` : "—", color: "text-cyan-600", bg: "bg-cyan-50 dark:bg-cyan-950" },
+            { icon: DollarSign, label: "Custo Operacional", value: fmt(kpiCustoOper), color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950" },
+            { icon: Fuel, label: "Combustível", value: fmt(kpiCombustivel), color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950", sub: `${fmtNum(kpiLitros, 0)} litros` },
+            { icon: Wrench, label: "Manutenção", value: fmt(kpiManutencao), color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950" },
+            { icon: Activity, label: "Custo/km", value: `R$ ${fmtNum(kpiCustoKm, 2)}`, color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950", sub: `${fmtNum(kpiTotalKm, 0)} km` },
+            { icon: Gauge, label: "Consumo Médio", value: kpiConsumoMedio > 0 ? `${fmtNum(kpiConsumoMedio)} km/l` : "—", color: "text-cyan-600", bg: "bg-cyan-50 dark:bg-cyan-950" },
           ].map((k, i) => (
             <div key={i} className={`${k.bg} border rounded-xl p-3`}>
               <div className="flex items-center gap-1.5 mb-1">
