@@ -268,6 +268,8 @@ export default function FrotasAnalitico() {
       pctComb: number; pctManut: number; pctMultas: number; pctTotal: number;
       maiorAumento: string; maiorReducao: string;
       litros: number; kmEstimado: number; custoKm: number; consumoMes: number;
+      prevLitros: number; prevCustoKm: number; prevConsumo: number;
+      varLitros: number; pctLitros: number; varCustoKm: number; pctCustoKm: number;
     }> = [];
 
     for (let m = 0; m < 12; m++) {
@@ -297,11 +299,21 @@ export default function FrotasAnalitico() {
       const reducoes = diffs.filter(dd => dd.val < 0).sort((a, b) => a.val - b.val);
 
       const litros = Number(litrosByMonthMap[key] || 0);
+      const prevLitros = Number(litrosByMonthMap[prevKey] || 0);
       const kmEstimado = d.totalLitros > 0 && d.totalKm > 0
         ? Math.round((litros / d.totalLitros) * d.totalKm)
         : 0;
+      const prevKmEstimado = d.totalLitros > 0 && d.totalKm > 0
+        ? Math.round((prevLitros / d.totalLitros) * d.totalKm)
+        : 0;
       const custoKm = kmEstimado > 0 ? total / kmEstimado : 0;
-      const consumoMes = d.totalLitros > 0 && d.totalKm > 0 ? d.totalKm / d.totalLitros : 0;
+      const prevCustoKm = prevKmEstimado > 0 ? prevTotal / prevKmEstimado : 0;
+      const consumoMes = litros > 0 && kmEstimado > 0 ? kmEstimado / litros : 0;
+      const prevConsumo = prevLitros > 0 && prevKmEstimado > 0 ? prevKmEstimado / prevLitros : 0;
+      const varLitros = litros - prevLitros;
+      const pctLitros = prevLitros > 0 ? ((litros - prevLitros) / prevLitros) * 100 : 0;
+      const varCustoKm = custoKm - prevCustoKm;
+      const pctCustoKm = prevCustoKm > 0 ? ((custoKm - prevCustoKm) / prevCustoKm) * 100 : 0;
 
       rows.push({
         mes: MESES_FULL[m], mesIdx: m,
@@ -312,6 +324,8 @@ export default function FrotasAnalitico() {
         maiorAumento: aumentos.length > 0 ? `${aumentos[0].cat} (+${fmt(aumentos[0].val)})` : "",
         maiorReducao: reducoes.length > 0 ? `${reducoes[0].cat} (${fmt(reducoes[0].val)})` : "",
         litros, kmEstimado, custoKm, consumoMes,
+        prevLitros, prevCustoKm, prevConsumo,
+        varLitros, pctLitros, varCustoKm, pctCustoKm,
       });
     }
     return rows;
@@ -630,12 +644,22 @@ export default function FrotasAnalitico() {
                           </td>
                           <td className="py-2 px-2 text-right text-purple-600">
                             {hasCur && row.custoKm > 0 ? `R$ ${row.custoKm.toFixed(2)}` : "—"}
+                            {hasCur && hasPrev && row.prevCustoKm > 0 && row.varCustoKm !== 0 && (
+                              <span className={`ml-1 text-[10px] ${row.varCustoKm > 0 ? "text-red-500" : "text-green-500"}`}>
+                                {row.varCustoKm > 0 ? "▲" : "▼"}{Math.abs(row.pctCustoKm).toFixed(0)}%
+                              </span>
+                            )}
                           </td>
                           <td className="py-2 px-2 text-right text-cyan-600">
                             {hasCur && row.consumoMes > 0 ? `${row.consumoMes.toFixed(1)}` : "—"}
                           </td>
                           <td className="py-2 px-2 text-right text-amber-600">
                             {hasCur && row.litros > 0 ? fmtNum(Math.round(row.litros), 0) : "—"}
+                            {hasCur && row.prevLitros > 0 && row.varLitros !== 0 && (
+                              <span className={`ml-1 text-[10px] ${row.varLitros > 0 ? "text-red-500" : "text-green-500"}`}>
+                                {row.varLitros > 0 ? "▲" : "▼"}{Math.abs(row.pctLitros).toFixed(0)}%
+                              </span>
+                            )}
                           </td>
                           <td className="py-2 px-2 text-right">
                             {hasCur && hasPrev && row.varTotal !== 0 ? (
