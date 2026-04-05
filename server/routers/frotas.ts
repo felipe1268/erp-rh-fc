@@ -3787,6 +3787,146 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       return { ok: true };
     }),
 
+  getMaintenanceDashboard: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, ano } = input;
+      const anoFilter = ano || new Date().getFullYear();
+      const startDate = `${anoFilter}-01-01`;
+      const endDate = `${anoFilter + 1}-01-01`;
+
+      const kpiRes = await db.execute(sql`
+        SELECT
+          COUNT(*)::int as total_manutencoes,
+          COALESCE(SUM(custo::numeric), 0) as custo_total,
+          COUNT(CASE WHEN tipo = 'preventiva' THEN 1 END)::int as preventivas,
+          COUNT(CASE WHEN tipo = 'corretiva' THEN 1 END)::int as corretivas,
+          COUNT(DISTINCT vehicle_id)::int as veiculos_atendidos,
+          COUNT(DISTINCT fornecedor)::int as fornecedores,
+          COALESCE(AVG(CASE WHEN custo::numeric > 0 THEN custo::numeric END), 0) as custo_medio,
+          COALESCE(MAX(custo::numeric), 0) as custo_max
+        FROM fleet_maintenances
+        WHERE company_id = ${companyId} AND status != 'cancelada'
+          AND data_manutencao >= ${startDate}::date AND data_manutencao < ${endDate}::date
+      `);
+      const kpi = ((kpiRes as any).rows || kpiRes)[0] || {};
+
+      const porMesRes = await db.execute(sql`
+        SELECT EXTRACT(MONTH FROM data_manutencao)::int as mes,
+               COUNT(*)::int as qtd,
+               COALESCE(SUM(custo::numeric), 0) as custo,
+               COUNT(CASE WHEN tipo = 'preventiva' THEN 1 END)::int as preventivas,
+               COUNT(CASE WHEN tipo = 'corretiva' THEN 1 END)::int as corretivas
+        FROM fleet_maintenances
+        WHERE company_id = ${companyId} AND status != 'cancelada'
+          AND data_manutencao >= ${startDate}::date AND data_manutencao < ${endDate}::date
+        GROUP BY mes ORDER BY mes
+      `);
+
+      const porVeiculoRes = await db.execute(sql`
+        SELECT fm.vehicle_id, v.placa, v.modelo, v.marca, v."tipoVeiculo" as tipo_veiculo,
+               COUNT(*)::int as qtd_manutencoes,
+               COALESCE(SUM(fm.custo::numeric), 0) as custo_total,
+               COUNT(CASE WHEN fm.tipo = 'preventiva' THEN 1 END)::int as preventivas,
+               COUNT(CASE WHEN fm.tipo = 'corretiva' THEN 1 END)::int as corretivas,
+               MAX(fm.data_manutencao) as ultima_manutencao
+        FROM fleet_maintenances fm
+        JOIN vehicles v ON v.id = fm.vehicle_id
+        WHERE fm.company_id = ${companyId} AND fm.status != 'cancelada'
+          AND fm.data_manutencao >= ${startDate}::date AND fm.data_manutencao < ${endDate}::date
+        GROUP BY fm.vehicle_id, v.placa, v.modelo, v.marca, v."tipoVeiculo"
+        ORDER BY custo_total DESC
+      `);
+
+      const porFornecedorRes = await db.execute(sql`
+        SELECT COALESCE(fornecedor, 'Não informado') as fornecedor,
+               COUNT(*)::int as qtd,
+               COALESCE(SUM(custo::numeric), 0) as custo_total
+        FROM fleet_maintenances
+        WHERE company_id = ${companyId} AND status != 'cancelada'
+          AND data_manutencao >= ${startDate}::date AND data_manutencao < ${endDate}::date
+        GROUP BY fornecedor ORDER BY custo_total DESC
+      `);
+
+      const topItensRes = await db.execute(sql`
+        SELECT mi.nome, mi.categoria,
+               SUM(mi.quantidade)::numeric as qtd_total,
+               COUNT(DISTINCT fm.vehicle_id)::int as veiculos,
+               COALESCE(SUM(mi.valor_total::numeric), 0) as custo_total,
+               COUNT(*)::int as ocorrencias
+        FROM fleet_maintenance_items mi
+        JOIN fleet_maintenances fm ON fm.id = mi.maintenance_id
+        WHERE fm.company_id = ${companyId} AND fm.status != 'cancelada'
+          AND fm.data_manutencao >= ${startDate}::date AND fm.data_manutencao < ${endDate}::date
+        GROUP BY mi.nome, mi.categoria
+        ORDER BY ocorrencias DESC, custo_total DESC
+        LIMIT 30
+      `);
+
+      const itensPorVeiculoRes = await db.execute(sql`
+        SELECT v.placa, v.modelo, mi.nome, mi.categoria,
+               SUM(mi.quantidade)::numeric as qtd,
+               COALESCE(SUM(mi.valor_total::numeric), 0) as custo
+        FROM fleet_maintenance_items mi
+        JOIN fleet_maintenances fm ON fm.id = mi.maintenance_id
+        JOIN vehicles v ON v.id = fm.vehicle_id
+        WHERE fm.company_id = ${companyId} AND fm.status != 'cancelada'
+          AND fm.data_manutencao >= ${startDate}::date AND fm.data_manutencao < ${endDate}::date
+        GROUP BY v.placa, v.modelo, mi.nome, mi.categoria
+        ORDER BY v.placa, custo DESC
+      `);
+
+      const custoMesPorTipoRes = await db.execute(sql`
+        SELECT EXTRACT(MONTH FROM fm.data_manutencao)::int as mes,
+               COALESCE(SUM(CASE WHEN mi.categoria = 'peca' THEN mi.valor_total::numeric ELSE 0 END), 0) as pecas,
+               COALESCE(SUM(CASE WHEN mi.categoria = 'servico' THEN mi.valor_total::numeric ELSE 0 END), 0) as servicos
+        FROM fleet_maintenances fm
+        LEFT JOIN fleet_maintenance_items mi ON mi.maintenance_id = fm.id
+        WHERE fm.company_id = ${companyId} AND fm.status != 'cancelada'
+          AND fm.data_manutencao >= ${startDate}::date AND fm.data_manutencao < ${endDate}::date
+        GROUP BY mes ORDER BY mes
+      `);
+
+      return {
+        kpi: {
+          totalManutencoes: parseInt(kpi.total_manutencoes) || 0,
+          custoTotal: parseFloat(kpi.custo_total) || 0,
+          preventivas: parseInt(kpi.preventivas) || 0,
+          corretivas: parseInt(kpi.corretivas) || 0,
+          veiculosAtendidos: parseInt(kpi.veiculos_atendidos) || 0,
+          fornecedores: parseInt(kpi.fornecedores) || 0,
+          custoMedio: parseFloat(kpi.custo_medio) || 0,
+          custoMax: parseFloat(kpi.custo_max) || 0,
+        },
+        porMes: ((porMesRes as any).rows || []).map((r: any) => ({
+          mes: r.mes, qtd: parseInt(r.qtd), custo: parseFloat(r.custo),
+          preventivas: parseInt(r.preventivas), corretivas: parseInt(r.corretivas),
+        })),
+        porVeiculo: ((porVeiculoRes as any).rows || []).map((r: any) => ({
+          vehicleId: r.vehicle_id, placa: r.placa, modelo: r.modelo, marca: r.marca, tipoVeiculo: r.tipo_veiculo,
+          qtdManutencoes: parseInt(r.qtd_manutencoes), custoTotal: parseFloat(r.custo_total),
+          preventivas: parseInt(r.preventivas), corretivas: parseInt(r.corretivas),
+          ultimaManutencao: r.ultima_manutencao,
+        })),
+        porFornecedor: ((porFornecedorRes as any).rows || []).map((r: any) => ({
+          fornecedor: r.fornecedor, qtd: parseInt(r.qtd), custoTotal: parseFloat(r.custo_total),
+        })),
+        topItens: ((topItensRes as any).rows || []).map((r: any) => ({
+          nome: r.nome, categoria: r.categoria, qtdTotal: parseFloat(r.qtd_total),
+          veiculos: parseInt(r.veiculos), custoTotal: parseFloat(r.custo_total), ocorrencias: parseInt(r.ocorrencias),
+        })),
+        itensPorVeiculo: ((itensPorVeiculoRes as any).rows || []).map((r: any) => ({
+          placa: r.placa, modelo: r.modelo, nome: r.nome, categoria: r.categoria,
+          qtd: parseFloat(r.qtd), custo: parseFloat(r.custo),
+        })),
+        custoMesPorTipo: ((custoMesPorTipoRes as any).rows || []).map((r: any) => ({
+          mes: r.mes, pecas: parseFloat(r.pecas), servicos: parseFloat(r.servicos),
+        })),
+      };
+    }),
+
   getMaintenanceMonthSummary: protectedProcedure
     .input(z.object({ companyId: z.number(), mes: z.number(), ano: z.number() }))
     .query(async ({ input }) => {

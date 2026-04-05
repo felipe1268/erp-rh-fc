@@ -483,6 +483,7 @@ const menuSectionsFrotas: MenuSection[] = [
     items: [
       { icon: LayoutDashboard, label: "Dashboard Frotas", path: "/frotas/painel" },
       { icon: BarChart3, label: "Analítico", path: "/frotas/analitico" },
+      { icon: Wrench, label: "Dash Manutenção", path: "/frotas/manutencoes-dashboard" },
     ],
   },
   {

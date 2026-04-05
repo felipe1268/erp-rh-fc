@@ -8182,4 +8182,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 21:00:00",
   },
+  {
+    version: 1044,
+    titulo: "Dashboard Dedicado de Manutenção",
+    descricao:
+      "Novo painel analítico exclusivo de manutenções no menu lateral (Frotas → Painel → Dash Manutenção). " +
+      "KPIs: total de OS, custo total, preventivas vs corretivas (%), veículos atendidos, fornecedores, custo médio e maior OS. " +
+      "Gráficos: evolução mensal custo (peças × serviços), preventiva vs corretiva por mês. " +
+      "Rankings: peças mais trocadas, serviços mais realizados, custo por veículo, fornecedores. " +
+      "Tabela detalhada por veículo com expansão para ver todos os itens trocados/realizados. " +
+      "Filtro por ano com seletor intuitivo.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 22:00:00",
+  },
 ];
