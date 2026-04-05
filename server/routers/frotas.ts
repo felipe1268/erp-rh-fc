@@ -2572,7 +2572,16 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         ORDER BY tipo_combustivel
       `)).rows;
 
-      return { latest, avgByType };
+      const bestByType = (await db.execute(sql`
+        SELECT DISTINCT ON (tipo_combustivel)
+          tipo_combustivel, preco, posto, cidade, data
+        FROM fuel_market_prices
+        WHERE company_id = ${input.companyId}
+          AND data >= CURRENT_DATE - INTERVAL '30 days'
+        ORDER BY tipo_combustivel, preco ASC, data DESC
+      `)).rows;
+
+      return { latest, avgByType, bestByType };
     }),
 
   saveMarketPrice: protectedProcedure

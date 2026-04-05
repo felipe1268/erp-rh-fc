@@ -11,7 +11,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Fuel, MapPin, DollarSign, BarChart3, RefreshCw, Info, Navigation,
   Plus, Trash2, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
-  AlertTriangle, CheckCircle2,
+  AlertTriangle, CheckCircle2, Trophy, Award,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -89,6 +89,7 @@ export default function PrecosCombustivel() {
     if (!prices?.byType || !market?.avgByType) return [];
     return prices.byType.map((ft: any) => {
       const mkt = market.avgByType.find((m: any) => m.tipo_combustivel === ft.tipo_combustivel);
+      const best = market.bestByType?.find((b: any) => b.tipo_combustivel === ft.tipo_combustivel);
       const seuPreco = parseFloat(ft.preco_medio);
       const mktPreco = mkt ? parseFloat(mkt.preco_medio) : null;
       const diff = mktPreco ? seuPreco - mktPreco : null;
@@ -100,9 +101,12 @@ export default function PrecosCombustivel() {
         diff,
         pct,
         status: diff === null ? 'sem_dados' : diff > 0.05 ? 'acima' : diff < -0.05 ? 'abaixo' : 'ok',
+        melhorPosto: best?.posto || null,
+        melhorPreco: best ? parseFloat(best.preco) : null,
+        melhorCidade: best?.cidade || null,
       };
     });
-  }, [prices?.byType, market?.avgByType]);
+  }, [prices?.byType, market?.avgByType, market?.bestByType]);
 
   const initMap = useCallback(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -360,6 +364,24 @@ export default function PrecosCombustivel() {
                           </span>
                         </div>
                       )}
+                      {c.melhorPosto && c.melhorPreco !== null && (
+                        <div className="mt-2 p-2.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                          <div className="flex items-center gap-1.5 text-[10px] text-emerald-700 dark:text-emerald-400 uppercase tracking-wider font-semibold mb-1">
+                            <Trophy className="h-3 w-3" />
+                            Melhor Preço
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs font-medium text-emerald-800 dark:text-emerald-300 truncate flex-1 mr-2">
+                              <MapPin className="h-3 w-3 inline mr-1" />
+                              {c.melhorPosto}
+                              {c.melhorCidade && <span className="text-emerald-600 dark:text-emerald-500"> • {c.melhorCidade}</span>}
+                            </div>
+                            <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
+                              R$ {c.melhorPreco.toFixed(4)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -385,39 +407,51 @@ export default function PrecosCombustivel() {
                     </tr>
                   </thead>
                   <tbody>
-                    {market.latest.map((row: any) => (
-                      <tr key={row.id} className="border-b hover:bg-muted/30">
-                        <td className="py-2 px-3">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-3 w-3 text-emerald-500" />
-                            {row.posto}
-                          </div>
-                        </td>
-                        <td className="py-2 px-2">
-                          <Badge variant="outline" style={{ borderColor: FUEL_COLORS[row.tipo_combustivel] || "#94a3b8", color: FUEL_COLORS[row.tipo_combustivel] || "#94a3b8" }}>
-                            {row.tipo_combustivel}
-                          </Badge>
-                        </td>
-                        <td className="py-2 px-2 text-right font-bold" style={{ color: FUEL_COLORS[row.tipo_combustivel] || "#94a3b8" }}>
-                          R$ {parseFloat(row.preco).toFixed(4)}
-                        </td>
-                        <td className="py-2 px-2 text-sm">{row.cidade}</td>
-                        <td className="py-2 px-2 text-xs text-muted-foreground">{row.fonte}</td>
-                        <td className="py-2 px-2 text-right text-xs">
-                          {new Date(row.data).toLocaleDateString("pt-BR")}
-                        </td>
-                        <td className="py-2 px-2 text-center">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
-                            onClick={() => deleteMutation.mutate({ id: row.id, companyId })}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                    {market.latest.map((row: any) => {
+                      const isBest = market.bestByType?.some(
+                        (b: any) => b.tipo_combustivel === row.tipo_combustivel &&
+                          b.posto === row.posto &&
+                          parseFloat(b.preco) === parseFloat(row.preco)
+                      );
+                      return (
+                        <tr key={row.id} className={`border-b hover:bg-muted/30 ${isBest ? 'bg-emerald-50/70 dark:bg-emerald-950/30' : ''}`}>
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-2">
+                              {isBest ? <Trophy className="h-3 w-3 text-amber-500" /> : <MapPin className="h-3 w-3 text-emerald-500" />}
+                              <span className={isBest ? 'font-semibold' : ''}>{row.posto}</span>
+                              {isBest && (
+                                <Badge className="text-[9px] px-1 py-0 bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-700">
+                                  Melhor Preço
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2 px-2">
+                            <Badge variant="outline" style={{ borderColor: FUEL_COLORS[row.tipo_combustivel] || "#94a3b8", color: FUEL_COLORS[row.tipo_combustivel] || "#94a3b8" }}>
+                              {row.tipo_combustivel}
+                            </Badge>
+                          </td>
+                          <td className="py-2 px-2 text-right font-bold" style={{ color: FUEL_COLORS[row.tipo_combustivel] || "#94a3b8" }}>
+                            R$ {parseFloat(row.preco).toFixed(4)}
+                          </td>
+                          <td className="py-2 px-2 text-sm">{row.cidade}</td>
+                          <td className="py-2 px-2 text-xs text-muted-foreground">{row.fonte}</td>
+                          <td className="py-2 px-2 text-right text-xs">
+                            {new Date(row.data).toLocaleDateString("pt-BR")}
+                          </td>
+                          <td className="py-2 px-2 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
+                              onClick={() => deleteMutation.mutate({ id: row.id, companyId })}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
