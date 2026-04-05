@@ -8168,4 +8168,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 20:30:00",
   },
+  {
+    version: 1043,
+    titulo: "Templates de Checklist por Tipo de Veículo (IA)",
+    descricao:
+      "Gerados 6 templates de checklist personalizados por IA para cada tipo de veículo da frota: " +
+      "Carro (43 itens — Gol, Fit, Corolla), SUV híbrido (42 itens — BYD Song Plus com verificações do sistema híbrido/elétrico), " +
+      "Utilitário (42 itens — Kombi, Doblo com compartimento de carga), Caminhão (53 itens — HR, VW 17.250 com tacógrafo e sistema pneumático), " +
+      "Moto (34 itens — Yamaha YBR 150 com corrente/transmissão e suspensão), Máquina (45 itens — JCB 3CX com sistema hidráulico e implementos). " +
+      "Total: 259 itens de inspeção cobrindo pneus, fluidos, iluminação, carroceria, motor, freios, segurança e documentação.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 21:00:00",
+  },
 ];
