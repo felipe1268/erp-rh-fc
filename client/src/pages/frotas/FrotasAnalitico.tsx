@@ -466,14 +466,14 @@ export default function FrotasAnalitico() {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {[
-            { icon: Truck, label: "Veículos Ativos", value: String(d.totalVehicles), color: "text-slate-600", bg: "bg-slate-50 dark:bg-slate-900" },
-            { icon: DollarSign, label: "Custo Operacional", value: fmt(kpiCustoOper), color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950" },
-            { icon: Fuel, label: "Combustível", value: fmt(kpiCombustivel), color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950", sub: `${fmtNum(kpiLitros, 0)} litros` },
-            { icon: Wrench, label: "Manutenção", value: fmt(kpiManutencao), color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950" },
-            { icon: Activity, label: "Custo/km", value: `R$ ${fmtNum(kpiCustoKm, 2)}`, color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950", sub: `${fmtNum(kpiTotalKm, 0)} km` },
-            { icon: Gauge, label: "Consumo Médio", value: kpiConsumoMedio > 0 ? `${fmtNum(kpiConsumoMedio)} km/l` : "—", color: "text-cyan-600", bg: "bg-cyan-50 dark:bg-cyan-950" },
+            { icon: Truck, label: "Veículos Ativos", value: String(d.totalVehicles), color: "text-slate-600", bg: "bg-slate-50 dark:bg-slate-900", tip: "Quantidade de veículos com status ativo na frota" },
+            { icon: DollarSign, label: "Custo Operacional", value: fmt(kpiCustoOper), color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950", tip: "Soma de combustível + manutenção + multas no período" },
+            { icon: Fuel, label: "Combustível", value: fmt(kpiCombustivel), color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950", sub: `${fmtNum(kpiLitros, 0)} litros`, tip: "Total gasto com abastecimentos e litros consumidos no período" },
+            { icon: Wrench, label: "Manutenção", value: fmt(kpiManutencao), color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950", tip: "Total gasto com manutenções preventivas e corretivas no período" },
+            { icon: Activity, label: "Custo/km", value: `R$ ${fmtNum(kpiCustoKm, 2)}`, color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950", sub: `${fmtNum(kpiTotalKm, 0)} km`, tip: "Custo operacional total dividido pela quilometragem rodada — quanto menor, mais eficiente" },
+            { icon: Gauge, label: "Consumo Médio", value: kpiConsumoMedio > 0 ? `${fmtNum(kpiConsumoMedio)} km/l` : "—", color: "text-cyan-600", bg: "bg-cyan-50 dark:bg-cyan-950", tip: "Quilômetros percorridos por litro de combustível — quanto maior, mais econômico" },
           ].map((k, i) => (
-            <div key={i} className={`${k.bg} border rounded-xl p-3`}>
+            <div key={i} className={`${k.bg} border rounded-xl p-3 cursor-default group relative`} title={k.tip}>
               <div className="flex items-center gap-1.5 mb-1">
                 <k.icon className={`h-3.5 w-3.5 ${k.color}`} />
                 <span className="text-[10px] text-muted-foreground uppercase font-medium">{k.label}</span>

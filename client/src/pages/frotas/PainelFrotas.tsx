@@ -131,20 +131,20 @@ export default function PainelFrotas() {
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-              <KpiCard icon={Truck} label="Veículos Ativos" value={d.totalVehicles} onClick={() => navigate("/frotas/veiculos")} color="text-cyan-600" bg="bg-cyan-50" />
-              <KpiCard icon={DollarSign} label="Patrimônio FIPE" value={fmt(d.totalFipe)} color="text-green-600" bg="bg-green-50" />
-              <KpiCard icon={TrendingDown} label={anoDash ? `Depreciação ${anoDash}` : "Depreciação Real"} value={fmt(d.depreciacao)} color="text-red-600" bg="bg-red-50" sub={anoDash ? "Estimativa anual" : `Retém ${pctRetidoGlobal}%`} />
-              <KpiCard icon={Gauge} label={anoDash ? `Km Rodado ${anoDash}` : "Km Total Rodado"} value={`${fmtN(Math.round(d.totalKm))} km`} color="text-blue-600" bg="bg-blue-50" sub={anoDash ? (d.kmMetodo === 'odometro' ? "Via odômetro" : d.kmMetodo === 'estimado' ? "Estimado por consumo" : d.kmMetodo === 'misto' ? "Odômetro + estimado" : "Sem dados no período") : undefined} />
-              <KpiCard icon={Fuel} label={anoDash ? `Consumo ${anoDash}` : "Consumo Médio"} value={d.consumoMedio > 0 ? `${d.consumoMedio.toFixed(1)} km/l` : "—"} color="text-amber-600" bg="bg-amber-50" sub={d.totalLitros > 0 ? `${fmtN(Math.round(d.totalLitros))} litros` : undefined} />
-              <KpiCard icon={Clock} label="Idade Média" value={`${d.idadeFrota.toFixed(1)} anos`} color="text-slate-600" bg="bg-slate-50" />
+              <KpiCard icon={Truck} label="Veículos Ativos" value={d.totalVehicles} onClick={() => navigate("/frotas/veiculos")} color="text-cyan-600" bg="bg-cyan-50" tip="Quantidade total de veículos ativos cadastrados na frota" />
+              <KpiCard icon={DollarSign} label="Patrimônio FIPE" value={fmt(d.totalFipe)} color="text-green-600" bg="bg-green-50" tip="Valor de mercado atual de todos os veículos com base na tabela FIPE" />
+              <KpiCard icon={TrendingDown} label={anoDash ? `Depreciação ${anoDash}` : "Depreciação Real"} value={fmt(d.depreciacao)} color="text-red-600" bg="bg-red-50" sub={anoDash ? "Estimativa anual" : `Retém ${pctRetidoGlobal}%`} tip="Diferença entre o valor de compra e o valor FIPE atual — quanto o patrimônio desvalorizou" />
+              <KpiCard icon={Gauge} label={anoDash ? `Km Rodado ${anoDash}` : "Km Total Rodado"} value={`${fmtN(Math.round(d.totalKm))} km`} color="text-blue-600" bg="bg-blue-50" sub={anoDash ? (d.kmMetodo === 'odometro' ? "Via odômetro" : d.kmMetodo === 'estimado' ? "Estimado por consumo" : d.kmMetodo === 'misto' ? "Odômetro + estimado" : "Sem dados no período") : undefined} tip="Quilometragem total percorrida pela frota no período selecionado" />
+              <KpiCard icon={Fuel} label={anoDash ? `Consumo ${anoDash}` : "Consumo Médio"} value={d.consumoMedio > 0 ? `${d.consumoMedio.toFixed(1)} km/l` : "—"} color="text-amber-600" bg="bg-amber-50" sub={d.totalLitros > 0 ? `${fmtN(Math.round(d.totalLitros))} litros` : undefined} tip="Média de km percorridos por litro de combustível — quanto maior, mais econômica a frota" />
+              <KpiCard icon={Clock} label="Idade Média" value={`${d.idadeFrota.toFixed(1)} anos`} color="text-slate-600" bg="bg-slate-50" tip="Idade média dos veículos da frota com base no ano de fabricação" />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
-              <KpiCard icon={Wrench} label={anoDash ? `Manutenção ${anoDash}` : "Manutenção"} value={fmt(d.totalManutCusto)} onClick={() => navigate("/frotas/manutencoes")} color="text-emerald-600" bg="bg-emerald-50" sub={`${d.veiculosEmManutencao} em andamento`} />
-              <KpiCard icon={Fuel} label={anoDash ? `Combustível ${anoDash}` : "Combustível"} value={fmt(d.totalCombustivel)} onClick={() => navigate("/frotas/combustivel")} color="text-blue-600" bg="bg-blue-50" />
-              <KpiCard icon={AlertTriangle} label={anoDash ? `Multas ${anoDash}` : "Multas"} value={fmt(d.totalMultas)} onClick={() => navigate("/frotas/multas")} color="text-red-600" bg="bg-red-50" sub={d.multasPendentes > 0 ? `${d.multasPendentes} pendentes` : "Nenhuma pendente"} />
-              <KpiCard icon={Receipt} label={anoDash ? `IPVA ${anoDash}` : "IPVA Pendente"} value={fmt(d.totalIpvaPendente)} onClick={() => navigate("/frotas/ipva")} color="text-purple-600" bg="bg-purple-50" />
-              <KpiCard icon={Activity} label={anoDash ? `Custo/km ${anoDash}` : "Custo/km (M+C)"} value={d.custoKm > 0 ? `R$ ${d.custoKm.toFixed(2)}/km` : "—"} color="text-indigo-600" bg="bg-indigo-50" sub={`Oper. total: ${fmt(d.custoOperTotal)}`} />
+              <KpiCard icon={Wrench} label={anoDash ? `Manutenção ${anoDash}` : "Manutenção"} value={fmt(d.totalManutCusto)} onClick={() => navigate("/frotas/manutencoes")} color="text-emerald-600" bg="bg-emerald-50" sub={`${d.veiculosEmManutencao} em andamento`} tip="Total gasto com manutenções preventivas e corretivas — clique para ver detalhes" />
+              <KpiCard icon={Fuel} label={anoDash ? `Combustível ${anoDash}` : "Combustível"} value={fmt(d.totalCombustivel)} onClick={() => navigate("/frotas/combustivel")} color="text-blue-600" bg="bg-blue-50" tip="Total gasto com abastecimentos da frota — clique para ver registros" />
+              <KpiCard icon={AlertTriangle} label={anoDash ? `Multas ${anoDash}` : "Multas"} value={fmt(d.totalMultas)} onClick={() => navigate("/frotas/multas")} color="text-red-600" bg="bg-red-50" sub={d.multasPendentes > 0 ? `${d.multasPendentes} pendentes` : "Nenhuma pendente"} tip="Total de multas de trânsito registradas no período — clique para gerenciar" />
+              <KpiCard icon={Receipt} label={anoDash ? `IPVA ${anoDash}` : "IPVA Pendente"} value={fmt(d.totalIpvaPendente)} onClick={() => navigate("/frotas/ipva")} color="text-purple-600" bg="bg-purple-50" tip="Valor pendente de IPVA a pagar — clique para ver situação por veículo" />
+              <KpiCard icon={Activity} label={anoDash ? `Custo/km ${anoDash}` : "Custo/km (M+C)"} value={d.custoKm > 0 ? `R$ ${d.custoKm.toFixed(2)}/km` : "—"} color="text-indigo-600" bg="bg-indigo-50" sub={`Oper. total: ${fmt(d.custoOperTotal)}`} tip="Custo por quilômetro rodado (manutenção + combustível) — quanto menor, mais eficiente a operação" />
             </div>
 
             <Tabs defaultValue="visao-geral" className="space-y-4">
@@ -1649,12 +1649,12 @@ export default function PainelFrotas() {
 }
 
 function KpiCard({
-  icon: Icon, label, value, onClick, color, bg, sub,
+  icon: Icon, label, value, onClick, color, bg, sub, tip,
 }: {
-  icon: any; label: string; value: any; onClick?: () => void; color: string; bg: string; sub?: string;
+  icon: any; label: string; value: any; onClick?: () => void; color: string; bg: string; sub?: string; tip?: string;
 }) {
   return (
-    <Card className={`${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`} onClick={onClick}>
+    <Card className={`${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`} onClick={onClick} title={tip}>
       <CardContent className="p-4">
         <div className="flex items-center gap-3">
           <div className={`h-10 w-10 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
