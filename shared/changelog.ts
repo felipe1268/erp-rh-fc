@@ -8089,4 +8089,23 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-06 01:30:00",
   },
+  {
+    version: 1038,
+    titulo: "Raio-X do Veículo + Checklist Veicular Mensal",
+    descricao:
+      "Novo módulo 'Raio-X do Veículo': ficha completa com histórico consolidado de manutenções, combustível, " +
+      "pedágios, multas, seguros, IPVA, licenciamento, lavagens, estacionamentos, checklists e compras vinculadas. " +
+      "Score de Saúde (0-100) calculado automaticamente. TCO (Custo Total de Propriedade) com gráfico de composição. " +
+      "Timeline cronológica de todos os eventos com filtros por tipo. Alertas inteligentes: troca de óleo (10.000 km), " +
+      "rodízio de pneus, revisão preventiva, documentos vencidos. " +
+      "Novo módulo 'Checklist Veicular': templates personalizáveis com 9 categorias padrão (Pneus, Fluidos, Iluminação, " +
+      "Carroceria, Interior, Segurança, Motor, Freios, Documentação), preenchimento com Conforme/NC/NA, registro obrigatório " +
+      "de km (atualiza veículo automaticamente), score por checklist. Gerador de template padrão com 39 itens. " +
+      "Novas tabelas: fleet_checklist_templates, fleet_checklist_template_items, fleet_checklists, fleet_checklist_responses, " +
+      "fleet_washes, fleet_parking.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 02:00:00",
+  },
 ];

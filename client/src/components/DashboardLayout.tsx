@@ -516,6 +516,13 @@ const menuSectionsFrotas: MenuSection[] = [
     ],
   },
   {
+    title: "Inspeções",
+    items: [
+      { icon: UserSearch, label: "Raio-X do Veículo", path: "/frotas/raio-x" },
+      { icon: ClipboardCheck, label: "Checklist Veicular", path: "/frotas/checklist" },
+    ],
+  },
+  {
     title: "Rastreamento",
     items: [
       { icon: Target, label: "Mapa e Trajetos", path: "/frotas/rastreamento" },

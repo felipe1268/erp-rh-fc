@@ -299,6 +299,88 @@ async function ensureFleetTables() {
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_checklist_templates (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      nome VARCHAR(255) NOT NULL,
+      descricao TEXT,
+      tipo_veiculo VARCHAR(50),
+      ativo BOOLEAN DEFAULT TRUE,
+      criado_por VARCHAR(255),
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    )
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_checklist_template_items (
+      id SERIAL PRIMARY KEY,
+      template_id INTEGER NOT NULL REFERENCES fleet_checklist_templates(id) ON DELETE CASCADE,
+      categoria VARCHAR(100) NOT NULL,
+      item VARCHAR(255) NOT NULL,
+      descricao TEXT,
+      obrigatorio BOOLEAN DEFAULT TRUE,
+      ordem INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    )
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_checklists (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      vehicle_id INTEGER NOT NULL,
+      template_id INTEGER REFERENCES fleet_checklist_templates(id),
+      km_atual INTEGER,
+      data_checklist DATE NOT NULL DEFAULT CURRENT_DATE,
+      status VARCHAR(30) DEFAULT 'pendente',
+      score NUMERIC(5,2),
+      observacoes TEXT,
+      preenchido_por VARCHAR(255),
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    )
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_checklist_responses (
+      id SERIAL PRIMARY KEY,
+      checklist_id INTEGER NOT NULL REFERENCES fleet_checklists(id) ON DELETE CASCADE,
+      template_item_id INTEGER REFERENCES fleet_checklist_template_items(id),
+      categoria VARCHAR(100) NOT NULL,
+      item VARCHAR(255) NOT NULL,
+      resposta VARCHAR(20) NOT NULL DEFAULT 'na',
+      observacoes TEXT,
+      foto_url TEXT,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    )
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_washes (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      vehicle_id INTEGER NOT NULL,
+      data DATE NOT NULL DEFAULT CURRENT_DATE,
+      tipo VARCHAR(50) DEFAULT 'completa',
+      valor NUMERIC(10,2),
+      local VARCHAR(255),
+      observacoes TEXT,
+      criado_por VARCHAR(255),
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    )
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_parking (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      vehicle_id INTEGER NOT NULL,
+      data DATE NOT NULL DEFAULT CURRENT_DATE,
+      local VARCHAR(255),
+      valor NUMERIC(10,2),
+      horas NUMERIC(5,2),
+      observacoes TEXT,
+      criado_por VARCHAR(255),
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    )
+  `);
 }
 let tablesReady = false;
 
@@ -4205,5 +4287,412 @@ Sempre retorne JSON válido, sem markdown.`;
       const db = await getDb();
       await db.execute(sql`DELETE FROM fleet_driver_aliases WHERE id = ${input.id} AND company_id = ${input.companyId}`);
       return { ok: true };
+    }),
+
+  getVehicleRaioX: protectedProcedure
+    .input(z.object({ companyId: z.number(), vehicleId: z.number() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, vehicleId } = input;
+
+      const [vehRes, maintRes, fuelRes, tollRes, finesRes, ipvaRes, licRes, insRes, washRes, parkRes, checkRes, scRes] = await Promise.all([
+        db.execute(sql`SELECT * FROM vehicles WHERE id = ${vehicleId} AND "companyId" = ${companyId}`),
+        db.execute(sql`SELECT fm.*, COALESCE((SELECT SUM(valor_total) FROM fleet_maintenance_items mi WHERE mi.maintenance_id = fm.id AND mi.categoria = 'peca'), 0) as total_pecas, COALESCE((SELECT SUM(valor_total) FROM fleet_maintenance_items mi WHERE mi.maintenance_id = fm.id AND mi.categoria = 'servico'), 0) as total_servico FROM fleet_maintenances fm WHERE fm.vehicle_id = ${vehicleId} AND fm.company_id = ${companyId} ORDER BY fm.data_manutencao DESC`),
+        db.execute(sql`SELECT * FROM fleet_fuel_records WHERE vehicle_id = ${vehicleId} AND company_id = ${companyId} ORDER BY data DESC`),
+        db.execute(sql`SELECT * FROM fleet_toll_records WHERE vehicle_id = ${vehicleId} AND company_id = ${companyId} ORDER BY data DESC`),
+        db.execute(sql`SELECT * FROM fleet_fines WHERE vehicle_id = ${vehicleId} AND company_id = ${companyId} ORDER BY data_infracao DESC`),
+        db.execute(sql`SELECT * FROM fleet_ipva WHERE vehicle_id = ${vehicleId} AND company_id = ${companyId} ORDER BY ano_referencia DESC`),
+        db.execute(sql`SELECT * FROM fleet_licensing WHERE vehicle_id = ${vehicleId} AND company_id = ${companyId} ORDER BY ano_exercicio DESC`),
+        db.execute(sql`SELECT * FROM fleet_insurance WHERE vehicle_id = ${vehicleId} AND company_id = ${companyId} ORDER BY data_inicio DESC`),
+        db.execute(sql`SELECT * FROM fleet_washes WHERE vehicle_id = ${vehicleId} AND company_id = ${companyId} ORDER BY data DESC`),
+        db.execute(sql`SELECT * FROM fleet_parking WHERE vehicle_id = ${vehicleId} AND company_id = ${companyId} ORDER BY data DESC`),
+        db.execute(sql`SELECT fc.*, (SELECT COUNT(*) FROM fleet_checklist_responses r WHERE r.checklist_id = fc.id AND r.resposta = 'conforme')::int as ok_count, (SELECT COUNT(*) FROM fleet_checklist_responses r WHERE r.checklist_id = fc.id)::int as total_count FROM fleet_checklists fc WHERE fc.vehicle_id = ${vehicleId} AND fc.company_id = ${companyId} ORDER BY fc.data_checklist DESC`),
+        db.execute(sql`SELECT cs.id, cs.numero_sc, cs.titulo, cs.status, cs.created_at, cs.vehicle_id FROM compras_solicitacoes cs WHERE cs.vehicle_id = ${vehicleId} AND cs.company_id = ${companyId} ORDER BY cs.created_at DESC`),
+      ]);
+
+      const r = (res: any) => (res as any).rows || res || [];
+      const vehicle = r(vehRes)[0] || null;
+      const manutencoes = r(maintRes);
+      const combustivel = r(fuelRes);
+      const pedagios = r(tollRes);
+      const multas = r(finesRes);
+      const ipva = r(ipvaRes);
+      const licenciamento = r(licRes);
+      const seguros = r(insRes);
+      const lavagens = r(washRes);
+      const estacionamentos = r(parkRes);
+      const checklists = r(checkRes);
+      const compras = r(scRes);
+
+      const n = (v: any) => Number(v) || 0;
+      const custoManutencao = manutencoes.reduce((s: number, m: any) => s + n(m.custo), 0);
+      const custoCombustivel = combustivel.reduce((s: number, f: any) => s + n(f.valor_total), 0);
+      const custoPedagios = pedagios.reduce((s: number, t: any) => s + n(t.valor), 0);
+      const custoMultas = multas.reduce((s: number, m: any) => s + n(m.valor_original), 0);
+      const custoIpva = ipva.reduce((s: number, i: any) => s + n(i.valor_total), 0);
+      const custoLicenciamento = licenciamento.reduce((s: number, l: any) => s + n(l.valor), 0);
+      const custoSeguros = seguros.reduce((s: number, s2: any) => s + n(s2.valor_premio), 0);
+      const custoLavagens = lavagens.reduce((s: number, l: any) => s + n(l.valor), 0);
+      const custoEstacionamentos = estacionamentos.reduce((s: number, e: any) => s + n(e.valor), 0);
+      const tco = custoManutencao + custoCombustivel + custoPedagios + custoMultas + custoIpva + custoLicenciamento + custoSeguros + custoLavagens + custoEstacionamentos;
+
+      let healthScore = 100;
+      const ultimoCheck = checklists[0];
+      if (!ultimoCheck) healthScore -= 15;
+      else {
+        const diasDesdeCheck = Math.floor((Date.now() - new Date(ultimoCheck.data_checklist).getTime()) / 86400000);
+        if (diasDesdeCheck > 45) healthScore -= 15;
+        else if (diasDesdeCheck > 30) healthScore -= 8;
+      }
+      const mantPendentes = manutencoes.filter((m: any) => m.status === 'agendada' || m.status === 'em_andamento');
+      if (mantPendentes.length > 0) healthScore -= 5 * mantPendentes.length;
+      const mantAtrasadas = manutencoes.filter((m: any) => m.data_proxima && new Date(m.data_proxima) < new Date());
+      if (mantAtrasadas.length > 0) healthScore -= 10 * mantAtrasadas.length;
+      const multasPendentes = multas.filter((m: any) => m.status === 'pendente');
+      if (multasPendentes.length > 0) healthScore -= 5 * multasPendentes.length;
+      const ipvaPendente = ipva.filter((i: any) => i.status === 'pendente');
+      if (ipvaPendente.length > 0) healthScore -= 10;
+      const licPendente = licenciamento.filter((l: any) => l.status === 'pendente');
+      if (licPendente.length > 0) healthScore -= 10;
+      const seguroVencido = seguros.filter((s: any) => s.status === 'vencida' || (s.data_fim && new Date(s.data_fim) < new Date()));
+      if (seguroVencido.length > 0) healthScore -= 15;
+      healthScore = Math.max(0, Math.min(100, healthScore));
+
+      const alertas: { tipo: string; mensagem: string; nivel: string }[] = [];
+      if (mantAtrasadas.length > 0) alertas.push({ tipo: 'manutencao', mensagem: `${mantAtrasadas.length} manutenção(ões) atrasada(s)`, nivel: 'critico' });
+      if (vehicle?.km_atual) {
+        const km = n(vehicle.km_atual);
+        const ultimaTrocaOleo = manutencoes.find((m: any) => m.descricao?.toLowerCase().includes('óleo') || m.descricao?.toLowerCase().includes('oleo'));
+        if (ultimaTrocaOleo) {
+          const kmDesdeOleo = km - n(ultimaTrocaOleo.km_na_manutencao);
+          if (kmDesdeOleo > 10000) alertas.push({ tipo: 'oleo', mensagem: `Troca de óleo: ${kmDesdeOleo.toLocaleString('pt-BR')} km desde última troca`, nivel: 'critico' });
+          else if (kmDesdeOleo > 8000) alertas.push({ tipo: 'oleo', mensagem: `Troca de óleo: ${kmDesdeOleo.toLocaleString('pt-BR')} km desde última troca (próximo)`, nivel: 'atencao' });
+        }
+        const ultimoRodizio = manutencoes.find((m: any) => m.descricao?.toLowerCase().includes('pneu') || m.descricao?.toLowerCase().includes('rodízio') || m.descricao?.toLowerCase().includes('rodizio'));
+        if (ultimoRodizio) {
+          const kmDesdeRodizio = km - n(ultimoRodizio.km_na_manutencao);
+          if (kmDesdeRodizio > 10000) alertas.push({ tipo: 'pneus', mensagem: `Rodízio de pneus: ${kmDesdeRodizio.toLocaleString('pt-BR')} km desde último rodízio`, nivel: 'atencao' });
+        }
+        const ultimaRevisao = manutencoes.find((m: any) => m.tipo === 'preventiva');
+        if (ultimaRevisao) {
+          const kmDesdeRevisao = km - n(ultimaRevisao.km_na_manutencao);
+          if (kmDesdeRevisao > 15000) alertas.push({ tipo: 'revisao', mensagem: `Revisão preventiva: ${kmDesdeRevisao.toLocaleString('pt-BR')} km desde última`, nivel: 'atencao' });
+        }
+      }
+      if (multasPendentes.length > 0) alertas.push({ tipo: 'multa', mensagem: `${multasPendentes.length} multa(s) pendente(s)`, nivel: 'atencao' });
+      if (ipvaPendente.length > 0) alertas.push({ tipo: 'ipva', mensagem: 'IPVA pendente de pagamento', nivel: 'atencao' });
+      if (licPendente.length > 0) alertas.push({ tipo: 'licenciamento', mensagem: 'Licenciamento pendente', nivel: 'critico' });
+      if (seguroVencido.length > 0) alertas.push({ tipo: 'seguro', mensagem: 'Seguro vencido ou próximo do vencimento', nivel: 'critico' });
+      if (!ultimoCheck || (Date.now() - new Date(ultimoCheck.data_checklist).getTime()) > 35 * 86400000) {
+        alertas.push({ tipo: 'checklist', mensagem: 'Checklist mensal pendente', nivel: 'atencao' });
+      }
+
+      const timeline: any[] = [];
+      manutencoes.forEach((m: any) => timeline.push({ data: m.data_manutencao, tipo: 'manutencao', descricao: m.descricao, valor: n(m.custo), id: m.id }));
+      combustivel.forEach((f: any) => timeline.push({ data: f.data, tipo: 'combustivel', descricao: `${n(f.litros)}L ${f.tipo_combustivel || ''} — ${f.posto || ''}`, valor: n(f.valor_total), id: f.id }));
+      pedagios.forEach((t: any) => timeline.push({ data: t.data, tipo: 'pedagio', descricao: t.descricao || t.praca_pedagio || 'Pedágio', valor: n(t.valor), id: t.id }));
+      multas.forEach((m: any) => timeline.push({ data: m.data_infracao, tipo: 'multa', descricao: m.descricao, valor: n(m.valor_original), id: m.id }));
+      lavagens.forEach((l: any) => timeline.push({ data: l.data, tipo: 'lavagem', descricao: `Lavagem ${l.tipo || ''} — ${l.local || ''}`, valor: n(l.valor), id: l.id }));
+      estacionamentos.forEach((e: any) => timeline.push({ data: e.data, tipo: 'estacionamento', descricao: e.local || 'Estacionamento', valor: n(e.valor), id: e.id }));
+      checklists.forEach((c: any) => timeline.push({ data: c.data_checklist, tipo: 'checklist', descricao: `Checklist — ${c.motorista_nome || 'Motorista'} — ${c.km_atual || '?'} km`, valor: 0, id: c.id }));
+      seguros.forEach((s: any) => timeline.push({ data: s.data_inicio, tipo: 'seguro', descricao: `Seguro ${s.seguradora} — Apólice ${s.numero_apolice || ''}`, valor: n(s.valor_premio), id: s.id }));
+      ipva.forEach((i: any) => timeline.push({ data: i.data_vencimento || `${i.ano_referencia}-01-01`, tipo: 'ipva', descricao: `IPVA ${i.ano_referencia}`, valor: n(i.valor_total), id: i.id }));
+      licenciamento.forEach((l: any) => timeline.push({ data: l.data_vencimento || `${l.ano_exercicio}-01-01`, tipo: 'licenciamento', descricao: `Licenciamento ${l.ano_exercicio}`, valor: n(l.valor), id: l.id }));
+      compras.forEach((c: any) => timeline.push({ data: c.created_at?.split('T')[0] || '', tipo: 'compra', descricao: `SC ${c.numero_sc} — ${c.titulo || ''}`, valor: 0, id: c.id }));
+      timeline.sort((a: any, b: any) => (b.data || '').localeCompare(a.data || ''));
+
+      return {
+        vehicle,
+        manutencoes,
+        combustivel,
+        pedagios,
+        multas,
+        ipva,
+        licenciamento,
+        seguros,
+        lavagens,
+        estacionamentos,
+        checklists,
+        compras,
+        tco: {
+          total: tco,
+          manutencao: custoManutencao,
+          combustivel: custoCombustivel,
+          pedagios: custoPedagios,
+          multas: custoMultas,
+          ipva: custoIpva,
+          licenciamento: custoLicenciamento,
+          seguros: custoSeguros,
+          lavagens: custoLavagens,
+          estacionamentos: custoEstacionamentos,
+        },
+        healthScore,
+        alertas,
+        timeline: timeline.slice(0, 200),
+      };
+    }),
+
+  listChecklistTemplates: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const res = await db.execute(sql`SELECT t.*, (SELECT COUNT(*)::int FROM fleet_checklist_template_items WHERE template_id = t.id) as items_count FROM fleet_checklist_templates t WHERE t.company_id = ${input.companyId} ORDER BY t.nome`);
+      return (res as any).rows || [];
+    }),
+
+  getChecklistTemplate: protectedProcedure
+    .input(z.object({ companyId: z.number(), templateId: z.number() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const tRes = await db.execute(sql`SELECT * FROM fleet_checklist_templates WHERE id = ${input.templateId} AND company_id = ${input.companyId}`);
+      const template = ((tRes as any).rows || [])[0];
+      if (!template) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado" });
+      const iRes = await db.execute(sql`SELECT * FROM fleet_checklist_template_items WHERE template_id = ${input.templateId} ORDER BY categoria, ordem`);
+      return { ...template, items: (iRes as any).rows || [] };
+    }),
+
+  createChecklistTemplate: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      nome: z.string(),
+      descricao: z.string().optional(),
+      tipoVeiculo: z.string().optional(),
+      vehicleId: z.number().optional(),
+      periodicidade: z.string().default('mensal'),
+      items: z.array(z.object({
+        categoria: z.string(),
+        descricao: z.string(),
+        tipoResposta: z.string().default('conforme_nc'),
+        obrigatorio: z.boolean().default(true),
+        fotoObrigatoria: z.boolean().default(false),
+        ordem: z.number().default(0),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const userName = (ctx as any).user?.name || 'Sistema';
+      const tRes = await db.execute(sql`INSERT INTO fleet_checklist_templates (company_id, vehicle_id, nome, descricao, tipo_veiculo, periodicidade, criado_por) VALUES (${input.companyId}, ${input.vehicleId ?? null}, ${input.nome}, ${input.descricao ?? null}, ${input.tipoVeiculo ?? null}, ${input.periodicidade}, ${userName}) RETURNING *`);
+      const template = ((tRes as any).rows || [])[0];
+      if (template && input.items.length > 0) {
+        for (const item of input.items) {
+          await db.execute(sql`INSERT INTO fleet_checklist_template_items (template_id, categoria, descricao, tipo_resposta, obrigatorio, foto_obrigatoria, ordem) VALUES (${template.id}, ${item.categoria}, ${item.descricao}, ${item.tipoResposta}, ${item.obrigatorio}, ${item.fotoObrigatoria}, ${item.ordem})`);
+        }
+      }
+      return template;
+    }),
+
+  updateChecklistTemplate: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      templateId: z.number(),
+      nome: z.string().optional(),
+      descricao: z.string().optional(),
+      tipoVeiculo: z.string().optional(),
+      vehicleId: z.number().optional(),
+      periodicidade: z.string().optional(),
+      ativo: z.boolean().optional(),
+      items: z.array(z.object({
+        categoria: z.string(),
+        descricao: z.string(),
+        tipoResposta: z.string().default('conforme_nc'),
+        obrigatorio: z.boolean().default(true),
+        fotoObrigatoria: z.boolean().default(false),
+        ordem: z.number().default(0),
+      })).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      await db.execute(sql`UPDATE fleet_checklist_templates SET
+        nome = COALESCE(${input.nome ?? null}, nome),
+        descricao = COALESCE(${input.descricao ?? null}, descricao),
+        tipo_veiculo = COALESCE(${input.tipoVeiculo ?? null}, tipo_veiculo),
+        vehicle_id = COALESCE(${input.vehicleId ?? null}, vehicle_id),
+        periodicidade = COALESCE(${input.periodicidade ?? null}, periodicidade),
+        ativo = COALESCE(${input.ativo ?? null}, ativo),
+        updated_at = NOW()
+        WHERE id = ${input.templateId} AND company_id = ${input.companyId}`);
+      if (input.items) {
+        await db.execute(sql`DELETE FROM fleet_checklist_template_items WHERE template_id = ${input.templateId}`);
+        for (const item of input.items) {
+          await db.execute(sql`INSERT INTO fleet_checklist_template_items (template_id, categoria, descricao, tipo_resposta, obrigatorio, foto_obrigatoria, ordem) VALUES (${input.templateId}, ${item.categoria}, ${item.descricao}, ${item.tipoResposta}, ${item.obrigatorio}, ${item.fotoObrigatoria}, ${item.ordem})`);
+        }
+      }
+      return { ok: true };
+    }),
+
+  deleteChecklistTemplate: protectedProcedure
+    .input(z.object({ companyId: z.number(), templateId: z.number() }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      await db.execute(sql`DELETE FROM fleet_checklist_templates WHERE id = ${input.templateId} AND company_id = ${input.companyId}`);
+      return { ok: true };
+    }),
+
+  listChecklists: protectedProcedure
+    .input(z.object({ companyId: z.number(), vehicleId: z.number().optional(), status: z.string().optional() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      let q = sql`SELECT fc.*, v.placa, v.modelo, v.marca, t.nome as template_nome,
+        (SELECT COUNT(*) FROM fleet_checklist_responses r WHERE r.checklist_id = fc.id AND r.resposta = 'conforme')::int as ok_count,
+        (SELECT COUNT(*) FROM fleet_checklist_responses r WHERE r.checklist_id = fc.id)::int as total_count
+        FROM fleet_checklists fc
+        JOIN vehicles v ON v.id = fc.vehicle_id
+        LEFT JOIN fleet_checklist_templates t ON t.id = fc.template_id
+        WHERE fc.company_id = ${input.companyId}`;
+      if (input.vehicleId) q = sql`${q} AND fc.vehicle_id = ${input.vehicleId}`;
+      if (input.status) q = sql`${q} AND fc.status = ${input.status}`;
+      q = sql`${q} ORDER BY fc.data_checklist DESC`;
+      return ((await db.execute(q)) as any).rows || [];
+    }),
+
+  createChecklist: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      vehicleId: z.number(),
+      templateId: z.number().optional(),
+      motoristaNome: z.string().optional(),
+      motoristaId: z.number().optional(),
+      dataChecklist: z.string(),
+      kmAtual: z.number().optional(),
+      observacoes: z.string().optional(),
+      fotoUrls: z.string().optional(),
+      videoUrls: z.string().optional(),
+      responses: z.array(z.object({
+        templateItemId: z.number().optional(),
+        categoria: z.string(),
+        descricao: z.string(),
+        resposta: z.string().default('conforme'),
+        observacao: z.string().optional(),
+        fotoUrl: z.string().optional(),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const userName = (ctx as any).user?.name || 'Sistema';
+      const totalItems = input.responses.length;
+      const conformeItems = input.responses.filter(r => r.resposta === 'conforme').length;
+      const scoreGeral = totalItems > 0 ? Math.round((conformeItems / totalItems) * 100 * 10) / 10 : 100;
+
+      const cRes = await db.execute(sql`INSERT INTO fleet_checklists (company_id, vehicle_id, template_id, motorista_id, motorista_nome, data_checklist, km_atual, status, observacoes, foto_urls, video_urls, score_geral, criado_por)
+        VALUES (${input.companyId}, ${input.vehicleId}, ${input.templateId ?? null}, ${input.motoristaId ?? null}, ${input.motoristaNome ?? null}, ${input.dataChecklist}, ${input.kmAtual ?? null}, 'preenchido', ${input.observacoes ?? null}, ${input.fotoUrls ?? null}, ${input.videoUrls ?? null}, ${String(scoreGeral)}, ${userName}) RETURNING *`);
+      const checklist = ((cRes as any).rows || [])[0];
+
+      if (checklist) {
+        for (const resp of input.responses) {
+          await db.execute(sql`INSERT INTO fleet_checklist_responses (checklist_id, template_item_id, categoria, descricao, resposta, observacao, foto_url) VALUES (${checklist.id}, ${resp.templateItemId ?? null}, ${resp.categoria}, ${resp.descricao}, ${resp.resposta}, ${resp.observacao ?? null}, ${resp.fotoUrl ?? null})`);
+        }
+        if (input.kmAtual) {
+          await db.execute(sql`UPDATE vehicles SET km_atual = ${String(input.kmAtual)}, updated_at = NOW() WHERE id = ${input.vehicleId} AND company_id = ${input.companyId}`);
+        }
+      }
+      return checklist;
+    }),
+
+  deleteChecklist: protectedProcedure
+    .input(z.object({ companyId: z.number(), checklistId: z.number() }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      await db.execute(sql`DELETE FROM fleet_checklists WHERE id = ${input.checklistId} AND company_id = ${input.companyId}`);
+      return { ok: true };
+    }),
+
+  getChecklistDetail: protectedProcedure
+    .input(z.object({ companyId: z.number(), checklistId: z.number() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const cRes = await db.execute(sql`SELECT fc.*, v.placa, v.modelo, v.marca FROM fleet_checklists fc JOIN vehicles v ON v.id = fc.vehicle_id WHERE fc.id = ${input.checklistId} AND fc.company_id = ${input.companyId}`);
+      const checklist = ((cRes as any).rows || [])[0];
+      if (!checklist) throw new TRPCError({ code: "NOT_FOUND", message: "Checklist não encontrado" });
+      const rRes = await db.execute(sql`SELECT * FROM fleet_checklist_responses WHERE checklist_id = ${input.checklistId} ORDER BY categoria, id`);
+      return { ...checklist, responses: (rRes as any).rows || [] };
+    }),
+
+  createWash: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), vehicleId: z.number(), data: z.string(), tipo: z.string().default('completa'),
+      local: z.string().optional(), valor: z.number().default(0), kmAtual: z.number().optional(), observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const userName = (ctx as any).user?.name || 'Sistema';
+      const res = await db.execute(sql`INSERT INTO fleet_washes (company_id, vehicle_id, data, tipo, local, valor, km_atual, observacoes, criado_por) VALUES (${input.companyId}, ${input.vehicleId}, ${input.data}, ${input.tipo}, ${input.local ?? null}, ${String(input.valor)}, ${input.kmAtual ? String(input.kmAtual) : null}, ${input.observacoes ?? null}, ${userName}) RETURNING *`);
+      return ((res as any).rows || [])[0];
+    }),
+
+  deleteWash: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number() }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      await db.execute(sql`DELETE FROM fleet_washes WHERE id = ${input.id} AND company_id = ${input.companyId}`);
+      return { ok: true };
+    }),
+
+  createParking: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), vehicleId: z.number(), data: z.string(), local: z.string().optional(),
+      tipo: z.string().default('estacionamento'), valor: z.number().default(0), horas: z.number().optional(), observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const userName = (ctx as any).user?.name || 'Sistema';
+      const res = await db.execute(sql`INSERT INTO fleet_parking (company_id, vehicle_id, data, local, tipo, valor, horas, observacoes, criado_por) VALUES (${input.companyId}, ${input.vehicleId}, ${input.data}, ${input.local ?? null}, ${input.tipo}, ${String(input.valor)}, ${input.horas ? String(input.horas) : null}, ${input.observacoes ?? null}, ${userName}) RETURNING *`);
+      return ((res as any).rows || [])[0];
+    }),
+
+  deleteParking: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number() }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      await db.execute(sql`DELETE FROM fleet_parking WHERE id = ${input.id} AND company_id = ${input.companyId}`);
+      return { ok: true };
+    }),
+
+  generateDefaultChecklistTemplate: protectedProcedure
+    .input(z.object({ companyId: z.number(), tipoVeiculo: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const userName = (ctx as any).user?.name || 'Sistema';
+      const tipo = input.tipoVeiculo || 'Veículo Leve';
+
+      const items = [
+        { cat: 'Pneus', items: ['Estado geral dos pneus (desgaste, bolhas, cortes)', 'Calibragem dos pneus', 'Estepe em boas condições', 'Rodas sem amassados ou trincas'] },
+        { cat: 'Fluidos', items: ['Nível de óleo do motor', 'Nível do fluido de freio', 'Nível do líquido de arrefecimento', 'Nível do fluido da direção hidráulica', 'Nível do fluido do limpador de parabrisa'] },
+        { cat: 'Iluminação', items: ['Faróis (baixo e alto)', 'Lanternas traseiras', 'Setas (dianteiras e traseiras)', 'Luz de freio', 'Luz de ré', 'Farol de neblina'] },
+        { cat: 'Carroceria', items: ['Pintura e lataria (riscos, amassados)', 'Para-brisas e vidros (trincas, rachaduras)', 'Retrovisores (estado e ajuste)', 'Limpadores de parabrisa', 'Fechaduras e travas'] },
+        { cat: 'Interior', items: ['Painel de instrumentos (luzes de alerta)', 'Ar condicionado funcionando', 'Cintos de segurança', 'Bancos e estofamentos', 'Tapetes e assoalho'] },
+        { cat: 'Segurança', items: ['Triângulo de sinalização', 'Extintor de incêndio (validade)', 'Macaco e chave de roda', 'Kit de primeiros socorros', 'Buzina funcionando'] },
+        { cat: 'Motor', items: ['Ruídos anormais no motor', 'Vazamentos visíveis', 'Correia do motor (estado visual)', 'Bateria (terminais e carga)'] },
+        { cat: 'Freios', items: ['Eficiência da frenagem', 'Freio de estacionamento', 'Ruídos ao frear', 'Curso do pedal de freio'] },
+        { cat: 'Documentação', items: ['CRLV em dia', 'Seguro obrigatório', 'CNH do motorista válida', 'Autorização de condução'] },
+      ];
+
+      const tRes = await db.execute(sql`INSERT INTO fleet_checklist_templates (company_id, nome, descricao, tipo_veiculo, periodicidade, criado_por) VALUES (${input.companyId}, ${'Inspeção Mensal — ' + tipo}, ${'Checklist padrão de inspeção mensal para ' + tipo + '. Categorias: pneus, fluidos, iluminação, carroceria, interior, segurança, motor, freios, documentação.'}, ${tipo}, 'mensal', ${userName}) RETURNING *`);
+      const template = ((tRes as any).rows || [])[0];
+
+      if (template) {
+        let ordem = 0;
+        for (const cat of items) {
+          for (const desc of cat.items) {
+            await db.execute(sql`INSERT INTO fleet_checklist_template_items (template_id, categoria, descricao, tipo_resposta, obrigatorio, foto_obrigatoria, ordem) VALUES (${template.id}, ${cat.cat}, ${desc}, 'conforme_nc', true, false, ${ordem})`);
+            ordem++;
+          }
+        }
+      }
+      return template;
     }),
 });
