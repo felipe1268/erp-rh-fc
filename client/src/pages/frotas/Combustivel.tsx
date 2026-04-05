@@ -34,6 +34,8 @@ export default function Combustivel() {
   const [search, setSearch] = useState("");
   const [importResult, setImportResult] = useState<any>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState<number | null>(null);
+  const [pdfProgressLabel, setPdfProgressLabel] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
 
@@ -112,13 +114,59 @@ export default function Combustivel() {
       toast.error("Arquivo muito grande (máx. 10MB)");
       return;
     }
+
+    setPdfProgress(0);
+    setPdfProgressLabel("Lendo arquivo...");
+
     const reader = new FileReader();
+    reader.onprogress = (ev) => {
+      if (ev.lengthComputable && ev.total > 0) {
+        const pct = Math.round((ev.loaded / ev.total) * 30);
+        setPdfProgress(pct);
+      }
+    };
     reader.onload = (ev) => {
+      setPdfProgress(30);
+      setPdfProgressLabel("Preparando envio...");
+
       const result = ev.target?.result as ArrayBuffer;
       const base64 = btoa(
         new Uint8Array(result).reduce((data, byte) => data + String.fromCharCode(byte), '')
       );
-      importPdfMut.mutate({ companyId: cId, pdfBase64: base64, criadoPor: user?.name || "" });
+
+      setPdfProgress(40);
+      setPdfProgressLabel("Enviando ao servidor...");
+
+      let progressInterval: ReturnType<typeof setInterval>;
+      let current = 40;
+      progressInterval = setInterval(() => {
+        current = Math.min(current + 2, 85);
+        setPdfProgress(current);
+        if (current >= 60 && current < 85) {
+          setPdfProgressLabel("Processando PDF...");
+        }
+      }, 300);
+
+      importPdfMut.mutate(
+        { companyId: cId, pdfBase64: base64, criadoPor: user?.name || "" },
+        {
+          onSuccess: () => {
+            clearInterval(progressInterval);
+            setPdfProgress(95);
+            setPdfProgressLabel("Finalizando...");
+            setTimeout(() => {
+              setPdfProgress(100);
+              setPdfProgressLabel("Concluído!");
+              setTimeout(() => { setPdfProgress(null); setPdfProgressLabel(""); }, 800);
+            }, 400);
+          },
+          onError: () => {
+            clearInterval(progressInterval);
+            setPdfProgress(null);
+            setPdfProgressLabel("");
+          },
+        }
+      );
     };
     reader.readAsArrayBuffer(file);
     e.target.value = "";
@@ -199,9 +247,9 @@ export default function Combustivel() {
           <div className="flex gap-2">
             <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={handleCsv} />
             <input type="file" accept=".pdf" ref={pdfRef} className="hidden" onChange={handlePdf} />
-            <Button variant="outline" onClick={() => pdfRef.current?.click()} disabled={importPdfMut.isPending}>
+            <Button variant="outline" onClick={() => pdfRef.current?.click()} disabled={importPdfMut.isPending || pdfProgress !== null}>
               <FileText className="h-4 w-4 mr-1" />
-              {importPdfMut.isPending ? "Processando PDF..." : "Importar PDF Posto"}
+              {pdfProgress !== null ? "Processando..." : "Importar PDF Posto"}
             </Button>
             <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importCsvMut.isPending}>
               <Upload className="h-4 w-4 mr-1" /> Importar CSV
@@ -209,6 +257,26 @@ export default function Combustivel() {
             <Button onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo Abastecimento</Button>
           </div>
         </div>
+
+        {pdfProgress !== null && (
+          <div className="bg-card border rounded-lg p-4 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-foreground">{pdfProgressLabel}</span>
+              <span className="font-bold text-primary">{pdfProgress}%</span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-300 ease-out"
+                style={{
+                  width: `${pdfProgress}%`,
+                  background: pdfProgress === 100
+                    ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                    : 'linear-gradient(90deg, #3b82f6, #6366f1)',
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[200px]">
