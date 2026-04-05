@@ -267,7 +267,7 @@ export default function FrotasAnalitico() {
       varComb: number; varManut: number; varMultas: number; varTotal: number;
       pctComb: number; pctManut: number; pctMultas: number; pctTotal: number;
       maiorAumento: string; maiorReducao: string;
-      litros: number; kmEstimado: number; custoKm: number;
+      litros: number; kmEstimado: number; custoKm: number; consumoMes: number;
     }> = [];
 
     for (let m = 0; m < 12; m++) {
@@ -301,6 +301,7 @@ export default function FrotasAnalitico() {
         ? Math.round((litros / d.totalLitros) * d.totalKm)
         : 0;
       const custoKm = kmEstimado > 0 ? total / kmEstimado : 0;
+      const consumoMes = d.totalLitros > 0 && d.totalKm > 0 ? d.totalKm / d.totalLitros : 0;
 
       rows.push({
         mes: MESES_FULL[m], mesIdx: m,
@@ -310,7 +311,7 @@ export default function FrotasAnalitico() {
         pctComb, pctManut, pctMultas, pctTotal,
         maiorAumento: aumentos.length > 0 ? `${aumentos[0].cat} (+${fmt(aumentos[0].val)})` : "",
         maiorReducao: reducoes.length > 0 ? `${reducoes[0].cat} (${fmt(reducoes[0].val)})` : "",
-        litros, kmEstimado, custoKm,
+        litros, kmEstimado, custoKm, consumoMes,
       });
     }
     return rows;
@@ -351,7 +352,9 @@ export default function FrotasAnalitico() {
     ? (d.totalLitros > 0 && d.totalKm > 0 ? Math.round((kpiLitros / d.totalLitros) * d.totalKm) : 0)
     : d.totalKm;
   const kpiCustoKm = kpiTotalKm > 0 ? kpiCustoOper / kpiTotalKm : 0;
-  const kpiConsumoMedio = d.consumoMedio;
+  const kpiConsumoMedio = d.consumoMedio > 0
+    ? d.consumoMedio
+    : (d.totalLitros > 0 && d.totalKm > 0 ? d.totalKm / d.totalLitros : 0);
 
   const distCusto = [
     { name: "Combustível", value: kpiCombustivel, pct: kpiCustoOper > 0 ? Math.round((kpiCombustivel / kpiCustoOper) * 100) : 0 },
@@ -572,6 +575,7 @@ export default function FrotasAnalitico() {
                       <th className="py-2 px-2 text-right font-semibold text-red-600">Multas</th>
                       <th className="py-2 px-2 text-right font-semibold">Total</th>
                       <th className="py-2 px-2 text-right font-semibold text-purple-600">R$/km</th>
+                      <th className="py-2 px-2 text-right font-semibold text-cyan-600">km/l</th>
                       <th className="py-2 px-2 text-right font-semibold text-amber-600">Litros</th>
                       <th className="py-2 px-2 text-right font-semibold">Var. R$</th>
                       <th className="py-2 px-2 text-center font-semibold">Var. %</th>
@@ -627,6 +631,9 @@ export default function FrotasAnalitico() {
                           <td className="py-2 px-2 text-right text-purple-600">
                             {hasCur && row.custoKm > 0 ? `R$ ${row.custoKm.toFixed(2)}` : "—"}
                           </td>
+                          <td className="py-2 px-2 text-right text-cyan-600">
+                            {hasCur && row.consumoMes > 0 ? `${row.consumoMes.toFixed(1)}` : "—"}
+                          </td>
                           <td className="py-2 px-2 text-right text-amber-600">
                             {hasCur && row.litros > 0 ? fmtNum(Math.round(row.litros), 0) : "—"}
                           </td>
@@ -673,6 +680,7 @@ export default function FrotasAnalitico() {
                       <td className="py-2 px-2 text-right text-red-600">{fmt(comparativoMensal.reduce((s, r) => s + r.multas, 0))}</td>
                       <td className="py-2 px-2 text-right">{fmt(comparativoMensal.reduce((s, r) => s + r.total, 0))}</td>
                       <td className="py-2 px-2 text-right text-purple-600">{(() => { const t = comparativoMensal.reduce((s, r) => s + r.total, 0); const k = comparativoMensal.reduce((s, r) => s + r.kmEstimado, 0); return k > 0 ? `R$ ${(t / k).toFixed(2)}` : "—"; })()}</td>
+                      <td className="py-2 px-2 text-right text-cyan-600">{(() => { const l = comparativoMensal.reduce((s, r) => s + r.litros, 0); const k = comparativoMensal.reduce((s, r) => s + r.kmEstimado, 0); return l > 0 && k > 0 ? `${(k / l).toFixed(1)}` : "—"; })()}</td>
                       <td className="py-2 px-2 text-right text-amber-600">{fmtNum(Math.round(comparativoMensal.reduce((s, r) => s + r.litros, 0)), 0)}</td>
                       <td className="py-2 px-2" colSpan={3}></td>
                     </tr>
