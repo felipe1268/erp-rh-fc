@@ -181,7 +181,7 @@ export default function FrotasAnalitico() {
   const [tblSort, setTblSort] = useState<{ col: string; dir: "asc" | "desc" }>({ col: "custoTotal", dir: "desc" });
   const [tblFilter, setTblFilter] = useState<string>("todos");
   const [tblExpanded, setTblExpanded] = useState<Set<number>>(new Set());
-  const [mesSel, setMesSel] = useState<number>(new Date().getMonth());
+  const [mesSel, setMesSel] = useState<number | null>(null);
 
   const dash = trpc.frotas.getDashboard.useQuery({ companyId: cId, ano: anoDash }, { enabled: cId > 0 });
   const fuel = trpc.frotas.listFuelRecords.useQuery({ companyId: cId }, { enabled: cId > 0 });
@@ -328,20 +328,21 @@ export default function FrotasAnalitico() {
   const custosPorVeiculo = custosPorVeiculoAll.slice(0, 15);
   const topMotoristas = topMotoristasPorLitrosData;
 
-  const mesKey = anoDash ? `${anoDash}-${String(mesSel + 1).padStart(2, "0")}` : null;
+  const mesKey = (anoDash && mesSel !== null) ? `${anoDash}-${String(mesSel + 1).padStart(2, "0")}` : null;
+  const mesFiltroAtivo = !!mesKey;
   const mesDados = mesKey ? (custosTotaisByMonth[mesKey] as any) || null : null;
   const mesLitros = mesKey ? ((d as any).litrosByMonth?.[mesKey] || 0) : 0;
 
-  const kpiCombustivel = mesDados ? Number(mesDados.combustivel || 0) : d.totalCombustivel;
-  const kpiManutencao = mesDados ? Number(mesDados.manutencao || 0) : d.totalManutCusto;
-  const kpiMultas = mesDados ? Number(mesDados.multas || 0) : d.totalMultas;
+  const kpiCombustivel = mesFiltroAtivo ? Number(mesDados?.combustivel || 0) : d.totalCombustivel;
+  const kpiManutencao = mesFiltroAtivo ? Number(mesDados?.manutencao || 0) : d.totalManutCusto;
+  const kpiMultas = mesFiltroAtivo ? Number(mesDados?.multas || 0) : d.totalMultas;
   const kpiCustoOper = kpiCombustivel + kpiManutencao + kpiMultas;
-  const kpiLitros = mesDados ? mesLitros : d.totalLitros;
-  const kpiTotalKm = mesDados
+  const kpiLitros = mesFiltroAtivo ? mesLitros : d.totalLitros;
+  const kpiTotalKm = mesFiltroAtivo
     ? (d.totalLitros > 0 && d.totalKm > 0 ? Math.round((kpiLitros / d.totalLitros) * d.totalKm) : 0)
     : d.totalKm;
   const kpiCustoKm = kpiTotalKm > 0 ? kpiCustoOper / kpiTotalKm : 0;
-  const kpiConsumoMedio = mesDados
+  const kpiConsumoMedio = mesFiltroAtivo
     ? (kpiLitros > 0 && kpiTotalKm > 0 ? kpiTotalKm / kpiLitros : 0)
     : d.consumoMedio;
 
@@ -441,7 +442,7 @@ export default function FrotasAnalitico() {
                     return (
                       <button
                         key={i}
-                        onClick={() => setMesSel(i)}
+                        onClick={() => setMesSel(prev => prev === i ? null : i)}
                         className={`py-1.5 text-[11px] font-medium rounded-md transition-all ${
                           isSel
                             ? "bg-primary text-primary-foreground shadow-sm"
@@ -653,6 +654,7 @@ export default function FrotasAnalitico() {
               </div>
 
               {(() => {
+                if (mesSel === null) return null;
                 const sel = comparativoMensal[mesSel];
                 if (!sel || sel.total === 0) return null;
                 return (
