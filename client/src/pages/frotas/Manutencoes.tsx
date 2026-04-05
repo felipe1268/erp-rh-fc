@@ -358,14 +358,20 @@ export default function Manutencoes() {
     <DashboardLayout>
       <div className="p-2 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Wrench className="h-5 w-5 text-orange-600" /> Manutenções
-          </h1>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
+              <Wrench className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-[#1e3a5f] dark:text-white">Manutenções</h1>
+              <p className="text-xs text-muted-foreground">Gestão de ordens de serviço e manutenção da frota</p>
+            </div>
+          </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950" onClick={() => { setOsDialogOpen(true); setOsFile(null); setOsPreview(null); setOsParsed(null); setOsSelectedItems({}); }}>
+            <Button size="sm" variant="outline" className="border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950 rounded-lg" onClick={() => { setOsDialogOpen(true); setOsFile(null); setOsPreview(null); setOsParsed(null); setOsSelectedItems({}); }}>
               <ScanLine className="h-4 w-4 mr-1" /> Importar OS (IA)
             </Button>
-            <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova Manutenção</Button>
+            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white shadow-md rounded-lg" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova Manutenção</Button>
           </div>
         </div>
 
@@ -416,32 +422,37 @@ export default function Manutencoes() {
 
         {summary && (summary.qtd > 0 || isApproved) && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <Card className="bg-orange-50 dark:bg-orange-950 border-orange-200">
-              <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold text-orange-700">{summary.qtd}</p>
-                <p className="text-xs text-orange-600">Manutenções</p>
+            <Card className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950 dark:to-amber-950 border-orange-200 dark:border-orange-800 shadow-sm overflow-hidden relative">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-orange-500/10 rounded-bl-3xl" />
+              <CardContent className="p-4 text-center">
+                <p className="text-3xl font-extrabold text-orange-600 dark:text-orange-400">{summary.qtd}</p>
+                <p className="text-xs font-semibold text-orange-500/80 mt-0.5 uppercase tracking-wide">Manutenções</p>
               </CardContent>
             </Card>
-            <Card className="bg-green-50 dark:bg-green-950 border-green-200">
-              <CardContent className="p-3 text-center">
-                <p className="text-lg font-bold text-green-700">{fmt(summary.total)}</p>
-                <p className="text-xs text-green-600">Custo Total</p>
+            <Card className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950 dark:to-green-950 border-emerald-200 dark:border-emerald-800 shadow-sm overflow-hidden relative">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-emerald-500/10 rounded-bl-3xl" />
+              <CardContent className="p-4 text-center">
+                <p className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">{fmt(summary.total)}</p>
+                <p className="text-xs font-semibold text-emerald-500/80 mt-0.5 uppercase tracking-wide">Custo Total</p>
               </CardContent>
             </Card>
-            <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200">
-              <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold text-blue-700">{summary.preventivas}</p>
-                <p className="text-xs text-blue-600">Preventivas</p>
+            <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-blue-200 dark:border-blue-800 shadow-sm overflow-hidden relative">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-blue-500/10 rounded-bl-3xl" />
+              <CardContent className="p-4 text-center">
+                <p className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">{summary.preventivas}</p>
+                <p className="text-xs font-semibold text-blue-500/80 mt-0.5 uppercase tracking-wide">Preventivas</p>
               </CardContent>
             </Card>
-            <Card className="bg-amber-50 dark:bg-amber-950 border-amber-200">
-              <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold text-amber-700">{summary.corretivas}</p>
-                <p className="text-xs text-amber-600">Corretivas</p>
+            <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950 dark:to-yellow-950 border-amber-200 dark:border-amber-800 shadow-sm overflow-hidden relative">
+              <div className="absolute top-0 right-0 w-12 h-12 bg-amber-500/10 rounded-bl-3xl" />
+              <CardContent className="p-4 text-center">
+                <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-400">{summary.corretivas}</p>
+                <p className="text-xs font-semibold text-amber-500/80 mt-0.5 uppercase tracking-wide">Corretivas</p>
               </CardContent>
             </Card>
-            <Card className={`${isApproved ? "bg-emerald-50 dark:bg-emerald-950 border-emerald-300" : "bg-slate-50 dark:bg-slate-950 border-slate-200"}`}>
-              <CardContent className="p-3 text-center">
+            <Card className={`shadow-sm overflow-hidden relative ${isApproved ? "bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950 border-emerald-300 dark:border-emerald-800" : "bg-gradient-to-br from-slate-50 to-gray-50 dark:from-slate-950 dark:to-gray-950 border-slate-200 dark:border-slate-700"}`}>
+              <div className={`absolute top-0 right-0 w-12 h-12 rounded-bl-3xl ${isApproved ? "bg-emerald-500/10" : "bg-slate-500/10"}`} />
+              <CardContent className="p-4 text-center">
                 {isApproved ? (
                   <>
                     <div className="flex items-center justify-center gap-1">
@@ -522,60 +533,86 @@ export default function Manutencoes() {
             <div className="animate-spin h-6 w-6 border-2 border-orange-600 border-t-transparent rounded-full" />
           </div>
         ) : list.length === 0 ? (
-          <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhuma manutenção encontrada neste mês</CardContent></Card>
+          <Card className="border-dashed"><CardContent className="py-12 text-center">
+            <div className="w-14 h-14 rounded-full bg-orange-100 dark:bg-orange-950 mx-auto mb-3 flex items-center justify-center">
+              <Wrench className="h-7 w-7 text-orange-400" />
+            </div>
+            <p className="font-medium text-slate-600 dark:text-slate-300">Nenhuma manutenção encontrada</p>
+            <p className="text-xs text-muted-foreground mt-1">Nenhum registro para este mês com os filtros aplicados</p>
+          </CardContent></Card>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-card">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50">
+              <thead className="bg-gradient-to-r from-[#1e3a5f] to-[#2c5282]">
                 <tr>
-                  <th className="text-left p-3 font-medium">Data</th>
-                  <th className="text-left p-3 font-medium">Veículo</th>
-                  <th className="text-left p-3 font-medium">Tipo</th>
-                  <th className="text-left p-3 font-medium">Descrição</th>
-                  <th className="text-left p-3 font-medium">Custo</th>
-                  <th className="text-left p-3 font-medium">KM</th>
-                  <th className="text-left p-3 font-medium">Fornecedor</th>
-                  <th className="text-left p-3 font-medium">Status</th>
-                  <th className="text-left p-3 font-medium">Próxima</th>
-                  <th className="text-right p-3 font-medium">Ações</th>
+                  <th className="text-left p-3 font-semibold text-xs text-white/90 uppercase tracking-wide">Data</th>
+                  <th className="text-left p-3 font-semibold text-xs text-white/90 uppercase tracking-wide">Veículo</th>
+                  <th className="text-left p-3 font-semibold text-xs text-white/90 uppercase tracking-wide">Tipo</th>
+                  <th className="text-left p-3 font-semibold text-xs text-white/90 uppercase tracking-wide">Descrição</th>
+                  <th className="text-right p-3 font-semibold text-xs text-white/90 uppercase tracking-wide">Custo</th>
+                  <th className="text-left p-3 font-semibold text-xs text-white/90 uppercase tracking-wide">KM</th>
+                  <th className="text-left p-3 font-semibold text-xs text-white/90 uppercase tracking-wide">Fornecedor</th>
+                  <th className="text-center p-3 font-semibold text-xs text-white/90 uppercase tracking-wide">Status</th>
+                  <th className="text-left p-3 font-semibold text-xs text-white/90 uppercase tracking-wide">Próxima</th>
+                  <th className="text-right p-3 font-semibold text-xs text-white/90 uppercase tracking-wide">Ações</th>
                 </tr>
               </thead>
-              <tbody>
-                {list.map((m: any) => {
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {list.map((m: any, idx: number) => {
                   const atrasada = m.status === "agendada" && m.data_proxima && m.data_proxima < today;
+                  const custo = parseFloat(m.custo || "0");
+                  const maxCusto = Math.max(...list.map((x: any) => parseFloat(x.custo || "0")), 1);
                   return (
-                    <tr key={m.id} className={`border-t hover:bg-muted/30 ${atrasada ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
-                      <td className="p-3 whitespace-nowrap">{m.data_manutencao ? m.data_manutencao.split('-').reverse().join('/') : "—"}</td>
+                    <tr key={m.id} className={`hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors ${atrasada ? "bg-red-50/60 dark:bg-red-950/20" : idx % 2 === 0 ? "" : "bg-slate-50/50 dark:bg-slate-900/20"}`}>
+                      <td className="p-3 whitespace-nowrap font-medium">{m.data_manutencao ? m.data_manutencao.split('-').reverse().join('/') : "—"}</td>
                       <td className="p-3">
-                        <span className="font-mono text-xs">{m.placa || "—"}</span>{" "}
-                        <span className="text-muted-foreground text-xs">{m.modelo}</span>
+                        <div className="flex flex-col">
+                          <span className="font-mono text-xs font-bold text-[#1e3a5f] dark:text-blue-300">{m.placa || "—"}</span>
+                          <span className="text-muted-foreground text-[11px]">{m.modelo} {m.marca ? `· ${m.marca}` : ""}</span>
+                        </div>
                       </td>
-                      <td className="p-3"><Badge variant={m.tipo === "preventiva" ? "outline" : "secondary"} className="text-[10px]">{m.tipo}</Badge></td>
+                      <td className="p-3">
+                        <Badge className={`text-[10px] font-semibold ${m.tipo === "preventiva" ? "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-300" : "bg-orange-100 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/40 dark:text-orange-300"}`}>
+                          {m.tipo === "preventiva" ? "Preventiva" : "Corretiva"}
+                        </Badge>
+                      </td>
                       <td className="p-3 max-w-[220px]">
-                        <span className="truncate block" title={m.descricao}>
+                        <span className="truncate block font-medium text-sm" title={m.descricao}>
                           {m.descricao}
-                          {(m.anexos as any[])?.length > 0 && <Paperclip className="inline h-3 w-3 ml-1 text-blue-500" />}
+                          {(m.anexos as any[])?.length > 0 && <Paperclip className="inline h-3 w-3 ml-1.5 text-blue-500" />}
                         </span>
                         {parseInt(m.items_count) > 0 && (
-                          <span className="text-[10px] text-muted-foreground">
-                            {m.items_count} itens • Peças {fmt(m.total_pecas)} • Serviço {fmt(m.total_servico)}
+                          <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                            {m.items_count} itens <span className="text-blue-500">Peças {fmt(m.total_pecas)}</span> <span className="text-orange-500">Serviço {fmt(m.total_servico)}</span>
                           </span>
                         )}
                       </td>
-                      <td className="p-3 font-medium">{fmt(m.custo)}</td>
-                      <td className="p-3 text-xs">{m.km_na_manutencao ? parseFloat(m.km_na_manutencao).toLocaleString("pt-BR") : "—"}</td>
-                      <td className="p-3 text-xs max-w-[180px] truncate" title={m.fornecedor}>{m.fornecedor || "—"}</td>
-                      <td className="p-3">
-                        <Badge variant={STATUS_MAP[m.status]?.variant || "secondary"} className="text-[10px]">
+                      <td className="p-3 text-right">
+                        <div className="flex flex-col items-end">
+                          <span className="font-bold text-emerald-700 dark:text-emerald-400">{fmt(custo)}</span>
+                          <div className="w-16 h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mt-1">
+                            <div className="h-full rounded-full bg-emerald-500/60" style={{ width: `${(custo / maxCusto) * 100}%` }} />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3 text-xs tabular-nums">{m.km_na_manutencao ? parseFloat(m.km_na_manutencao).toLocaleString("pt-BR") : "—"}</td>
+                      <td className="p-3 text-xs max-w-[180px] truncate text-muted-foreground" title={m.fornecedor}>{m.fornecedor || "—"}</td>
+                      <td className="p-3 text-center">
+                        <Badge className={`text-[10px] font-semibold ${
+                          m.status === "realizada" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300" :
+                          m.status === "em_andamento" ? "bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-300" :
+                          m.status === "agendada" ? "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-300" :
+                          "bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/40 dark:text-red-300"
+                        }`}>
                           {atrasada && <AlertTriangle className="h-3 w-3 mr-1" />}
                           {STATUS_MAP[m.status]?.label || m.status}
                         </Badge>
                       </td>
                       <td className="p-3 text-xs whitespace-nowrap">{m.data_proxima ? m.data_proxima.split('-').reverse().join('/') : "—"}</td>
                       <td className="p-3 text-right whitespace-nowrap">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(m)}><Pencil className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { if (confirm("Excluir esta manutenção?")) deleteMut.mutate({ id: m.id, companyId: cId }); }}>
-                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950" onClick={() => openEdit(m)}><Pencil className="h-3.5 w-3.5 text-slate-500" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950" onClick={() => { if (confirm("Excluir esta manutenção?")) deleteMut.mutate({ id: m.id, companyId: cId }); }}>
+                          <Trash2 className="h-3.5 w-3.5 text-red-400" />
                         </Button>
                       </td>
                     </tr>
@@ -583,10 +620,10 @@ export default function Manutencoes() {
                 })}
               </tbody>
               {list.length > 0 && (
-                <tfoot className="bg-muted/30 border-t-2">
+                <tfoot className="bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 border-t-2 border-emerald-200 dark:border-emerald-800">
                   <tr>
-                    <td className="p-3 font-bold" colSpan={4}>Total do Mês ({list.length} registros)</td>
-                    <td className="p-3 font-bold text-green-700">{fmt(list.reduce((s: number, m: any) => s + parseFloat(m.custo || "0"), 0))}</td>
+                    <td className="p-3 font-bold text-[#1e3a5f] dark:text-blue-300" colSpan={4}>Total do Mês ({list.length} registros)</td>
+                    <td className="p-3 font-bold text-lg text-emerald-700 dark:text-emerald-400 text-right">{fmt(list.reduce((s: number, m: any) => s + parseFloat(m.custo || "0"), 0))}</td>
                     <td colSpan={5}></td>
                   </tr>
                 </tfoot>
@@ -635,24 +672,35 @@ export default function Manutencoes() {
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0" resizable={false} showCloseButton={false}>
-            <div className="sticky top-0 z-10 bg-background border-b px-6 py-4 flex items-center justify-between">
-              <DialogTitle className="text-xl font-bold">{editing ? "Editar Manutenção" : "Nova Manutenção"}</DialogTitle>
+            <div className="sticky top-0 z-10 bg-gradient-to-r from-[#1e3a5f] to-[#2c5282] border-b px-6 py-4 flex items-center justify-between shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center backdrop-blur-sm">
+                  <Wrench className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-bold text-white">{editing ? "Editar Manutenção" : "Nova Manutenção"}</DialogTitle>
+                  <p className="text-xs text-blue-200/80">{editing ? `OS #${editing.id}` : "Registrar nova ordem de serviço"}</p>
+                </div>
+              </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-                <Button onClick={save} disabled={createMut.isPending || updateMut.isPending}>
-                  {(createMut.isPending || updateMut.isPending) ? "Salvando..." : "Salvar"}
+                <Button variant="outline" className="border-white/30 text-white hover:bg-white/10 hover:text-white" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+                <Button className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg" onClick={save} disabled={createMut.isPending || updateMut.isPending}>
+                  {(createMut.isPending || updateMut.isPending) ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando...</> : <><Check className="h-4 w-4 mr-1" /> Salvar</>}
                 </Button>
               </div>
             </div>
 
-            <div className="px-6 py-4 max-w-5xl mx-auto w-full space-y-6">
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Dados da Manutenção</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Veículo *</Label>
+            <div className="px-6 py-6 max-w-5xl mx-auto w-full space-y-6 bg-gradient-to-b from-slate-50/50 to-transparent dark:from-slate-900/30">
+              <div className="bg-white dark:bg-card rounded-xl border shadow-sm p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-1.5 h-5 rounded-full bg-[#1e3a5f]" />
+                  <h3 className="text-sm font-bold text-[#1e3a5f] dark:text-blue-300 uppercase tracking-wide">Dados da Manutenção</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4">
+                  <div className="col-span-2 md:col-span-1">
+                    <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Veículo *</Label>
                     <Select value={form.vehicleId ? String(form.vehicleId) : ""} onValueChange={v => setForm({ ...form, vehicleId: parseInt(v) })}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectTrigger className="h-10 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
                         {(vehicles.data || []).map((v: any) => (
                           <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo} - {v.marca}</SelectItem>
@@ -661,9 +709,9 @@ export default function Manutencoes() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Tipo</Label>
+                    <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Tipo</Label>
                     <Select value={form.tipo || "corretiva"} onValueChange={v => setForm({ ...form, tipo: v })}>
-                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-10 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="preventiva">Preventiva</SelectItem>
                         <SelectItem value="corretiva">Corretiva</SelectItem>
@@ -671,82 +719,82 @@ export default function Manutencoes() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Data *</Label>
-                    <Input className="h-9" type="date" value={form.dataManutencao || ""} onChange={e => setForm({ ...form, dataManutencao: e.target.value })} />
+                    <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Data *</Label>
+                    <Input className="h-10 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50" type="date" value={form.dataManutencao || ""} onChange={e => setForm({ ...form, dataManutencao: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Custo (R$)</Label>
-                    <MoneyInput className="h-9" value={form.custo} onChange={v => setForm({ ...form, custo: v })} />
+                    <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Custo (R$)</Label>
+                    <MoneyInput className="h-10 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 font-semibold text-emerald-700 dark:text-emerald-400" value={form.custo} onChange={v => setForm({ ...form, custo: v })} />
                   </div>
                 </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <div className="col-span-full">
-                  <Label className="text-xs text-muted-foreground">Descrição *</Label>
-                  <Input className="h-9" value={form.descricao || ""} onChange={e => setForm({ ...form, descricao: e.target.value })} />
+                <div className="mt-4">
+                  <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Descrição *</Label>
+                  <Input className="h-10 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50" value={form.descricao || ""} onChange={e => setForm({ ...form, descricao: e.target.value })} placeholder="Ex: Troca tubo S, anel pressão, montagem/desmontagem e ajuste" />
                 </div>
               </div>
 
-              <div className="border-t pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Peças e Serviços</h3>
-                  <Button type="button" variant="outline" size="sm" onClick={addMaintItem}>
+              <div className="bg-white dark:bg-card rounded-xl border shadow-sm p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-5 rounded-full bg-orange-500" />
+                    <h3 className="text-sm font-bold text-[#1e3a5f] dark:text-blue-300 uppercase tracking-wide">Peças e Serviços</h3>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" className="border-orange-200 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-950" onClick={addMaintItem}>
                     <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar Item
                   </Button>
                 </div>
                 {maintItems.length > 0 ? (
-                  <div className="border rounded-lg overflow-hidden">
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
                     <table className="w-full text-sm">
-                      <thead className="bg-muted/50">
+                      <thead className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-800/50">
                         <tr>
-                          <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground w-28">Categoria</th>
-                          <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Descrição do Item</th>
-                          <th className="text-center px-3 py-2 font-medium text-xs text-muted-foreground w-20">Qtd</th>
-                          <th className="text-right px-3 py-2 font-medium text-xs text-muted-foreground w-28">Valor Unit.</th>
-                          <th className="text-right px-3 py-2 font-medium text-xs text-muted-foreground w-28">Valor Total</th>
+                          <th className="text-left px-3 py-2.5 font-semibold text-xs text-slate-500 dark:text-slate-400 w-28">Categoria</th>
+                          <th className="text-left px-3 py-2.5 font-semibold text-xs text-slate-500 dark:text-slate-400">Descrição do Item</th>
+                          <th className="text-center px-3 py-2.5 font-semibold text-xs text-slate-500 dark:text-slate-400 w-20">Qtd</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-xs text-slate-500 dark:text-slate-400 w-28">Valor Unit.</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-xs text-slate-500 dark:text-slate-400 w-28">Valor Total</th>
                           <th className="w-10"></th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {maintItems.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-muted/30">
-                            <td className="px-2 py-1.5">
+                          <tr key={idx} className="hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors">
+                            <td className="px-2 py-2">
                               <Select value={item.categoria} onValueChange={v => updateMaintItem(idx, "categoria", v)}>
-                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-9 text-xs border-slate-200 dark:border-slate-700"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="peca">Peça</SelectItem>
                                   <SelectItem value="servico">Serviço</SelectItem>
                                 </SelectContent>
                               </Select>
                             </td>
-                            <td className="px-2 py-1.5">
-                              <Input className="h-8 text-sm" placeholder="Ex: Retentor comando" value={item.nome} onChange={e => updateMaintItem(idx, "nome", e.target.value)} />
+                            <td className="px-2 py-2">
+                              <Input className="h-9 text-sm border-slate-200 dark:border-slate-700" placeholder="Ex: Retentor comando" value={item.nome} onChange={e => updateMaintItem(idx, "nome", e.target.value)} />
                             </td>
-                            <td className="px-2 py-1.5">
-                              <Input className="h-8 text-sm text-center" type="number" min="0.01" step="0.01" value={item.quantidade || ""} onChange={e => updateMaintItem(idx, "quantidade", parseFloat(e.target.value) || 0)} />
+                            <td className="px-2 py-2">
+                              <Input className="h-9 text-sm text-center border-slate-200 dark:border-slate-700" type="number" min="0.01" step="0.01" value={item.quantidade || ""} onChange={e => updateMaintItem(idx, "quantidade", parseFloat(e.target.value) || 0)} />
                             </td>
-                            <td className="px-2 py-1.5">
-                              <MoneyInput className="h-8 text-sm text-right" value={item.valorUnitario} onChange={v => updateMaintItem(idx, "valorUnitario", parseFloat(v) || 0)} />
+                            <td className="px-2 py-2">
+                              <MoneyInput className="h-9 text-sm text-right border-slate-200 dark:border-slate-700" value={item.valorUnitario} onChange={v => updateMaintItem(idx, "valorUnitario", parseFloat(v) || 0)} />
                             </td>
-                            <td className="px-2 py-1.5 text-right font-medium text-sm">
+                            <td className="px-2 py-2 text-right font-bold text-sm text-emerald-700 dark:text-emerald-400">
                               {fmt(item.valorTotal)}
                             </td>
-                            <td className="px-1 py-1.5">
-                              <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => removeMaintItem(idx)}>
+                            <td className="px-1 py-2">
+                              <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg" onClick={() => removeMaintItem(idx)}>
                                 <X className="h-3.5 w-3.5" />
                               </Button>
                             </td>
                           </tr>
                         ))}
                       </tbody>
-                      <tfoot className="bg-muted/30 border-t">
+                      <tfoot className="bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 border-t-2 border-emerald-200 dark:border-emerald-800">
                         <tr>
-                          <td colSpan={4} className="px-3 py-2 text-right text-xs font-semibold text-muted-foreground">
-                            Peças: {fmt(maintItems.filter(i => i.categoria === "peca").reduce((s, i) => s + i.valorTotal, 0))}
-                            {" | "}Serviço: {fmt(maintItems.filter(i => i.categoria === "servico").reduce((s, i) => s + i.valorTotal, 0))}
+                          <td colSpan={4} className="px-3 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            <span className="inline-flex items-center gap-1 mr-3"><span className="w-2 h-2 rounded-full bg-blue-400" /> Peças: {fmt(maintItems.filter(i => i.categoria === "peca").reduce((s, i) => s + i.valorTotal, 0))}</span>
+                            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" /> Serviço: {fmt(maintItems.filter(i => i.categoria === "servico").reduce((s, i) => s + i.valorTotal, 0))}</span>
                           </td>
-                          <td className="px-3 py-2 text-right font-bold text-sm">
+                          <td className="px-3 py-3 text-right font-bold text-base text-emerald-700 dark:text-emerald-400">
                             {fmt(maintItems.reduce((s, i) => s + i.valorTotal, 0))}
                           </td>
                           <td></td>
@@ -755,82 +803,100 @@ export default function Manutencoes() {
                     </table>
                   </div>
                 ) : (
-                  <div className="border rounded-lg p-6 text-center text-muted-foreground text-sm">
-                    <Wrench className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    <p>Nenhum item adicionado.</p>
-                    <p className="text-xs mt-1">Clique em "Adicionar Item" para registrar peças e serviços utilizados.</p>
+                  <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 text-center">
+                    <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-950 mx-auto mb-3 flex items-center justify-center">
+                      <Wrench className="h-6 w-6 text-orange-400" />
+                    </div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Nenhum item adicionado</p>
+                    <p className="text-xs text-muted-foreground mt-1">Clique em "Adicionar Item" para registrar peças e serviços utilizados</p>
                   </div>
                 )}
               </div>
 
-              <div className="border-t pt-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Detalhes</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">KM na Manutenção</Label>
-                    <Input className="h-9" type="number" value={form.kmNaManutencao || ""} onChange={e => setForm({ ...form, kmNaManutencao: e.target.value })} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-card rounded-xl border shadow-sm p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-5 rounded-full bg-blue-500" />
+                    <h3 className="text-sm font-bold text-[#1e3a5f] dark:text-blue-300 uppercase tracking-wide">Detalhes</h3>
                   </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Fornecedor</Label>
-                    <Input className="h-9" value={form.fornecedor || ""} onChange={e => setForm({ ...form, fornecedor: e.target.value })} />
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">KM na Manutenção</Label>
+                      <Input className="h-10 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50" type="number" value={form.kmNaManutencao || ""} onChange={e => setForm({ ...form, kmNaManutencao: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Fornecedor</Label>
+                      <Input className="h-10 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50" value={form.fornecedor || ""} onChange={e => setForm({ ...form, fornecedor: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Status</Label>
+                      <Select value={form.status || "realizada"} onValueChange={v => setForm({ ...form, status: v })}>
+                        <SelectTrigger className="h-10 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="realizada">Realizada</SelectItem>
+                          <SelectItem value="agendada">Agendada</SelectItem>
+                          <SelectItem value="em_andamento">Em Andamento</SelectItem>
+                          <SelectItem value="cancelada">Cancelada</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Status</Label>
-                    <Select value={form.status || "realizada"} onValueChange={v => setForm({ ...form, status: v })}>
-                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="realizada">Realizada</SelectItem>
-                        <SelectItem value="agendada">Agendada</SelectItem>
-                        <SelectItem value="em_andamento">Em Andamento</SelectItem>
-                        <SelectItem value="cancelada">Cancelada</SelectItem>
-                      </SelectContent>
-                    </Select>
+                </div>
+
+                <div className="bg-white dark:bg-card rounded-xl border shadow-sm p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-5 rounded-full bg-amber-500" />
+                    <h3 className="text-sm font-bold text-[#1e3a5f] dark:text-blue-300 uppercase tracking-wide">Próxima Manutenção</h3>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Data Próxima</Label>
+                      <Input className="h-10 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50" type="date" value={form.dataProxima || ""} onChange={e => setForm({ ...form, dataProxima: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">KM Próxima</Label>
+                      <Input className="h-10 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50" type="number" value={form.kmProxima || ""} onChange={e => setForm({ ...form, kmProxima: e.target.value })} />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="border-t pt-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Próxima Manutenção</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Próxima Manutenção</Label>
-                    <Input className="h-9" type="date" value={form.dataProxima || ""} onChange={e => setForm({ ...form, dataProxima: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">KM Próxima</Label>
-                    <Input className="h-9" type="number" value={form.kmProxima || ""} onChange={e => setForm({ ...form, kmProxima: e.target.value })} />
-                  </div>
+              <div className="bg-white dark:bg-card rounded-xl border shadow-sm p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1.5 h-5 rounded-full bg-slate-400" />
+                  <h3 className="text-sm font-bold text-[#1e3a5f] dark:text-blue-300 uppercase tracking-wide">Observações</h3>
                 </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <Label className="text-xs text-muted-foreground">Observações</Label>
-                <Textarea className="mt-1" rows={3} value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
+                <Textarea className="border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50" rows={3} value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} placeholder="Notas adicionais sobre a manutenção..." />
               </div>
 
               {editingMaintId && (
-                <div className="border-t pt-4">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
-                    <Paperclip className="h-4 w-4" /> Anexos
-                  </h3>
+                <div className="bg-white dark:bg-card rounded-xl border shadow-sm p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-5 rounded-full bg-violet-500" />
+                    <h3 className="text-sm font-bold text-[#1e3a5f] dark:text-blue-300 uppercase tracking-wide flex items-center gap-2">
+                      <Paperclip className="h-4 w-4" /> Anexos
+                    </h3>
+                  </div>
                   {(() => {
                     const currentMaint = manut.data?.find((m: any) => m.id === editingMaintId);
                     const anexos = (currentMaint?.anexos || []) as any[];
                     return (
                       <div className="space-y-2">
                         {anexos.length > 0 && (
-                          <div className="space-y-1">
+                          <div className="space-y-1.5">
                             {anexos.map((a: any, idx: number) => (
-                              <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded px-3 py-2 text-sm">
-                                <File className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                                <span className="truncate flex-1" title={a.nome}>{a.nome}</span>
+                              <div key={idx} className="flex items-center gap-3 bg-gradient-to-r from-blue-50 to-slate-50 dark:from-blue-950/20 dark:to-slate-900/30 rounded-lg px-4 py-2.5 text-sm border border-blue-100 dark:border-blue-900/30">
+                                <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center flex-shrink-0">
+                                  <File className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <span className="truncate flex-1 font-medium" title={a.nome}>{a.nome}</span>
                                 <span className="text-xs text-muted-foreground flex-shrink-0">
                                   {a.tamanho ? (a.tamanho / 1024 < 1024 ? `${(a.tamanho / 1024).toFixed(0)} KB` : `${(a.tamanho / 1024 / 1024).toFixed(1)} MB`) : ''}
                                 </span>
                                 <a href={a.url} target="_blank" rel="noopener noreferrer" title="Baixar">
-                                  <Button variant="ghost" size="icon" className="h-7 w-7"><Download className="h-3.5 w-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30"><Download className="h-3.5 w-3.5 text-blue-600" /></Button>
                                 </a>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
                                   onClick={() => { if (confirm("Remover este anexo?")) removeAttachMut.mutate({ companyId: cId, maintenanceId: editingMaintId, key: a.key }); }}>
                                   <X className="h-3.5 w-3.5" />
                                 </Button>
@@ -838,11 +904,16 @@ export default function Manutencoes() {
                             ))}
                           </div>
                         )}
-                        <label className="flex items-center gap-2 cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 hover:bg-muted/30 transition-colors">
-                          <Upload className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">
-                            {uploadAttachMut.isPending ? "Enviando..." : "Clique para anexar arquivo (PDF, imagem, doc)"}
-                          </span>
+                        <label className="flex items-center gap-3 cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl px-5 py-4 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 hover:border-blue-400 dark:hover:border-blue-600 transition-all group">
+                          <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 transition-colors">
+                            <Upload className="h-5 w-5 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                          </div>
+                          <div>
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                              {uploadAttachMut.isPending ? "Enviando..." : "Clique para anexar arquivo"}
+                            </span>
+                            <p className="text-xs text-muted-foreground">PDF, imagem, doc (máx. 10MB)</p>
+                          </div>
                           <input type="file" className="hidden" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.xls,.xlsx"
                             onChange={e => { if (e.target.files?.length) handleAttachUpload(editingMaintId, e.target.files); e.target.value = ""; }}
                             disabled={uploadAttachMut.isPending} />

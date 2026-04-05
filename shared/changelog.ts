@@ -8029,4 +8029,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-06 00:05:00",
   },
+  {
+    version: 1034,
+    titulo: "Redesign Visual — Tela de Manutenções",
+    descricao:
+      "Redesign completo da tela de Manutenções com identidade visual do sistema. " +
+      "Header com ícone gradiente laranja e subtítulo. KPI cards com gradientes suaves, ornamentos decorativos " +
+      "e tipografia premium. Tabela principal com header azul marinho (#1e3a5f), linhas zebradas, badges coloridas " +
+      "por tipo (Preventiva azul, Corretiva laranja) e status, mini barra de custo, hover azul claro. " +
+      "Formulário de edição/criação redesenhado: header gradiente azul marinho com ícone branco, " +
+      "seções em cards brancos com indicador lateral colorido (azul, laranja, âmbar, violeta), " +
+      "campos com background sutil, tabela de peças/serviços com footer gradiente verde, " +
+      "área de upload com hover interativo, e layout side-by-side para Detalhes e Próxima Manutenção.",
+    tipo: "melhoria",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 00:15:00",
+  },
 ];
