@@ -1,5 +1,6 @@
 import { trpc } from "../../lib/trpc";
 import { useCompany } from "../../contexts/CompanyContext";
+import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,7 @@ type Tab = "resumo" | "timeline" | "manutencoes" | "combustivel" | "custos" | "c
 
 export default function RaioXVeiculo() {
   const { selectedCompany } = useCompany();
+  const [, navigate] = useLocation();
   const cId = selectedCompany?.id ?? 0;
   const [vehicleId, setVehicleId] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("resumo");
@@ -332,6 +334,9 @@ export default function RaioXVeiculo() {
         <div className="bg-gradient-to-r from-[#1e3a5f] to-[#2c5282] text-white p-6 rounded-b-2xl shadow-lg">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center gap-3 mb-2">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 rounded-xl" onClick={() => navigate("/frotas/painel")}>
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
               <div className="p-2 rounded-xl bg-white/10"><Car className="h-6 w-6" /></div>
               <h1 className="text-2xl font-bold tracking-tight">Raio-X do Veículo</h1>
             </div>
