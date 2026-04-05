@@ -200,9 +200,9 @@ export default function FrotasAnalitico() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2">
           <KpiMini icon={Truck} label="Veículos" value={d.totalVehicles} color="text-slate-600" />
-          <KpiMini icon={DollarSign} label="Custo Total" value={fmtK(d.custoOperTotal)} sub={`Média: ${fmtK(d.totalVehicles > 0 ? d.custoOperTotal / d.totalVehicles : 0)}/veículo`} color="text-indigo-600" />
-          <KpiMini icon={Fuel} label="Combustível" value={fmtK(d.totalCombustivel)} sub={`${fmtNum(d.totalLitros, 0)} litros`} color="text-blue-600" />
-          <KpiMini icon={Wrench} label="Manutenção" value={fmtK(d.totalManutCusto)} color="text-emerald-600" />
+          <KpiMini icon={DollarSign} label="Custo Total" value={fmt(d.custoOperTotal)} sub={`Média: ${fmt(d.totalVehicles > 0 ? d.custoOperTotal / d.totalVehicles : 0)}/veículo`} color="text-indigo-600" />
+          <KpiMini icon={Fuel} label="Combustível" value={fmt(d.totalCombustivel)} sub={`${fmtNum(d.totalLitros, 0)} litros`} color="text-blue-600" />
+          <KpiMini icon={Wrench} label="Manutenção" value={fmt(d.totalManutCusto)} color="text-emerald-600" />
           <KpiMini icon={Activity} label="R$/km" value={`R$ ${fmtNum(d.custoKm, 2)}`} sub={`${fmtNum(d.totalKm, 0)} km rodados`} color="text-purple-600" />
           <KpiMini icon={Gauge} label="Consumo Médio" value={d.consumoMedio > 0 ? `${fmtNum(d.consumoMedio)} km/l` : "—"} color="text-cyan-600" />
         </div>
