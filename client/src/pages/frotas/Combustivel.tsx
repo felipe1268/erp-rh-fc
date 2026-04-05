@@ -17,6 +17,9 @@ import { toast } from "sonner";
 function fmt(v: any) {
   return parseFloat(v || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+function fmtNum(v: number, decimals = 1) {
+  return v.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
 
 const COMBUSTIVEIS = ["Gasolina", "Etanol", "Diesel", "Diesel S10", "GNV", "Flex"];
 
@@ -319,7 +322,7 @@ export default function Combustivel() {
             </Card>
             <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200">
               <CardContent className="p-3 text-center">
-                <p className="text-lg font-bold text-blue-700">{resumo.totalLitros.toFixed(1)}L</p>
+                <p className="text-lg font-bold text-blue-700">{fmtNum(resumo.totalLitros)}L</p>
                 <p className="text-xs text-blue-600">Litros Total</p>
               </CardContent>
             </Card>
@@ -348,7 +351,7 @@ export default function Combustivel() {
                     {byVehicle.map((v, i) => (
                       <div key={i} className="flex justify-between items-center text-sm border-b pb-1">
                         <span className="font-mono text-xs">{v.placa}</span>
-                        <span className="text-muted-foreground">{v.litros.toFixed(1)}L</span>
+                        <span className="text-muted-foreground">{fmtNum(v.litros)}L</span>
                         <span className="font-medium">{fmt(v.valor)}</span>
                         <Badge variant="outline" className="text-xs">{v.count}x</Badge>
                       </div>
@@ -365,7 +368,7 @@ export default function Combustivel() {
                     {byDriver.map(([name, d], i) => (
                       <div key={i} className="flex justify-between items-center text-sm border-b pb-1">
                         <span className="truncate max-w-[140px] text-xs">{name}</span>
-                        <span className="text-muted-foreground">{d.litros.toFixed(1)}L</span>
+                        <span className="text-muted-foreground">{fmtNum(d.litros)}L</span>
                         <span className="font-medium">{fmt(d.valor)}</span>
                         <Badge variant="outline" className="text-xs">{d.count}x</Badge>
                       </div>
@@ -406,8 +409,8 @@ export default function Combustivel() {
                     <td className="p-3 whitespace-nowrap">{r.data ? r.data.split('-').reverse().join('/') : "—"}</td>
                     <td className="p-3 font-mono">{r.placa || "—"}</td>
                     <td className="p-3"><Badge variant="outline">{r.tipo_combustivel}</Badge></td>
-                    <td className="p-3 text-right">{parseFloat(r.litros || 0).toFixed(2)}</td>
-                    <td className="p-3 text-right">{r.preco_litro ? `R$ ${parseFloat(r.preco_litro).toFixed(3)}` : "—"}</td>
+                    <td className="p-3 text-right">{fmtNum(parseFloat(r.litros || 0), 2)}</td>
+                    <td className="p-3 text-right">{r.preco_litro ? `R$ ${fmtNum(parseFloat(r.preco_litro), 3)}` : "—"}</td>
                     <td className="p-3 text-right font-medium">{fmt(r.valor_total)}</td>
                     <td className="p-3 text-right">{r.km_atual ? parseFloat(r.km_atual).toLocaleString("pt-BR") : "—"}</td>
                     <td className="p-3 text-xs max-w-[150px] truncate">{r.motorista || "—"}</td>
