@@ -7939,4 +7939,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 21:00:00",
   },
+  {
+    version: 1028,
+    titulo: "Tabela Comparativo com R$/km e Litros por mês",
+    descricao:
+      "Tabela Comparativo Mês a Mês do Analítico de Frotas agora inclui duas novas colunas: " +
+      "R$/km (custo por quilômetro estimado do mês) e Litros (total de litros abastecidos no mês), " +
+      "com totais no rodapé. Consumo Médio corrigido para usar dados reais do backend " +
+      "em vez de cálculo circular que retornava sempre o mesmo valor.",
+    tipo: "melhoria",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 22:00:00",
+  },
 ];

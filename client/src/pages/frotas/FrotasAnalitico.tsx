@@ -259,6 +259,7 @@ export default function FrotasAnalitico() {
   const comparativoMensal = useMemo(() => {
     if (!d) return [];
     const ano = anoDash || new Date().getFullYear();
+    const litrosByMonthMap = (d as any).litrosByMonth || {};
     const rows: Array<{
       mes: string; mesIdx: number;
       combustivel: number; manutencao: number; multas: number; total: number;
@@ -266,6 +267,7 @@ export default function FrotasAnalitico() {
       varComb: number; varManut: number; varMultas: number; varTotal: number;
       pctComb: number; pctManut: number; pctMultas: number; pctTotal: number;
       maiorAumento: string; maiorReducao: string;
+      litros: number; kmEstimado: number; custoKm: number;
     }> = [];
 
     for (let m = 0; m < 12; m++) {
@@ -294,6 +296,12 @@ export default function FrotasAnalitico() {
       const aumentos = diffs.filter(dd => dd.val > 0).sort((a, b) => b.val - a.val);
       const reducoes = diffs.filter(dd => dd.val < 0).sort((a, b) => a.val - b.val);
 
+      const litros = Number(litrosByMonthMap[key] || 0);
+      const kmEstimado = d.totalLitros > 0 && d.totalKm > 0
+        ? Math.round((litros / d.totalLitros) * d.totalKm)
+        : 0;
+      const custoKm = kmEstimado > 0 ? total / kmEstimado : 0;
+
       rows.push({
         mes: MESES_FULL[m], mesIdx: m,
         combustivel: cur.combustivel, manutencao: cur.manutencao, multas: cur.multas, total,
@@ -302,6 +310,7 @@ export default function FrotasAnalitico() {
         pctComb, pctManut, pctMultas, pctTotal,
         maiorAumento: aumentos.length > 0 ? `${aumentos[0].cat} (+${fmt(aumentos[0].val)})` : "",
         maiorReducao: reducoes.length > 0 ? `${reducoes[0].cat} (${fmt(reducoes[0].val)})` : "",
+        litros, kmEstimado, custoKm,
       });
     }
     return rows;
@@ -562,9 +571,11 @@ export default function FrotasAnalitico() {
                       <th className="py-2 px-2 text-right font-semibold text-emerald-600">Manutenção</th>
                       <th className="py-2 px-2 text-right font-semibold text-red-600">Multas</th>
                       <th className="py-2 px-2 text-right font-semibold">Total</th>
+                      <th className="py-2 px-2 text-right font-semibold text-purple-600">R$/km</th>
+                      <th className="py-2 px-2 text-right font-semibold text-amber-600">Litros</th>
                       <th className="py-2 px-2 text-right font-semibold">Var. R$</th>
                       <th className="py-2 px-2 text-center font-semibold">Var. %</th>
-                      <th className="py-2 px-2 text-left font-semibold">Principal Impacto</th>
+                      <th className="py-2 px-2 text-left font-semibold">Impacto</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -613,6 +624,12 @@ export default function FrotasAnalitico() {
                           <td className="py-2 px-2 text-right font-bold">
                             {hasCur ? fmt(row.total) : "—"}
                           </td>
+                          <td className="py-2 px-2 text-right text-purple-600">
+                            {hasCur && row.custoKm > 0 ? `R$ ${row.custoKm.toFixed(2)}` : "—"}
+                          </td>
+                          <td className="py-2 px-2 text-right text-amber-600">
+                            {hasCur && row.litros > 0 ? fmtN(Math.round(row.litros)) : "—"}
+                          </td>
                           <td className="py-2 px-2 text-right">
                             {hasCur && hasPrev && row.varTotal !== 0 ? (
                               <span className={`font-medium ${row.varTotal > 0 ? "text-red-600" : "text-green-600"}`}>
@@ -655,6 +672,8 @@ export default function FrotasAnalitico() {
                       <td className="py-2 px-2 text-right text-emerald-600">{fmt(comparativoMensal.reduce((s, r) => s + r.manutencao, 0))}</td>
                       <td className="py-2 px-2 text-right text-red-600">{fmt(comparativoMensal.reduce((s, r) => s + r.multas, 0))}</td>
                       <td className="py-2 px-2 text-right">{fmt(comparativoMensal.reduce((s, r) => s + r.total, 0))}</td>
+                      <td className="py-2 px-2 text-right text-purple-600">{(() => { const t = comparativoMensal.reduce((s, r) => s + r.total, 0); const k = comparativoMensal.reduce((s, r) => s + r.kmEstimado, 0); return k > 0 ? `R$ ${(t / k).toFixed(2)}` : "—"; })()}</td>
+                      <td className="py-2 px-2 text-right text-amber-600">{fmtN(Math.round(comparativoMensal.reduce((s, r) => s + r.litros, 0)))}</td>
                       <td className="py-2 px-2" colSpan={3}></td>
                     </tr>
                   </tfoot>
