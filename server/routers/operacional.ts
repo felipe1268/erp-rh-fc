@@ -685,6 +685,171 @@ export const operacionalRouter = router({
         fotos: fotoStats,
       };
     }),
+
+  listarLiberacaoTemplates: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      return rows(await db.execute(sql`
+        SELECT t.*, (SELECT COUNT(*) FROM liberacao_servicos_template_itens WHERE template_id = t.id)::int as total_itens
+        FROM liberacao_servicos_templates t
+        WHERE t.company_id = ${input.companyId} AND t.is_active = true
+        ORDER BY t.tipo_servico, t.nome
+      `));
+    }),
+
+  getLiberacaoTemplateItens: protectedProcedure
+    .input(z.object({ templateId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const t = rows(await db.execute(sql`SELECT id FROM liberacao_servicos_templates WHERE id = ${input.templateId} AND company_id = ${input.companyId}`));
+      if (!t.length) return [];
+      return rows(await db.execute(sql`SELECT * FROM liberacao_servicos_template_itens WHERE template_id = ${input.templateId} ORDER BY ordem`));
+    }),
+
+  listarLiberacoes: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number(), tipoServico: z.string().optional(), status: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const conds = [sql`ls.company_id = ${input.companyId}`, sql`ls.obra_id = ${input.obraId}`];
+      if (input.tipoServico) conds.push(sql`ls.tipo_servico = ${input.tipoServico}`);
+      if (input.status) conds.push(sql`ls.status = ${input.status}`);
+      const where = sql.join(conds, sql` AND `);
+      return rows(await db.execute(sql`
+        SELECT ls.*,
+          (SELECT COUNT(*) FROM liberacao_servicos_itens WHERE liberacao_id = ls.id)::int as total_itens,
+          (SELECT COUNT(*) FROM liberacao_servicos_itens WHERE liberacao_id = ls.id AND resposta = 'conforme')::int as itens_ok,
+          (SELECT COUNT(*) FROM liberacao_servicos_itens WHERE liberacao_id = ls.id AND resposta = 'nao_conforme')::int as itens_nc
+        FROM liberacao_servicos ls
+        WHERE ${where}
+        ORDER BY ls.data_criacao DESC
+      `));
+    }),
+
+  criarLiberacao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      templateId: z.number(),
+      local: z.string().optional(),
+      pavimento: z.string().optional(),
+      elemento: z.string().optional(),
+      descricao: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const userName = (ctx as any).user?.name || 'Sistema';
+      const tmpl = rows(await db.execute(sql`SELECT * FROM liberacao_servicos_templates WHERE id = ${input.templateId} AND company_id = ${input.companyId}`));
+      if (!tmpl.length) throw new Error("Template não encontrado");
+      const t = tmpl[0];
+
+      const lRows = rows(await db.execute(sql`
+        INSERT INTO liberacao_servicos (company_id, obra_id, tipo_servico, local, pavimento, elemento, descricao, criado_por, status)
+        VALUES (${input.companyId}, ${input.obraId}, ${t.tipo_servico}, ${input.local || null}, ${input.pavimento || null}, ${input.elemento || null}, ${input.descricao || null}, ${userName}, 'pendente')
+        RETURNING id
+      `));
+      const libId = lRows[0]?.id;
+
+      const itens = rows(await db.execute(sql`SELECT * FROM liberacao_servicos_template_itens WHERE template_id = ${input.templateId} ORDER BY ordem`));
+      for (const item of itens) {
+        await db.execute(sql`
+          INSERT INTO liberacao_servicos_itens (liberacao_id, descricao, categoria, ordem, foto_obrigatoria, resposta)
+          VALUES (${libId}, ${item.descricao}, ${item.categoria || null}, ${item.ordem}, ${item.foto_obrigatoria}, 'pendente')
+        `);
+      }
+      return { ok: true, id: libId };
+    }),
+
+  getLiberacaoDetalhe: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const lib = rows(await db.execute(sql`SELECT * FROM liberacao_servicos WHERE id = ${input.id} AND company_id = ${input.companyId}`));
+      if (!lib.length) throw new Error("Liberação não encontrada");
+      const itens = rows(await db.execute(sql`SELECT * FROM liberacao_servicos_itens WHERE liberacao_id = ${input.id} ORDER BY ordem`));
+      return { ...lib[0], itens };
+    }),
+
+  responderLiberacaoItem: protectedProcedure
+    .input(z.object({
+      itemId: z.number(),
+      companyId: z.number(),
+      liberacaoId: z.number(),
+      resposta: z.string(),
+      observacao: z.string().optional(),
+      midiasUrls: z.array(z.object({ url: z.string(), tipo: z.string() })).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const lib = rows(await db.execute(sql`SELECT id FROM liberacao_servicos WHERE id = ${input.liberacaoId} AND company_id = ${input.companyId}`));
+      if (!lib.length) throw new Error("Liberação não encontrada");
+      const midiasJson = input.midiasUrls && input.midiasUrls.length > 0 ? JSON.stringify(input.midiasUrls) : '[]';
+      await db.execute(sql`
+        UPDATE liberacao_servicos_itens SET resposta = ${input.resposta}, observacao = ${input.observacao || null}, midias_urls = ${midiasJson}::jsonb
+        WHERE id = ${input.itemId} AND liberacao_id = ${input.liberacaoId}
+      `);
+      return { ok: true };
+    }),
+
+  assinarLiberacao: protectedProcedure
+    .input(z.object({
+      liberacaoId: z.number(),
+      companyId: z.number(),
+      papel: z.enum(['fiscal', 'encarregado', 'engenheiro']),
+      nome: z.string(),
+      assinaturaUrl: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const lib = rows(await db.execute(sql`SELECT * FROM liberacao_servicos WHERE id = ${input.liberacaoId} AND company_id = ${input.companyId}`));
+      if (!lib.length) throw new Error("Liberação não encontrada");
+
+      if (input.papel === 'fiscal') {
+        await db.execute(sql`UPDATE liberacao_servicos SET assinatura_fiscal_nome = ${input.nome}, assinatura_fiscal_url = ${input.assinaturaUrl}, assinatura_fiscal_data = NOW() WHERE id = ${input.liberacaoId}`);
+      } else if (input.papel === 'encarregado') {
+        await db.execute(sql`UPDATE liberacao_servicos SET assinatura_encarregado_nome = ${input.nome}, assinatura_encarregado_url = ${input.assinaturaUrl}, assinatura_encarregado_data = NOW() WHERE id = ${input.liberacaoId}`);
+      } else {
+        await db.execute(sql`UPDATE liberacao_servicos SET assinatura_engenheiro_nome = ${input.nome}, assinatura_engenheiro_url = ${input.assinaturaUrl}, assinatura_engenheiro_data = NOW() WHERE id = ${input.liberacaoId}`);
+      }
+      return { ok: true };
+    }),
+
+  finalizarLiberacao: protectedProcedure
+    .input(z.object({
+      liberacaoId: z.number(),
+      companyId: z.number(),
+      status: z.enum(['liberado', 'reprovado']),
+      motivoReprovacao: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (input.status === 'liberado') {
+        await db.execute(sql`UPDATE liberacao_servicos SET status = 'liberado', data_liberacao = NOW() WHERE id = ${input.liberacaoId} AND company_id = ${input.companyId}`);
+      } else {
+        await db.execute(sql`UPDATE liberacao_servicos SET status = 'reprovado', data_reprovacao = NOW(), motivo_reprovacao = ${input.motivoReprovacao || null} WHERE id = ${input.liberacaoId} AND company_id = ${input.companyId}`);
+      }
+      return { ok: true };
+    }),
+
+  uploadLiberacaoMedia: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      base64: z.string(),
+      contentType: z.string().default("image/jpeg"),
+    }))
+    .mutation(async ({ input }) => {
+      const { storagePut } = await import("../storage");
+      const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime'];
+      if (!allowedMimes.includes(input.contentType)) throw new Error("Tipo não permitido");
+      const buf = Buffer.from(input.base64, 'base64');
+      const isVideo = input.contentType.startsWith('video');
+      const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+      if (buf.length > maxSize) throw new Error(isVideo ? "Vídeo muito grande (máx 50MB)" : "Foto muito grande (máx 10MB)");
+      const ext = input.contentType.includes('png') ? 'png' : input.contentType.includes('webp') ? 'webp' : isVideo ? 'mp4' : 'jpg';
+      const key = `liberacoes/${input.companyId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { url } = await storagePut(key, buf, input.contentType);
+      return { url: url || `/api/files/${key}` };
+    }),
 });
 
 async function autoPreencherRDO(db: any, rdoId: number, companyId: number, obraId: number) {

@@ -488,6 +488,7 @@ const menuSectionsOperacional: MenuSection[] = [
     title: "Checklist",
     items: [
       { icon: CheckSquare,     label: "Checklists de Qualidade", path: "/operacional/checklists" },
+      { icon: ClipboardCheck,   label: "Liberação de Serviços", path: "/operacional/liberacao-servicos" },
     ],
   },
 ];

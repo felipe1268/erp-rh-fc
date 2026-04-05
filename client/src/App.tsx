@@ -221,6 +221,7 @@ const ChecklistsPage = lazy(() => import("./pages/operacional/Checklists"));
 const ConcratagemPage = lazy(() => import("./pages/operacional/Concretagem"));
 const NaoConformidadesPage = lazy(() => import("./pages/operacional/NaoConformidades"));
 const RegistroFotograficoPage = lazy(() => import("./pages/operacional/RegistroFotografico"));
+const LiberacaoServicosPage = lazy(() => import("./pages/operacional/LiberacaoServicos"));
 
 // Integrações
 const MasControle = lazy(() => import("./pages/integracoes/MasControle"));
@@ -444,6 +445,7 @@ function Router() {
         <Route path="/operacional/concretagem" component={ConcratagemPage} />
         <Route path="/operacional/nc" component={NaoConformidadesPage} />
         <Route path="/operacional/fotos" component={RegistroFotograficoPage} />
+        <Route path="/operacional/liberacao-servicos" component={LiberacaoServicosPage} />
         {/* Integrações */}
         <Route path="/integracoes/mas-controle"  component={MasControle} />
         {/* Sprint 6 - IA */}

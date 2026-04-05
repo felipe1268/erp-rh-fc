@@ -8215,4 +8215,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 22:30:00",
   },
+  {
+    version: 1046,
+    titulo: "Liberação de Serviços — Checklist com Assinaturas",
+    descricao:
+      "Novo submódulo no Operacional → Checklist → Liberação de Serviços. " +
+      "6 templates pré-configurados: Concretagem (19 itens), Forro/Gesso (11), Impermeabilização (11), " +
+      "Caimento de Água (9), Alvenaria (9), Revestimento (9). " +
+      "Cada item pode receber Conforme/NC/N.A. com captura de fotos e vídeos como evidência. " +
+      "3 campos de assinatura digital com canvas touch: Fiscal, Encarregado e Engenheiro Responsável. " +
+      "Fluxo: criar liberação → preencher itens → anexar evidências → assinar → liberar ou reprovar. " +
+      "Filtros por obra, tipo de serviço e status. Detalhes com local, pavimento e elemento.",
+    tipo: "feature",
+    modulos: "Operacional",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 23:00:00",
+  },
 ];
