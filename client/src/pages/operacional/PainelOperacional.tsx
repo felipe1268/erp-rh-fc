@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import {
-  ClipboardList, Blocks, AlertTriangle, Camera,
+  ClipboardList, Blocks, AlertTriangle,
   CloudRain, ShieldCheck, ClipboardCheck,
   HardHat,
 } from "lucide-react";
@@ -14,15 +14,6 @@ const submodulos = [
     accentFrom: "#F59E0B",
     accentTo: "#D97706",
     path: "/operacional/rdo",
-  },
-  {
-    id: "fotos",
-    titulo: "Fotos",
-    subtitulo: "Registro Fotogr...",
-    icon: Camera,
-    accentFrom: "#8B5CF6",
-    accentTo: "#7C3AED",
-    path: "/operacional/fotos",
   },
   {
     id: "concretagem",
