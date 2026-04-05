@@ -18,6 +18,12 @@ import { useEffect, useState } from "react";
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+const MESES_BR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+function fmtMesAno(m: string) {
+  const [ano, mes] = m.split("-");
+  const idx = parseInt(mes) - 1;
+  return `${MESES_BR[idx] || mes}/${ano}`;
+}
 function fmtN(v: number) {
   return v.toLocaleString("pt-BR");
 }
@@ -349,7 +355,7 @@ export default function PainelFrotas() {
                               const pctMultas = max > 0 ? (c.multas / max) * 100 : 0;
                               return (
                                 <div key={m} className="flex items-center gap-2">
-                                  <span className="text-[11px] w-16 text-muted-foreground font-mono">{m}</span>
+                                  <span className="text-[11px] w-20 text-muted-foreground font-mono">{fmtMesAno(m)}</span>
                                   <div className="flex-1 h-5 bg-muted rounded overflow-hidden flex">
                                     {pctComb > 0 && <div className="h-full bg-amber-500" style={{ width: `${pctComb}%` }} />}
                                     {pctManut > 0 && <div className="h-full bg-orange-500" style={{ width: `${pctManut}%` }} />}
@@ -690,7 +696,7 @@ export default function PainelFrotas() {
                               const max = Math.max(...Object.values(d.fuelByMonth) as number[]);
                               return (
                                 <div key={m} className="flex items-center gap-2">
-                                  <span className="text-[11px] w-16 text-muted-foreground font-mono">{m}</span>
+                                  <span className="text-[11px] w-20 text-muted-foreground font-mono">{fmtMesAno(m)}</span>
                                   <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
                                     <div className="h-full bg-amber-500 rounded-full" style={{ width: `${((v as number) / max) * 100}%` }} />
                                   </div>
@@ -719,7 +725,7 @@ export default function PainelFrotas() {
                               const max = Math.max(...Object.values(d.maintByMonth) as number[]);
                               return (
                                 <div key={m} className="flex items-center gap-2">
-                                  <span className="text-[11px] w-16 text-muted-foreground font-mono">{m}</span>
+                                  <span className="text-[11px] w-20 text-muted-foreground font-mono">{fmtMesAno(m)}</span>
                                   <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
                                     <div className="h-full bg-orange-500 rounded-full" style={{ width: `${((v as number) / max) * 100}%` }} />
                                   </div>
