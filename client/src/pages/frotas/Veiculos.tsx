@@ -46,10 +46,17 @@ export default function Veiculos() {
     onSuccess: () => { vehicles.refetch(); toast.success("Veículo inativado"); },
   });
   const uploadPhotoMut = trpc.frotas.uploadVehiclePhoto.useMutation({
-    onSuccess: () => { vehicles.refetch(); toast.success("Foto atualizada"); },
+    onSuccess: (data) => {
+      vehicles.refetch();
+      toast.success("Foto atualizada");
+      if (dialogOpen && editing) {
+        setForm((f: any) => ({ ...f, fotoUrl: data.fotoUrl }));
+      }
+    },
     onError: (err) => toast.error("Erro ao enviar foto: " + err.message),
   });
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const dialogPhotoRef = useRef<HTMLInputElement>(null);
   const [photoTargetId, setPhotoTargetId] = useState<number | null>(null);
 
   function handlePhotoClick(vehicleId: number) {
@@ -57,9 +64,14 @@ export default function Veiculos() {
     photoInputRef.current?.click();
   }
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !photoTargetId) return;
+  function handleDialogPhotoClick() {
+    if (editing) {
+      setPhotoTargetId(editing.id);
+      dialogPhotoRef.current?.click();
+    }
+  }
+
+  function processPhotoFile(file: File, targetId: number) {
     if (!file.type.startsWith('image/')) {
       toast.error("Selecione uma imagem (JPG, PNG, etc.)");
       return;
@@ -72,9 +84,15 @@ export default function Veiculos() {
     reader.onload = (ev) => {
       const result = ev.target?.result as ArrayBuffer;
       const base64 = btoa(new Uint8Array(result).reduce((d, b) => d + String.fromCharCode(b), ''));
-      uploadPhotoMut.mutate({ vehicleId: photoTargetId, companyId: cId, base64, contentType: file.type });
+      uploadPhotoMut.mutate({ vehicleId: targetId, companyId: cId, base64, contentType: file.type });
     };
     reader.readAsArrayBuffer(file);
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !photoTargetId) return;
+    processPhotoFile(file, photoTargetId);
     e.target.value = "";
   }
 
@@ -110,7 +128,7 @@ export default function Veiculos() {
       fipeCodigoMarca: v.fipe_codigo_marca, fipeCodigoModelo: v.fipe_codigo_modelo,
       fipeCodigoAno: v.fipe_codigo_ano, depreciacaoAnos: v.depreciacao_anos || 5,
       crlvVencimento: v.crlv_vencimento, seguroVencimento: v.seguro_vencimento,
-      observacoes: v.observacoes,
+      observacoes: v.observacoes, fotoUrl: v.foto_url,
     });
     setDialogOpen(true);
   }
@@ -278,91 +296,191 @@ export default function Veiculos() {
         )}
 
         <input type="file" accept="image/*" ref={photoInputRef} className="hidden" onChange={handlePhotoChange} />
+        <input type="file" accept="image/*" ref={dialogPhotoRef} className="hidden" onChange={handlePhotoChange} />
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto">
-            <DialogHeader><DialogTitle>{editing ? "Editar Veículo" : "Novo Veículo"}</DialogTitle></DialogHeader>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <Label>Tipo *</Label>
-                <Select value={form.tipoVeiculo || ""} onValueChange={v => setForm({ ...form, tipoVeiculo: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{TIPOS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                </Select>
+          <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0">
+            <div className="sticky top-0 z-10 bg-background border-b px-6 py-4 flex items-center justify-between">
+              <DialogTitle className="text-xl font-bold">{editing ? "Editar Veículo" : "Novo Veículo"}</DialogTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+                <Button onClick={save} disabled={createMut.isPending || updateMut.isPending}>
+                  {(createMut.isPending || updateMut.isPending) ? "Salvando..." : "Salvar"}
+                </Button>
               </div>
-              <div><Label>Placa</Label><Input value={form.placa || ""} onChange={e => setForm({ ...form, placa: e.target.value.toUpperCase() })} maxLength={10} /></div>
-              <div><Label>Modelo *</Label><Input value={form.modelo || ""} onChange={e => setForm({ ...form, modelo: e.target.value })} /></div>
-              <div><Label>Marca</Label><Input value={form.marca || ""} onChange={e => setForm({ ...form, marca: e.target.value })} /></div>
-              <div><Label>Ano Fabricação</Label><Input value={form.anoFabricacao || ""} onChange={e => setForm({ ...form, anoFabricacao: e.target.value })} maxLength={4} /></div>
-              <div><Label>Ano Modelo</Label><Input value={form.anoModelo || ""} onChange={e => setForm({ ...form, anoModelo: e.target.value })} maxLength={4} /></div>
-              <div><Label>Cor</Label><Input value={form.cor || ""} onChange={e => setForm({ ...form, cor: e.target.value })} /></div>
-              <div><Label>KM Atual</Label><Input type="number" value={form.kmAtual || ""} onChange={e => setForm({ ...form, kmAtual: e.target.value })} /></div>
-              <div><Label>RENAVAM</Label><Input value={form.renavam || ""} onChange={e => setForm({ ...form, renavam: e.target.value })} /></div>
-              <div><Label>Chassi</Label><Input value={form.chassi || ""} onChange={e => setForm({ ...form, chassi: e.target.value })} /></div>
-              <div><Label>Responsável</Label><Input value={form.responsavel || ""} onChange={e => setForm({ ...form, responsavel: e.target.value })} /></div>
-              <div>
-                <Label>Status</Label>
-                <Select value={form.statusVeiculo || "Ativo"} onValueChange={v => setForm({ ...form, statusVeiculo: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{STATUS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div><Label>Data Aquisição</Label><Input type="date" value={form.dataAquisicao || ""} onChange={e => setForm({ ...form, dataAquisicao: e.target.value })} /></div>
-              <div><Label>Valor de Compra (R$)</Label><Input type="number" step="0.01" value={form.valorCompra || ""} onChange={e => setForm({ ...form, valorCompra: e.target.value })} /></div>
-              <div><Label>Depreciação (anos)</Label><Input type="number" value={form.depreciacaoAnos || 5} onChange={e => setForm({ ...form, depreciacaoAnos: parseInt(e.target.value) || 5 })} /></div>
-              <div><Label>Vencimento CRLV</Label><Input type="date" value={form.crlvVencimento || ""} onChange={e => setForm({ ...form, crlvVencimento: e.target.value })} /></div>
-              <div><Label>Vencimento Seguro</Label><Input type="date" value={form.seguroVencimento || ""} onChange={e => setForm({ ...form, seguroVencimento: e.target.value })} /></div>
             </div>
 
-            <Card className="mt-4">
-              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><DollarSign className="h-4 w-4 text-green-600" /> Consulta FIPE</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="px-6 py-4 max-w-6xl mx-auto w-full space-y-6">
+              <div className="flex flex-col md:flex-row gap-6">
+                <div
+                  className="w-full md:w-56 h-44 flex-shrink-0 bg-muted rounded-xl flex items-center justify-center overflow-hidden relative group cursor-pointer border-2 border-dashed border-muted-foreground/20 hover:border-primary/40 transition-colors"
+                  onClick={handleDialogPhotoClick}
+                  title="Clique para alterar a foto"
+                >
+                  {form.fotoUrl ? (
+                    <img src={form.fotoUrl} alt="Foto do veículo" className="w-full h-full object-cover rounded-xl" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Camera className="h-8 w-8" />
+                      <span className="text-xs">Clique para adicionar foto</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-1 text-white">
+                      <Camera className="h-6 w-6" />
+                      <span className="text-xs font-medium">Alterar Foto</span>
+                    </div>
+                  </div>
+                  {uploadPhotoMut.isPending && editing && photoTargetId === editing.id && (
+                    <div className="absolute inset-0 bg-black/60 rounded-xl flex items-center justify-center">
+                      <div className="w-8 h-8 border-3 border-white border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 space-y-1">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Identificação</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Tipo *</Label>
+                      <Select value={form.tipoVeiculo || ""} onValueChange={v => setForm({ ...form, tipoVeiculo: v })}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>{TIPOS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Placa</Label>
+                      <Input className="h-9 font-mono" value={form.placa || ""} onChange={e => setForm({ ...form, placa: e.target.value.toUpperCase() })} maxLength={10} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Modelo *</Label>
+                      <Input className="h-9" value={form.modelo || ""} onChange={e => setForm({ ...form, modelo: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Marca</Label>
+                      <Input className="h-9" value={form.marca || ""} onChange={e => setForm({ ...form, marca: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Ano Fab.</Label>
+                      <Input className="h-9" value={form.anoFabricacao || ""} onChange={e => setForm({ ...form, anoFabricacao: e.target.value })} maxLength={4} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Ano Modelo</Label>
+                      <Input className="h-9" value={form.anoModelo || ""} onChange={e => setForm({ ...form, anoModelo: e.target.value })} maxLength={4} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Cor</Label>
+                      <Input className="h-9" value={form.cor || ""} onChange={e => setForm({ ...form, cor: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Status</Label>
+                      <Select value={form.statusVeiculo || "Ativo"} onValueChange={v => setForm({ ...form, statusVeiculo: v })}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>{STATUS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Documentação</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
                   <div>
-                    <Label>Marca FIPE</Label>
+                    <Label className="text-xs text-muted-foreground">RENAVAM</Label>
+                    <Input className="h-9 font-mono" value={form.renavam || ""} onChange={e => setForm({ ...form, renavam: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Chassi</Label>
+                    <Input className="h-9 font-mono text-xs" value={form.chassi || ""} onChange={e => setForm({ ...form, chassi: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">KM Atual</Label>
+                    <Input className="h-9" type="number" value={form.kmAtual || ""} onChange={e => setForm({ ...form, kmAtual: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Responsável</Label>
+                    <Input className="h-9" value={form.responsavel || ""} onChange={e => setForm({ ...form, responsavel: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Vencimento CRLV</Label>
+                    <Input className="h-9" type="date" value={form.crlvVencimento || ""} onChange={e => setForm({ ...form, crlvVencimento: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Vencimento Seguro</Label>
+                    <Input className="h-9" type="date" value={form.seguroVencimento || ""} onChange={e => setForm({ ...form, seguroVencimento: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Financeiro</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Data Aquisição</Label>
+                    <Input className="h-9" type="date" value={form.dataAquisicao || ""} onChange={e => setForm({ ...form, dataAquisicao: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Valor de Compra (R$)</Label>
+                    <Input className="h-9" type="number" step="0.01" value={form.valorCompra || ""} onChange={e => setForm({ ...form, valorCompra: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Depreciação (anos)</Label>
+                    <Input className="h-9" type="number" value={form.depreciacaoAnos || 5} onChange={e => setForm({ ...form, depreciacaoAnos: parseInt(e.target.value) || 5 })} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                  <DollarSign className="h-4 w-4 text-green-600 inline mr-1" />
+                  Consulta FIPE
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Marca FIPE</Label>
                     <Select value={form.fipeCodigoMarca || ""} onValueChange={v => setForm({ ...form, fipeCodigoMarca: v, fipeCodigoModelo: "", fipeCodigoAno: "" })}>
-                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent className="max-h-[300px]">
                         {(fipeMarcas.data || []).map((m: any) => <SelectItem key={m.codigo} value={String(m.codigo)}>{m.nome}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>Modelo FIPE</Label>
+                    <Label className="text-xs text-muted-foreground">Modelo FIPE</Label>
                     <Select value={form.fipeCodigoModelo || ""} onValueChange={v => setForm({ ...form, fipeCodigoModelo: v, fipeCodigoAno: "" })}>
-                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent className="max-h-[300px]">
                         {(fipeModelos.data?.modelos || []).map((m: any) => <SelectItem key={m.codigo} value={String(m.codigo)}>{m.nome}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>Ano FIPE</Label>
+                    <Label className="text-xs text-muted-foreground">Ano FIPE</Label>
                     <Select value={form.fipeCodigoAno || ""} onValueChange={v => setForm({ ...form, fipeCodigoAno: v })}>
-                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
                         {(fipeAnos.data || []).map((a: any) => <SelectItem key={a.codigo} value={a.codigo}>{a.nome}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
+                  {fipeValor.data && (
+                    <div className="flex items-end">
+                      <div className="p-2 bg-green-50 rounded-lg border border-green-200 w-full">
+                        <p className="text-xs text-muted-foreground">Valor FIPE</p>
+                        <p className="text-green-700 font-bold">{fipeValor.data.Valor}</p>
+                        <p className="text-[10px] text-muted-foreground">Ref: {fipeValor.data.MesReferencia}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {fipeValor.data && (
-                  <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                    <p className="text-sm"><strong>Valor FIPE:</strong> <span className="text-green-700 text-lg font-bold">{fipeValor.data.Valor}</span></p>
-                    <p className="text-xs text-muted-foreground">Ref: {fipeValor.data.MesReferencia} | Código: {fipeValor.data.CodigoFipe}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              </div>
 
-            <div><Label>Observações</Label><Textarea value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} /></div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-              <Button onClick={save} disabled={createMut.isPending || updateMut.isPending}>
-                {(createMut.isPending || updateMut.isPending) ? "Salvando..." : "Salvar"}
-              </Button>
-            </DialogFooter>
+              <div className="border-t pt-4">
+                <Label className="text-xs text-muted-foreground">Observações</Label>
+                <Textarea className="mt-1" rows={3} value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
