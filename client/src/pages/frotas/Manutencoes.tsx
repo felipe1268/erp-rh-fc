@@ -16,7 +16,7 @@ import {
   CheckCircle2, Loader2, ScanLine, FileUp, Eye, X, Check,
   Sparkles, Upload, Lock,
 } from "lucide-react";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
 function fmt(v: any) {
@@ -56,6 +56,10 @@ export default function Manutencoes() {
   const [osSaving, setOsSaving] = useState(false);
   const osFileRef = useRef<HTMLInputElement>(null);
 
+  type MaintItem = { categoria: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number };
+  const [maintItems, setMaintItems] = useState<MaintItem[]>([]);
+  const [editingMaintId, setEditingMaintId] = useState<number | null>(null);
+
   const vehicles = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
   const manut = trpc.frotas.listMaintenances.useQuery(
     { companyId: cId, vehicleId: filterVehicle !== "all" ? parseInt(filterVehicle) : undefined },
@@ -93,6 +97,27 @@ export default function Manutencoes() {
   });
 
   const parseMut = trpc.frotas.parseMaintenanceOS.useMutation();
+
+  const maintItemsQuery = trpc.frotas.listMaintenanceItems.useQuery(
+    { companyId: cId, maintenanceId: editingMaintId || 0 },
+    { enabled: cId > 0 && !!editingMaintId },
+  );
+  const saveItemsMut = trpc.frotas.saveMaintenanceItems.useMutation({
+    onSuccess: () => { manut.refetch(); toast.success("Itens salvos"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  useEffect(() => {
+    if (maintItemsQuery.data && maintItemsQuery.data.length > 0) {
+      setMaintItems(maintItemsQuery.data.map((i: any) => ({
+        categoria: i.categoria,
+        nome: i.nome,
+        quantidade: parseFloat(i.quantidade || "1"),
+        valorUnitario: parseFloat(i.valor_unitario || "0"),
+        valorTotal: parseFloat(i.valor_total || "0"),
+      })));
+    }
+  }, [maintItemsQuery.data]);
 
   const handleOsFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -198,12 +223,16 @@ export default function Manutencoes() {
 
   function openNew() {
     setEditing(null);
+    setEditingMaintId(null);
+    setMaintItems([]);
     setForm({ tipo: "corretiva", status: "realizada", dataManutencao: new Date().toISOString().slice(0, 10) });
     setDialogOpen(true);
   }
 
   function openEdit(m: any) {
     setEditing(m);
+    setEditingMaintId(m.id);
+    setMaintItems([]);
     setForm({
       vehicleId: m.vehicle_id, tipo: m.tipo, descricao: m.descricao, custo: m.custo,
       kmNaManutencao: m.km_na_manutencao, fornecedor: m.fornecedor,
@@ -213,14 +242,58 @@ export default function Manutencoes() {
     setDialogOpen(true);
   }
 
+  function addMaintItem() {
+    setMaintItems(prev => [...prev, { categoria: "peca", nome: "", quantidade: 1, valorUnitario: 0, valorTotal: 0 }]);
+  }
+
+  function updateMaintItem(idx: number, field: string, val: any) {
+    setMaintItems(prev => {
+      const items = [...prev];
+      const item = { ...items[idx], [field]: val };
+      if (field === "quantidade" || field === "valorUnitario") {
+        item.valorTotal = Number((item.quantidade * item.valorUnitario).toFixed(2));
+      }
+      items[idx] = item;
+      const totalPecas = items.filter(i => i.categoria === "peca").reduce((s, i) => s + i.valorTotal, 0);
+      const totalServico = items.filter(i => i.categoria === "servico").reduce((s, i) => s + i.valorTotal, 0);
+      setForm((f: any) => ({ ...f, custo: (totalPecas + totalServico).toFixed(2) }));
+      return items;
+    });
+  }
+
+  function removeMaintItem(idx: number) {
+    setMaintItems(prev => {
+      const items = prev.filter((_, i) => i !== idx);
+      const totalPecas = items.filter(i => i.categoria === "peca").reduce((s, i) => s + i.valorTotal, 0);
+      const totalServico = items.filter(i => i.categoria === "servico").reduce((s, i) => s + i.valorTotal, 0);
+      setForm((f: any) => ({ ...f, custo: (totalPecas + totalServico).toFixed(2) }));
+      return items;
+    });
+  }
+
   function save() {
     if (!form.vehicleId || !form.descricao || !form.dataManutencao) {
       toast.error("Preencha veículo, descrição e data");
       return;
     }
     const payload = { ...form, companyId: cId, criadoPor: user?.name };
-    if (editing) updateMut.mutate({ id: editing.id, ...payload });
-    else createMut.mutate(payload);
+    if (editing) {
+      updateMut.mutate({ id: editing.id, ...payload }, {
+        onSuccess: () => {
+          if (maintItems.length > 0) {
+            saveItemsMut.mutate({ companyId: cId, maintenanceId: editing.id, items: maintItems });
+          }
+        },
+      });
+    } else {
+      createMut.mutate(payload, {
+        onSuccess: (created: any) => {
+          if (maintItems.length > 0 && created?.id) {
+            saveItemsMut.mutate({ companyId: cId, maintenanceId: created.id, items: maintItems });
+          }
+        },
+      });
+    }
   }
 
   const allRecords = manut.data || [];
@@ -457,7 +530,14 @@ export default function Manutencoes() {
                         <span className="text-muted-foreground text-xs">{m.modelo}</span>
                       </td>
                       <td className="p-3"><Badge variant={m.tipo === "preventiva" ? "outline" : "secondary"} className="text-[10px]">{m.tipo}</Badge></td>
-                      <td className="p-3 max-w-[220px] truncate" title={m.descricao}>{m.descricao}</td>
+                      <td className="p-3 max-w-[220px]">
+                        <span className="truncate block" title={m.descricao}>{m.descricao}</span>
+                        {parseInt(m.items_count) > 0 && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {m.items_count} itens • Peças {fmt(m.total_pecas)} • Serviço {fmt(m.total_servico)}
+                          </span>
+                        )}
+                      </td>
                       <td className="p-3 font-medium">{fmt(m.custo)}</td>
                       <td className="p-3 text-xs">{m.km_na_manutencao ? parseFloat(m.km_na_manutencao).toLocaleString("pt-BR") : "—"}</td>
                       <td className="p-3 text-xs max-w-[180px] truncate" title={m.fornecedor}>{m.fornecedor || "—"}</td>
@@ -582,6 +662,81 @@ export default function Manutencoes() {
                   <Label className="text-xs text-muted-foreground">Descrição *</Label>
                   <Input className="h-9" value={form.descricao || ""} onChange={e => setForm({ ...form, descricao: e.target.value })} />
                 </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Peças e Serviços</h3>
+                  <Button type="button" variant="outline" size="sm" onClick={addMaintItem}>
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar Item
+                  </Button>
+                </div>
+                {maintItems.length > 0 ? (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground w-28">Categoria</th>
+                          <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Descrição do Item</th>
+                          <th className="text-center px-3 py-2 font-medium text-xs text-muted-foreground w-20">Qtd</th>
+                          <th className="text-right px-3 py-2 font-medium text-xs text-muted-foreground w-28">Valor Unit.</th>
+                          <th className="text-right px-3 py-2 font-medium text-xs text-muted-foreground w-28">Valor Total</th>
+                          <th className="w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {maintItems.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-muted/30">
+                            <td className="px-2 py-1.5">
+                              <Select value={item.categoria} onValueChange={v => updateMaintItem(idx, "categoria", v)}>
+                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="peca">Peça</SelectItem>
+                                  <SelectItem value="servico">Serviço</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <Input className="h-8 text-sm" placeholder="Ex: Retentor comando" value={item.nome} onChange={e => updateMaintItem(idx, "nome", e.target.value)} />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <Input className="h-8 text-sm text-center" type="number" min="0.01" step="0.01" value={item.quantidade || ""} onChange={e => updateMaintItem(idx, "quantidade", parseFloat(e.target.value) || 0)} />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <Input className="h-8 text-sm text-right" type="number" min="0" step="0.01" value={item.valorUnitario || ""} onChange={e => updateMaintItem(idx, "valorUnitario", parseFloat(e.target.value) || 0)} />
+                            </td>
+                            <td className="px-2 py-1.5 text-right font-medium text-sm">
+                              {fmt(item.valorTotal)}
+                            </td>
+                            <td className="px-1 py-1.5">
+                              <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => removeMaintItem(idx)}>
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-muted/30 border-t">
+                        <tr>
+                          <td colSpan={4} className="px-3 py-2 text-right text-xs font-semibold text-muted-foreground">
+                            Peças: {fmt(maintItems.filter(i => i.categoria === "peca").reduce((s, i) => s + i.valorTotal, 0))}
+                            {" | "}Serviço: {fmt(maintItems.filter(i => i.categoria === "servico").reduce((s, i) => s + i.valorTotal, 0))}
+                          </td>
+                          <td className="px-3 py-2 text-right font-bold text-sm">
+                            {fmt(maintItems.reduce((s, i) => s + i.valorTotal, 0))}
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg p-6 text-center text-muted-foreground text-sm">
+                    <Wrench className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p>Nenhum item adicionado.</p>
+                    <p className="text-xs mt-1">Clique em "Adicionar Item" para registrar peças e serviços utilizados.</p>
+                  </div>
+                )}
               </div>
 
               <div className="border-t pt-4">

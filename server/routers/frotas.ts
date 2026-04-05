@@ -61,6 +61,19 @@ async function ensureFleetTables() {
     )
   `);
   await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_maintenance_items (
+      id SERIAL PRIMARY KEY,
+      maintenance_id INTEGER NOT NULL REFERENCES fleet_maintenances(id) ON DELETE CASCADE,
+      company_id INTEGER NOT NULL,
+      categoria VARCHAR(30) NOT NULL DEFAULT 'peca',
+      nome VARCHAR(255) NOT NULL,
+      quantidade NUMERIC(10,2) NOT NULL DEFAULT 1,
+      valor_unitario NUMERIC(14,2) NOT NULL DEFAULT 0,
+      valor_total NUMERIC(14,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    )
+  `);
+  await db.execute(sql`
     CREATE TABLE IF NOT EXISTS fleet_fuel_records (
       id SERIAL PRIMARY KEY,
       company_id INTEGER NOT NULL,
@@ -779,7 +792,11 @@ Sempre retorne JSON válido, sem markdown.`;
     .query(async ({ input }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
-      let q = sql`SELECT fm.*, v.placa, v.modelo, v.marca FROM fleet_maintenances fm JOIN vehicles v ON v.id = fm.vehicle_id WHERE fm.company_id = ${input.companyId}`;
+      let q = sql`SELECT fm.*, v.placa, v.modelo, v.marca,
+        COALESCE((SELECT COUNT(*) FROM fleet_maintenance_items mi WHERE mi.maintenance_id = fm.id)::int, 0) as items_count,
+        COALESCE((SELECT SUM(valor_total) FROM fleet_maintenance_items mi WHERE mi.maintenance_id = fm.id AND mi.categoria = 'peca'), 0) as total_pecas,
+        COALESCE((SELECT SUM(valor_total) FROM fleet_maintenance_items mi WHERE mi.maintenance_id = fm.id AND mi.categoria = 'servico'), 0) as total_servico
+        FROM fleet_maintenances fm JOIN vehicles v ON v.id = fm.vehicle_id WHERE fm.company_id = ${input.companyId}`;
       if (input.vehicleId) q = sql`${q} AND fm.vehicle_id = ${input.vehicleId}`;
       if (input.status) q = sql`${q} AND fm.status = ${input.status}`;
       q = sql`${q} ORDER BY fm.data_manutencao DESC`;
@@ -829,6 +846,55 @@ Sempre retorne JSON válido, sem markdown.`;
       const db = await getDb();
       await db.delete(fleetMaintenances).where(and(eq(fleetMaintenances.id, input.id), eq(fleetMaintenances.companyId, input.companyId)));
       return { success: true };
+    }),
+
+  listMaintenanceItems: protectedProcedure
+    .input(z.object({ companyId: z.number(), maintenanceId: z.number() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const res = await db.execute(sql`
+        SELECT * FROM fleet_maintenance_items
+        WHERE company_id = ${input.companyId} AND maintenance_id = ${input.maintenanceId}
+        ORDER BY id ASC
+      `);
+      return (res as any).rows || [];
+    }),
+
+  saveMaintenanceItems: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      maintenanceId: z.number(),
+      items: z.array(z.object({
+        id: z.number().optional(),
+        categoria: z.string(),
+        nome: z.string(),
+        quantidade: z.number(),
+        valorUnitario: z.number(),
+        valorTotal: z.number(),
+      })),
+      updateCusto: z.boolean().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      await db.execute(sql`DELETE FROM fleet_maintenance_items WHERE maintenance_id = ${input.maintenanceId} AND company_id = ${input.companyId}`);
+      for (const item of input.items) {
+        await db.execute(sql`
+          INSERT INTO fleet_maintenance_items (maintenance_id, company_id, categoria, nome, quantidade, valor_unitario, valor_total)
+          VALUES (${input.maintenanceId}, ${input.companyId}, ${item.categoria}, ${item.nome}, ${item.quantidade}, ${item.valorUnitario}, ${item.valorTotal})
+        `);
+      }
+      if (input.updateCusto !== false) {
+        const totalPecas = input.items.filter(i => i.categoria === 'peca').reduce((s, i) => s + i.valorTotal, 0);
+        const totalServico = input.items.filter(i => i.categoria === 'servico').reduce((s, i) => s + i.valorTotal, 0);
+        const custoTotal = totalPecas + totalServico;
+        await db.execute(sql`
+          UPDATE fleet_maintenances SET custo = ${custoTotal.toFixed(2)}, updated_at = NOW()
+          WHERE id = ${input.maintenanceId} AND company_id = ${input.companyId}
+        `);
+      }
+      return { success: true, count: input.items.length };
     }),
 
   listFuelRecords: protectedProcedure
