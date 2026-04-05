@@ -1248,6 +1248,9 @@ export default function Combustivel() {
                 <Label className="text-sm font-medium">Digite sua senha para confirmar</Label>
                 <Input
                   type="password"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore
                   className="mt-1"
                   placeholder="Sua senha de acesso"
                   value={clearAllPassword}

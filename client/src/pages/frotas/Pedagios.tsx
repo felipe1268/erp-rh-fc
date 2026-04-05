@@ -905,7 +905,7 @@ export default function Pedagios() {
               <p className="text-xs text-red-500 font-medium">Esta ação não pode ser desfeita. Digite sua senha para confirmar.</p>
               <div>
                 <Label className="text-xs">Senha</Label>
-                <Input type="password" placeholder="Digite sua senha..." value={clearMonthPassword} onChange={e => setClearMonthPassword(e.target.value)} />
+                <Input type="password" autoComplete="new-password" data-lpignore="true" data-1p-ignore placeholder="Digite sua senha..." value={clearMonthPassword} onChange={e => setClearMonthPassword(e.target.value)} />
               </div>
             </div>
             <DialogFooter>
@@ -932,7 +932,7 @@ export default function Pedagios() {
               <p className="text-xs text-red-500 font-medium">Esta ação não pode ser desfeita. Digite sua senha para confirmar.</p>
               <div>
                 <Label className="text-xs">Senha</Label>
-                <Input type="password" placeholder="Digite sua senha..." value={clearAllPassword} onChange={e => setClearAllPassword(e.target.value)} />
+                <Input type="password" autoComplete="new-password" data-lpignore="true" data-1p-ignore placeholder="Digite sua senha..." value={clearAllPassword} onChange={e => setClearAllPassword(e.target.value)} />
               </div>
             </div>
             <DialogFooter>
