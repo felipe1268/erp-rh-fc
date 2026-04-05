@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -154,7 +155,7 @@ export default function Ipva() {
                 </Select>
               </div>
               <div><Label>Ano Referência *</Label><Input type="number" value={form.anoReferencia || ""} onChange={e => setForm({ ...form, anoReferencia: parseInt(e.target.value) })} /></div>
-              <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={form.valorTotal || ""} onChange={e => setForm({ ...form, valorTotal: e.target.value })} /></div>
+              <div><Label>Valor (R$)</Label><MoneyInput value={form.valorTotal} onChange={v => setForm({ ...form, valorTotal: v })} /></div>
               <div><Label>Vencimento</Label><Input type="date" value={form.dataVencimento || ""} onChange={e => setForm({ ...form, dataVencimento: e.target.value })} /></div>
               <div><Label>Data Pagamento</Label><Input type="date" value={form.dataPagamento || ""} onChange={e => setForm({ ...form, dataPagamento: e.target.value })} /></div>
               <div>

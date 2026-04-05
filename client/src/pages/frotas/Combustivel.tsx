@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -717,8 +718,8 @@ export default function Combustivel() {
                 </Select>
               </div>
               <div><Label>Litros *</Label><Input type="number" step="0.01" value={form.litros || ""} onChange={e => setForm({ ...form, litros: e.target.value })} /></div>
-              <div><Label>Valor por Litro (R$)</Label><Input type="number" step="0.001" value={form.precoLitro || ""} onChange={e => setForm({ ...form, precoLitro: e.target.value })} /></div>
-              <div><Label>Valor Total (R$)</Label><Input type="number" step="0.01" value={form.valorTotal || ""} onChange={e => setForm({ ...form, valorTotal: e.target.value })} /></div>
+              <div><Label>Valor por Litro (R$)</Label><MoneyInput value={form.precoLitro} onChange={v => setForm({ ...form, precoLitro: v })} decimals={3} placeholder="0,000" /></div>
+              <div><Label>Valor Total (R$)</Label><MoneyInput value={form.valorTotal} onChange={v => setForm({ ...form, valorTotal: v })} /></div>
               <div><Label>KM Atual</Label><Input type="number" value={form.kmAtual || ""} onChange={e => setForm({ ...form, kmAtual: e.target.value })} /></div>
               <div><Label>Posto</Label><Input value={form.posto || ""} onChange={e => setForm({ ...form, posto: e.target.value })} /></div>
               <div><Label>Motorista</Label><Input value={form.motorista || ""} onChange={e => setForm({ ...form, motorista: e.target.value })} /></div>

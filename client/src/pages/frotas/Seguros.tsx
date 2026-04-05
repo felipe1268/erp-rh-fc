@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -205,8 +206,8 @@ export default function Seguros() {
               <div><Label>Seguradora *</Label><Input value={form.seguradora || ""} onChange={e => setForm({ ...form, seguradora: e.target.value })} /></div>
               <div><Label>Nº Apólice</Label><Input value={form.numeroApolice || ""} onChange={e => setForm({ ...form, numeroApolice: e.target.value })} /></div>
               <div><Label>Tipo de Cobertura</Label><Input value={form.tipoCobertura || ""} onChange={e => setForm({ ...form, tipoCobertura: e.target.value })} placeholder="Ex: Compreensivo, Terceiros..." /></div>
-              <div><Label>Valor do Prêmio (R$)</Label><Input type="number" step="0.01" value={form.valorPremio || ""} onChange={e => setForm({ ...form, valorPremio: e.target.value })} /></div>
-              <div><Label>Valor da Franquia (R$)</Label><Input type="number" step="0.01" value={form.franquia || ""} onChange={e => setForm({ ...form, franquia: e.target.value })} /></div>
+              <div><Label>Valor do Prêmio (R$)</Label><MoneyInput value={form.valorPremio} onChange={v => setForm({ ...form, valorPremio: v })} /></div>
+              <div><Label>Valor da Franquia (R$)</Label><MoneyInput value={form.franquia} onChange={v => setForm({ ...form, franquia: v })} /></div>
               <div><Label>Data Início</Label><Input type="date" value={form.dataInicio || ""} onChange={e => setForm({ ...form, dataInicio: e.target.value })} /></div>
               <div><Label>Data Fim</Label><Input type="date" value={form.dataFim || ""} onChange={e => setForm({ ...form, dataFim: e.target.value })} /></div>
               <div>

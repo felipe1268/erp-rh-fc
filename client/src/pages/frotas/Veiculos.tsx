@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image, Camera, Loader2, Sparkles } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
+import { MoneyInput } from "@/components/ui/money-input";
 
 const TIPOS = ["Carro", "SUV", "Caminhonete", "Caminhão", "Utilitário", "Van", "Moto", "Ônibus", "Máquina", "Outros"];
 const STATUS = ["Ativo", "Em Manutenção", "Inativo", "Vendido"];
@@ -452,7 +453,7 @@ export default function Veiculos() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Valor de Compra (R$)</Label>
-                    <Input className="h-9" type="number" step="0.01" value={form.valorCompra || ""} onChange={e => setForm({ ...form, valorCompra: e.target.value })} />
+                    <MoneyInput className="h-9" value={form.valorCompra} onChange={v => setForm({ ...form, valorCompra: v })} />
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Depreciação (anos)</Label>

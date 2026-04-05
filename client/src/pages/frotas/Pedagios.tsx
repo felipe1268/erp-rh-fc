@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -359,7 +360,7 @@ export default function Pedagios() {
               </div>
               <div>
                 <Label className="text-xs">Valor (R$) *</Label>
-                <Input type="number" step="0.01" value={form.valor || ""} onChange={e => setForm({ ...form, valor: e.target.value })} />
+                <MoneyInput value={form.valor} onChange={v => setForm({ ...form, valor: v })} />
               </div>
               <div>
                 <Label className="text-xs">Eixos</Label>

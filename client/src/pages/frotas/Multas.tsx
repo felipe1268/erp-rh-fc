@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -195,8 +196,8 @@ export default function Multas() {
                 </Select>
               </div>
               <div><Label>Pontos</Label><Input type="number" value={form.pontos || ""} onChange={e => setForm({ ...form, pontos: parseInt(e.target.value) || 0 })} /></div>
-              <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={form.valorOriginal || ""} onChange={e => setForm({ ...form, valorOriginal: e.target.value })} /></div>
-              <div><Label>Valor com Desconto</Label><Input type="number" step="0.01" value={form.valorComDesconto || ""} onChange={e => setForm({ ...form, valorComDesconto: e.target.value })} /></div>
+              <div><Label>Valor (R$)</Label><MoneyInput value={form.valorOriginal} onChange={v => setForm({ ...form, valorOriginal: v })} /></div>
+              <div><Label>Valor com Desconto</Label><MoneyInput value={form.valorComDesconto} onChange={v => setForm({ ...form, valorComDesconto: v })} /></div>
               <div><Label>Vencimento</Label><Input type="date" value={form.dataVencimento || ""} onChange={e => setForm({ ...form, dataVencimento: e.target.value })} /></div>
               <div>
                 <Label>Status</Label>

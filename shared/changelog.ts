@@ -7858,4 +7858,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 16:00:00",
   },
+  {
+    version: 1023,
+    titulo: "MoneyInput — Formatação Brasileira (R$) em Todos os Formulários de Frotas",
+    descricao:
+      "Componente MoneyInput reutilizável com formatação monetária brasileira (1.000,00) " +
+      "aplicado em todos os campos de valor do módulo Frotas: Veículos (valor de compra), " +
+      "Manutenções (custo e valor unitário de itens), Seguros (prêmio e franquia), " +
+      "Multas (valor original e com desconto), IPVA, Licenciamento, Combustível " +
+      "(valor total e preço/litro com 3 decimais) e Pedágios. Suporte a casas decimais " +
+      "configuráveis via prop 'decimals'.",
+    tipo: "melhoria",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 17:00:00",
+  },
 ];

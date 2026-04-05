@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -675,7 +676,7 @@ export default function Manutencoes() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Custo (R$)</Label>
-                    <Input className="h-9" type="number" step="0.01" value={form.custo || ""} onChange={e => setForm({ ...form, custo: e.target.value })} />
+                    <MoneyInput className="h-9" value={form.custo} onChange={v => setForm({ ...form, custo: v })} />
                   </div>
                 </div>
               </div>
@@ -726,7 +727,7 @@ export default function Manutencoes() {
                               <Input className="h-8 text-sm text-center" type="number" min="0.01" step="0.01" value={item.quantidade || ""} onChange={e => updateMaintItem(idx, "quantidade", parseFloat(e.target.value) || 0)} />
                             </td>
                             <td className="px-2 py-1.5">
-                              <Input className="h-8 text-sm text-right" type="number" min="0" step="0.01" value={item.valorUnitario || ""} onChange={e => updateMaintItem(idx, "valorUnitario", parseFloat(e.target.value) || 0)} />
+                              <MoneyInput className="h-8 text-sm text-right" value={item.valorUnitario} onChange={v => updateMaintItem(idx, "valorUnitario", parseFloat(v) || 0)} />
                             </td>
                             <td className="px-2 py-1.5 text-right font-medium text-sm">
                               {fmt(item.valorTotal)}
