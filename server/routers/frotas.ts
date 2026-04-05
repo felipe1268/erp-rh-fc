@@ -661,7 +661,8 @@ export const frotasRouter = router({
       const db = await getDb();
       let pdfParse: any;
       try {
-        pdfParse = require('pdf-parse');
+        const mod = await import('pdf-parse');
+        pdfParse = mod.default || mod;
       } catch (e: any) {
         console.error('[FuelPDF] pdf-parse not available:', e.message);
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Módulo pdf-parse não disponível. Contate o suporte.' });
