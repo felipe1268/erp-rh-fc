@@ -934,7 +934,7 @@ export default function Combustivel() {
         </Dialog>
 
         <Dialog open={driverDialogOpen} onOpenChange={setDriverDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" /> Gestão de Motoristas — Mesclar Nomes
@@ -949,7 +949,7 @@ export default function Combustivel() {
                 <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 <>
-                  <div className="space-y-1 max-h-[250px] overflow-y-auto border rounded-lg p-2">
+                  <div className="space-y-1 max-h-[50vh] overflow-y-auto border rounded-lg p-3">
                     <p className="text-xs font-medium text-muted-foreground px-2 pb-1">Motoristas encontrados ({driverNames.data?.drivers?.length || 0})</p>
                     {driverNames.data?.drivers?.map((d: any) => {
                       const isSelected = selectedDrivers.includes(d.motorista);
@@ -1025,7 +1025,7 @@ export default function Combustivel() {
                   {driverNames.data?.aliases && driverNames.data.aliases.length > 0 && (
                     <div className="border rounded-lg p-3 space-y-2">
                       <p className="text-xs font-medium text-muted-foreground">Mapeamentos salvos ({driverNames.data.aliases.length})</p>
-                      <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                      <div className="space-y-1 max-h-[30vh] overflow-y-auto">
                         {driverNames.data.aliases.map((a: any) => (
                           <div key={a.id} className="flex items-center gap-2 text-sm bg-muted/30 rounded-md px-2 py-1">
                             <span className="text-muted-foreground line-through">{a.alias_name}</span>
