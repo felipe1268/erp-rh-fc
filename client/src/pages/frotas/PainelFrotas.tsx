@@ -39,6 +39,7 @@ export default function PainelFrotas() {
   const [, navigate] = useLocation();
   const [alertFilter, setAlertFilter] = useState<AlertFilter>("todos");
   const [idadeDialog, setIdadeDialog] = useState<string | null>(null);
+  const [custoMesDialog, setCustoMesDialog] = useState<string | null>(null);
 
   const initMut = trpc.frotas.initTables.useMutation();
   const dash = trpc.frotas.getDashboard.useQuery(
@@ -354,7 +355,11 @@ export default function PainelFrotas() {
                               const pctManut = max > 0 ? (c.manutencao / max) * 100 : 0;
                               const pctMultas = max > 0 ? (c.multas / max) * 100 : 0;
                               return (
-                                <div key={m} className="flex items-center gap-2">
+                                <div
+                                  key={m}
+                                  className="flex items-center gap-2 cursor-pointer rounded-lg p-1 -mx-1 hover:bg-muted/60 transition-colors"
+                                  onClick={() => setCustoMesDialog(m)}
+                                >
                                   <span className="text-[11px] w-20 text-muted-foreground font-mono">{fmtMesAno(m)}</span>
                                   <div className="flex-1 h-5 bg-muted rounded overflow-hidden flex">
                                     {pctComb > 0 && <div className="h-full bg-amber-500" style={{ width: `${pctComb}%` }} />}
@@ -829,6 +834,74 @@ export default function PainelFrotas() {
           </>
         )}
       </div>
+
+      <Dialog open={!!custoMesDialog} onOpenChange={() => setCustoMesDialog(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-orange-600" />
+              Custos por Veículo — {custoMesDialog ? fmtMesAno(custoMesDialog) : ""}
+            </DialogTitle>
+          </DialogHeader>
+          {d && custoMesDialog && (d as any).custosMensaisVeiculo?.[custoMesDialog] ? (() => {
+            const veics = Object.values((d as any).custosMensaisVeiculo[custoMesDialog]) as Array<{placa: string; modelo: string; combustivel: number; manutencao: number; multas: number}>;
+            const sorted = [...veics].sort((a, b) => (b.combustivel + b.manutencao + b.multas) - (a.combustivel + a.manutencao + a.multas));
+            const totalMes = (d.custosTotaisByMonth as any)[custoMesDialog];
+            return (
+              <div className="space-y-3">
+                {totalMes && (
+                  <div className="grid grid-cols-3 gap-3 mb-2">
+                    <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-center">
+                      <p className="text-[10px] text-amber-600 uppercase font-medium">Combustível</p>
+                      <p className="text-sm font-bold text-amber-700">{fmt(totalMes.combustivel)}</p>
+                    </div>
+                    <div className="p-2.5 bg-orange-50 rounded-lg border border-orange-200 text-center">
+                      <p className="text-[10px] text-orange-600 uppercase font-medium">Manutenção</p>
+                      <p className="text-sm font-bold text-orange-700">{fmt(totalMes.manutencao)}</p>
+                    </div>
+                    <div className="p-2.5 bg-red-50 rounded-lg border border-red-200 text-center">
+                      <p className="text-[10px] text-red-600 uppercase font-medium">Multas</p>
+                      <p className="text-sm font-bold text-red-700">{fmt(totalMes.multas)}</p>
+                    </div>
+                  </div>
+                )}
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/50 text-xs">
+                        <th className="text-left p-2 font-medium">Veículo</th>
+                        <th className="text-right p-2 font-medium text-amber-600">Combustível</th>
+                        <th className="text-right p-2 font-medium text-orange-600">Manutenção</th>
+                        <th className="text-right p-2 font-medium text-red-600">Multas</th>
+                        <th className="text-right p-2 font-medium">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.map((v, i) => {
+                        const total = v.combustivel + v.manutencao + v.multas;
+                        return (
+                          <tr key={i} className="border-t hover:bg-muted/30">
+                            <td className="p-2">
+                              <span className="font-mono text-xs font-bold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded mr-1.5">{v.placa}</span>
+                              <span className="text-xs text-muted-foreground">{v.modelo}</span>
+                            </td>
+                            <td className="text-right p-2 text-xs">{v.combustivel > 0 ? fmt(v.combustivel) : "—"}</td>
+                            <td className="text-right p-2 text-xs">{v.manutencao > 0 ? fmt(v.manutencao) : "—"}</td>
+                            <td className="text-right p-2 text-xs">{v.multas > 0 ? fmt(v.multas) : "—"}</td>
+                            <td className="text-right p-2 text-xs font-bold">{fmt(total)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })() : (
+            <p className="text-sm text-muted-foreground">Nenhum dado para este mês.</p>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!idadeDialog} onOpenChange={() => setIdadeDialog(null)}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">

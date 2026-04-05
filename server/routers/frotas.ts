@@ -1450,20 +1450,38 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       const totalIpvaGeral = allIpva.reduce((s: number, i: any) => s + n(i.valor_total), 0);
 
       const custosTotaisByMonth: Record<string, { combustivel: number; manutencao: number; multas: number }> = {};
+      const custosMensaisVeiculo: Record<string, Record<number, { placa: string; modelo: string; combustivel: number; manutencao: number; multas: number }>> = {};
+      const vehicleMap: Record<number, { placa: string; modelo: string }> = {};
+      for (const v of allVehicles) vehicleMap[v.id] = { placa: v.placa || "S/P", modelo: v.modelo || "" };
+
+      function ensureMV(mes: string, vid: number) {
+        if (!custosMensaisVeiculo[mes]) custosMensaisVeiculo[mes] = {};
+        if (!custosMensaisVeiculo[mes][vid]) {
+          const info = vehicleMap[vid] || { placa: "S/P", modelo: "?" };
+          custosMensaisVeiculo[mes][vid] = { placa: info.placa, modelo: info.modelo, combustivel: 0, manutencao: 0, multas: 0 };
+        }
+      }
+
       for (const f of allFuel) {
         const m = (f.data || "").substring(0, 7);
         if (!custosTotaisByMonth[m]) custosTotaisByMonth[m] = { combustivel: 0, manutencao: 0, multas: 0 };
         custosTotaisByMonth[m].combustivel += n(f.valor_total);
+        ensureMV(m, f.vehicle_id);
+        custosMensaisVeiculo[m][f.vehicle_id].combustivel += n(f.valor_total);
       }
       for (const m of allMaint) {
         const mo = (m.data_manutencao || "").substring(0, 7);
         if (!custosTotaisByMonth[mo]) custosTotaisByMonth[mo] = { combustivel: 0, manutencao: 0, multas: 0 };
         custosTotaisByMonth[mo].manutencao += n(m.custo);
+        ensureMV(mo, m.vehicle_id);
+        custosMensaisVeiculo[mo][m.vehicle_id].manutencao += n(m.custo);
       }
       for (const f of allFines) {
         const mo = (f.data_infracao || "").substring(0, 7);
         if (!custosTotaisByMonth[mo]) custosTotaisByMonth[mo] = { combustivel: 0, manutencao: 0, multas: 0 };
         custosTotaisByMonth[mo].multas += n(f.valor_original);
+        ensureMV(mo, f.vehicle_id);
+        custosMensaisVeiculo[mo][f.vehicle_id].multas += n(f.valor_original);
       }
 
       const tipoCombustivel: Record<string, number> = {};
@@ -1483,7 +1501,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         totalManutCusto, totalCombustivel, totalMultas, multasPendentes,
         totalIpvaPendente, consumoMedio, custoKm, totalKm, totalLitros,
         tipoCount, marcaCount,
-        fuelByMonth, maintByMonth, custosTotaisByMonth,
+        fuelByMonth, maintByMonth, custosTotaisByMonth, custosMensaisVeiculo,
         alertas, alertasCriticos, alertasAlerta, alertasInfo,
         veiculosEmManutencao: allMaint.filter((m: any) => m.status === "em_andamento").length,
         depreciacaoPorVeiculo,
