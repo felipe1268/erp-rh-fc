@@ -7829,4 +7829,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 14:00:00",
   },
+  {
+    version: 1021,
+    titulo: "Dashboard Manutenção: Filtros Ano/Mês, Comparativo Anual e Detalhe por Veículo",
+    descricao:
+      "Filtros de período (ano/mês) e veículo na aba Análise Manutenção. Comparativo automático " +
+      "ano anterior vs atual com variação percentual e tabela de peças lado a lado. Nova sub-aba " +
+      "'Detalhe Veículo' com ficha completa: KPIs, composição peças/serviços, evolução mensal, " +
+      "histórico de OS com itens detalhados. Botão de drill-down na tabela 'Custo por Veículo'. " +
+      "Barras de evolução mensal clicáveis para filtrar por mês específico. 4 novas manutenções " +
+      "cadastradas do Caminhão Bomba ATA8A53 (JAP Gold + Hidráulica Globo, total R$30.387).",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 15:00:00",
+  },
 ];

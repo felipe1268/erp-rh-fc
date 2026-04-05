@@ -2051,7 +2051,12 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
     }),
 
   getMaintenanceAnalytics: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({
+      companyId: z.number(),
+      ano: z.number().optional(),
+      mes: z.number().min(1).max(12).optional(),
+      vehiclePlaca: z.string().optional(),
+    }))
     .query(async ({ ctx, input }) => {
       if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para esta empresa' });
@@ -2061,6 +2066,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
 
       const itemsRes = await db.execute(sql`
         SELECT mi.*, fm.vehicle_id, fm.data_manutencao, fm.fornecedor, fm.tipo as manut_tipo,
+               fm.descricao as manut_descricao, fm.custo as manut_custo, fm.id as manut_id,
                v.placa, v.modelo, v.marca
         FROM fleet_maintenance_items mi
         JOIN fleet_maintenances fm ON fm.id = mi.maintenance_id
@@ -2068,7 +2074,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         WHERE mi.company_id = ${input.companyId}
         ORDER BY fm.data_manutencao DESC
       `);
-      const allItems = (itemsRes as any).rows || [];
+      const rawItems = (itemsRes as any).rows || [];
 
       const maintRes = await db.execute(sql`
         SELECT fm.*, v.placa, v.modelo, v.marca
@@ -2077,7 +2083,34 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         WHERE fm.company_id = ${input.companyId}
         ORDER BY fm.data_manutencao DESC
       `);
-      const allMaint = (maintRes as any).rows || [];
+      const rawMaint = (maintRes as any).rows || [];
+
+      const filterByPeriod = (dateStr: string) => {
+        if (!dateStr) return true;
+        const d = new Date(dateStr);
+        if (input.ano && d.getFullYear() !== input.ano) return false;
+        if (input.mes && (d.getMonth() + 1) !== input.mes) return false;
+        return true;
+      };
+      const filterByVehicle = (placa: string) => {
+        if (!input.vehiclePlaca) return true;
+        return placa === input.vehiclePlaca;
+      };
+
+      const allItems = rawItems.filter((i: any) => filterByPeriod(i.data_manutencao) && filterByVehicle(i.placa));
+      const allMaint = rawMaint.filter((m: any) => filterByPeriod(m.data_manutencao) && filterByVehicle(m.placa));
+
+      const anosDisp = [...new Set(rawMaint.map((m: any) => {
+        const d = m.data_manutencao;
+        return d ? new Date(d).getFullYear() : null;
+      }).filter(Boolean))].sort() as number[];
+
+      const mesesDisp = input.ano
+        ? [...new Set(rawMaint.filter((m: any) => m.data_manutencao && new Date(m.data_manutencao).getFullYear() === input.ano)
+            .map((m: any) => new Date(m.data_manutencao).getMonth() + 1))].sort((a, b) => (a as number) - (b as number)) as number[]
+        : [];
+
+      const veiculosDisp = [...new Set(rawMaint.map((m: any) => m.placa))].sort() as string[];
 
       const pecaFreq: Record<string, { nome: string; count: number; totalGasto: number; veiculos: Set<string>; datas: string[] }> = {};
       for (const item of allItems) {
@@ -2089,7 +2122,6 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         pecaFreq[key].veiculos.add(item.placa);
         pecaFreq[key].datas.push(item.data_manutencao);
       }
-
       const pecasMaisTrocadas = Object.values(pecaFreq)
         .map((p: any) => ({ ...p, veiculos: Array.from(p.veiculos), numVeiculos: p.veiculos.size }))
         .sort((a: any, b: any) => b.count - a.count)
@@ -2136,13 +2168,13 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         else { categoriaTotais.servicos += n(item.valor_total); categoriaTotais.servicosCount += 1; }
       }
 
-      const custoVeiculo: Record<string, { placa: string; modelo: string; marca: string; totalPecas: number; totalServicos: number; numOS: number }> = {};
+      const custoVeiculo: Record<string, { placa: string; modelo: string; marca: string; totalPecas: number; totalServicos: number; numOS: number; vehicleId: number }> = {};
       for (const m of allMaint) {
-        if (!custoVeiculo[m.placa]) custoVeiculo[m.placa] = { placa: m.placa, modelo: m.modelo, marca: m.marca, totalPecas: 0, totalServicos: 0, numOS: 0 };
+        if (!custoVeiculo[m.placa]) custoVeiculo[m.placa] = { placa: m.placa, modelo: m.modelo, marca: m.marca, totalPecas: 0, totalServicos: 0, numOS: 0, vehicleId: m.vehicle_id };
         custoVeiculo[m.placa].numOS += 1;
       }
       for (const item of allItems) {
-        if (!custoVeiculo[item.placa]) custoVeiculo[item.placa] = { placa: item.placa, modelo: item.modelo, marca: item.marca, totalPecas: 0, totalServicos: 0, numOS: 0 };
+        if (!custoVeiculo[item.placa]) custoVeiculo[item.placa] = { placa: item.placa, modelo: item.modelo, marca: item.marca, totalPecas: 0, totalServicos: 0, numOS: 0, vehicleId: item.vehicle_id };
         if (item.categoria === 'peca') custoVeiculo[item.placa].totalPecas += n(item.valor_total);
         else custoVeiculo[item.placa].totalServicos += n(item.valor_total);
       }
@@ -2166,6 +2198,90 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         evolucaoMensal[mes].numOS += 1;
       }
 
+      let comparativoAnual: any = null;
+      if (input.ano && anosDisp.length > 1) {
+        const anoAnterior = input.ano - 1;
+        if (anosDisp.includes(anoAnterior)) {
+          const itemsAnt = rawItems.filter((i: any) => i.data_manutencao && new Date(i.data_manutencao).getFullYear() === anoAnterior && filterByVehicle(i.placa));
+          const maintAnt = rawMaint.filter((m: any) => m.data_manutencao && new Date(m.data_manutencao).getFullYear() === anoAnterior && filterByVehicle(m.placa));
+          const catAnt = { pecas: 0, servicos: 0, pecasCount: 0, servicosCount: 0 };
+          for (const item of itemsAnt) {
+            if (item.categoria === 'peca') { catAnt.pecas += n(item.valor_total); catAnt.pecasCount += parseInt(item.quantidade) || 1; }
+            else { catAnt.servicos += n(item.valor_total); catAnt.servicosCount += 1; }
+          }
+          const pecaFreqAnt: Record<string, { nome: string; count: number; totalGasto: number }> = {};
+          for (const item of itemsAnt) {
+            if (item.categoria !== 'peca') continue;
+            const key = item.nome.toLowerCase().trim();
+            if (!pecaFreqAnt[key]) pecaFreqAnt[key] = { nome: item.nome, count: 0, totalGasto: 0 };
+            pecaFreqAnt[key].count += parseInt(item.quantidade) || 1;
+            pecaFreqAnt[key].totalGasto += n(item.valor_total);
+          }
+          comparativoAnual = {
+            anoAnterior,
+            categoriaTotaisAnterior: catAnt,
+            totalManutAnterior: maintAnt.length,
+            totalItensAnterior: itemsAnt.length,
+            pecasAnterior: Object.values(pecaFreqAnt).sort((a: any, b: any) => b.count - a.count).slice(0, 20),
+          };
+        }
+      }
+
+      let detalheVeiculo: any = null;
+      if (input.vehiclePlaca) {
+        const osVeiculo = allMaint.map((m: any) => {
+          const itensOS = allItems.filter((i: any) => String(i.manut_id) === String(m.id));
+          return {
+            id: m.id, data: m.data_manutencao, tipo: m.tipo, descricao: m.descricao,
+            fornecedor: m.fornecedor, custo: n(m.custo), status: m.status,
+            itens: itensOS.map((i: any) => ({
+              nome: i.nome, categoria: i.categoria,
+              quantidade: parseInt(i.quantidade) || 1,
+              valorUnit: n(i.valor_unitario), valorTotal: n(i.valor_total),
+            })),
+          };
+        });
+        const evolMensalVeic: Record<string, { pecas: number; servicos: number; total: number; numOS: number }> = {};
+        for (const item of allItems) {
+          const mes = item.data_manutencao?.substring(0, 7) || '';
+          if (!mes) continue;
+          if (!evolMensalVeic[mes]) evolMensalVeic[mes] = { pecas: 0, servicos: 0, total: 0, numOS: 0 };
+          if (item.categoria === 'peca') evolMensalVeic[mes].pecas += n(item.valor_total);
+          else evolMensalVeic[mes].servicos += n(item.valor_total);
+          evolMensalVeic[mes].total += n(item.valor_total);
+        }
+        for (const m of allMaint) {
+          const mes = m.data_manutencao?.substring(0, 7) || '';
+          if (!mes) continue;
+          if (!evolMensalVeic[mes]) evolMensalVeic[mes] = { pecas: 0, servicos: 0, total: 0, numOS: 0 };
+          evolMensalVeic[mes].numOS += 1;
+        }
+        const fornVeic: Record<string, { nome: string; total: number; numOS: number }> = {};
+        for (const m of allMaint) {
+          const f = m.fornecedor || 'Não informado';
+          if (!fornVeic[f]) fornVeic[f] = { nome: f, total: 0, numOS: 0 };
+          fornVeic[f].total += n(m.custo); fornVeic[f].numOS += 1;
+        }
+        const pecasVeic: Record<string, { nome: string; count: number; totalGasto: number }> = {};
+        for (const item of allItems) {
+          if (item.categoria !== 'peca') continue;
+          const key = item.nome.toLowerCase().trim();
+          if (!pecasVeic[key]) pecasVeic[key] = { nome: item.nome, count: 0, totalGasto: 0 };
+          pecasVeic[key].count += parseInt(item.quantidade) || 1;
+          pecasVeic[key].totalGasto += n(item.valor_total);
+        }
+        const veicInfo = rawMaint.find((m: any) => m.placa === input.vehiclePlaca);
+        detalheVeiculo = {
+          placa: input.vehiclePlaca,
+          modelo: veicInfo?.modelo || '',
+          marca: veicInfo?.marca || '',
+          ordens: osVeiculo,
+          evolucaoMensal: evolMensalVeic,
+          fornecedores: Object.values(fornVeic).sort((a: any, b: any) => b.total - a.total),
+          pecas: Object.values(pecasVeic).sort((a: any, b: any) => b.count - a.count),
+        };
+      }
+
       return {
         pecasMaisTrocadas,
         trocasRapidas,
@@ -2175,6 +2291,14 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         evolucaoMensal,
         totalItens: allItems.length,
         totalManutencoes: allMaint.length,
+        anosDisponiveis: anosDisp,
+        mesesDisponiveis: mesesDisp,
+        veiculosDisponiveis: veiculosDisp,
+        filtroAno: input.ano || null,
+        filtroMes: input.mes || null,
+        filtroVeiculo: input.vehiclePlaca || null,
+        comparativoAnual,
+        detalheVeiculo,
       };
     }),
 

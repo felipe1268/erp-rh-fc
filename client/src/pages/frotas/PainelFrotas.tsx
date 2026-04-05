@@ -11,6 +11,7 @@ import {
   BarChart3, Shield, Receipt, FileText, AlertCircle, Info,
   CheckCircle2, Calendar, MapPin, Activity, PieChart, Car,
   ArrowUpRight, ArrowDownRight, Clock, Droplets, TrendingUp,
+  Filter, X, ChevronRight, Eye, Search,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useEffect, useState } from "react";
@@ -42,13 +43,16 @@ export default function PainelFrotas() {
   const [custoMesDialog, setCustoMesDialog] = useState<string | null>(null);
 
   const [maintTab, setMaintTab] = useState<string>("pecas");
+  const [filtroAno, setFiltroAno] = useState<number | undefined>();
+  const [filtroMes, setFiltroMes] = useState<number | undefined>();
+  const [filtroVeiculo, setFiltroVeiculo] = useState<string | undefined>();
   const initMut = trpc.frotas.initTables.useMutation();
   const dash = trpc.frotas.getDashboard.useQuery(
     { companyId: cId },
     { enabled: cId > 0, retry: 1 },
   );
   const maintAnalytics = trpc.frotas.getMaintenanceAnalytics.useQuery(
-    { companyId: cId },
+    { companyId: cId, ano: filtroAno, mes: filtroMes, vehiclePlaca: filtroVeiculo },
     { enabled: cId > 0 },
   );
 
@@ -834,7 +838,7 @@ export default function PainelFrotas() {
                 )}
               </TabsContent>
 
-              <TabsContent value="manutencao" className="space-y-6">
+              <TabsContent value="manutencao" className="space-y-4">
                 {maintAnalytics.isLoading ? (
                   <Card><CardContent className="py-12 text-center"><p className="text-muted-foreground">Carregando análise...</p></CardContent></Card>
                 ) : maintAnalytics.data ? (() => {
@@ -843,20 +847,162 @@ export default function PainelFrotas() {
                   const pctPecas = totalGeral > 0 ? Math.round((ma.categoriaTotais.pecas / totalGeral) * 100) : 0;
                   const evolKeys = Object.keys(ma.evolucaoMensal).sort();
                   const maxEvolTotal = evolKeys.length > 0 ? Math.max(...evolKeys.map(k => (ma.evolucaoMensal as any)[k].total)) : 1;
+                  const comp = ma.comparativoAnual;
+                  const MESES_FULL = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+                  const filtroPeriodoLabel = filtroAno
+                    ? filtroMes ? `${MESES_FULL[filtroMes]}/${filtroAno}` : `Ano ${filtroAno}`
+                    : "Todo Período";
+                  const temFiltro = filtroAno || filtroMes || filtroVeiculo;
                   return (
                     <>
+                      <Card className="border-emerald-200 bg-emerald-50/30">
+                        <CardContent className="p-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Filter className="h-4 w-4 text-emerald-600" />
+                            <span className="text-sm font-semibold text-emerald-800">Filtros de Análise</span>
+                            {temFiltro && (
+                              <button onClick={() => { setFiltroAno(undefined); setFiltroMes(undefined); setFiltroVeiculo(undefined); }}
+                                className="ml-auto text-xs text-red-600 hover:text-red-800 flex items-center gap-1">
+                                <X className="h-3 w-3" /> Limpar filtros
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <select value={filtroAno || ""} onChange={e => { setFiltroAno(e.target.value ? Number(e.target.value) : undefined); setFiltroMes(undefined); }}
+                              className="text-xs border rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-emerald-300 outline-none">
+                              <option value="">Todos os anos</option>
+                              {(ma.anosDisponiveis || []).map((a: number) => (
+                                <option key={a} value={a}>{a}</option>
+                              ))}
+                            </select>
+                            {filtroAno && (
+                              <select value={filtroMes || ""} onChange={e => setFiltroMes(e.target.value ? Number(e.target.value) : undefined)}
+                                className="text-xs border rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-emerald-300 outline-none">
+                                <option value="">Todos os meses</option>
+                                {(ma.mesesDisponiveis || []).map((m: number) => (
+                                  <option key={m} value={m}>{MESES_FULL[m]}</option>
+                                ))}
+                              </select>
+                            )}
+                            <select value={filtroVeiculo || ""} onChange={e => setFiltroVeiculo(e.target.value || undefined)}
+                              className="text-xs border rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-emerald-300 outline-none">
+                              <option value="">Todos os veículos</option>
+                              {(ma.veiculosDisponiveis || []).map((p: string) => (
+                                <option key={p} value={p}>{p}</option>
+                              ))}
+                            </select>
+                            {temFiltro && (
+                              <div className="flex items-center gap-1 px-3 py-1 bg-emerald-100 rounded-lg text-xs text-emerald-800">
+                                <Search className="h-3 w-3" />
+                                {filtroPeriodoLabel}{filtroVeiculo ? ` | ${filtroVeiculo}` : ""}
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <MiniCard label="Total Manutenções" value={String(ma.totalManutencoes)} icon={Wrench} color="text-emerald-600" />
-                        <MiniCard label="Total Itens" value={String(ma.totalItens)} icon={Activity} color="text-blue-600" />
+                        <MiniCard label="Manutenções" value={String(ma.totalManutencoes)} icon={Wrench} color="text-emerald-600" />
+                        <MiniCard label="Itens" value={String(ma.totalItens)} icon={Activity} color="text-blue-600" />
                         <MiniCard label="Peças" value={fmt(ma.categoriaTotais.pecas)} icon={PieChart} color="text-orange-600" />
                         <MiniCard label="Serviços (MO)" value={fmt(ma.categoriaTotais.servicos)} icon={DollarSign} color="text-violet-600" />
                       </div>
+
+                      {comp && (
+                        <Card className="border-blue-200">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                              <TrendingUp className="h-4 w-4 text-blue-600" />
+                              Comparativo {comp.anoAnterior} vs {filtroAno}
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              {[
+                                { label: "Manutenções", atual: ma.totalManutencoes, anterior: comp.totalManutAnterior },
+                                { label: "Itens", atual: ma.totalItens, anterior: comp.totalItensAnterior },
+                                { label: "Peças (R$)", atual: ma.categoriaTotais.pecas, anterior: comp.categoriaTotaisAnterior.pecas, isCurrency: true },
+                                { label: "Serviços (R$)", atual: ma.categoriaTotais.servicos, anterior: comp.categoriaTotaisAnterior.servicos, isCurrency: true },
+                              ].map((c, i) => {
+                                const diff = c.anterior > 0 ? ((c.atual - c.anterior) / c.anterior * 100) : 0;
+                                const up = diff > 0;
+                                return (
+                                  <div key={i} className="p-3 rounded-lg border bg-white">
+                                    <p className="text-[10px] text-muted-foreground uppercase mb-1">{c.label}</p>
+                                    <div className="flex items-end gap-2">
+                                      <span className="text-base font-bold">{c.isCurrency ? fmt(c.atual) : c.atual}</span>
+                                      {c.anterior > 0 && (
+                                        <span className={`text-[10px] flex items-center gap-0.5 ${up ? "text-red-600" : "text-green-600"}`}>
+                                          {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                                          {Math.abs(diff).toFixed(0)}%
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground">{comp.anoAnterior}: {c.isCurrency ? fmt(c.anterior) : c.anterior}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {comp.pecasAnterior?.length > 0 && ma.pecasMaisTrocadas.length > 0 && (
+                              <div className="mt-4 border-t pt-3">
+                                <p className="text-xs font-semibold mb-2 text-blue-700">Comparativo de Peças — Top 10</p>
+                                <div className="border rounded-lg overflow-hidden">
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="bg-blue-50 text-[10px]">
+                                        <th className="text-left p-2 font-medium">Peça</th>
+                                        <th className="text-center p-2 font-medium">{comp.anoAnterior} (qtd)</th>
+                                        <th className="text-center p-2 font-medium">{filtroAno} (qtd)</th>
+                                        <th className="text-right p-2 font-medium">{comp.anoAnterior} (R$)</th>
+                                        <th className="text-right p-2 font-medium">{filtroAno} (R$)</th>
+                                        <th className="text-center p-2 font-medium">Var.</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(() => {
+                                        const pecasAtualMap: Record<string, any> = {};
+                                        for (const p of ma.pecasMaisTrocadas) pecasAtualMap[p.nome.toLowerCase().trim()] = p;
+                                        const pecasAntMap: Record<string, any> = {};
+                                        for (const p of comp.pecasAnterior) pecasAntMap[p.nome.toLowerCase().trim()] = p;
+                                        const allKeys = [...new Set([...Object.keys(pecasAtualMap), ...Object.keys(pecasAntMap)])];
+                                        return allKeys.slice(0, 10).map((key, i) => {
+                                          const ant = pecasAntMap[key];
+                                          const atu = pecasAtualMap[key];
+                                          const qAnt = ant?.count || 0;
+                                          const qAtu = atu?.count || 0;
+                                          const vAnt = ant?.totalGasto || 0;
+                                          const vAtu = atu?.totalGasto || 0;
+                                          const varPct = vAnt > 0 ? ((vAtu - vAnt) / vAnt * 100) : (vAtu > 0 ? 100 : 0);
+                                          return (
+                                            <tr key={i} className="border-t">
+                                              <td className="p-2 font-medium">{(atu || ant).nome}</td>
+                                              <td className="p-2 text-center">{qAnt || "—"}</td>
+                                              <td className="p-2 text-center font-bold">{qAtu || "—"}</td>
+                                              <td className="p-2 text-right">{vAnt > 0 ? fmt(vAnt) : "—"}</td>
+                                              <td className="p-2 text-right font-bold">{vAtu > 0 ? fmt(vAtu) : "—"}</td>
+                                              <td className={`p-2 text-center font-bold ${varPct > 0 ? "text-red-600" : varPct < 0 ? "text-green-600" : ""}`}>
+                                                {varPct !== 0 ? `${varPct > 0 ? "+" : ""}${varPct.toFixed(0)}%` : "—"}
+                                              </td>
+                                            </tr>
+                                          );
+                                        });
+                                      })()}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
 
                       <div className="flex gap-1.5 flex-wrap">
                         {[
                           { key: "pecas", label: "Peças Mais Trocadas" },
                           { key: "rapidas", label: "Trocas Rápidas" },
                           { key: "veiculos", label: "Custo por Veículo" },
+                          { key: "detalhe", label: "Detalhe Veículo" },
                           { key: "fornecedores", label: "Fornecedores" },
                           { key: "evolucao", label: "Evolução Mensal" },
                         ].map(t => (
@@ -875,12 +1021,12 @@ export default function PainelFrotas() {
                             <CardTitle className="text-sm flex items-center gap-2">
                               <PieChart className="h-4 w-4 text-orange-600" />
                               Top Peças Mais Trocadas
+                              {temFiltro && <Badge variant="outline" className="text-[9px]">{filtroPeriodoLabel}</Badge>}
                             </CardTitle>
-                            <p className="text-xs text-muted-foreground">Peças com maior frequência de troca na frota. Identifique padrões de desgaste e oportunidades de compra em lote.</p>
                           </CardHeader>
                           <CardContent>
                             {ma.pecasMaisTrocadas.length === 0 ? (
-                              <p className="text-sm text-muted-foreground py-4 text-center">Nenhum item de peça cadastrado ainda.</p>
+                              <p className="text-sm text-muted-foreground py-4 text-center">Nenhum item de peça no período.</p>
                             ) : (
                               <div className="space-y-2">
                                 {ma.pecasMaisTrocadas.map((p: any, i: number) => {
@@ -923,18 +1069,14 @@ export default function PainelFrotas() {
                             <CardTitle className="text-sm flex items-center gap-2">
                               <AlertTriangle className="h-4 w-4 text-red-600" />
                               Trocas Rápidas (menos de 6 meses)
+                              {temFiltro && <Badge variant="outline" className="text-[9px]">{filtroPeriodoLabel}</Badge>}
                             </CardTitle>
-                            <p className="text-xs text-muted-foreground">
-                              Peças que foram trocadas novamente em menos de 180 dias no mesmo veículo.
-                              Pode indicar peça de baixa qualidade, problema estrutural, ou uso inadequado.
-                            </p>
                           </CardHeader>
                           <CardContent>
                             {ma.trocasRapidas.length === 0 ? (
                               <div className="py-6 text-center">
                                 <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
                                 <p className="text-sm font-medium">Nenhuma troca rápida detectada</p>
-                                <p className="text-xs text-muted-foreground">Todas as peças mantiveram vida útil adequada</p>
                               </div>
                             ) : (
                               <div className="space-y-2">
@@ -970,9 +1112,9 @@ export default function PainelFrotas() {
                           <CardHeader className="pb-2">
                             <CardTitle className="text-sm flex items-center gap-2">
                               <Truck className="h-4 w-4 text-blue-600" />
-                              Custo de Manutenção por Veículo (Peças vs Serviços)
+                              Custo por Veículo (Peças vs Serviços)
+                              {temFiltro && <Badge variant="outline" className="text-[9px]">{filtroPeriodoLabel}</Badge>}
                             </CardTitle>
-                            <p className="text-xs text-muted-foreground">Composição detalhada do gasto. Veículos com alta proporção de serviços podem indicar problemas complexos ou recorrentes.</p>
                           </CardHeader>
                           <CardContent>
                             <div className="border rounded-lg overflow-hidden">
@@ -985,6 +1127,7 @@ export default function PainelFrotas() {
                                     <th className="text-right p-2.5 font-medium">Total</th>
                                     <th className="text-center p-2.5 font-medium">OS</th>
                                     <th className="p-2.5 font-medium w-32">Composição</th>
+                                    <th className="p-2.5 w-8"></th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -1010,6 +1153,12 @@ export default function PainelFrotas() {
                                             <span>{100-pctP}% MO</span>
                                           </div>
                                         </td>
+                                        <td className="p-1">
+                                          <button onClick={() => { setFiltroVeiculo(v.placa); setMaintTab("detalhe"); }}
+                                            className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-600 transition-colors" title="Ver detalhe">
+                                            <Eye className="h-3.5 w-3.5" />
+                                          </button>
+                                        </td>
                                       </tr>
                                     );
                                   })}
@@ -1020,14 +1169,218 @@ export default function PainelFrotas() {
                         </Card>
                       )}
 
+                      {maintTab === "detalhe" && (
+                        <>
+                          {!filtroVeiculo ? (
+                            <Card>
+                              <CardContent className="py-8 text-center">
+                                <Truck className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                                <p className="text-sm font-medium mb-2">Selecione um veículo para análise detalhada</p>
+                                <div className="flex flex-wrap gap-2 justify-center">
+                                  {(ma.veiculosDisponiveis || []).map((p: string) => (
+                                    <button key={p} onClick={() => setFiltroVeiculo(p)}
+                                      className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-mono font-bold text-blue-700 hover:bg-blue-100 transition-colors">
+                                      {p}
+                                    </button>
+                                  ))}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ) : ma.detalheVeiculo ? (() => {
+                            const dv = ma.detalheVeiculo;
+                            const totalVeic = ma.categoriaTotais.pecas + ma.categoriaTotais.servicos;
+                            const pctPecasV = totalVeic > 0 ? Math.round((ma.categoriaTotais.pecas / totalVeic) * 100) : 0;
+                            const evolKeysV = Object.keys(dv.evolucaoMensal || {}).sort();
+                            const maxEvolV = evolKeysV.length > 0 ? Math.max(...evolKeysV.map((k: string) => (dv.evolucaoMensal as any)[k].total)) : 1;
+                            return (
+                              <div className="space-y-4">
+                                <Card className="border-blue-300 bg-blue-50/30">
+                                  <CardContent className="p-4">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                                          <Truck className="h-6 w-6 text-blue-600" />
+                                        </div>
+                                        <div>
+                                          <p className="font-mono text-lg font-bold text-blue-800">{dv.placa}</p>
+                                          <p className="text-sm text-muted-foreground">{dv.marca} {dv.modelo}</p>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-2xl font-bold text-blue-800">{fmt(totalVeic)}</p>
+                                        <p className="text-xs text-muted-foreground">{ma.totalManutencoes} OS | {ma.totalItens} itens</p>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                  <div className="p-3 bg-orange-50 rounded-lg border border-orange-200 text-center">
+                                    <p className="text-[10px] text-orange-600 uppercase font-medium">Peças</p>
+                                    <p className="text-base font-bold text-orange-700">{fmt(ma.categoriaTotais.pecas)}</p>
+                                    <p className="text-[10px] text-muted-foreground">{ma.categoriaTotais.pecasCount} un.</p>
+                                  </div>
+                                  <div className="p-3 bg-violet-50 rounded-lg border border-violet-200 text-center">
+                                    <p className="text-[10px] text-violet-600 uppercase font-medium">Serviços</p>
+                                    <p className="text-base font-bold text-violet-700">{fmt(ma.categoriaTotais.servicos)}</p>
+                                    <p className="text-[10px] text-muted-foreground">{ma.categoriaTotais.servicosCount} lançam.</p>
+                                  </div>
+                                  <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 text-center">
+                                    <p className="text-[10px] text-emerald-600 uppercase font-medium">Composição</p>
+                                    <div className="h-2 bg-muted rounded-full overflow-hidden flex mt-1 mb-0.5">
+                                      <div className="h-full bg-orange-500" style={{ width: `${pctPecasV}%` }} />
+                                      <div className="h-full bg-violet-500" style={{ width: `${100-pctPecasV}%` }} />
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground">{pctPecasV}% peças | {100-pctPecasV}% MO</p>
+                                  </div>
+                                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 text-center">
+                                    <p className="text-[10px] text-blue-600 uppercase font-medium">Fornecedores</p>
+                                    <p className="text-base font-bold text-blue-700">{(dv.fornecedores || []).length}</p>
+                                    <p className="text-[10px] text-muted-foreground">{(dv.fornecedores || []).map((f: any) => f.nome).slice(0,2).join(", ")}</p>
+                                  </div>
+                                </div>
+
+                                {dv.pecas && dv.pecas.length > 0 && (
+                                  <Card>
+                                    <CardHeader className="pb-2">
+                                      <CardTitle className="text-sm flex items-center gap-2">
+                                        <PieChart className="h-4 w-4 text-orange-600" />
+                                        Peças deste Veículo
+                                      </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                      <div className="space-y-1.5">
+                                        {dv.pecas.map((p: any, i: number) => {
+                                          const maxC = dv.pecas[0]?.count || 1;
+                                          const pctBar = Math.round((p.count / maxC) * 100);
+                                          return (
+                                            <div key={i} className="flex items-center gap-3">
+                                              <span className="text-xs text-muted-foreground w-4 text-right">{i+1}.</span>
+                                              <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-xs font-medium truncate">{p.nome}</span>
+                                                  <Badge variant="outline" className="text-[9px] h-4">{p.count}x</Badge>
+                                                </div>
+                                                <div className="h-1 bg-muted rounded-full mt-0.5 overflow-hidden">
+                                                  <div className="h-full bg-orange-400 rounded-full" style={{ width: `${pctBar}%` }} />
+                                                </div>
+                                              </div>
+                                              <span className="text-xs font-bold text-orange-600">{fmt(p.totalGasto)}</span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                )}
+
+                                {evolKeysV.length > 0 && (
+                                  <Card>
+                                    <CardHeader className="pb-2">
+                                      <CardTitle className="text-sm flex items-center gap-2">
+                                        <BarChart3 className="h-4 w-4 text-emerald-600" />
+                                        Evolução Mensal — {dv.placa}
+                                      </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                      <div className="space-y-2">
+                                        {evolKeysV.map((mes: string) => {
+                                          const ev = (dv.evolucaoMensal as any)[mes];
+                                          const pctMes = Math.round((ev.total / maxEvolV) * 100);
+                                          const pctP = ev.total > 0 ? Math.round((ev.pecas / ev.total) * 100) : 0;
+                                          return (
+                                            <div key={mes}>
+                                              <div className="flex items-center justify-between text-xs mb-0.5">
+                                                <span className="font-medium">{fmtMesAno(mes)}</span>
+                                                <span className="font-bold">{fmt(ev.total)} <span className="text-muted-foreground font-normal">({ev.numOS} OS)</span></span>
+                                              </div>
+                                              <div className="h-3 bg-muted rounded-full overflow-hidden flex" style={{ width: `${Math.max(pctMes, 8)}%` }}>
+                                                <div className="h-full bg-orange-500" style={{ width: `${pctP}%` }} />
+                                                <div className="h-full bg-violet-500" style={{ width: `${100-pctP}%` }} />
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                )}
+
+                                {dv.ordens && dv.ordens.length > 0 && (
+                                  <Card>
+                                    <CardHeader className="pb-2">
+                                      <CardTitle className="text-sm flex items-center gap-2">
+                                        <FileText className="h-4 w-4 text-slate-600" />
+                                        Histórico de OS — {dv.placa}
+                                      </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                      <div className="space-y-3">
+                                        {dv.ordens.map((os: any, idx: number) => (
+                                          <div key={idx} className="border rounded-lg p-3 hover:bg-muted/30 transition-colors">
+                                            <div className="flex items-center justify-between mb-2">
+                                              <div className="flex items-center gap-2">
+                                                <Badge variant={os.tipo === 'corretiva' ? 'destructive' : 'default'} className="text-[9px]">
+                                                  {os.tipo}
+                                                </Badge>
+                                                <span className="text-xs text-muted-foreground">{os.data}</span>
+                                              </div>
+                                              <span className="text-sm font-bold">{fmt(os.custo)}</span>
+                                            </div>
+                                            <p className="text-sm font-medium mb-1">{os.descricao}</p>
+                                            <p className="text-xs text-muted-foreground mb-2">{os.fornecedor}</p>
+                                            {os.itens && os.itens.length > 0 && (
+                                              <div className="border-t pt-2">
+                                                <table className="w-full text-[11px]">
+                                                  <thead>
+                                                    <tr className="text-muted-foreground">
+                                                      <th className="text-left py-0.5 font-medium">Item</th>
+                                                      <th className="text-center py-0.5 font-medium w-10">Tipo</th>
+                                                      <th className="text-center py-0.5 font-medium w-10">Qtd</th>
+                                                      <th className="text-right py-0.5 font-medium w-20">Unit.</th>
+                                                      <th className="text-right py-0.5 font-medium w-20">Total</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    {os.itens.map((it: any, j: number) => (
+                                                      <tr key={j} className="border-t border-dashed">
+                                                        <td className="py-0.5">{it.nome}</td>
+                                                        <td className="py-0.5 text-center">
+                                                          <span className={`px-1 rounded text-[9px] ${it.categoria === 'peca' ? 'bg-orange-100 text-orange-700' : 'bg-violet-100 text-violet-700'}`}>
+                                                            {it.categoria === 'peca' ? 'P' : 'S'}
+                                                          </span>
+                                                        </td>
+                                                        <td className="py-0.5 text-center">{it.quantidade}</td>
+                                                        <td className="py-0.5 text-right">{fmt(it.valorUnit)}</td>
+                                                        <td className="py-0.5 text-right font-medium">{fmt(it.valorTotal)}</td>
+                                                      </tr>
+                                                    ))}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                )}
+                              </div>
+                            );
+                          })() : (
+                            <Card><CardContent className="py-8 text-center"><p className="text-muted-foreground text-sm">Carregando detalhe...</p></CardContent></Card>
+                          )}
+                        </>
+                      )}
+
                       {maintTab === "fornecedores" && (
                         <Card>
                           <CardHeader className="pb-2">
                             <CardTitle className="text-sm flex items-center gap-2">
                               <MapPin className="h-4 w-4 text-teal-600" />
                               Análise por Fornecedor
+                              {temFiltro && <Badge variant="outline" className="text-[9px]">{filtroPeriodoLabel}</Badge>}
                             </CardTitle>
-                            <p className="text-xs text-muted-foreground">Compare fornecedores por volume de gasto, ticket médio e variedade de veículos atendidos.</p>
                           </CardHeader>
                           <CardContent>
                             <div className="space-y-3">
@@ -1062,7 +1415,8 @@ export default function PainelFrotas() {
                             <CardHeader className="pb-2">
                               <CardTitle className="text-sm flex items-center gap-2">
                                 <BarChart3 className="h-4 w-4 text-emerald-600" />
-                                Evolução Mensal de Manutenção
+                                Evolução Mensal
+                                {temFiltro && <Badge variant="outline" className="text-[9px]">{filtroPeriodoLabel}</Badge>}
                               </CardTitle>
                             </CardHeader>
                             <CardContent>
@@ -1072,14 +1426,15 @@ export default function PainelFrotas() {
                                   const pctMes = Math.round((ev.total / maxEvolTotal) * 100);
                                   const pctP = ev.total > 0 ? Math.round((ev.pecas / ev.total) * 100) : 0;
                                   return (
-                                    <div key={mes}>
+                                    <div key={mes} className="cursor-pointer hover:bg-muted/30 rounded p-1 -mx-1 transition-colors"
+                                      onClick={() => { const [a,m] = mes.split("-"); setFiltroAno(Number(a)); setFiltroMes(Number(m)); }}>
                                       <div className="flex items-center justify-between text-xs mb-0.5">
                                         <span className="font-medium">{fmtMesAno(mes)}</span>
                                         <span className="font-bold">{fmt(ev.total)} <span className="text-muted-foreground font-normal">({ev.numOS} OS)</span></span>
                                       </div>
                                       <div className="h-3 bg-muted rounded-full overflow-hidden flex" style={{ width: `${Math.max(pctMes, 5)}%` }}>
-                                        <div className="h-full bg-orange-500" style={{ width: `${pctP}%` }} title={`Peças: ${fmt(ev.pecas)}`} />
-                                        <div className="h-full bg-violet-500" style={{ width: `${100-pctP}%` }} title={`Serviços: ${fmt(ev.servicos)}`} />
+                                        <div className="h-full bg-orange-500" style={{ width: `${pctP}%` }} />
+                                        <div className="h-full bg-violet-500" style={{ width: `${100-pctP}%` }} />
                                       </div>
                                     </div>
                                   );
