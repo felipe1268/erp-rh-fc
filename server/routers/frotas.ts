@@ -211,6 +211,27 @@ async function ensureFleetTables() {
     )
   `);
   await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_toll_records (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      vehicle_id INTEGER NOT NULL,
+      data DATE NOT NULL,
+      categoria VARCHAR(50) NOT NULL DEFAULT 'pedagio',
+      descricao VARCHAR(500),
+      praca_pedagio VARCHAR(255),
+      rodovia VARCHAR(100),
+      valor NUMERIC(14,2) NOT NULL,
+      tag_id VARCHAR(100),
+      placa VARCHAR(20),
+      eixos INTEGER,
+      status VARCHAR(30) NOT NULL DEFAULT 'pago',
+      observacoes TEXT,
+      criado_por VARCHAR(255),
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    )
+  `);
+  await db.execute(sql`
     CREATE TABLE IF NOT EXISTS fleet_driver_aliases (
       id SERIAL PRIMARY KEY,
       company_id INTEGER NOT NULL,
@@ -2563,6 +2584,211 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
           AND origem_modulo = 'frotas'
       `);
       return { ok: true };
+    }),
+
+  listTollRecords: protectedProcedure
+    .input(z.object({ companyId: z.number(), vehicleId: z.number().optional() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      let q = sql`SELECT tr.*, v.placa, v.modelo, v.marca FROM fleet_toll_records tr JOIN vehicles v ON v.id = tr.vehicle_id WHERE tr.company_id = ${input.companyId}`;
+      if (input.vehicleId) q = sql`${q} AND tr.vehicle_id = ${input.vehicleId}`;
+      q = sql`${q} ORDER BY tr.data DESC, tr.id DESC`;
+      const res = await db.execute(q);
+      return ((res as any).rows || res) as any[];
+    }),
+
+  createTollRecord: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), vehicleId: z.number(), data: z.string(),
+      categoria: z.string().default("pedagio"), descricao: z.string().optional(),
+      pracaPedagio: z.string().optional(), rodovia: z.string().optional(),
+      valor: z.string(), tagId: z.string().optional(), placa: z.string().optional(),
+      eixos: z.number().optional(), status: z.string().default("pago"),
+      observacoes: z.string().optional(), criadoPor: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      await db.execute(sql`
+        INSERT INTO fleet_toll_records (company_id, vehicle_id, data, categoria, descricao, praca_pedagio, rodovia, valor, tag_id, placa, eixos, status, observacoes, criado_por)
+        VALUES (${input.companyId}, ${input.vehicleId}, ${input.data}::date, ${input.categoria},
+          ${input.descricao || null}, ${input.pracaPedagio || null}, ${input.rodovia || null},
+          ${parseFloat(input.valor)}, ${input.tagId || null}, ${input.placa || null},
+          ${input.eixos || null}, ${input.status}, ${input.observacoes || null}, ${input.criadoPor || null})
+      `);
+      return { ok: true };
+    }),
+
+  updateTollRecord: protectedProcedure
+    .input(z.object({
+      id: z.number(), companyId: z.number(), vehicleId: z.number().optional(), data: z.string().optional(),
+      categoria: z.string().optional(), descricao: z.string().optional(),
+      pracaPedagio: z.string().optional(), rodovia: z.string().optional(),
+      valor: z.string().optional(), tagId: z.string().optional(), placa: z.string().optional(),
+      eixos: z.number().optional(), status: z.string().optional(), observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const sets: string[] = [];
+      const vals: any = {};
+      if (input.vehicleId !== undefined) sets.push(`vehicle_id = ${input.vehicleId}`);
+      if (input.data) sets.push(`data = '${input.data}'::date`);
+      if (input.categoria) sets.push(`categoria = '${input.categoria}'`);
+      if (input.valor) sets.push(`valor = ${parseFloat(input.valor)}`);
+      await db.execute(sql`
+        UPDATE fleet_toll_records SET
+          vehicle_id = COALESCE(${input.vehicleId ?? null}, vehicle_id),
+          data = COALESCE(${input.data ?? null}::date, data),
+          categoria = COALESCE(${input.categoria ?? null}, categoria),
+          descricao = COALESCE(${input.descricao ?? null}, descricao),
+          praca_pedagio = COALESCE(${input.pracaPedagio ?? null}, praca_pedagio),
+          rodovia = COALESCE(${input.rodovia ?? null}, rodovia),
+          valor = COALESCE(${input.valor ? parseFloat(input.valor) : null}, valor),
+          tag_id = COALESCE(${input.tagId ?? null}, tag_id),
+          placa = COALESCE(${input.placa ?? null}, placa),
+          eixos = COALESCE(${input.eixos ?? null}, eixos),
+          status = COALESCE(${input.status ?? null}, status),
+          observacoes = COALESCE(${input.observacoes ?? null}, observacoes),
+          updated_at = NOW()
+        WHERE id = ${input.id} AND company_id = ${input.companyId}
+      `);
+      return { ok: true };
+    }),
+
+  deleteTollRecord: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      await db.execute(sql`DELETE FROM fleet_toll_records WHERE id = ${input.id} AND company_id = ${input.companyId}`);
+      return { ok: true };
+    }),
+
+  parseTollPdf: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      base64: z.string().max(15_000_000),
+      mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const userCompanyId = (ctx as any).user?.companyId;
+      if (userCompanyId && String(userCompanyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
+      }
+      const db = await getDb();
+      const vRes = await db.execute(sql`
+        SELECT id, placa, modelo, marca, "tipoVeiculo" FROM vehicles WHERE "companyId" = ${input.companyId} ORDER BY placa
+      `);
+      const veiculos = (vRes as any).rows || vRes;
+      const listaVeiculos = veiculos.map((v: any) =>
+        `ID:${v.id} | Placa: ${v.placa || "S/P"} | ${v.marca} ${v.modelo} (${v.tipoVeiculo})`
+      ).join("\n");
+
+      const prompt = `Analise este documento de pedágio/Sem Parar e extraia TODOS os lançamentos.
+
+VEÍCULOS CADASTRADOS NA FROTA (use o ID correspondente):
+${listaVeiculos}
+
+Retorne APENAS um JSON válido (sem markdown, sem \`\`\`) com esta estrutura:
+{
+  "success": true,
+  "items": [
+    {
+      "vehicleId": <number - ID do veículo da lista acima>,
+      "vehiclePlaca": "<placa do veículo>",
+      "data": "<data no formato YYYY-MM-DD>",
+      "categoria": "pedagio" | "sem_parar" | "estacionamento" | "recarga_tag",
+      "descricao": "<descrição do lançamento>",
+      "pracaPedagio": "<nome da praça de pedágio>",
+      "rodovia": "<nome da rodovia>",
+      "valor": <number - valor em R$>,
+      "tagId": "<ID do tag se houver>",
+      "eixos": <number ou null - quantidade de eixos>,
+      "observacoes": "<detalhes extras>"
+    }
+  ],
+  "rawText": "<resumo do que foi lido>",
+  "confidence": "alta" | "media" | "baixa"
+}
+
+Se houver múltiplos lançamentos, crie um item para cada.
+Se não encontrar o veículo na lista, coloque vehicleId: null e preencha placa encontrada.
+Se a data não estiver clara, use hoje: ${new Date().toISOString().slice(0, 10)}.`;
+
+      const systemPrompt = `Você é um assistente especialista em gestão de frotas veiculares no Brasil.
+Analise extratos de pedágio, faturas Sem Parar/ConectCar/Veloe e extraia dados de cada passagem.
+Seja preciso com valores monetários, datas e identificação de veículos por placa.
+Sempre retorne JSON válido, sem markdown.`;
+
+      const { invokeAnthropicVision } = await import("../_core/llm");
+      const rawResponse = await invokeAnthropicVision({
+        base64: input.base64,
+        mimeType: input.mimeType as any,
+        prompt,
+        systemPrompt,
+      });
+
+      let parsed: any;
+      try {
+        const cleaned = rawResponse.replace(/```json\s*/g, "").replace(/```/g, "").trim();
+        parsed = JSON.parse(cleaned);
+      } catch {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao interpretar resposta da IA." });
+      }
+
+      if (!parsed?.items || !Array.isArray(parsed.items)) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Nenhum item encontrado no documento." });
+      }
+
+      for (const item of parsed.items) {
+        if (item.vehicleId) {
+          const found = veiculos.find((v: any) => v.id === item.vehicleId);
+          if (!found) item.vehicleId = null;
+        }
+      }
+
+      return parsed;
+    }),
+
+  importTollBatch: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      items: z.array(z.object({
+        vehicleId: z.number(),
+        data: z.string(),
+        categoria: z.string().default("pedagio"),
+        descricao: z.string().optional(),
+        pracaPedagio: z.string().optional(),
+        rodovia: z.string().optional(),
+        valor: z.number(),
+        tagId: z.string().optional(),
+        eixos: z.number().optional(),
+        observacoes: z.string().optional(),
+      })),
+      criadoPor: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const userCid = (ctx as any).user?.companyId;
+      if (userCid && String(userCid) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      let inserted = 0;
+      for (const item of input.items) {
+        await db.execute(sql`
+          INSERT INTO fleet_toll_records (company_id, vehicle_id, data, categoria, descricao, praca_pedagio, rodovia, valor, tag_id, eixos, observacoes, criado_por)
+          VALUES (${input.companyId}, ${item.vehicleId}, ${item.data}::date, ${item.categoria},
+            ${item.descricao || null}, ${item.pracaPedagio || null}, ${item.rodovia || null},
+            ${item.valor}, ${item.tagId || null}, ${item.eixos || null},
+            ${item.observacoes || null}, ${input.criadoPor || 'IA Import'})
+        `);
+        inserted++;
+      }
+      return { inserted };
     }),
 
   clearFuelMonth: protectedProcedure
