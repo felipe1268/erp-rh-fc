@@ -564,7 +564,8 @@ export default function FrotasAnalitico() {
                       <th className="py-2 px-2 text-right font-semibold text-emerald-600">Manutenção</th>
                       <th className="py-2 px-2 text-right font-semibold text-red-600">Multas</th>
                       <th className="py-2 px-2 text-right font-semibold">Total</th>
-                      <th className="py-2 px-2 text-center font-semibold">Variação</th>
+                      <th className="py-2 px-2 text-right font-semibold">Var. R$</th>
+                      <th className="py-2 px-2 text-center font-semibold">Var. %</th>
                       <th className="py-2 px-2 text-left font-semibold">Principal Impacto</th>
                     </tr>
                   </thead>
@@ -614,6 +615,15 @@ export default function FrotasAnalitico() {
                           <td className="py-2 px-2 text-right font-bold">
                             {hasCur ? fmt(row.total) : "—"}
                           </td>
+                          <td className="py-2 px-2 text-right">
+                            {hasCur && hasPrev && row.varTotal !== 0 ? (
+                              <span className={`font-medium ${row.varTotal > 0 ? "text-red-600" : "text-green-600"}`}>
+                                {row.varTotal > 0 ? "+" : ""}{fmt(row.varTotal)}
+                              </span>
+                            ) : hasCur && !hasPrev ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : "—"}
+                          </td>
                           <td className="py-2 px-2 text-center">
                             {hasCur && hasPrev ? (
                               <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -647,7 +657,7 @@ export default function FrotasAnalitico() {
                       <td className="py-2 px-2 text-right text-emerald-600">{fmt(comparativoMensal.reduce((s, r) => s + r.manutencao, 0))}</td>
                       <td className="py-2 px-2 text-right text-red-600">{fmt(comparativoMensal.reduce((s, r) => s + r.multas, 0))}</td>
                       <td className="py-2 px-2 text-right">{fmt(comparativoMensal.reduce((s, r) => s + r.total, 0))}</td>
-                      <td className="py-2 px-2" colSpan={2}></td>
+                      <td className="py-2 px-2" colSpan={3}></td>
                     </tr>
                   </tfoot>
                 </table>
