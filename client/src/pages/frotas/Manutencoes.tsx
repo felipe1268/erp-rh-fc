@@ -1140,7 +1140,7 @@ export default function Manutencoes() {
         </Dialog>
 
         <Dialog open={!!viewMaint} onOpenChange={(open) => { if (!open) setViewMaint(null); }}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
             {viewMaint && (() => {
               const m = viewMaint;
               const items = (viewItems.data || []) as any[];
