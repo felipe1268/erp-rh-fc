@@ -12,6 +12,7 @@ import {
   CheckCircle2, Calendar, MapPin, Activity, PieChart, Car,
   ArrowUpRight, ArrowDownRight, Clock, Droplets, TrendingUp,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useEffect, useState } from "react";
 
 function fmt(v: number) {
@@ -31,6 +32,7 @@ export default function PainelFrotas() {
   const cId = parseInt(selectedCompanyId || "0");
   const [, navigate] = useLocation();
   const [alertFilter, setAlertFilter] = useState<AlertFilter>("todos");
+  const [idadeDialog, setIdadeDialog] = useState<string | null>(null);
 
   const initMut = trpc.frotas.initTables.useMutation();
   const dash = trpc.frotas.getDashboard.useQuery(
@@ -211,7 +213,11 @@ export default function PainelFrotas() {
                               "10+ anos": "bg-red-500",
                             };
                             return (
-                              <div key={faixa}>
+                              <div
+                                key={faixa}
+                                className={`cursor-pointer rounded-lg p-1.5 -mx-1.5 transition-colors ${count > 0 ? "hover:bg-muted/60" : ""}`}
+                                onClick={() => count > 0 && setIdadeDialog(faixa)}
+                              >
                                 <div className="flex justify-between text-xs mb-0.5">
                                   <span className="font-medium">{faixa}</span>
                                   <span className="text-muted-foreground">{count} veículo{count !== 1 ? "s" : ""}</span>
@@ -817,6 +823,38 @@ export default function PainelFrotas() {
           </>
         )}
       </div>
+
+      <Dialog open={!!idadeDialog} onOpenChange={() => setIdadeDialog(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-slate-600" />
+              Veículos — {idadeDialog}
+            </DialogTitle>
+          </DialogHeader>
+          {d && idadeDialog && (d as any).idadeVeiculos?.[idadeDialog] ? (
+            <div className="space-y-2">
+              {((d as any).idadeVeiculos[idadeDialog] as Array<{id: number, placa: string, modelo: string, marca: string, ano: string, idade: number}>).map((v) => (
+                <div key={v.id} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                    <Car className="h-5 w-5 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate">{v.modelo}</p>
+                    <p className="text-xs text-muted-foreground">{v.marca} — Ano {v.ano}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <span className="font-mono text-sm font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{v.placa}</span>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{v.idade} ano{v.idade !== 1 ? "s" : ""}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhum veículo nesta faixa.</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

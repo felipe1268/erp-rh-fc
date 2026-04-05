@@ -1426,11 +1426,14 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       }).sort((a: any, b: any) => b.custoTotal - a.custoTotal);
 
       const idadeDistribuicao: Record<string, number> = {};
+      const idadeVeiculos: Record<string, Array<{id: number, placa: string, modelo: string, marca: string, ano: string, idade: number}>> = {};
       for (const v of allVehicles) {
         const ano = parseInt(v.anoFabricacao) || 0;
         const idade = ano > 0 ? now.getFullYear() - ano : 0;
         const faixa = idade <= 2 ? "0-2 anos" : idade <= 5 ? "3-5 anos" : idade <= 10 ? "6-10 anos" : "10+ anos";
         idadeDistribuicao[faixa] = (idadeDistribuicao[faixa] || 0) + 1;
+        if (!idadeVeiculos[faixa]) idadeVeiculos[faixa] = [];
+        idadeVeiculos[faixa].push({ id: v.id, placa: v.placa || "S/P", modelo: v.modelo || "", marca: v.marca || "", ano: v.anoFabricacao || "—", idade });
       }
 
       const statusVeiculos: Record<string, number> = {};
@@ -1485,7 +1488,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         veiculosEmManutencao: allMaint.filter((m: any) => m.status === "em_andamento").length,
         depreciacaoPorVeiculo,
         custoPorVeiculo,
-        idadeDistribuicao, statusVeiculos,
+        idadeDistribuicao, idadeVeiculos, statusVeiculos,
         totalSegurosPremio, segurosAtivos, veiculosSemSeguro,
         totalLicenciamento, totalIpvaGeral,
         tipoCombustivel, idadeFrota, custoOperTotal,
