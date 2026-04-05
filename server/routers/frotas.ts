@@ -2503,4 +2503,83 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       `);
       return { ok: true };
     }),
+
+  clearFuelMonth: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const userCid = (ctx as any).user?.companyId;
+      if (userCid && String(userCid) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, mes, ano } = input;
+      const startDate = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const endDate = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+
+      const countRes = await db.execute(sql`
+        SELECT COUNT(*) as total FROM fleet_fuel_records
+        WHERE company_id = ${companyId} AND data >= ${startDate}::date AND data < ${endDate}::date
+      `);
+      const total = parseInt(((countRes as any).rows || countRes)[0]?.total) || 0;
+
+      if (total === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum registro encontrado neste mês." });
+      }
+
+      await db.execute(sql`
+        DELETE FROM fleet_fuel_records
+        WHERE company_id = ${companyId} AND data >= ${startDate}::date AND data < ${endDate}::date
+      `);
+
+      return { deleted: total };
+    }),
+
+  clearAllFuelRecords: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      password: z.string().min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const userCid = (ctx as any).user?.companyId;
+      if (userCid && String(userCid) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
+      }
+
+      const bcrypt = await import("bcryptjs");
+      const { users } = await import("../../drizzle/schema");
+
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+
+      const userId = (ctx as any).user?.id;
+      if (!userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado." });
+
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+      if (!user || !user.password) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Usuário não possui login local com senha." });
+      }
+
+      const valid = bcrypt.compareSync(input.password, user.password);
+      if (!valid) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta. Operação cancelada." });
+      }
+
+      const countRes = await db.execute(sql`
+        SELECT COUNT(*) as total FROM fleet_fuel_records WHERE company_id = ${input.companyId}
+      `);
+      const total = parseInt(((countRes as any).rows || countRes)[0]?.total) || 0;
+
+      if (total === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum registro de combustível encontrado." });
+      }
+
+      await db.execute(sql`
+        DELETE FROM fleet_fuel_records WHERE company_id = ${input.companyId}
+      `);
+
+      return { deleted: total };
+    }),
 });

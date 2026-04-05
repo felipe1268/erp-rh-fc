@@ -47,6 +47,9 @@ export default function Combustivel() {
   const [pdfProgressLabel, setPdfProgressLabel] = useState("");
   const [consolidateDialogOpen, setConsolidateDialogOpen] = useState(false);
   const [consolidateObs, setConsolidateObs] = useState("");
+  const [clearMonthDialogOpen, setClearMonthDialogOpen] = useState(false);
+  const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
+  const [clearAllPassword, setClearAllPassword] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
 
@@ -97,6 +100,25 @@ export default function Combustivel() {
       fuelSummary.refetch();
     },
     onError: (e) => toast.error(e.message),
+  });
+  const clearMonthMut = trpc.frotas.clearFuelMonth.useMutation({
+    onSuccess: (r) => {
+      toast.success(`${r.deleted} registro(s) do mês excluído(s)`);
+      fuel.refetch();
+      fuelSummary.refetch();
+      setClearMonthDialogOpen(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const clearAllMut = trpc.frotas.clearAllFuelRecords.useMutation({
+    onSuccess: (r) => {
+      toast.success(`${r.deleted} registro(s) de combustível excluído(s) de todo o sistema`);
+      fuel.refetch();
+      fuelSummary.refetch();
+      setClearAllDialogOpen(false);
+      setClearAllPassword("");
+    },
+    onError: (e) => { toast.error(e.message); },
   });
 
   function openNew() {
@@ -303,6 +325,12 @@ export default function Combustivel() {
           <div className="flex gap-2">
             <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={handleCsv} />
             <input type="file" accept=".pdf" ref={pdfRef} className="hidden" onChange={handlePdf} />
+            <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setClearMonthDialogOpen(true)} disabled={list.length === 0}>
+              <Trash2 className="h-4 w-4 mr-1" /> Limpar Mês
+            </Button>
+            <Button variant="outline" size="sm" className="text-red-700 border-red-300 hover:bg-red-50" onClick={() => { setClearAllDialogOpen(true); setClearAllPassword(""); }}>
+              <Lock className="h-4 w-4 mr-1" /> Limpar Tudo
+            </Button>
             <Button variant="outline" size="sm" onClick={() => pdfRef.current?.click()} disabled={importPdfMut.isPending || pdfProgress !== null}>
               <FileText className="h-4 w-4 mr-1" />
               {pdfProgress !== null ? "Processando..." : "Importar PDF"}
@@ -803,6 +831,78 @@ export default function Combustivel() {
               >
                 {consolidateMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <DollarSign className="h-4 w-4 mr-1" />}
                 {consolidateMut.isPending ? "Processando..." : "Confirmar Consolidação"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={clearMonthDialogOpen} onOpenChange={setClearMonthDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                <Trash2 className="h-5 w-5" /> Limpar Registros do Mês
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <p className="text-sm">
+                Tem certeza que deseja excluir <strong>todos os {list.length} registro(s)</strong> de combustível do mês <strong>{String(mesAtual).padStart(2, "0")}/{anoAtual}</strong>?
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                <AlertTriangle className="h-4 w-4 inline mr-1" />
+                Esta ação não pode ser desfeita.
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setClearMonthDialogOpen(false)}>Cancelar</Button>
+              <Button
+                variant="destructive"
+                onClick={() => clearMonthMut.mutate({ companyId: cId, mes: mesAtual, ano: anoAtual })}
+                disabled={clearMonthMut.isPending}
+              >
+                {clearMonthMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                {clearMonthMut.isPending ? "Excluindo..." : "Excluir Registros do Mês"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={clearAllDialogOpen} onOpenChange={(o) => { setClearAllDialogOpen(o); if (!o) setClearAllPassword(""); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-700">
+                <Lock className="h-5 w-5" /> Limpar TODOS os Registros de Combustível
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                <AlertTriangle className="h-4 w-4 inline mr-1" />
+                <strong>ATENÇÃO:</strong> Esta ação irá excluir TODOS os registros de combustível de todos os meses do sistema. Esta ação não pode ser desfeita.
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Digite sua senha para confirmar</Label>
+                <Input
+                  type="password"
+                  className="mt-1"
+                  placeholder="Sua senha de acesso"
+                  value={clearAllPassword}
+                  onChange={e => setClearAllPassword(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && clearAllPassword.length > 0 && !clearAllMut.isPending) {
+                      clearAllMut.mutate({ companyId: cId, password: clearAllPassword });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setClearAllDialogOpen(false); setClearAllPassword(""); }}>Cancelar</Button>
+              <Button
+                variant="destructive"
+                onClick={() => clearAllMut.mutate({ companyId: cId, password: clearAllPassword })}
+                disabled={clearAllMut.isPending || clearAllPassword.length === 0}
+              >
+                {clearAllMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                {clearAllMut.isPending ? "Excluindo..." : "Excluir TUDO"}
               </Button>
             </DialogFooter>
           </DialogContent>
