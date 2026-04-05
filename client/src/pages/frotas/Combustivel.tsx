@@ -421,6 +421,12 @@ export default function Combustivel() {
                 <div className="text-sm text-muted-foreground">
                   Total lido do PDF: <strong>{importResult.totalParsed}</strong> registros de combustível
                 </div>
+                {importResult.totalParsed === 0 && importResult.inserted === 0 && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                    <p className="font-medium mb-1">Nenhum registro encontrado no PDF</p>
+                    <p className="text-xs">Verifique se o PDF é do sistema do posto de combustível (Posto Gestor) e contém as placas cadastradas no sistema.</p>
+                  </div>
+                )}
                 {importResult.noVehicle > 0 && (
                   <div className="flex items-center gap-2 text-sm text-red-600">
                     <XCircle className="h-4 w-4" />

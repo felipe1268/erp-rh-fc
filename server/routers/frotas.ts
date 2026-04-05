@@ -639,16 +639,31 @@ export const frotasRouter = router({
     .mutation(async ({ input }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
-      const pdfParse = require('pdf-parse');
+      let pdfParse: any;
+      try {
+        pdfParse = require('pdf-parse');
+      } catch (e: any) {
+        console.error('[FuelPDF] pdf-parse not available:', e.message);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Módulo pdf-parse não disponível. Contate o suporte.' });
+      }
       const buf = Buffer.from(input.pdfBase64, 'base64');
-      const pdfData = await pdfParse(buf);
+      console.log('[FuelPDF] Buffer size:', buf.length);
+      let pdfData: any;
+      try {
+        pdfData = await pdfParse(buf);
+      } catch (e: any) {
+        console.error('[FuelPDF] Erro ao processar PDF:', e.message);
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Erro ao ler o PDF. Verifique se o arquivo não está corrompido ou protegido.' });
+      }
       const text = pdfData.text;
+      console.log('[FuelPDF] Text length:', text.length, '| First 300 chars:', text.substring(0, 300));
 
       const vRows = await db.execute(sql`SELECT id, placa FROM vehicles WHERE "companyId" = ${input.companyId} AND placa IS NOT NULL`);
       const vehicleList = (vRows as any).rows as { id: number; placa: string }[];
       const plateToVehicle: Record<string, number> = {};
       for (const v of vehicleList) if (v.placa) plateToVehicle[v.placa.toUpperCase().replace(/[^A-Z0-9]/g, '')] = v.id;
       const knownPlates = Object.keys(plateToVehicle);
+      console.log('[FuelPDF] Known plates:', knownPlates.join(', '));
       if (knownPlates.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum veículo com placa cadastrada' });
 
       const eRows = await db.execute(sql`SELECT id, "nomeCompleto" FROM employees WHERE "companyId" = ${input.companyId}`);
@@ -857,6 +872,15 @@ export const frotasRouter = router({
         });
       }
 
+      const firstRec = parsed.length > 0 ? JSON.stringify(parsed[0]) : 'No records found';
+      console.log('[FuelPDF] Parsed records:', parsed.length, firstRec);
+      if (parsed.length === 0) {
+        const dateMatches = text.match(/\d{2}\/\d{2}\/\d{4}/g);
+        const plateMatches = text.match(new RegExp(platePattern, 'g'));
+        console.log('[FuelPDF] Debug: dates found in text:', dateMatches?.length || 0, '| plates found:', plateMatches?.length || 0);
+        console.log('[FuelPDF] First 10 lines:', lines.slice(0, 10).join(' | '));
+      }
+
       let inserted = 0, duplicates = 0, noVehicle = 0;
       const matchedDrivers: Record<string, string> = {};
       const unmatchedDrivers: Set<string> = new Set();
@@ -886,18 +910,22 @@ export const frotasRouter = router({
         const litros = n(rec.litros);
         if (litros <= 0 || litros > 1000) continue;
 
-        await db.insert(fleetFuelRecords).values({
-          companyId: input.companyId, vehicleId, data: rec.date,
-          litros: rec.litros, valorTotal: rec.valorTotal,
-          precoLitro: n(rec.precoLitro) > 0 ? rec.precoLitro : (litros > 0 ? (n(rec.valorTotal) / litros).toFixed(4) : null),
-          tipoCombustivel: rec.tipoCombustivel,
-          motorista: motoristaFinal || null,
-          posto: 'Auto Posto Umuarama',
-          numDoc: rec.numDoc || null,
-          desconto: n(rec.desconto) > 0 ? rec.desconto : null,
-          criadoPor: input.criadoPor || 'PDF Import',
-        } as any);
-        inserted++;
+        try {
+          await db.insert(fleetFuelRecords).values({
+            companyId: input.companyId, vehicleId, data: rec.date,
+            litros: rec.litros, valorTotal: rec.valorTotal,
+            precoLitro: n(rec.precoLitro) > 0 ? rec.precoLitro : (litros > 0 ? (n(rec.valorTotal) / litros).toFixed(4) : null),
+            tipoCombustivel: rec.tipoCombustivel,
+            motorista: motoristaFinal || null,
+            posto: 'Auto Posto Umuarama',
+            numDoc: rec.numDoc || null,
+            desconto: n(rec.desconto) > 0 ? rec.desconto : null,
+            criadoPor: input.criadoPor || 'PDF Import',
+          } as any);
+          inserted++;
+        } catch (dbErr: any) {
+          console.error('[FuelPDF] Insert error:', dbErr.message, '| Record:', JSON.stringify(rec));
+        }
       }
 
       return {
