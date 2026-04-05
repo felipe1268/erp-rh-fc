@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocation } from "wouter";
 import {
   Truck, Wrench, Fuel, AlertTriangle, DollarSign, TrendingDown, Gauge,
-  BarChart3, Shield, Receipt, FileText, RefreshCw, AlertCircle, Info,
+  BarChart3, Shield, Receipt, FileText, AlertCircle, Info,
   CheckCircle2, Calendar, MapPin, Activity, PieChart, Car,
   ArrowUpRight, ArrowDownRight, Clock, Droplets, TrendingUp,
 } from "lucide-react";
@@ -87,9 +87,6 @@ export default function PainelFrotas() {
               Gestão completa — indicadores, custos, patrimônio e alertas
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => dash.refetch()}>
-            <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
-          </Button>
         </div>
 
         {dash.isLoading ? (
