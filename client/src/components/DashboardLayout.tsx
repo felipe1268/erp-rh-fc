@@ -465,14 +465,29 @@ const menuSectionsGestaoDocumentos: MenuSection[] = [
 
 const menuSectionsOperacional: MenuSection[] = [
   {
-    title: "Operacional",
+    title: "Painel",
     items: [
-      { icon: LayoutDashboard, label: "Painel",                  path: "/operacional/painel" },
-      { icon: ClipboardList,   label: "RDO",                     path: "/operacional/rdo" },
+      { icon: LayoutDashboard, label: "Painel Operacional", path: "/operacional/painel" },
+    ],
+  },
+  {
+    title: "Diário de Obra",
+    items: [
+      { icon: ClipboardList,   label: "RDO",                  path: "/operacional/rdo" },
+      { icon: Camera,          label: "Registro Fotográfico",  path: "/operacional/fotos" },
+    ],
+  },
+  {
+    title: "Controle de Qualidade de Concreto",
+    items: [
+      { icon: Blocks,          label: "Concretagem",          path: "/operacional/concretagem" },
+      { icon: AlertTriangle,   label: "Não Conformidades",    path: "/operacional/nc" },
+    ],
+  },
+  {
+    title: "Checklist",
+    items: [
       { icon: CheckSquare,     label: "Checklists de Qualidade", path: "/operacional/checklists" },
-      { icon: Blocks,          label: "Controle de Concretagem", path: "/operacional/concretagem" },
-      { icon: AlertTriangle,   label: "Não Conformidades",       path: "/operacional/nc" },
-      { icon: Camera,          label: "Registro Fotográfico",    path: "/operacional/fotos" },
     ],
   },
 ];
