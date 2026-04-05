@@ -111,6 +111,7 @@ import { integrasignRouter } from "./routers/integrasign";
 import { databookRouter } from "./routers/databook";
 import { operacionalRouter } from "./routers/operacional";
 import { frotasRouter } from "./routers/frotas";
+import { diarioObraRouter } from "./routers/diarioObra";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -175,6 +176,7 @@ export const appRouter = router({
   contracts: contractsRouter,
   skills: skillsRouter,
   frotas: frotasRouter,
+  diarioObra: diarioObraRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

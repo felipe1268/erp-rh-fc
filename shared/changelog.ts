@@ -8246,4 +8246,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 23:30:00",
   },
+  {
+    version: 1048,
+    titulo: "Diário de Obra — Módulo Completo com Importação",
+    descricao:
+      "Módulo Diário de Obra completo integrado ao menu Operacional. " +
+      "10 tabelas novas no banco (obras, relatórios, mão de obra, equipamentos, atividades, ocorrências, materiais, comentários, fotos, vídeos). " +
+      "Importação completa do diariodeobra.app com download de binários (fotos, vídeos, PDFs) para independência total. " +
+      "Grid de obras com cards, filtros por status e busca. Lista de relatórios por obra com filtro por mês. " +
+      "Detalhe do relatório com todas as seções (clima, horário, mão de obra, equipamentos, atividades, ocorrências, materiais, comentários, fotos, vídeos). " +
+      "CRUD completo para criação de novos relatórios e obras. Visualização de fotos em modal com carregamento sob demanda. " +
+      "Backend com 30+ endpoints tRPC para listagem, detalhe, importação e CRUD de todos os sub-itens.",
+    tipo: "feature",
+    modulos: "Operacional",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 23:45:00",
+  },
 ];

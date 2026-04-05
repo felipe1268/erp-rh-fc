@@ -473,6 +473,7 @@ const menuSectionsOperacional: MenuSection[] = [
   {
     title: "Diário de Obra",
     items: [
+      { icon: Building2,       label: "Obras",                path: "/operacional/diario-obra" },
       { icon: ClipboardList,   label: "RDO",                  path: "/operacional/rdo" },
       { icon: Camera,          label: "Registro Fotográfico",  path: "/operacional/fotos" },
     ],
