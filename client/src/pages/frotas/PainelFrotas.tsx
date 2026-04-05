@@ -143,7 +143,7 @@ export default function PainelFrotas() {
               <KpiCard icon={Wrench} label={anoDash ? `Manutenção ${anoDash}` : "Manutenção"} value={fmt(d.totalManutCusto)} onClick={() => navigate("/frotas/manutencoes")} color="text-emerald-600" bg="bg-emerald-50" sub={`${d.veiculosEmManutencao} em andamento`} tip="Total gasto com manutenções preventivas e corretivas — clique para ver detalhes" />
               <KpiCard icon={Fuel} label={anoDash ? `Combustível ${anoDash}` : "Combustível"} value={fmt(d.totalCombustivel)} onClick={() => navigate("/frotas/combustivel")} color="text-blue-600" bg="bg-blue-50" tip="Total gasto com abastecimentos da frota — clique para ver registros" />
               <KpiCard icon={AlertTriangle} label={anoDash ? `Multas ${anoDash}` : "Multas"} value={fmt(d.totalMultas)} onClick={() => navigate("/frotas/multas")} color="text-red-600" bg="bg-red-50" sub={d.multasPendentes > 0 ? `${d.multasPendentes} pendentes` : "Nenhuma pendente"} tip="Total de multas de trânsito registradas no período — clique para gerenciar" />
-              <KpiCard icon={Receipt} label={anoDash ? `IPVA ${anoDash}` : "IPVA Pendente"} value={fmt(d.totalIpvaPendente)} onClick={() => navigate("/frotas/ipva")} color="text-purple-600" bg="bg-purple-50" tip="Valor pendente de IPVA a pagar — clique para ver situação por veículo" />
+              <KpiCard icon={Receipt} label={anoDash ? `Pedágios ${anoDash}` : "Pedágios"} value={fmt(d.totalPedagios || 0)} onClick={() => navigate("/frotas/pedagios")} color="text-indigo-600" bg="bg-indigo-50" tip="Total gasto com pedágios da frota — clique para ver registros" />
               <KpiCard icon={Activity} label={anoDash ? `Custo/km ${anoDash}` : "Custo/km (M+C)"} value={d.custoKm > 0 ? `R$ ${d.custoKm.toFixed(2)}/km` : "—"} color="text-indigo-600" bg="bg-indigo-50" sub={`Oper. total: ${fmt(d.custoOperTotal)}`} tip="Custo por quilômetro rodado (manutenção + combustível) — quanto menor, mais eficiente a operação" />
             </div>
 
@@ -283,6 +283,8 @@ export default function PainelFrotas() {
                       <FinRow label="Custo Manutenção" value={fmt(d.totalManutCusto)} color="text-emerald-600" />
                       <FinRow label="Custo Combustível" value={fmt(d.totalCombustivel)} color="text-blue-600" />
                       <FinRow label="Multas" value={fmt(d.totalMultas)} color="text-red-600" />
+                      <FinRow label="Pedágios" value={fmt(d.totalPedagios || 0)} color="text-indigo-600" />
+                      <FinRow label="Seguros" value={fmt(d.totalSeguros || 0)} color="text-amber-600" />
                       <div className="border-t pt-2 mt-2" />
                       <FinRow label="Custo Operacional Total" value={fmt(d.custoOperTotal)} bold />
                       <FinRow label="Custo por Km" value={d.custoKm > 0 ? `R$ ${d.custoKm.toFixed(2)}/km` : "—"} />
@@ -364,11 +366,13 @@ export default function PainelFrotas() {
                       <p className="text-muted-foreground text-sm">Sem dados de custos mensais</p>
                     ) : (
                       <>
-                        <div className="flex gap-4 mb-3 text-[10px]">
+                        <div className="flex gap-4 mb-3 text-[10px] flex-wrap">
                           {([
                             { key: "combustivel", label: "Combustível", bg: "bg-blue-500" },
                             { key: "manutencao", label: "Manutenção", bg: "bg-emerald-500" },
                             { key: "multas", label: "Multas", bg: "bg-red-500" },
+                            { key: "pedagios", label: "Pedágios", bg: "bg-indigo-500" },
+                            { key: "seguros", label: "Seguros", bg: "bg-amber-500" },
                           ] as const).map((item) => {
                             const hidden = hiddenCustos.has(item.key);
                             return (
@@ -396,16 +400,22 @@ export default function PainelFrotas() {
                               const vComb = hiddenCustos.has("combustivel") ? 0 : c.combustivel;
                               const vManut = hiddenCustos.has("manutencao") ? 0 : c.manutencao;
                               const vMultas = hiddenCustos.has("multas") ? 0 : c.multas;
-                              const total = vComb + vManut + vMultas;
+                              const vPedag = hiddenCustos.has("pedagios") ? 0 : (c.pedagios || 0);
+                              const vSegur = hiddenCustos.has("seguros") ? 0 : (c.seguros || 0);
+                              const total = vComb + vManut + vMultas + vPedag + vSegur;
                               const allTotals = Object.values(d.custosTotaisByMonth).map((x: any) => {
                                 return (hiddenCustos.has("combustivel") ? 0 : x.combustivel)
                                   + (hiddenCustos.has("manutencao") ? 0 : x.manutencao)
-                                  + (hiddenCustos.has("multas") ? 0 : x.multas);
+                                  + (hiddenCustos.has("multas") ? 0 : x.multas)
+                                  + (hiddenCustos.has("pedagios") ? 0 : (x.pedagios || 0))
+                                  + (hiddenCustos.has("seguros") ? 0 : (x.seguros || 0));
                               });
                               const max = Math.max(...allTotals, 1);
                               const pctComb = max > 0 ? (vComb / max) * 100 : 0;
                               const pctManut = max > 0 ? (vManut / max) * 100 : 0;
                               const pctMultas = max > 0 ? (vMultas / max) * 100 : 0;
+                              const pctPedag = max > 0 ? (vPedag / max) * 100 : 0;
+                              const pctSegur = max > 0 ? (vSegur / max) * 100 : 0;
                               return (
                                 <div
                                   key={m}
@@ -417,6 +427,8 @@ export default function PainelFrotas() {
                                     {pctComb > 0 && <div className="h-full bg-blue-500 transition-all" style={{ width: `${pctComb}%` }} />}
                                     {pctManut > 0 && <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pctManut}%` }} />}
                                     {pctMultas > 0 && <div className="h-full bg-red-500 transition-all" style={{ width: `${pctMultas}%` }} />}
+                                    {pctPedag > 0 && <div className="h-full bg-indigo-500 transition-all" style={{ width: `${pctPedag}%` }} />}
+                                    {pctSegur > 0 && <div className="h-full bg-amber-500 transition-all" style={{ width: `${pctSegur}%` }} />}
                                   </div>
                                   <span className="text-[11px] font-medium w-24 text-right">{fmt(total)}</span>
                                 </div>
@@ -1554,24 +1566,32 @@ export default function PainelFrotas() {
             </DialogTitle>
           </DialogHeader>
           {d && custoMesDialog && (d as any).custosMensaisVeiculo?.[custoMesDialog] ? (() => {
-            const veics = Object.values((d as any).custosMensaisVeiculo[custoMesDialog]) as Array<{placa: string; modelo: string; combustivel: number; manutencao: number; multas: number}>;
-            const sorted = [...veics].sort((a, b) => (b.combustivel + b.manutencao + b.multas) - (a.combustivel + a.manutencao + a.multas));
+            const veics = Object.values((d as any).custosMensaisVeiculo[custoMesDialog]) as Array<{placa: string; modelo: string; combustivel: number; manutencao: number; multas: number; pedagios: number; seguros: number}>;
+            const sorted = [...veics].sort((a, b) => (b.combustivel + b.manutencao + b.multas + (b.pedagios||0) + (b.seguros||0)) - (a.combustivel + a.manutencao + a.multas + (a.pedagios||0) + (a.seguros||0)));
             const totalMes = (d.custosTotaisByMonth as any)[custoMesDialog];
             return (
               <div className="space-y-3">
                 {totalMes && (
-                  <div className="grid grid-cols-3 gap-3 mb-2">
-                    <div className="p-2.5 bg-blue-50 rounded-lg border border-blue-200 text-center">
-                      <p className="text-[10px] text-blue-600 uppercase font-medium">Combustível</p>
-                      <p className="text-sm font-bold text-blue-700">{fmt(totalMes.combustivel)}</p>
+                  <div className="grid grid-cols-5 gap-2 mb-2">
+                    <div className="p-2 bg-blue-50 rounded-lg border border-blue-200 text-center">
+                      <p className="text-[9px] text-blue-600 uppercase font-medium">Combustível</p>
+                      <p className="text-xs font-bold text-blue-700">{fmt(totalMes.combustivel)}</p>
                     </div>
-                    <div className="p-2.5 bg-emerald-50 rounded-lg border border-emerald-200 text-center">
-                      <p className="text-[10px] text-emerald-600 uppercase font-medium">Manutenção</p>
-                      <p className="text-sm font-bold text-emerald-700">{fmt(totalMes.manutencao)}</p>
+                    <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-200 text-center">
+                      <p className="text-[9px] text-emerald-600 uppercase font-medium">Manutenção</p>
+                      <p className="text-xs font-bold text-emerald-700">{fmt(totalMes.manutencao)}</p>
                     </div>
-                    <div className="p-2.5 bg-red-50 rounded-lg border border-red-200 text-center">
-                      <p className="text-[10px] text-red-600 uppercase font-medium">Multas</p>
-                      <p className="text-sm font-bold text-red-700">{fmt(totalMes.multas)}</p>
+                    <div className="p-2 bg-red-50 rounded-lg border border-red-200 text-center">
+                      <p className="text-[9px] text-red-600 uppercase font-medium">Multas</p>
+                      <p className="text-xs font-bold text-red-700">{fmt(totalMes.multas)}</p>
+                    </div>
+                    <div className="p-2 bg-indigo-50 rounded-lg border border-indigo-200 text-center">
+                      <p className="text-[9px] text-indigo-600 uppercase font-medium">Pedágios</p>
+                      <p className="text-xs font-bold text-indigo-700">{fmt(totalMes.pedagios || 0)}</p>
+                    </div>
+                    <div className="p-2 bg-amber-50 rounded-lg border border-amber-200 text-center">
+                      <p className="text-[9px] text-amber-600 uppercase font-medium">Seguros</p>
+                      <p className="text-xs font-bold text-amber-700">{fmt(totalMes.seguros || 0)}</p>
                     </div>
                   </div>
                 )}
@@ -1580,15 +1600,17 @@ export default function PainelFrotas() {
                     <thead>
                       <tr className="bg-muted/50 text-xs">
                         <th className="text-left p-2 font-medium">Veículo</th>
-                        <th className="text-right p-2 font-medium text-blue-600">Combustível</th>
-                        <th className="text-right p-2 font-medium text-emerald-600">Manutenção</th>
+                        <th className="text-right p-2 font-medium text-blue-600">Comb.</th>
+                        <th className="text-right p-2 font-medium text-emerald-600">Manut.</th>
                         <th className="text-right p-2 font-medium text-red-600">Multas</th>
+                        <th className="text-right p-2 font-medium text-indigo-600">Pedágios</th>
+                        <th className="text-right p-2 font-medium text-amber-600">Seguros</th>
                         <th className="text-right p-2 font-medium">Total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sorted.map((v, i) => {
-                        const total = v.combustivel + v.manutencao + v.multas;
+                        const total = v.combustivel + v.manutencao + v.multas + (v.pedagios||0) + (v.seguros||0);
                         return (
                           <tr key={i} className="border-t hover:bg-muted/30">
                             <td className="p-2">
@@ -1598,6 +1620,8 @@ export default function PainelFrotas() {
                             <td className="text-right p-2 text-xs">{v.combustivel > 0 ? fmt(v.combustivel) : "—"}</td>
                             <td className="text-right p-2 text-xs">{v.manutencao > 0 ? fmt(v.manutencao) : "—"}</td>
                             <td className="text-right p-2 text-xs">{v.multas > 0 ? fmt(v.multas) : "—"}</td>
+                            <td className="text-right p-2 text-xs">{(v.pedagios||0) > 0 ? fmt(v.pedagios) : "—"}</td>
+                            <td className="text-right p-2 text-xs">{(v.seguros||0) > 0 ? fmt(v.seguros) : "—"}</td>
                             <td className="text-right p-2 text-xs font-bold">{fmt(total)}</td>
                           </tr>
                         );

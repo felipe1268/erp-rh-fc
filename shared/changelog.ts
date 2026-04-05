@@ -8143,4 +8143,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 17:30:00",
   },
+  {
+    version: 1041,
+    titulo: "Dashboard Frotas — Pedágios e Seguros nos Gráficos",
+    descricao:
+      "Gráfico 'Evolução de Custos Mensais' no Painel e Analítico de Frotas agora inclui Pedágios (indigo) e Seguros (amber) " +
+      "como barras empilhadas, com legenda clicável para ocultar/exibir categorias. Dialog de custos por veículo por mês " +
+      "expandido para 5 colunas (Combustível, Manutenção, Multas, Pedágios, Seguros). KPI card de Pedágios adicionado ao " +
+      "Painel. Resumo financeiro atualizado com linha de Pedágios. Custo Operacional Total agora inclui todas as 5 categorias.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 18:00:00",
+  },
 ];

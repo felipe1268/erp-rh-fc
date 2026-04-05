@@ -374,23 +374,29 @@ export default function FrotasAnalitico() {
       const prevKey = m > 0 ? `${ano}-${String(m).padStart(2, "0")}` : `${ano - 1}-12`;
       const raw = (custosTotaisByMonth[key] as any) || {};
       const rawPrev = (custosTotaisByMonth[prevKey] as any) || {};
-      const cur = { combustivel: Number(raw.combustivel ?? 0), manutencao: Number(raw.manutencao ?? 0), multas: Number(raw.multas ?? 0) };
-      const prev = { combustivel: Number(rawPrev.combustivel ?? 0), manutencao: Number(rawPrev.manutencao ?? 0), multas: Number(rawPrev.multas ?? 0) };
-      const total = cur.combustivel + cur.manutencao + cur.multas;
-      const prevTotal = prev.combustivel + prev.manutencao + prev.multas;
+      const cur = { combustivel: Number(raw.combustivel ?? 0), manutencao: Number(raw.manutencao ?? 0), multas: Number(raw.multas ?? 0), pedagios: Number(raw.pedagios ?? 0), seguros: Number(raw.seguros ?? 0) };
+      const prev = { combustivel: Number(rawPrev.combustivel ?? 0), manutencao: Number(rawPrev.manutencao ?? 0), multas: Number(rawPrev.multas ?? 0), pedagios: Number(rawPrev.pedagios ?? 0), seguros: Number(rawPrev.seguros ?? 0) };
+      const total = cur.combustivel + cur.manutencao + cur.multas + cur.pedagios + cur.seguros;
+      const prevTotal = prev.combustivel + prev.manutencao + prev.multas + prev.pedagios + prev.seguros;
       const varComb = cur.combustivel - prev.combustivel;
       const varManut = cur.manutencao - prev.manutencao;
       const varMultas = cur.multas - prev.multas;
+      const varPedag = cur.pedagios - prev.pedagios;
+      const varSegur = cur.seguros - prev.seguros;
       const varTotal = total - prevTotal;
       const pctTotal = prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : 0;
       const pctComb = prev.combustivel > 0 ? ((cur.combustivel - prev.combustivel) / prev.combustivel) * 100 : 0;
       const pctManut = prev.manutencao > 0 ? ((cur.manutencao - prev.manutencao) / prev.manutencao) * 100 : 0;
       const pctMultas = prev.multas > 0 ? ((cur.multas - prev.multas) / prev.multas) * 100 : 0;
+      const pctPedag = prev.pedagios > 0 ? ((cur.pedagios - prev.pedagios) / prev.pedagios) * 100 : 0;
+      const pctSegur = prev.seguros > 0 ? ((cur.seguros - prev.seguros) / prev.seguros) * 100 : 0;
 
       const diffs = [
         { cat: "Combustível", val: varComb },
         { cat: "Manutenção", val: varManut },
         { cat: "Multas", val: varMultas },
+        { cat: "Pedágios", val: varPedag },
+        { cat: "Seguros", val: varSegur },
       ];
       const aumentos = diffs.filter(dd => dd.val > 0).sort((a, b) => b.val - a.val);
       const reducoes = diffs.filter(dd => dd.val < 0).sort((a, b) => a.val - b.val);
@@ -414,10 +420,10 @@ export default function FrotasAnalitico() {
 
       rows.push({
         mes: MESES_FULL[m], mesIdx: m,
-        combustivel: cur.combustivel, manutencao: cur.manutencao, multas: cur.multas, total,
-        prevComb: prev.combustivel, prevManut: prev.manutencao, prevMultas: prev.multas, prevTotal,
-        varComb, varManut, varMultas, varTotal,
-        pctComb, pctManut, pctMultas, pctTotal,
+        combustivel: cur.combustivel, manutencao: cur.manutencao, multas: cur.multas, pedagios: cur.pedagios, seguros: cur.seguros, total,
+        prevComb: prev.combustivel, prevManut: prev.manutencao, prevMultas: prev.multas, prevPedag: prev.pedagios, prevSegur: prev.seguros, prevTotal,
+        varComb, varManut, varMultas, varPedag, varSegur, varTotal,
+        pctComb, pctManut, pctMultas, pctPedag, pctSegur, pctTotal,
         maiorAumento: aumentos.length > 0 ? `${aumentos[0].cat} (+${fmt(aumentos[0].val)})` : "",
         maiorReducao: reducoes.length > 0 ? `${reducoes[0].cat} (${fmt(reducoes[0].val)})` : "",
         litros, kmEstimado, custoKm, consumoMes,
@@ -457,7 +463,9 @@ export default function FrotasAnalitico() {
   const kpiCombustivel = mesFiltroAtivo ? Number(mesDados?.combustivel || 0) : d.totalCombustivel;
   const kpiManutencao = mesFiltroAtivo ? Number(mesDados?.manutencao || 0) : d.totalManutCusto;
   const kpiMultas = mesFiltroAtivo ? Number(mesDados?.multas || 0) : d.totalMultas;
-  const kpiCustoOper = kpiCombustivel + kpiManutencao + kpiMultas;
+  const kpiPedagios = mesFiltroAtivo ? Number(mesDados?.pedagios || 0) : (d.totalPedagios || 0);
+  const kpiSeguros = mesFiltroAtivo ? Number(mesDados?.seguros || 0) : (d.totalSeguros || 0);
+  const kpiCustoOper = kpiCombustivel + kpiManutencao + kpiMultas + kpiPedagios + kpiSeguros;
   const kpiLitros = mesFiltroAtivo ? mesLitros : d.totalLitros;
   const kpiTotalKm = mesFiltroAtivo
     ? (d.totalLitros > 0 && d.totalKm > 0 ? Math.round((kpiLitros / d.totalLitros) * d.totalKm) : 0)
@@ -471,6 +479,8 @@ export default function FrotasAnalitico() {
     { name: "Combustível", value: kpiCombustivel, pct: kpiCustoOper > 0 ? Math.round((kpiCombustivel / kpiCustoOper) * 100) : 0 },
     { name: "Manutenção", value: kpiManutencao, pct: kpiCustoOper > 0 ? Math.round((kpiManutencao / kpiCustoOper) * 100) : 0 },
     { name: "Multas", value: kpiMultas, pct: kpiCustoOper > 0 ? Math.round((kpiMultas / kpiCustoOper) * 100) : 0 },
+    { name: "Pedágios", value: kpiPedagios, pct: kpiCustoOper > 0 ? Math.round((kpiPedagios / kpiCustoOper) * 100) : 0 },
+    { name: "Seguros", value: kpiSeguros, pct: kpiCustoOper > 0 ? Math.round((kpiSeguros / kpiCustoOper) * 100) : 0 },
   ].filter(x => x.value > 0);
 
   const distTipo = Object.entries(d.tipoCount).map(([name, value]) => ({
@@ -540,7 +550,7 @@ export default function FrotasAnalitico() {
     .slice(-12)
     .map(([m, costs]) => {
       const c = costs as any;
-      return { name: fmtMesAno(m), key: m, combustivel: c.combustivel, manutencao: c.manutencao, multas: c.multas, total: c.combustivel + c.manutencao + c.multas };
+      return { name: fmtMesAno(m), key: m, combustivel: c.combustivel, manutencao: c.manutencao, multas: c.multas, pedagios: c.pedagios || 0, seguros: c.seguros || 0, total: c.combustivel + c.manutencao + c.multas + (c.pedagios || 0) + (c.seguros || 0) };
     });
 
   const postosFrequentes: Record<string, { litros: number; valor: number; count: number }> = {};
@@ -678,7 +688,9 @@ export default function FrotasAnalitico() {
                   <Bar dataKey="combustivel" name="Combustível" fill="#3b82f6" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.combustivel} />
                   <Bar dataKey="manutencao" name="Manutenção" fill="#10b981" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.manutencao} />
                   <Bar dataKey="multas" name="Multas" fill="#ef4444" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.multas} />
-                  <Line type="monotone" dataKey="total" name="Total" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} hide={!!hiddenSeries.total} />
+                  <Bar dataKey="pedagios" name="Pedágios" fill="#6366f1" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.pedagios} />
+                  <Bar dataKey="seguros" name="Seguros" fill="#f59e0b" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.seguros} />
+                  <Line type="monotone" dataKey="total" name="Total" stroke="#0f172a" strokeWidth={2} dot={{ r: 3 }} hide={!!hiddenSeries.total} />
                 </ComposedChart>
               </ResponsiveContainer>
             </CardContent>
