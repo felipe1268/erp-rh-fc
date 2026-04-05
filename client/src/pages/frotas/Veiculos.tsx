@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image, Camera, Loader2, Sparkles } from "lucide-react";
+import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image, Camera, Loader2, Sparkles, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { MoneyInput } from "@/components/ui/money-input";
@@ -45,6 +45,17 @@ export default function Veiculos() {
   });
   const deleteMut = trpc.frotas.deleteVehicle.useMutation({
     onSuccess: () => { vehicles.refetch(); toast.success("Veículo inativado"); },
+  });
+  const pendingReg = trpc.frotas.getVehiclesPendingRegistration.useQuery(
+    { companyId: cId },
+    { enabled: cId > 0 },
+  );
+  const pendingIds = new Set((pendingReg.data || []).map((p: any) => p.id));
+  const pendingMap = new Map((pendingReg.data || []).map((p: any) => [p.id, p.camposFaltantes]));
+
+  const consolidateRegMut = trpc.frotas.consolidateVehicleRegistration.useMutation({
+    onSuccess: () => { vehicles.refetch(); pendingReg.refetch(); toast.success("Cadastro consolidado com sucesso!"); },
+    onError: (e) => toast.error(e.message),
   });
   const uploadPhotoMut = trpc.frotas.uploadVehiclePhoto.useMutation({
     onSuccess: (data) => {
@@ -251,6 +262,14 @@ export default function Veiculos() {
                   <p className="text-xs text-amber-600">Ativos</p>
                 </CardContent>
               </Card>
+              {(pendingReg.data || []).length > 0 && (
+                <Card className="bg-red-50 dark:bg-red-950 border-red-200">
+                  <CardContent className="p-3 text-center">
+                    <p className="text-2xl font-bold text-red-700">{(pendingReg.data || []).length}</p>
+                    <p className="text-xs text-red-600">Cadastro Incompleto</p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           );
         })()}
@@ -293,6 +312,12 @@ export default function Veiculos() {
                       </div>
                       <Badge variant={v.statusVeiculo === "Ativo" ? "default" : "secondary"} className="text-[10px] shrink-0">{v.statusVeiculo}</Badge>
                     </div>
+                    {pendingIds.has(v.id) && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <AlertTriangle className="h-3 w-3 text-amber-500" />
+                        <span className="text-[10px] text-amber-600 font-medium">Cadastro incompleto — {(pendingMap.get(v.id) || []).join(", ")}</span>
+                      </div>
+                    )}
                     <div className="mt-1.5 flex items-center gap-2">
                       <span className="font-mono text-sm font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{v.placa || "S/P"}</span>
                       <span className="text-xs text-muted-foreground">{v.tipoVeiculo}</span>
@@ -506,6 +531,52 @@ export default function Veiculos() {
                   )}
                 </div>
               </div>
+
+              {editing && (
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                    <CheckCircle2 className="h-4 w-4 text-cyan-600 inline mr-1" />
+                    Validação de Cadastro
+                  </h3>
+                  {pendingIds.has(editing.id) ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="h-5 w-5 text-amber-500" />
+                        <span className="font-semibold text-amber-800">Cadastro incompleto</span>
+                      </div>
+                      <p className="text-sm text-amber-700 mb-2">
+                        Campos faltantes: <strong>{(pendingMap.get(editing.id) || []).join(", ")}</strong>
+                      </p>
+                      <p className="text-xs text-amber-600">Preencha os campos acima e salve para poder consolidar o cadastro.</p>
+                    </div>
+                  ) : (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        <div>
+                          <span className="font-semibold text-green-800">
+                            {editing.cadastro_consolidado ? "Cadastro consolidado" : "Cadastro completo — pronto para consolidar"}
+                          </span>
+                          {editing.cadastro_consolidado_em && (
+                            <p className="text-xs text-green-600">Consolidado em {new Date(editing.cadastro_consolidado_em).toLocaleDateString("pt-BR")} por {editing.cadastro_consolidado_por || "Sistema"}</p>
+                          )}
+                        </div>
+                      </div>
+                      {!editing.cadastro_consolidado && (
+                        <Button
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => consolidateRegMut.mutate({ companyId: cId, vehicleId: editing.id })}
+                          disabled={consolidateRegMut.isPending}
+                        >
+                          {consolidateRegMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+                          Consolidar Cadastro
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="border-t pt-4">
                 <Label className="text-xs text-muted-foreground">Observações</Label>

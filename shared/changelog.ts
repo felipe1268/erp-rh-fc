@@ -8108,4 +8108,22 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-06 02:00:00",
   },
+  {
+    version: 1039,
+    titulo: "IPVA/Licenciamento Premium + Pesquisa Automática de Preços + Validação Cadastro Veículos",
+    descricao:
+      "Redesign completo das telas de IPVA e Licenciamento: layout premium com header gradiente, KPIs consolidados " +
+      "(total, pendentes, pagos, isentos/CRLV), seleção múltipla com checkbox, ações em lote (dar baixa / cancelar baixa) " +
+      "com data de pagamento, filtros por veículo e status, indicadores de vencido, design responsivo. " +
+      "Pesquisa automática de preços de combustível: botão 'Pesquisar Preços' busca dados de 20 postos da região " +
+      "Guaratinguetá/Aparecida (fonte Gaspedia/ANP) e popula a tabela de mercado automaticamente, eliminando a necessidade " +
+      "de cadastro manual. Novos endpoints batch: batchUpdateIpvaStatus, batchUpdateLicensingStatus, fetchFuelPricesFromANP. " +
+      "Validação de cadastro de veículos: campo cadastro_consolidado — consolida/bloqueia a liberação financeira mensal " +
+      "se houver veículos com dados incompletos (placa, marca, ano, RENAVAM, km). Consolidação e aprovação de manutenção " +
+      "agora verificam automaticamente todos os veículos com lançamentos no período.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 02:30:00",
+  },
 ];

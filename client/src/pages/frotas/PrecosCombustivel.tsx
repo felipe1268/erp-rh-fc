@@ -18,6 +18,7 @@ import {
 } from "recharts";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { toast } from "sonner";
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -83,6 +84,13 @@ export default function PrecosCombustivel() {
   });
   const deleteMutation = trpc.frotas.deleteMarketPrice.useMutation({
     onSuccess: () => refetchMarket(),
+  });
+  const fetchANPMutation = trpc.frotas.fetchFuelPricesFromANP.useMutation({
+    onSuccess: (data) => {
+      refetchMarket();
+      toast.success(data.message || `${data.totalInserted} preços importados!`);
+    },
+    onError: (err) => toast.error(err.message || "Erro ao buscar preços"),
   });
 
   const comparison = useMemo(() => {
@@ -303,6 +311,16 @@ export default function PrecosCombustivel() {
                 Preços de Mercado — {market?.distinctPostos || 0} Postos Pesquisados
               </CardTitle>
               <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => fetchANPMutation.mutate({ companyId: Number(companyId) })}
+                  disabled={fetchANPMutation.isPending}
+                  className="gap-1 bg-emerald-600 hover:bg-emerald-700"
+                >
+                  <RefreshCw className={`h-4 w-4 ${fetchANPMutation.isPending ? "animate-spin" : ""}`} />
+                  {fetchANPMutation.isPending ? "Pesquisando..." : "Pesquisar Preços"}
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => setShowAddPrice(true)} className="gap-1">
                   <Plus className="h-4 w-4" />
                   Manual
