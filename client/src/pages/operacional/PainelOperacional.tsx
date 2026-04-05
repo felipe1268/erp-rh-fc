@@ -1,11 +1,12 @@
 import { useLocation } from "wouter";
+import { useState, useRef } from "react";
 import {
   ClipboardList, AlertTriangle,
   CloudRain, ShieldCheck, ClipboardCheck,
   HardHat, FlaskConical,
 } from "lucide-react";
 
-const submodulos = [
+const SUBMODULOS = [
   {
     id: "rdo",
     titulo: "RDO",
@@ -62,8 +63,58 @@ const submodulos = [
   },
 ];
 
+const ORDER_KEY = "fc-operacional-order";
+
 export default function PainelOperacional() {
   const [, setLocation] = useLocation();
+
+  const [moduleOrder, setModuleOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(ORDER_KEY) || "[]"); } catch { return []; }
+  });
+  const [dragActive, setDragActive] = useState<string | null>(null);
+  const [dragTarget, setDragTarget] = useState<string | null>(null);
+  const draggingId = useRef<string | null>(null);
+  const didDrag = useRef(false);
+
+  const sorted = moduleOrder.length === 0
+    ? SUBMODULOS
+    : [...SUBMODULOS].sort((a, b) => {
+        const ai = moduleOrder.indexOf(a.id);
+        const bi = moduleOrder.indexOf(b.id);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
+
+  function handleDragStart(id: string) {
+    draggingId.current = id;
+    didDrag.current = false;
+    setDragActive(id);
+  }
+  function handleDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault();
+    didDrag.current = true;
+    setDragTarget(id);
+  }
+  function handleDrop(toId: string) {
+    const fromId = draggingId.current;
+    if (!fromId || fromId === toId) return;
+    const ids = sorted.map(m => m.id);
+    const fromIdx = ids.indexOf(fromId);
+    const toIdx = ids.indexOf(toId);
+    const newOrder = [...ids];
+    newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, fromId);
+    setModuleOrder(newOrder);
+    localStorage.setItem(ORDER_KEY, JSON.stringify(newOrder));
+  }
+  function handleDragEnd() {
+    setDragActive(null);
+    setDragTarget(null);
+    draggingId.current = null;
+    setTimeout(() => { didDrag.current = false; }, 0);
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -76,17 +127,29 @@ export default function PainelOperacional() {
       </div>
 
       <div className="flex flex-wrap gap-4">
-        {submodulos.map((mod) => (
+        {sorted.map((mod) => {
+          const isBeingDragged = dragActive === mod.id;
+          const isDropTarget = dragTarget === mod.id && dragActive !== mod.id;
+          return (
             <div
               key={mod.id}
-              onClick={() => setLocation(mod.path)}
+              draggable
+              onDragStart={() => handleDragStart(mod.id)}
+              onDragOver={(e) => handleDragOver(e, mod.id)}
+              onDrop={() => handleDrop(mod.id)}
+              onDragEnd={handleDragEnd}
+              onClick={() => { if (!didDrag.current) setLocation(mod.path); }}
               className="group relative flex flex-col items-center justify-center text-center rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:scale-[1.04] select-none"
               style={{
                 width: '155px',
                 minHeight: '140px',
                 background: `linear-gradient(145deg, ${mod.accentFrom}16, ${mod.accentTo}0a)`,
-                border: `1.5px solid ${mod.accentFrom}38`,
+                border: isDropTarget
+                  ? `2px solid ${mod.accentFrom}`
+                  : `1.5px solid ${mod.accentFrom}38`,
                 boxShadow: `0 4px 20px -6px ${mod.accentFrom}28`,
+                opacity: isBeingDragged ? 0.4 : 1,
+                transition: 'all 0.2s ease',
               }}
             >
               <div
@@ -105,7 +168,8 @@ export default function PainelOperacional() {
               <p className="text-sm font-extrabold leading-tight text-[#1B2A4A] dark:text-white tracking-tight w-full truncate">{mod.titulo}</p>
               <p className="text-[10.5px] text-gray-400 leading-tight mt-0.5 w-full truncate">{mod.subtitulo}</p>
             </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
