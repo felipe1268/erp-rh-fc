@@ -1785,8 +1785,11 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
     }),
 
   getDashboard: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId !== undefined && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar dados desta empresa" });
+      }
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
       const vehiclesRes = await db.execute(sql`
@@ -1794,20 +1797,17 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       `);
       const allVehicles = (vehiclesRes as any).rows || [];
 
-      const maintRes = await db.execute(sql`
+      const allMaintRaw = ((await db.execute(sql`
         SELECT * FROM fleet_maintenances WHERE company_id = ${input.companyId}
-      `);
-      const allMaint = (maintRes as any).rows || [];
+      `)) as any).rows || [];
 
-      const fuelRes = await db.execute(sql`
+      const allFuelRaw = ((await db.execute(sql`
         SELECT * FROM fleet_fuel_records WHERE company_id = ${input.companyId}
-      `);
-      const allFuel = (fuelRes as any).rows || [];
+      `)) as any).rows || [];
 
-      const finesRes = await db.execute(sql`
+      const allFinesRaw = ((await db.execute(sql`
         SELECT * FROM fleet_fines WHERE company_id = ${input.companyId}
-      `);
-      const allFines = (finesRes as any).rows || [];
+      `)) as any).rows || [];
 
       const ipvaRes = await db.execute(sql`
         SELECT * FROM fleet_ipva WHERE company_id = ${input.companyId}
@@ -1823,6 +1823,23 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         SELECT * FROM fleet_insurance WHERE company_id = ${input.companyId}
       `);
       const allIns = (insRes as any).rows || [];
+
+      const anosSet = new Set<number>();
+      for (const m of allMaintRaw) { const y = parseInt((m.data_manutencao || "").substring(0, 4)); if (y > 2000) anosSet.add(y); }
+      for (const f of allFuelRaw) { const y = parseInt((f.data || "").substring(0, 4)); if (y > 2000) anosSet.add(y); }
+      for (const f of allFinesRaw) { const y = parseInt((f.data_infracao || "").substring(0, 4)); if (y > 2000) anosSet.add(y); }
+      const anosDisponiveis = Array.from(anosSet).sort((a, b) => b - a);
+
+      const anoFiltro = input.ano;
+      const filterByYear = (dateStr: string | null | undefined) => {
+        if (!anoFiltro) return true;
+        const y = parseInt((dateStr || "").substring(0, 4));
+        return y === anoFiltro;
+      };
+
+      const allMaint = anoFiltro ? allMaintRaw.filter((m: any) => filterByYear(m.data_manutencao)) : allMaintRaw;
+      const allFuel = anoFiltro ? allFuelRaw.filter((f: any) => filterByYear(f.data)) : allFuelRaw;
+      const allFines = anoFiltro ? allFinesRaw.filter((f: any) => filterByYear(f.data_infracao)) : allFinesRaw;
 
       const totalVehicles = allVehicles.length;
       const totalFipe = allVehicles.reduce((s: number, v: any) => s + n(v.valor_fipe), 0);
@@ -1893,13 +1910,13 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         }
       }
 
-      for (const m of allMaint) {
+      for (const m of allMaintRaw) {
         if (m.status === "agendada" && m.data_proxima && m.data_proxima <= in30) {
           alertas.push({ tipo: "manutencao", msg: `Manutenção agendada: ${m.descricao}`, veiculoId: m.vehicle_id, urgencia: m.data_proxima <= today ? "critico" : "alerta" });
         }
       }
 
-      for (const f of allFines) {
+      for (const f of allFinesRaw) {
         if (f.status === "pendente" && f.data_vencimento && f.data_vencimento <= in30) {
           const fVehicle = allVehicles.find((v: any) => v.id === f.vehicle_id);
           alertas.push({ tipo: "multa", msg: `Multa pendente: ${f.descricao} - R$ ${n(f.valor_original).toFixed(2)}`, veiculoId: f.vehicle_id, placa: fVehicle?.placa || f.placa, urgencia: f.data_vencimento <= today ? "critico" : "alerta" });
@@ -2052,13 +2069,14 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         tipoCount, marcaCount,
         fuelByMonth, maintByMonth, custosTotaisByMonth, custosMensaisVeiculo,
         alertas, alertasCriticos, alertasAlerta, alertasInfo,
-        veiculosEmManutencao: allMaint.filter((m: any) => m.status === "em_andamento").length,
+        veiculosEmManutencao: allMaintRaw.filter((m: any) => m.status === "em_andamento").length,
         depreciacaoPorVeiculo,
         custoPorVeiculo,
         idadeDistribuicao, idadeVeiculos, statusVeiculos,
         totalSegurosPremio, segurosAtivos, veiculosSemSeguro,
         totalLicenciamento, totalIpvaGeral,
         tipoCombustivel, idadeFrota, custoOperTotal,
+        anosDisponiveis, anoSelecionado: anoFiltro || null,
       };
     }),
 

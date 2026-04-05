@@ -7844,4 +7844,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 15:00:00",
   },
+  {
+    version: 1022,
+    titulo: "Dashboard Frotas: Filtro por Ano — Separação de Custos por Período",
+    descricao:
+      "Adicionado filtro de ano no Dashboard Frotas e no Analítico de Frotas. " +
+      "Todos os valores financeiros (manutenção, combustível, multas, custo operacional, " +
+      "custo/km, ranking de veículos, evolução mensal, motoristas e postos) agora são " +
+      "calculados separadamente por ano, evitando distorção na análise. Seletor de ano " +
+      "inicia no ano atual por padrão. Opção 'Todos os anos' disponível para visão acumulada.",
+    tipo: "melhoria",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 16:00:00",
+  },
 ];

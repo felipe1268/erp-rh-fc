@@ -46,9 +46,10 @@ export default function PainelFrotas() {
   const [filtroAno, setFiltroAno] = useState<number | undefined>();
   const [filtroMes, setFiltroMes] = useState<number | undefined>();
   const [filtroVeiculo, setFiltroVeiculo] = useState<string | undefined>();
+  const [anoDash, setAnoDash] = useState<number | undefined>(new Date().getFullYear());
   const initMut = trpc.frotas.initTables.useMutation();
   const dash = trpc.frotas.getDashboard.useQuery(
-    { companyId: cId },
+    { companyId: cId, ano: anoDash },
     { enabled: cId > 0, retry: 1 },
   );
   const maintAnalytics = trpc.frotas.getMaintenanceAnalytics.useQuery(
@@ -87,7 +88,7 @@ export default function PainelFrotas() {
   return (
     <DashboardLayout>
       <div className="p-2 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Activity className="h-6 w-6 text-cyan-600" /> Dashboard Frotas
@@ -95,6 +96,24 @@ export default function PainelFrotas() {
             <p className="text-muted-foreground text-sm">
               Gestão completa — indicadores, custos, patrimônio e alertas
             </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <select
+              value={anoDash ?? ""}
+              onChange={(e) => setAnoDash(e.target.value ? Number(e.target.value) : undefined)}
+              className="border rounded-md px-3 py-1.5 text-sm bg-background"
+            >
+              <option value="">Todos os anos</option>
+              {(d?.anosDisponiveis || []).map((a: number) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+            {anoDash && (
+              <Badge variant="secondary" className="text-xs gap-1 cursor-pointer" onClick={() => setAnoDash(undefined)}>
+                {anoDash} <X className="h-3 w-3" />
+              </Badge>
+            )}
           </div>
         </div>
 

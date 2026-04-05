@@ -5,8 +5,9 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart3, PieChart as PieIcon, Fuel, Wrench, AlertTriangle,
-  Truck, DollarSign, Activity, Users, Gauge, TrendingDown, Trophy, MapPin, Droplets
+  Truck, DollarSign, Activity, Users, Gauge, TrendingDown, Trophy, MapPin, Droplets, Calendar, X
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, ComposedChart, Line, Sector
@@ -174,8 +175,9 @@ export default function FrotasAnalitico() {
   const cId = parseInt(selectedCompanyId || "0");
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
   const toggleSeries = (dataKey: string) => setHiddenSeries(prev => ({ ...prev, [dataKey]: !prev[dataKey] }));
+  const [anoDash, setAnoDash] = useState<number | undefined>(new Date().getFullYear());
 
-  const dash = trpc.frotas.getDashboard.useQuery({ companyId: cId }, { enabled: cId > 0 });
+  const dash = trpc.frotas.getDashboard.useQuery({ companyId: cId, ano: anoDash }, { enabled: cId > 0 });
   const fuel = trpc.frotas.listFuelRecords.useQuery({ companyId: cId }, { enabled: cId > 0 });
 
   if (!dash.data) {
@@ -189,7 +191,13 @@ export default function FrotasAnalitico() {
   }
 
   const d = dash.data;
-  const allFuel = fuel.data || [];
+  const allFuelRaw = fuel.data || [];
+  const allFuel = anoDash
+    ? (allFuelRaw as any[]).filter((f: any) => {
+        const y = parseInt(((f.data || f.dataAbastecimento || "") as string).substring(0, 4));
+        return y === anoDash;
+      })
+    : allFuelRaw;
 
   const custosPorVeiculo = d.custoPorVeiculo.slice(0, 15);
 
@@ -259,11 +267,31 @@ export default function FrotasAnalitico() {
   return (
     <DashboardLayout>
       <div className="p-3 space-y-5">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-blue-600" /> Analítico de Frotas
-          </h1>
-          <p className="text-xs text-muted-foreground">Visão estratégica completa — custos, consumo, motoristas, veículos e desempenho</p>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-blue-600" /> Analítico de Frotas
+            </h1>
+            <p className="text-xs text-muted-foreground">Visão estratégica completa — custos, consumo, motoristas, veículos e desempenho</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <select
+              value={anoDash ?? ""}
+              onChange={(e) => setAnoDash(e.target.value ? Number(e.target.value) : undefined)}
+              className="border rounded-md px-3 py-1.5 text-sm bg-background"
+            >
+              <option value="">Todos os anos</option>
+              {(d.anosDisponiveis || []).map((a: number) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+            {anoDash && (
+              <Badge variant="secondary" className="text-xs gap-1 cursor-pointer" onClick={() => setAnoDash(undefined)}>
+                {anoDash} <X className="h-3 w-3" />
+              </Badge>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
