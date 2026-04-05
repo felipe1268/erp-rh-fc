@@ -4385,7 +4385,7 @@ Sempre retorne JSON válido, sem markdown.`;
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
 
-      const XLSX = require("xlsx");
+      const XLSX = await import("xlsx");
       const buffer = Buffer.from(input.base64, "base64");
       const wb = XLSX.read(buffer, { type: "buffer" });
       const ws = wb.Sheets[wb.SheetNames[0]];
