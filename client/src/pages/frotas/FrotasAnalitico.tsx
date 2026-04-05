@@ -186,153 +186,48 @@ export default function FrotasAnalitico() {
   const dash = trpc.frotas.getDashboard.useQuery({ companyId: cId, ano: anoDash }, { enabled: cId > 0 });
   const fuel = trpc.frotas.listFuelRecords.useQuery({ companyId: cId }, { enabled: cId > 0 });
 
-  if (!dash.data) {
-    return (
-      <DashboardLayout>
-        <div className="p-4 flex items-center justify-center h-64">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  const d = dash.data;
-  const allFuelRaw = fuel.data || [];
-  const allFuel = anoDash
-    ? (allFuelRaw as any[]).filter((f: any) => {
-        const y = parseInt(((f.data || f.dataAbastecimento || "") as string).substring(0, 4));
-        return y === anoDash;
-      })
-    : allFuelRaw;
-
-  const custosPorVeiculoAll = d.custoPorVeiculo || [];
-  const custosPorVeiculo = custosPorVeiculoAll.slice(0, 15);
-
-  const motoristas: Record<string, { litros: number; valor: number; abastecimentos: number }> = {};
-  for (const f of allFuel as any[]) {
-    const nome = f.motorista || "Não informado";
-    if (!motoristas[nome]) motoristas[nome] = { litros: 0, valor: 0, abastecimentos: 0 };
-    motoristas[nome].litros += parseFloat(f.litros || "0");
-    motoristas[nome].valor += parseFloat(f.valorTotal || f.valor_total || "0");
-    motoristas[nome].abastecimentos += 1;
-  }
-  const topMotoristas = Object.entries(motoristas)
-    .map(([name, v]) => ({ name, ...v }))
-    .sort((a, b) => b.valor - a.valor)
-    .slice(0, 10);
-
-  const distCusto = [
-    { name: "Combustível", value: d.totalCombustivel, pct: d.custoOperTotal > 0 ? Math.round((d.totalCombustivel / d.custoOperTotal) * 100) : 0 },
-    { name: "Manutenção", value: d.totalManutCusto, pct: d.custoOperTotal > 0 ? Math.round((d.totalManutCusto / d.custoOperTotal) * 100) : 0 },
-    { name: "Multas", value: d.totalMultas, pct: d.custoOperTotal > 0 ? Math.round((d.totalMultas / d.custoOperTotal) * 100) : 0 },
-  ].filter(x => x.value > 0);
-
-  const distTipo = Object.entries(d.tipoCount).map(([name, value]) => ({
-    name, value, pct: d.totalVehicles > 0 ? Math.round(((value as number) / d.totalVehicles) * 100) : 0,
-  }));
-
-  const distMarca = Object.entries(d.marcaCount)
-    .map(([name, value]) => ({ name, value, pct: d.totalVehicles > 0 ? Math.round(((value as number) / d.totalVehicles) * 100) : 0 }))
-    .sort((a, b) => (b.value as number) - (a.value as number));
-
-  const distCombustivel = Object.entries(d.tipoCombustivel)
-    .map(([name, value]) => ({ name, value: value as number, pct: d.totalLitros > 0 ? Math.round(((value as number) / d.totalLitros) * 100) : 0 }))
-    .sort((a, b) => b.value - a.value);
-
   const MESES_NOME = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
   const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-  const evolucaoMensal = Object.entries(d.custosTotaisByMonth)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-12)
-    .map(([m, costs]) => {
-      const c = costs as any;
-      return { name: fmtMesAno(m), key: m, combustivel: c.combustivel, manutencao: c.manutencao, multas: c.multas, total: c.combustivel + c.manutencao + c.multas };
-    });
+  const d = dash.data;
+  const custosTotaisByMonth = d?.custosTotaisByMonth || {};
 
   const mesesComDados = useMemo(() => {
     const set = new Set<number>();
-    Object.keys(d.custosTotaisByMonth).forEach(k => {
+    Object.keys(custosTotaisByMonth).forEach(k => {
       const parts = k.split("-");
       const y = parseInt(parts[0]);
       const m = parseInt(parts[1]) - 1;
       if (!anoDash || y === anoDash) set.add(m);
     });
     return set;
-  }, [d.custosTotaisByMonth, anoDash]);
+  }, [custosTotaisByMonth, anoDash]);
 
-  const comparativoMensal = useMemo(() => {
-    const ano = anoDash || new Date().getFullYear();
-    const rows: Array<{
-      mes: string; mesIdx: number;
-      combustivel: number; manutencao: number; multas: number; total: number;
-      prevComb: number; prevManut: number; prevMultas: number; prevTotal: number;
-      varComb: number; varManut: number; varMultas: number; varTotal: number;
-      pctComb: number; pctManut: number; pctMultas: number; pctTotal: number;
-      maiorAumento: string; maiorReducao: string;
-    }> = [];
+  const custosPorVeiculoAll = useMemo(() => d?.custoPorVeiculo || [], [d]);
 
-    for (let m = 0; m < 12; m++) {
-      const key = `${ano}-${String(m + 1).padStart(2, "0")}`;
-      const prevKey = m > 0 ? `${ano}-${String(m).padStart(2, "0")}` : `${ano - 1}-12`;
-      const raw = (d.custosTotaisByMonth[key] as any) || {};
-      const rawPrev = (d.custosTotaisByMonth[prevKey] as any) || {};
-      const cur = { combustivel: Number(raw.combustivel ?? 0), manutencao: Number(raw.manutencao ?? 0), multas: Number(raw.multas ?? 0) };
-      const prev = { combustivel: Number(rawPrev.combustivel ?? 0), manutencao: Number(rawPrev.manutencao ?? 0), multas: Number(rawPrev.multas ?? 0) };
-      const total = cur.combustivel + cur.manutencao + cur.multas;
-      const prevTotal = prev.combustivel + prev.manutencao + prev.multas;
-      const varComb = cur.combustivel - prev.combustivel;
-      const varManut = cur.manutencao - prev.manutencao;
-      const varMultas = cur.multas - prev.multas;
-      const varTotal = total - prevTotal;
-      const pctTotal = prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : 0;
-      const pctComb = prev.combustivel > 0 ? ((cur.combustivel - prev.combustivel) / prev.combustivel) * 100 : 0;
-      const pctManut = prev.manutencao > 0 ? ((cur.manutencao - prev.manutencao) / prev.manutencao) * 100 : 0;
-      const pctMultas = prev.multas > 0 ? ((cur.multas - prev.multas) / prev.multas) * 100 : 0;
-
-      const diffs = [
-        { cat: "Combustível", val: varComb },
-        { cat: "Manutenção", val: varManut },
-        { cat: "Multas", val: varMultas },
-      ];
-      const aumentos = diffs.filter(d => d.val > 0).sort((a, b) => b.val - a.val);
-      const reducoes = diffs.filter(d => d.val < 0).sort((a, b) => a.val - b.val);
-
-      rows.push({
-        mes: MESES_FULL[m], mesIdx: m,
-        combustivel: cur.combustivel, manutencao: cur.manutencao, multas: cur.multas, total,
-        prevComb: prev.combustivel, prevManut: prev.manutencao, prevMultas: prev.multas, prevTotal,
-        varComb, varManut, varMultas, varTotal,
-        pctComb, pctManut, pctMultas, pctTotal,
-        maiorAumento: aumentos.length > 0 ? `${aumentos[0].cat} (+${fmt(aumentos[0].val)})` : "",
-        maiorReducao: reducoes.length > 0 ? `${reducoes[0].cat} (${fmt(reducoes[0].val)})` : "",
-      });
+  const topMotoristasPorLitrosData = useMemo(() => {
+    const allFuelRaw = fuel.data || [];
+    const af = anoDash
+      ? (allFuelRaw as any[]).filter((f: any) => {
+          const y = parseInt(((f.data || f.dataAbastecimento || "") as string).substring(0, 4));
+          return y === anoDash;
+        })
+      : allFuelRaw;
+    const mots: Record<string, { litros: number; valor: number; abastecimentos: number }> = {};
+    for (const f of af as any[]) {
+      const nome = f.motorista || "Não informado";
+      if (!mots[nome]) mots[nome] = { litros: 0, valor: 0, abastecimentos: 0 };
+      mots[nome].litros += parseFloat(f.litros || "0");
+      mots[nome].valor += parseFloat(f.valorTotal || f.valor_total || "0");
+      mots[nome].abastecimentos += 1;
     }
-    return rows;
-  }, [d.custosTotaisByMonth, anoDash]);
+    return Object.entries(mots)
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 10);
+  }, [fuel.data, anoDash]);
 
-  const postosFrequentes: Record<string, { litros: number; valor: number; count: number }> = {};
-  for (const f of allFuel as any[]) {
-    const posto = f.posto || f.local || "Não informado";
-    if (!postosFrequentes[posto]) postosFrequentes[posto] = { litros: 0, valor: 0, count: 0 };
-    postosFrequentes[posto].litros += parseFloat(f.litros || "0");
-    postosFrequentes[posto].valor += parseFloat(f.valorTotal || f.valor_total || "0");
-    postosFrequentes[posto].count += 1;
-  }
-  const topPostos = Object.entries(postosFrequentes)
-    .map(([name, v]) => ({ name, ...v }))
-    .sort((a, b) => b.valor - a.valor)
-    .slice(0, 8);
-
-  const depTop = d.depreciacaoPorVeiculo
-    .filter((v: any) => v.deprecReal > 0)
-    .sort((a: any, b: any) => b.deprecReal - a.deprecReal)
-    .slice(0, 8);
-
-  const topMotoristasPorLitros = useMemo(() => [...topMotoristas].sort((a, b) => b.litros - a.litros), [topMotoristas]);
-  const maxCustoVeiculo = custosPorVeiculo[0]?.custoTotal || 1;
-  const maxPostoValor = topPostos[0]?.valor || 1;
-  const maxDep = depTop[0]?.deprecReal || 1;
+  const topMotoristasPorLitros = useMemo(() => [...topMotoristasPorLitrosData].sort((a, b) => b.litros - a.litros), [topMotoristasPorLitrosData]);
 
   const tiposUnicos = useMemo(() => [...new Set(custosPorVeiculoAll.map((v: any) => v.tipo))].filter(Boolean).sort(), [custosPorVeiculoAll]);
   const tblFiltered = useMemo(() => {
@@ -360,6 +255,126 @@ export default function FrotasAnalitico() {
     manut: tblFiltered.reduce((s: number, v: any) => s + (v.custoManut || 0), 0),
     multas: tblFiltered.reduce((s: number, v: any) => s + (v.custoMultas || 0), 0),
   }), [tblFiltered]);
+
+  const comparativoMensal = useMemo(() => {
+    if (!d) return [];
+    const ano = anoDash || new Date().getFullYear();
+    const rows: Array<{
+      mes: string; mesIdx: number;
+      combustivel: number; manutencao: number; multas: number; total: number;
+      prevComb: number; prevManut: number; prevMultas: number; prevTotal: number;
+      varComb: number; varManut: number; varMultas: number; varTotal: number;
+      pctComb: number; pctManut: number; pctMultas: number; pctTotal: number;
+      maiorAumento: string; maiorReducao: string;
+    }> = [];
+
+    for (let m = 0; m < 12; m++) {
+      const key = `${ano}-${String(m + 1).padStart(2, "0")}`;
+      const prevKey = m > 0 ? `${ano}-${String(m).padStart(2, "0")}` : `${ano - 1}-12`;
+      const raw = (custosTotaisByMonth[key] as any) || {};
+      const rawPrev = (custosTotaisByMonth[prevKey] as any) || {};
+      const cur = { combustivel: Number(raw.combustivel ?? 0), manutencao: Number(raw.manutencao ?? 0), multas: Number(raw.multas ?? 0) };
+      const prev = { combustivel: Number(rawPrev.combustivel ?? 0), manutencao: Number(rawPrev.manutencao ?? 0), multas: Number(rawPrev.multas ?? 0) };
+      const total = cur.combustivel + cur.manutencao + cur.multas;
+      const prevTotal = prev.combustivel + prev.manutencao + prev.multas;
+      const varComb = cur.combustivel - prev.combustivel;
+      const varManut = cur.manutencao - prev.manutencao;
+      const varMultas = cur.multas - prev.multas;
+      const varTotal = total - prevTotal;
+      const pctTotal = prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : 0;
+      const pctComb = prev.combustivel > 0 ? ((cur.combustivel - prev.combustivel) / prev.combustivel) * 100 : 0;
+      const pctManut = prev.manutencao > 0 ? ((cur.manutencao - prev.manutencao) / prev.manutencao) * 100 : 0;
+      const pctMultas = prev.multas > 0 ? ((cur.multas - prev.multas) / prev.multas) * 100 : 0;
+
+      const diffs = [
+        { cat: "Combustível", val: varComb },
+        { cat: "Manutenção", val: varManut },
+        { cat: "Multas", val: varMultas },
+      ];
+      const aumentos = diffs.filter(dd => dd.val > 0).sort((a, b) => b.val - a.val);
+      const reducoes = diffs.filter(dd => dd.val < 0).sort((a, b) => a.val - b.val);
+
+      rows.push({
+        mes: MESES_FULL[m], mesIdx: m,
+        combustivel: cur.combustivel, manutencao: cur.manutencao, multas: cur.multas, total,
+        prevComb: prev.combustivel, prevManut: prev.manutencao, prevMultas: prev.multas, prevTotal,
+        varComb, varManut, varMultas, varTotal,
+        pctComb, pctManut, pctMultas, pctTotal,
+        maiorAumento: aumentos.length > 0 ? `${aumentos[0].cat} (+${fmt(aumentos[0].val)})` : "",
+        maiorReducao: reducoes.length > 0 ? `${reducoes[0].cat} (${fmt(reducoes[0].val)})` : "",
+      });
+    }
+    return rows;
+  }, [custosTotaisByMonth, anoDash, d]);
+
+  if (!d) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 flex items-center justify-center h-64">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const allFuelRaw = fuel.data || [];
+  const allFuel = anoDash
+    ? (allFuelRaw as any[]).filter((f: any) => {
+        const y = parseInt(((f.data || f.dataAbastecimento || "") as string).substring(0, 4));
+        return y === anoDash;
+      })
+    : allFuelRaw;
+
+  const custosPorVeiculo = custosPorVeiculoAll.slice(0, 15);
+  const topMotoristas = topMotoristasPorLitrosData;
+
+  const distCusto = [
+    { name: "Combustível", value: d.totalCombustivel, pct: d.custoOperTotal > 0 ? Math.round((d.totalCombustivel / d.custoOperTotal) * 100) : 0 },
+    { name: "Manutenção", value: d.totalManutCusto, pct: d.custoOperTotal > 0 ? Math.round((d.totalManutCusto / d.custoOperTotal) * 100) : 0 },
+    { name: "Multas", value: d.totalMultas, pct: d.custoOperTotal > 0 ? Math.round((d.totalMultas / d.custoOperTotal) * 100) : 0 },
+  ].filter(x => x.value > 0);
+
+  const distTipo = Object.entries(d.tipoCount).map(([name, value]) => ({
+    name, value, pct: d.totalVehicles > 0 ? Math.round(((value as number) / d.totalVehicles) * 100) : 0,
+  }));
+
+  const distMarca = Object.entries(d.marcaCount)
+    .map(([name, value]) => ({ name, value, pct: d.totalVehicles > 0 ? Math.round(((value as number) / d.totalVehicles) * 100) : 0 }))
+    .sort((a, b) => (b.value as number) - (a.value as number));
+
+  const distCombustivel = Object.entries(d.tipoCombustivel)
+    .map(([name, value]) => ({ name, value: value as number, pct: d.totalLitros > 0 ? Math.round(((value as number) / d.totalLitros) * 100) : 0 }))
+    .sort((a, b) => b.value - a.value);
+
+  const evolucaoMensal = Object.entries(d.custosTotaisByMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-12)
+    .map(([m, costs]) => {
+      const c = costs as any;
+      return { name: fmtMesAno(m), key: m, combustivel: c.combustivel, manutencao: c.manutencao, multas: c.multas, total: c.combustivel + c.manutencao + c.multas };
+    });
+
+  const postosFrequentes: Record<string, { litros: number; valor: number; count: number }> = {};
+  for (const f of allFuel as any[]) {
+    const posto = f.posto || f.local || "Não informado";
+    if (!postosFrequentes[posto]) postosFrequentes[posto] = { litros: 0, valor: 0, count: 0 };
+    postosFrequentes[posto].litros += parseFloat(f.litros || "0");
+    postosFrequentes[posto].valor += parseFloat(f.valorTotal || f.valor_total || "0");
+    postosFrequentes[posto].count += 1;
+  }
+  const topPostos = Object.entries(postosFrequentes)
+    .map(([name, v]) => ({ name, ...v }))
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 8);
+
+  const depTop = d.depreciacaoPorVeiculo
+    .filter((v: any) => v.deprecReal > 0)
+    .sort((a: any, b: any) => b.deprecReal - a.deprecReal)
+    .slice(0, 8);
+
+  const maxCustoVeiculo = custosPorVeiculo[0]?.custoTotal || 1;
+  const maxPostoValor = topPostos[0]?.valor || 1;
+  const maxDep = depTop[0]?.deprecReal || 1;
 
   return (
     <DashboardLayout>
