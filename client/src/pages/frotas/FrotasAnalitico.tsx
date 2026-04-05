@@ -73,6 +73,11 @@ function KpiMini({ icon: Icon, label, value, sub, color = "text-primary" }: any)
 export default function FrotasAnalitico() {
   const { selectedCompanyId } = useCompany();
   const cId = parseInt(selectedCompanyId || "0");
+  const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
+  const toggleSeries = (dataKey: string) => {
+    setHiddenSeries(prev => ({ ...prev, [dataKey]: !prev[dataKey] }));
+  };
+
   const dash = trpc.frotas.getDashboard.useQuery({ companyId: cId }, { enabled: cId > 0 });
   const fuel = trpc.frotas.listFuelRecords.useQuery({ companyId: cId }, { enabled: cId > 0 });
 
@@ -228,11 +233,17 @@ export default function FrotasAnalitico() {
                       <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => fmtK(v)} />
                       <Tooltip content={<CustomTooltip />} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="combustivel" name="Combustível" fill="#3b82f6" radius={[2, 2, 0, 0]} stackId="a" />
-                      <Bar dataKey="manutencao" name="Manutenção" fill="#10b981" radius={[2, 2, 0, 0]} stackId="a" />
-                      <Bar dataKey="multas" name="Multas" fill="#ef4444" radius={[2, 2, 0, 0]} stackId="a" />
-                      <Line type="monotone" dataKey="total" name="Total" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
+                      <Legend
+                        wrapperStyle={{ fontSize: 11, cursor: "pointer" }}
+                        onClick={(e: any) => toggleSeries(e.dataKey)}
+                        formatter={(value: string, entry: any) => (
+                          <span style={{ color: hiddenSeries[entry.dataKey] ? "#ccc" : entry.color, textDecoration: hiddenSeries[entry.dataKey] ? "line-through" : "none" }}>{value}</span>
+                        )}
+                      />
+                      <Bar dataKey="combustivel" name="Combustível" fill="#3b82f6" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.combustivel} />
+                      <Bar dataKey="manutencao" name="Manutenção" fill="#10b981" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.manutencao} />
+                      <Bar dataKey="multas" name="Multas" fill="#ef4444" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.multas} />
+                      <Line type="monotone" dataKey="total" name="Total" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} hide={!!hiddenSeries.total} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </CardContent>
