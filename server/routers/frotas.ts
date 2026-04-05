@@ -10,6 +10,7 @@ import {
   obras, employees,
 } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
+import { storagePut } from "../storage";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -364,6 +365,25 @@ export const frotasRouter = router({
       const setFields: any = { ...data, updatedAt: new Date().toISOString() };
       await db.update(vehicles).set(setFields).where(and(eq(vehicles.id, id), eq(vehicles.companyId, companyId)));
       return { success: true };
+    }),
+
+  uploadVehiclePhoto: protectedProcedure
+    .input(z.object({
+      vehicleId: z.number(),
+      companyId: z.number(),
+      base64: z.string(),
+      contentType: z.string().default("image/jpeg"),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const buf = Buffer.from(input.base64, 'base64');
+      const ext = input.contentType.includes('png') ? 'png' : 'jpg';
+      const key = `vehicles/${input.companyId}/${input.vehicleId}_${Date.now()}.${ext}`;
+      const { url } = await storagePut(key, buf, input.contentType);
+      const fotoUrl = url || `/api/files/${key}`;
+      await db.update(vehicles).set({ fotoUrl, updatedAt: new Date().toISOString() } as any)
+        .where(and(eq(vehicles.id, input.vehicleId), eq(vehicles.companyId, input.companyId)));
+      return { fotoUrl };
     }),
 
   deleteVehicle: protectedProcedure

@@ -10,8 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image } from "lucide-react";
-import { useState } from "react";
+import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image, Camera } from "lucide-react";
+import { useState, useRef } from "react";
 import { toast } from "sonner";
 
 const TIPOS = ["Carro", "SUV", "Caminhonete", "Caminhão", "Utilitário", "Van", "Moto", "Ônibus", "Máquina", "Outros"];
@@ -45,6 +45,38 @@ export default function Veiculos() {
   const deleteMut = trpc.frotas.deleteVehicle.useMutation({
     onSuccess: () => { vehicles.refetch(); toast.success("Veículo inativado"); },
   });
+  const uploadPhotoMut = trpc.frotas.uploadVehiclePhoto.useMutation({
+    onSuccess: () => { vehicles.refetch(); toast.success("Foto atualizada"); },
+    onError: (err) => toast.error("Erro ao enviar foto: " + err.message),
+  });
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoTargetId, setPhotoTargetId] = useState<number | null>(null);
+
+  function handlePhotoClick(vehicleId: number) {
+    setPhotoTargetId(vehicleId);
+    photoInputRef.current?.click();
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !photoTargetId) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error("Selecione uma imagem (JPG, PNG, etc.)");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagem muito grande (máx. 5MB)");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as ArrayBuffer;
+      const base64 = btoa(new Uint8Array(result).reduce((d, b) => d + String.fromCharCode(b), ''));
+      uploadPhotoMut.mutate({ vehicleId: photoTargetId, companyId: cId, base64, contentType: file.type });
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = "";
+  }
 
   const fipeTipo = form.tipoVeiculo === "Caminhão" ? "caminhoes" : form.tipoVeiculo === "Moto" ? "motos" : "carros";
   const fipeMarcas = trpc.frotas.fipeMarcas.useQuery({ tipo: fipeTipo }, { enabled: dialogOpen });
@@ -185,11 +217,23 @@ export default function Veiculos() {
             {list.map((v: any) => (
               <Card key={v.id} className="overflow-hidden hover:shadow-md transition-shadow">
                 <div className="flex">
-                  <div className="w-32 h-32 flex-shrink-0 bg-muted flex items-center justify-center overflow-hidden">
+                  <div
+                    className="w-32 h-32 flex-shrink-0 bg-muted flex items-center justify-center overflow-hidden relative group cursor-pointer"
+                    onClick={() => handlePhotoClick(v.id)}
+                    title="Clique para alterar a foto"
+                  >
                     {v.foto_url ? (
                       <img src={v.foto_url} alt={v.modelo} className="w-full h-full object-cover" />
                     ) : (
                       <Car className="h-10 w-10 text-muted-foreground/40" />
+                    )}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Camera className="h-6 w-6 text-white" />
+                    </div>
+                    {uploadPhotoMut.isPending && photoTargetId === v.id && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      </div>
                     )}
                   </div>
                   <div className="flex-1 p-3 min-w-0">
@@ -232,6 +276,8 @@ export default function Veiculos() {
             ))}
           </div>
         )}
+
+        <input type="file" accept="image/*" ref={photoInputRef} className="hidden" onChange={handlePhotoChange} />
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto">
