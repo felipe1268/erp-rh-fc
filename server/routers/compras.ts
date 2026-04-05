@@ -4201,6 +4201,19 @@ Retorne APENAS um JSON válido neste formato:
           aprovacaoExtraEm: new Date().toISOString(),
         } : {}),
       } as any).returning();
+
+      try {
+        const scFrotasRes = await db.execute(sql`SELECT vehicle_id, maintenance_id, origem_modulo FROM compras_solicitacoes WHERE id = ${cot.solicitacaoId} AND origem_modulo = 'frotas'`);
+        const scFrotas = ((scFrotasRes as any).rows || scFrotasRes)[0];
+        if (scFrotas?.vehicle_id || scFrotas?.maintenance_id) {
+          await db.execute(sql`UPDATE compras_ordens SET vehicle_id = ${scFrotas.vehicle_id}, maintenance_id = ${scFrotas.maintenance_id} WHERE id = ${oc.id}`);
+          if (scFrotas.maintenance_id) {
+            await db.execute(sql`UPDATE fleet_maintenances SET oc_id = ${oc.id}, oc_numero = ${numeroOc}, custo = ${String(totalOC.toFixed(2))} WHERE id = ${scFrotas.maintenance_id}`);
+            console.log(`[criarOrdemDeCotacao] Frotas sync: Manutenção #${scFrotas.maintenance_id} vinculada à OC #${oc.id} (${numeroOc}), custo atualizado para R$ ${totalOC.toFixed(2)}`);
+          }
+        }
+      } catch (syncErr: any) { console.warn("[criarOrdemDeCotacao] Frotas sync error:", syncErr?.message); }
+
       if (itens.length > 0) {
         await db.insert(comprasOrdensItens).values(
           itens.map(it => {
@@ -4222,6 +4235,13 @@ Retorne APENAS um JSON válido neste formato:
       }
       if (cot.fornecedorId && !extraAprovacaoRequerida) {
         const forn = await db.select().from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId));
+        let ocVehicleId = (oc as any).vehicle_id ?? (oc as any).vehicleId ?? null;
+        if (!ocVehicleId && cot.solicitacaoId) {
+          try {
+            const scVehRes = await db.execute(sql`SELECT vehicle_id FROM compras_solicitacoes WHERE id = ${cot.solicitacaoId} AND vehicle_id IS NOT NULL`);
+            ocVehicleId = ((scVehRes as any).rows || scVehRes)?.[0]?.vehicle_id ?? null;
+          } catch(_) {}
+        }
         const { entryIds, apIds } = await criarParcelasFinanceiras({
           ocId: oc.id,
           companyId: input.companyId,
@@ -4234,6 +4254,7 @@ Retorne APENAS um JSON válido neste formato:
           numeroParcelas: oc.numeroParcelas ?? 1,
           dataBase: oc.dataEntregaPrevista || null,
           numero: oc.numeroOc,
+          vehicleId: ocVehicleId,
         }, input.userId ?? 0, input.userName ?? "Sistema");
 
         if (entryIds.length > 0) {

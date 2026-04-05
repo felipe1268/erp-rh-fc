@@ -57,6 +57,7 @@ export interface OCParcelasInput {
   numero?: string | null;
   tipo?: string | null;
   freteSufixo?: string;
+  vehicleId?: number | null;
 }
 
 export async function criarParcelasFinanceiras(
@@ -108,6 +109,7 @@ export async function criarParcelasFinanceiras(
         formaPagamento: input.formaPagamento || null,
         criadoPorId: userId,
         criadoPorNome: userName,
+        ...(input.vehicleId ? { vehicleId: input.vehicleId } : {}),
       } as any).returning({ id: (financialEntries as any).id });
 
       const financialEntryId = entryResult?.[0]?.id;

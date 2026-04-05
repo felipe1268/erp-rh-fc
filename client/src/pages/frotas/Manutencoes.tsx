@@ -16,6 +16,7 @@ import {
   ChevronLeft, ChevronRight, Send, Undo2, DollarSign,
   CheckCircle2, Loader2, ScanLine, FileUp, Eye, X, Check,
   Sparkles, Upload, Lock, Paperclip, Download, File,
+  ShoppingCart, Link2, ExternalLink,
 } from "lucide-react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "sonner";
@@ -100,6 +101,13 @@ export default function Manutencoes() {
       toast.success("Consolidação revertida — lançamento financeiro cancelado.");
       monthSummary.refetch();
       consolidatedMonths.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const createPurchaseMut = trpc.frotas.createPurchaseFromMaintenance.useMutation({
+    onSuccess: (r) => {
+      toast.success(`Solicitação de Compra ${r.numeroSc} criada com ${r.qtdItens} item(ns)! Encaminhe ao setor de Compras.`);
+      manut.refetch();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -625,6 +633,32 @@ export default function Manutencoes() {
                       </td>
                       <td className="p-3 text-xs whitespace-nowrap">{m.data_proxima ? m.data_proxima.split('-').reverse().join('/') : "—"}</td>
                       <td className="p-3 text-right whitespace-nowrap">
+                        {m.sc_numero ? (
+                          <span className="inline-flex items-center gap-0.5 mr-1">
+                            <Badge variant="outline" className="text-[10px] border-violet-300 text-violet-700 bg-violet-50 dark:bg-violet-950 dark:text-violet-300">
+                              <Link2 className="h-3 w-3 mr-0.5" />{m.sc_numero}
+                            </Badge>
+                            {m.oc_numero && (
+                              <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-300">
+                                <ShoppingCart className="h-3 w-3 mr-0.5" />{m.oc_numero}
+                              </Badge>
+                            )}
+                          </span>
+                        ) : (
+                          <Button
+                            variant="ghost" size="icon"
+                            className="h-8 w-8 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950"
+                            title="Solicitar Compra"
+                            onClick={() => {
+                              if (confirm(`Criar Solicitação de Compra para esta manutenção?\n${m.placa} — ${m.descricao || m.modelo}`)) {
+                                createPurchaseMut.mutate({ companyId: cId, maintenanceId: m.id });
+                              }
+                            }}
+                            disabled={createPurchaseMut.isPending}
+                          >
+                            <ShoppingCart className="h-3.5 w-3.5 text-violet-500" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950" onClick={() => openEdit(m)}><Pencil className="h-3.5 w-3.5 text-slate-500" /></Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950" onClick={() => { if (confirm("Excluir esta manutenção?")) deleteMut.mutate({ id: m.id, companyId: cId }); }}>
                           <Trash2 className="h-3.5 w-3.5 text-red-400" />

@@ -3467,6 +3467,147 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       return { manutencao: maintMonths, combustivel: fuelMonths };
     }),
 
+  createPurchaseFromMaintenance: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      maintenanceId: z.number(),
+      obraId: z.number().nullable().optional(),
+      prioridade: z.string().optional(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, maintenanceId } = input;
+
+      const maintRes = await db.execute(sql`
+        SELECT m.*, v.placa, v.modelo, v.marca
+        FROM fleet_maintenances m
+        LEFT JOIN vehicles v ON v.id = m.vehicle_id
+        WHERE m.id = ${maintenanceId} AND m.company_id = ${companyId}
+      `);
+      const maint = ((maintRes as any).rows || maintRes)[0];
+      if (!maint) throw new TRPCError({ code: "NOT_FOUND", message: "Manutenção não encontrada." });
+
+      if (maint.sc_id) throw new TRPCError({ code: "CONFLICT", message: `Esta manutenção já possui SC vinculada (SC #${maint.sc_numero || maint.sc_id}).` });
+
+      const itemsRes = await db.execute(sql`
+        SELECT * FROM fleet_maintenance_items WHERE maintenance_id = ${maintenanceId} ORDER BY id
+      `);
+      const items = (itemsRes as any).rows || itemsRes;
+
+      const countRes = await db.execute(sql`SELECT count(*)::int as c FROM compras_solicitacoes WHERE company_id = ${companyId}`);
+      const seq = (parseInt(((countRes as any).rows || countRes)[0]?.c ?? 0) + 1).toString().padStart(4, "0");
+      const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
+
+      const titulo = `Manutenção ${maint.tipo === 'preventiva' ? 'Preventiva' : 'Corretiva'} — ${maint.placa || 'Veículo'} ${maint.modelo || ''}`.trim();
+      const obs = [
+        `Origem: Módulo Frotas — Manutenção #${maintenanceId}`,
+        `Veículo: ${maint.placa || '-'} — ${maint.marca || ''} ${maint.modelo || ''}`,
+        `Tipo: ${maint.tipo || '-'}`,
+        maint.descricao ? `Descrição: ${maint.descricao}` : '',
+        maint.fornecedor ? `Fornecedor sugerido: ${maint.fornecedor}` : '',
+        input.observacoes || '',
+      ].filter(Boolean).join('\n');
+
+      const scRes = await db.execute(sql`
+        INSERT INTO compras_solicitacoes (company_id, numero_sc, obra_id, titulo, prioridade, observacoes, status, aprovacao_status, tipo, vehicle_id, maintenance_id, origem_modulo, created_at, updated_at)
+        VALUES (${companyId}, ${numeroSc}, ${input.obraId ?? null}, ${titulo}, ${input.prioridade || 'alta'}, ${obs}, 'pendente', 'aguardando', 'servico', ${maint.vehicle_id}, ${maintenanceId}, 'frotas', NOW(), NOW())
+        RETURNING id, numero_sc
+      `);
+      const sc = ((scRes as any).rows || scRes)[0];
+
+      if (items.length > 0) {
+        for (const it of items) {
+          const desc = `${it.categoria === 'peca' ? '[Peça]' : '[Serviço]'} ${it.nome}`;
+          await db.execute(sql`
+            INSERT INTO compras_solicitacoes_itens (solicitacao_id, descricao, unidade, quantidade, observacoes, status_item)
+            VALUES (${sc.id}, ${desc}, 'un', ${String(it.quantidade || 1)}, ${`Valor unitário ref.: R$ ${parseFloat(it.valor_unitario || 0).toFixed(2)}`}, 'pendente')
+          `);
+        }
+      } else {
+        await db.execute(sql`
+          INSERT INTO compras_solicitacoes_itens (solicitacao_id, descricao, unidade, quantidade, observacoes, status_item)
+          VALUES (${sc.id}, ${titulo}, 'sv', '1', ${`Custo estimado: R$ ${parseFloat(maint.custo || 0).toFixed(2)}`}, 'pendente')
+        `);
+      }
+
+      await db.execute(sql`
+        UPDATE fleet_maintenances SET sc_id = ${sc.id}, sc_numero = ${sc.numero_sc} WHERE id = ${maintenanceId}
+      `);
+
+      return { scId: sc.id, numeroSc: sc.numero_sc, titulo, qtdItens: items.length || 1 };
+    }),
+
+  linkPurchaseToMaintenance: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      maintenanceId: z.number(),
+      ocId: z.number().optional(),
+      ocNumero: z.string().optional(),
+      custoFinal: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, maintenanceId } = input;
+
+      if (input.ocId || input.ocNumero || input.custoFinal !== undefined) {
+        await db.execute(sql`UPDATE fleet_maintenances SET
+          oc_id = COALESCE(${input.ocId ?? null}, oc_id),
+          oc_numero = COALESCE(${input.ocNumero ?? null}, oc_numero),
+          custo = COALESCE(${input.custoFinal !== undefined ? String(input.custoFinal) : null}, custo),
+          updated_at = NOW()
+          WHERE id = ${maintenanceId} AND company_id = ${companyId}`);
+      }
+
+      if (input.ocId) {
+        const maintRes = await db.execute(sql`SELECT vehicle_id FROM fleet_maintenances WHERE id = ${maintenanceId}`);
+        const vehicleId = ((maintRes as any).rows || maintRes)[0]?.vehicle_id;
+        if (vehicleId) {
+          await db.execute(sql`UPDATE compras_ordens SET vehicle_id = ${vehicleId}, maintenance_id = ${maintenanceId} WHERE id = ${input.ocId}`);
+        }
+      }
+
+      return { success: true };
+    }),
+
+  getMaintenancePurchaseStatus: protectedProcedure
+    .input(z.object({ companyId: z.number(), maintenanceId: z.number() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, maintenanceId } = input;
+
+      const maintRes = await db.execute(sql`
+        SELECT sc_id, sc_numero, oc_id, oc_numero FROM fleet_maintenances WHERE id = ${maintenanceId} AND company_id = ${companyId}
+      `);
+      const maint = ((maintRes as any).rows || maintRes)[0];
+      if (!maint) return null;
+
+      let scStatus = null;
+      let ocStatus = null;
+      let ocTotal = null;
+
+      if (maint.sc_id) {
+        const scRes = await db.execute(sql`SELECT status, aprovacao_status FROM compras_solicitacoes WHERE id = ${maint.sc_id}`);
+        const sc = ((scRes as any).rows || scRes)[0];
+        scStatus = sc?.status || null;
+      }
+
+      if (maint.oc_id) {
+        const ocRes = await db.execute(sql`SELECT status, total FROM compras_ordens WHERE id = ${maint.oc_id}`);
+        const oc = ((ocRes as any).rows || ocRes)[0];
+        ocStatus = oc?.status || null;
+        ocTotal = oc?.total ? parseFloat(oc.total) : null;
+      }
+
+      return {
+        scId: maint.sc_id, scNumero: maint.sc_numero, scStatus,
+        ocId: maint.oc_id, ocNumero: maint.oc_numero, ocStatus, ocTotal,
+      };
+    }),
+
   compareGasPrices: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {

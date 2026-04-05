@@ -5267,6 +5267,9 @@ export const comprasSolicitacoes = pgTable("compras_solicitacoes", {
   incluirEquipamentos: boolean("incluir_equipamentos").default(false),
   observacoes:      text(),
   imagemReferenciaUrl: text("imagem_referencia_url"),
+  vehicleId:        integer("vehicle_id"),
+  maintenanceId:    integer("maintenance_id"),
+  origemModulo:     varchar("origem_modulo", { length: 30 }),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:     timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });
@@ -5443,6 +5446,8 @@ export const comprasOrdens = pgTable("compras_ordens", {
   fdAprovadoEm:       timestamp("fd_aprovado_em", { mode: "string" }),
   fdAprovadoPor:      varchar("fd_aprovado_por", { length: 255 }),
   fdBdiItemId:        integer("fd_bdi_item_id"),
+  vehicleId:          integer("vehicle_id"),
+  maintenanceId:      integer("maintenance_id"),
   criadoEm:           timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:       timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });
@@ -5755,6 +5760,7 @@ export const financialEntries = pgTable("financial_entries", {
   criadoPorNome: varchar("criado_por_nome", { length: 255 }),
   aprovadoPorId: integer("aprovado_por_id"),
   aprovadoPorNome: varchar("aprovado_por_nome", { length: 255 }),
+  vehicleId: integer("vehicle_id"),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [

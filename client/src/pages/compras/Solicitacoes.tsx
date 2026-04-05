@@ -1359,6 +1359,9 @@ export default function Solicitacoes() {
                       <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (sc as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : (sc as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : "bg-blue-100 text-blue-700"}`}>
                         {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "MAT+MDO" : (sc as any).tipo === "equipamento" ? "EQUIP" : "MAT"}
                       </span>
+                      {((sc as any).origemModulo === "frotas" || (sc as any).origem_modulo === "frotas") && (
+                        <span className="ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded bg-orange-100 text-orange-700">FROTAS</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>

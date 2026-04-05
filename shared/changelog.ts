@@ -8075,4 +8075,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-06 00:45:00",
   },
+  {
+    version: 1037,
+    titulo: "Integração Frotas↔Compras — Propagação OC e Financeiro",
+    descricao:
+      "Ao gerar OC a partir de cotação vinculada a SC de Frotas, o sistema agora propaga vehicle_id e maintenance_id " +
+      "para a OC e sincroniza automaticamente o número da OC e custo na manutenção de origem (fleet_maintenances). " +
+      "Parcelas financeiras geradas por compras de frotas incluem vehicle_id para rastreabilidade. " +
+      "Badge OC verde (emerald) aparece na tabela de manutenções ao lado da badge SC violeta quando há OC vinculada. " +
+      "SCs originadas de Frotas exibem badge laranja 'FROTAS' na listagem de Solicitações do módulo Compras.",
+    tipo: "feature",
+    modulos: "Frotas, Compras, Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 01:30:00",
+  },
 ];
