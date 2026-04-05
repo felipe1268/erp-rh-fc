@@ -67,7 +67,7 @@ export default function PainelFrotas() {
     crlv: { label: "CRLV", icon: FileText, color: "text-blue-600" },
     seguro: { label: "Seguro (veículo)", icon: Shield, color: "text-emerald-600" },
     seguro_apolice: { label: "Apólice de Seguro", icon: Shield, color: "text-emerald-600" },
-    manutencao: { label: "Manutenção", icon: Wrench, color: "text-orange-600" },
+    manutencao: { label: "Manutenção", icon: Wrench, color: "text-emerald-600" },
     multa: { label: "Multas", icon: AlertTriangle, color: "text-red-600" },
     ipva: { label: "IPVA", icon: Receipt, color: "text-purple-600" },
     licenciamento: { label: "Licenciamento", icon: Calendar, color: "text-indigo-600" },
@@ -114,8 +114,8 @@ export default function PainelFrotas() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
-              <KpiCard icon={Wrench} label="Manutenção" value={fmt(d.totalManutCusto)} onClick={() => navigate("/frotas/manutencoes")} color="text-orange-600" bg="bg-orange-50" sub={`${d.veiculosEmManutencao} em andamento`} />
-              <KpiCard icon={Fuel} label="Combustível" value={fmt(d.totalCombustivel)} onClick={() => navigate("/frotas/combustivel")} color="text-amber-600" bg="bg-amber-50" />
+              <KpiCard icon={Wrench} label="Manutenção" value={fmt(d.totalManutCusto)} onClick={() => navigate("/frotas/manutencoes")} color="text-emerald-600" bg="bg-emerald-50" sub={`${d.veiculosEmManutencao} em andamento`} />
+              <KpiCard icon={Fuel} label="Combustível" value={fmt(d.totalCombustivel)} onClick={() => navigate("/frotas/combustivel")} color="text-blue-600" bg="bg-blue-50" />
               <KpiCard icon={AlertTriangle} label="Multas" value={fmt(d.totalMultas)} onClick={() => navigate("/frotas/multas")} color="text-red-600" bg="bg-red-50" sub={d.multasPendentes > 0 ? `${d.multasPendentes} pendentes` : "Nenhuma pendente"} />
               <KpiCard icon={Receipt} label="IPVA Pendente" value={fmt(d.totalIpvaPendente)} onClick={() => navigate("/frotas/ipva")} color="text-purple-600" bg="bg-purple-50" />
               <KpiCard icon={Activity} label="Custo/km (M+C)" value={d.custoKm > 0 ? `R$ ${d.custoKm.toFixed(2)}/km` : "—"} color="text-indigo-600" bg="bg-indigo-50" sub={`Oper. total: ${fmt(d.custoOperTotal)}`} />
@@ -253,8 +253,8 @@ export default function PainelFrotas() {
                       <FinRow label="Valor FIPE Atual" value={fmt(d.totalFipe)} color="text-green-600" />
                       <FinRow label="Depreciação (Compra → FIPE)" value={fmt(d.depreciacao)} color="text-red-600" />
                       <div className="border-t pt-2 mt-2" />
-                      <FinRow label="Custo Manutenção" value={fmt(d.totalManutCusto)} color="text-orange-600" />
-                      <FinRow label="Custo Combustível" value={fmt(d.totalCombustivel)} color="text-amber-600" />
+                      <FinRow label="Custo Manutenção" value={fmt(d.totalManutCusto)} color="text-emerald-600" />
+                      <FinRow label="Custo Combustível" value={fmt(d.totalCombustivel)} color="text-blue-600" />
                       <FinRow label="Multas" value={fmt(d.totalMultas)} color="text-red-600" />
                       <div className="border-t pt-2 mt-2" />
                       <FinRow label="Custo Operacional Total" value={fmt(d.custoOperTotal)} bold />
@@ -338,8 +338,8 @@ export default function PainelFrotas() {
                     ) : (
                       <>
                         <div className="flex gap-4 mb-3 text-[10px]">
-                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-500 inline-block" /> Combustível</span>
-                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-orange-500 inline-block" /> Manutenção</span>
+                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" /> Combustível</span>
+                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> Manutenção</span>
                           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-500 inline-block" /> Multas</span>
                         </div>
                         <div className="space-y-1.5">
@@ -362,8 +362,8 @@ export default function PainelFrotas() {
                                 >
                                   <span className="text-[11px] w-20 text-muted-foreground font-mono">{fmtMesAno(m)}</span>
                                   <div className="flex-1 h-5 bg-muted rounded overflow-hidden flex">
-                                    {pctComb > 0 && <div className="h-full bg-amber-500" style={{ width: `${pctComb}%` }} />}
-                                    {pctManut > 0 && <div className="h-full bg-orange-500" style={{ width: `${pctManut}%` }} />}
+                                    {pctComb > 0 && <div className="h-full bg-blue-500" style={{ width: `${pctComb}%` }} />}
+                                    {pctManut > 0 && <div className="h-full bg-emerald-500" style={{ width: `${pctManut}%` }} />}
                                     {pctMultas > 0 && <div className="h-full bg-red-500" style={{ width: `${pctMultas}%` }} />}
                                   </div>
                                   <span className="text-[11px] font-medium w-24 text-right">{fmt(total)}</span>
@@ -851,13 +851,13 @@ export default function PainelFrotas() {
               <div className="space-y-3">
                 {totalMes && (
                   <div className="grid grid-cols-3 gap-3 mb-2">
-                    <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-center">
-                      <p className="text-[10px] text-amber-600 uppercase font-medium">Combustível</p>
-                      <p className="text-sm font-bold text-amber-700">{fmt(totalMes.combustivel)}</p>
+                    <div className="p-2.5 bg-blue-50 rounded-lg border border-blue-200 text-center">
+                      <p className="text-[10px] text-blue-600 uppercase font-medium">Combustível</p>
+                      <p className="text-sm font-bold text-blue-700">{fmt(totalMes.combustivel)}</p>
                     </div>
-                    <div className="p-2.5 bg-orange-50 rounded-lg border border-orange-200 text-center">
-                      <p className="text-[10px] text-orange-600 uppercase font-medium">Manutenção</p>
-                      <p className="text-sm font-bold text-orange-700">{fmt(totalMes.manutencao)}</p>
+                    <div className="p-2.5 bg-emerald-50 rounded-lg border border-emerald-200 text-center">
+                      <p className="text-[10px] text-emerald-600 uppercase font-medium">Manutenção</p>
+                      <p className="text-sm font-bold text-emerald-700">{fmt(totalMes.manutencao)}</p>
                     </div>
                     <div className="p-2.5 bg-red-50 rounded-lg border border-red-200 text-center">
                       <p className="text-[10px] text-red-600 uppercase font-medium">Multas</p>
@@ -870,8 +870,8 @@ export default function PainelFrotas() {
                     <thead>
                       <tr className="bg-muted/50 text-xs">
                         <th className="text-left p-2 font-medium">Veículo</th>
-                        <th className="text-right p-2 font-medium text-amber-600">Combustível</th>
-                        <th className="text-right p-2 font-medium text-orange-600">Manutenção</th>
+                        <th className="text-right p-2 font-medium text-blue-600">Combustível</th>
+                        <th className="text-right p-2 font-medium text-emerald-600">Manutenção</th>
                         <th className="text-right p-2 font-medium text-red-600">Multas</th>
                         <th className="text-right p-2 font-medium">Total</th>
                       </tr>
