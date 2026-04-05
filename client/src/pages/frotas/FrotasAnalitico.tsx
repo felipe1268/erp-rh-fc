@@ -102,7 +102,7 @@ function InteractivePie({ data, colorOffset = 0, unit = "", valueFormatter }: {
                 style={{ backgroundColor: isHidden ? "#d1d5db" : COLORS[(i + colorOffset) % COLORS.length] }}
               />
               {d.name}
-              <span className={`ml-0.5 ${isHidden ? "" : "font-semibold"}`}>{d.value}</span>
+              <span className={`ml-0.5 ${isHidden ? "" : "font-semibold"}`}>{fmtVal(d.value)}</span>
             </button>
           );
         })}
@@ -513,7 +513,7 @@ export default function FrotasAnalitico() {
             </CardHeader>
             <CardContent>
               {distCombustivel.length > 0 ? (
-                <InteractivePie data={distCombustivel} colorOffset={6} unit="litros" valueFormatter={(v) => fmtNum(v, 0)} />
+                <InteractivePie data={distCombustivel} colorOffset={6} unit="litros" valueFormatter={(v) => fmtNum(v, 2)} />
               ) : <p className="text-xs text-muted-foreground text-center py-8">Sem dados</p>}
             </CardContent>
           </Card>
