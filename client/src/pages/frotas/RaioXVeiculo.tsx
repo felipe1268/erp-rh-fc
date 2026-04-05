@@ -86,6 +86,9 @@ export default function RaioXVeiculo() {
     if (!v || !raioX) return;
     const logoUrl = selectedCompany?.logoUrl || "";
     const companyName = selectedCompany?.name || selectedCompany?.nome || "Empresa";
+    const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    const rawPhoto = v.foto_url || v.fotoUrl || "";
+    const vehiclePhoto = rawPhoto && /^https?:\/\//i.test(rawPhoto) ? escHtml(rawPhoto) : "";
     const now = new Date();
     const dataEmissao = now.toLocaleDateString("pt-BR") + " " + now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
@@ -166,8 +169,10 @@ export default function RaioXVeiculo() {
     .header img { height: 50px; max-width: 160px; object-fit: contain; }
     .header-company { font-size: 14px; font-weight: 700; color: #1e3a5f; }
     .header-right { text-align: right; font-size: 9px; color: #64748b; }
-    .title-bar { background: #1e3a5f; color: white; padding: 10px 16px; border-radius: 6px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .title-bar { background: #1e3a5f; color: white; padding: 10px 16px; border-radius: 6px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .title-bar h1 { font-size: 16px; font-weight: 700; }
+    .vehicle-photo { width: 70px; height: 70px; border-radius: 8px; object-fit: cover; border: 2px solid rgba(255,255,255,0.3); flex-shrink: 0; }
+    .vehicle-photo-placeholder { width: 70px; height: 70px; border-radius: 8px; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 24px; }
     .title-bar .score { background: white; color: #1e3a5f; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; }
     .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
     .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; }
@@ -210,7 +215,8 @@ export default function RaioXVeiculo() {
   </div>
 
   <div class="title-bar">
-    <div>
+    ${vehiclePhoto ? `<img src="${vehiclePhoto}" class="vehicle-photo" alt="Foto do veículo" />` : `<div class="vehicle-photo-placeholder">🚗</div>`}
+    <div style="flex:1">
       <h1>${v.placa}</h1>
       <div style="font-size:11px;opacity:0.8">${v.marca || ""} ${v.modelo || ""} • ${v.ano_fabricacao || v.anoFabricacao || "—"} • ${v.tipo_veiculo || v.tipoVeiculo || "—"}</div>
     </div>
@@ -335,15 +341,19 @@ export default function RaioXVeiculo() {
         <div className="max-w-4xl mx-auto p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
             {(vehicles || []).filter((v: any) => v.statusVeiculo === "Ativo").map((v: any) => (
-              <Card key={v.id} className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] border-0 shadow-md" onClick={() => setVehicleId(v.id)}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                      <Truck className="h-6 w-6 text-white" />
+              <Card key={v.id} className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] border-0 shadow-md overflow-hidden" onClick={() => setVehicleId(v.id)}>
+                <CardContent className="p-0">
+                  <div className="flex items-stretch">
+                    <div className="w-20 h-20 flex-shrink-0 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center overflow-hidden">
+                      {(v.foto_url || v.fotoUrl) ? (
+                        <img src={v.foto_url || v.fotoUrl} alt={v.placa} className="w-full h-full object-cover" />
+                      ) : (
+                        <Truck className="h-7 w-7 text-slate-400" />
+                      )}
                     </div>
-                    <div>
+                    <div className="p-3 flex-1 min-w-0">
                       <p className="font-bold text-sm text-slate-800 dark:text-white">{v.placa}</p>
-                      <p className="text-xs text-slate-500">{v.marca} {v.modelo}</p>
+                      <p className="text-xs text-slate-500 truncate">{v.marca} {v.modelo}</p>
                       <p className="text-[10px] text-slate-400">{v.tipoVeiculo} • {v.anoFabricacao || '—'}</p>
                     </div>
                   </div>
@@ -364,7 +374,13 @@ export default function RaioXVeiculo() {
             <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 rounded-xl" onClick={() => { setVehicleId(null); setTab("resumo"); }}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div className="p-2 rounded-xl bg-white/10"><Car className="h-6 w-6" /></div>
+            <div className="w-14 h-14 rounded-xl bg-white/10 overflow-hidden flex items-center justify-center shrink-0">
+              {(v?.foto_url || v?.fotoUrl) ? (
+                <img src={v.foto_url || v.fotoUrl} alt={v?.placa} className="w-full h-full object-cover" />
+              ) : (
+                <Car className="h-6 w-6" />
+              )}
+            </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Raio-X — {v?.placa || "..."}</h1>
               <p className="text-cyan-100 text-sm">{v?.marca} {v?.modelo} • {v?.ano_fabricacao || v?.anoFabricacao || "—"} • {v?.tipo_veiculo || v?.tipoVeiculo || "—"}</p>
