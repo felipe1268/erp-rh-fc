@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -9,10 +9,106 @@ import {
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, ComposedChart, Line
+  Legend, ResponsiveContainer, ComposedChart, Line, Sector
 } from "recharts";
 
 const COLORS = ["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1", "#14b8a6", "#e11d48"];
+
+function InteractivePie({ data, colorOffset = 0, unit = "", valueFormatter }: {
+  data: Array<{ name: string; value: number; pct: number }>;
+  colorOffset?: number;
+  unit?: string;
+  valueFormatter?: (v: number) => string;
+}) {
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  const visibleData = useMemo(() => data.filter(d => !hidden.has(d.name)), [data, hidden]);
+  const totalVisible = useMemo(() => visibleData.reduce((s, d) => s + d.value, 0), [visibleData]);
+  const enriched = useMemo(() => visibleData.map(d => ({
+    ...d,
+    pct: totalVisible > 0 ? Math.round((d.value / totalVisible) * 100) : 0,
+  })), [visibleData, totalVisible]);
+
+  const toggle = useCallback((name: string) => {
+    setHidden(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      if (next.size >= data.length) return prev;
+      return next;
+    });
+  }, [data.length]);
+
+  const fmtVal = valueFormatter || ((v: number) => v.toLocaleString("pt-BR"));
+
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload } = props;
+    return (
+      <g>
+        <text x={cx} y={cy - 8} textAnchor="middle" className="text-base font-bold fill-foreground">{payload.name}</text>
+        <text x={cx} y={cy + 12} textAnchor="middle" className="text-sm fill-muted-foreground">{fmtVal(payload.value)}{unit ? ` ${unit}` : ""}</text>
+        <text x={cx} y={cy + 28} textAnchor="middle" className="text-xs fill-muted-foreground">{payload.pct}%</text>
+        <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius + 8} startAngle={startAngle} endAngle={endAngle} fill={fill} />
+        <Sector cx={cx} cy={cy} innerRadius={outerRadius + 12} outerRadius={outerRadius + 16} startAngle={startAngle} endAngle={endAngle} fill={fill} opacity={0.4} />
+      </g>
+    );
+  };
+
+  return (
+    <div className="flex flex-col items-center w-full">
+      <ResponsiveContainer width="100%" height={320}>
+        <PieChart>
+          <Pie
+            data={enriched}
+            cx="50%" cy="50%"
+            innerRadius="45%"
+            outerRadius="75%"
+            paddingAngle={3}
+            dataKey="value"
+            activeIndex={activeIndex !== null ? activeIndex : undefined}
+            activeShape={renderActiveShape}
+            onMouseEnter={(_, i) => setActiveIndex(i)}
+            onMouseLeave={() => setActiveIndex(null)}
+          >
+            {enriched.map((entry, i) => {
+              const origIdx = data.findIndex(d => d.name === entry.name);
+              return <Cell key={entry.name} fill={COLORS[(origIdx + colorOffset) % COLORS.length]} stroke="white" strokeWidth={2} />;
+            })}
+          </Pie>
+          {activeIndex === null && (
+            <>
+              <text x="50%" y="46%" textAnchor="middle" className="text-lg font-bold fill-foreground">{fmtVal(totalVisible)}</text>
+              <text x="50%" y="54%" textAnchor="middle" className="text-xs fill-muted-foreground">{unit || "total"}</text>
+            </>
+          )}
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="flex flex-wrap justify-center gap-2 mt-2 px-2">
+        {data.map((d, i) => {
+          const isHidden = hidden.has(d.name);
+          return (
+            <button
+              key={d.name}
+              onClick={() => toggle(d.name)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${
+                isHidden
+                  ? "bg-muted/40 text-muted-foreground border-muted line-through opacity-50"
+                  : "bg-white hover:bg-muted/30 border-border shadow-sm"
+              }`}
+            >
+              <span
+                className="w-3 h-3 rounded-full flex-shrink-0"
+                style={{ backgroundColor: isHidden ? "#d1d5db" : COLORS[(i + colorOffset) % COLORS.length] }}
+              />
+              {d.name}
+              <span className={`ml-0.5 ${isHidden ? "" : "font-semibold"}`}>{d.value}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -333,64 +429,37 @@ export default function FrotasAnalitico() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm flex items-center gap-2"><PieIcon className="h-4 w-4 text-blue-500" /> Frota por Tipo</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2"><Truck className="h-4 w-4 text-blue-500" /> Frota por Tipo</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col items-center">
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={distTipo} cx="50%" cy="50%" outerRadius={70} paddingAngle={2} dataKey="value" label={({ name, pct }) => `${name} ${pct}%`}>
-                    {distTipo.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const dd = payload[0].payload;
-                    return <div className="bg-popover border rounded-lg shadow-lg p-2 text-xs"><strong>{dd.name}</strong>: {dd.value} ({dd.pct}%)</div>;
-                  }} />
-                </PieChart>
-              </ResponsiveContainer>
+            <CardContent>
+              {distTipo.length > 0 ? (
+                <InteractivePie data={distTipo} colorOffset={0} unit="veículos" />
+              ) : <p className="text-xs text-muted-foreground text-center py-8">Sem dados</p>}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm flex items-center gap-2"><PieIcon className="h-4 w-4 text-emerald-500" /> Frota por Marca</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4 text-emerald-500" /> Frota por Marca</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col items-center">
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={distMarca} cx="50%" cy="50%" outerRadius={70} paddingAngle={2} dataKey="value" label={({ name, pct }) => `${name} ${pct}%`}>
-                    {distMarca.map((_, i) => <Cell key={i} fill={COLORS[(i + 3) % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const dd = payload[0].payload;
-                    return <div className="bg-popover border rounded-lg shadow-lg p-2 text-xs"><strong>{dd.name}</strong>: {dd.value} ({dd.pct}%)</div>;
-                  }} />
-                </PieChart>
-              </ResponsiveContainer>
+            <CardContent>
+              {distMarca.length > 0 ? (
+                <InteractivePie data={distMarca} colorOffset={3} unit="veículos" />
+              ) : <p className="text-xs text-muted-foreground text-center py-8">Sem dados</p>}
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="lg:col-span-2">
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm flex items-center gap-2"><PieIcon className="h-4 w-4 text-amber-500" /> Tipo de Combustível</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2"><Droplets className="h-4 w-4 text-amber-500" /> Tipo de Combustível</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col items-center">
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={distCombustivel} cx="50%" cy="50%" innerRadius={35} outerRadius={70} paddingAngle={2} dataKey="value" label={({ name, pct }) => `${name} ${pct}%`}>
-                    {distCombustivel.map((_, i) => <Cell key={i} fill={COLORS[(i + 6) % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const dd = payload[0].payload;
-                    return <div className="bg-popover border rounded-lg shadow-lg p-2 text-xs"><strong>{dd.name}</strong>: {fmtNum(dd.value, 0)} litros ({dd.pct}%)</div>;
-                  }} />
-                </PieChart>
-              </ResponsiveContainer>
+            <CardContent>
+              {distCombustivel.length > 0 ? (
+                <InteractivePie data={distCombustivel} colorOffset={6} unit="litros" valueFormatter={(v) => fmtNum(v, 0)} />
+              ) : <p className="text-xs text-muted-foreground text-center py-8">Sem dados</p>}
             </CardContent>
           </Card>
         </div>
