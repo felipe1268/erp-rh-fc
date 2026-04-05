@@ -434,16 +434,6 @@ export default function FrotasAnalitico() {
     return rows;
   }, [custosTotaisByMonth, anoDash, d]);
 
-  if (!d) {
-    return (
-      <DashboardLayout>
-        <div className="p-4 flex items-center justify-center h-64">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   const allFuelRaw = fuel.data || [];
   const allFuel = anoDash
     ? (allFuelRaw as any[]).filter((f: any) => {
@@ -451,49 +441,6 @@ export default function FrotasAnalitico() {
         return y === anoDash;
       })
     : allFuelRaw;
-
-  const custosPorVeiculo = custosPorVeiculoAll.slice(0, 15);
-  const topMotoristas = topMotoristasPorLitrosData;
-
-  const mesKey = (anoDash && mesSel !== null) ? `${anoDash}-${String(mesSel + 1).padStart(2, "0")}` : null;
-  const mesFiltroAtivo = !!mesKey;
-  const mesDados = mesKey ? (custosTotaisByMonth[mesKey] as any) || null : null;
-  const mesLitros = mesKey ? ((d as any).litrosByMonth?.[mesKey] || 0) : 0;
-
-  const kpiCombustivel = mesFiltroAtivo ? Number(mesDados?.combustivel || 0) : d.totalCombustivel;
-  const kpiManutencao = mesFiltroAtivo ? Number(mesDados?.manutencao || 0) : d.totalManutCusto;
-  const kpiMultas = mesFiltroAtivo ? Number(mesDados?.multas || 0) : d.totalMultas;
-  const kpiPedagios = mesFiltroAtivo ? Number(mesDados?.pedagios || 0) : (d.totalPedagios || 0);
-  const kpiSeguros = mesFiltroAtivo ? Number(mesDados?.seguros || 0) : (d.totalSeguros || 0);
-  const kpiCustoOper = kpiCombustivel + kpiManutencao + kpiMultas + kpiPedagios + kpiSeguros;
-  const kpiLitros = mesFiltroAtivo ? mesLitros : d.totalLitros;
-  const kpiTotalKm = mesFiltroAtivo
-    ? (d.totalLitros > 0 && d.totalKm > 0 ? Math.round((kpiLitros / d.totalLitros) * d.totalKm) : 0)
-    : d.totalKm;
-  const kpiCustoKm = kpiTotalKm > 0 ? kpiCustoOper / kpiTotalKm : 0;
-  const kpiConsumoMedio = d.consumoMedio > 0
-    ? d.consumoMedio
-    : (d.totalLitros > 0 && d.totalKm > 0 ? d.totalKm / d.totalLitros : 0);
-
-  const distCusto = [
-    { name: "Combustível", value: kpiCombustivel, pct: kpiCustoOper > 0 ? Math.round((kpiCombustivel / kpiCustoOper) * 100) : 0 },
-    { name: "Manutenção", value: kpiManutencao, pct: kpiCustoOper > 0 ? Math.round((kpiManutencao / kpiCustoOper) * 100) : 0 },
-    { name: "Multas", value: kpiMultas, pct: kpiCustoOper > 0 ? Math.round((kpiMultas / kpiCustoOper) * 100) : 0 },
-    { name: "Pedágios", value: kpiPedagios, pct: kpiCustoOper > 0 ? Math.round((kpiPedagios / kpiCustoOper) * 100) : 0 },
-    { name: "Seguros", value: kpiSeguros, pct: kpiCustoOper > 0 ? Math.round((kpiSeguros / kpiCustoOper) * 100) : 0 },
-  ].filter(x => x.value > 0);
-
-  const distTipo = Object.entries(d.tipoCount).map(([name, value]) => ({
-    name, value, pct: d.totalVehicles > 0 ? Math.round(((value as number) / d.totalVehicles) * 100) : 0,
-  }));
-
-  const distMarca = Object.entries(d.marcaCount)
-    .map(([name, value]) => ({ name, value, pct: d.totalVehicles > 0 ? Math.round(((value as number) / d.totalVehicles) * 100) : 0 }))
-    .sort((a, b) => (b.value as number) - (a.value as number));
-
-  const distCombustivel = Object.entries(d.tipoCombustivel)
-    .map(([name, value]) => ({ name, value: value as number, pct: d.totalLitros > 0 ? Math.round(((value as number) / d.totalLitros) * 100) : 0 }))
-    .sort((a, b) => b.value - a.value);
 
   const motoristasPorTipoCombustivel = useMemo(() => {
     const map: Record<string, Record<string, { litros: number; valor: number; abastecimentos: number }>> = {};
@@ -544,6 +491,59 @@ export default function FrotasAnalitico() {
       : allF;
     return filtered.sort((a: any, b: any) => ((b.data_infracao || "") > (a.data_infracao || "") ? 1 : -1));
   }, [fines.data, anoDash]);
+
+  if (!d) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 flex items-center justify-center h-64">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const custosPorVeiculo = custosPorVeiculoAll.slice(0, 15);
+  const topMotoristas = topMotoristasPorLitrosData;
+
+  const mesKey = (anoDash && mesSel !== null) ? `${anoDash}-${String(mesSel + 1).padStart(2, "0")}` : null;
+  const mesFiltroAtivo = !!mesKey;
+  const mesDados = mesKey ? (custosTotaisByMonth[mesKey] as any) || null : null;
+  const mesLitros = mesKey ? ((d as any).litrosByMonth?.[mesKey] || 0) : 0;
+
+  const kpiCombustivel = mesFiltroAtivo ? Number(mesDados?.combustivel || 0) : d.totalCombustivel;
+  const kpiManutencao = mesFiltroAtivo ? Number(mesDados?.manutencao || 0) : d.totalManutCusto;
+  const kpiMultas = mesFiltroAtivo ? Number(mesDados?.multas || 0) : d.totalMultas;
+  const kpiPedagios = mesFiltroAtivo ? Number(mesDados?.pedagios || 0) : (d.totalPedagios || 0);
+  const kpiSeguros = mesFiltroAtivo ? Number(mesDados?.seguros || 0) : (d.totalSeguros || 0);
+  const kpiCustoOper = kpiCombustivel + kpiManutencao + kpiMultas + kpiPedagios + kpiSeguros;
+  const kpiLitros = mesFiltroAtivo ? mesLitros : d.totalLitros;
+  const kpiTotalKm = mesFiltroAtivo
+    ? (d.totalLitros > 0 && d.totalKm > 0 ? Math.round((kpiLitros / d.totalLitros) * d.totalKm) : 0)
+    : d.totalKm;
+  const kpiCustoKm = kpiTotalKm > 0 ? kpiCustoOper / kpiTotalKm : 0;
+  const kpiConsumoMedio = d.consumoMedio > 0
+    ? d.consumoMedio
+    : (d.totalLitros > 0 && d.totalKm > 0 ? d.totalKm / d.totalLitros : 0);
+
+  const distCusto = [
+    { name: "Combustível", value: kpiCombustivel, pct: kpiCustoOper > 0 ? Math.round((kpiCombustivel / kpiCustoOper) * 100) : 0 },
+    { name: "Manutenção", value: kpiManutencao, pct: kpiCustoOper > 0 ? Math.round((kpiManutencao / kpiCustoOper) * 100) : 0 },
+    { name: "Multas", value: kpiMultas, pct: kpiCustoOper > 0 ? Math.round((kpiMultas / kpiCustoOper) * 100) : 0 },
+    { name: "Pedágios", value: kpiPedagios, pct: kpiCustoOper > 0 ? Math.round((kpiPedagios / kpiCustoOper) * 100) : 0 },
+    { name: "Seguros", value: kpiSeguros, pct: kpiCustoOper > 0 ? Math.round((kpiSeguros / kpiCustoOper) * 100) : 0 },
+  ].filter(x => x.value > 0);
+
+  const distTipo = Object.entries(d.tipoCount).map(([name, value]) => ({
+    name, value, pct: d.totalVehicles > 0 ? Math.round(((value as number) / d.totalVehicles) * 100) : 0,
+  }));
+
+  const distMarca = Object.entries(d.marcaCount)
+    .map(([name, value]) => ({ name, value, pct: d.totalVehicles > 0 ? Math.round(((value as number) / d.totalVehicles) * 100) : 0 }))
+    .sort((a, b) => (b.value as number) - (a.value as number));
+
+  const distCombustivel = Object.entries(d.tipoCombustivel)
+    .map(([name, value]) => ({ name, value: value as number, pct: d.totalLitros > 0 ? Math.round(((value as number) / d.totalLitros) * 100) : 0 }))
+    .sort((a, b) => b.value - a.value);
 
   const evolucaoMensal = Object.entries(d.custosTotaisByMonth)
     .sort(([a], [b]) => a.localeCompare(b))
