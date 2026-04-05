@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Fuel, Plus, Pencil, Trash2, Upload, Search, FileText, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { Fuel, Plus, Pencil, Trash2, Upload, Search, FileText, CheckCircle2, AlertTriangle, XCircle, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 
@@ -33,8 +33,9 @@ export default function Combustivel() {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
   const [filterVehicle, setFilterVehicle] = useState("all");
-  const [filterYear, setFilterYear] = useState("all");
-  const [filterMonth, setFilterMonth] = useState("all");
+  const now = new Date();
+  const [anoAtual, setAnoAtual] = useState(now.getFullYear());
+  const [mesAtual, setMesAtual] = useState(now.getMonth() + 1);
   const [filterDay, setFilterDay] = useState("all");
   const [filterFuel, setFilterFuel] = useState("all");
   const [filterDriver, setFilterDriver] = useState("all");
@@ -182,31 +183,24 @@ export default function Combustivel() {
 
   const allRecords = fuel.data || [];
 
-  const availableYears = (() => {
-    const years = new Set<string>();
-    allRecords.forEach((r: any) => { if (r.data) years.add(r.data.split('-')[0]); });
-    return [...years].sort().reverse();
-  })();
+  const mesRef = `${anoAtual}-${String(mesAtual).padStart(2, "0")}`;
 
-  const availableMonthsForYear = (() => {
-    const months = new Set<string>();
-    allRecords.forEach((r: any) => {
-      if (r.data) {
-        const [y, m] = r.data.split('-');
-        if (filterYear === "all" || y === filterYear) months.add(m);
-      }
-    });
-    return [...months].sort();
-  })();
+  function prevMonth() {
+    if (mesAtual === 1) { setMesAtual(12); setAnoAtual(anoAtual - 1); }
+    else setMesAtual(mesAtual - 1);
+    setFilterDay("all");
+  }
+  function nextMonth() {
+    if (mesAtual === 12) { setMesAtual(1); setAnoAtual(anoAtual + 1); }
+    else setMesAtual(mesAtual + 1);
+    setFilterDay("all");
+  }
 
   const availableDaysForMonth = (() => {
     const days = new Set<string>();
+    const ym = mesRef;
     allRecords.forEach((r: any) => {
-      if (r.data) {
-        const [y, m, d] = r.data.split('-');
-        if ((filterYear === "all" || y === filterYear) && (filterMonth === "all" || m === filterMonth))
-          days.add(d);
-      }
+      if (r.data && r.data.startsWith(ym)) days.add(r.data.split('-')[2]);
     });
     return [...days].sort();
   })();
@@ -219,10 +213,11 @@ export default function Combustivel() {
 
   const list = allRecords.filter((r: any) => {
     if (r.data) {
-      const [y, m, d] = r.data.split('-');
-      if (filterYear !== "all" && y !== filterYear) return false;
-      if (filterMonth !== "all" && m !== filterMonth) return false;
-      if (filterDay !== "all" && d !== filterDay) return false;
+      if (!r.data.startsWith(mesRef)) return false;
+      if (filterDay !== "all") {
+        const d = r.data.split('-')[2];
+        if (d !== filterDay) return false;
+      }
     }
     if (filterFuel !== "all" && r.tipo_combustivel !== filterFuel) return false;
     if (filterDriver !== "all" && r.motorista !== filterDriver) return false;
@@ -247,10 +242,10 @@ export default function Combustivel() {
   })();
 
   const byVehicle = (() => {
-    const map: Record<string, { placa: string; litros: number; valor: number; count: number }> = {};
+    const map: Record<string, { id: string; placa: string; litros: number; valor: number; count: number }> = {};
     list.forEach((r: any) => {
       const key = r.vehicle_id;
-      if (!map[key]) map[key] = { placa: r.placa || r.modelo || "—", litros: 0, valor: 0, count: 0 };
+      if (!map[key]) map[key] = { id: String(key), placa: r.placa || r.modelo || "—", litros: 0, valor: 0, count: 0 };
       map[key].litros += parseFloat(r.litros || "0");
       map[key].valor += parseFloat(r.valor_total || "0");
       map[key].count++;
@@ -270,29 +265,43 @@ export default function Combustivel() {
     return Object.entries(map).sort((a, b) => b[1].valor - a[1].valor);
   })();
 
-  function formatMonth(ym: string) {
-    const [y, m] = ym.split('-');
-    return `${MESES[parseInt(m) - 1]} ${y}`;
-  }
-
   return (
     <DashboardLayout>
       <div className="p-2 space-y-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Fuel className="h-6 w-6 text-amber-600" /> Combustível
-          </h1>
-          <div className="flex gap-2">
-            <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={handleCsv} />
-            <input type="file" accept=".pdf" ref={pdfRef} className="hidden" onChange={handlePdf} />
-            <Button variant="outline" onClick={() => pdfRef.current?.click()} disabled={importPdfMut.isPending || pdfProgress !== null}>
-              <FileText className="h-4 w-4 mr-1" />
-              {pdfProgress !== null ? "Processando..." : "Importar PDF Posto"}
-            </Button>
-            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importCsvMut.isPending}>
-              <Upload className="h-4 w-4 mr-1" /> Importar CSV
-            </Button>
-            <Button onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo Abastecimento</Button>
+        <div className="bg-gradient-to-r from-amber-700 to-orange-700 rounded-xl p-4 text-white">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h1 className="text-xl font-bold flex items-center gap-2">
+                <Fuel className="h-5 w-5" /> Combustível
+              </h1>
+              <p className="text-sm text-amber-200">Controle de abastecimentos e consumo</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="icon" onClick={prevMonth} className="text-white hover:bg-white/10">
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <div className="text-center min-w-[160px]">
+                <div className="text-lg font-bold">{MESES[mesAtual - 1]} {anoAtual}</div>
+                <div className="text-xs text-amber-200">{list.length} registros</div>
+              </div>
+              <Button variant="ghost" size="icon" onClick={nextMonth} className="text-white hover:bg-white/10">
+                <ChevronRight className="w-5 h-5" />
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={handleCsv} />
+              <input type="file" accept=".pdf" ref={pdfRef} className="hidden" onChange={handlePdf} />
+              <Button variant="ghost" className="text-white hover:bg-white/10 text-sm" onClick={() => pdfRef.current?.click()} disabled={importPdfMut.isPending || pdfProgress !== null}>
+                <FileText className="h-4 w-4 mr-1" />
+                {pdfProgress !== null ? "Processando..." : "Importar PDF"}
+              </Button>
+              <Button variant="ghost" className="text-white hover:bg-white/10 text-sm" onClick={() => fileRef.current?.click()} disabled={importCsvMut.isPending}>
+                <Upload className="h-4 w-4 mr-1" /> CSV
+              </Button>
+              <Button className="bg-white text-amber-700 hover:bg-amber-50 text-sm" onClick={openNew}>
+                <Plus className="h-4 w-4 mr-1" /> Novo
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -316,89 +325,71 @@ export default function Combustivel() {
           </div>
         )}
 
-        <Card className="border-slate-200 dark:border-slate-800">
-          <CardContent className="p-3">
-            <div className="flex flex-wrap gap-2 items-center">
-              <div className="relative flex-1 min-w-[180px]">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar placa, posto, motorista..." className="pl-9 h-9" value={search} onChange={e => setSearch(e.target.value)} />
-              </div>
-              <Select value={filterYear} onValueChange={v => { setFilterYear(v); setFilterMonth("all"); setFilterDay("all"); }}>
-                <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="Ano" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos anos</SelectItem>
-                  {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterMonth} onValueChange={v => { setFilterMonth(v); setFilterDay("all"); }}>
-                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="Mês" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos meses</SelectItem>
-                  {availableMonthsForYear.map(m => <SelectItem key={m} value={m}>{MESES[parseInt(m) - 1]}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterDay} onValueChange={setFilterDay}>
-                <SelectTrigger className="w-[100px] h-9"><SelectValue placeholder="Dia" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos dias</SelectItem>
-                  {availableDaysForMonth.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterVehicle} onValueChange={setFilterVehicle}>
-                <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder="Veículo" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos veículos</SelectItem>
-                  {(vehicles.data || []).map((v: any) => (
-                    <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={filterFuel} onValueChange={setFilterFuel}>
-                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="Combustível" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos tipos</SelectItem>
-                  {COMBUSTIVEIS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterDriver} onValueChange={setFilterDriver}>
-                <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder="Motorista" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos motoristas</SelectItem>
-                  {availableDrivers.map(d => <SelectItem key={d} value={d}>{d.length > 25 ? d.slice(0, 25) + "…" : d}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {(filterYear !== "all" || filterMonth !== "all" || filterDay !== "all" || filterVehicle !== "all" || filterFuel !== "all" || filterDriver !== "all" || search) && (
-                <Button variant="ghost" size="sm" className="h-9 text-xs text-red-600 hover:text-red-700" onClick={() => { setFilterYear("all"); setFilterMonth("all"); setFilterDay("all"); setFilterVehicle("all"); setFilterFuel("all"); setFilterDriver("all"); setSearch(""); }}>
-                  <XCircle className="h-3.5 w-3.5 mr-1" /> Limpar filtros
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar placa, posto, motorista..." className="pl-9 h-9" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <Select value={filterDay} onValueChange={setFilterDay}>
+            <SelectTrigger className="w-[100px] h-9"><SelectValue placeholder="Dia" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos dias</SelectItem>
+              {availableDaysForMonth.map(d => <SelectItem key={d} value={d}>Dia {d}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterVehicle} onValueChange={setFilterVehicle}>
+            <SelectTrigger className="w-[150px] h-9"><SelectValue placeholder="Veículo" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos veículos</SelectItem>
+              {(vehicles.data || []).map((v: any) => (
+                <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterFuel} onValueChange={setFilterFuel}>
+            <SelectTrigger className="w-[120px] h-9"><SelectValue placeholder="Combustível" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos tipos</SelectItem>
+              {COMBUSTIVEIS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterDriver} onValueChange={setFilterDriver}>
+            <SelectTrigger className="w-[150px] h-9"><SelectValue placeholder="Motorista" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos motoristas</SelectItem>
+              {availableDrivers.map(d => <SelectItem key={d} value={d}>{d.length > 25 ? d.slice(0, 25) + "…" : d}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {(filterDay !== "all" || filterVehicle !== "all" || filterFuel !== "all" || filterDriver !== "all" || search) && (
+            <Button variant="ghost" size="sm" className="h-9 text-xs text-red-600 hover:text-red-700" onClick={() => { setFilterDay("all"); setFilterVehicle("all"); setFilterFuel("all"); setFilterDriver("all"); setSearch(""); }}>
+              <XCircle className="h-3.5 w-3.5 mr-1" /> Limpar
+            </Button>
+          )}
+        </div>
 
         {list.length > 0 && (
           <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 rounded-xl p-3 text-center">
+            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 rounded-xl p-3 text-center cursor-pointer hover:ring-2 hover:ring-amber-400 transition-all" onClick={() => setViewTab("tabela")}>
               <p className="text-xl font-bold text-amber-700">{fmtNum(resumo.registros, 0)}</p>
               <p className="text-[10px] text-amber-600 uppercase font-medium">Abastecimentos</p>
             </div>
-            <div className="bg-green-50 dark:bg-green-950 border border-green-200 rounded-xl p-3 text-center">
+            <div className="bg-green-50 dark:bg-green-950 border border-green-200 rounded-xl p-3 text-center cursor-pointer hover:ring-2 hover:ring-green-400 transition-all" onClick={() => setViewTab("tabela")}>
               <p className="text-base font-bold text-green-700">{fmt(resumo.totalValor)}</p>
               <p className="text-[10px] text-green-600 uppercase font-medium">Valor Total</p>
             </div>
-            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 rounded-xl p-3 text-center">
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 rounded-xl p-3 text-center cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" onClick={() => setViewTab("tabela")}>
               <p className="text-base font-bold text-blue-700">{fmtNum(resumo.totalLitros)}L</p>
               <p className="text-[10px] text-blue-600 uppercase font-medium">Litros</p>
             </div>
-            <div className="bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 rounded-xl p-3 text-center">
+            <div className="bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 rounded-xl p-3 text-center cursor-pointer hover:ring-2 hover:ring-indigo-400 transition-all" onClick={() => setViewTab("tabela")}>
               <p className="text-base font-bold text-indigo-700">{resumo.totalLitros > 0 ? fmt(resumo.totalValor / resumo.totalLitros) : "—"}</p>
               <p className="text-[10px] text-indigo-600 uppercase font-medium">Preço Médio/L</p>
             </div>
-            <div className="bg-cyan-50 dark:bg-cyan-950 border border-cyan-200 rounded-xl p-3 text-center">
+            <div className="bg-cyan-50 dark:bg-cyan-950 border border-cyan-200 rounded-xl p-3 text-center cursor-pointer hover:ring-2 hover:ring-cyan-400 transition-all" onClick={() => setViewTab("analise")}>
               <p className="text-xl font-bold text-cyan-700">{resumo.veiculos}</p>
               <p className="text-[10px] text-cyan-600 uppercase font-medium">Veículos</p>
             </div>
-            <div className="bg-purple-50 dark:bg-purple-950 border border-purple-200 rounded-xl p-3 text-center">
+            <div className="bg-purple-50 dark:bg-purple-950 border border-purple-200 rounded-xl p-3 text-center cursor-pointer hover:ring-2 hover:ring-purple-400 transition-all" onClick={() => setViewTab("analise")}>
               <p className="text-xl font-bold text-purple-700">{resumo.motoristas}</p>
               <p className="text-[10px] text-purple-600 uppercase font-medium">Motoristas</p>
             </div>
@@ -422,8 +413,9 @@ export default function Combustivel() {
                 <div className="space-y-1.5 max-h-[350px] overflow-y-auto">
                   {byVehicle.map((v, i) => {
                     const maxVal = byVehicle[0]?.valor || 1;
+                    const isActive = filterVehicle === v.id;
                     return (
-                      <div key={i} className="group">
+                      <div key={i} className={`group cursor-pointer rounded-lg px-1 py-0.5 -mx-1 transition-all ${isActive ? "bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-400" : "hover:bg-muted/50"}`} onClick={() => setFilterVehicle(isActive ? "all" : v.id)}>
                         <div className="flex items-center gap-2 text-sm py-1">
                           <span className="font-mono text-xs font-bold w-20 flex-shrink-0 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{v.placa}</span>
                           <div className="flex-1 h-6 bg-muted rounded-md overflow-hidden relative">
@@ -447,8 +439,9 @@ export default function Combustivel() {
                 <div className="space-y-1.5 max-h-[350px] overflow-y-auto">
                   {byDriver.map(([name, d], i) => {
                     const maxVal = byDriver[0]?.[1]?.valor || 1;
+                    const isActive = filterDriver === name;
                     return (
-                      <div key={i}>
+                      <div key={i} className={`cursor-pointer rounded-lg px-1 py-0.5 -mx-1 transition-all ${isActive ? "bg-purple-100 dark:bg-purple-900/30 ring-1 ring-purple-400" : "hover:bg-muted/50"}`} onClick={() => setFilterDriver(isActive ? "all" : name)}>
                         <div className="flex items-center gap-2 text-sm py-1">
                           <span className="text-xs w-28 flex-shrink-0 truncate" title={name}>{name}</span>
                           <div className="flex-1 h-6 bg-muted rounded-md overflow-hidden relative">
