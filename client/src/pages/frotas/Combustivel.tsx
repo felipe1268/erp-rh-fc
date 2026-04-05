@@ -33,8 +33,13 @@ export default function Combustivel() {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
   const [filterVehicle, setFilterVehicle] = useState("all");
+  const [filterYear, setFilterYear] = useState("all");
   const [filterMonth, setFilterMonth] = useState("all");
+  const [filterDay, setFilterDay] = useState("all");
+  const [filterFuel, setFilterFuel] = useState("all");
+  const [filterDriver, setFilterDriver] = useState("all");
   const [search, setSearch] = useState("");
+  const [viewTab, setViewTab] = useState<"tabela" | "analise">("tabela");
   const [importResult, setImportResult] = useState<any>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<number | null>(null);
@@ -177,29 +182,59 @@ export default function Combustivel() {
 
   const allRecords = fuel.data || [];
 
-  const availableMonths = (() => {
+  const availableYears = (() => {
+    const years = new Set<string>();
+    allRecords.forEach((r: any) => { if (r.data) years.add(r.data.split('-')[0]); });
+    return [...years].sort().reverse();
+  })();
+
+  const availableMonthsForYear = (() => {
     const months = new Set<string>();
     allRecords.forEach((r: any) => {
       if (r.data) {
         const [y, m] = r.data.split('-');
-        months.add(`${y}-${m}`);
+        if (filterYear === "all" || y === filterYear) months.add(m);
       }
     });
-    return [...months].sort().reverse();
+    return [...months].sort();
+  })();
+
+  const availableDaysForMonth = (() => {
+    const days = new Set<string>();
+    allRecords.forEach((r: any) => {
+      if (r.data) {
+        const [y, m, d] = r.data.split('-');
+        if ((filterYear === "all" || y === filterYear) && (filterMonth === "all" || m === filterMonth))
+          days.add(d);
+      }
+    });
+    return [...days].sort();
+  })();
+
+  const availableDrivers = (() => {
+    const drivers = new Set<string>();
+    allRecords.forEach((r: any) => { if (r.motorista) drivers.add(r.motorista); });
+    return [...drivers].sort();
   })();
 
   const list = allRecords.filter((r: any) => {
-    if (filterMonth !== "all" && r.data) {
-      const [y, m] = r.data.split('-');
-      if (`${y}-${m}` !== filterMonth) return false;
+    if (r.data) {
+      const [y, m, d] = r.data.split('-');
+      if (filterYear !== "all" && y !== filterYear) return false;
+      if (filterMonth !== "all" && m !== filterMonth) return false;
+      if (filterDay !== "all" && d !== filterDay) return false;
     }
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return (
-      (r.placa || "").toLowerCase().includes(s) ||
-      (r.posto || "").toLowerCase().includes(s) ||
-      (r.motorista || "").toLowerCase().includes(s)
-    );
+    if (filterFuel !== "all" && r.tipo_combustivel !== filterFuel) return false;
+    if (filterDriver !== "all" && r.motorista !== filterDriver) return false;
+    if (search) {
+      const s = search.toLowerCase();
+      if (!(
+        (r.placa || "").toLowerCase().includes(s) ||
+        (r.posto || "").toLowerCase().includes(s) ||
+        (r.motorista || "").toLowerCase().includes(s)
+      )) return false;
+    }
+    return true;
   });
 
   const resumo = (() => {
@@ -281,106 +316,158 @@ export default function Combustivel() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar placa, posto, motorista..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          <Select value={filterMonth} onValueChange={setFilterMonth}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Mês" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os meses</SelectItem>
-              {availableMonths.map(m => (
-                <SelectItem key={m} value={m}>{formatMonth(m)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterVehicle} onValueChange={setFilterVehicle}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Veículo" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os veículos</SelectItem>
-              {(vehicles.data || []).map((v: any) => (
-                <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo} - {v.marca}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Card className="border-slate-200 dark:border-slate-800">
+          <CardContent className="p-3">
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Buscar placa, posto, motorista..." className="pl-9 h-9" value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+              <Select value={filterYear} onValueChange={v => { setFilterYear(v); setFilterMonth("all"); setFilterDay("all"); }}>
+                <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="Ano" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos anos</SelectItem>
+                  {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterMonth} onValueChange={v => { setFilterMonth(v); setFilterDay("all"); }}>
+                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="Mês" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos meses</SelectItem>
+                  {availableMonthsForYear.map(m => <SelectItem key={m} value={m}>{MESES[parseInt(m) - 1]}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterDay} onValueChange={setFilterDay}>
+                <SelectTrigger className="w-[100px] h-9"><SelectValue placeholder="Dia" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos dias</SelectItem>
+                  {availableDaysForMonth.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterVehicle} onValueChange={setFilterVehicle}>
+                <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder="Veículo" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos veículos</SelectItem>
+                  {(vehicles.data || []).map((v: any) => (
+                    <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filterFuel} onValueChange={setFilterFuel}>
+                <SelectTrigger className="w-[130px] h-9"><SelectValue placeholder="Combustível" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos tipos</SelectItem>
+                  {COMBUSTIVEIS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterDriver} onValueChange={setFilterDriver}>
+                <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder="Motorista" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos motoristas</SelectItem>
+                  {availableDrivers.map(d => <SelectItem key={d} value={d}>{d.length > 25 ? d.slice(0, 25) + "…" : d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {(filterYear !== "all" || filterMonth !== "all" || filterDay !== "all" || filterVehicle !== "all" || filterFuel !== "all" || filterDriver !== "all" || search) && (
+                <Button variant="ghost" size="sm" className="h-9 text-xs text-red-600 hover:text-red-700" onClick={() => { setFilterYear("all"); setFilterMonth("all"); setFilterDay("all"); setFilterVehicle("all"); setFilterFuel("all"); setFilterDriver("all"); setSearch(""); }}>
+                  <XCircle className="h-3.5 w-3.5 mr-1" /> Limpar filtros
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {list.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <Card className="bg-amber-50 dark:bg-amber-950 border-amber-200">
-              <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold text-amber-700">{resumo.registros}</p>
-                <p className="text-xs text-amber-600">Abastecimentos</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-green-50 dark:bg-green-950 border-green-200">
-              <CardContent className="p-3 text-center">
-                <p className="text-lg font-bold text-green-700">{fmt(resumo.totalValor)}</p>
-                <p className="text-xs text-green-600">Valor Total</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200">
-              <CardContent className="p-3 text-center">
-                <p className="text-lg font-bold text-blue-700">{fmtNum(resumo.totalLitros)}L</p>
-                <p className="text-xs text-blue-600">Litros Total</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-cyan-50 dark:bg-cyan-950 border-cyan-200">
-              <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold text-cyan-700">{resumo.veiculos}</p>
-                <p className="text-xs text-cyan-600">Veículos</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-purple-50 dark:bg-purple-950 border-purple-200">
-              <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold text-purple-700">{resumo.motoristas}</p>
-                <p className="text-xs text-purple-600">Motoristas</p>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 rounded-xl p-3 text-center">
+              <p className="text-xl font-bold text-amber-700">{fmtNum(resumo.registros, 0)}</p>
+              <p className="text-[10px] text-amber-600 uppercase font-medium">Abastecimentos</p>
+            </div>
+            <div className="bg-green-50 dark:bg-green-950 border border-green-200 rounded-xl p-3 text-center">
+              <p className="text-base font-bold text-green-700">{fmt(resumo.totalValor)}</p>
+              <p className="text-[10px] text-green-600 uppercase font-medium">Valor Total</p>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 rounded-xl p-3 text-center">
+              <p className="text-base font-bold text-blue-700">{fmtNum(resumo.totalLitros)}L</p>
+              <p className="text-[10px] text-blue-600 uppercase font-medium">Litros</p>
+            </div>
+            <div className="bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 rounded-xl p-3 text-center">
+              <p className="text-base font-bold text-indigo-700">{resumo.totalLitros > 0 ? fmt(resumo.totalValor / resumo.totalLitros) : "—"}</p>
+              <p className="text-[10px] text-indigo-600 uppercase font-medium">Preço Médio/L</p>
+            </div>
+            <div className="bg-cyan-50 dark:bg-cyan-950 border border-cyan-200 rounded-xl p-3 text-center">
+              <p className="text-xl font-bold text-cyan-700">{resumo.veiculos}</p>
+              <p className="text-[10px] text-cyan-600 uppercase font-medium">Veículos</p>
+            </div>
+            <div className="bg-purple-50 dark:bg-purple-950 border border-purple-200 rounded-xl p-3 text-center">
+              <p className="text-xl font-bold text-purple-700">{resumo.motoristas}</p>
+              <p className="text-[10px] text-purple-600 uppercase font-medium">Motoristas</p>
+            </div>
           </div>
         )}
 
-        {list.length > 0 && (byVehicle.length > 1 || byDriver.length > 1) && (
+        {list.length > 0 && (
+          <div className="flex gap-1 border-b">
+            <button className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${viewTab === "tabela" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`} onClick={() => setViewTab("tabela")}>Registros</button>
+            <button className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${viewTab === "analise" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`} onClick={() => setViewTab("analise")}>Análise</button>
+          </div>
+        )}
+
+        {viewTab === "analise" && list.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {byVehicle.length > 1 && (
-              <Card>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold text-sm mb-2">Consumo por Veículo</h3>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {byVehicle.map((v, i) => (
-                      <div key={i} className="flex justify-between items-center text-sm border-b pb-1">
-                        <span className="font-mono text-xs">{v.placa}</span>
-                        <span className="text-muted-foreground">{fmtNum(v.litros)}L</span>
-                        <span className="font-medium">{fmt(v.valor)}</span>
-                        <Badge variant="outline" className="text-xs">{v.count}x</Badge>
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <Fuel className="h-4 w-4 text-amber-600" /> Consumo por Veículo
+                </h3>
+                <div className="space-y-1.5 max-h-[350px] overflow-y-auto">
+                  {byVehicle.map((v, i) => {
+                    const maxVal = byVehicle[0]?.valor || 1;
+                    return (
+                      <div key={i} className="group">
+                        <div className="flex items-center gap-2 text-sm py-1">
+                          <span className="font-mono text-xs font-bold w-20 flex-shrink-0 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{v.placa}</span>
+                          <div className="flex-1 h-6 bg-muted rounded-md overflow-hidden relative">
+                            <div className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-md transition-all" style={{ width: `${(v.valor / maxVal) * 100}%` }} />
+                            <span className="absolute inset-0 flex items-center px-2 text-[10px] font-medium">{fmtNum(v.litros)}L</span>
+                          </div>
+                          <span className="text-xs font-bold w-24 text-right">{fmt(v.valor)}</span>
+                          <Badge variant="outline" className="text-[10px] w-10 justify-center">{v.count}x</Badge>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            {byDriver.length > 1 && (
-              <Card>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold text-sm mb-2">Consumo por Motorista</h3>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {byDriver.map(([name, d], i) => (
-                      <div key={i} className="flex justify-between items-center text-sm border-b pb-1">
-                        <span className="truncate max-w-[140px] text-xs">{name}</span>
-                        <span className="text-muted-foreground">{fmtNum(d.litros)}L</span>
-                        <span className="font-medium">{fmt(d.valor)}</span>
-                        <Badge variant="outline" className="text-xs">{d.count}x</Badge>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <Fuel className="h-4 w-4 text-purple-600" /> Consumo por Motorista
+                </h3>
+                <div className="space-y-1.5 max-h-[350px] overflow-y-auto">
+                  {byDriver.map(([name, d], i) => {
+                    const maxVal = byDriver[0]?.[1]?.valor || 1;
+                    return (
+                      <div key={i}>
+                        <div className="flex items-center gap-2 text-sm py-1">
+                          <span className="text-xs w-28 flex-shrink-0 truncate" title={name}>{name}</span>
+                          <div className="flex-1 h-6 bg-muted rounded-md overflow-hidden relative">
+                            <div className="h-full bg-gradient-to-r from-purple-400 to-purple-500 rounded-md transition-all" style={{ width: `${(d.valor / maxVal) * 100}%` }} />
+                            <span className="absolute inset-0 flex items-center px-2 text-[10px] font-medium">{fmtNum(d.litros)}L</span>
+                          </div>
+                          <span className="text-xs font-bold w-24 text-right">{fmt(d.valor)}</span>
+                          <Badge variant="outline" className="text-[10px] w-10 justify-center">{d.count}x</Badge>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
-        {fuel.isLoading ? (
+        {viewTab === "tabela" && (fuel.isLoading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin h-6 w-6 border-2 border-amber-600 border-t-transparent rounded-full" />
           </div>
@@ -426,7 +513,7 @@ export default function Combustivel() {
               </tbody>
             </table>
           </div>
-        )}
+        ))}
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
