@@ -137,10 +137,15 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     if (isAdminMaster) return true;
     const perm = normalizedAccess[moduleId];
     if (perm != null) {
-      // admin/viewer: acesso total ao módulo
       if (perm.level === "admin" || perm.level === "viewer") return true;
-      // custom: o módulo só é acessível se ao menos UMA página tem view=true
       return Object.values(perm.pages || {}).some(p => p.view);
+    }
+    if (moduleId === 'juridico-trabalhista') {
+      const parentPerm = normalizedAccess['juridico'];
+      if (parentPerm != null) {
+        if (parentPerm.level === "admin" || parentPerm.level === "viewer") return true;
+        return Object.values(parentPerm.pages || {}).some(p => p.view);
+      }
     }
     // Fallback grupo legado — apenas quando o grupo NÃO usa o novo sistema de module_access
     if (hasGroup && !groupHasNewSystem) {
@@ -164,14 +169,22 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   // ── Permissões por página ─────────────────────────────────────────────────
   const getPagePerm = (moduleId: string, pageId: string) => {
-    const perm = normalizedAccess[moduleId];
+    const perm = normalizedAccess[moduleId]
+      ?? (moduleId === 'juridico-trabalhista' ? normalizedAccess['juridico'] : null);
     if (!perm) return null;
     return perm.pages?.[pageId] ?? null;
   };
 
+  const resolveModulePerm = (moduleId: string) => {
+    const perm = normalizedAccess[moduleId];
+    if (perm) return perm;
+    if (moduleId === 'juridico-trabalhista') return normalizedAccess['juridico'] ?? null;
+    return null;
+  };
+
   const canViewPage = (moduleId: string, pageId: string): boolean => {
     if (isAdminMaster) return true;
-    const perm = normalizedAccess[moduleId];
+    const perm = resolveModulePerm(moduleId);
     if (!perm) return false;
     if (perm.level === "admin" || perm.level === "viewer") return true;
     const page = getPagePerm(moduleId, pageId);
@@ -180,7 +193,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const canCreatePage = (moduleId: string, pageId: string): boolean => {
     if (isAdminMaster) return true;
-    const perm = normalizedAccess[moduleId];
+    const perm = resolveModulePerm(moduleId);
     if (!perm) return false;
     if (perm.level === "admin") return true;
     if (perm.level === "viewer") return false;
@@ -190,7 +203,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const canEditPage = (moduleId: string, pageId: string): boolean => {
     if (isAdminMaster) return true;
-    const perm = normalizedAccess[moduleId];
+    const perm = resolveModulePerm(moduleId);
     if (!perm) return false;
     if (perm.level === "admin") return true;
     if (perm.level === "viewer") return false;
@@ -200,7 +213,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const canDeletePage = (moduleId: string, pageId: string): boolean => {
     if (isAdminMaster) return true;
-    const perm = normalizedAccess[moduleId];
+    const perm = resolveModulePerm(moduleId);
     if (!perm) return false;
     if (perm.level === "admin") return true;
     if (perm.level === "viewer") return false;
@@ -308,13 +321,12 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       );
       if (!mod) return false;
 
-      const perm = normalizedAccess[mod.id];
+      const perm = normalizedAccess[mod.id]
+        ?? (mod.id === 'juridico-trabalhista' ? normalizedAccess['juridico'] : null);
       if (!perm) return false;
 
-      // admin/viewer: todas as rotas do módulo são acessíveis
       if (perm.level === "admin" || perm.level === "viewer") return true;
 
-      // custom: checar permissão específica desta rota via ROUTE_TO_PAGEID
       const moduleRouteMap = ROUTE_TO_PAGEID[mod.id];
       if (!moduleRouteMap) {
         // Módulo sem mapeamento de rotas: permitir se o módulo estiver liberado

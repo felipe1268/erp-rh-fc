@@ -83,6 +83,9 @@ export type ActiveModuleId =
   | "rh-dp"
   | "sst"
   | "juridico"
+  | "juridico-trabalhista"
+  | "juridico-tributario"
+  | "juridico-civil"
   | "avaliacao"
   | "terceiros"
   | "parceiros"
@@ -192,12 +195,42 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   {
     id: "juridico",
     label: "Jurídico",
-    description: "Departamento Jurídico",
+    description: "Módulo Jurídico (legado — migrado para submódulos)",
     color: "amber",
-    icon: "Scale",
+    icon: "Gavel",
+    features: [],
+  },
+  {
+    id: "juridico-trabalhista",
+    label: "Trabalhista",
+    description: "Processos Trabalhistas — Reclamatórias, audiências, provisões e análise de risco",
+    color: "amber",
+    icon: "Gavel",
     features: [
       { key: "processos-trabalhistas", label: "Processos Trabalhistas", route: "/processos-trabalhistas", icon: "Gavel" },
-      { key: "dashboard-juridico", label: "Dashboard Jurídico", route: "/dashboards/juridico", icon: "Gavel" },
+      { key: "dashboard-juridico", label: "Dashboard Trabalhista", route: "/dashboards/juridico", icon: "Gavel" },
+    ],
+  },
+  {
+    id: "juridico-tributario",
+    label: "Tributário",
+    description: "Processos Tributários — ICMS, ISS, autos de infração e defesas fiscais",
+    color: "teal",
+    icon: "Receipt",
+    features: [
+      { key: "processos-tributarios", label: "Processos Tributários", route: "/processos-tributarios", icon: "Receipt" },
+      { key: "dashboard-tributario", label: "Dashboard Tributário", route: "/dashboards/tributario", icon: "Receipt" },
+    ],
+  },
+  {
+    id: "juridico-civil",
+    label: "Civil",
+    description: "Processos Cíveis — Cobranças, indenizações, contratos e ações ordinárias",
+    color: "indigo",
+    icon: "FileText",
+    features: [
+      { key: "processos-civis", label: "Processos Cíveis", route: "/processos-civis", icon: "FileText" },
+      { key: "dashboard-civil", label: "Dashboard Civil", route: "/dashboards/civil", icon: "FileText" },
     ],
   },
   {

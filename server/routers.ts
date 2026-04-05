@@ -54,6 +54,8 @@ import { folhaPagamentoRouter } from "./routers/folhaPagamento";
 import { controleDocumentosRouter } from "./routers/controleDocumentos";
 import { getAvailableTables, getTableStructure, importTableData } from "./routers/importData";
 import { processosTrabRouter } from "./routers/processosTrabalhistas";
+import { processosTributariosRouter } from "./routers/processosTributarios";
+import { processosCivisRouter } from "./routers/processosCivis";
 import { homeDataRouter } from "./routers/homeData";
 import { episRouter } from "./routers/epis";
 import { faceRecognitionRouter } from "./routers/faceRecognition";
@@ -848,6 +850,16 @@ export const appRouter = router({
   // PROCESSOS TRABALHISTAS
   // ============================================================
   processos: processosTrabRouter,
+
+  // ============================================================
+  // PROCESSOS TRIBUTÁRIOS
+  // ============================================================
+  processosTributarios: processosTributariosRouter,
+
+  // ============================================================
+  // PROCESSOS CÍVEIS
+  // ============================================================
+  processosCivis: processosCivisRouter,
 
   // ============================================================
   // OBRAS

@@ -2483,6 +2483,7 @@ export const processoDocumentos = pgTable("processo_documentos", {
         id: serial().notNull(),
         companyId: integer().notNull(),
         processoId: integer().notNull(),
+        tipoProcesso: varchar("tipo_processo", { length: 30 }).default('trabalhista').notNull(),
         nome: varchar({ length: 255 }).notNull(),
         tipo: text().default('outros').notNull(),
         descricao: text(),
@@ -2498,12 +2499,13 @@ export const processoDocumentos = pgTable("processo_documentos", {
 (table) => [
         index("pd_company").on(table.companyId),
         index("pd_processo").on(table.processoId),
+        index("pd_tipo_processo").on(table.tipoProcesso, table.processoId),
 ]);
 
 export const processosAndamentos = pgTable("processos_andamentos", {
         id: serial().notNull(),
         processoId: integer().notNull(),
-        // you can use { mode: 'date' }, if you want to have Date as type for this column
+        tipoProcesso: varchar("tipo_processo", { length: 30 }).default('trabalhista').notNull(),
         data: date({ mode: 'string' }).notNull(),
         tipo: text().default('outros').notNull(),
         descricao: text().notNull(),
@@ -2516,6 +2518,7 @@ export const processosAndamentos = pgTable("processos_andamentos", {
 (table) => [
         index("pal_processo").on(table.processoId),
         index("pal_data").on(table.processoId, table.data),
+        index("pal_tipo_processo").on(table.tipoProcesso, table.processoId),
 ]);
 
 export const processosTrabalhistas = pgTable("processos_trabalhistas", {
@@ -2577,6 +2580,83 @@ export const processosTrabalhistas = pgTable("processos_trabalhistas", {
         index("pt_employee").on(table.employeeId),
         index("pt_status").on(table.companyId, table.status),
         index("pt_numero").on(table.numeroProcesso),
+]);
+
+export const processosTributarios = pgTable("processos_tributarios", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        numeroProcesso: varchar({ length: 50 }).notNull(),
+        tipoTributo: text().default('icms').notNull(),
+        esfera: text().default('judicial').notNull(),
+        orgaoJulgador: varchar({ length: 255 }),
+        vara: varchar({ length: 100 }),
+        comarca: varchar({ length: 100 }),
+        tribunal: varchar({ length: 100 }),
+        autoInfracao: varchar({ length: 100 }),
+        valorAutoInfracao: varchar({ length: 20 }),
+        valorCausa: varchar({ length: 20 }),
+        valorCondenacao: varchar({ length: 20 }),
+        valorPago: varchar({ length: 20 }),
+        contribuinte: varchar({ length: 255 }).notNull(),
+        cnpjContribuinte: varchar({ length: 20 }),
+        advogadoResponsavel: varchar({ length: 255 }),
+        dataDistribuicao: date({ mode: 'string' }),
+        dataAutoInfracao: date({ mode: 'string' }),
+        dataAudiencia: date({ mode: 'string' }),
+        dataEncerramento: date({ mode: 'string' }),
+        status: text().default('em_andamento').notNull(),
+        fase: text().default('conhecimento').notNull(),
+        risco: text().default('medio').notNull(),
+        observacoes: text(),
+        criadoPor: varchar({ length: 255 }),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        deletedAt: timestamp({ mode: 'string' }),
+        deletedBy: varchar({ length: 255 }),
+        deletedByUserId: integer(),
+},
+(table) => [
+        index("ptrib_company").on(table.companyId),
+        index("ptrib_status").on(table.companyId, table.status),
+        index("ptrib_numero").on(table.numeroProcesso),
+]);
+
+export const processosCivis = pgTable("processos_civis", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        numeroProcesso: varchar({ length: 50 }).notNull(),
+        tipoAcao: text().default('cobranca').notNull(),
+        vara: varchar({ length: 100 }),
+        comarca: varchar({ length: 100 }),
+        tribunal: varchar({ length: 100 }),
+        autor: varchar({ length: 255 }).notNull(),
+        reu: varchar({ length: 255 }).notNull(),
+        advogadoAutor: varchar({ length: 255 }),
+        advogadoReu: varchar({ length: 255 }),
+        valorCausa: varchar({ length: 20 }),
+        valorCondenacao: varchar({ length: 20 }),
+        valorAcordo: varchar({ length: 20 }),
+        valorPago: varchar({ length: 20 }),
+        dataDistribuicao: date({ mode: 'string' }),
+        dataCitacao: date({ mode: 'string' }),
+        dataAudiencia: date({ mode: 'string' }),
+        dataEncerramento: date({ mode: 'string' }),
+        status: text().default('em_andamento').notNull(),
+        fase: text().default('conhecimento').notNull(),
+        risco: text().default('medio').notNull(),
+        objetoAcao: text(),
+        observacoes: text(),
+        criadoPor: varchar({ length: 255 }),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        deletedAt: timestamp({ mode: 'string' }),
+        deletedBy: varchar({ length: 255 }),
+        deletedByUserId: integer(),
+},
+(table) => [
+        index("pciv_company").on(table.companyId),
+        index("pciv_status").on(table.companyId, table.status),
+        index("pciv_numero").on(table.numeroProcesso),
 ]);
 
 export const risks = pgTable("risks", {

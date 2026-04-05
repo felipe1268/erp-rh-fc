@@ -68,6 +68,7 @@ export const processosTrabRouter = router({
         }).from(processoDocumentos)
           .where(and(
             inArray(processoDocumentos.processoId, procIds),
+            eq(processoDocumentos.tipoProcesso, 'trabalhista'),
             sql`${processoDocumentos.deletedAt} IS NULL`,
           ))
           .groupBy(processoDocumentos.processoId);
@@ -104,9 +105,11 @@ export const processosTrabRouter = router({
       const [emp] = await db.select().from(employees)
         .where(eq(employees.id, processo.employeeId));
 
-      // Buscar andamentos
       const andamentos = await db.select().from(processosAndamentos)
-        .where(eq(processosAndamentos.processoId, input.id))
+        .where(and(
+          eq(processosAndamentos.processoId, input.id),
+          eq(processosAndamentos.tipoProcesso, 'trabalhista'),
+        ))
         .orderBy(desc(processosAndamentos.data));
 
       return {
@@ -285,7 +288,10 @@ export const processosTrabRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
       return db.select().from(processosAndamentos)
-        .where(eq(processosAndamentos.processoId, input.processoId))
+        .where(and(
+          eq(processosAndamentos.processoId, input.processoId),
+          eq(processosAndamentos.tipoProcesso, 'trabalhista'),
+        ))
         .orderBy(desc(processosAndamentos.data));
     }),
 
@@ -302,7 +308,10 @@ export const processosTrabRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      const result = await db.insert(processosAndamentos).values(input).returning();
+      const result = await db.insert(processosAndamentos).values({
+        ...input,
+        tipoProcesso: 'trabalhista',
+      }).returning();
       return { id: result[0].id };
     }),
 
@@ -310,7 +319,11 @@ export const processosTrabRouter = router({
     .input(z.object({ id: z.number(), processoId: z.number() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      await db.delete(processosAndamentos).where(and(eq(processosAndamentos.id, input.id), eq(processosAndamentos.processoId, input.processoId)));
+      await db.delete(processosAndamentos).where(and(
+        eq(processosAndamentos.id, input.id),
+        eq(processosAndamentos.processoId, input.processoId),
+        eq(processosAndamentos.tipoProcesso, 'trabalhista'),
+      ));
       return { success: true };
     }),
 
@@ -487,6 +500,7 @@ export const processosTrabRouter = router({
             descricao: `[DataJud] ${mov.nome}`,
             resultado: mov.complementosTabelados?.map(c => c.nome).join(', ') || null,
             criadoPor: 'DataJud API',
+            tipoProcesso: 'trabalhista',
           });
         }
       }
@@ -781,9 +795,11 @@ export const processosTrabRouter = router({
       const [emp] = await db.select().from(employees)
         .where(eq(employees.id, processo.employeeId));
 
-      // Buscar andamentos
       const andamentos = await db.select().from(processosAndamentos)
-        .where(eq(processosAndamentos.processoId, input.processoId))
+        .where(and(
+          eq(processosAndamentos.processoId, input.processoId),
+          eq(processosAndamentos.tipoProcesso, 'trabalhista'),
+        ))
         .orderBy(desc(processosAndamentos.data));
 
       // Buscar regras de ouro da empresa (categoria jurídico)
@@ -1157,9 +1173,11 @@ IMPORTANTE:
           const [emp] = await db.select().from(employees)
             .where(eq(employees.id, processo.employeeId));
 
-          // Buscar andamentos
           const andamentos = await db.select().from(processosAndamentos)
-            .where(eq(processosAndamentos.processoId, proc.id))
+            .where(and(
+              eq(processosAndamentos.processoId, proc.id),
+              eq(processosAndamentos.tipoProcesso, 'trabalhista'),
+            ))
             .orderBy(desc(processosAndamentos.data));
 
           // Buscar regras de ouro

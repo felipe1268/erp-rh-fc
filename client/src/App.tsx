@@ -88,6 +88,10 @@ const PJMedicoes = lazy(() => import("./pages/PJMedicoes"));
 const PainelRH = lazy(() => import("./pages/PainelRH"));
 const PainelSST = lazy(() => import("./pages/PainelSST"));
 const PainelJuridico = lazy(() => import("./pages/PainelJuridico"));
+const PainelTributario = lazy(() => import("./pages/PainelTributario"));
+const PainelCivil = lazy(() => import("./pages/PainelCivil"));
+const ProcessosTributarios = lazy(() => import("./pages/ProcessosTributarios"));
+const ProcessosCivis = lazy(() => import("./pages/ProcessosCivis"));
 const BibliotecaConhecimento = lazy(() => import("./pages/BibliotecaConhecimento"));
 const AvaliacaoDesempenho = lazy(() => import("./pages/AvaliacaoDesempenho"));
 const Telemetria = lazy(() => import("./pages/Telemetria"));
@@ -108,6 +112,8 @@ const DashFolhaPagamento = lazy(() => import("./pages/dashboards/DashFolhaPagame
 const DashHorasExtras = lazy(() => import("./pages/dashboards/DashHorasExtras"));
 const DashEpis = lazy(() => import("./pages/dashboards/DashEpis"));
 const DashJuridico = lazy(() => import("./pages/dashboards/DashJuridico"));
+const DashTributario = lazy(() => import("./pages/dashboards/DashTributario"));
+const DashCivil = lazy(() => import("./pages/dashboards/DashCivil"));
 const DashAvisoPrevio = lazy(() => import("./pages/dashboards/DashAvisoPrevio"));
 const DashFerias = lazy(() => import("./pages/dashboards/DashFerias"));
 const VisaoPanoramica = lazy(() => import("./pages/dashboards/VisaoPanoramica"));
@@ -265,6 +271,9 @@ function Router() {
         <Route path={"/painel/rh"} component={PainelRH} />
         <Route path={"/painel/sst"} component={PainelSST} />
         <Route path={"/painel/juridico"} component={PainelJuridico} />
+        <Route path={"/painel/juridico-trabalhista"} component={PainelJuridico} />
+        <Route path={"/painel/tributario"} component={PainelTributario} />
+        <Route path={"/painel/civil"} component={PainelCivil} />
         <Route path={"/empresas"} component={Empresas} />
         <Route path={"/colaboradores"} component={Colaboradores} />
         <Route path={"/clientes"} component={Clientes} />
@@ -276,6 +285,8 @@ function Router() {
         <Route path={"/relogios-ponto"} component={RelogiosPonto} />
         <Route path={"/convencoes-coletivas"} component={ConvencoesColetivas} />
         <Route path={"/processos-trabalhistas"} component={ProcessosTrabalhistas} />
+        <Route path={"/processos-tributarios"} component={ProcessosTributarios} />
+        <Route path={"/processos-civis"} component={ProcessosCivis} />
         <Route path={"/epis"} component={Epis} />
         <Route path={"/usuarios"} component={() => <MasterOnlyGuard component={Usuarios} />} />
         <Route path={"/grupos-usuarios"} component={() => <MasterOnlyGuard component={GruposUsuarios} />} />
@@ -337,6 +348,8 @@ function Router() {
         <Route path={"/dashboards/horas-extras"} component={DashHorasExtras} />
         <Route path={"/dashboards/epis"} component={DashEpis} />
         <Route path={"/dashboards/juridico"} component={DashJuridico} />
+        <Route path={"/dashboards/tributario"} component={DashTributario} />
+        <Route path={"/dashboards/civil"} component={DashCivil} />
         <Route path={"/dashboards/aviso-previo"} component={DashAvisoPrevio} />
         <Route path={"/dashboards/ferias"} component={DashFerias} />
         <Route path={"/dashboards/efetivo-obra"} component={DashEfetivoObra} />

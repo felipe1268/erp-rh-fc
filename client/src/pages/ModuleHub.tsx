@@ -11,7 +11,7 @@ import {
   Bell, Clock, Zap, Layers, ArrowUpRight, ClipboardCheck,
   Handshake, TrendingUp, Home, Ruler, BookOpen, FileSignature,
   HardHat, Warehouse, BarChart3, FolderOpen, Hammer, Truck,
-  Settings, FileText, Trash2, GitBranch,
+  Settings, FileText, Trash2, GitBranch, Receipt, Scale,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -78,10 +78,10 @@ const MODULES: Module[] = [
     features: ["Controle de EPIs", "ASOs", "CIPA", "Base CAEPI", "Documentos SST"],
   },
   {
-    id: "juridico",
-    title: "Jurídico",
-    subtitle: "Gestão Jurídica Trabalhista",
-    description: "Processos trabalhistas, audiências, provisões e análise de risco jurídico.",
+    id: "juridico-trabalhista",
+    title: "Trabalhista",
+    subtitle: "Processos Trabalhistas",
+    description: "Reclamatórias trabalhistas, audiências, provisões, DataJud e análise de risco com IA.",
     icon: Gavel,
     accentFrom: "#1B2A4A",
     accentTo: "#D4A843",
@@ -89,7 +89,35 @@ const MODULES: Module[] = [
     iconBg: "rgba(27,42,74,0.12)",
     path: "/painel/juridico",
     active: true,
-    features: ["Processos Trabalhistas", "Audiências", "Provisões", "Análise de Risco"],
+    features: ["Processos Trabalhistas", "DataJud", "Audiências", "Análise IA"],
+  },
+  {
+    id: "juridico-tributario",
+    title: "Tributário",
+    subtitle: "Processos Tributários",
+    description: "ICMS, ISS, autos de infração, defesas fiscais e execuções tributárias.",
+    icon: Receipt,
+    accentFrom: "#0D9488",
+    accentTo: "#14B8A6",
+    accentGlow: "rgba(20,184,166,0.30)",
+    iconBg: "rgba(13,148,136,0.12)",
+    path: "/painel/tributario",
+    active: true,
+    features: ["Processos Tributários", "Autos de Infração", "Defesa Fiscal", "Execução Fiscal"],
+  },
+  {
+    id: "juridico-civil",
+    title: "Civil",
+    subtitle: "Processos Cíveis",
+    description: "Cobranças, indenizações, contratos, ações ordinárias e execuções cíveis.",
+    icon: BookOpen,
+    accentFrom: "#4F46E5",
+    accentTo: "#6366F1",
+    accentGlow: "rgba(99,102,241,0.30)",
+    iconBg: "rgba(79,70,229,0.12)",
+    path: "/painel/civil",
+    active: true,
+    features: ["Processos Cíveis", "Cobranças", "Indenizações", "Contratos"],
   },
   {
     id: "avaliacao",
@@ -363,6 +391,7 @@ export default function ModuleHub() {
   // Mapeia module id do hub para module_key do banco
   const hubToConfigKey: Record<string, string> = {
     "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
+    "juridico-trabalhista": "juridico", "juridico-tributario": "juridico", "juridico-civil": "juridico",
     "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
     "cadastro": "cadastro",
   };

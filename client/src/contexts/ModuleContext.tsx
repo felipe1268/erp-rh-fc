@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "operacional" | "frotas" | "admin" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "juridico-trabalhista" | "juridico-tributario" | "juridico-civil" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "operacional" | "frotas" | "admin" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -21,7 +21,10 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/painel": "rh-dp",
   "/painel/rh": "rh-dp",
   "/painel/sst": "sst",
-  "/painel/juridico": "juridico",
+  "/painel/juridico": "juridico-trabalhista",
+  "/painel/juridico-trabalhista": "juridico-trabalhista",
+  "/painel/tributario": "juridico-tributario",
+  "/painel/civil": "juridico-civil",
   "/colaboradores": "rh-dp",
   "/fechamento-ponto": "rh-dp",
   "/folha-pagamento": "rh-dp",
@@ -41,7 +44,12 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/epis": "sst",
   "/cipa": "sst",
   // Jurídico routes
-  "/processos-trabalhistas": "juridico",
+  "/processos-trabalhistas": "juridico-trabalhista",
+  "/processos-tributarios": "juridico-tributario",
+  "/processos-civis": "juridico-civil",
+  "/dashboards/juridico": "juridico-trabalhista",
+  "/dashboards/tributario": "juridico-tributario",
+  "/dashboards/civil": "juridico-civil",
   // Avaliação routes
   "/avaliacao-desempenho": "avaliacao" as ModuleId,
   // Terceiros routes
@@ -149,6 +157,9 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "rh-dp": "RH & DP",
   "sst": "SST",
   "juridico": "Jurídico",
+  "juridico-trabalhista": "Trabalhista",
+  "juridico-tributario": "Tributário",
+  "juridico-civil": "Civil",
   "avaliacao": "Avaliação",
   "terceiros": "Terceiros",
   "parceiros": "Parceiros",
@@ -172,7 +183,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [activeModule, setActiveModuleState] = useState<ModuleId>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "gestao-documentos" || saved === "operacional" || saved === "frotas" || saved === "all")) {
+    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "juridico-trabalhista" || saved === "juridico-tributario" || saved === "juridico-civil" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "gestao-documentos" || saved === "operacional" || saved === "frotas" || saved === "all")) {
       return saved as ModuleId;
     }
     return "rh-dp"; // Default to RH & DP

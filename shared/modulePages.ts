@@ -81,6 +81,35 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "documentos_confidenciais", label: "Documentos confidenciais" },
     ],
   },
+  "juridico-trabalhista": {
+    pages: [
+      { id: "processos",    label: "Processos Trabalhistas",                      actions: ["view","create","edit","delete"] },
+      { id: "convencoes",   label: "Convenções Coletivas",                        actions: ["view","create","edit","delete"] },
+      { id: "dashboards",   label: "Dashboards Trabalhista",                      actions: ["view"] },
+    ],
+    sensitiveFlags: [
+      { id: "valores_acordos",        label: "Valores de indenizações e acordos trabalhistas" },
+      { id: "documentos_confidenciais", label: "Documentos confidenciais" },
+    ],
+  },
+  "juridico-tributario": {
+    pages: [
+      { id: "processos_tributarios", label: "Processos Tributários",              actions: ["view","create","edit","delete"] },
+      { id: "dashboards",            label: "Dashboards Tributário",              actions: ["view"] },
+    ],
+    sensitiveFlags: [
+      { id: "valores_tributarios",     label: "Valores de causas e autos de infração" },
+    ],
+  },
+  "juridico-civil": {
+    pages: [
+      { id: "processos_civis",  label: "Processos Cíveis",                       actions: ["view","create","edit","delete"] },
+      { id: "dashboards",       label: "Dashboards Civil",                        actions: ["view"] },
+    ],
+    sensitiveFlags: [
+      { id: "valores_civis",          label: "Valores de causas e condenações cíveis" },
+    ],
+  },
 
   // ══════════════════════════════════════════════════════
   // AVALIAÇÃO DE DESEMPENHO
@@ -339,6 +368,19 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/processos-trabalhistas":  "processos",
     "/convencoes-coletivas":    "convencoes",
     "/dashboards/juridico":     "dashboards",
+  },
+  "juridico-trabalhista": {
+    "/processos-trabalhistas":  "processos",
+    "/convencoes-coletivas":    "convencoes",
+    "/dashboards/juridico":     "dashboards",
+  },
+  "juridico-tributario": {
+    "/processos-tributarios":     "processos_tributarios",
+    "/dashboards/tributario":     "dashboards",
+  },
+  "juridico-civil": {
+    "/processos-civis":           "processos_civis",
+    "/dashboards/civil":          "dashboards",
   },
   "avaliacao": {
     "/avaliacao-desempenho":      "avaliacoes",
