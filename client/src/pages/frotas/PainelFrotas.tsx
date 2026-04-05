@@ -134,7 +134,7 @@ export default function PainelFrotas() {
               <KpiCard icon={Truck} label="Veículos Ativos" value={d.totalVehicles} onClick={() => navigate("/frotas/veiculos")} color="text-cyan-600" bg="bg-cyan-50" />
               <KpiCard icon={DollarSign} label="Patrimônio FIPE" value={fmt(d.totalFipe)} color="text-green-600" bg="bg-green-50" />
               <KpiCard icon={TrendingDown} label={anoDash ? `Depreciação ${anoDash}` : "Depreciação Real"} value={fmt(d.depreciacao)} color="text-red-600" bg="bg-red-50" sub={anoDash ? "Estimativa anual" : `Retém ${pctRetidoGlobal}%`} />
-              <KpiCard icon={Gauge} label={anoDash ? `Km Rodado ${anoDash}` : "Km Total Rodado"} value={`${fmtN(Math.round(d.totalKm))} km`} color="text-blue-600" bg="bg-blue-50" sub={anoDash ? "Baseado em abastecimentos" : undefined} />
+              <KpiCard icon={Gauge} label={anoDash && d.temDadosKmAbastecimento ? `Km Rodado ${anoDash}` : "Km Total Rodado"} value={`${fmtN(Math.round(d.totalKm))} km`} color="text-blue-600" bg="bg-blue-50" sub={anoDash && d.temDadosKmAbastecimento ? "Baseado em abastecimentos" : undefined} />
               <KpiCard icon={Fuel} label={anoDash ? `Consumo ${anoDash}` : "Consumo Médio"} value={d.consumoMedio > 0 ? `${d.consumoMedio.toFixed(1)} km/l` : "—"} color="text-amber-600" bg="bg-amber-50" sub={d.totalLitros > 0 ? `${fmtN(Math.round(d.totalLitros))} litros` : undefined} />
               <KpiCard icon={Clock} label="Idade Média" value={`${d.idadeFrota.toFixed(1)} anos`} color="text-slate-600" bg="bg-slate-50" />
             </div>

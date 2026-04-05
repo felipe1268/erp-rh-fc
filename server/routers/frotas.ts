@@ -2247,6 +2247,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
       const now = new Date();
 
       const kmRodadoPorVeiculo: Record<number, number> = {};
+      let temDadosKmAbastecimento = false;
       for (const v of allVehicles) {
         const vFuelAll = allFuel.filter((f: any) => f.vehicle_id === v.id);
         if (vFuelAll.length > 0) {
@@ -2254,14 +2255,16 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
           const kmsAnt = vFuelAll.map((f: any) => n(f.km_anterior)).filter((k: number) => k > 0);
           if (kms.length > 0 && kmsAnt.length > 0) {
             kmRodadoPorVeiculo[v.id] = Math.max(...kms) - Math.min(...kmsAnt);
+            temDadosKmAbastecimento = true;
           } else if (kms.length >= 2) {
             kmRodadoPorVeiculo[v.id] = Math.max(...kms) - Math.min(...kms);
+            temDadosKmAbastecimento = true;
           }
         }
       }
       const kmRodadoPeriodo = Object.values(kmRodadoPorVeiculo).reduce((s, k) => s + Math.max(k, 0), 0);
       const totalKmGeral = allVehicles.reduce((s: number, v: any) => s + n(v.km_atual), 0);
-      const totalKm = anoFiltro ? kmRodadoPeriodo : totalKmGeral;
+      const totalKm = (anoFiltro && temDadosKmAbastecimento) ? kmRodadoPeriodo : totalKmGeral;
 
       const depreciacaoPorVeiculo = allVehicles.map((v: any) => {
         const valorC = n(v.valor_compra);
@@ -2392,7 +2395,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         const litros = vFuel.reduce((s: number, f: any) => s + n(f.litros), 0);
         const fuelRecs = vFuel.filter((f: any) => n(f.consumo_km_l) > 0);
         const consumo = fuelRecs.length > 0 ? fuelRecs.reduce((s: number, f: any) => s + n(f.consumo_km_l), 0) / fuelRecs.length : 0;
-        const km = anoFiltro ? (kmRodadoPorVeiculo[v.id] || 0) : n(v.km_atual);
+        const km = (anoFiltro && temDadosKmAbastecimento) ? (kmRodadoPorVeiculo[v.id] || 0) : n(v.km_atual);
         const custoTotal = custoManut + custoComb + custoMultas;
         const custoKmV = km > 0 ? custoTotal / km : 0;
         return {
@@ -2490,6 +2493,7 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         totalLicenciamento, totalIpvaGeral,
         tipoCombustivel, idadeFrota, custoOperTotal,
         anosDisponiveis, anoSelecionado: anoFiltro || null,
+        temDadosKmAbastecimento,
       };
     }),
 
