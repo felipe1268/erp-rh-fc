@@ -37,6 +37,9 @@ async function ensureFleetTables() {
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS crlv_vencimento DATE;
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS seguro_url TEXT;
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS seguro_vencimento DATE;
+      ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS cadastro_consolidado BOOLEAN DEFAULT FALSE;
+      ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS cadastro_consolidado_em TIMESTAMP;
+      ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS cadastro_consolidado_por VARCHAR(255);
     EXCEPTION WHEN OTHERS THEN NULL;
     END $$;
   `);
@@ -383,6 +386,52 @@ async function ensureFleetTables() {
   `);
 }
 let tablesReady = false;
+
+const CAMPOS_OBRIGATORIOS_CADASTRO = [
+  { campo: "placa", label: "Placa" },
+  { campo: "marca", label: "Marca" },
+  { campo: "anoFabricacao", label: "Ano de Fabricação" },
+  { campo: "renavam", label: "RENAVAM" },
+];
+
+function checkVehicleRegistration(vehicle: any): { completo: boolean; camposFaltantes: string[] } {
+  const camposFaltantes: string[] = [];
+  for (const { campo, label } of CAMPOS_OBRIGATORIOS_CADASTRO) {
+    const val = vehicle[campo];
+    if (!val || (typeof val === "string" && val.trim() === "")) {
+      camposFaltantes.push(label);
+    }
+  }
+  const kmVal = parseFloat(vehicle.kmAtual || vehicle.km_atual || "0");
+  if (!kmVal || kmVal <= 0) {
+    camposFaltantes.push("KM Atual");
+  }
+  return { completo: camposFaltantes.length === 0, camposFaltantes };
+}
+
+async function getVehiclesWithPendingRegistration(db: any, companyId: number, vehicleIds: number[]): Promise<any[]> {
+  if (vehicleIds.length === 0) return [];
+  const idList = vehicleIds.join(",");
+  const res = await db.execute(sql.raw(
+    `SELECT id, placa, modelo, marca, "anoFabricacao", renavam, "kmAtual", cadastro_consolidado
+     FROM vehicles WHERE id IN (${idList}) AND "companyId" = ${companyId}`
+  ));
+  const rows = (res as any).rows || res;
+  const pendentes: any[] = [];
+  for (const v of rows) {
+    if (v.cadastro_consolidado) continue;
+    const check = checkVehicleRegistration(v);
+    if (!check.completo) {
+      pendentes.push({
+        id: v.id,
+        placa: v.placa || "(sem placa)",
+        modelo: v.modelo || "(sem modelo)",
+        camposFaltantes: check.camposFaltantes,
+      });
+    }
+  }
+  return pendentes;
+}
 
 export const frotasRouter = router({
   initTables: protectedProcedure.mutation(async () => {
@@ -3224,6 +3273,23 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum custo encontrado para este mês." });
       }
 
+      const vehicleIdsRes = await db.execute(sql`
+        SELECT DISTINCT vehicle_id FROM (
+          SELECT vehicle_id FROM fleet_fuel_records WHERE company_id = ${companyId} AND data >= ${startDate}::date AND data < ${endDate}::date
+          UNION SELECT vehicle_id FROM fleet_maintenances WHERE company_id = ${companyId} AND data_manutencao >= ${startDate}::date AND data_manutencao < ${endDate}::date
+          UNION SELECT vehicle_id FROM fleet_toll_records WHERE company_id = ${companyId} AND data >= ${startDate}::date AND data < ${endDate}::date
+        ) sub
+      `);
+      const vehicleIds = ((vehicleIdsRes as any).rows || vehicleIdsRes).map((r: any) => r.vehicle_id).filter(Boolean);
+      const pendentes = await getVehiclesWithPendingRegistration(db, companyId, vehicleIds);
+      if (pendentes.length > 0) {
+        const detalhes = pendentes.map((p: any) => `${p.placa} (${p.modelo}): falta ${p.camposFaltantes.join(", ")}`).join("; ");
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Consolidação bloqueada — ${pendentes.length} veículo(s) com cadastro incompleto: ${detalhes}. Complete os dados ou consolide o cadastro antes de enviar ao financeiro.`,
+        });
+      }
+
       const meses = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
       const descricao = `Consolidação Frotas - ${meses[mes]}/${ano}`;
       const obsFinanceiro = `Combustível: R$ ${custoCombustivel.toFixed(2)} | Manutenção: R$ ${custoManutencao.toFixed(2)} | IPVA: R$ ${custoIpva.toFixed(2)} | Multas: R$ ${custoMultas.toFixed(2)} | Licenciamento: R$ ${custoLicenciamento.toFixed(2)} | Seguro: R$ ${custoSeguro.toFixed(2)}`;
@@ -3403,6 +3469,20 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
 
       if (custoTotal === 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma manutenção com custo encontrada para este mês." });
+      }
+
+      const maintVehicleRes = await db.execute(sql`
+        SELECT DISTINCT vehicle_id FROM fleet_maintenances
+        WHERE company_id = ${companyId} AND data_manutencao >= ${startDate}::date AND data_manutencao < ${endDate}::date AND status != 'cancelada'
+      `);
+      const maintVehicleIds = ((maintVehicleRes as any).rows || maintVehicleRes).map((r: any) => r.vehicle_id).filter(Boolean);
+      const pendentes = await getVehiclesWithPendingRegistration(db, companyId, maintVehicleIds);
+      if (pendentes.length > 0) {
+        const detalhes = pendentes.map((p: any) => `${p.placa} (${p.modelo}): falta ${p.camposFaltantes.join(", ")}`).join("; ");
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Aprovação bloqueada — ${pendentes.length} veículo(s) com cadastro incompleto: ${detalhes}. Complete os dados ou consolide o cadastro antes de enviar ao financeiro.`,
+        });
       }
 
       const detailRes = await db.execute(sql`
