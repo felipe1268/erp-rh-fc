@@ -8046,4 +8046,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-06 00:15:00",
   },
+  {
+    version: 1035,
+    titulo: "IPVA e Licenciamento 2026 — Programação Automática por Placa",
+    descricao:
+      "Geração automática de IPVA e Licenciamento 2026 para todos os 13 veículos com placa cadastrada. " +
+      "IPVA calculado com base no tipo de veículo (4% carros, 2% motos, 1.5% caminhões) e valor FIPE estimado, " +
+      "com datas de vencimento do calendário oficial SP 2026 (por último dígito da placa). " +
+      "BYD Song Plus marcado como isento (veículo elétrico/híbrido isento em SP até 2027). " +
+      "Licenciamento 2026 com vencimentos escalonados de julho a dezembro conforme calendário SP. " +
+      "Todos os registros pendentes com alertas automáticos no painel de Frotas para controle de fluxo de caixa.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 00:30:00",
+  },
 ];
