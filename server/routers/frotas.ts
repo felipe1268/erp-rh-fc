@@ -4372,6 +4372,157 @@ Sempre retorne JSON válido, sem markdown.`;
       return parsed;
     }),
 
+  parseTollExcel: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      base64: z.string().max(30_000_000),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const userCid = (ctx as any).user?.companyId;
+      if (userCid && String(userCid) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+
+      const XLSX = require("xlsx");
+      const buffer = Buffer.from(input.base64, "base64");
+      const wb = XLSX.read(buffer, { type: "buffer" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+
+      let headerIdx = -1;
+      for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+        const row = rawRows[i];
+        if (row && row.some((c: any) => String(c).toLowerCase().includes("placa"))) {
+          headerIdx = i;
+          break;
+        }
+      }
+      if (headerIdx === -1) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Formato de planilha não reconhecido. Cabeçalho com 'Placa' não encontrado." });
+      }
+
+      const headers = rawRows[headerIdx].map((h: any) => String(h).trim().toLowerCase());
+      const colMap: Record<string, number> = {};
+      for (let i = 0; i < headers.length; i++) {
+        const h = headers[i];
+        if (h.includes("fatura")) colMap.fatura = i;
+        if (h.includes("data")) colMap.data = i;
+        if (h.includes("horário") || h.includes("horario") || h.includes("hora")) colMap.horario = i;
+        if (h.includes("placa")) colMap.placa = i;
+        if (h.includes("tipo do veículo") || h.includes("tipo do veiculo") || h.includes("tipo ve")) colMap.tipoVeiculo = i;
+        if (h.includes("descrição") || h.includes("descricao") || h === "descrição") colMap.descricao = i;
+        if (h.includes("tipo de uso") || h.includes("tipo uso")) colMap.tipoUso = i;
+        if (h.includes("valor")) colMap.valor = i;
+        if (h.includes("débito") || h.includes("debito") || h.includes("crédito") || h.includes("credito")) colMap.debitoCredito = i;
+        if (h.includes("sentido")) colMap.sentido = i;
+      }
+
+      if (colMap.placa === undefined || colMap.data === undefined || colMap.valor === undefined) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Colunas obrigatórias não encontradas: Placa, Data e Valor são necessários." });
+      }
+
+      const vehicleRows = await db.execute(sql`SELECT id, placa, marca, modelo FROM vehicles WHERE "companyId" = ${input.companyId}`);
+      const vehicleMap = new Map<string, { id: number; placa: string; marca: string; modelo: string }>();
+      for (const v of vehicleRows.rows) {
+        const placa = String((v as any).placa || "").replace(/[-\s]/g, "").toUpperCase();
+        if (placa) vehicleMap.set(placa, { id: (v as any).id, placa: (v as any).placa, marca: (v as any).marca, modelo: (v as any).modelo });
+      }
+
+      const tipoUsoToCategoria = (tipo: string): string => {
+        const t = tipo.toLowerCase().trim();
+        if (t.includes("passag") || t.includes("pedagio") || t.includes("pedágio")) return "pedagio";
+        if (t.includes("estacion")) return "estacionamento";
+        if (t.includes("recarga") || t.includes("tag")) return "recarga_tag";
+        return "sem_parar";
+      };
+
+      const items: any[] = [];
+      const dataRows = rawRows.slice(headerIdx + 1);
+
+      for (const row of dataRows) {
+        if (!row || row.length === 0) continue;
+        const placaRaw = String(row[colMap.placa] || "").trim();
+        if (!placaRaw) continue;
+
+        const valorRaw = row[colMap.valor];
+        let valor: number;
+        if (typeof valorRaw === "number") {
+          valor = valorRaw;
+        } else {
+          let vs = String(valorRaw).replace(/[^\d.,\-]/g, "");
+          if (vs.includes(",")) {
+            vs = vs.replace(/\./g, "").replace(",", ".");
+          }
+          valor = parseFloat(vs);
+        }
+        if (isNaN(valor) || valor <= 0) continue;
+
+        if (colMap.debitoCredito !== undefined) {
+          const dc = String(row[colMap.debitoCredito] || "").toUpperCase().trim();
+          if (dc === "CR" || dc === "CRÉDITO" || dc === "CREDITO") continue;
+        }
+
+        let dataStr = String(row[colMap.data] || "").trim();
+        let dataISO = "";
+        const m = dataStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) {
+          dataISO = `${m[3]}-${m[2]}-${m[1]}`;
+        } else if (dataStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+          dataISO = dataStr.slice(0, 10);
+        } else if (typeof row[colMap.data] === "number") {
+          const excelDate = XLSX.SSF.parse_date_code(row[colMap.data]);
+          if (excelDate) {
+            dataISO = `${excelDate.y}-${String(excelDate.m).padStart(2, "0")}-${String(excelDate.d).padStart(2, "0")}`;
+          }
+        }
+        if (!dataISO) continue;
+
+        const placaNorm = placaRaw.replace(/[-\s]/g, "").toUpperCase();
+        const vehicle = vehicleMap.get(placaNorm);
+
+        const descricao = colMap.descricao !== undefined ? String(row[colMap.descricao] || "").trim() : "";
+        const tipoUso = colMap.tipoUso !== undefined ? String(row[colMap.tipoUso] || "").trim() : "";
+        const categoria = tipoUso ? tipoUsoToCategoria(tipoUso) : "pedagio";
+        const horario = colMap.horario !== undefined ? String(row[colMap.horario] || "").trim() : "";
+        const fatura = colMap.fatura !== undefined ? String(row[colMap.fatura] || "").trim() : "";
+        const sentido = colMap.sentido !== undefined ? String(row[colMap.sentido] || "").trim() : "";
+
+        const pracaPedagio = descricao + (sentido ? ` (${sentido})` : "");
+
+        items.push({
+          vehicleId: vehicle?.id || null,
+          vehiclePlaca: placaRaw,
+          vehicleInfo: vehicle ? `${vehicle.placa} — ${vehicle.marca} ${vehicle.modelo}` : null,
+          data: dataISO,
+          horario,
+          categoria,
+          descricao: tipoUso || descricao,
+          pracaPedagio: pracaPedagio,
+          valor,
+          fatura,
+          matched: !!vehicle,
+        });
+      }
+
+      const totalValor = items.reduce((s, it) => s + it.valor, 0);
+      const matched = items.filter(it => it.matched).length;
+      const unmatched = items.filter(it => !it.matched).length;
+      const placasNaoEncontradas = [...new Set(items.filter(it => !it.matched).map(it => it.vehiclePlaca))];
+
+      return {
+        items,
+        summary: {
+          total: items.length,
+          matched,
+          unmatched,
+          totalValor,
+          placasNaoEncontradas,
+        },
+      };
+    }),
+
   importTollBatch: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -4396,6 +4547,17 @@ Sempre retorne JSON válido, sem markdown.`;
       }
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
+
+      const vehicleIds = [...new Set(input.items.map(it => it.vehicleId))];
+      if (vehicleIds.length > 0) {
+        const validVehicles = await db.execute(sql`SELECT id FROM vehicles WHERE "companyId" = ${input.companyId} AND id = ANY(${vehicleIds})`);
+        const validIds = new Set((validVehicles.rows as any[]).map(r => r.id));
+        const invalidIds = vehicleIds.filter(id => !validIds.has(id));
+        if (invalidIds.length > 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Veículo(s) não pertence(m) a esta empresa: ${invalidIds.join(", ")}` });
+        }
+      }
+
       let inserted = 0;
       for (const item of input.items) {
         await db.execute(sql`

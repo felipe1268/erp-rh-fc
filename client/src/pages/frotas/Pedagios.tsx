@@ -12,11 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import {
   Milestone, Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight,
   CheckCircle2, Loader2, Sparkles, FileUp, Eye, X, Check, DollarSign, AlertTriangle, Car,
+  FileSpreadsheet, Upload, CheckCheck, AlertCircle,
 } from "lucide-react";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
 function fmt(v: any) {
@@ -54,6 +56,15 @@ export default function Pedagios() {
   const [iaSaving, setIaSaving] = useState(false);
   const iaFileRef = useRef<HTMLInputElement>(null);
 
+  const [excelDialogOpen, setExcelDialogOpen] = useState(false);
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [excelParsed, setExcelParsed] = useState<any>(null);
+  const [excelSelectedItems, setExcelSelectedItems] = useState<Set<number>>(new Set());
+  const [excelSaving, setExcelSaving] = useState(false);
+  const [excelProgress, setExcelProgress] = useState(0);
+  const [excelStage, setExcelStage] = useState<"idle" | "reading" | "parsing" | "matching" | "done" | "saving">("idle");
+  const excelFileRef = useRef<HTMLInputElement>(null);
+
   const vehicles = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
   const tolls = trpc.frotas.listTollRecords.useQuery(
     { companyId: cId, vehicleId: filterVehicle !== "all" ? parseInt(filterVehicle) : undefined },
@@ -70,6 +81,7 @@ export default function Pedagios() {
   });
   const parseMut = trpc.frotas.parseTollPdf.useMutation();
   const importBatchMut = trpc.frotas.importTollBatch.useMutation();
+  const parseExcelMut = trpc.frotas.parseTollExcel.useMutation();
 
   function openNew() {
     setEditing(null);
@@ -168,6 +180,126 @@ export default function Pedagios() {
     setIaSaving(false);
   }, [iaParsed, iaSelectedItems, cId, user]);
 
+  const handleExcelFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!["xlsx", "xls", "csv"].includes(ext || "")) {
+      toast.error("Formato inválido. Use arquivos .xlsx, .xls ou .csv");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 20MB)."); return; }
+    setExcelFile(file);
+    setExcelParsed(null);
+    setExcelSelectedItems(new Set());
+    setExcelProgress(0);
+    setExcelStage("idle");
+    setExcelDialogOpen(true);
+    e.target.value = "";
+  }, []);
+
+  const processExcel = useCallback(async () => {
+    if (!excelFile) return;
+    setExcelStage("reading");
+    setExcelProgress(10);
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        setExcelStage("parsing");
+        setExcelProgress(30);
+
+        const b64 = (reader.result as string).split(",")[1];
+
+        setExcelStage("matching");
+        setExcelProgress(50);
+
+        const result = await parseExcelMut.mutateAsync({
+          companyId: cId,
+          base64: b64,
+        });
+
+        setExcelProgress(90);
+        setExcelParsed(result);
+
+        if (result.items?.length) {
+          const validIndices = new Set<number>();
+          result.items.forEach((it: any, i: number) => {
+            if (it.matched) validIndices.add(i);
+          });
+          setExcelSelectedItems(validIndices);
+        }
+        setExcelStage("done");
+        setExcelProgress(100);
+      } catch (err: any) {
+        toast.error(err.message || "Erro ao processar planilha");
+        setExcelStage("idle");
+        setExcelProgress(0);
+      }
+    };
+    reader.readAsDataURL(excelFile);
+  }, [excelFile, cId]);
+
+  const saveExcelItems = useCallback(async () => {
+    if (!excelParsed?.items) return;
+    setExcelSaving(true);
+    setExcelStage("saving");
+    setExcelProgress(0);
+
+    const items = excelParsed.items.filter((_: any, i: number) => excelSelectedItems.has(i)).filter((it: any) => it.vehicleId);
+    if (items.length === 0) {
+      toast.error("Nenhum item com veículo válido selecionado.");
+      setExcelSaving(false);
+      setExcelStage("done");
+      setExcelProgress(100);
+      return;
+    }
+
+    try {
+      const batchSize = 50;
+      let totalInserted = 0;
+      for (let i = 0; i < items.length; i += batchSize) {
+        const batch = items.slice(i, i + batchSize);
+        const result = await importBatchMut.mutateAsync({
+          companyId: cId,
+          items: batch.map((it: any) => ({
+            vehicleId: it.vehicleId,
+            data: it.data,
+            categoria: it.categoria || "pedagio",
+            descricao: it.descricao || "",
+            pracaPedagio: it.pracaPedagio || "",
+            rodovia: "",
+            valor: it.valor,
+            tagId: "",
+            eixos: undefined,
+            observacoes: it.fatura ? `Fatura: ${it.fatura}` : "",
+          })),
+          criadoPor: user?.name || "Excel Import",
+        });
+        totalInserted += result.inserted;
+        setExcelProgress(Math.round(((i + batch.length) / items.length) * 100));
+      }
+      toast.success(`${totalInserted} lançamento(s) importado(s) com sucesso!`);
+      tolls.refetch();
+      setExcelDialogOpen(false);
+      setExcelParsed(null);
+      setExcelFile(null);
+      setExcelStage("idle");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao salvar");
+    }
+    setExcelSaving(false);
+  }, [excelParsed, excelSelectedItems, cId, user]);
+
+  const excelToggleAll = useCallback(() => {
+    if (!excelParsed?.items) return;
+    if (excelSelectedItems.size === excelParsed.items.length) {
+      setExcelSelectedItems(new Set());
+    } else {
+      setExcelSelectedItems(new Set(excelParsed.items.map((_: any, i: number) => i)));
+    }
+  }, [excelParsed, excelSelectedItems]);
+
   const allRecords = (tolls.data || []) as any[];
   const list = allRecords.filter((r: any) => {
     const d = new Date(r.data);
@@ -202,6 +334,11 @@ export default function Pedagios() {
             <Milestone className="h-5 w-5 text-indigo-600" /> Pedágios e Sem Parar
           </h1>
           <div className="flex gap-2">
+            <input type="file" accept=".xlsx,.xls,.csv" ref={excelFileRef} className="hidden" onChange={handleExcelFileSelect} />
+            <Button variant="outline" size="sm" className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+              onClick={() => excelFileRef.current?.click()}>
+              <FileSpreadsheet className="h-4 w-4 mr-1" /> Importar Excel
+            </Button>
             <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" ref={iaFileRef} className="hidden" onChange={handleIaFileSelect} />
             <Button variant="outline" size="sm" className="bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100"
               onClick={() => iaFileRef.current?.click()}>
@@ -484,6 +621,161 @@ export default function Pedagios() {
                       <Button variant="outline" onClick={() => { setIaDialogOpen(false); setIaParsed(null); setIaFile(null); }}>Cancelar</Button>
                       <Button className="bg-violet-600 hover:bg-violet-700" onClick={saveIAItems} disabled={iaSaving || iaSelectedItems.size === 0}>
                         {iaSaving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando...</> : <><Check className="h-4 w-4 mr-1" /> Importar Selecionados</>}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={excelDialogOpen} onOpenChange={(o) => { if (!parseExcelMut.isPending && !excelSaving) setExcelDialogOpen(o); }}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5 text-emerald-600" /> Importar Pedágios — Excel Sem Parar
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {excelFile && (
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <FileUp className="h-4 w-4 text-emerald-500" />
+                    <span className="font-medium">{excelFile.name}</span>
+                    <Badge variant="outline" className="text-xs">{(excelFile.size / 1024).toFixed(0)} KB</Badge>
+                  </div>
+                </div>
+              )}
+
+              {(excelStage !== "idle" && excelStage !== "done") && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                    <span className="text-muted-foreground">
+                      {excelStage === "reading" && "Lendo arquivo..."}
+                      {excelStage === "parsing" && "Interpretando planilha..."}
+                      {excelStage === "matching" && "Vinculando placas aos veículos..."}
+                      {excelStage === "saving" && "Salvando lançamentos..."}
+                    </span>
+                  </div>
+                  <Progress value={excelProgress} className="h-2" />
+                  <div className="text-right text-xs text-muted-foreground">{excelProgress}%</div>
+                </div>
+              )}
+
+              {!excelParsed && excelStage === "idle" && (
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={processExcel} disabled={parseExcelMut.isPending}>
+                  {parseExcelMut.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-4 w-4 mr-1" /> Processar Planilha</>}
+                </Button>
+              )}
+
+              {excelParsed && (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <Card className="border-emerald-200 bg-emerald-50/50">
+                      <CardContent className="p-2 text-center">
+                        <div className="text-lg font-bold text-emerald-700">{excelParsed.summary?.total || 0}</div>
+                        <div className="text-[10px] text-emerald-600 uppercase font-semibold">Total Registros</div>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-blue-200 bg-blue-50/50">
+                      <CardContent className="p-2 text-center">
+                        <div className="text-lg font-bold text-blue-700">{fmt(excelParsed.summary?.totalValor || 0)}</div>
+                        <div className="text-[10px] text-blue-600 uppercase font-semibold">Valor Total</div>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-green-200 bg-green-50/50">
+                      <CardContent className="p-2 text-center">
+                        <div className="text-lg font-bold text-green-700">{excelParsed.summary?.matched || 0}</div>
+                        <div className="text-[10px] text-green-600 uppercase font-semibold">Veículos OK</div>
+                      </CardContent>
+                    </Card>
+                    <Card className={`${(excelParsed.summary?.unmatched || 0) > 0 ? "border-amber-200 bg-amber-50/50" : "border-gray-200 bg-gray-50/50"}`}>
+                      <CardContent className="p-2 text-center">
+                        <div className={`text-lg font-bold ${(excelParsed.summary?.unmatched || 0) > 0 ? "text-amber-700" : "text-gray-500"}`}>{excelParsed.summary?.unmatched || 0}</div>
+                        <div className="text-[10px] text-amber-600 uppercase font-semibold">Sem Veículo</div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {(excelParsed.summary?.placasNaoEncontradas?.length > 0) && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                      <div className="flex items-center gap-2 text-amber-700 font-medium mb-1">
+                        <AlertCircle className="h-4 w-4" /> Placas não encontradas no cadastro:
+                      </div>
+                      <div className="flex gap-1 flex-wrap">
+                        {excelParsed.summary.placasNaoEncontradas.map((p: string) => (
+                          <Badge key={p} variant="outline" className="text-amber-700 border-amber-300">{p}</Badge>
+                        ))}
+                      </div>
+                      <p className="text-xs text-amber-600 mt-1">Cadastre estes veículos no módulo Frotas para incluí-los na importação.</p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 border-b pb-2">
+                    <Button variant="ghost" size="sm" onClick={excelToggleAll} className="text-xs">
+                      <CheckCheck className="h-3.5 w-3.5 mr-1" />
+                      {excelSelectedItems.size === excelParsed.items?.length ? "Desmarcar Todos" : "Marcar Todos"}
+                    </Button>
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {excelSelectedItems.size} de {excelParsed.items?.length || 0} selecionado(s)
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 max-h-[350px] overflow-y-auto">
+                    {excelParsed.items?.map((item: any, idx: number) => {
+                      const isSelected = excelSelectedItems.has(idx);
+                      const catInfo = CATEGORIAS[item.categoria] || { label: item.categoria, color: "bg-gray-100 text-gray-700" };
+                      return (
+                        <div key={idx}
+                          className={`rounded-lg border p-2 cursor-pointer transition-colors text-sm ${
+                            isSelected
+                              ? item.matched ? "border-emerald-300 bg-emerald-50/50" : "border-amber-300 bg-amber-50/50"
+                              : "border-muted bg-muted/20 opacity-50"
+                          }`}
+                          onClick={() => {
+                            const next = new Set(excelSelectedItems);
+                            if (next.has(idx)) next.delete(idx); else next.add(idx);
+                            setExcelSelectedItems(next);
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Checkbox checked={isSelected} className="mt-0" />
+                            <div className="flex-1 flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-muted-foreground w-[75px]">{new Date(item.data + "T12:00:00").toLocaleDateString("pt-BR")}</span>
+                              {item.horario && <span className="text-[10px] text-muted-foreground">{item.horario}</span>}
+                              <Badge className={`text-[10px] ${catInfo.color}`}>{catInfo.label}</Badge>
+                              <span className="font-medium text-xs">{item.vehiclePlaca}</span>
+                              {item.matched ? (
+                                <span className="text-[10px] text-emerald-600">{item.vehicleInfo}</span>
+                              ) : (
+                                <Badge className="bg-amber-100 text-amber-700 text-[10px]">Não cadastrada</Badge>
+                              )}
+                              <span className="text-xs text-muted-foreground flex-1 truncate">{item.pracaPedagio || item.descricao}</span>
+                              <span className="font-semibold text-xs ml-auto">{fmt(item.valor)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {excelStage === "saving" && (
+                    <div className="space-y-1">
+                      <Progress value={excelProgress} className="h-2" />
+                      <div className="text-right text-xs text-muted-foreground">Salvando... {excelProgress}%</div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 justify-between items-center pt-2 border-t">
+                    <div className="text-sm text-muted-foreground">
+                      {excelSelectedItems.size} selecionado(s) ·
+                      Total: {fmt(excelParsed.items?.filter((_: any, i: number) => excelSelectedItems.has(i)).reduce((s: number, it: any) => s + (it.valor || 0), 0))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => { setExcelDialogOpen(false); setExcelParsed(null); setExcelFile(null); setExcelStage("idle"); }}>Cancelar</Button>
+                      <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={saveExcelItems} disabled={excelSaving || excelSelectedItems.size === 0}>
+                        {excelSaving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando...</> : <><Check className="h-4 w-4 mr-1" /> Importar Selecionados</>}
                       </Button>
                     </div>
                   </div>

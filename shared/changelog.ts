@@ -8126,4 +8126,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-06 02:30:00",
   },
+  {
+    version: 1040,
+    titulo: "Importação Excel Sem Parar — Pedágios com Barra de Progresso",
+    descricao:
+      "Novo botão 'Importar Excel' na página de Pedágios para importação direta de extratos Sem Parar (.xlsx/.xls/.csv). " +
+      "Parser inteligente no backend identifica automaticamente as colunas (Fatura, Data, Horário, Placa, Tipo, Descrição, " +
+      "Tipo de Uso, Valor, Débito/Crédito, Sentido). Matching automático de placas com veículos cadastrados. " +
+      "Categorização automática (PASSAGENS→pedágio, ESTACIONAMENTO→estacionamento, JUROS/MULTA→sem_parar). " +
+      "Dialog de importação com: barra de progresso animada 0-100% (leitura→parsing→matching→salvamento), " +
+      "KPIs resumo (total registros, valor total, veículos OK, sem veículo), alerta de placas não cadastradas, " +
+      "lista com checkbox para seleção individual, marcar/desmarcar todos, salvamento em lotes de 50 com progresso. " +
+      "Filtra automaticamente créditos (apenas débitos). Registros salvos com referência à fatura nas observações.",
+    tipo: "feature",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 17:30:00",
+  },
 ];
