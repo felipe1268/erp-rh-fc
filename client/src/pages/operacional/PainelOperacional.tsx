@@ -7,11 +7,57 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import {
   ClipboardList, CheckSquare, Blocks, AlertTriangle, Camera,
-  LayoutDashboard, Plus, ArrowRight, CloudRain, Sun, CloudSun,
-  FileText, Loader2,
+  LayoutDashboard, Plus, ArrowRight, CloudRain,
+  Loader2, ShieldCheck, ClipboardCheck,
+  BookOpen, HardHat,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
+
+const submodulos = [
+  {
+    id: "diario",
+    titulo: "Diário de Obra",
+    descricao: "RDO, Registro Fotográfico e Clima",
+    icon: BookOpen,
+    cor: "from-amber-500 to-orange-500",
+    corBg: "bg-amber-50 dark:bg-amber-950/30",
+    corBorda: "border-amber-200 dark:border-amber-800",
+    corTexto: "text-amber-700 dark:text-amber-400",
+    items: [
+      { label: "RDO", path: "/operacional/rdo", icon: ClipboardList },
+      { label: "Registro Fotográfico", path: "/operacional/fotos", icon: Camera },
+    ],
+  },
+  {
+    id: "concreto",
+    titulo: "Controle de Qualidade de Concreto",
+    descricao: "Concretagem e Não Conformidades",
+    icon: Blocks,
+    cor: "from-blue-500 to-cyan-500",
+    corBg: "bg-blue-50 dark:bg-blue-950/30",
+    corBorda: "border-blue-200 dark:border-blue-800",
+    corTexto: "text-blue-700 dark:text-blue-400",
+    items: [
+      { label: "Concretagem", path: "/operacional/concretagem", icon: Blocks },
+      { label: "Não Conformidades", path: "/operacional/nc", icon: AlertTriangle },
+    ],
+  },
+  {
+    id: "checklist",
+    titulo: "Checklist",
+    descricao: "Qualidade e Liberação de Serviços",
+    icon: CheckSquare,
+    cor: "from-emerald-500 to-teal-500",
+    corBg: "bg-emerald-50 dark:bg-emerald-950/30",
+    corBorda: "border-emerald-200 dark:border-emerald-800",
+    corTexto: "text-emerald-700 dark:text-emerald-400",
+    items: [
+      { label: "Checklists de Qualidade", path: "/operacional/checklists", icon: ClipboardCheck },
+      { label: "Liberação de Serviços", path: "/operacional/liberacao-servicos", icon: ShieldCheck },
+    ],
+  },
+];
 
 export default function PainelOperacional() {
   const { companyId } = useCompany();
@@ -41,10 +87,13 @@ export default function PainelOperacional() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Painel Operacional</h1>
-          <p className="text-sm text-gray-500">Visão consolidada da obra</p>
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <HardHat className="h-7 w-7 text-amber-500" />
+            Painel Operacional
+          </h1>
+          <p className="text-sm text-gray-500">Gestão completa da obra</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={filtroStatus} onValueChange={(v) => { setFiltroStatus(v); setObraId(null); }}>
@@ -71,23 +120,64 @@ export default function PainelOperacional() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {submodulos.map((sub) => (
+          <div
+            key={sub.id}
+            className={`group relative rounded-2xl border ${sub.corBorda} ${sub.corBg} p-5 transition-all hover:shadow-lg hover:scale-[1.02] cursor-default`}
+          >
+            <div className="flex items-start gap-4 mb-4">
+              <div className={`p-3 rounded-xl bg-gradient-to-br ${sub.cor} text-white shadow-lg`}>
+                <sub.icon className="h-7 w-7" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-bold text-slate-800 dark:text-white leading-tight">{sub.titulo}</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">{sub.descricao}</p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              {sub.items.map((item) => (
+                <button
+                  key={item.path}
+                  disabled={!selectedObraId}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all
+                    bg-white/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-700 
+                    border border-transparent hover:border-slate-200 dark:hover:border-slate-600
+                    hover:shadow-sm group/item
+                    disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white/60 disabled:hover:shadow-none`}
+                  onClick={() => selectedObraId && setLocation(`${item.path}?obra=${selectedObraId}`)}
+                >
+                  <div className={`p-1.5 rounded-lg ${sub.corBg}`}>
+                    <item.icon className={`h-4 w-4 ${sub.corTexto}`} />
+                  </div>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover/item:text-slate-900 dark:group-hover/item:text-white">
+                    {item.label}
+                  </span>
+                  <ArrowRight className="h-3.5 w-3.5 text-slate-300 ml-auto opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {!selectedObraId ? (
-        <div className="text-center py-20 text-gray-400">
-          <LayoutDashboard className="w-16 h-16 mx-auto mb-4 opacity-30" />
-          <p>Selecione uma obra para visualizar o painel</p>
+        <div className="text-center py-12 text-gray-400">
+          <LayoutDashboard className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Selecione uma obra acima para ver os indicadores</p>
         </div>
       ) : dashboard.isLoading ? (
-        <div className="flex items-center justify-center py-20">
+        <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
         </div>
       ) : (
         <>
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center justify-between">
+          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <ClipboardList className="w-6 h-6 text-amber-600" />
               <div>
-                <p className="font-semibold text-amber-800">RDO de Hoje — {new Date().toLocaleDateString("pt-BR")}</p>
-                <p className="text-sm text-amber-600">
+                <p className="font-semibold text-amber-800 dark:text-amber-300">RDO de Hoje — {new Date().toLocaleDateString("pt-BR")}</p>
+                <p className="text-sm text-amber-600 dark:text-amber-400">
                   {d?.rdo?.hojeStatus === "finalizado" ? "Finalizado" :
                     d?.rdo?.hojeStatus === "rascunho" ? "Rascunho — pendente de finalização" :
                       "Não criado ainda"}
