@@ -1,11 +1,12 @@
-import { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart3, PieChart as PieIcon, Fuel, Wrench, AlertTriangle,
-  Truck, DollarSign, Activity, Users, Gauge, TrendingDown, Trophy, MapPin, Droplets, Calendar, X
+  Truck, DollarSign, Activity, Users, Gauge, TrendingDown, Trophy, MapPin, Droplets, Calendar, X,
+  Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Filter
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -176,6 +177,10 @@ export default function FrotasAnalitico() {
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
   const toggleSeries = (dataKey: string) => setHiddenSeries(prev => ({ ...prev, [dataKey]: !prev[dataKey] }));
   const [anoDash, setAnoDash] = useState<number | undefined>(new Date().getFullYear());
+  const [tblSearch, setTblSearch] = useState("");
+  const [tblSort, setTblSort] = useState<{ col: string; dir: "asc" | "desc" }>({ col: "custoTotal", dir: "desc" });
+  const [tblFilter, setTblFilter] = useState<string>("todos");
+  const [tblExpanded, setTblExpanded] = useState<Set<number>>(new Set());
 
   const dash = trpc.frotas.getDashboard.useQuery({ companyId: cId, ano: anoDash }, { enabled: cId > 0 });
   const fuel = trpc.frotas.listFuelRecords.useQuery({ companyId: cId }, { enabled: cId > 0 });
@@ -199,7 +204,8 @@ export default function FrotasAnalitico() {
       })
     : allFuelRaw;
 
-  const custosPorVeiculo = d.custoPorVeiculo.slice(0, 15);
+  const custosPorVeiculoAll = d.custoPorVeiculo || [];
+  const custosPorVeiculo = custosPorVeiculoAll.slice(0, 15);
 
   const motoristas: Record<string, { litros: number; valor: number; abastecimentos: number }> = {};
   for (const f of allFuel as any[]) {
@@ -262,6 +268,33 @@ export default function FrotasAnalitico() {
   const maxCustoVeiculo = custosPorVeiculo[0]?.custoTotal || 1;
   const maxPostoValor = topPostos[0]?.valor || 1;
   const maxDep = depTop[0]?.deprecReal || 1;
+
+  const tiposUnicos = useMemo(() => [...new Set(custosPorVeiculoAll.map((v: any) => v.tipo))].filter(Boolean).sort(), [custosPorVeiculoAll]);
+  const tblFiltered = useMemo(() => {
+    return custosPorVeiculoAll
+      .filter((v: any) => {
+        if (tblFilter !== "todos" && v.tipo !== tblFilter) return false;
+        if (tblSearch) {
+          const s = tblSearch.toLowerCase();
+          return (v.placa || "").toLowerCase().includes(s) || (v.modelo || "").toLowerCase().includes(s);
+        }
+        return true;
+      })
+      .sort((a: any, b: any) => {
+        const col = tblSort.col;
+        const av = a[col] ?? (typeof a[col] === "string" ? "" : 0);
+        const bv = b[col] ?? (typeof b[col] === "string" ? "" : 0);
+        if (typeof av === "string" && typeof bv === "string") return tblSort.dir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+        return tblSort.dir === "asc" ? (Number(av) || 0) - (Number(bv) || 0) : (Number(bv) || 0) - (Number(av) || 0);
+      });
+  }, [custosPorVeiculoAll, tblFilter, tblSearch, tblSort]);
+  const tblMaxTotal = useMemo(() => Math.max(...custosPorVeiculoAll.map((v: any) => v.custoTotal || 0), 1), [custosPorVeiculoAll]);
+  const tblTotals = useMemo(() => ({
+    geral: tblFiltered.reduce((s: number, v: any) => s + (v.custoTotal || 0), 0),
+    comb: tblFiltered.reduce((s: number, v: any) => s + (v.custoComb || 0), 0),
+    manut: tblFiltered.reduce((s: number, v: any) => s + (v.custoManut || 0), 0),
+    multas: tblFiltered.reduce((s: number, v: any) => s + (v.custoMultas || 0), 0),
+  }), [tblFiltered]);
 
   return (
     <DashboardLayout>
@@ -655,55 +688,202 @@ export default function FrotasAnalitico() {
           </Card>
         </div>
 
-        <Card>
-          <CardHeader className="pb-1">
-            <SectionTitle icon={BarChart3} title="Tabela Completa — Veículos" color="text-slate-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b bg-muted/30 text-left">
-                    <th className="py-2 px-2 font-semibold">#</th>
-                    <th className="py-2 px-2 font-semibold">Placa</th>
-                    <th className="py-2 px-2 font-semibold">Modelo</th>
-                    <th className="py-2 px-2 font-semibold">Tipo</th>
-                    <th className="py-2 px-2 text-right font-semibold text-blue-600">Combustível</th>
-                    <th className="py-2 px-2 text-right font-semibold text-emerald-600">Manutenção</th>
-                    <th className="py-2 px-2 text-right font-semibold text-red-600">Multas</th>
-                    <th className="py-2 px-2 text-right font-semibold">Total</th>
-                    <th className="py-2 px-2 text-right font-semibold">km/l</th>
-                    <th className="py-2 px-2 text-right font-semibold">R$/km</th>
-                    <th className="py-2 px-2 text-right font-semibold">Km</th>
-                    <th className="py-2 px-2 text-center font-semibold">Abast.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {custosPorVeiculo.map((v: any, i: number) => (
-                    <tr key={v.id} className="border-b hover:bg-muted/30">
-                      <td className="py-1.5 px-2 text-muted-foreground">{i + 1}</td>
-                      <td className="py-1.5 px-2"><span className="font-mono font-bold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{v.placa}</span></td>
-                      <td className="py-1.5 px-2 text-muted-foreground">{v.modelo}</td>
-                      <td className="py-1.5 px-2 text-muted-foreground">{v.tipo}</td>
-                      <td className="py-1.5 px-2 text-right text-blue-600">{v.custoComb > 0 ? fmt(v.custoComb) : "—"}</td>
-                      <td className="py-1.5 px-2 text-right text-emerald-600">{v.custoManut > 0 ? fmt(v.custoManut) : "—"}</td>
-                      <td className="py-1.5 px-2 text-right text-red-600">{v.custoMultas > 0 ? fmt(v.custoMultas) : "—"}</td>
-                      <td className="py-1.5 px-2 text-right font-bold">{fmt(v.custoTotal)}</td>
-                      <td className="py-1.5 px-2 text-right">
-                        <span className={v.consumo >= 10 ? "text-green-600 font-bold" : v.consumo >= 6 ? "text-blue-600" : v.consumo > 0 ? "text-amber-600" : ""}>
-                          {v.consumo > 0 ? fmtNum(v.consumo, 1) : "—"}
-                        </span>
-                      </td>
-                      <td className="py-1.5 px-2 text-right">{v.custoKmV > 0 ? `R$ ${fmtNum(v.custoKmV, 2)}` : "—"}</td>
-                      <td className="py-1.5 px-2 text-right">{v.km > 0 ? fmtNum(v.km, 0) : "—"}</td>
-                      <td className="py-1.5 px-2 text-center">{v.abastecimentos}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        {(() => {
+          const SortHeader = ({ col, label, className = "" }: { col: string; label: string; className?: string }) => (
+            <th
+              className={`py-2.5 px-2 font-semibold cursor-pointer select-none hover:bg-muted/50 transition-colors ${className}`}
+              onClick={() => setTblSort(prev => ({ col, dir: prev.col === col && prev.dir === "desc" ? "asc" : "desc" }))}
+            >
+              <span className="inline-flex items-center gap-1">
+                {label}
+                {tblSort.col === col ? (
+                  tblSort.dir === "desc" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />
+                ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+              </span>
+            </th>
+          );
+
+          const toggleExpand = (id: number) => {
+            setTblExpanded(prev => {
+              const next = new Set(prev);
+              next.has(id) ? next.delete(id) : next.add(id);
+              return next;
+            });
+          };
+
+          return (
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <SectionTitle icon={BarChart3} title="Tabela Completa — Veículos" color="text-slate-500" />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="Buscar placa ou modelo..."
+                        value={tblSearch}
+                        onChange={(e) => setTblSearch(e.target.value)}
+                        className="pl-8 pr-3 py-1.5 text-xs border rounded-md bg-background w-48 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <select
+                        value={tblFilter}
+                        onChange={(e) => setTblFilter(e.target.value)}
+                        className="pl-8 pr-6 py-1.5 text-xs border rounded-md bg-background appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      >
+                        <option value="todos">Todos os tipos</option>
+                        {tiposUnicos.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <Badge variant="secondary" className="text-xs">
+                      {tblFiltered.length} veículo{tblFiltered.length !== 1 ? "s" : ""}
+                    </Badge>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="px-0 pb-2">
+                <div className="grid grid-cols-4 gap-3 px-4 pb-3">
+                  <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-lg p-2.5 border">
+                    <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Custo Total</p>
+                    <p className="text-sm font-bold mt-0.5">{fmt(tblTotals.geral)}</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 rounded-lg p-2.5 border border-blue-200 dark:border-blue-800">
+                    <p className="text-[10px] text-blue-600 font-medium uppercase tracking-wide">Combustível</p>
+                    <p className="text-sm font-bold text-blue-700 dark:text-blue-400 mt-0.5">{fmt(tblTotals.comb)}</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900 rounded-lg p-2.5 border border-emerald-200 dark:border-emerald-800">
+                    <p className="text-[10px] text-emerald-600 font-medium uppercase tracking-wide">Manutenção</p>
+                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">{fmt(tblTotals.manut)}</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950 dark:to-red-900 rounded-lg p-2.5 border border-red-200 dark:border-red-800">
+                    <p className="text-[10px] text-red-600 font-medium uppercase tracking-wide">Multas</p>
+                    <p className="text-sm font-bold text-red-700 dark:text-red-400 mt-0.5">{fmt(tblTotals.multas)}</p>
+                  </div>
+                </div>
+
+                <div className="overflow-auto max-h-[600px]">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 z-10 bg-background">
+                      <tr className="border-b border-t bg-muted/40 text-left">
+                        <th className="py-2.5 px-2 w-6"></th>
+                        <SortHeader col="placa" label="Placa" />
+                        <SortHeader col="modelo" label="Modelo" />
+                        <SortHeader col="tipo" label="Tipo" />
+                        <SortHeader col="custoComb" label="Combustível" className="text-right text-blue-600" />
+                        <SortHeader col="custoManut" label="Manutenção" className="text-right text-emerald-600" />
+                        <SortHeader col="custoMultas" label="Multas" className="text-right text-red-600" />
+                        <SortHeader col="custoTotal" label="Total" className="text-right" />
+                        <th className="py-2.5 px-2 text-right font-semibold w-24">Composição</th>
+                        <SortHeader col="consumo" label="km/l" className="text-right" />
+                        <SortHeader col="custoKmV" label="R$/km" className="text-right" />
+                        <SortHeader col="abastecimentos" label="Abast." className="text-center" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tblFiltered.map((v: any, i: number) => {
+                        const isExpanded = tblExpanded.has(v.id);
+                        const combPct = v.custoTotal > 0 ? (v.custoComb / v.custoTotal) * 100 : 0;
+                        const manutPct = v.custoTotal > 0 ? (v.custoManut / v.custoTotal) * 100 : 0;
+                        const multaPct = v.custoTotal > 0 ? (v.custoMultas / v.custoTotal) * 100 : 0;
+                        const barW = tblMaxTotal > 0 ? (v.custoTotal / tblMaxTotal) * 100 : 0;
+                        return (
+                          <React.Fragment key={v.id}>
+                            <tr
+                              className={`border-b cursor-pointer transition-colors ${isExpanded ? "bg-primary/5" : "hover:bg-muted/30"}`}
+                              onClick={() => toggleExpand(v.id)}
+                            >
+                              <td className="py-2 px-2 text-muted-foreground">
+                                {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                              </td>
+                              <td className="py-2 px-2">
+                                <span className="font-mono font-bold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs">{v.placa}</span>
+                              </td>
+                              <td className="py-2 px-2 text-muted-foreground max-w-[200px] truncate">{v.modelo}</td>
+                              <td className="py-2 px-2">
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                  {v.tipo}
+                                </Badge>
+                              </td>
+                              <td className="py-2 px-2 text-right text-blue-600 font-medium">{v.custoComb > 0 ? fmt(v.custoComb) : "—"}</td>
+                              <td className="py-2 px-2 text-right text-emerald-600 font-medium">{v.custoManut > 0 ? fmt(v.custoManut) : "—"}</td>
+                              <td className="py-2 px-2 text-right text-red-600 font-medium">{v.custoMultas > 0 ? fmt(v.custoMultas) : "—"}</td>
+                              <td className="py-2 px-2 text-right font-bold">{fmt(v.custoTotal)}</td>
+                              <td className="py-2 px-2">
+                                <div className="h-3 rounded-full overflow-hidden bg-muted flex" style={{ width: `${Math.max(barW, 8)}%`, minWidth: 30 }}>
+                                  {combPct > 0 && <div className="h-full bg-blue-500" style={{ width: `${combPct}%` }} title={`Combustível: ${combPct.toFixed(0)}%`} />}
+                                  {manutPct > 0 && <div className="h-full bg-emerald-500" style={{ width: `${manutPct}%` }} title={`Manutenção: ${manutPct.toFixed(0)}%`} />}
+                                  {multaPct > 0 && <div className="h-full bg-red-500" style={{ width: `${multaPct}%` }} title={`Multas: ${multaPct.toFixed(0)}%`} />}
+                                </div>
+                              </td>
+                              <td className="py-2 px-2 text-right">
+                                {v.consumo > 0 ? (
+                                  <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                    v.consumo >= 10 ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
+                                    v.consumo >= 6 ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" :
+                                    "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+                                  }`}>
+                                    {fmtNum(v.consumo, 1)}
+                                  </span>
+                                ) : <span className="text-muted-foreground">—</span>}
+                              </td>
+                              <td className="py-2 px-2 text-right">{v.custoKmV > 0 ? `R$ ${fmtNum(v.custoKmV, 2)}` : "—"}</td>
+                              <td className="py-2 px-2 text-center">
+                                <span className="inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 rounded-full bg-muted text-[10px] font-bold">
+                                  {v.abastecimentos}
+                                </span>
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr className="bg-primary/5 border-b">
+                                <td colSpan={12} className="px-4 py-3">
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <div className="space-y-1">
+                                      <p className="text-[10px] text-muted-foreground font-medium uppercase">Quilometragem</p>
+                                      <p className="text-sm font-bold">{v.km > 0 ? `${fmtNum(v.km, 0)} km` : "Não registrado"}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-[10px] text-muted-foreground font-medium uppercase">Litros Consumidos</p>
+                                      <p className="text-sm font-bold text-blue-600">{v.litros > 0 ? `${fmtNum(v.litros, 0)} L` : "—"}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-[10px] text-muted-foreground font-medium uppercase">Custo por km</p>
+                                      <p className="text-sm font-bold">{v.custoKmV > 0 ? `R$ ${fmtNum(v.custoKmV, 2)}` : "—"}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-[10px] text-muted-foreground font-medium uppercase">Composição do Custo</p>
+                                      <div className="flex items-center gap-2 text-[10px]">
+                                        {combPct > 0 && <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-full bg-blue-500" />{combPct.toFixed(0)}% Comb.</span>}
+                                        {manutPct > 0 && <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-full bg-emerald-500" />{manutPct.toFixed(0)}% Man.</span>}
+                                        {multaPct > 0 && <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-full bg-red-500" />{multaPct.toFixed(0)}% Mult.</span>}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 bg-muted/30 font-bold">
+                        <td className="py-2.5 px-2" colSpan={4}>TOTAL ({tblFiltered.length} veículos)</td>
+                        <td className="py-2.5 px-2 text-right text-blue-600">{fmt(tblTotals.comb)}</td>
+                        <td className="py-2.5 px-2 text-right text-emerald-600">{fmt(tblTotals.manut)}</td>
+                        <td className="py-2.5 px-2 text-right text-red-600">{fmt(tblTotals.multas)}</td>
+                        <td className="py-2.5 px-2 text-right">{fmt(tblTotals.geral)}</td>
+                        <td className="py-2.5 px-2" colSpan={4}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
       </div>
     </DashboardLayout>
   );

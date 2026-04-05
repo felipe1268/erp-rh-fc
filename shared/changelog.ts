@@ -7902,4 +7902,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 19:00:00",
   },
+  {
+    version: 1026,
+    titulo: "Tabela Completa de Veículos — Layout Interativo Redesenhado",
+    descricao:
+      "Tabela de veículos no Analítico de Frotas completamente redesenhada: " +
+      "busca por placa/modelo, filtro por tipo de veículo, ordenação clicável em todas as colunas " +
+      "(placa, modelo, tipo, combustível, manutenção, multas, total, km/l, R$/km, abastecimentos), " +
+      "barra de composição visual (azul=combustível, verde=manutenção, vermelho=multas), " +
+      "linha expansível com detalhes (km, litros, custo/km, composição %), " +
+      "cards de resumo no topo (Custo Total, Combustível, Manutenção, Multas), " +
+      "rodapé com totalizadores, badges de tipo, indicadores coloridos de consumo, " +
+      "e exibição de todos os veículos (sem limite de 15). Cabeçalho sticky com scroll vertical.",
+    tipo: "melhoria",
+    modulos: "Frotas",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 20:00:00",
+  },
 ];
