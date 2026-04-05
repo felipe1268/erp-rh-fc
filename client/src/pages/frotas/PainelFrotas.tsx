@@ -141,9 +141,9 @@ export default function PainelFrotas() {
 
             <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
               <KpiCard icon={Wrench} label={anoDash ? `Manutenção ${anoDash}` : "Manutenção"} value={fmt(d.totalManutCusto)} onClick={() => navigate("/frotas/manutencoes")} color="text-emerald-600" bg="bg-emerald-50" sub={`${d.veiculosEmManutencao} em andamento`} tip="Total gasto com manutenções preventivas e corretivas — clique para ver detalhes" />
-              <KpiCard icon={Fuel} label={anoDash ? `Combustível ${anoDash}` : "Combustível"} value={fmt(d.totalCombustivel)} onClick={() => navigate("/frotas/combustivel")} color="text-blue-600" bg="bg-blue-50" tip="Total gasto com abastecimentos da frota — clique para ver registros" />
+              <KpiCard icon={Fuel} label={anoDash ? `Combustível ${anoDash}` : "Combustível"} value={fmt(d.totalCombustivel)} onClick={() => navigate("/frotas/combustivel")} color="text-sky-600" bg="bg-sky-50" tip="Total gasto com abastecimentos da frota — clique para ver registros" />
               <KpiCard icon={AlertTriangle} label={anoDash ? `Multas ${anoDash}` : "Multas"} value={fmt(d.totalMultas)} onClick={() => navigate("/frotas/multas")} color="text-red-600" bg="bg-red-50" sub={d.multasPendentes > 0 ? `${d.multasPendentes} pendentes` : "Nenhuma pendente"} tip="Total de multas de trânsito registradas no período — clique para gerenciar" />
-              <KpiCard icon={Receipt} label={anoDash ? `Pedágios ${anoDash}` : "Pedágios"} value={fmt(d.totalPedagios || 0)} onClick={() => navigate("/frotas/pedagios")} color="text-indigo-600" bg="bg-indigo-50" tip="Total gasto com pedágios da frota — clique para ver registros" />
+              <KpiCard icon={Receipt} label={anoDash ? `Pedágios ${anoDash}` : "Pedágios"} value={fmt(d.totalPedagios || 0)} onClick={() => navigate("/frotas/pedagios")} color="text-violet-600" bg="bg-violet-50" tip="Total gasto com pedágios da frota — clique para ver registros" />
               <KpiCard icon={Activity} label={anoDash ? `Custo/km ${anoDash}` : "Custo/km (M+C)"} value={d.custoKm > 0 ? `R$ ${d.custoKm.toFixed(2)}/km` : "—"} color="text-indigo-600" bg="bg-indigo-50" sub={`Oper. total: ${fmt(d.custoOperTotal)}`} tip="Custo por quilômetro rodado (manutenção + combustível) — quanto menor, mais eficiente a operação" />
             </div>
 
@@ -281,10 +281,10 @@ export default function PainelFrotas() {
                       <FinRow label="Depreciação (Compra → FIPE)" value={fmt(d.depreciacao)} color="text-red-600" />
                       <div className="border-t pt-2 mt-2" />
                       <FinRow label="Custo Manutenção" value={fmt(d.totalManutCusto)} color="text-emerald-600" />
-                      <FinRow label="Custo Combustível" value={fmt(d.totalCombustivel)} color="text-blue-600" />
+                      <FinRow label="Custo Combustível" value={fmt(d.totalCombustivel)} color="text-sky-600" />
                       <FinRow label="Multas" value={fmt(d.totalMultas)} color="text-red-600" />
-                      <FinRow label="Pedágios" value={fmt(d.totalPedagios || 0)} color="text-indigo-600" />
-                      <FinRow label="Seguros" value={fmt(d.totalSeguros || 0)} color="text-amber-600" />
+                      <FinRow label="Pedágios" value={fmt(d.totalPedagios || 0)} color="text-violet-600" />
+                      <FinRow label="Seguros" value={fmt(d.totalSeguros || 0)} color="text-orange-600" />
                       <div className="border-t pt-2 mt-2" />
                       <FinRow label="Custo Operacional Total" value={fmt(d.custoOperTotal)} bold />
                       <FinRow label="Custo por Km" value={d.custoKm > 0 ? `R$ ${d.custoKm.toFixed(2)}/km` : "—"} />
@@ -368,11 +368,11 @@ export default function PainelFrotas() {
                       <>
                         <div className="flex gap-4 mb-3 text-[10px] flex-wrap">
                           {([
-                            { key: "combustivel", label: "Combustível", bg: "bg-blue-500" },
+                            { key: "combustivel", label: "Combustível", bg: "bg-sky-500" },
                             { key: "manutencao", label: "Manutenção", bg: "bg-emerald-500" },
-                            { key: "multas", label: "Multas", bg: "bg-red-500" },
-                            { key: "pedagios", label: "Pedágios", bg: "bg-indigo-500" },
-                            { key: "seguros", label: "Seguros", bg: "bg-amber-500" },
+                            { key: "multas", label: "Multas", bg: "bg-rose-500" },
+                            { key: "pedagios", label: "Pedágios", bg: "bg-violet-500" },
+                            { key: "seguros", label: "Seguros", bg: "bg-orange-500" },
                           ] as const).map((item) => {
                             const hidden = hiddenCustos.has(item.key);
                             return (
@@ -424,11 +424,11 @@ export default function PainelFrotas() {
                                 >
                                   <span className="text-[11px] w-20 text-muted-foreground font-mono">{fmtMesAno(m)}</span>
                                   <div className="flex-1 h-5 bg-muted rounded overflow-hidden flex">
-                                    {pctComb > 0 && <div className="h-full bg-blue-500 transition-all" style={{ width: `${pctComb}%` }} />}
+                                    {pctComb > 0 && <div className="h-full bg-sky-500 transition-all" style={{ width: `${pctComb}%` }} />}
                                     {pctManut > 0 && <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pctManut}%` }} />}
-                                    {pctMultas > 0 && <div className="h-full bg-red-500 transition-all" style={{ width: `${pctMultas}%` }} />}
-                                    {pctPedag > 0 && <div className="h-full bg-indigo-500 transition-all" style={{ width: `${pctPedag}%` }} />}
-                                    {pctSegur > 0 && <div className="h-full bg-amber-500 transition-all" style={{ width: `${pctSegur}%` }} />}
+                                    {pctMultas > 0 && <div className="h-full bg-rose-500 transition-all" style={{ width: `${pctMultas}%` }} />}
+                                    {pctPedag > 0 && <div className="h-full bg-violet-500 transition-all" style={{ width: `${pctPedag}%` }} />}
+                                    {pctSegur > 0 && <div className="h-full bg-orange-500 transition-all" style={{ width: `${pctSegur}%` }} />}
                                   </div>
                                   <span className="text-[11px] font-medium w-24 text-right">{fmt(total)}</span>
                                 </div>
@@ -1573,25 +1573,25 @@ export default function PainelFrotas() {
               <div className="space-y-3">
                 {totalMes && (
                   <div className="grid grid-cols-5 gap-2 mb-2">
-                    <div className="p-2 bg-blue-50 rounded-lg border border-blue-200 text-center">
-                      <p className="text-[9px] text-blue-600 uppercase font-medium">Combustível</p>
-                      <p className="text-xs font-bold text-blue-700">{fmt(totalMes.combustivel)}</p>
+                    <div className="p-2 bg-sky-50 rounded-lg border border-sky-200 text-center">
+                      <p className="text-[9px] text-sky-600 uppercase font-medium">Combustível</p>
+                      <p className="text-xs font-bold text-sky-700">{fmt(totalMes.combustivel)}</p>
                     </div>
                     <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-200 text-center">
                       <p className="text-[9px] text-emerald-600 uppercase font-medium">Manutenção</p>
                       <p className="text-xs font-bold text-emerald-700">{fmt(totalMes.manutencao)}</p>
                     </div>
-                    <div className="p-2 bg-red-50 rounded-lg border border-red-200 text-center">
-                      <p className="text-[9px] text-red-600 uppercase font-medium">Multas</p>
-                      <p className="text-xs font-bold text-red-700">{fmt(totalMes.multas)}</p>
+                    <div className="p-2 bg-rose-50 rounded-lg border border-rose-200 text-center">
+                      <p className="text-[9px] text-rose-600 uppercase font-medium">Multas</p>
+                      <p className="text-xs font-bold text-rose-700">{fmt(totalMes.multas)}</p>
                     </div>
-                    <div className="p-2 bg-indigo-50 rounded-lg border border-indigo-200 text-center">
-                      <p className="text-[9px] text-indigo-600 uppercase font-medium">Pedágios</p>
-                      <p className="text-xs font-bold text-indigo-700">{fmt(totalMes.pedagios || 0)}</p>
+                    <div className="p-2 bg-violet-50 rounded-lg border border-violet-200 text-center">
+                      <p className="text-[9px] text-violet-600 uppercase font-medium">Pedágios</p>
+                      <p className="text-xs font-bold text-violet-700">{fmt(totalMes.pedagios || 0)}</p>
                     </div>
-                    <div className="p-2 bg-amber-50 rounded-lg border border-amber-200 text-center">
-                      <p className="text-[9px] text-amber-600 uppercase font-medium">Seguros</p>
-                      <p className="text-xs font-bold text-amber-700">{fmt(totalMes.seguros || 0)}</p>
+                    <div className="p-2 bg-orange-50 rounded-lg border border-orange-200 text-center">
+                      <p className="text-[9px] text-orange-600 uppercase font-medium">Seguros</p>
+                      <p className="text-xs font-bold text-orange-700">{fmt(totalMes.seguros || 0)}</p>
                     </div>
                   </div>
                 )}
@@ -1600,11 +1600,11 @@ export default function PainelFrotas() {
                     <thead>
                       <tr className="bg-muted/50 text-xs">
                         <th className="text-left p-2 font-medium">Veículo</th>
-                        <th className="text-right p-2 font-medium text-blue-600">Comb.</th>
+                        <th className="text-right p-2 font-medium text-sky-600">Comb.</th>
                         <th className="text-right p-2 font-medium text-emerald-600">Manut.</th>
-                        <th className="text-right p-2 font-medium text-red-600">Multas</th>
-                        <th className="text-right p-2 font-medium text-indigo-600">Pedágios</th>
-                        <th className="text-right p-2 font-medium text-amber-600">Seguros</th>
+                        <th className="text-right p-2 font-medium text-rose-600">Multas</th>
+                        <th className="text-right p-2 font-medium text-violet-600">Pedágios</th>
+                        <th className="text-right p-2 font-medium text-orange-600">Seguros</th>
                         <th className="text-right p-2 font-medium">Total</th>
                       </tr>
                     </thead>

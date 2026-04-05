@@ -685,11 +685,11 @@ export default function FrotasAnalitico() {
                       <span style={{ color: hiddenSeries[entry.dataKey] ? "#ccc" : entry.color, textDecoration: hiddenSeries[entry.dataKey] ? "line-through" : "none" }}>{value}</span>
                     )}
                   />
-                  <Bar dataKey="combustivel" name="Combustível" fill="#3b82f6" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.combustivel} />
+                  <Bar dataKey="combustivel" name="Combustível" fill="#0ea5e9" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.combustivel} />
                   <Bar dataKey="manutencao" name="Manutenção" fill="#10b981" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.manutencao} />
-                  <Bar dataKey="multas" name="Multas" fill="#ef4444" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.multas} />
-                  <Bar dataKey="pedagios" name="Pedágios" fill="#6366f1" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.pedagios} />
-                  <Bar dataKey="seguros" name="Seguros" fill="#f59e0b" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.seguros} />
+                  <Bar dataKey="multas" name="Multas" fill="#f43f5e" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.multas} />
+                  <Bar dataKey="pedagios" name="Pedágios" fill="#8b5cf6" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.pedagios} />
+                  <Bar dataKey="seguros" name="Seguros" fill="#f97316" radius={[2, 2, 0, 0]} stackId="a" hide={!!hiddenSeries.seguros} />
                   <Line type="monotone" dataKey="total" name="Total" stroke="#0f172a" strokeWidth={2} dot={{ r: 3 }} hide={!!hiddenSeries.total} />
                 </ComposedChart>
               </ResponsiveContainer>
