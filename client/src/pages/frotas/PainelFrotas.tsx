@@ -1614,7 +1614,7 @@ export default function PainelFrotas() {
       </Dialog>
 
       <Dialog open={!!idadeDialog} onOpenChange={() => setIdadeDialog(null)}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-slate-600" />
@@ -1623,7 +1623,7 @@ export default function PainelFrotas() {
           </DialogHeader>
           {d && idadeDialog && (d as any).idadeVeiculos?.[idadeDialog] ? (
             <div className="space-y-2">
-              {((d as any).idadeVeiculos[idadeDialog] as Array<{id: number, placa: string, modelo: string, marca: string, ano: string, idade: number}>).map((v) => (
+              {([...((d as any).idadeVeiculos[idadeDialog] as Array<{id: number, placa: string, modelo: string, marca: string, ano: string, idade: number}>)].sort((a, b) => a.idade - b.idade)).map((v) => (
                 <div key={v.id} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors">
                   <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
                     <Car className="h-5 w-5 text-slate-500" />
