@@ -342,9 +342,7 @@ export default function FrotasAnalitico() {
     ? (d.totalLitros > 0 && d.totalKm > 0 ? Math.round((kpiLitros / d.totalLitros) * d.totalKm) : 0)
     : d.totalKm;
   const kpiCustoKm = kpiTotalKm > 0 ? kpiCustoOper / kpiTotalKm : 0;
-  const kpiConsumoMedio = mesFiltroAtivo
-    ? (kpiLitros > 0 && kpiTotalKm > 0 ? kpiTotalKm / kpiLitros : 0)
-    : d.consumoMedio;
+  const kpiConsumoMedio = d.consumoMedio;
 
   const distCusto = [
     { name: "Combustível", value: kpiCombustivel, pct: kpiCustoOper > 0 ? Math.round((kpiCombustivel / kpiCustoOper) * 100) : 0 },
