@@ -195,10 +195,17 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   {
     id: "juridico",
     label: "Jurídico",
-    description: "Módulo Jurídico (legado — migrado para submódulos)",
+    description: "Gestão Jurídica — Trabalhista, Tributário e Civil",
     color: "amber",
     icon: "Gavel",
-    features: [],
+    features: [
+      { key: "processos-trabalhistas", label: "Processos Trabalhistas", route: "/processos-trabalhistas", icon: "Gavel" },
+      { key: "dashboard-juridico", label: "Dashboard Trabalhista", route: "/dashboards/juridico", icon: "Gavel" },
+      { key: "processos-tributarios", label: "Processos Tributários", route: "/processos-tributarios", icon: "Receipt" },
+      { key: "dashboard-tributario", label: "Dashboard Tributário", route: "/dashboards/tributario", icon: "Receipt" },
+      { key: "processos-civis", label: "Processos Cíveis", route: "/processos-civis", icon: "FileText" },
+      { key: "dashboard-civil", label: "Dashboard Civil", route: "/dashboards/civil", icon: "FileText" },
+    ],
   },
   {
     id: "juridico-trabalhista",

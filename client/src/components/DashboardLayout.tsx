@@ -174,67 +174,32 @@ const menuSectionsSST: MenuSection[] = [
   },
 ];
 
-// Jurídico Trabalhista
-const menuSectionsJuridicoTrabalhista: MenuSection[] = [
+// Jurídico (unificado — Trabalhista, Tributário, Civil)
+const menuSectionsJuridico: MenuSection[] = [
   {
     title: "Principal",
     items: [
-      { icon: LayoutDashboard, label: "Painel Trabalhista", path: "/painel/juridico" },
+      { icon: LayoutDashboard, label: "Painel Jurídico", path: "/painel/juridico" },
     ],
   },
   {
     title: "Trabalhista",
     items: [
       { icon: Gavel, label: "Processos Trabalhistas", path: "/processos-trabalhistas" },
-    ],
-  },
-  {
-    title: "Dashboards",
-    items: [
       { icon: Gavel, label: "Dashboard Trabalhista", path: "/dashboards/juridico" },
-    ],
-  },
-];
-
-// Jurídico Tributário
-const menuSectionsJuridicoTributario: MenuSection[] = [
-  {
-    title: "Principal",
-    items: [
-      { icon: LayoutDashboard, label: "Painel Tributário", path: "/painel/tributario" },
     ],
   },
   {
     title: "Tributário",
     items: [
       { icon: Scale, label: "Processos Tributários", path: "/processos-tributarios" },
-    ],
-  },
-  {
-    title: "Dashboards",
-    items: [
       { icon: Scale, label: "Dashboard Tributário", path: "/dashboards/tributario" },
-    ],
-  },
-];
-
-// Jurídico Civil
-const menuSectionsJuridicoCivil: MenuSection[] = [
-  {
-    title: "Principal",
-    items: [
-      { icon: LayoutDashboard, label: "Painel Civil", path: "/painel/civil" },
     ],
   },
   {
     title: "Civil",
     items: [
       { icon: FileText, label: "Processos Cíveis", path: "/processos-civis" },
-    ],
-  },
-  {
-    title: "Dashboards",
-    items: [
       { icon: FileText, label: "Dashboard Civil", path: "/dashboards/civil" },
     ],
   },
@@ -618,10 +583,10 @@ const menuSectionsCadastro: MenuSection[] = [
 const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "rh-dp": menuSectionsRHDP,
   "sst": menuSectionsSST,
-  "juridico": menuSectionsJuridicoTrabalhista,
-  "juridico-trabalhista": menuSectionsJuridicoTrabalhista,
-  "juridico-tributario": menuSectionsJuridicoTributario,
-  "juridico-civil": menuSectionsJuridicoCivil,
+  "juridico": menuSectionsJuridico,
+  "juridico-trabalhista": menuSectionsJuridico,
+  "juridico-tributario": menuSectionsJuridico,
+  "juridico-civil": menuSectionsJuridico,
   "avaliacao": menuSectionsAvaliacao,
   "terceiros":     menuSectionsTerceiros,
   "parceiros":     menuSectionsParceiros,
@@ -692,8 +657,8 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "sst": "/painel/sst",
   "juridico": "/painel/juridico",
   "juridico-trabalhista": "/painel/juridico",
-  "juridico-tributario": "/painel/tributario",
-  "juridico-civil": "/painel/civil",
+  "juridico-tributario": "/painel/juridico",
+  "juridico-civil": "/painel/juridico",
   "avaliacao": "/avaliacao-desempenho",
   "terceiros":      "/terceiros/painel",
   "parceiros":      "/parceiros/painel",
@@ -715,10 +680,10 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
 const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> = {
   "rh-dp": { icon: Users, color: "text-blue-400", bg: "bg-blue-500/20" },
   "sst": { icon: Shield, color: "text-emerald-400", bg: "bg-emerald-500/20" },
-  "juridico": { icon: Gavel, color: "text-slate-300", bg: "bg-slate-400/20" },
+  "juridico": { icon: Gavel, color: "text-amber-400", bg: "bg-amber-500/20" },
   "juridico-trabalhista": { icon: Gavel, color: "text-amber-400", bg: "bg-amber-500/20" },
-  "juridico-tributario": { icon: Scale, color: "text-teal-400", bg: "bg-teal-500/20" },
-  "juridico-civil": { icon: FileText, color: "text-indigo-400", bg: "bg-indigo-500/20" },
+  "juridico-tributario": { icon: Gavel, color: "text-amber-400", bg: "bg-amber-500/20" },
+  "juridico-civil": { icon: Gavel, color: "text-amber-400", bg: "bg-amber-500/20" },
   "avaliacao": { icon: Star, color: "text-amber-400", bg: "bg-amber-500/20" },
   "terceiros":     { icon: HardHat,    color: "text-orange-400", bg: "bg-orange-500/20"  },
   "parceiros":     { icon: Handshake,  color: "text-purple-400", bg: "bg-purple-500/20"  },
@@ -820,8 +785,8 @@ function DashboardLayoutContent({
   const { activeModule, setActiveModule } = useModule();
   const { isModuleEnabled, isPageEnabled } = useModuleConfig();
   const hubToConfigKey: Record<string, string> = {
-    "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
-    "juridico-trabalhista": "juridico", "juridico-tributario": "juridico", "juridico-civil": "juridico",
+    "rh-dp": "rh", "sst": "sst",
+    "juridico": "juridico", "juridico-trabalhista": "juridico", "juridico-tributario": "juridico", "juridico-civil": "juridico",
     "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
     "orcamento": "orcamento", "planejamento": "planejamento", "cadastro": "cadastro",
     "compras": "compras",
@@ -1037,9 +1002,9 @@ function DashboardLayoutContent({
     // Painéis de módulo (não precisam de permissão granular, seguem o módulo)
     map.set('/painel/rh', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
     map.set('/painel/sst', { moduleId: 'sst', featureKey: 'epis' });
-    map.set('/painel/juridico', { moduleId: 'juridico-trabalhista', featureKey: 'processos-trabalhistas' });
-    map.set('/painel/tributario', { moduleId: 'juridico-tributario', featureKey: 'processos-tributarios' });
-    map.set('/painel/civil', { moduleId: 'juridico-civil', featureKey: 'processos-civis' });
+    map.set('/painel/juridico', { moduleId: 'juridico', featureKey: 'processos-trabalhistas' });
+    map.set('/painel/tributario', { moduleId: 'juridico', featureKey: 'processos-tributarios' });
+    map.set('/painel/civil', { moduleId: 'juridico', featureKey: 'processos-civis' });
     return map;
   }, []);
 
@@ -1313,9 +1278,7 @@ function DashboardLayoutContent({
   const ALL_MODULE_DEFS = [
     { id: "rh-dp",        label: "RH & DP",      icon: Users,       color: "text-blue-400",    bg: "bg-blue-500/20",    path: "/painel/rh",            canSee: () => (permIsAdminMaster || canAccessModule("rh-dp"))        && isModEnabled("rh-dp") },
     { id: "sst",          label: "SST",           icon: Shield,      color: "text-emerald-400", bg: "bg-emerald-500/20", path: "/painel/sst",            canSee: () => (permIsAdminMaster || canAccessModule("sst"))          && isModEnabled("sst") },
-    { id: "juridico-trabalhista", label: "Trabalhista", icon: Gavel, color: "text-amber-400", bg: "bg-amber-500/20", path: "/painel/juridico", canSee: () => (permIsAdminMaster || canAccessModule("juridico-trabalhista") || canAccessModule("juridico")) && (isModEnabled("juridico-trabalhista") || isModEnabled("juridico")) },
-    { id: "juridico-tributario", label: "Tributário", icon: Scale, color: "text-teal-400", bg: "bg-teal-500/20", path: "/painel/tributario", canSee: () => (permIsAdminMaster || canAccessModule("juridico-tributario")) && (isModEnabled("juridico-tributario") || isModEnabled("juridico")) },
-    { id: "juridico-civil", label: "Civil", icon: FileText, color: "text-indigo-400", bg: "bg-indigo-500/20", path: "/painel/civil", canSee: () => (permIsAdminMaster || canAccessModule("juridico-civil")) && (isModEnabled("juridico-civil") || isModEnabled("juridico")) },
+    { id: "juridico", label: "Jurídico", icon: Gavel, color: "text-amber-400", bg: "bg-amber-500/20", path: "/painel/juridico", canSee: () => (permIsAdminMaster || canAccessModule("juridico") || canAccessModule("juridico-trabalhista") || canAccessModule("juridico-tributario") || canAccessModule("juridico-civil")) && (isModEnabled("juridico") || isModEnabled("juridico-trabalhista") || isModEnabled("juridico-tributario") || isModEnabled("juridico-civil")) },
     { id: "avaliacao",    label: "Avaliação",     icon: Star,        color: "text-amber-400",   bg: "bg-amber-500/20",   path: "/avaliacao-desempenho",  canSee: () => (permIsAdminMaster || canAccessModule("avaliacao"))    && isModEnabled("avaliacao") },
     { id: "terceiros",    label: "Terceiros",     icon: HardHat,     color: "text-orange-400",  bg: "bg-orange-500/20",  path: "/terceiros/painel",      canSee: () => (permIsAdminMaster || canAccessModule("terceiros"))    && isModEnabled("terceiros") },
     { id: "parceiros",    label: "Parceiros",     icon: Handshake,   color: "text-purple-400",  bg: "bg-purple-500/20",  path: "/parceiros/painel",      canSee: () => (permIsAdminMaster || canAccessModule("parceiros"))    && isModEnabled("parceiros") },

@@ -78,10 +78,10 @@ const MODULES: Module[] = [
     features: ["Controle de EPIs", "ASOs", "CIPA", "Base CAEPI", "Documentos SST"],
   },
   {
-    id: "juridico-trabalhista",
-    title: "Trabalhista",
-    subtitle: "Processos Trabalhistas",
-    description: "Reclamatórias trabalhistas, audiências, provisões, DataJud e análise de risco com IA.",
+    id: "juridico",
+    title: "Jurídico",
+    subtitle: "Gestão Jurídica Completa",
+    description: "Trabalhista, tributário e civil — processos, audiências, provisões, DataJud e análise de risco com IA.",
     icon: Gavel,
     accentFrom: "#1B2A4A",
     accentTo: "#D4A843",
@@ -89,35 +89,7 @@ const MODULES: Module[] = [
     iconBg: "rgba(27,42,74,0.12)",
     path: "/painel/juridico",
     active: true,
-    features: ["Processos Trabalhistas", "DataJud", "Audiências", "Análise IA"],
-  },
-  {
-    id: "juridico-tributario",
-    title: "Tributário",
-    subtitle: "Processos Tributários",
-    description: "ICMS, ISS, autos de infração, defesas fiscais e execuções tributárias.",
-    icon: Receipt,
-    accentFrom: "#0D9488",
-    accentTo: "#14B8A6",
-    accentGlow: "rgba(20,184,166,0.30)",
-    iconBg: "rgba(13,148,136,0.12)",
-    path: "/painel/tributario",
-    active: true,
-    features: ["Processos Tributários", "Autos de Infração", "Defesa Fiscal", "Execução Fiscal"],
-  },
-  {
-    id: "juridico-civil",
-    title: "Civil",
-    subtitle: "Processos Cíveis",
-    description: "Cobranças, indenizações, contratos, ações ordinárias e execuções cíveis.",
-    icon: BookOpen,
-    accentFrom: "#4F46E5",
-    accentTo: "#6366F1",
-    accentGlow: "rgba(99,102,241,0.30)",
-    iconBg: "rgba(79,70,229,0.12)",
-    path: "/painel/civil",
-    active: true,
-    features: ["Processos Cíveis", "Cobranças", "Indenizações", "Contratos"],
+    features: ["Processos Trabalhistas", "Processos Tributários", "Processos Cíveis", "DataJud", "Audiências", "Análise IA"],
   },
   {
     id: "avaliacao",
@@ -398,14 +370,22 @@ export default function ModuleHub() {
   // Filtrar módulos: habilitados no config E acessíveis pelo grupo do usuário
   const activeModules = MODULES.filter(m => {
     if (!m.active) return false;
-    if (!isModuleEnabled(hubToConfigKey[m.id] ?? m.id)) return false;
+    const configKey = hubToConfigKey[m.id] ?? m.id;
+    const modEnabled = m.id === "juridico"
+      ? (isModuleEnabled("juridico") || isModuleEnabled("juridico-trabalhista") || isModuleEnabled("juridico-tributario") || isModuleEnabled("juridico-civil"))
+      : isModuleEnabled(configKey);
+    if (!modEnabled) return false;
     // Se o usuário pertence a um grupo (e não é admin_master), filtrar por permissões do grupo
     if (hasGroup && !isAdminMaster) {
       const modDef = MODULE_DEFINITIONS.find(md => md.id === m.id);
       // Módulo sem definição = sem controle de acesso → bloquear para usuários de grupo
       if (!modDef) return false;
       // Verificar acesso ao módulo (novo sistema tem prioridade total via canAccessModule)
-      if (!canAccessModule(m.id)) return false;
+      // Para o módulo "juridico" unificado, aceitar acesso via qualquer sub-módulo
+      const canAccess = m.id === "juridico"
+        ? (canAccessModule("juridico") || canAccessModule("juridico-trabalhista") || canAccessModule("juridico-tributario") || canAccessModule("juridico-civil"))
+        : canAccessModule(m.id);
+      if (!canAccess) return false;
       // Validação adicional via rota (sistema legado ou fallback)
       const hasAnyRoute = modDef.features.some(f => groupCanAccessRoute(f.route));
       if (!hasAnyRoute) return false;
@@ -464,7 +444,14 @@ export default function ModuleHub() {
     dragOverId.current = null;
     setTimeout(() => { didDrag.current = false; }, 0);
   }
-  const disabledModules = MODULES.filter(m => m.active && !isModuleEnabled(hubToConfigKey[m.id] ?? m.id));
+  const disabledModules = MODULES.filter(m => {
+    if (!m.active) return false;
+    const configKey = hubToConfigKey[m.id] ?? m.id;
+    const enabled = m.id === "juridico"
+      ? (isModuleEnabled("juridico") || isModuleEnabled("juridico-trabalhista") || isModuleEnabled("juridico-tributario") || isModuleEnabled("juridico-civil"))
+      : isModuleEnabled(configKey);
+    return !enabled;
+  });
   const futureModules = [...MODULES.filter(m => !m.active), ...disabledModules.map(m => ({ ...m, active: false }))];
 
   return (

@@ -13,7 +13,8 @@ import {
   Calendar, Activity, Clock, DollarSign, FileText, TrendingUp,
   ShieldAlert, ExternalLink, Eye, ArrowUpRight, ArrowDownRight,
   Loader2, Users, Briefcase, Target, PieChart, Zap, Hash,
-  Bell, BellRing, CheckCheck, Settings2, RefreshCw, Trash2
+  Bell, BellRing, CheckCheck, Settings2, RefreshCw, Trash2,
+  Receipt, BookOpen
 } from "lucide-react";
 import { formatDateTime, formatDate } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
@@ -267,7 +268,7 @@ export default function PainelJuridico() {
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Painel Jurídico</h1>
-                <p className="text-muted-foreground text-xs">Gestão Jurídica Trabalhista</p>
+                <p className="text-muted-foreground text-xs">Gestão Jurídica — Trabalhista, Tributário e Civil</p>
               </div>
             </div>
           </div>
@@ -282,6 +283,37 @@ export default function PainelJuridico() {
             <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/dashboards/juridico")}>
               <BarChart3 className="h-3.5 w-3.5" /> Dashboard
             </Button>
+          </div>
+        </div>
+
+        {/* Sub-módulos */}
+        <div>
+          <h2 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Sub-módulos</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { title: "Trabalhista", subtitle: "Processos Trabalhistas", icon: Gavel, from: "#1B2A4A", to: "#D4A843", glow: "rgba(212,168,67,0.30)", path: "/processos-trabalhistas" },
+              { title: "Tributário", subtitle: "Processos Tributários", icon: Receipt, from: "#0D9488", to: "#14B8A6", glow: "rgba(20,184,166,0.30)", path: "/processos-tributarios" },
+              { title: "Civil", subtitle: "Processos Cíveis", icon: BookOpen, from: "#4F46E5", to: "#6366F1", glow: "rgba(99,102,241,0.30)", path: "/processos-civis" },
+            ].map((sub) => (
+              <button
+                key={sub.title}
+                onClick={() => navigate(sub.path)}
+                className="group relative overflow-hidden rounded-xl border border-border/60 bg-card p-4 text-left transition-all hover:shadow-lg hover:scale-[1.02] cursor-pointer"
+              >
+                <div className="absolute inset-0 opacity-[0.07] rounded-xl" style={{ background: `linear-gradient(135deg, ${sub.from}, ${sub.to})` }} />
+                <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full opacity-20 blur-2xl transition-opacity group-hover:opacity-40" style={{ background: sub.glow }} />
+                <div className="relative flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center shadow-sm" style={{ background: `linear-gradient(135deg, ${sub.from}, ${sub.to})` }}>
+                    <sub.icon className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground">{sub.title}</h3>
+                    <p className="text-xs text-muted-foreground">{sub.subtitle}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 
