@@ -207,6 +207,7 @@ const FrotasIpva = lazy(() => import("./pages/frotas/Ipva"));
 const FrotasLicenciamento = lazy(() => import("./pages/frotas/Licenciamento"));
 const FrotasSeguros = lazy(() => import("./pages/frotas/Seguros"));
 const FrotasAnalitico = lazy(() => import("./pages/frotas/FrotasAnalitico"));
+const FrotasConsolidacao = lazy(() => import("./pages/frotas/FrotasConsolidacao"));
 
 // Operacional
 const PainelOperacional = lazy(() => import("./pages/operacional/PainelOperacional"));
@@ -425,6 +426,7 @@ function Router() {
         <Route path="/frotas/licenciamento" component={FrotasLicenciamento} />
         <Route path="/frotas/seguros" component={FrotasSeguros} />
         <Route path="/frotas/analitico" component={FrotasAnalitico} />
+        <Route path="/frotas/consolidacao" component={FrotasConsolidacao} />
         {/* Operacional */}
         <Route path="/operacional/painel" component={PainelOperacional} />
         <Route path="/operacional/rdo" component={RDOPage} />

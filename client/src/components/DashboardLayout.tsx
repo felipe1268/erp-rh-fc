@@ -37,7 +37,7 @@ import {
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
-  Camera, Blocks, CheckSquare, Repeat,
+  Camera, Blocks, CheckSquare, Repeat, FileCheck2,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -505,6 +505,12 @@ const menuSectionsFrotas: MenuSection[] = [
       { icon: Receipt, label: "IPVA", path: "/frotas/ipva" },
       { icon: FileText, label: "Licenciamento", path: "/frotas/licenciamento" },
       { icon: Shield, label: "Seguros", path: "/frotas/seguros" },
+    ],
+  },
+  {
+    title: "Financeiro",
+    items: [
+      { icon: FileCheck2, label: "Consolidação", path: "/frotas/consolidacao" },
     ],
   },
   {

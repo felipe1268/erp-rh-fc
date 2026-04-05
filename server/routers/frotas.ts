@@ -210,6 +210,35 @@ async function ensureFleetTables() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     )
   `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_consolidations (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      mes INTEGER NOT NULL,
+      ano INTEGER NOT NULL,
+      custo_combustivel NUMERIC(14,2) DEFAULT 0,
+      custo_manutencao NUMERIC(14,2) DEFAULT 0,
+      custo_ipva NUMERIC(14,2) DEFAULT 0,
+      custo_multas NUMERIC(14,2) DEFAULT 0,
+      custo_licenciamento NUMERIC(14,2) DEFAULT 0,
+      custo_seguro NUMERIC(14,2) DEFAULT 0,
+      custo_total NUMERIC(14,2) DEFAULT 0,
+      qtd_abastecimentos INTEGER DEFAULT 0,
+      qtd_manutencoes INTEGER DEFAULT 0,
+      qtd_multas INTEGER DEFAULT 0,
+      litros_total NUMERIC(12,3) DEFAULT 0,
+      status VARCHAR(30) NOT NULL DEFAULT 'pendente',
+      financial_entry_id INTEGER,
+      observacoes TEXT,
+      consolidado_por_id INTEGER,
+      consolidado_por_nome VARCHAR(255),
+      data_consolidacao TIMESTAMP,
+      data_envio_financeiro TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      UNIQUE(company_id, mes, ano)
+    )
+  `);
 }
 let tablesReady = false;
 
@@ -1532,5 +1561,369 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         totalLicenciamento, totalIpvaGeral,
         tipoCombustivel, idadeFrota, custoOperTotal,
       };
+    }),
+
+  getConsolidationData: protectedProcedure
+    .input(z.object({ companyId: z.number(), mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100) }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, mes, ano } = input;
+      const startDate = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const endDate = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+
+      const fuelRes = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_total::numeric),0) as total, COUNT(*) as qtd,
+               COALESCE(SUM(litros::numeric),0) as litros,
+               COALESCE(AVG(preco_litro::numeric),0) as preco_medio
+        FROM fleet_fuel_records
+        WHERE company_id = ${companyId} AND data >= ${startDate}::date AND data < ${endDate}::date
+      `);
+      const fuel = (fuelRes as any).rows?.[0] || (fuelRes as any)[0] || {};
+
+      const maintRes = await db.execute(sql`
+        SELECT COALESCE(SUM(custo::numeric),0) as total, COUNT(*) as qtd
+        FROM fleet_maintenances
+        WHERE company_id = ${companyId} AND data_manutencao >= ${startDate}::date AND data_manutencao < ${endDate}::date
+      `);
+      const maint = (maintRes as any).rows?.[0] || (maintRes as any)[0] || {};
+
+      const finesRes = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_original::numeric),0) as total, COUNT(*) as qtd
+        FROM fleet_fines
+        WHERE company_id = ${companyId} AND data_infracao >= ${startDate}::date AND data_infracao < ${endDate}::date
+      `);
+      const fines = (finesRes as any).rows?.[0] || (finesRes as any)[0] || {};
+
+      const ipvaRes = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_total::numeric),0) as total
+        FROM fleet_ipva
+        WHERE company_id = ${companyId} AND ano_referencia = ${ano}
+          AND data_vencimento >= ${startDate}::date AND data_vencimento < ${endDate}::date
+      `);
+      const ipva = (ipvaRes as any).rows?.[0] || (ipvaRes as any)[0] || {};
+
+      const licRes = await db.execute(sql`
+        SELECT COALESCE(SUM(valor::numeric),0) as total
+        FROM fleet_licensing
+        WHERE company_id = ${companyId}
+          AND data_vencimento >= ${startDate}::date AND data_vencimento < ${endDate}::date
+      `);
+      const lic = (licRes as any).rows?.[0] || (licRes as any)[0] || {};
+
+      const segRes = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_premio::numeric),0) as total
+        FROM fleet_insurance
+        WHERE company_id = ${companyId} AND status = 'ativa'
+          AND data_inicio <= ${endDate}::date AND data_fim >= ${startDate}::date
+      `);
+      const seg = (segRes as any).rows?.[0] || (segRes as any)[0] || {};
+
+      const topPostos = await db.execute(sql`
+        SELECT posto, COUNT(*) as qtd, COALESCE(SUM(valor_total::numeric),0) as total,
+               COALESCE(SUM(litros::numeric),0) as litros,
+               COALESCE(AVG(preco_litro::numeric),0) as preco_medio
+        FROM fleet_fuel_records
+        WHERE company_id = ${companyId} AND data >= ${startDate}::date AND data < ${endDate}::date
+          AND posto IS NOT NULL AND posto != ''
+        GROUP BY posto ORDER BY total DESC LIMIT 10
+      `);
+      const postos = (topPostos as any).rows || topPostos;
+
+      const existingRes = await db.execute(sql`
+        SELECT * FROM fleet_consolidations
+        WHERE company_id = ${companyId} AND mes = ${mes} AND ano = ${ano}
+      `);
+      const existing = ((existingRes as any).rows || existingRes)[0] || null;
+
+      const custoCombustivel = n(fuel.total);
+      const custoManutencao = n(maint.total);
+      const custoIpva = n(ipva.total);
+      const custoMultas = n(fines.total);
+      const custoLicenciamento = n(lic.total);
+      const custoSeguro = n(seg.total);
+      const custoTotal = custoCombustivel + custoManutencao + custoIpva + custoMultas + custoLicenciamento + custoSeguro;
+
+      return {
+        custoCombustivel, custoManutencao, custoIpva, custoMultas, custoLicenciamento, custoSeguro,
+        custoTotal,
+        qtdAbastecimentos: parseInt(fuel.qtd) || 0,
+        qtdManutencoes: parseInt(maint.qtd) || 0,
+        qtdMultas: parseInt(fines.qtd) || 0,
+        litrosTotal: n(fuel.litros),
+        precoMedioCombustivel: n(fuel.preco_medio),
+        postos: Array.isArray(postos) ? postos : [],
+        existing,
+      };
+    }),
+
+  consolidateMonth: protectedProcedure
+    .input(z.object({
+      companyId: z.number(), mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100),
+      observacoes: z.string().max(2000).optional(),
+      enviarFinanceiro: z.boolean().default(true),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, mes, ano } = input;
+      const startDate = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const endDate = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+
+      const fuelRes = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_total::numeric),0) as total, COUNT(*) as qtd, COALESCE(SUM(litros::numeric),0) as litros
+        FROM fleet_fuel_records WHERE company_id = ${companyId} AND data >= ${startDate}::date AND data < ${endDate}::date
+      `);
+      const fuel = ((fuelRes as any).rows || fuelRes)[0] || {};
+
+      const maintRes = await db.execute(sql`
+        SELECT COALESCE(SUM(custo::numeric),0) as total, COUNT(*) as qtd
+        FROM fleet_maintenances WHERE company_id = ${companyId} AND data_manutencao >= ${startDate}::date AND data_manutencao < ${endDate}::date
+      `);
+      const maint = ((maintRes as any).rows || maintRes)[0] || {};
+
+      const finesRes = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_original::numeric),0) as total, COUNT(*) as qtd
+        FROM fleet_fines WHERE company_id = ${companyId} AND data_infracao >= ${startDate}::date AND data_infracao < ${endDate}::date
+      `);
+      const fines = ((finesRes as any).rows || finesRes)[0] || {};
+
+      const ipvaRes = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_total::numeric),0) as total
+        FROM fleet_ipva WHERE company_id = ${companyId} AND ano_referencia = ${ano}
+          AND data_vencimento >= ${startDate}::date AND data_vencimento < ${endDate}::date
+      `);
+      const ipva = ((ipvaRes as any).rows || ipvaRes)[0] || {};
+
+      const licRes = await db.execute(sql`
+        SELECT COALESCE(SUM(valor::numeric),0) as total
+        FROM fleet_licensing WHERE company_id = ${companyId}
+          AND data_vencimento >= ${startDate}::date AND data_vencimento < ${endDate}::date
+      `);
+      const lic = ((licRes as any).rows || licRes)[0] || {};
+
+      const segRes = await db.execute(sql`
+        SELECT COALESCE(SUM(valor_premio::numeric),0) as total
+        FROM fleet_insurance WHERE company_id = ${companyId} AND status = 'ativa'
+          AND data_inicio <= ${endDate}::date AND data_fim >= ${startDate}::date
+      `);
+      const seg = ((segRes as any).rows || segRes)[0] || {};
+
+      const custoCombustivel = n(fuel.total);
+      const custoManutencao = n(maint.total);
+      const custoIpva = n(ipva.total);
+      const custoMultas = n(fines.total);
+      const custoLicenciamento = n(lic.total);
+      const custoSeguro = n(seg.total);
+      const custoTotal = custoCombustivel + custoManutencao + custoIpva + custoMultas + custoLicenciamento + custoSeguro;
+
+      if (custoTotal === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum custo encontrado para este mês." });
+      }
+
+      const meses = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+      const descricao = `Consolidação Frotas - ${meses[mes]}/${ano}`;
+      const obsFinanceiro = `Combustível: R$ ${custoCombustivel.toFixed(2)} | Manutenção: R$ ${custoManutencao.toFixed(2)} | IPVA: R$ ${custoIpva.toFixed(2)} | Multas: R$ ${custoMultas.toFixed(2)} | Licenciamento: R$ ${custoLicenciamento.toFixed(2)} | Seguro: R$ ${custoSeguro.toFixed(2)}`;
+      const userId = ctx.user?.id ?? null;
+      const userName = ctx.user?.name ?? null;
+      const qtdAbast = parseInt(fuel.qtd) || 0;
+      const qtdMaint = parseInt(maint.qtd) || 0;
+      const qtdFines = parseInt(fines.qtd) || 0;
+      const litrosTotal = n(fuel.litros);
+      const obsText = input.observacoes || null;
+
+      await db.execute(sql`BEGIN`);
+      try {
+        const prevRes = await db.execute(sql`
+          SELECT financial_entry_id FROM fleet_consolidations
+          WHERE company_id = ${companyId} AND mes = ${mes} AND ano = ${ano}
+        `);
+        const prevEntryId = ((prevRes as any).rows || prevRes)[0]?.financial_entry_id;
+        if (prevEntryId) {
+          await db.execute(sql`
+            UPDATE financial_entries SET status = 'cancelado', updated_at = NOW()
+            WHERE id = ${prevEntryId}
+          `);
+        }
+
+        let financialEntryId: number | null = null;
+        if (input.enviarFinanceiro) {
+          const feRes = await db.execute(sql`
+            INSERT INTO financial_entries
+              (company_id, tipo, natureza, valor_previsto, data_competencia, data_vencimento,
+               status, descricao, observacoes, origem_modulo, criado_por_id, criado_por_nome, created_at, updated_at)
+            VALUES (${companyId}, 'despesa', 'variavel', ${custoTotal}, ${startDate}::date, ${startDate}::date,
+              'previsto', ${descricao}, ${obsFinanceiro},
+              'frotas', ${userId}, ${userName}, NOW(), NOW())
+            RETURNING id
+          `);
+          financialEntryId = ((feRes as any).rows || feRes)[0]?.id || null;
+        }
+
+        const status = input.enviarFinanceiro ? "enviado_financeiro" : "consolidado";
+        const consRes = await db.execute(sql`
+          INSERT INTO fleet_consolidations
+            (company_id, mes, ano, custo_combustivel, custo_manutencao, custo_ipva, custo_multas,
+             custo_licenciamento, custo_seguro, custo_total, qtd_abastecimentos, qtd_manutencoes, qtd_multas,
+             litros_total, status, financial_entry_id, observacoes,
+             consolidado_por_id, consolidado_por_nome, data_consolidacao, data_envio_financeiro,
+             created_at, updated_at)
+          VALUES (${companyId}, ${mes}, ${ano}, ${custoCombustivel}, ${custoManutencao}, ${custoIpva}, ${custoMultas},
+            ${custoLicenciamento}, ${custoSeguro}, ${custoTotal}, ${qtdAbast}, ${qtdMaint}, ${qtdFines},
+            ${litrosTotal}, ${status}, ${financialEntryId}, ${obsText},
+            ${userId}, ${userName}, NOW(), ${input.enviarFinanceiro ? sql`NOW()` : sql`NULL`},
+            NOW(), NOW())
+          ON CONFLICT (company_id, mes, ano) DO UPDATE SET
+            custo_combustivel = EXCLUDED.custo_combustivel,
+            custo_manutencao = EXCLUDED.custo_manutencao,
+            custo_ipva = EXCLUDED.custo_ipva,
+            custo_multas = EXCLUDED.custo_multas,
+            custo_licenciamento = EXCLUDED.custo_licenciamento,
+            custo_seguro = EXCLUDED.custo_seguro,
+            custo_total = EXCLUDED.custo_total,
+            qtd_abastecimentos = EXCLUDED.qtd_abastecimentos,
+            qtd_manutencoes = EXCLUDED.qtd_manutencoes,
+            qtd_multas = EXCLUDED.qtd_multas,
+            litros_total = EXCLUDED.litros_total,
+            status = EXCLUDED.status,
+            financial_entry_id = EXCLUDED.financial_entry_id,
+            observacoes = EXCLUDED.observacoes,
+            consolidado_por_id = EXCLUDED.consolidado_por_id,
+            consolidado_por_nome = EXCLUDED.consolidado_por_nome,
+            data_consolidacao = NOW(),
+            data_envio_financeiro = EXCLUDED.data_envio_financeiro,
+            updated_at = NOW()
+          RETURNING id
+        `);
+
+        await db.execute(sql`COMMIT`);
+
+        return {
+          id: ((consRes as any).rows || consRes)[0]?.id,
+          financialEntryId,
+          custoTotal,
+        };
+      } catch (err) {
+        await db.execute(sql`ROLLBACK`);
+        throw err;
+      }
+    }),
+
+  listConsolidations: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      if (input.ano) {
+        const res = await db.execute(sql`
+          SELECT * FROM fleet_consolidations
+          WHERE company_id = ${input.companyId} AND ano = ${input.ano}
+          ORDER BY ano DESC, mes DESC
+        `);
+        return (res as any).rows || res;
+      }
+      const res = await db.execute(sql`
+        SELECT * FROM fleet_consolidations
+        WHERE company_id = ${input.companyId}
+        ORDER BY ano DESC, mes DESC
+      `);
+      return (res as any).rows || res;
+    }),
+
+  desconsolidateMonth: protectedProcedure
+    .input(z.object({ companyId: z.number(), mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100) }))
+    .mutation(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const consRes = await db.execute(sql`
+        SELECT * FROM fleet_consolidations
+        WHERE company_id = ${input.companyId} AND mes = ${input.mes} AND ano = ${input.ano}
+      `);
+      const cons = ((consRes as any).rows || consRes)[0];
+      if (!cons) throw new TRPCError({ code: "NOT_FOUND", message: "Consolidação não encontrada." });
+
+      await db.execute(sql`BEGIN`);
+      try {
+        if (cons.financial_entry_id) {
+          await db.execute(sql`
+            UPDATE financial_entries SET status = 'cancelado', updated_at = NOW()
+            WHERE id = ${cons.financial_entry_id}
+          `);
+        }
+        await db.execute(sql`
+          DELETE FROM fleet_consolidations
+          WHERE company_id = ${input.companyId} AND mes = ${input.mes} AND ano = ${input.ano}
+        `);
+        await db.execute(sql`COMMIT`);
+      } catch (err) {
+        await db.execute(sql`ROLLBACK`);
+        throw err;
+      }
+
+      return { ok: true };
+    }),
+
+  compareGasPrices: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+
+      const fuelRes = await db.execute(sql`
+        SELECT posto, tipo_combustivel,
+               AVG(preco_litro::numeric) as preco_medio,
+               SUM(litros::numeric) as total_litros,
+               SUM(valor_total::numeric) as total_gasto,
+               COUNT(*) as qtd,
+               MIN(preco_litro::numeric) as menor_preco,
+               MAX(preco_litro::numeric) as maior_preco,
+               MAX(data) as ultimo_abastecimento
+        FROM fleet_fuel_records
+        WHERE company_id = ${input.companyId}
+          AND data >= NOW() - INTERVAL '6 months'
+          AND posto IS NOT NULL AND posto != ''
+        GROUP BY posto, tipo_combustivel
+        ORDER BY total_gasto DESC
+      `);
+      const historico = (fuelRes as any).rows || fuelRes;
+
+      let postosProximos: any[] = [];
+      try {
+        const apiKey = process.env.GOOGLE_API_KEY;
+        if (apiKey) {
+          const lat = -23.7663;
+          const lng = -53.3252;
+          const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=15000&type=gas_station&language=pt-BR&key=${apiKey}`;
+          const resp = await fetch(url);
+          const data = await resp.json();
+          if (data.results) {
+            postosProximos = data.results.map((p: any) => ({
+              nome: p.name,
+              endereco: p.vicinity,
+              rating: p.rating || 0,
+              totalRatings: p.user_ratings_total || 0,
+              aberto: p.opening_hours?.open_now ?? null,
+              lat: p.geometry?.location?.lat,
+              lng: p.geometry?.location?.lng,
+              placeId: p.place_id,
+            }));
+          }
+        }
+      } catch (_e) {}
+
+      const globalAvgRes = await db.execute(sql`
+        SELECT tipo_combustivel,
+               AVG(preco_litro::numeric) as preco_medio_geral,
+               MIN(preco_litro::numeric) as menor_preco_geral,
+               MAX(preco_litro::numeric) as maior_preco_geral
+        FROM fleet_fuel_records
+        WHERE company_id = ${input.companyId}
+          AND data >= NOW() - INTERVAL '3 months'
+          AND preco_litro IS NOT NULL AND preco_litro > 0
+        GROUP BY tipo_combustivel
+      `);
+      const mediaGeral = (globalAvgRes as any).rows || globalAvgRes;
+
+      return { historico, postosProximos, mediaGeral };
     }),
 });

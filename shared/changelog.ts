@@ -7749,4 +7749,24 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 02:15:00",
   },
+  {
+    version: 1016,
+    titulo: "Consolidação de Custos de Frotas + Comparativo de Preços de Combustível",
+    descricao:
+      "Nova tela Consolidação (Frotas > Financeiro > Consolidação) para agrupar todos os custos mensais da frota " +
+      "(combustível, manutenção, IPVA, multas, licenciamento e seguros) e gerar automaticamente um lançamento " +
+      "no módulo Financeiro como despesa para pagamento. " +
+      "Navegação com botões Jan-Dez, indicador visual de meses já consolidados. " +
+      "Comparativo de preços de combustível: análise dos postos utilizados nos últimos 6 meses com preço médio, " +
+      "faixa de preços, indicador acima/abaixo da média e alerta de renegociação. " +
+      "Pesquisa de postos próximos via Google Places API (região Umuarama-PR) com avaliação e status de funcionamento. " +
+      "Médias de preço por tipo de combustível nos últimos 3 meses. " +
+      "Histórico de consolidações com status, valores detalhados e número do lançamento financeiro. " +
+      "Possibilidade de reverter consolidação (cancela o lançamento financeiro associado). " +
+      "Tabela fleet_consolidations criada com unique constraint (company_id, mes, ano).",
+    tipo: "feature",
+    modulos: "Frotas, Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-05 04:30:00",
+  },
 ];
