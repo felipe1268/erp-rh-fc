@@ -184,17 +184,21 @@ export default function Combustivel() {
   const allRecords = fuel.data || [];
 
   const mesRef = `${anoAtual}-${String(mesAtual).padStart(2, "0")}`;
+  const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-  function prevMonth() {
-    if (mesAtual === 1) { setMesAtual(12); setAnoAtual(anoAtual - 1); }
-    else setMesAtual(mesAtual - 1);
-    setFilterDay("all");
-  }
-  function nextMonth() {
-    if (mesAtual === 12) { setMesAtual(1); setAnoAtual(anoAtual + 1); }
-    else setMesAtual(mesAtual + 1);
-    setFilterDay("all");
-  }
+  const mesesComDados = (() => {
+    const map: Record<number, number> = {};
+    allRecords.forEach((r: any) => {
+      if (r.data) {
+        const [y, m] = r.data.split('-');
+        if (parseInt(y) === anoAtual) {
+          const mi = parseInt(m);
+          map[mi] = (map[mi] || 0) + 1;
+        }
+      }
+    });
+    return map;
+  })();
 
   const availableDaysForMonth = (() => {
     const days = new Set<string>();
@@ -268,40 +272,65 @@ export default function Combustivel() {
   return (
     <DashboardLayout>
       <div className="p-2 space-y-3">
-        <div className="bg-gradient-to-r from-amber-700 to-orange-700 rounded-xl p-4 text-white">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <h1 className="text-xl font-bold flex items-center gap-2">
-                <Fuel className="h-5 w-5" /> Combustível
-              </h1>
-              <p className="text-sm text-amber-200">Controle de abastecimentos e consumo</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={prevMonth} className="text-white hover:bg-white/10">
-                <ChevronLeft className="w-5 h-5" />
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <Fuel className="h-5 w-5 text-amber-600" /> Combustível
+          </h1>
+          <div className="flex gap-2">
+            <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={handleCsv} />
+            <input type="file" accept=".pdf" ref={pdfRef} className="hidden" onChange={handlePdf} />
+            <Button variant="outline" size="sm" onClick={() => pdfRef.current?.click()} disabled={importPdfMut.isPending || pdfProgress !== null}>
+              <FileText className="h-4 w-4 mr-1" />
+              {pdfProgress !== null ? "Processando..." : "Importar PDF"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={importCsvMut.isPending}>
+              <Upload className="h-4 w-4 mr-1" /> CSV
+            </Button>
+            <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo</Button>
+          </div>
+        </div>
+
+        <div className="bg-card border rounded-xl p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAnoAtual(anoAtual - 1)}>
+                <ChevronLeft className="w-4 h-4" />
               </Button>
-              <div className="text-center min-w-[160px]">
-                <div className="text-lg font-bold">{MESES[mesAtual - 1]} {anoAtual}</div>
-                <div className="text-xs text-amber-200">{list.length} registros</div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={nextMonth} className="text-white hover:bg-white/10">
-                <ChevronRight className="w-5 h-5" />
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={handleCsv} />
-              <input type="file" accept=".pdf" ref={pdfRef} className="hidden" onChange={handlePdf} />
-              <Button variant="ghost" className="text-white hover:bg-white/10 text-sm" onClick={() => pdfRef.current?.click()} disabled={importPdfMut.isPending || pdfProgress !== null}>
-                <FileText className="h-4 w-4 mr-1" />
-                {pdfProgress !== null ? "Processando..." : "Importar PDF"}
-              </Button>
-              <Button variant="ghost" className="text-white hover:bg-white/10 text-sm" onClick={() => fileRef.current?.click()} disabled={importCsvMut.isPending}>
-                <Upload className="h-4 w-4 mr-1" /> CSV
-              </Button>
-              <Button className="bg-white text-amber-700 hover:bg-amber-50 text-sm" onClick={openNew}>
-                <Plus className="h-4 w-4 mr-1" /> Novo
+              <span className="text-sm font-bold min-w-[50px] text-center">{anoAtual}</span>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAnoAtual(anoAtual + 1)}>
+                <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Com dados</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-muted inline-block border" /> Sem dados</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-12 gap-1">
+            {MESES_ABREV.map((m, i) => {
+              const mes = i + 1;
+              const isSelected = mesAtual === mes;
+              const hasData = !!mesesComDados[mes];
+              const count = mesesComDados[mes] || 0;
+              return (
+                <button
+                  key={m}
+                  onClick={() => { setMesAtual(mes); setFilterDay("all"); }}
+                  className={`relative rounded-lg py-2 text-xs font-medium transition-all ${
+                    isSelected
+                      ? "bg-amber-600 text-white shadow-md ring-2 ring-amber-300"
+                      : hasData
+                        ? "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-900/60"
+                        : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {m}
+                  {hasData && !isSelected && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">{count > 99 ? "99+" : count}</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
