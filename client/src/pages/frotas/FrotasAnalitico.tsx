@@ -814,25 +814,23 @@ export default function FrotasAnalitico() {
             </CardHeader>
             <CardContent>
               {topMotoristas.length > 0 ? (
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={topMotoristas} margin={{ top: 5, right: 5, bottom: 60, left: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis
+                <ResponsiveContainer width="100%" height={Math.max(320, topMotoristas.length * 36)}>
+                  <BarChart data={topMotoristas} layout="vertical" margin={{ top: 5, right: 15, bottom: 5, left: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <YAxis
                       dataKey="name"
-                      tick={{ fontSize: 9, fill: "#888" }}
-                      angle={-45}
-                      textAnchor="end"
-                      interval={0}
-                      height={70}
-                      tickFormatter={(v: string) => v.length > 15 ? v.slice(0, 13) + "…" : v}
+                      type="category"
+                      tick={{ fontSize: 10, fill: "#888" }}
+                      width={130}
+                      tickFormatter={(v: string) => v.length > 18 ? v.slice(0, 16) + "…" : v}
                     />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v.toFixed(0)}`} width={55} />
+                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v.toFixed(0)}`} />
                     <Tooltip
                       formatter={(v: number, _: any, props: any) => [fmt(v), "Gasto"]}
                       labelFormatter={(name: string) => name}
                       contentStyle={{ fontSize: 12 }}
                     />
-                    <Bar dataKey="valor" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                    <Bar dataKey="valor" radius={[0, 4, 4, 0]} maxBarSize={28}>
                       {topMotoristas.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
@@ -851,25 +849,23 @@ export default function FrotasAnalitico() {
             </CardHeader>
             <CardContent>
               {topMotoristas.length > 0 ? (
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={topMotoristasPorLitros} margin={{ top: 5, right: 5, bottom: 60, left: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis
+                <ResponsiveContainer width="100%" height={Math.max(320, topMotoristasPorLitros.length * 36)}>
+                  <BarChart data={topMotoristasPorLitros} layout="vertical" margin={{ top: 5, right: 15, bottom: 5, left: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <YAxis
                       dataKey="name"
-                      tick={{ fontSize: 9, fill: "#888" }}
-                      angle={-45}
-                      textAnchor="end"
-                      interval={0}
-                      height={70}
-                      tickFormatter={(v: string) => v.length > 15 ? v.slice(0, 13) + "…" : v}
+                      type="category"
+                      tick={{ fontSize: 10, fill: "#888" }}
+                      width={130}
+                      tickFormatter={(v: string) => v.length > 18 ? v.slice(0, 16) + "…" : v}
                     />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${v.toFixed(0)}L`} width={50} />
+                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${v.toFixed(0)}L`} />
                     <Tooltip
                       formatter={(v: number) => [`${fmtNum(v, 0)}L`, "Litros"]}
                       labelFormatter={(name: string) => name}
                       contentStyle={{ fontSize: 12 }}
                     />
-                    <Bar dataKey="litros" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                    <Bar dataKey="litros" radius={[0, 4, 4, 0]} maxBarSize={28}>
                       {topMotoristasPorLitros.map((_, i) => (
                         <Cell key={i} fill={COLORS[(i + 3) % COLORS.length]} />
                       ))}
