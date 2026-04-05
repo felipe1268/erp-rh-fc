@@ -55,7 +55,7 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
 
 export default function PrecosCombustivel() {
   const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId || 0;
+  const companyId = Number(selectedCompanyId) || 0;
   const [ano, setAno] = useState(new Date().getFullYear());
   const [stations, setStations] = useState<NearbyStation[]>([]);
   const [loadingMap, setLoadingMap] = useState(false);
