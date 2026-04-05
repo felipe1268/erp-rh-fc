@@ -57,12 +57,13 @@ export default function Pedagios() {
   const iaFileRef = useRef<HTMLInputElement>(null);
 
   const [excelDialogOpen, setExcelDialogOpen] = useState(false);
-  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [excelFiles, setExcelFiles] = useState<File[]>([]);
   const [excelParsed, setExcelParsed] = useState<any>(null);
   const [excelSelectedItems, setExcelSelectedItems] = useState<Set<number>>(new Set());
   const [excelSaving, setExcelSaving] = useState(false);
   const [excelProgress, setExcelProgress] = useState(0);
   const [excelStage, setExcelStage] = useState<"idle" | "reading" | "parsing" | "matching" | "done" | "saving">("idle");
+  const [excelFileProgress, setExcelFileProgress] = useState("");
   const excelFileRef = useRef<HTMLInputElement>(null);
 
   const vehicles = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
@@ -181,64 +182,96 @@ export default function Pedagios() {
   }, [iaParsed, iaSelectedItems, cId, user]);
 
   const handleExcelFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!["xlsx", "xls", "csv"].includes(ext || "")) {
-      toast.error("Formato inválido. Use arquivos .xlsx, .xls ou .csv");
-      return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const validFiles: File[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      if (!["xlsx", "xls", "csv"].includes(ext || "")) {
+        toast.error(`Formato inválido: ${file.name}. Use .xlsx, .xls ou .csv`);
+        continue;
+      }
+      if (file.size > 20 * 1024 * 1024) { toast.error(`${file.name} muito grande (máx 20MB).`); continue; }
+      validFiles.push(file);
     }
-    if (file.size > 20 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 20MB)."); return; }
-    setExcelFile(file);
+    if (validFiles.length === 0) return;
+    setExcelFiles(validFiles);
     setExcelParsed(null);
     setExcelSelectedItems(new Set());
     setExcelProgress(0);
     setExcelStage("idle");
+    setExcelFileProgress("");
     setExcelDialogOpen(true);
     e.target.value = "";
   }, []);
 
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = () => reject(new Error(`Erro ao ler ${file.name}`));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const processExcel = useCallback(async () => {
-    if (!excelFile) return;
+    if (excelFiles.length === 0) return;
     setExcelStage("reading");
-    setExcelProgress(10);
+    setExcelProgress(0);
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        setExcelStage("parsing");
-        setExcelProgress(30);
+    try {
+      const allItems: any[] = [];
+      const totalFiles = excelFiles.length;
 
-        const b64 = (reader.result as string).split(",")[1];
+      for (let f = 0; f < totalFiles; f++) {
+        const file = excelFiles[f];
+        setExcelFileProgress(`Arquivo ${f + 1} de ${totalFiles}: ${file.name}`);
+        setExcelStage("reading");
+        setExcelProgress(Math.round((f / totalFiles) * 80));
+
+        const b64 = await readFileAsBase64(file);
 
         setExcelStage("matching");
-        setExcelProgress(50);
+        setExcelProgress(Math.round(((f + 0.5) / totalFiles) * 80));
 
         const result = await parseExcelMut.mutateAsync({
           companyId: cId,
           base64: b64,
         });
 
-        setExcelProgress(90);
-        setExcelParsed(result);
-
         if (result.items?.length) {
-          const validIndices = new Set<number>();
-          result.items.forEach((it: any, i: number) => {
-            if (it.matched) validIndices.add(i);
-          });
-          setExcelSelectedItems(validIndices);
+          for (const item of result.items) {
+            allItems.push({ ...item, _arquivo: file.name });
+          }
         }
-        setExcelStage("done");
-        setExcelProgress(100);
-      } catch (err: any) {
-        toast.error(err.message || "Erro ao processar planilha");
-        setExcelStage("idle");
-        setExcelProgress(0);
       }
-    };
-    reader.readAsDataURL(excelFile);
-  }, [excelFile, cId]);
+
+      const totalValor = allItems.reduce((s: number, it: any) => s + it.valor, 0);
+      const matched = allItems.filter((it: any) => it.matched).length;
+      const unmatched = allItems.filter((it: any) => !it.matched).length;
+      const placasNaoEncontradas = [...new Set(allItems.filter((it: any) => !it.matched).map((it: any) => it.vehiclePlaca))];
+
+      const merged = {
+        items: allItems,
+        summary: { total: allItems.length, matched, unmatched, totalValor, placasNaoEncontradas },
+      };
+
+      setExcelParsed(merged);
+      const validIndices = new Set<number>();
+      allItems.forEach((it: any, i: number) => { if (it.matched) validIndices.add(i); });
+      setExcelSelectedItems(validIndices);
+
+      setExcelStage("done");
+      setExcelProgress(100);
+      setExcelFileProgress(`${totalFiles} arquivo(s) processado(s)`);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao processar planilha(s)");
+      setExcelStage("idle");
+      setExcelProgress(0);
+      setExcelFileProgress("");
+    }
+  }, [excelFiles, cId]);
 
   const saveExcelItems = useCallback(async () => {
     if (!excelParsed?.items) return;
@@ -283,7 +316,7 @@ export default function Pedagios() {
       tolls.refetch();
       setExcelDialogOpen(false);
       setExcelParsed(null);
-      setExcelFile(null);
+      setExcelFiles([]);
       setExcelStage("idle");
     } catch (err: any) {
       toast.error(err.message || "Erro ao salvar");
@@ -334,7 +367,7 @@ export default function Pedagios() {
             <Milestone className="h-5 w-5 text-indigo-600" /> Pedágios e Sem Parar
           </h1>
           <div className="flex gap-2">
-            <input type="file" accept=".xlsx,.xls,.csv" ref={excelFileRef} className="hidden" onChange={handleExcelFileSelect} />
+            <input type="file" accept=".xlsx,.xls,.csv" multiple ref={excelFileRef} className="hidden" onChange={handleExcelFileSelect} />
             <Button variant="outline" size="sm" className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
               onClick={() => excelFileRef.current?.click()}>
               <FileSpreadsheet className="h-4 w-4 mr-1" /> Importar Excel
@@ -637,12 +670,17 @@ export default function Pedagios() {
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              {excelFile && (
+              {excelFiles.length > 0 && (
                 <div className="bg-muted/30 rounded-lg p-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <FileUp className="h-4 w-4 text-emerald-500" />
-                    <span className="font-medium">{excelFile.name}</span>
-                    <Badge variant="outline" className="text-xs">{(excelFile.size / 1024).toFixed(0)} KB</Badge>
+                  <div className="flex items-center gap-2 text-sm mb-1">
+                    <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+                    <span className="font-semibold">{excelFiles.length} arquivo(s) selecionado(s)</span>
+                    <Badge variant="outline" className="text-xs">{(excelFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(0)} KB total</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {excelFiles.map((f, i) => (
+                      <Badge key={i} className="bg-emerald-100 text-emerald-700 text-[10px]">{f.name}</Badge>
+                    ))}
                   </div>
                 </div>
               )}
@@ -658,6 +696,7 @@ export default function Pedagios() {
                       {excelStage === "saving" && "Salvando lançamentos..."}
                     </span>
                   </div>
+                  {excelFileProgress && <div className="text-xs text-muted-foreground">{excelFileProgress}</div>}
                   <Progress value={excelProgress} className="h-2" />
                   <div className="text-right text-xs text-muted-foreground">{excelProgress}%</div>
                 </div>
@@ -665,7 +704,7 @@ export default function Pedagios() {
 
               {!excelParsed && excelStage === "idle" && (
                 <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={processExcel} disabled={parseExcelMut.isPending}>
-                  {parseExcelMut.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-4 w-4 mr-1" /> Processar Planilha</>}
+                  {parseExcelMut.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-4 w-4 mr-1" /> Processar {excelFiles.length > 1 ? `${excelFiles.length} Planilhas` : "Planilha"}</>}
                 </Button>
               )}
 
@@ -773,7 +812,7 @@ export default function Pedagios() {
                       Total: {fmt(excelParsed.items?.filter((_: any, i: number) => excelSelectedItems.has(i)).reduce((s: number, it: any) => s + (it.valor || 0), 0))}
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => { setExcelDialogOpen(false); setExcelParsed(null); setExcelFile(null); setExcelStage("idle"); }}>Cancelar</Button>
+                      <Button variant="outline" onClick={() => { setExcelDialogOpen(false); setExcelParsed(null); setExcelFiles([]); setExcelStage("idle"); }}>Cancelar</Button>
                       <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={saveExcelItems} disabled={excelSaving || excelSelectedItems.size === 0}>
                         {excelSaving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando...</> : <><Check className="h-4 w-4 mr-1" /> Importar Selecionados</>}
                       </Button>
