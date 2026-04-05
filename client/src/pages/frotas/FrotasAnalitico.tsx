@@ -628,7 +628,7 @@ export default function FrotasAnalitico() {
                             {hasCur && row.custoKm > 0 ? `R$ ${row.custoKm.toFixed(2)}` : "—"}
                           </td>
                           <td className="py-2 px-2 text-right text-amber-600">
-                            {hasCur && row.litros > 0 ? fmtN(Math.round(row.litros)) : "—"}
+                            {hasCur && row.litros > 0 ? fmtNum(Math.round(row.litros), 0) : "—"}
                           </td>
                           <td className="py-2 px-2 text-right">
                             {hasCur && hasPrev && row.varTotal !== 0 ? (
@@ -673,7 +673,7 @@ export default function FrotasAnalitico() {
                       <td className="py-2 px-2 text-right text-red-600">{fmt(comparativoMensal.reduce((s, r) => s + r.multas, 0))}</td>
                       <td className="py-2 px-2 text-right">{fmt(comparativoMensal.reduce((s, r) => s + r.total, 0))}</td>
                       <td className="py-2 px-2 text-right text-purple-600">{(() => { const t = comparativoMensal.reduce((s, r) => s + r.total, 0); const k = comparativoMensal.reduce((s, r) => s + r.kmEstimado, 0); return k > 0 ? `R$ ${(t / k).toFixed(2)}` : "—"; })()}</td>
-                      <td className="py-2 px-2 text-right text-amber-600">{fmtN(Math.round(comparativoMensal.reduce((s, r) => s + r.litros, 0)))}</td>
+                      <td className="py-2 px-2 text-right text-amber-600">{fmtNum(Math.round(comparativoMensal.reduce((s, r) => s + r.litros, 0)), 0)}</td>
                       <td className="py-2 px-2" colSpan={3}></td>
                     </tr>
                   </tfoot>
