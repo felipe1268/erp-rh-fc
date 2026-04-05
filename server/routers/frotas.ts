@@ -4653,14 +4653,33 @@ Sempre retorne JSON válido, sem markdown.`;
   clearTollMonth: protectedProcedure
     .input(z.object({
       companyId: z.number(), mes: z.number().min(1).max(12), ano: z.number().min(2020).max(2100),
+      password: z.string().min(1),
     }))
     .mutation(async ({ input, ctx }) => {
       const userCid = (ctx as any).user?.companyId;
       if (userCid && String(userCid) !== String(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa." });
       }
+
+      const bcrypt = await import("bcryptjs");
+      const { users } = await import("../../drizzle/schema");
+
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
+
+      const userId = (ctx as any).user?.id;
+      if (!userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado." });
+
+      const [userRow] = await db.select().from(users).where(eq(users.id, userId));
+      if (!userRow || !userRow.password) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Usuário não possui login local com senha." });
+      }
+
+      const valid = bcrypt.compareSync(input.password, userRow.password);
+      if (!valid) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta. Operação cancelada." });
+      }
+
       const { companyId, mes, ano } = input;
       const startDate = `${ano}-${String(mes).padStart(2, "0")}-01`;
       const endDate = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;

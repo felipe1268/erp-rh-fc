@@ -57,6 +57,7 @@ export default function Pedagios() {
   const iaFileRef = useRef<HTMLInputElement>(null);
 
   const [clearMonthDialogOpen, setClearMonthDialogOpen] = useState(false);
+  const [clearMonthPassword, setClearMonthPassword] = useState("");
   const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
   const [clearAllPassword, setClearAllPassword] = useState("");
 
@@ -88,7 +89,7 @@ export default function Pedagios() {
   const importBatchMut = trpc.frotas.importTollBatch.useMutation();
   const parseExcelMut = trpc.frotas.parseTollExcel.useMutation();
   const clearMonthMut = trpc.frotas.clearTollMonth.useMutation({
-    onSuccess: (data) => { tolls.refetch(); setClearMonthDialogOpen(false); toast.success(`${data.deleted} lançamento(s) excluído(s)`); },
+    onSuccess: (data) => { tolls.refetch(); setClearMonthDialogOpen(false); setClearMonthPassword(""); toast.success(`${data.deleted} lançamento(s) excluído(s)`); },
     onError: (err) => toast.error(err.message),
   });
   const clearAllMut = trpc.frotas.clearAllTollRecords.useMutation({
@@ -388,7 +389,7 @@ export default function Pedagios() {
           </h1>
           <div className="flex gap-2">
             <input type="file" accept=".xlsx,.xls,.csv" multiple ref={excelFileRef} className="hidden" onChange={handleExcelFileSelect} />
-            <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setClearMonthDialogOpen(true)} disabled={list.length === 0}>
+            <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => { setClearMonthDialogOpen(true); setClearMonthPassword(""); }} disabled={list.length === 0}>
               <Trash2 className="h-4 w-4 mr-1" /> Limpar Mês
             </Button>
             <Button variant="outline" size="sm" className="text-red-700 border-red-300 hover:bg-red-50" onClick={() => { setClearAllDialogOpen(true); setClearAllPassword(""); }}>
@@ -901,11 +902,15 @@ export default function Pedagios() {
               <p className="text-sm">
                 Tem certeza que deseja excluir <strong>todos os {list.length} lançamento(s)</strong> de pedágio de <strong>{MESES_ABREV[mesAtual - 1]}/{anoAtual}</strong>?
               </p>
-              <p className="text-xs text-red-500 font-medium">Esta ação não pode ser desfeita.</p>
+              <p className="text-xs text-red-500 font-medium">Esta ação não pode ser desfeita. Digite sua senha para confirmar.</p>
+              <div>
+                <Label className="text-xs">Senha</Label>
+                <Input type="password" placeholder="Digite sua senha..." value={clearMonthPassword} onChange={e => setClearMonthPassword(e.target.value)} />
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setClearMonthDialogOpen(false)}>Cancelar</Button>
-              <Button variant="destructive" onClick={() => clearMonthMut.mutate({ companyId: cId, mes: mesAtual, ano: anoAtual })} disabled={clearMonthMut.isPending}>
+              <Button variant="destructive" onClick={() => clearMonthMut.mutate({ companyId: cId, mes: mesAtual, ano: anoAtual, password: clearMonthPassword })} disabled={clearMonthMut.isPending || !clearMonthPassword}>
                 {clearMonthMut.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                 Excluir {list.length} Registro(s)
               </Button>
