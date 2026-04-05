@@ -663,7 +663,7 @@ export default function Pedagios() {
           </DialogContent>
         </Dialog>
         <Dialog open={excelDialogOpen} onOpenChange={(o) => { if (!parseExcelMut.isPending && !excelSaving) setExcelDialogOpen(o); }}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-[95vw] w-[95vw] max-h-[95vh] h-[95vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <FileSpreadsheet className="h-5 w-5 text-emerald-600" /> Importar Pedágios — Excel Sem Parar
@@ -761,7 +761,7 @@ export default function Pedagios() {
                     </span>
                   </div>
 
-                  <div className="space-y-1 max-h-[350px] overflow-y-auto">
+                  <div className="space-y-1 max-h-[calc(95vh-380px)] overflow-y-auto">
                     {excelParsed.items?.map((item: any, idx: number) => {
                       const isSelected = excelSelectedItems.has(idx);
                       const catInfo = CATEGORIAS[item.categoria] || { label: item.categoria, color: "bg-gray-100 text-gray-700" };
