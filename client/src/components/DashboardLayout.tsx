@@ -1248,6 +1248,8 @@ function DashboardLayoutContent({
     { id: "financeiro",   label: "Financeiro",    icon: DollarSign,  color: "text-yellow-400",  bg: "bg-yellow-500/20",  path: "/financeiro",            canSee: () => (permIsAdminMaster || canAccessModule("financeiro"))   && isModEnabled("financeiro") },
     { id: "medicao",      label: "Medição",       icon: Construction,color: "text-orange-400",  bg: "bg-orange-500/20",  path: "/medicao",               canSee: () => (permIsAdminMaster || canAccessModule("medicao"))      && isModEnabled("medicao") },
     { id: "gestao-documentos", label: "Proj./Doc. Técnicos", icon: FolderOpen, color: "text-sky-400", bg: "bg-sky-500/20", path: "/gestao-documentos", canSee: () => (permIsAdminMaster || canAccessModule("gestao-documentos")) && isModEnabled("gestao-documentos") },
+    { id: "operacional", label: "Operacional", icon: HardHat, color: "text-amber-400", bg: "bg-amber-500/20", path: "/operacional/painel", canSee: () => (permIsAdminMaster || canAccessModule("operacional")) && isModEnabled("operacional") },
+    { id: "frotas", label: "Frotas", icon: Truck, color: "text-cyan-400", bg: "bg-cyan-500/20", path: "/frotas/painel", canSee: () => (permIsAdminMaster || canAccessModule("frotas")) && isModEnabled("frotas") },
   ];
   const visibleModuleDefs = ALL_MODULE_DEFS.filter(m => m.canSee());
   const sortedModuleDefs = moduleOrder.length === 0 ? visibleModuleDefs :
