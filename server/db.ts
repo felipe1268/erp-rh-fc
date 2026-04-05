@@ -346,9 +346,8 @@ export async function createEmployee(data: InsertEmployee) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  // Sanitizar nomeCompleto: remover tabs, quebras de linha, espaços extras
   if (data.nomeCompleto && typeof data.nomeCompleto === 'string') {
-    data = { ...data, nomeCompleto: data.nomeCompleto.replace(/[\t\r\n]/g, '').replace(/\s+/g, ' ').trim() };
+    data = { ...data, nomeCompleto: data.nomeCompleto.replace(/[\t\r\n]/g, '').replace(/\s+/g, ' ').trim().toUpperCase() };
   }
   // Normalizar cidade: Title Case + acentos corretos
   if (data.cidade && typeof data.cidade === 'string') {
@@ -499,9 +498,8 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
       sanitized[key] = value;
     }
   }
-  // Sanitizar nomeCompleto: remover tabs, quebras de linha, espaços extras
   if (sanitized.nomeCompleto && typeof sanitized.nomeCompleto === 'string') {
-    sanitized.nomeCompleto = sanitized.nomeCompleto.replace(/[\t\r\n]/g, '').replace(/\s+/g, ' ').trim();
+    sanitized.nomeCompleto = sanitized.nomeCompleto.replace(/[\t\r\n]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
   }
   // Normalizar cidade: Title Case + acentos corretos
   if (sanitized.cidade && typeof sanitized.cidade === 'string') {
