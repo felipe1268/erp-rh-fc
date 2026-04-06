@@ -2625,7 +2625,7 @@ export const processosTributarios = pgTable("processos_tributarios", {
         index("ptrib_numero").on(table.numeroProcesso),
 ]);
 
-export const processosCivis = pgTable("processos_civis", {
+export const processosCivis = pgTable("processos_civeis", {
         id: serial().notNull(),
         companyId: integer().notNull(),
         numeroProcesso: varchar({ length: 50 }).notNull(),

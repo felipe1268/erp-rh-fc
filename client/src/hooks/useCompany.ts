@@ -9,7 +9,7 @@ export function useCompany() {
     companyId,
     selectedCompanyId,
     selectedCompany,
-    isConstrutoras: false,
+    isConstrutoras: false as const,
     getCompanyIds: getCompanyIdsForQuery,
     getCompanyIdsForQuery,
     construtorasIds: [] as number[],
