@@ -139,9 +139,9 @@ export default function PainelJuridico() {
                           <div className="bg-muted/40 rounded-lg p-2">
                             <div className="flex items-center gap-1 mb-0.5">
                               <ShieldAlert className="h-3 w-3 text-red-500" />
-                              <span className="text-[9px] text-muted-foreground">Em Risco</span>
+                              <span className="text-[9px] text-muted-foreground">Provável Passivo</span>
                             </div>
-                            <span className="text-sm font-bold text-red-600">{fmtBRL(sub.data.resumo.valorEmRisco)}</span>
+                            <span className="text-sm font-bold text-red-600">{fmtBRL(sub.data.resumo.passivoProvavel ?? sub.data.resumo.valorEmRisco)}</span>
                           </div>
                           <div className="bg-muted/40 rounded-lg p-2">
                             <div className="flex items-center gap-1 mb-0.5">
@@ -150,6 +150,15 @@ export default function PainelJuridico() {
                             </div>
                             <span className="text-lg font-bold text-green-600">{sub.data.resumo.processosEncerrados}</span>
                           </div>
+                          {(sub.data.resumo.creditoReceber ?? 0) > 0 && (
+                            <div className="bg-muted/40 rounded-lg p-2">
+                              <div className="flex items-center gap-1 mb-0.5">
+                                <Scale className="h-3 w-3 text-emerald-500" />
+                                <span className="text-[9px] text-muted-foreground">A Receber</span>
+                              </div>
+                              <span className="text-sm font-bold text-emerald-600">{fmtBRL(sub.data.resumo.creditoReceber)}</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -165,13 +174,18 @@ export default function PainelJuridico() {
                   const totalProcessos = (dashTrab?.resumo.totalProcessos || 0) + (dashTrib?.resumo.totalProcessos || 0) + (dashCiv?.resumo.totalProcessos || 0);
                   const totalAtivos = (dashTrab?.resumo.processosAtivos || 0) + (dashTrib?.resumo.processosAtivos || 0) + (dashCiv?.resumo.processosAtivos || 0);
                   const totalEncerrados = (dashTrab?.resumo.processosEncerrados || 0) + (dashTrib?.resumo.processosEncerrados || 0) + (dashCiv?.resumo.processosEncerrados || 0);
-                  const totalRisco = (dashTrab?.resumo.valorEmRisco || 0) + (dashTrib?.resumo.valorEmRisco || 0) + (dashCiv?.resumo.valorEmRisco || 0);
-                  return [
+                  const totalPassivo = (dashTrab?.resumo.passivoProvavel ?? dashTrab?.resumo.valorEmRisco ?? 0) + (dashTrib?.resumo.passivoProvavel ?? dashTrib?.resumo.valorEmRisco ?? 0) + (dashCiv?.resumo.passivoProvavel ?? dashCiv?.resumo.valorEmRisco ?? 0);
+                  const totalCredito = (dashTrab?.resumo.creditoReceber ?? 0) + (dashTrib?.resumo.creditoReceber ?? 0) + (dashCiv?.resumo.creditoReceber ?? 0);
+                  const items: any[] = [
                     { label: "Total de Processos", value: totalProcessos.toString(), icon: Scale, color: "text-blue-600", bg: "bg-blue-50" },
                     { label: "Processos Ativos", value: totalAtivos.toString(), icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
                     { label: "Encerrados", value: totalEncerrados.toString(), icon: FileText, color: "text-green-600", bg: "bg-green-50" },
-                    { label: "Valor em Risco Total", value: fmtBRL(totalRisco), icon: ShieldAlert, color: "text-red-600", bg: "bg-red-50" },
+                    { label: "Provável Passivo", value: fmtBRL(totalPassivo), icon: ShieldAlert, color: "text-red-600", bg: "bg-red-50" },
                   ];
+                  if (totalCredito > 0) {
+                    items.push({ label: "Crédito a Receber", value: fmtBRL(totalCredito), icon: Scale, color: "text-emerald-600", bg: "bg-emerald-50" });
+                  }
+                  return items;
                 })().map((kpi) => (
                   <Card key={kpi.label}>
                     <CardContent className="p-3">

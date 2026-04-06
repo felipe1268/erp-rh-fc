@@ -91,6 +91,7 @@ export const processosCivisRouter = router({
       criadoPor: z.string().optional(),
       resultado: z.string().optional(),
       andamentoProcessual: z.string().optional(),
+      polo: z.enum(['passivo', 'ativo']).default('passivo'),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -118,6 +119,7 @@ export const processosCivisRouter = router({
         criadoPor: emptyToNull(input.criadoPor),
         resultado: emptyToNull(input.resultado),
         andamentoProcessual: emptyToNull(input.andamentoProcessual),
+        polo: input.polo,
       }).returning();
       return { id: result[0].id };
     }),
@@ -151,6 +153,7 @@ export const processosCivisRouter = router({
       observacoes: z.string().nullable().optional(),
       resultado: z.string().nullable().optional(),
       andamentoProcessual: z.string().nullable().optional(),
+      polo: z.enum(['passivo', 'ativo']).nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const { id, companyId, companyIds, ...data } = input;
@@ -181,6 +184,7 @@ export const processosCivisRouter = router({
       if (data.observacoes !== undefined) updateData.observacoes = data.observacoes;
       if (data.resultado !== undefined) (updateData as any).resultado = emptyToNull(data.resultado);
       if (data.andamentoProcessual !== undefined) (updateData as any).andamentoProcessual = emptyToNull(data.andamentoProcessual);
+      if (data.polo !== undefined) (updateData as any).polo = data.polo || 'passivo';
       await db.update(processosCivis).set(updateData)
         .where(and(
           eq(processosCivis.id, id),

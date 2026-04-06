@@ -126,6 +126,7 @@ const COLOR_MAP: Record<string, { bg: string; icon: string; border: string; text
   teal: { bg: "bg-teal-50", icon: "text-teal-600", border: "border-l-teal-500", text: "text-teal-600" },
   slate: { bg: "bg-slate-50", icon: "text-slate-600", border: "border-l-slate-500", text: "text-slate-600" },
   blue: { bg: "bg-blue-50", icon: "text-blue-600", border: "border-l-blue-500", text: "text-blue-600" },
+  emerald: { bg: "bg-emerald-50", icon: "text-emerald-600", border: "border-l-emerald-500", text: "text-emerald-600" },
 };
 
 function KpiCard({ title, value, icon: Icon, color, onClick, isMonetary }: {
@@ -235,7 +236,10 @@ export default function PainelCivil() {
                 <KpiCard title="Total de Processos" value={fmtNum(dashData.resumo.totalProcessos)} icon={BookOpen} color="indigo" onClick={() => navigate("/processos-civis")} />
                 <KpiCard title="Processos Ativos" value={fmtNum(dashData.resumo.processosAtivos)} icon={AlertTriangle} color="amber" onClick={() => navigate("/processos-civis")} />
                 <KpiCard title="Encerrados" value={fmtNum(dashData.resumo.processosEncerrados)} icon={FileText} color="green" onClick={() => navigate("/processos-civis")} />
-                <KpiCard title="Valor em Risco" value={fmtBRL(dashData.resumo.valorEmRisco)} icon={ShieldAlert} color="red" isMonetary />
+                <KpiCard title="Provável Passivo" value={fmtBRL(dashData.resumo.passivoProvavel ?? dashData.resumo.valorEmRisco)} icon={ShieldAlert} color="red" isMonetary />
+                {(dashData.resumo.creditoReceber ?? 0) > 0 && (
+                  <KpiCard title="Crédito a Receber" value={fmtBRL(dashData.resumo.creditoReceber)} icon={TrendingUp} color="emerald" isMonetary />
+                )}
               </div>
             </div>
 
@@ -526,7 +530,7 @@ export default function PainelCivil() {
                         return (order[a.risco] ?? 99) - (order[b.risco] ?? 99);
                       }).map((r: any) => {
                         const cfg = RISCO_CONFIG[r.risco] || RISCO_CONFIG.medio;
-                        const totalRisco = dashData.resumo.valorEmRisco;
+                        const totalRisco = dashData.resumo.passivoProvavel ?? dashData.resumo.valorEmRisco;
                         const pct = totalRisco > 0 ? Math.round((r.valor / totalRisco) * 100) : 0;
                         return (
                           <div key={r.risco}>
@@ -545,8 +549,8 @@ export default function PainelCivil() {
                       })}
                     </div>
                     <div className="mt-3 pt-2 border-t flex items-center justify-between">
-                      <span className="text-[10px] text-muted-foreground">Total em risco</span>
-                      <span className="text-sm font-bold text-red-600">{fmtBRL(dashData.resumo.valorEmRisco)}</span>
+                      <span className="text-[10px] text-muted-foreground">Provável passivo</span>
+                      <span className="text-sm font-bold text-red-600">{fmtBRL(dashData.resumo.passivoProvavel ?? dashData.resumo.valorEmRisco)}</span>
                     </div>
                   </CardContent>
                 </Card>

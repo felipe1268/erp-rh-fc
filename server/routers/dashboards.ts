@@ -1320,6 +1320,8 @@ async function getDashJuridico(companyId: number, companyIds?: number[]) {
       totalValorAcordo: Math.round(totalValorAcordo * 100) / 100,
       totalValorPago: Math.round(totalValorPago * 100) / 100,
       valorEmRisco: Math.round(Object.values(valorPorRisco).reduce((s, v) => s + v, 0) * 100) / 100,
+      passivoProvavel: Math.round(Object.values(valorPorRisco).reduce((s, v) => s + v, 0) * 100) / 100,
+      creditoReceber: 0,
     },
     porStatus: Object.entries(porStatus).map(([label, value]) => ({ label: label.replace(/_/g, " "), value })),
     porRisco: Object.entries(porRisco).map(([label, value]) => ({ label, value })),
@@ -1519,10 +1521,18 @@ async function getDashCivil(companyId: number, companyIds?: number[]) {
     .map(([mes, count]) => ({ mes, count }));
 
   const valorPorRisco: Record<string, number> = {};
+  let passivoProvavel = 0, creditoReceber = 0;
   for (const p of allProcessos) {
     if (p.status !== "encerrado" && p.status !== "arquivado") {
       const risco = p.risco || "medio";
-      valorPorRisco[risco] = (valorPorRisco[risco] || 0) + parseBRLVal(p.valorCausa);
+      const val = parseBRLVal(p.valorCausa);
+      const polo = (p as any).polo || "passivo";
+      if (polo === "ativo") {
+        creditoReceber += val;
+      } else {
+        valorPorRisco[risco] = (valorPorRisco[risco] || 0) + val;
+        passivoProvavel += val;
+      }
     }
   }
 
@@ -1551,7 +1561,9 @@ async function getDashCivil(companyId: number, companyIds?: number[]) {
       totalValorCondenacao: Math.round(totalValorCondenacao * 100) / 100,
       totalValorAcordo: Math.round(totalValorAcordo * 100) / 100,
       totalValorPago: Math.round(totalValorPago * 100) / 100,
-      valorEmRisco: Math.round(Object.values(valorPorRisco).reduce((s, v) => s + v, 0) * 100) / 100,
+      valorEmRisco: Math.round(passivoProvavel * 100) / 100,
+      passivoProvavel: Math.round(passivoProvavel * 100) / 100,
+      creditoReceber: Math.round(creditoReceber * 100) / 100,
     },
     porStatus: Object.entries(porStatus).map(([label, value]) => ({ label: label.replace(/_/g, " "), value })),
     porRisco: Object.entries(porRisco).map(([label, value]) => ({ label, value })),

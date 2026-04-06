@@ -93,6 +93,7 @@ export default function ProcessosCivis() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRisco, setFilterRisco] = useState("all");
   const [filterResultado, setFilterResultado] = useState("all");
+  const [filterPolo, setFilterPolo] = useState("all");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -118,6 +119,7 @@ export default function ProcessosCivis() {
     risco: "medio" as string,
     objetoAcao: "",
     observacoes: "",
+    polo: "passivo" as string,
   });
 
   const processos = trpc.processosCivis.listar.useQuery(
@@ -237,6 +239,7 @@ export default function ProcessosCivis() {
       status: form.status as "em_andamento" | "aguardando_audiencia" | "aguardando_pericia" | "recurso" | "execucao" | "sentenca" | "acordo" | "arquivado" | "encerrado",
       fase: form.fase as "conhecimento" | "instrucao" | "decisoria" | "recursal" | "execucao" | "encerrado",
       risco: form.risco as "baixo" | "medio" | "alto" | "critico",
+      polo: form.polo as "passivo" | "ativo",
       criadoPor: user?.name || undefined,
     });
   }
@@ -255,8 +258,9 @@ export default function ProcessosCivis() {
     if (filterStatus !== "all") items = items.filter(p => p.status === filterStatus);
     if (filterRisco !== "all") items = items.filter(p => p.risco === filterRisco);
     if (filterResultado !== "all") items = items.filter((p: any) => p.resultado === filterResultado);
+    if (filterPolo !== "all") items = items.filter((p: any) => (p.polo || "passivo") === filterPolo);
     return items;
-  }, [processos.data, searchTerm, filterStatus, filterRisco, filterResultado]);
+  }, [processos.data, searchTerm, filterStatus, filterRisco, filterResultado, filterPolo]);
 
   const toggleSelect = (id: number) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -333,6 +337,13 @@ export default function ProcessosCivis() {
                             </select>
                           </div>
                           <div>
+                            <label className="text-xs text-muted-foreground">Polo</label>
+                            <select className="w-full border rounded px-2 py-1 text-sm" value={form.polo} onChange={e => setForm(f => ({ ...f, polo: e.target.value }))}>
+                              <option value="passivo">Passivo (Réu)</option>
+                              <option value="ativo">Ativo (Autor)</option>
+                            </select>
+                          </div>
+                          <div>
                             <label className="text-xs text-muted-foreground">Valor da Causa</label>
                             <input className="w-full border rounded px-2 py-1 text-sm" value={form.valorCausa} onChange={e => setForm(f => ({ ...f, valorCausa: e.target.value }))} />
                           </div>
@@ -358,6 +369,7 @@ export default function ProcessosCivis() {
                         <div className="flex justify-between"><span className="text-muted-foreground">Autor</span><span>{p.autor}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Réu</span><span>{p.reu}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Tipo de Ação</span><span>{TIPO_ACAO_LABELS[p.tipoAcao]}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Polo</span><span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${(p as any).polo === "ativo" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>{(p as any).polo === "ativo" ? "Ativo (Autor)" : "Passivo (Réu)"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Fase</span><span>{FASE_LABELS[p.fase]}</span></div>
                         {p.vara && <div className="flex justify-between"><span className="text-muted-foreground">Vara</span><span>{p.vara}</span></div>}
                         {p.comarca && <div className="flex justify-between"><span className="text-muted-foreground">Comarca</span><span>{p.comarca}</span></div>}
@@ -366,7 +378,7 @@ export default function ProcessosCivis() {
                         {p.advogadoReu && <div className="flex justify-between"><span className="text-muted-foreground">Advogado Réu</span><span>{p.advogadoReu}</span></div>}
                         {p.objetoAcao && <div><span className="text-muted-foreground block">Objeto da Ação</span><span className="text-sm">{p.objetoAcao}</span></div>}
                         <Button size="sm" variant="outline" className="mt-2" onClick={() => {
-                          setForm({ ...form, tipoAcao: p.tipoAcao, status: p.status, fase: p.fase, risco: p.risco, valorCausa: p.valorCausa || "", objetoAcao: p.objetoAcao || "", observacoes: p.observacoes || "" });
+                          setForm({ ...form, tipoAcao: p.tipoAcao, status: p.status, fase: p.fase, risco: p.risco, valorCausa: p.valorCausa || "", objetoAcao: p.objetoAcao || "", observacoes: p.observacoes || "", polo: (p as any).polo || "passivo" });
                           setEditingId(p.id);
                         }}><Pencil className="h-3 w-3 mr-1" /> Editar</Button>
                       </>
@@ -644,6 +656,13 @@ export default function ProcessosCivis() {
                     {Object.entries(RISCO_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                   </select>
                 </div>
+                <div>
+                  <label className="text-sm font-medium">Polo</label>
+                  <select className="w-full border rounded px-3 py-2 text-sm" value={form.polo} onChange={e => setForm(f => ({ ...f, polo: e.target.value }))}>
+                    <option value="passivo">Passivo (Réu)</option>
+                    <option value="ativo">Ativo (Autor)</option>
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="text-sm font-medium">Objeto da Ação</label>
@@ -685,26 +704,39 @@ export default function ProcessosCivis() {
           </div>
         </div>
 
-        {stats.data && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Card><CardContent className="p-3">
-              <div className="text-xs text-muted-foreground">Total</div>
-              <div className="text-2xl font-bold">{stats.data.total}</div>
-            </CardContent></Card>
-            <Card><CardContent className="p-3">
-              <div className="text-xs text-muted-foreground">Em Andamento</div>
-              <div className="text-2xl font-bold text-blue-600">{stats.data.emAndamento}</div>
-            </CardContent></Card>
-            <Card><CardContent className="p-3">
-              <div className="text-xs text-muted-foreground">Encerrados</div>
-              <div className="text-2xl font-bold text-green-600">{stats.data.encerrados}</div>
-            </CardContent></Card>
-            <Card><CardContent className="p-3">
-              <div className="text-xs text-muted-foreground">Valor em Causa</div>
-              <div className="text-lg font-bold text-red-600">{stats.data.totalValorCausa.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}</div>
-            </CardContent></Card>
-          </div>
-        )}
+        {stats.data && (() => {
+          const lista = processos.data ?? [];
+          const ativos = lista.filter((p: any) => p.status !== "encerrado" && p.status !== "arquivado");
+          const encerrados = lista.filter((p: any) => p.status === "encerrado" || p.status === "arquivado");
+          const parseBRL = (v: any) => { if (!v) return 0; const s = String(v).replace(/[R$\s.]/g, "").replace(",", "."); return parseFloat(s) || 0; };
+          const passivo = ativos.filter((p: any) => (p.polo || "passivo") === "passivo").reduce((s: number, p: any) => s + parseBRL(p.valorCausa), 0);
+          const credito = ativos.filter((p: any) => p.polo === "ativo").reduce((s: number, p: any) => s + parseBRL(p.valorCausa), 0);
+          const fBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <Card><CardContent className="p-3">
+                <div className="text-xs text-muted-foreground">Total</div>
+                <div className="text-2xl font-bold">{lista.length}</div>
+              </CardContent></Card>
+              <Card><CardContent className="p-3">
+                <div className="text-xs text-muted-foreground">Em Andamento</div>
+                <div className="text-2xl font-bold text-blue-600">{ativos.length}</div>
+              </CardContent></Card>
+              <Card><CardContent className="p-3">
+                <div className="text-xs text-muted-foreground">Encerrados</div>
+                <div className="text-2xl font-bold text-green-600">{encerrados.length}</div>
+              </CardContent></Card>
+              <Card><CardContent className="p-3">
+                <div className="text-xs text-muted-foreground">Provável Passivo</div>
+                <div className="text-lg font-bold text-red-600">{fBRL(passivo)}</div>
+              </CardContent></Card>
+              <Card><CardContent className="p-3">
+                <div className="text-xs text-muted-foreground">Crédito a Receber</div>
+                <div className="text-lg font-bold text-emerald-600">{fBRL(credito)}</div>
+              </CardContent></Card>
+            </div>
+          );
+        })()}
 
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[200px]">
@@ -725,6 +757,11 @@ export default function ProcessosCivis() {
             <option value="acordo">Acordo</option>
             <option value="condenacao_estimada">Condenação Estimada</option>
             <option value="pendente">Pendente</option>
+          </select>
+          <select className="border rounded px-3 py-2 text-sm" value={filterPolo} onChange={e => setFilterPolo(e.target.value)}>
+            <option value="all">Todos os Polos</option>
+            <option value="passivo">Passivo (Réu)</option>
+            <option value="ativo">Ativo (Autor)</option>
           </select>
           {selectedIds.length > 0 && (
             <Button size="sm" variant="destructive" onClick={() => setShowBatchDeleteDialog(true)}>
@@ -760,6 +797,9 @@ export default function ProcessosCivis() {
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700">
                           {TIPO_ACAO_LABELS[p.tipoAcao] || p.tipoAcao}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${(p as any).polo === "ativo" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                          {(p as any).polo === "ativo" ? "Polo Ativo" : "Polo Passivo"}
                         </span>
                       </div>
                       <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">

@@ -2658,6 +2658,7 @@ export const processosCivis = pgTable("processos_civeis", {
         deletedByUserId: integer(),
         resultado: varchar({ length: 50 }),
         andamentoProcessual: text(),
+        polo: varchar({ length: 20 }).default('passivo'),
 },
 (table) => [
         index("pciv_company").on(table.companyId),
