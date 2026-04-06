@@ -447,8 +447,15 @@ export default function ProcessosTrabalhistas() {
     const altoCritico = ativos.filter(p => p.risco === 'alto' || p.risco === 'critico').length;
     const passivoAberto = ativos.reduce((sum, p) => sum + Number(p.valorCausa || 0), 0);
     const passivoEncerrado = encerradosList.reduce((sum, p) => sum + Number(p.valorCausa || 0), 0);
-    const totalValorPago = items.reduce((sum, p) => sum + Number(p.valorPago || 0), 0);
-    return { total: items.length, emAndamento, encerrados, altoCritico, passivoAberto, passivoEncerrado, totalValorPago };
+    const totalPagoOuCondenacao = items.reduce((sum, p) => {
+      const pago = Number(p.valorPago || 0);
+      if (pago > 0) return sum + pago;
+      if (isEncerrado(p) && (p.resultado === 'acordo' || p.resultado === 'condenacao_estimada')) {
+        return sum + Number(p.valorCondenacao || 0);
+      }
+      return sum;
+    }, 0);
+    return { total: items.length, emAndamento, encerrados, altoCritico, passivoAberto, passivoEncerrado, totalPagoOuCondenacao };
   }, [filtered, processos.data]);
 
   // ===== DETALHE VIEW =====
@@ -1471,8 +1478,8 @@ export default function ProcessosTrabalhistas() {
               <p className="text-xs text-slate-500">Passivo Encerrado</p>
             </div>
             <div className="bg-emerald-50 rounded-lg p-3 text-center">
-              <p className="text-xl font-bold text-emerald-700">{formatBRL(String(filteredStats.totalValorPago))}</p>
-              <p className="text-xs text-muted-foreground">Total Pago</p>
+              <p className="text-xl font-bold text-emerald-700">{formatBRL(String(filteredStats.totalPagoOuCondenacao))}</p>
+              <p className="text-xs text-muted-foreground">Total Pago/Acordo</p>
             </div>
           </div>
         )}
