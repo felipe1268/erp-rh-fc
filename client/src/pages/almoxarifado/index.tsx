@@ -308,9 +308,11 @@ export default function AlmoxarifadoPage() {
 
   const criarMut = trpc.compras.criarItem.useMutation({
     onSuccess: () => { refetch(); setModalItem(false); toast.success("Item criado!"); },
+    onError: (e) => toast.error("Erro ao criar item: " + e.message),
   });
   const atualizarMut = trpc.compras.atualizarItem.useMutation({
     onSuccess: () => { refetch(); setModalItem(false); toast.success("Item atualizado!"); },
+    onError: (e) => toast.error("Erro ao atualizar item: " + e.message),
   });
   const excluirMut = trpc.compras.excluirItem.useMutation({
     onSuccess: () => { refetch(); toast.success("Item removido."); },
