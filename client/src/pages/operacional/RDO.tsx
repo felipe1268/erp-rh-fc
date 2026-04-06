@@ -62,12 +62,16 @@ function ObraVisaoGeral({ obraId, companyId, setLocation, selectedFonte }: any) 
     if (st === 'aprovado') return 'Aprovado';
     if (st === 'finalizado') return 'Finalizado';
     if (st === 'revisao' || st === 'revisar') return 'Preenchendo';
-    return st || 'Preenchendo';
+    if (st === 'rascunho') return 'Rascunho';
+    if (st === 'pendente') return 'Pendente';
+    return st ? st.charAt(0).toUpperCase() + st.slice(1) : 'Preenchendo';
   };
   const statusBg = (st: string) => {
     if (st === 'aprovado') return 'bg-green-500 text-white';
     if (st === 'finalizado') return 'bg-blue-500 text-white';
     if (st === 'revisao' || st === 'revisar') return 'bg-yellow-400 text-gray-800';
+    if (st === 'rascunho') return 'bg-orange-400 text-white';
+    if (st === 'pendente') return 'bg-orange-400 text-white';
     return 'bg-orange-400 text-white';
   };
 
@@ -136,7 +140,24 @@ function ObraVisaoGeral({ obraId, companyId, setLocation, selectedFonte }: any) 
                             {statusLabel(r.status)}
                           </span>
                         </td>
-                        <td className="py-1.5 px-1 text-xs text-gray-400">Relatório Diário de Obra (RDO)</td>
+                        <td className="py-1.5 px-1 text-xs text-gray-400 whitespace-nowrap">
+                          <span className="hidden sm:inline">Relatório Diário de Obra (RDO)</span>
+                          <span className="sm:hidden">RDO</span>
+                        </td>
+                        <td className="py-1.5 px-1 text-xs text-gray-400 whitespace-nowrap">
+                          {Number(r.total_fotos) > 0 && (
+                            <span className="inline-flex items-center gap-0.5 mr-2">
+                              <Camera className="w-3.5 h-3.5 text-gray-400" />
+                              <span>{Number(r.total_fotos)}</span>
+                            </span>
+                          )}
+                          {Number(r.total_videos) > 0 && (
+                            <span className="inline-flex items-center gap-0.5">
+                              <Video className="w-3.5 h-3.5 text-gray-400" />
+                              <span>{Number(r.total_videos)}</span>
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1697,6 +1718,20 @@ export default function RDO() {
                           {rdoStatusLabel(r.status)}
                         </span>
                       </td>
+                      <td className="py-1.5 px-2 text-xs text-gray-400 whitespace-nowrap">
+                        {Number(r.total_fotos) > 0 && (
+                          <span className="inline-flex items-center gap-0.5 mr-2">
+                            <Camera className="w-3.5 h-3.5 text-gray-400" />
+                            <span>{Number(r.total_fotos)}</span>
+                          </span>
+                        )}
+                        {Number(r.total_videos) > 0 && (
+                          <span className="inline-flex items-center gap-0.5">
+                            <Video className="w-3.5 h-3.5 text-gray-400" />
+                            <span>{Number(r.total_videos)}</span>
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1742,6 +1777,18 @@ export default function RDO() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {Number(r.total_fotos) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-400">
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>{Number(r.total_fotos)}</span>
+                  </span>
+                )}
+                {Number(r.total_videos) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-400">
+                    <Video className="w-3.5 h-3.5" />
+                    <span>{Number(r.total_videos)}</span>
+                  </span>
+                )}
                 {r.fonte === 'importado' && <span className="text-[10px] text-gray-400 font-medium">Importado</span>}
                 <span className={`text-xs px-2 py-0.5 rounded font-medium ${rdoStatusColor(r.status)}`}>
                   {rdoStatusLabel(r.status)}

@@ -51,8 +51,11 @@ export const operacionalRouter = router({
           (SELECT COUNT(*) FROM diario_obra_fotos f JOIN diario_obra_relatorios r ON f.relatorio_id = r.id WHERE r.obra_id = ${input.obraId}) as total_fotos
       `));
       const relatoriosRecentes = rows(await db.execute(sql`
-        SELECT id, numero, data, status FROM diario_obra_relatorios
-        WHERE obra_id = ${input.obraId} ORDER BY data DESC LIMIT 7
+        SELECT r.id, r.numero, r.data, r.status, r.external_id,
+          COALESCE((SELECT COUNT(*) FROM diario_obra_fotos f WHERE f.relatorio_id = r.id), 0) as total_fotos,
+          COALESCE((SELECT COUNT(*) FROM diario_obra_videos v WHERE v.relatorio_id = r.id), 0) as total_videos
+        FROM diario_obra_relatorios r
+        WHERE r.obra_id = ${input.obraId} ORDER BY r.data DESC LIMIT 7
       `));
       let prazoContratual = obra.prazo_contratual_original ? Number(obra.prazo_contratual_original) : null;
       let prazoDecorrido = null;
@@ -113,6 +116,35 @@ export const operacionalRouter = router({
         } catch {}
       }
 
+      if (token && obra.external_id && relatoriosRecentes.length > 0) {
+        try {
+          const recsWithExtId = relatoriosRecentes.filter((r: any) => r.external_id);
+          const detailPromises = recsWithExtId.map((r: any) =>
+            fetch(`https://api.diariodeobra.app/v2/obras/${obra.external_id}/relatorios/${r.external_id}`, {
+              headers: { 'token': token },
+              signal: AbortSignal.timeout(6000),
+            }).then(res => res.ok ? res.json() : null).catch(() => null)
+          );
+          const details = await Promise.all(detailPromises);
+          const countMap = new Map<string, { fotos: number; videos: number }>();
+          details.forEach((det: any, i: number) => {
+            if (det) {
+              countMap.set(recsWithExtId[i].external_id, {
+                fotos: (det.galeriaDeFotos || []).length,
+                videos: (det.videos || []).length,
+              });
+            }
+          });
+          for (const r of relatoriosRecentes as any[]) {
+            if (r.external_id && countMap.has(r.external_id)) {
+              const c = countMap.get(r.external_id)!;
+              r.total_fotos = Math.max(Number(r.total_fotos) || 0, c.fotos);
+              r.total_videos = Math.max(Number(r.total_videos) || 0, c.videos);
+            }
+          }
+        } catch {}
+      }
+
       const mergedStats = apiStats ? {
         total_relatorios: apiStats.relatorios ?? stats[0]?.total_relatorios ?? 0,
         total_atividades: apiStats.atividades ?? stats[0]?.total_atividades ?? 0,
@@ -150,11 +182,44 @@ export const operacionalRouter = router({
         if (input.mes) conditions.push(sql`TO_CHAR(data, 'YYYY-MM') = ${input.mes}`);
         const where = sql.join(conditions, sql` AND `);
         const result = rows(await db.execute(sql`
-          SELECT id, obra_id, company_id, external_id, numero, data, status, responsavel_nome,
-                 clima_manha, clima_tarde, clima_noite, hora_inicio, hora_fim, horas_trabalhadas,
-                 observacoes, importado_em, created_at, updated_at, 'importado' as fonte
-          FROM diario_obra_relatorios WHERE ${where} ORDER BY data DESC, numero DESC
+          SELECT r.id, r.obra_id, r.company_id, r.external_id, r.numero, r.data, r.status, r.responsavel_nome,
+                 r.clima_manha, r.clima_tarde, r.clima_noite, r.hora_inicio, r.hora_fim, r.horas_trabalhadas,
+                 r.observacoes, r.importado_em, r.created_at, r.updated_at, 'importado' as fonte,
+                 COALESCE((SELECT COUNT(*) FROM diario_obra_fotos f WHERE f.relatorio_id = r.id), 0) as total_fotos,
+                 COALESCE((SELECT COUNT(*) FROM diario_obra_videos v WHERE v.relatorio_id = r.id), 0) as total_videos
+          FROM diario_obra_relatorios r WHERE ${where} ORDER BY r.data DESC, r.numero DESC
         `));
+        const token = process.env.DIARIO_OBRA_API_TOKEN;
+        const obra = rows(await db.execute(sql`SELECT external_id FROM diario_obra_obras WHERE id = ${input.obraId}`));
+        const obraExtId = obra[0]?.external_id;
+        if (token && obraExtId) {
+          try {
+            const recsWithExtId = result.filter((r: any) => r.external_id).slice(0, 15);
+            const detailPromises = recsWithExtId.map((r: any) =>
+              fetch(`https://api.diariodeobra.app/v2/obras/${obraExtId}/relatorios/${r.external_id}`, {
+                headers: { 'token': token },
+                signal: AbortSignal.timeout(6000),
+              }).then(res => res.ok ? res.json() : null).catch(() => null)
+            );
+            const details = await Promise.all(detailPromises);
+            const countMap = new Map<string, { fotos: number; videos: number }>();
+            details.forEach((det: any, i: number) => {
+              if (det) {
+                countMap.set(recsWithExtId[i].external_id, {
+                  fotos: (det.galeriaDeFotos || []).length,
+                  videos: (det.videos || []).length,
+                });
+              }
+            });
+            for (const r of result as any[]) {
+              if (r.external_id && countMap.has(r.external_id)) {
+                const c = countMap.get(r.external_id)!;
+                r.total_fotos = Math.max(Number(r.total_fotos) || 0, c.fotos);
+                r.total_videos = Math.max(Number(r.total_videos) || 0, c.videos);
+              }
+            }
+          } catch {}
+        }
         return result;
       }
       const conditions = [
