@@ -368,7 +368,7 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation, refetchRdo
 
   const dataRel = new Date(rdo.data + "T12:00:00");
   const diaSemana = diasSemana[dataRel.getDay()] || '';
-  const isAprovado = rdo.status === 'aprovado';
+  const isLocked = rdo.status === 'aprovado' || rdo.status === 'finalizado';
 
   const materiaisRecebidos = ((rdo.materiais || []) as any[]).filter((m: any) => m.tipo === 'recebido' || m.tipo === 'Recebido');
   const materiaisUtilizados = ((rdo.materiais || []) as any[]).filter((m: any) => m.tipo === 'utilizado' || m.tipo === 'Utilizado' || m.tipo === 'usado');
@@ -409,7 +409,8 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation, refetchRdo
             </Button>
           )}
           {!editMode ? (
-            <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
+            <Button variant="outline" size="sm" onClick={() => setEditMode(true)} disabled={isLocked}
+              title={isLocked ? 'Reabra como rascunho para editar' : ''}>
               <Pencil className="w-4 h-4 mr-1" /> Editar
             </Button>
           ) : (
@@ -1208,7 +1209,7 @@ export default function RDO() {
   const hoje = new Date().toISOString().split("T")[0];
 
   if (rdoIdParam && rdo && (rdo as any).fonte === 'importado') {
-    return <RDODocumentoImportado rdo={rdo} obraId={selectedObraId || obraIdParam} companyId={companyId} setLocation={setLocation} />;
+    return <RDODocumentoImportado rdo={rdo} obraId={selectedObraId || obraIdParam} companyId={companyId} setLocation={setLocation} refetchRdo={() => rdoDetalhe.refetch()} />;
   }
 
   if (rdoIdParam && rdo) {

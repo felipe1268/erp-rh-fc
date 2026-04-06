@@ -534,10 +534,14 @@ export const operacionalRouter = router({
       horaIntervaloFim: z.string().optional(),
       horasTrabalhadas: z.string().optional(),
       observacoes: z.string().optional(),
-      status: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      const rel = rows(await db.execute(sql`SELECT status FROM diario_obra_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
+      if (!rel.length) throw new Error("Relatório não encontrado");
+      if (rel[0].status === 'aprovado' || rel[0].status === 'finalizado') {
+        throw new Error("Relatório aprovado/finalizado não pode ser editado. Reabra como rascunho primeiro.");
+      }
       await db.execute(sql`
         UPDATE diario_obra_relatorios SET
           clima_manha = COALESCE(${input.climaManha ?? null}, clima_manha),
@@ -550,7 +554,6 @@ export const operacionalRouter = router({
           hora_intervalo_fim = COALESCE(${input.horaIntervaloFim ?? null}, hora_intervalo_fim),
           horas_trabalhadas = COALESCE(${input.horasTrabalhadas ?? null}, horas_trabalhadas),
           observacoes = COALESCE(${input.observacoes ?? null}, observacoes),
-          status = COALESCE(${input.status ?? null}, status),
           updated_at = NOW()
         WHERE id = ${input.id} AND company_id = ${input.companyId}
       `);
