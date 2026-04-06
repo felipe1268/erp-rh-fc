@@ -721,6 +721,11 @@ export default function Cotacoes() {
     }
   }, [showDetalhe]);
 
+  const q = trpc.compras.listarCotacoes.useQuery(
+    { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus },
+    { enabled: companyId > 0 }
+  );
+  const detalheQ = trpc.compras.getCotacao.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
   const coberturaAutoQ = trpc.compras.buscarSaldosRealocacao.useQuery(
     { companyId, obraId: (detalheQ.data as any)?.obraId, cotacaoId: showDetalhe ?? undefined, deficit: 1 },
     { enabled: showDetalhe !== null && !!detalheQ.data }
@@ -730,12 +735,6 @@ export default function Cotacoes() {
       setCobertoPorRisco(true);
     }
   }, [coberturaAutoQ.data?.cobertoPorRisco, coberturaAutoQ.data?.totalDebitadoEstaCotacao]);
-
-  const q = trpc.compras.listarCotacoes.useQuery(
-    { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus },
-    { enabled: companyId > 0 }
-  );
-  const detalheQ = trpc.compras.getCotacao.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
   const mapaQ = trpc.compras.getMapaCotacao.useQuery({ cotacaoId: showDetalhe! }, { enabled: showDetalhe !== null });
   const mapaItens = mapaQ.data?.itens ?? [];
   const mapaDescricoes = mapaItens.map((it: any) => it.descricao as string).filter(Boolean);
