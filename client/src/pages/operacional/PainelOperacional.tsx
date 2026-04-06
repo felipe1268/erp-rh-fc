@@ -3,7 +3,7 @@ import { useState, useRef } from "react";
 import {
   ClipboardList, AlertTriangle,
   CloudRain, ShieldCheck, ClipboardCheck,
-  HardHat, FlaskConical,
+  HardHat, FlaskConical, ArrowLeft,
 } from "lucide-react";
 
 const SUBMODULOS = [
@@ -119,6 +119,13 @@ export default function PainelOperacional() {
   return (
     <div className="p-6 space-y-6">
       <div>
+        <button
+          onClick={() => setLocation("/")}
+          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 mb-2 transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Voltar à Tela Principal
+        </button>
         <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
           <HardHat className="h-7 w-7 text-amber-500" />
           Operacional
