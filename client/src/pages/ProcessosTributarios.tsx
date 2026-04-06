@@ -721,7 +721,7 @@ export default function ProcessosTributarios() {
           const filtEmAndamento = filtered.filter(p => !isEnc(p.status)).length;
           const filtEncerrados = filtered.filter(p => isEnc(p.status)).length;
           const altoCritico = filtered.filter(p => p.risco === "alto" || p.risco === "critico").length;
-          const parseBRL2 = (v: any) => { if (!v) return 0; const s = String(v).replace(/[R$\s.]/g, "").replace(",", "."); return parseFloat(s) || 0; };
+          const parseBRL2 = (v: any) => { if (!v) return 0; const s = String(v).replace(/R\$\s*/g, "").trim(); if (s.includes(",")) return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0; return parseFloat(s) || 0; };
           const valorCausa = filtered.reduce((s, p) => s + parseBRL2(p.valorCausa), 0);
           const fBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
           return (

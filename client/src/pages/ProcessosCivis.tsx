@@ -713,7 +713,7 @@ export default function ProcessosCivis() {
           const ativos = lista.filter((p: any) => p.status !== "encerrado" && p.status !== "arquivado");
           const encerrados = lista.filter((p: any) => p.status === "encerrado" || p.status === "arquivado");
           const altoCritico = lista.filter((p: any) => p.risco === "alto" || p.risco === "critico").length;
-          const parseBRL2 = (v: any) => { if (!v) return 0; const s = String(v).replace(/[R$\s.]/g, "").replace(",", "."); return parseFloat(s) || 0; };
+          const parseBRL2 = (v: any) => { if (!v) return 0; const s = String(v).replace(/R\$\s*/g, "").trim(); if (s.includes(",")) return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0; return parseFloat(s) || 0; };
           const passivo = ativos.filter((p: any) => (p.polo || "passivo") === "passivo").reduce((s: number, p: any) => s + parseBRL2(p.valorCausa), 0);
           const credito = ativos.filter((p: any) => p.polo === "ativo").reduce((s: number, p: any) => s + parseBRL2(p.valorCausa), 0);
           const fBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });

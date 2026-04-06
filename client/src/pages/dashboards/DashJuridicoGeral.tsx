@@ -62,7 +62,8 @@ export default function DashJuridicoGeral() {
 
     const parseBRL = (v: any) => {
       if (!v) return 0;
-      const s = String(v).replace(/[R$\s.]/g, "").replace(",", ".");
+      const s = String(v).replace(/R\$\s*/g, "").trim();
+      if (s.includes(",")) return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
       return parseFloat(s) || 0;
     };
 
