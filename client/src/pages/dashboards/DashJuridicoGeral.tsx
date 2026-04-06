@@ -1,4 +1,4 @@
-import { SEMANTIC_COLORS, CHART_PALETTE } from "@/lib/chartColors";
+import { CHART_PALETTE } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
@@ -7,8 +7,8 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Gavel, DollarSign, AlertTriangle, Scale, ShieldAlert,
-  Loader2, BookOpen, Receipt, FileText, TrendingUp,
+  Gavel, DollarSign, AlertTriangle, ShieldAlert,
+  Loader2, BookOpen, Receipt, FileText,
   ArrowLeft, BarChart3
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -39,53 +39,34 @@ export default function DashJuridicoGeral() {
   const queryArgs = { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) };
 
   const trab = trpc.dashboards.juridico.useQuery(queryArgs, { enabled });
-  const trib = trpc.processosTributarios.estatisticas.useQuery(
-    { companyId: queryCompanyId, companyIds: companyIds.length > 0 ? companyIds : undefined },
-    { enabled: queryCompanyId > 0 || companyIds.length > 0 }
-  );
-  const tribList = trpc.processosTributarios.listar.useQuery(
-    { companyId: queryCompanyId, companyIds: companyIds.length > 0 ? companyIds : undefined },
-    { enabled: queryCompanyId > 0 || companyIds.length > 0 }
-  );
-  const civList = trpc.processosCivis.listar.useQuery(
-    { companyId: queryCompanyId, companyIds: companyIds.length > 0 ? companyIds : undefined },
-    { enabled: queryCompanyId > 0 || companyIds.length > 0 }
-  );
+  const trib = trpc.dashboards.tributario.useQuery(queryArgs, { enabled });
+  const civ = trpc.dashboards.civil.useQuery(queryArgs, { enabled });
 
-  const isLoading = trab.isLoading || trib.isLoading || tribList.isLoading || civList.isLoading;
+  const isLoading = trab.isLoading || trib.isLoading || civ.isLoading;
 
   const consolidated = useMemo(() => {
     const trabData = trab.data;
     const tribData = trib.data;
-    const tribProcs = tribList.data ?? [];
-    const civProcs = civList.data ?? [];
-
-    const parseBRL = (v: any) => {
-      if (!v) return 0;
-      const s = String(v).replace(/R\$\s*/g, "").trim();
-      if (s.includes(",")) return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
-      return parseFloat(s) || 0;
-    };
+    const civData = civ.data;
 
     const trabTotal = trabData?.resumo?.totalProcessos ?? 0;
     const trabAtivos = trabData?.resumo?.processosAtivos ?? 0;
     const trabEncerrados = trabData?.resumo?.processosEncerrados ?? 0;
     const trabValorCausa = trabData?.resumo?.totalValorCausa ?? 0;
-    const trabValorRisco = trabData?.resumo?.valorEmRisco ?? 0;
 
-    const tribTotal = tribData?.total ?? 0;
-    const tribAtivos = tribData?.emAndamento ?? 0;
-    const tribEncerrados = tribData?.encerrados ?? 0;
-    const tribValorCausa = tribData?.totalValorCausa ?? 0;
+    const tribTotal = tribData?.resumo?.totalProcessos ?? 0;
+    const tribAtivos = tribData?.resumo?.processosAtivos ?? 0;
+    const tribEncerrados = tribData?.resumo?.processosEncerrados ?? 0;
+    const tribValorCausa = tribData?.resumo?.totalValorCausa ?? 0;
 
-    const civAtivos = civProcs.filter(p => p.status !== "encerrado" && p.status !== "arquivado");
-    const civEncerrados = civProcs.filter(p => p.status === "encerrado" || p.status === "arquivado");
-    const civTotal = civProcs.length;
-    const civValorCausa = civProcs.reduce((s, p) => s + parseBRL(p.valorCausa), 0);
+    const civTotal = civData?.resumo?.totalProcessos ?? 0;
+    const civAtivosCount = civData?.resumo?.processosAtivos ?? 0;
+    const civEncerrados = civData?.resumo?.processosEncerrados ?? 0;
+    const civValorCausa = civData?.resumo?.totalValorCausa ?? 0;
 
     const totalGeral = trabTotal + tribTotal + civTotal;
-    const ativosGeral = trabAtivos + tribAtivos + civAtivos.length;
-    const encerradosGeral = trabEncerrados + tribEncerrados + civEncerrados.length;
+    const ativosGeral = trabAtivos + tribAtivos + civAtivosCount;
+    const encerradosGeral = trabEncerrados + tribEncerrados + civEncerrados;
     const valorCausaGeral = trabValorCausa + tribValorCausa + civValorCausa;
 
     const riscoTrab: Record<string, number> = {};
@@ -102,24 +83,32 @@ export default function DashJuridicoGeral() {
       }
     }
 
-    const isEncerrado = (s: string) => ["encerrado", "arquivado"].includes(s);
-
     const riscoTrib: Record<string, number> = {};
     const riscoTribValor: Record<string, number> = {};
-    for (const p of tribProcs) {
-      if (isEncerrado(p.status)) continue;
-      const r = p.risco || "medio";
-      riscoTrib[r] = (riscoTrib[r] || 0) + 1;
-      riscoTribValor[r] = (riscoTribValor[r] || 0) + parseBRL(p.valorCausa);
+    if (tribData?.porRisco) {
+      for (const r of tribData.porRisco) {
+        const key = r.label.toLowerCase();
+        riscoTrib[key] = (riscoTrib[key] || 0) + r.value;
+      }
+    }
+    if (tribData?.valorPorRisco) {
+      for (const r of tribData.valorPorRisco) {
+        riscoTribValor[r.risco] = (riscoTribValor[r.risco] || 0) + r.valor;
+      }
     }
 
     const riscoCiv: Record<string, number> = {};
     const riscoCivValor: Record<string, number> = {};
-    for (const p of civProcs) {
-      if (isEncerrado(p.status)) continue;
-      const r = p.risco || "medio";
-      riscoCiv[r] = (riscoCiv[r] || 0) + 1;
-      riscoCivValor[r] = (riscoCivValor[r] || 0) + parseBRL(p.valorCausa);
+    if (civData?.porRisco) {
+      for (const r of civData.porRisco) {
+        const key = r.label.toLowerCase();
+        riscoCiv[key] = (riscoCiv[key] || 0) + r.value;
+      }
+    }
+    if (civData?.valorPorRisco) {
+      for (const r of civData.valorPorRisco) {
+        riscoCivValor[r.risco] = (riscoCivValor[r.risco] || 0) + r.valor;
+      }
     }
 
     const allRiscos = [...new Set([...Object.keys(riscoTrab), ...Object.keys(riscoTrib), ...Object.keys(riscoCiv)])];
@@ -152,11 +141,11 @@ export default function DashJuridicoGeral() {
       altoCriticoGeral,
       valorRiscoGeral,
       trabTotal, tribTotal, civTotal,
-      trabAtivos, tribAtivos, civAtivosCount: civAtivos.length,
+      trabAtivos, tribAtivos, civAtivosCount,
       trabValorCausa, tribValorCausa, civValorCausa,
       riscoConsolidado,
     };
-  }, [trab.data, trib.data, tribList.data, civList.data]);
+  }, [trab.data, trib.data, civ.data]);
 
   const [, setLocation] = useLocation();
 
