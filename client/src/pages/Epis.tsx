@@ -1774,16 +1774,16 @@ export default function Epis() {
                   conforme Art. 462, §1º da CLT e acordo firmado neste documento.
                 </p>
                 <p className="bg-amber-50 border border-amber-200 rounded p-2 text-amber-800">
-                  <strong>📷 FOTO OBRIGATÓRIA:</strong> Para qualquer solicitação de troca (desgaste, perda, mau uso ou furto),
-                  é <strong>obrigatório</strong> o registro fotográfico do estado atual do EPI antigo como comprovação.
-                  Sem a foto, a troca não será autorizada.
+                  <strong>📷 FOTO OBRIGATÓRIA:</strong> Para troca por desgaste normal ou mau uso/dano,
+                  é <strong>obrigatório</strong> o registro fotográfico do estado atual do EPI danificado como comprovação.
+                  Em caso de perda ou furto, a foto não é necessária.
                 </p>
               </div>
             </div>
 
             {/* Declaration Text */}
             <div className="text-sm text-justify mb-4 leading-relaxed">
-              <p>{textoFicha || `Declaro ter recebido os Equipamentos de Proteção Individual (EPIs) acima descritos, comprometendo-me a utilizá-los corretamente durante a jornada de trabalho, conforme orientações recebidas. Estou ciente de que a não utilização, o uso inadequado ou a perda/dano por negligência poderá acarretar desconto em meu salário dentro do mesmo mês da ocorrência, conforme Art. 462, §1º da CLT e NR-6 do MTE. Declaro também estar ciente da obrigatoriedade de apresentação de registro fotográfico do EPI antigo para qualquer solicitação de troca.`}</p>
+              <p>{textoFicha || `Declaro ter recebido os Equipamentos de Proteção Individual (EPIs) acima descritos, comprometendo-me a utilizá-los corretamente durante a jornada de trabalho, conforme orientações recebidas. Estou ciente de que a não utilização, o uso inadequado ou a perda/dano por negligência poderá acarretar desconto em meu salário dentro do mesmo mês da ocorrência, conforme Art. 462, §1º da CLT e NR-6 do MTE. Declaro também estar ciente da obrigatoriedade de apresentação de registro fotográfico do EPI danificado para troca por desgaste normal ou mau uso.`}</p>
             </div>
 
             {/* Employee Obligations */}
