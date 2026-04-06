@@ -1515,8 +1515,11 @@ export default function ProcessosTrabalhistas() {
             <select value={filterRegiao} onChange={e => setFilterRegiao(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
               <option value="all">Todas as Regiões</option>
-              <option value="igarassu_pe">Igarassu - PE</option>
-              <option value="demais_regioes">Demais Regiões</option>
+              <option value="igarassu_pe">Igarassu - PE (TRT 6)</option>
+              <option value="sao_paulo">São Paulo (TRT 2/15)</option>
+              <option value="minas_gerais">Minas Gerais (TRT 3)</option>
+              <option value="paraiba">Paraíba (TRT 13)</option>
+              <option value="goias">Goiás (TRT 18)</option>
               <option value="vidracaria_ferraz">Vidraçaria Ferraz</option>
             </select>
             <select value={filterResultado} onChange={e => setFilterResultado(e.target.value)}
