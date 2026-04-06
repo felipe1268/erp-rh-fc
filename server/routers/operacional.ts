@@ -13,17 +13,19 @@ export const operacionalRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       const mainObras = rows(await db.execute(sql`
-        SELECT id, nome, status, "companyId" as company_id, 'principal' as fonte
-        FROM obras WHERE "companyId" = ${input.companyId}
-        ${input.status && input.status !== 'todas' ? sql`AND status = ${input.status}` : sql``}
-        ORDER BY nome
+        SELECT o.id, o.nome, o.status, o."companyId" as company_id, 'principal' as fonte,
+          (SELECT COUNT(*) FROM rdo_relatorios r WHERE r.obra_id = o.id AND r.company_id = ${input.companyId}) as total_relatorios
+        FROM obras o WHERE o."companyId" = ${input.companyId}
+        ${input.status && input.status !== 'todas' ? sql`AND o.status = ${input.status}` : sql``}
+        ORDER BY o.nome
       `));
       const dioObras = rows(await db.execute(sql`
-        SELECT id, nome, status, company_id, 'importado' as fonte,
-          (SELECT COUNT(*) FROM diario_obra_relatorios r WHERE r.obra_id = diario_obra_obras.id) as total_relatorios
-        FROM diario_obra_obras WHERE company_id = ${input.companyId}
-        ${input.status && input.status !== 'todas' ? sql`AND status = ${input.status}` : sql``}
-        ORDER BY nome
+        SELECT d.id, d.nome, d.status, d.company_id, 'importado' as fonte, d.logo_url,
+          (SELECT COUNT(*) FROM diario_obra_relatorios r WHERE r.obra_id = d.id) as total_relatorios,
+          d.total_fotos
+        FROM diario_obra_obras d WHERE d.company_id = ${input.companyId}
+        ${input.status && input.status !== 'todas' ? sql`AND d.status = ${input.status}` : sql``}
+        ORDER BY d.nome
       `));
       return { principais: mainObras, importadas: dioObras };
     }),

@@ -16,7 +16,7 @@ import {
   ClipboardList, Plus, Loader2, CheckCircle, ArrowLeft,
   Sun, CloudRain, CloudSun, Cloud, Trash2, Users, Wrench,
   FileText, Camera, Save, Send, Pencil, RotateCcw, MoreVertical,
-  AlertTriangle, MessageSquare, Image, Printer,
+  AlertTriangle, MessageSquare, Image, Printer, Building2, Search,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -610,21 +610,31 @@ export default function RDO() {
   const obraIdParam = Number(params.get("obra")) || 0;
   const rdoIdParam = Number(params.get("id")) || 0;
 
-  const [filtroStatusObra, setFiltroStatusObra] = useState<string>("todas");
+  const [filtroStatusObra, setFiltroStatusObra] = useState<string>("Em_Andamento");
   const obrasUnificadas = trpc.operacional.listarObrasUnificadas.useQuery({ companyId }, { enabled: !!companyId });
   const fonteParam = params.get("fonte") || "";
 
   const todasObrasLista = [
     ...((obrasUnificadas.data as any)?.principais || []).map((o: any) => ({ ...o, fonte: 'principal' })),
     ...((obrasUnificadas.data as any)?.importadas || []).filter((o: any) => Number(o.total_relatorios) > 0).map((o: any) => ({ ...o, fonte: 'importado' })),
-  ].filter((o: any) => filtroStatusObra === "todas" || o.status === filtroStatusObra);
+  ].filter((o: any) => {
+    if (filtroStatusObra === "todas") return true;
+    const s = (o.status || "").toLowerCase();
+    const f = filtroStatusObra.toLowerCase();
+    return s === f || s === f.replace("_", " ");
+  });
 
   const [obraId, setObraId] = useState(obraIdParam);
   const [obraFonte, setObraFonte] = useState<string>(fonteParam || "");
+  const hasObraParam = obraIdParam > 0;
 
-  const selectedObraEntry = todasObrasLista.find((o: any) => o.id === obraId && o.fonte === obraFonte)
-    || todasObrasLista.find((o: any) => o.id === obraId)
-    || todasObrasLista[0];
+  const selectedObraEntry = hasObraParam
+    ? (todasObrasLista.find((o: any) => o.id === obraId && o.fonte === obraFonte)
+      || todasObrasLista.find((o: any) => o.id === obraId))
+    : (obraId > 0
+      ? (todasObrasLista.find((o: any) => o.id === obraId && o.fonte === obraFonte)
+        || todasObrasLista.find((o: any) => o.id === obraId))
+      : null);
   const selectedObraId = selectedObraEntry?.id || 0;
   const selectedFonte = selectedObraEntry?.fonte || 'principal';
 
@@ -670,6 +680,7 @@ export default function RDO() {
   const [addDialog, setAddDialog] = useState<string | null>(null);
   const [addForm, setAddForm] = useState<any>({});
   const [viewMode, setViewMode] = useState<'lista' | 'visao'>('lista');
+  const [buscaObra, setBuscaObra] = useState("");
 
   const rdo = rdoDetalhe.data;
 
@@ -1008,28 +1019,125 @@ export default function RDO() {
     );
   }
 
-  return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+  const obrasFiltradas = todasObrasLista.filter((o: any) =>
+    !buscaObra || o.nome?.toLowerCase().includes(buscaObra.toLowerCase())
+  );
+
+  const statusLabel = (s: string) => {
+    if (s === "Em_Andamento" || s === "em_andamento") return "Em andamento";
+    if (s === "Concluida" || s === "concluida") return "Concluída";
+    if (s === "Paralisada" || s === "paralisada") return "Paralisada";
+    return s || "—";
+  };
+  const statusColor = (s: string) => {
+    if (s === "Em_Andamento" || s === "em_andamento") return "bg-green-500";
+    if (s === "Concluida" || s === "concluida") return "bg-gray-500";
+    if (s === "Paralisada" || s === "paralisada") return "bg-yellow-500";
+    return "bg-blue-500";
+  };
+
+  if (!selectedObraEntry) {
+    return (
+      <div className="p-6 space-y-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setLocation("/operacional")}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">RDO — Relatório Diário de Obra</h1>
+            <h1 className="text-2xl font-bold">Obras ({obrasFiltradas.length})</h1>
+            <p className="text-sm text-gray-500">Selecione uma obra para ver os relatórios</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Pesquisar obra..."
+              value={buscaObra}
+              onChange={(e) => setBuscaObra(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Select value={filtroStatusObra} onValueChange={(v) => { setFiltroStatusObra(v); }}>
+            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todos os status</SelectItem>
+              <SelectItem value="Em_Andamento">Em andamento</SelectItem>
+              <SelectItem value="Concluida">Concluídas</SelectItem>
+              <SelectItem value="Paralisada">Paralisadas</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {obrasUnificadas.isLoading ? (
+          <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div>
+        ) : obrasFiltradas.length === 0 ? (
+          <div className="text-center py-20 text-gray-400">
+            <Building2 className="w-16 h-16 mx-auto mb-4 opacity-30" />
+            <p>Nenhuma obra encontrada</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {obrasFiltradas.map((obra: any) => {
+              const nRdos = Number(obra.total_relatorios) || 0;
+              const nFotos = Number(obra.total_fotos) || 0;
+              return (
+                <div
+                  key={`${obra.fonte}-${obra.id}`}
+                  className="group border rounded-xl overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 bg-white dark:bg-gray-900 hover:scale-[1.02]"
+                  onClick={() => {
+                    setObraId(obra.id);
+                    setObraFonte(obra.fonte);
+                    setViewMode('lista');
+                  }}
+                >
+                  <div className="relative h-32 bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center">
+                    {obra.logo_url ? (
+                      <img src={obra.logo_url} alt={obra.nome} className="w-full h-full object-cover" />
+                    ) : (
+                      <Building2 className="w-12 h-12 text-gray-500 opacity-50" />
+                    )}
+                    <span className={`absolute top-2 left-2 text-[10px] text-white font-semibold px-2 py-0.5 rounded ${statusColor(obra.status)}`}>
+                      {statusLabel(obra.status)}
+                    </span>
+                    {obra.fonte === 'importado' && (
+                      <span className="absolute top-2 right-2 text-[9px] text-white font-medium px-1.5 py-0.5 rounded bg-blue-600/80">
+                        Importado
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <div className="flex items-center gap-2 text-[11px] text-gray-400 mb-1.5">
+                      <span className="flex items-center gap-0.5"><ClipboardList className="w-3 h-3" /> {nRdos}</span>
+                      {nFotos > 0 && <span className="flex items-center gap-0.5"><Camera className="w-3 h-3" /> {nFotos}</span>}
+                    </div>
+                    <p className="text-xs font-bold text-gray-800 dark:text-white leading-tight line-clamp-2 uppercase">
+                      {obra.nome}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => { setObraId(0); setObraFonte(""); setLocation("/operacional/rdo"); }}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">{selectedObraEntry?.nome || "RDO"}</h1>
             <p className="text-sm text-gray-500">Relatórios diários de obra</p>
           </div>
         </div>
         <div className="flex gap-2 flex-wrap items-center">
-          <Select value={filtroStatusObra} onValueChange={(v) => { setFiltroStatusObra(v); setObraId(0); }}>
-            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Em_Andamento">Em andamento</SelectItem>
-              <SelectItem value="Concluida">Concluídas</SelectItem>
-              <SelectItem value="Paralisada">Paralisadas</SelectItem>
-              <SelectItem value="todas">Todas</SelectItem>
-            </SelectContent>
-          </Select>
           <Select value={selectedObraEntry ? `${selectedObraEntry.fonte}:${selectedObraEntry.id}` : ""} onValueChange={(v) => { const [f, id] = v.split(":"); setObraId(Number(id)); setObraFonte(f); setViewMode('lista'); }}>
             <SelectTrigger className="w-64"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
             <SelectContent>
