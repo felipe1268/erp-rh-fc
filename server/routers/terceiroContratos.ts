@@ -16,6 +16,7 @@ import {
   comprasCotacoes,
   comprasCotacoesItens,
   comprasCotacaoFornecedores,
+  comprasCotacaoRespostas,
   comprasSolicitacoes,
   comprasSolicitacoesItens,
   planejamentoRevisoes,
@@ -2616,6 +2617,23 @@ export const terceiroContratosRouter = router({
 
       // 7. Criar itens do contrato a partir dos itens da cotação (com EAP do SC)
       if (itens.length > 0) {
+        const respostas = await db.select({
+          itemId: comprasCotacaoRespostas.itemId,
+          precoUnitario: comprasCotacaoRespostas.precoUnitario,
+          total: comprasCotacaoRespostas.total,
+          quantidade: comprasCotacaoRespostas.quantidade,
+        }).from(comprasCotacaoRespostas).where(
+          and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId!))
+        );
+        const respostaMap: Record<number, { precoUnitario: number; total: number; quantidade: number | null }> = {};
+        for (const r of respostas) {
+          respostaMap[r.itemId] = {
+            precoUnitario: parseFloat(String(r.precoUnitario || "0")),
+            total: parseFloat(String(r.total || "0")),
+            quantidade: r.quantidade ? parseFloat(String(r.quantidade)) : null,
+          };
+        }
+
         const scItemIds = itens.map(it => it.solicitacaoItemId).filter(Boolean) as number[];
         let scItemMap: Record<number, { eapCodigo: string | null; orcamentoItemId: number | null }> = {};
         if (scItemIds.length > 0) {
@@ -2660,14 +2678,18 @@ export const terceiroContratosRouter = router({
           itens.map((it, idx) => {
             const scInfo = it.solicitacaoItemId ? scItemMap[it.solicitacaoItemId] : null;
             const eap = scInfo?.eapCodigo ?? null;
+            const resp = respostaMap[it.id];
+            const precoUnit = resp ? resp.precoUnitario : parseFloat(String(it.precoUnitario || "0"));
+            const qty = parseFloat(String(it.quantidade || "1"));
+            const totalItem = resp ? resp.total : (precoUnit * qty);
             return {
               contratoId: contrato.id,
               companyId: input.companyId,
               descricao: it.descricao,
               unidade: it.unidade || "vb",
-              quantidade: String(it.quantidade || "1"),
-              valorUnitario: String(it.precoUnitario || "0"),
-              valorTotal: String(it.total || "0"),
+              quantidade: String(qty),
+              valorUnitario: String(precoUnit),
+              valorTotal: String(totalItem),
               eapCodigo: eap,
               orcamentoItemId: scInfo?.orcamentoItemId ?? null,
               planejamentoAtividadeId: eap && eapToAtividadeId[eap] ? eapToAtividadeId[eap] : (it.descricao && nomeToAtividadeIdLocal[it.descricao.trim().toLowerCase()] ? nomeToAtividadeIdLocal[it.descricao.trim().toLowerCase()] : null),
