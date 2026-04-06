@@ -435,6 +435,18 @@ export default function ProcessosTrabalhistas() {
     return items;
   }, [processos.data, searchTerm, filterStatus, filterRisco, filterArquivo, filterEntidade, filterRegiao, filterResultado]);
 
+  const filteredStats = useMemo(() => {
+    if (!filtered.length && !processos.data?.length) return null;
+    const items = filtered;
+    const encerradosStatuses = ['encerrado', 'arquivado'];
+    const emAndamento = items.filter(p => !encerradosStatuses.includes(p.status) && p.fase !== 'encerrado').length;
+    const encerrados = items.filter(p => encerradosStatuses.includes(p.status) || p.fase === 'encerrado').length;
+    const altoCritico = items.filter(p => p.risco === 'alto' || p.risco === 'critico').length;
+    const totalValorCausa = items.reduce((sum, p) => sum + Number(p.valorCausa || 0), 0);
+    const totalValorPago = items.reduce((sum, p) => sum + Number(p.valorPago || 0), 0);
+    return { total: items.length, emAndamento, encerrados, altoCritico, totalValorCausa, totalValorPago };
+  }, [filtered, processos.data]);
+
   // ===== DETALHE VIEW =====
   if (viewMode === "detalhe" && selectedProcessoId) {
     const p = detalhe.data;
@@ -1428,30 +1440,30 @@ export default function ProcessosTrabalhistas() {
         </div>
 
         {/* Stats */}
-        {stats.data && (
+        {filteredStats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
             <div className="bg-blue-50 rounded-lg p-3 text-center">
-              <p className="text-xl font-bold text-blue-700">{stats.data.total}</p>
+              <p className="text-xl font-bold text-blue-700">{filteredStats.total}</p>
               <p className="text-xs text-muted-foreground">Total</p>
             </div>
             <div className="bg-amber-50 rounded-lg p-3 text-center">
-              <p className="text-xl font-bold text-amber-700">{stats.data.emAndamento}</p>
+              <p className="text-xl font-bold text-amber-700">{filteredStats.emAndamento}</p>
               <p className="text-xs text-muted-foreground">Em Andamento</p>
             </div>
             <div className="bg-green-50 rounded-lg p-3 text-center">
-              <p className="text-xl font-bold text-green-700">{stats.data.encerrados}</p>
+              <p className="text-xl font-bold text-green-700">{filteredStats.encerrados}</p>
               <p className="text-xs text-muted-foreground">Encerrados</p>
             </div>
             <div className="bg-red-50 rounded-lg p-3 text-center">
-              <p className="text-xl font-bold text-red-700">{stats.data.porRisco.critico + stats.data.porRisco.alto}</p>
+              <p className="text-xl font-bold text-red-700">{filteredStats.altoCritico}</p>
               <p className="text-xs text-muted-foreground">Alto/Crítico</p>
             </div>
             <div className="bg-purple-50 rounded-lg p-3 text-center">
-              <p className="text-xl font-bold text-purple-700">{formatBRL(String(stats.data.totalValorCausa))}</p>
+              <p className="text-xl font-bold text-purple-700">{formatBRL(String(filteredStats.totalValorCausa))}</p>
               <p className="text-xs text-muted-foreground">Valor Causas</p>
             </div>
             <div className="bg-emerald-50 rounded-lg p-3 text-center">
-              <p className="text-xl font-bold text-emerald-700">{formatBRL(String(stats.data.totalValorPago))}</p>
+              <p className="text-xl font-bold text-emerald-700">{formatBRL(String(filteredStats.totalValorPago))}</p>
               <p className="text-xs text-muted-foreground">Total Pago</p>
             </div>
           </div>
