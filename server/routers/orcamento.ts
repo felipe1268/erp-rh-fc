@@ -1558,7 +1558,18 @@ export const orcamentoRouter = router({
         isNull(orcamentos.deletedAt),
       ];
       if (input.obraId) conditions.push(eq(orcamentos.obraId, input.obraId));
-      return db.select().from(orcamentos).where(and(...conditions)).orderBy(desc(orcamentos.createdAt));
+      const rows = await db.select().from(orcamentos).where(and(...conditions)).orderBy(desc(orcamentos.createdAt));
+
+      const orcIds = rows.map(r => r.id);
+      let planejMap: Record<number, string> = {};
+      if (orcIds.length > 0) {
+        const projs = await db.select({ id: planejamentoProjetos.id, nome: planejamentoProjetos.nome, orcamentoId: planejamentoProjetos.orcamentoId })
+          .from(planejamentoProjetos)
+          .where(inArray(planejamentoProjetos.orcamentoId, orcIds));
+        projs.forEach(p => { if (p.orcamentoId) planejMap[p.orcamentoId] = p.nome || `Projeto #${p.id}`; });
+      }
+
+      return rows.map(r => ({ ...r, planejamentoVinculado: planejMap[r.id] || null }));
     }),
 
   // ── Buscar orçamento por ID com itens / insumos / BDI ─────
@@ -2475,22 +2486,16 @@ export const orcamentoRouter = router({
 
       const oid = input.id;
 
-      const projsVinculados = await db.select({ id: planejamentoProjetos.id })
+      const projsVinculados = await db.select({ id: planejamentoProjetos.id, nome: planejamentoProjetos.nome })
         .from(planejamentoProjetos)
         .where(eq(planejamentoProjetos.orcamentoId, oid));
 
-      for (const pj of projsVinculados) {
-        const pid = pj.id;
-        await db.delete(planejamentoRefis).where(eq(planejamentoRefis.projetoId, pid));
-        await db.delete(planejamentoAvancos).where(eq(planejamentoAvancos.projetoId, pid));
-        await db.delete(planejamentoMedicoes).where(eq(planejamentoMedicoes.projetoId, pid));
-        await db.delete(planejamentoAtividades).where(eq(planejamentoAtividades.projetoId, pid));
-        await db.delete(planejamentoRevisoes).where(eq(planejamentoRevisoes.projetoId, pid));
-        await db.delete(iaCronogramaChat).where(eq(iaCronogramaChat.projetoId, pid));
-        await db.delete(iaCronogramaAlertas).where(eq(iaCronogramaAlertas.projetoId, pid));
-        await db.delete(iaCronogramaCenarios).where(eq(iaCronogramaCenarios.projetoId, pid));
-        await db.delete(iaCronogramaMonitoramento).where(eq(iaCronogramaMonitoramento.projetoId, pid));
-        await db.delete(planejamentoProjetos).where(eq(planejamentoProjetos.id, pid));
+      if (projsVinculados.length > 0) {
+        const nomes = projsVinculados.map(p => p.nome || `#${p.id}`).join(', ');
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `Não é possível excluir este orçamento porque existe planejamento/cronograma vinculado (${nomes}). Exclua o planejamento primeiro e depois exclua o orçamento.`,
+        });
       }
 
       await db.update(comprasRiscoDebitos)

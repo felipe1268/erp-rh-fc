@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import {
   Calculator, Upload, Eye, Trash2, Pencil,
   FolderOpen, RefreshCw, Search, ChevronDown,
-  FileEdit, Clock, CheckCircle, Lock,
+  FileEdit, Clock, CheckCircle, Lock, Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -256,11 +256,16 @@ export default function OrcamentoLista() {
                           </DropdownMenu>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1 truncate">{orc.descricao || "—"}</p>
-                        <div className="flex gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
+                        <div className="flex gap-3 mt-2 text-xs text-muted-foreground flex-wrap items-center">
                           {orc.cliente && <span>Cliente: {orc.cliente}</span>}
                           {orc.local   && <span>Local: {orc.local}</span>}
                           {bdi  && <span className="text-amber-600 font-medium">{bdi}</span>}
                           {meta && <span className="text-purple-600 font-medium">{meta}</span>}
+                          {(orc as any).planejamentoVinculado && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium text-[10px]">
+                              <Calendar className="h-3 w-3" /> Cronograma vinculado
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -290,8 +295,8 @@ export default function OrcamentoLista() {
                             <Button
                               size="sm" variant="ghost"
                               className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                              disabled={orc.status === "fechado"}
-                              title="Excluir"
+                              disabled={orc.status === "fechado" || !!(orc as any).planejamentoVinculado}
+                              title={(orc as any).planejamentoVinculado ? "Exclua o planejamento primeiro" : "Excluir"}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
