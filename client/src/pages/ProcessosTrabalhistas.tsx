@@ -439,12 +439,16 @@ export default function ProcessosTrabalhistas() {
     if (!filtered.length && !processos.data?.length) return null;
     const items = filtered;
     const encerradosStatuses = ['encerrado', 'arquivado'];
-    const emAndamento = items.filter(p => !encerradosStatuses.includes(p.status) && p.fase !== 'encerrado').length;
-    const encerrados = items.filter(p => encerradosStatuses.includes(p.status) || p.fase === 'encerrado').length;
-    const altoCritico = items.filter(p => p.risco === 'alto' || p.risco === 'critico').length;
-    const totalValorCausa = items.reduce((sum, p) => sum + Number(p.valorCausa || 0), 0);
+    const isEncerrado = (p: any) => encerradosStatuses.includes(p.status) || p.fase === 'encerrado';
+    const ativos = items.filter(p => !isEncerrado(p));
+    const encerradosList = items.filter(p => isEncerrado(p));
+    const emAndamento = ativos.length;
+    const encerrados = encerradosList.length;
+    const altoCritico = ativos.filter(p => p.risco === 'alto' || p.risco === 'critico').length;
+    const passivoAberto = ativos.reduce((sum, p) => sum + Number(p.valorCausa || 0), 0);
+    const passivoEncerrado = encerradosList.reduce((sum, p) => sum + Number(p.valorCausa || 0), 0);
     const totalValorPago = items.reduce((sum, p) => sum + Number(p.valorPago || 0), 0);
-    return { total: items.length, emAndamento, encerrados, altoCritico, totalValorCausa, totalValorPago };
+    return { total: items.length, emAndamento, encerrados, altoCritico, passivoAberto, passivoEncerrado, totalValorPago };
   }, [filtered, processos.data]);
 
   // ===== DETALHE VIEW =====
@@ -1441,7 +1445,7 @@ export default function ProcessosTrabalhistas() {
 
         {/* Stats */}
         {filteredStats && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
             <div className="bg-blue-50 rounded-lg p-3 text-center">
               <p className="text-xl font-bold text-blue-700">{filteredStats.total}</p>
               <p className="text-xs text-muted-foreground">Total</p>
@@ -1458,9 +1462,13 @@ export default function ProcessosTrabalhistas() {
               <p className="text-xl font-bold text-red-700">{filteredStats.altoCritico}</p>
               <p className="text-xs text-muted-foreground">Alto/Crítico</p>
             </div>
-            <div className="bg-purple-50 rounded-lg p-3 text-center">
-              <p className="text-xl font-bold text-purple-700">{formatBRL(String(filteredStats.totalValorCausa))}</p>
-              <p className="text-xs text-muted-foreground">Valor Causas</p>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
+              <p className="text-xl font-bold text-orange-700">{formatBRL(String(filteredStats.passivoAberto))}</p>
+              <p className="text-xs font-semibold text-orange-600">Passivo em Aberto</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+              <p className="text-xl font-bold text-slate-500">{formatBRL(String(filteredStats.passivoEncerrado))}</p>
+              <p className="text-xs text-slate-500">Passivo Encerrado</p>
             </div>
             <div className="bg-emerald-50 rounded-lg p-3 text-center">
               <p className="text-xl font-bold text-emerald-700">{formatBRL(String(filteredStats.totalValorPago))}</p>
