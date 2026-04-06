@@ -40,6 +40,7 @@ const ALL_MODULES = [
   { id: "operacional",  label: "Operacional",      dot: "bg-cyan-500",    tag: "bg-cyan-100 text-cyan-700 border-cyan-200" },
   { id: "gestao-documentos", label: "Proj./Doc. Técnicos", dot: "bg-sky-500", tag: "bg-sky-100 text-sky-700 border-sky-200" },
   { id: "frotas",          label: "Frotas",            dot: "bg-cyan-600",   tag: "bg-cyan-100 text-cyan-700 border-cyan-200" },
+  { id: "medicao",        label: "Medição",           dot: "bg-teal-500",   tag: "bg-teal-100 text-teal-700 border-teal-200" },
 ];
 
 const GROUP_COLORS = [

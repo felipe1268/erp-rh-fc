@@ -17,7 +17,7 @@ import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
 import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection";
 import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -2100,8 +2100,16 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
   ],
   juridico: [
     { section: "Principal", label: "Painel Jurídico", path: "/painel/juridico" },
-    { section: "Jurídico", label: "Processos Trabalhistas", path: "/processos-trabalhistas" },
-    { section: "Dashboards", label: "Jurídico", path: "/dashboards/juridico" },
+    { section: "Trabalhista", label: "Processos Trabalhistas", path: "/processos-trabalhistas" },
+    { section: "Trabalhista", label: "Painel Trabalhista", path: "/painel/juridico-trabalhista" },
+    { section: "Tributário", label: "Processos Tributários", path: "/processos-tributarios" },
+    { section: "Tributário", label: "Painel Tributário", path: "/painel/tributario" },
+    { section: "Cível", label: "Processos Cíveis", path: "/processos-civeis" },
+    { section: "Cível", label: "Painel Cível", path: "/painel/civil" },
+    { section: "Dashboards", label: "Dashboard Jurídico", path: "/dashboards/juridico" },
+    { section: "Dashboards", label: "Dashboard Trabalhista", path: "/dashboards/trabalhista" },
+    { section: "Dashboards", label: "Dashboard Tributário", path: "/dashboards/tributario" },
+    { section: "Dashboards", label: "Dashboard Cível", path: "/dashboards/civil" },
   ],
   avaliacao: [
     { section: "Avaliação", label: "Dashboard", path: "/avaliacao-desempenho" },
@@ -2220,6 +2228,9 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
   ],
   medicao: [
     { section: "Medição", label: "Contratos de Medição", path: "/medicao" },
+    { section: "Medição", label: "Boletins de Medição", path: "/medicao?tab=boletins" },
+    { section: "Medição", label: "Fundo de Despesas (FD)", path: "/medicao?tab=fd" },
+    { section: "Medição", label: "Faturamento", path: "/medicao?tab=faturamento" },
   ],
   "gestao-documentos": [
     { section: "Principal", label: "Dashboard", path: "/gestao-documentos" },
@@ -2235,6 +2246,23 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Qualidade", label: "Concretagem", path: "/operacional/concretagem" },
     { section: "Qualidade", label: "Não Conformidades", path: "/operacional/nc" },
     { section: "Registros", label: "Registro Fotográfico", path: "/operacional/fotos" },
+  ],
+  frotas: [
+    { section: "Painel", label: "Dashboard Frotas", path: "/frotas/painel" },
+    { section: "Painel", label: "Analítico", path: "/frotas/analitico" },
+    { section: "Painel", label: "Dash Manutenção", path: "/frotas/manutencoes-dashboard" },
+    { section: "Cadastro", label: "Veículos", path: "/frotas/veiculos" },
+    { section: "Operacional", label: "Manutenções", path: "/frotas/manutencoes" },
+    { section: "Operacional", label: "Combustível", path: "/frotas/combustivel" },
+    { section: "Operacional", label: "Preços Combustível", path: "/frotas/precos-combustivel" },
+    { section: "Operacional", label: "Pedágios", path: "/frotas/pedagios" },
+    { section: "Obrigações", label: "Multas", path: "/frotas/multas" },
+    { section: "Obrigações", label: "IPVA", path: "/frotas/ipva" },
+    { section: "Obrigações", label: "Licenciamento", path: "/frotas/licenciamento" },
+    { section: "Obrigações", label: "Seguros", path: "/frotas/seguros" },
+    { section: "Relatórios", label: "Raio-X do Veículo", path: "/frotas/raio-x" },
+    { section: "Relatórios", label: "Checklist Veicular", path: "/frotas/checklist" },
+    { section: "Rastreamento", label: "Mapa e Trajetos", path: "/frotas/rastreamento" },
   ],
 };
 
@@ -2283,6 +2311,7 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
     medicao:        { label: "Medição",        subtitle: "Medição de Contratos",                 icon: FileBarChart,  color: "text-teal-600",   bgColor: "bg-teal-50",   borderColor: "border-teal-200",   description: "Boletins de medição por contrato, planilha EAP com avanço físico, faturamento direto e controle de FDs." },
     "gestao-documentos": { label: "Proj./Doc. Técnicos", subtitle: "Projetos e Documentos Técnicos", icon: FolderOpen, color: "text-indigo-600", bgColor: "bg-indigo-50", borderColor: "border-indigo-200", description: "Controle de documentos técnicos, revisões com aprovação, disciplinas, ARTs/RRTs e distribuição." },
     operacional: { label: "Operacional", subtitle: "Gestão Operacional de Obras", icon: Hammer, color: "text-orange-600", bgColor: "bg-orange-50", borderColor: "border-orange-200", description: "RDO, checklists de qualidade, mapa de concretagem, não conformidades, registro fotográfico e dashboard operacional." },
+    frotas: { label: "Frotas", subtitle: "Controle de Frotas", icon: Truck, color: "text-cyan-600", bgColor: "bg-cyan-50", borderColor: "border-cyan-200", description: "Veículos, manutenções, combustível, multas, IPVA, licenciamento, seguros com análise IA e rastreamento." },
   };
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
