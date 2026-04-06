@@ -1379,7 +1379,9 @@ export default function RDO() {
         </div>
       </div>
 
-      {selectedFonte === 'importado' ? (
+      {rdoIdParam ? (
+        <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div>
+      ) : selectedFonte === 'importado' ? (
         <ObraVisaoGeral obraId={selectedObraId} companyId={companyId} setLocation={setLocation} selectedFonte={selectedFonte} />
       ) : (
         <>
