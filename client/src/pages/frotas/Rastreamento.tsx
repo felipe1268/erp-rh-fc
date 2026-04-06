@@ -129,21 +129,38 @@ export default function Rastreamento() {
 
         withPos.forEach((v: any) => {
           const isOn = v.status === 'ON';
-          const color = isOn ? '#22c55e' : v.status === 'OUTDATED' ? '#f59e0b' : '#6b7280';
-          const fillColor = isOn ? '#22c55e' : v.status === 'OUTDATED' ? '#f59e0b' : '#9ca3af';
-
-          const marker = L.circleMarker(
-            [v.latitude, v.longitude],
-            { radius: 10, color, fillColor, fillOpacity: 0.85, weight: 2 },
-          ).addTo(map);
-
+          const color = isOn ? '#22c55e' : v.status === 'OUTDATED' ? '#eab308' : '#6b7280';
           const statusInfo = STATUS_COLORS[v.status] || STATUS_COLORS.OFF;
+
+          const vehicleSvgs: Record<string, string> = {
+            TRUCK: `<svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>`,
+            MOTORCYCLE: `<svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M19.44 9.03L15.41 5H11v2h3.59l2 2H5c-2.8 0-5 2.2-5 5s2.2 5 5 5c2.46 0 4.45-1.69 4.9-4h1.65l2.77-2.77c-.21.54-.32 1.14-.32 1.77 0 2.8 2.2 5 5 5s5-2.2 5-5c0-2.65-1.97-4.77-4.56-4.97zM7.82 15C7.4 16.15 6.28 17 5 17c-1.63 0-3-1.37-3-3s1.37-3 3-3c1.28 0 2.4.85 2.82 2H5v2h2.82zM19 17c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/></svg>`,
+            EQUIPMENT: `<svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>`,
+            CAR: `<svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>`,
+          };
+          const vehicleSvg = vehicleSvgs[v.tipo] || vehicleSvgs.CAR;
+
+          const markerIcon = L.divIcon({
+            className: '',
+            html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translateX(-50%)">
+              <div style="background:${color};border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.3);border:2px solid white">
+                ${vehicleSvg}
+              </div>
+              <div style="background:white;border:1px solid ${color};border-radius:4px;padding:1px 5px;font-size:10px;font-weight:bold;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.15);color:#333;margin-top:2px">${v.placa}</div>
+            </div>`,
+            iconSize: [28, 50],
+            iconAnchor: [14, 28],
+            popupAnchor: [0, -30],
+          });
+
+          const marker = L.marker([v.latitude, v.longitude], { icon: markerIcon }).addTo(map);
+
           marker.bindPopup(
-            `<div style="font-size:12px;min-width:180px">
-              <strong style="font-size:14px">${v.placa}</strong><br/>
-              <span style="color:#666">${v.nome || v.marca + ' ' + v.modelo}</span><br/>
+            `<div style="font-size:12px;min-width:200px">
+              <strong style="font-size:14px">${v.placa}</strong>
+              <span style="background:${color};color:white;border-radius:3px;padding:1px 6px;font-size:10px;margin-left:6px">${statusInfo.label}</span><br/>
+              <span style="color:#666">${v.nome || (v.marca || '') + ' ' + (v.modelo || '')}</span><br/>
               <hr style="margin:4px 0;border-color:#eee"/>
-              <b>Status:</b> <span style="color:${isOn ? 'green' : '#666'}">${statusInfo.label}</span><br/>
               ${v.motorista ? `<b>Motorista:</b> ${v.motorista}<br/>` : ''}
               <b>Velocidade:</b> ${v.velocidade || 0} km/h<br/>
               <b>Ignição:</b> ${v.ignicao ? '🟢 Ligada' : '⚫ Desligada'}<br/>
@@ -156,14 +173,6 @@ export default function Rastreamento() {
 
           marker.on('click', () => setSelectedVehicle(v));
           markersRef.current.push(marker);
-
-          const labelIcon = L.divIcon({
-            className: 'vehicle-label',
-            html: `<div style="background:white;border:1px solid ${color};border-radius:4px;padding:1px 4px;font-size:10px;font-weight:bold;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.15);color:#333;transform:translateX(-50%)">${v.placa}</div>`,
-            iconSize: [0, 0],
-            iconAnchor: [0, -14],
-          });
-          L.marker([v.latitude, v.longitude], { icon: labelIcon, interactive: false }).addTo(map);
         });
 
         if (withPos.length > 0) {
