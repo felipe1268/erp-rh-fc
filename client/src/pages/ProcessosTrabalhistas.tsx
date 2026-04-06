@@ -424,7 +424,8 @@ export default function ProcessosTrabalhistas() {
         if (filterEntidade === "chlorum") return rec.includes("CHLORUM");
         if (filterEntidade === "julio_ferraz_pj") return rec.includes("JULIO FERRAZ PROJETOS") || rec.includes("JÚLIO FERRAZ PROJETOS");
         if (filterEntidade === "cf_hotelaria") return rec.includes("CF HOTELARIA");
-        if (filterEntidade === "julio_cesar_pf") return rec.includes("JULIO CESAR FERRAZ") || rec.includes("JÚLIO CESAR FERRAZ");
+        if (filterEntidade === "julio_cesar_pf") return (rec.includes("JULIO CESAR FERRAZ") || rec.includes("JÚLIO CESAR FERRAZ")) && !rec.includes("VIDRA");
+        if (filterEntidade === "vidracaria_ferraz") return rec.includes("VIDRA");
         if (filterEntidade === "chlorum_julio") return (rec.includes("CHLORUM") && (rec.includes("JÚLIO") || rec.includes("JULIO")));
         return true;
       });
@@ -1511,6 +1512,7 @@ export default function ProcessosTrabalhistas() {
               <option value="julio_ferraz_pj">Julio Ferraz Projetos e Obras</option>
               <option value="cf_hotelaria">CF Hotelaria Ltda</option>
               <option value="julio_cesar_pf">Júlio Cesar Ferraz de Araújo (PF)</option>
+              <option value="vidracaria_ferraz">Vidraçaria Ferraz (filho Júlio)</option>
             </select>
             <select value={filterRegiao} onChange={e => setFilterRegiao(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
@@ -1520,7 +1522,6 @@ export default function ProcessosTrabalhistas() {
               <option value="minas_gerais">Minas Gerais (TRT 3)</option>
               <option value="paraiba">Paraíba (TRT 13)</option>
               <option value="goias">Goiás (TRT 18)</option>
-              <option value="vidracaria_ferraz">Vidraçaria Ferraz</option>
             </select>
             <select value={filterResultado} onChange={e => setFilterResultado(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
