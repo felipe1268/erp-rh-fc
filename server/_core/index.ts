@@ -61,6 +61,22 @@ async function startServer() {
   // Download de arquivos SST em ZIP
   registerDownloadSSTRoute(app);
   registerDownloadOCRoute(app);
+  app.get("/api/diario-obra/foto/:id", async (req: any, res: any) => {
+    try {
+      const db = await (await import("../db")).getDb();
+      const { sql } = await import("drizzle-orm");
+      const result = (await db.execute(sql`SELECT foto_data, mime_type FROM diario_obra_fotos WHERE id = ${Number(req.params.id)}`)) as any;
+      const row = (result.rows ?? result)?.[0];
+      if (!row || !row.foto_data) return res.status(404).send("Foto não encontrada");
+      res.setHeader("Content-Type", row.mime_type || "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      const buf = Buffer.isBuffer(row.foto_data) ? row.foto_data : Buffer.from(row.foto_data);
+      res.send(buf);
+    } catch (e: any) {
+      res.status(500).send("Erro: " + e.message);
+    }
+  });
+
   app.use("/uploads", express.static(path.join(process.cwd(), "server/uploads")));
 
   app.use("/uploads", async (req: any, res: any) => {

@@ -80,7 +80,8 @@ export const operacionalRouter = router({
           db.execute(sql`SELECT id, tipo, descricao, quantidade, unidade, nota_fiscal, fornecedor FROM diario_obra_materiais WHERE relatorio_id = ${input.id} ORDER BY tipo, id`),
           db.execute(sql`SELECT id, texto, autor, data_hora FROM diario_obra_comentarios WHERE relatorio_id = ${input.id} ORDER BY data_hora`),
         ]);
-        return { ...rel, maoObra: rows(maoObra), equipamentos: rows(equipamentos), atividades: rows(atividades), ocorrencias: rows(ocorrencias), materiais: rows(materiais), comentarios: rows(comentarios), fotos: [] };
+        const fotosImport = rows(await db.execute(sql`SELECT id, descricao, mime_type, tamanho_bytes, created_at FROM diario_obra_fotos WHERE relatorio_id = ${input.id} ORDER BY id`));
+        return { ...rel, maoObra: rows(maoObra), equipamentos: rows(equipamentos), atividades: rows(atividades), ocorrencias: rows(ocorrencias), materiais: rows(materiais), comentarios: rows(comentarios), fotos: fotosImport };
       }
       const rdoRows = rows(await db.execute(sql`SELECT *, 'principal' as fonte FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
       const rdoData = rdoRows[0] || null;

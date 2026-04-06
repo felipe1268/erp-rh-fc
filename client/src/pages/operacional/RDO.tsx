@@ -254,6 +254,25 @@ export default function RDO() {
           </Card>
         )}
 
+        {(rdo as any).fotos?.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Camera className="w-4 h-4" /> Fotos ({(rdo as any).fotos.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {(rdo as any).fotos.map((f: any) => (
+                  <div key={f.id} className="relative group cursor-pointer" onClick={() => window.open(`/api/diario-obra/foto/${f.id}`, '_blank')}>
+                    <img src={`/api/diario-obra/foto/${f.id}`} alt={f.descricao || 'Foto'} className="w-full h-40 object-cover rounded-lg border" loading="lazy" />
+                    {f.descricao && <p className="text-xs text-gray-500 mt-1 truncate">{f.descricao}</p>}
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-all flex items-center justify-center">
+                      <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">Ampliar</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {(rdo as any).pdf_url && (
           <Card>
             <CardContent className="py-3">
