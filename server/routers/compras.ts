@@ -1833,9 +1833,9 @@ Responda APENAS com um objeto JSON no formato:
       const [item] = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.id, input.itemId));
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
       if (item.solicitacaoId !== input.solicitacaoId) throw new TRPCError({ code: "BAD_REQUEST", message: "Item não pertence a esta solicitação" });
-      await db.update(comprasSolicitacoesItens).set({
-        statusItem: "cancelado",
-      }).where(eq(comprasSolicitacoesItens.id, input.itemId));
+      await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ${input.itemId}`);
+      await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ${input.itemId}`);
+      await db.delete(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.id, input.itemId));
       await db.update(comprasSolicitacoes).set({ atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
       return { ok: true };
     }),
@@ -7646,14 +7646,12 @@ Retorne APENAS um JSON válido neste formato:
           if (inputItemIds.length > 0) {
             const existingItems = await db.select({ id: comprasSolicitacoesItens.id })
               .from(comprasSolicitacoesItens)
-              .where(and(
-                eq(comprasSolicitacoesItens.solicitacaoId, input.id),
-                sql`${comprasSolicitacoesItens.statusItem} != 'cancelado'`,
-              ));
+              .where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
             const removedIds = existingItems.map(i => i.id).filter(id => !inputItemIds.includes(id));
             if (removedIds.length > 0) {
-              await db.update(comprasSolicitacoesItens).set({ statusItem: "cancelado" })
-                .where(inArray(comprasSolicitacoesItens.id, removedIds));
+              await db.execute(sql`UPDATE compras_cotacoes_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
+              await db.execute(sql`UPDATE compras_ordens_itens SET solicitacao_item_id = NULL WHERE solicitacao_item_id = ANY(${sql.raw("ARRAY[" + removedIds.join(",") + "]::int[]")})`);
+              await db.delete(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, removedIds));
             }
           }
         } else {
