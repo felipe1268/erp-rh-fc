@@ -1035,55 +1035,57 @@ export default function Solicitacoes() {
 
     const saldoProblems: string[] = [];
     const itensSemVerba = new Set<string>();
-    if (form.tipo === "servico") {
-      const eapItems = eapQ.data?.items || [];
-      for (const [, item] of consolidados) {
-        if (!item.orcamentoItemId) continue;
-        const eapItem = eapItems.find((e: any) => e.id === item.orcamentoItemId);
-        if (!eapItem) continue;
-        const mdoSaldo = (eapItem as any).mdoSaldo ?? 0;
-        const qtdSolicitando = parseFloat(item.quantidade) || 0;
-        if (qtdSolicitando > 0 && mdoSaldo <= 0) {
-          saldoProblems.push(`${eapItem.descricao}: SEM SALDO MDO (100%+ contratado)`);
-          itensSemVerba.add(String(item.orcamentoItemId));
-        } else if (qtdSolicitando > mdoSaldo && mdoSaldo > 0) {
-          const excesso = (((qtdSolicitando - mdoSaldo) / parseFloat(String(eapItem.quantidade || 1))) * 100).toFixed(0);
-          saldoProblems.push(`${eapItem.descricao}: excede saldo MDO em ${excesso}%`);
-          itensSemVerba.add(String(item.orcamentoItemId));
-        }
-      }
-    } else if (modoSC === "eap") {
-      const consolidadosData = insumosConsolidadosQ.data ?? [];
-      const qtdPorInsumo: Record<string, number> = {};
-      for (const [, item] of consolidados) {
-        if (item.insumoCodigo) {
-          qtdPorInsumo[item.insumoCodigo] = (qtdPorInsumo[item.insumoCodigo] || 0) + parseFloat(item.quantidade);
-        }
-      }
-      for (const [codigo, qtdSolicitando] of Object.entries(qtdPorInsumo)) {
-        const insGlobal = consolidadosData.find((c: any) => c.insumoCodigo === codigo);
-        if (insGlobal && qtdSolicitando > 0) {
-          const saldoDisp = insGlobal.saldoDisponivel;
-          if (saldoDisp <= 0 && !eapExtraDesbloqueado[codigo]) {
-            saldoProblems.push(`${insGlobal.descricao}: SEM SALDO GLOBAL (100%+ solicitado)`);
-            itensSemVerba.add(codigo);
-          } else if (qtdSolicitando > saldoDisp && saldoDisp > 0 && !eapExtraDesbloqueado[codigo]) {
-            const excesso = (((qtdSolicitando - saldoDisp) / insGlobal.qtdTotalOrcada) * 100).toFixed(0);
-            saldoProblems.push(`${insGlobal.descricao}: excede saldo global em ${excesso}%`);
-            itensSemVerba.add(codigo);
+    if (!editingSc) {
+      if (form.tipo === "servico") {
+        const eapItems = eapQ.data?.items || [];
+        for (const [, item] of consolidados) {
+          if (!item.orcamentoItemId) continue;
+          const eapItem = eapItems.find((e: any) => e.id === item.orcamentoItemId);
+          if (!eapItem) continue;
+          const mdoSaldo = (eapItem as any).mdoSaldo ?? 0;
+          const qtdSolicitando = parseFloat(item.quantidade) || 0;
+          if (qtdSolicitando > 0 && mdoSaldo <= 0) {
+            saldoProblems.push(`${eapItem.descricao}: SEM SALDO MDO (100%+ contratado)`);
+            itensSemVerba.add(String(item.orcamentoItemId));
+          } else if (qtdSolicitando > mdoSaldo && mdoSaldo > 0) {
+            const excesso = (((qtdSolicitando - mdoSaldo) / parseFloat(String(eapItem.quantidade || 1))) * 100).toFixed(0);
+            saldoProblems.push(`${eapItem.descricao}: excede saldo MDO em ${excesso}%`);
+            itensSemVerba.add(String(item.orcamentoItemId));
           }
         }
-      }
-    } else {
-      for (const [orcId, saldo] of Object.entries(saldoData)) {
-        const qtdServ = parseFloat(eapQtdServico[parseInt(orcId)] || "0");
-        if (qtdServ > 0 && saldo.saldoDisponivel <= 0) {
-          saldoProblems.push(`${saldo.descricao}: SEM VERBA DISPONÍVEL (100%+ consumido)`);
-          itensSemVerba.add(orcId);
-        } else if (qtdServ > 0 && saldo.saldoDisponivel < qtdServ) {
-          const excesso = ((qtdServ - saldo.saldoDisponivel) / saldo.qtdOrcada * 100).toFixed(0);
-          saldoProblems.push(`${saldo.descricao}: excede saldo em ${excesso}%`);
-          itensSemVerba.add(orcId);
+      } else if (modoSC === "eap") {
+        const consolidadosData = insumosConsolidadosQ.data ?? [];
+        const qtdPorInsumo: Record<string, number> = {};
+        for (const [, item] of consolidados) {
+          if (item.insumoCodigo) {
+            qtdPorInsumo[item.insumoCodigo] = (qtdPorInsumo[item.insumoCodigo] || 0) + parseFloat(item.quantidade);
+          }
+        }
+        for (const [codigo, qtdSolicitando] of Object.entries(qtdPorInsumo)) {
+          const insGlobal = consolidadosData.find((c: any) => c.insumoCodigo === codigo);
+          if (insGlobal && qtdSolicitando > 0) {
+            const saldoDisp = insGlobal.saldoDisponivel;
+            if (saldoDisp <= 0 && !eapExtraDesbloqueado[codigo]) {
+              saldoProblems.push(`${insGlobal.descricao}: SEM SALDO GLOBAL (100%+ solicitado)`);
+              itensSemVerba.add(codigo);
+            } else if (qtdSolicitando > saldoDisp && saldoDisp > 0 && !eapExtraDesbloqueado[codigo]) {
+              const excesso = (((qtdSolicitando - saldoDisp) / insGlobal.qtdTotalOrcada) * 100).toFixed(0);
+              saldoProblems.push(`${insGlobal.descricao}: excede saldo global em ${excesso}%`);
+              itensSemVerba.add(codigo);
+            }
+          }
+        }
+      } else {
+        for (const [orcId, saldo] of Object.entries(saldoData)) {
+          const qtdServ = parseFloat(eapQtdServico[parseInt(orcId)] || "0");
+          if (qtdServ > 0 && saldo.saldoDisponivel <= 0) {
+            saldoProblems.push(`${saldo.descricao}: SEM VERBA DISPONÍVEL (100%+ consumido)`);
+            itensSemVerba.add(orcId);
+          } else if (qtdServ > 0 && saldo.saldoDisponivel < qtdServ) {
+            const excesso = ((qtdServ - saldo.saldoDisponivel) / saldo.qtdOrcada * 100).toFixed(0);
+            saldoProblems.push(`${saldo.descricao}: excede saldo em ${excesso}%`);
+            itensSemVerba.add(orcId);
+          }
         }
       }
     }
