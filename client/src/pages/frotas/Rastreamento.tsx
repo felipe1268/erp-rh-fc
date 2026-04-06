@@ -6,10 +6,41 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MapPin, Upload, RefreshCw } from "lucide-react";
+import { MapPin, Upload, RefreshCw, Car, Truck, Bike, Loader2, Wifi, WifiOff, Navigation } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
+
+const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  ON: { bg: 'bg-green-100', text: 'text-green-700', label: 'Ligado' },
+  OFF: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Desligado' },
+  OUTDATED: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Desatualizado' },
+  IDLE: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Parado' },
+};
+
+const TIPO_ICONS: Record<string, typeof Car> = {
+  CAR: Car,
+  TRUCK: Truck,
+  MOTORCYCLE: Bike,
+  EQUIPMENT: Truck,
+};
+
+function formatDateTime(iso: string | null) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString('pt-BR'); } catch { return iso; }
+}
+
+function timeAgo(iso: string | null) {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `${min}min atrás`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h atrás`;
+  return `${Math.floor(h / 24)}d atrás`;
+}
 
 export default function Rastreamento() {
   const { selectedCompanyId } = useCompany();
@@ -18,11 +49,19 @@ export default function Rastreamento() {
   const [filterVehicle, setFilterVehicle] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [activeTab, setActiveTab] = useState<'live' | 'history'>('live');
+  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const vehicles = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
+  const infleet = trpc.frotas.getInfleetPositions.useQuery(
+    { companyId: cId },
+    { enabled: cId > 0, refetchInterval: 60000 },
+  );
+
+  const localVehicles = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
   const tracking = trpc.frotas.listTracking.useQuery(
     {
       companyId: cId,
@@ -30,7 +69,7 @@ export default function Rastreamento() {
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
     },
-    { enabled: cId > 0 },
+    { enabled: cId > 0 && activeTab === 'history' },
   );
   const importMut = trpc.frotas.importTrackingCsv.useMutation({
     onSuccess: (data) => { tracking.refetch(); toast.success(`${data.imported} pontos importados`); },
@@ -48,9 +87,13 @@ export default function Rastreamento() {
     e.target.value = "";
   }
 
+  const infleetVehicles = (infleet.data as any)?.vehicles || [];
+  const filteredInfleet = filterVehicle === 'all'
+    ? infleetVehicles
+    : infleetVehicles.filter((v: any) => v.id === filterVehicle);
+
   useEffect(() => {
     if (!mapRef.current) return;
-    const points = tracking.data || [];
 
     const loadLeaflet = async () => {
       if (typeof window === "undefined") return;
@@ -69,62 +112,118 @@ export default function Rastreamento() {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
+      markersRef.current = [];
 
-      const center: [number, number] = points.length > 0
-        ? [parseFloat(points[0].latitude), parseFloat(points[0].longitude)]
-        : [-15.7801, -47.9292];
+      if (activeTab === 'live') {
+        const withPos = filteredInfleet.filter((v: any) => v.latitude && v.longitude);
+        const center: [number, number] = withPos.length > 0
+          ? [withPos[0].latitude, withPos[0].longitude]
+          : [-22.83, -45.23];
 
-      const map = L.map(mapRef.current!, { zoomControl: true }).setView(center, points.length > 0 ? 13 : 4);
-      mapInstanceRef.current = map;
+        const map = L.map(mapRef.current!, { zoomControl: true }).setView(center, withPos.length > 0 ? 10 : 6);
+        mapInstanceRef.current = map;
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
-      }).addTo(map);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "&copy; OpenStreetMap contributors",
+        }).addTo(map);
 
-      if (points.length === 0) return;
+        withPos.forEach((v: any) => {
+          const isOn = v.status === 'ON';
+          const color = isOn ? '#22c55e' : v.status === 'OUTDATED' ? '#f59e0b' : '#6b7280';
+          const fillColor = isOn ? '#22c55e' : v.status === 'OUTDATED' ? '#f59e0b' : '#9ca3af';
 
-      const vehicleGroups: Record<string, any[]> = {};
-      points.forEach((p: any) => {
-        const key = p.vehicle_id || "unknown";
-        if (!vehicleGroups[key]) vehicleGroups[key] = [];
-        vehicleGroups[key].push(p);
-      });
+          const marker = L.circleMarker(
+            [v.latitude, v.longitude],
+            { radius: 10, color, fillColor, fillOpacity: 0.85, weight: 2 },
+          ).addTo(map);
 
-      const colors = ["#0ea5e9", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
-      let colorIdx = 0;
+          const statusInfo = STATUS_COLORS[v.status] || STATUS_COLORS.OFF;
+          marker.bindPopup(
+            `<div style="font-size:12px;min-width:180px">
+              <strong style="font-size:14px">${v.placa}</strong><br/>
+              <span style="color:#666">${v.nome || v.marca + ' ' + v.modelo}</span><br/>
+              <hr style="margin:4px 0;border-color:#eee"/>
+              <b>Status:</b> <span style="color:${isOn ? 'green' : '#666'}">${statusInfo.label}</span><br/>
+              ${v.motorista ? `<b>Motorista:</b> ${v.motorista}<br/>` : ''}
+              <b>Velocidade:</b> ${v.velocidade || 0} km/h<br/>
+              <b>Ignição:</b> ${v.ignicao ? '🟢 Ligada' : '⚫ Desligada'}<br/>
+              <b>KM:</b> ${v.km ? v.km.toLocaleString('pt-BR') : '—'}<br/>
+              <b>Endereço:</b> ${v.endereco || '—'}<br/>
+              <b>Atualizado:</b> ${formatDateTime(v.dataHora)}<br/>
+              <span style="color:#999;font-size:10px">${timeAgo(v.dataHora)}</span>
+            </div>`,
+          );
 
-      Object.entries(vehicleGroups).forEach(([vId, pts]) => {
-        const color = colors[colorIdx % colors.length];
-        colorIdx++;
+          marker.on('click', () => setSelectedVehicle(v));
+          markersRef.current.push(marker);
 
-        const latLngs = pts.map((p: any) => [parseFloat(p.latitude), parseFloat(p.longitude)] as [number, number]);
-
-        if (latLngs.length > 1) {
-          L.polyline(latLngs, { color, weight: 3, opacity: 0.7 }).addTo(map);
-        }
-
-        pts.forEach((p: any, i: number) => {
-          const isFirst = i === 0;
-          const isLast = i === pts.length - 1;
-          if (isFirst || isLast || i % Math.max(1, Math.floor(pts.length / 20)) === 0) {
-            const marker = L.circleMarker(
-              [parseFloat(p.latitude), parseFloat(p.longitude)],
-              { radius: isFirst || isLast ? 8 : 4, color, fillColor: color, fillOpacity: 0.8, weight: 2 },
-            ).addTo(map);
-
-            marker.bindPopup(
-              `<div style="font-size:12px"><strong>${p.placa || "Veículo " + vId}</strong><br/>` +
-              `${p.data_hora ? new Date(p.data_hora).toLocaleString("pt-BR") : ""}<br/>` +
-              `Vel: ${p.velocidade || "—"} km/h<br/>` +
-              `${p.endereco || ""}</div>`,
-            );
-          }
+          const labelIcon = L.divIcon({
+            className: 'vehicle-label',
+            html: `<div style="background:white;border:1px solid ${color};border-radius:4px;padding:1px 4px;font-size:10px;font-weight:bold;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.15);color:#333;transform:translateX(-50%)">${v.placa}</div>`,
+            iconSize: [0, 0],
+            iconAnchor: [0, -14],
+          });
+          L.marker([v.latitude, v.longitude], { icon: labelIcon, interactive: false }).addTo(map);
         });
-      });
 
-      const allLatLngs = points.map((p: any) => [parseFloat(p.latitude), parseFloat(p.longitude)] as [number, number]);
-      if (allLatLngs.length > 0) {
-        map.fitBounds(L.latLngBounds(allLatLngs), { padding: [30, 30] });
+        if (withPos.length > 0) {
+          const bounds = L.latLngBounds(withPos.map((v: any) => [v.latitude, v.longitude]));
+          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+        }
+      } else {
+        const points = tracking.data || [];
+        const center: [number, number] = points.length > 0
+          ? [parseFloat(points[0].latitude), parseFloat(points[0].longitude)]
+          : [-22.83, -45.23];
+
+        const map = L.map(mapRef.current!, { zoomControl: true }).setView(center, points.length > 0 ? 13 : 6);
+        mapInstanceRef.current = map;
+
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "&copy; OpenStreetMap contributors",
+        }).addTo(map);
+
+        if (points.length === 0) return;
+
+        const vehicleGroups: Record<string, any[]> = {};
+        points.forEach((p: any) => {
+          const key = p.vehicle_id || "unknown";
+          if (!vehicleGroups[key]) vehicleGroups[key] = [];
+          vehicleGroups[key].push(p);
+        });
+
+        const colors = ["#0ea5e9", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
+        let colorIdx = 0;
+
+        Object.entries(vehicleGroups).forEach(([vId, pts]) => {
+          const color = colors[colorIdx % colors.length];
+          colorIdx++;
+          const latLngs = pts.map((p: any) => [parseFloat(p.latitude), parseFloat(p.longitude)] as [number, number]);
+          if (latLngs.length > 1) {
+            L.polyline(latLngs, { color, weight: 3, opacity: 0.7 }).addTo(map);
+          }
+          pts.forEach((p: any, i: number) => {
+            const isFirst = i === 0;
+            const isLast = i === pts.length - 1;
+            if (isFirst || isLast || i % Math.max(1, Math.floor(pts.length / 20)) === 0) {
+              const marker = L.circleMarker(
+                [parseFloat(p.latitude), parseFloat(p.longitude)],
+                { radius: isFirst || isLast ? 8 : 4, color, fillColor: color, fillOpacity: 0.8, weight: 2 },
+              ).addTo(map);
+              marker.bindPopup(
+                `<div style="font-size:12px"><strong>${p.placa || "Veículo " + vId}</strong><br/>` +
+                `${p.data_hora ? new Date(p.data_hora).toLocaleString("pt-BR") : ""}<br/>` +
+                `Vel: ${p.velocidade || "—"} km/h<br/>` +
+                `${p.endereco || ""}</div>`,
+              );
+            }
+          });
+        });
+
+        const allLatLngs = points.map((p: any) => [parseFloat(p.latitude), parseFloat(p.longitude)] as [number, number]);
+        if (allLatLngs.length > 0) {
+          map.fitBounds(L.latLngBounds(allLatLngs), { padding: [30, 30] });
+        }
       }
     };
 
@@ -136,7 +235,11 @@ export default function Rastreamento() {
         mapInstanceRef.current = null;
       }
     };
-  }, [tracking.data]);
+  }, [activeTab === 'live' ? filteredInfleet : tracking.data, activeTab]);
+
+  const onCount = infleetVehicles.filter((v: any) => v.status === 'ON').length;
+  const offCount = infleetVehicles.filter((v: any) => v.status === 'OFF').length;
+  const outdatedCount = infleetVehicles.filter((v: any) => v.status === 'OUTDATED').length;
 
   return (
     <DashboardLayout>
@@ -146,47 +249,181 @@ export default function Rastreamento() {
             <MapPin className="h-6 w-6 text-blue-600" /> Rastreamento
           </h1>
           <div className="flex gap-2">
-            <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={handleCsv} />
-            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importMut.isPending}>
-              <Upload className="h-4 w-4 mr-1" /> {importMut.isPending ? "Importando..." : "Importar CSV"}
-            </Button>
-            <Button variant="outline" onClick={() => tracking.refetch()}>
-              <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
-            </Button>
+            <div className="flex rounded-lg border overflow-hidden">
+              <button
+                className={`px-3 py-1.5 text-sm font-medium transition-colors ${activeTab === 'live' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                onClick={() => setActiveTab('live')}>
+                <Wifi className="h-3.5 w-3.5 inline mr-1" /> Tempo Real
+              </button>
+              <button
+                className={`px-3 py-1.5 text-sm font-medium transition-colors ${activeTab === 'history' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                onClick={() => setActiveTab('history')}>
+                <Navigation className="h-3.5 w-3.5 inline mr-1" /> Histórico
+              </button>
+            </div>
+            {activeTab === 'live' && (
+              <Button variant="outline" size="sm" onClick={() => infleet.refetch()} disabled={infleet.isFetching}>
+                <RefreshCw className={`h-4 w-4 mr-1 ${infleet.isFetching ? 'animate-spin' : ''}`} /> Atualizar
+              </Button>
+            )}
+            {activeTab === 'history' && (
+              <>
+                <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={handleCsv} />
+                <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={importMut.isPending}>
+                  <Upload className="h-4 w-4 mr-1" /> Importar CSV
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => tracking.refetch()}>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Select value={filterVehicle} onValueChange={setFilterVehicle}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Veículo" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {(vehicles.data || []).map((v: any) => (
-                <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-1">
-            <Label className="text-xs">De:</Label>
-            <Input type="date" className="w-[150px]" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+        {activeTab === 'live' && infleetVehicles.length > 0 && (
+          <div className="flex gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="w-3 h-3 rounded-full bg-green-500 inline-block"></span>
+              <span className="font-medium">{onCount}</span> <span className="text-gray-500">Ligados</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="w-3 h-3 rounded-full bg-gray-400 inline-block"></span>
+              <span className="font-medium">{offCount}</span> <span className="text-gray-500">Desligados</span>
+            </div>
+            {outdatedCount > 0 && (
+              <div className="flex items-center gap-1.5 text-sm">
+                <span className="w-3 h-3 rounded-full bg-yellow-500 inline-block"></span>
+                <span className="font-medium">{outdatedCount}</span> <span className="text-gray-500">Desatualizados</span>
+              </div>
+            )}
+            <span className="text-xs text-gray-400 ml-2">Atualização automática a cada 60s</span>
           </div>
-          <div className="flex items-center gap-1">
-            <Label className="text-xs">Até:</Label>
-            <Input type="date" className="w-[150px]" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 items-center">
+          {activeTab === 'live' ? (
+            <Select value={filterVehicle} onValueChange={(v) => { setFilterVehicle(v); setSelectedVehicle(null); }}>
+              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Veículo" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os veículos ({infleetVehicles.length})</SelectItem>
+                {infleetVehicles.map((v: any) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.placa} — {v.nome || v.modelo}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <>
+              <Select value={filterVehicle} onValueChange={setFilterVehicle}>
+                <SelectTrigger className="w-[200px]"><SelectValue placeholder="Veículo" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {(localVehicles.data || []).map((v: any) => (
+                    <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-1">
+                <Label className="text-xs">De:</Label>
+                <Input type="date" className="w-[150px]" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              </div>
+              <div className="flex items-center gap-1">
+                <Label className="text-xs">Até:</Label>
+                <Input type="date" className="w-[150px]" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+              </div>
+            </>
+          )}
         </div>
 
-        <div className="text-xs text-muted-foreground">
-          CSV: vehicleId, latitude, longitude, data_hora (ISO), velocidade, endereco
+        {activeTab === 'history' && (
+          <div className="text-xs text-muted-foreground">
+            CSV: vehicleId, latitude, longitude, data_hora (ISO), velocidade, endereco
+          </div>
+        )}
+
+        {infleet.isLoading && activeTab === 'live' && (
+          <div className="flex items-center justify-center py-8 gap-2 text-gray-500">
+            <Loader2 className="w-5 h-5 animate-spin" /> Carregando posições da Infleet...
+          </div>
+        )}
+
+        {(infleet.data as any)?.error && activeTab === 'live' && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+            Erro ao conectar com Infleet: {(infleet.data as any).error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+          <div className="lg:col-span-3">
+            <Card>
+              <CardContent className="p-0">
+                <div ref={mapRef} className="w-full h-[520px] rounded-lg" style={{ minHeight: 400 }} />
+              </CardContent>
+            </Card>
+          </div>
+
+          {activeTab === 'live' && (
+            <div className="lg:col-span-1">
+              <Card className="h-[520px] flex flex-col">
+                <CardHeader className="py-2 px-3">
+                  <CardTitle className="text-sm">Veículos ({infleetVehicles.length})</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 flex-1 overflow-y-auto">
+                  {infleetVehicles.map((v: any) => {
+                    const st = STATUS_COLORS[v.status] || STATUS_COLORS.OFF;
+                    const Icon = TIPO_ICONS[v.tipo] || Car;
+                    const isSelected = selectedVehicle?.id === v.id;
+                    return (
+                      <div
+                        key={v.id}
+                        className={`px-3 py-2 border-b cursor-pointer hover:bg-blue-50 transition-colors ${isSelected ? 'bg-blue-50 border-l-2 border-l-blue-500' : ''}`}
+                        onClick={() => {
+                          setSelectedVehicle(v);
+                          if (mapInstanceRef.current && v.latitude && v.longitude) {
+                            mapInstanceRef.current.setView([v.latitude, v.longitude], 15, { animate: true });
+                            markersRef.current.forEach(m => {
+                              const ll = m.getLatLng();
+                              if (Math.abs(ll.lat - v.latitude) < 0.0001 && Math.abs(ll.lng - v.longitude) < 0.0001) {
+                                m.openPopup();
+                              }
+                            });
+                          }
+                        }}>
+                        <div className="flex items-center gap-2">
+                          <Icon className="w-4 h-4 text-gray-500 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-sm font-bold truncate">{v.placa}</span>
+                              <Badge variant="outline" className={`text-[10px] px-1 py-0 ${st.bg} ${st.text} border-0`}>
+                                {st.label}
+                              </Badge>
+                            </div>
+                            <p className="text-[11px] text-gray-500 truncate">{v.nome || `${v.marca} ${v.modelo}`}</p>
+                            {v.motorista && <p className="text-[10px] text-gray-400 truncate">👤 {v.motorista}</p>}
+                            {v.endereco && <p className="text-[10px] text-gray-400 truncate">📍 {v.endereco}</p>}
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {v.velocidade != null && <span className="text-[10px] text-gray-400">{v.velocidade} km/h</span>}
+                              <span className="text-[10px] text-gray-300">{timeAgo(v.dataHora)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {infleetVehicles.length === 0 && !infleet.isLoading && (
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                      <WifiOff className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      Nenhum veículo encontrado
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
 
-        <Card>
-          <CardContent className="p-0">
-            <div ref={mapRef} className="w-full h-[500px] rounded-lg" style={{ minHeight: 400 }} />
-          </CardContent>
-        </Card>
-
-        {tracking.data && tracking.data.length > 0 && (
+        {activeTab === 'history' && tracking.data && tracking.data.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">{tracking.data.length} pontos registrados</CardTitle>

@@ -1314,6 +1314,56 @@ Sempre retorne JSON válido, sem markdown.`;
       return (res as any).rows || [];
     }),
 
+  getInfleetPositions: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      if (!input.companyId) return { vehicles: [], error: 'Empresa não selecionada' };
+      const token = process.env.FROTA_API_TOKEN;
+      if (!token) return { vehicles: [], error: 'Token Infleet não configurado' };
+      try {
+        const query = `{
+          listVehicles {
+            id plate displayName brand model year type status
+            odometer driver { id name }
+            location {
+              latitude longitude speed ignition address fixTime course
+            }
+          }
+        }`;
+        const resp = await fetch('https://api.infleet.com.br/v1/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ query }),
+          signal: AbortSignal.timeout(12000),
+        });
+        if (!resp.ok) return { vehicles: [], error: `Infleet API: ${resp.status}` };
+        const data = await resp.json() as any;
+        if (data.errors) return { vehicles: [], error: data.errors[0]?.message || 'Erro GraphQL' };
+        const veiculos = (data.data?.listVehicles || []).map((v: any) => ({
+          id: v.id,
+          placa: v.plate,
+          nome: v.displayName || `${v.brand || ''} ${v.model || ''}`.trim(),
+          marca: v.brand,
+          modelo: v.model,
+          ano: v.year,
+          tipo: v.type,
+          status: v.status,
+          km: v.odometer ? Math.round(v.odometer) : null,
+          motorista: v.driver?.name || null,
+          latitude: v.location?.latitude || null,
+          longitude: v.location?.longitude || null,
+          velocidade: v.location?.speed != null ? Math.round(v.location.speed) : null,
+          ignicao: v.location?.ignition ?? null,
+          endereco: v.location?.address || null,
+          dataHora: v.location?.fixTime || null,
+          curso: v.location?.course || null,
+        }));
+        return { vehicles: veiculos, error: null };
+      } catch (e: any) {
+        return { vehicles: [], error: e.message || 'Erro ao conectar com Infleet' };
+      }
+    }),
+
   importTrackingCsv: protectedProcedure
     .input(z.object({ companyId: z.number(), data: z.array(z.object({
       vehicleId: z.number(), latitude: z.string(), longitude: z.string(),
