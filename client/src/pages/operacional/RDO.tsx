@@ -310,6 +310,22 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
   const obra = obraData.data || {} as any;
   const [fotoExpandida, setFotoExpandida] = useState<number | null>(null);
 
+  const allReports = trpc.operacional.listarRDOs.useQuery(
+    { companyId, obraId: rdo.obra_id || obraId, fonte: 'importado' as const },
+    { enabled: !!companyId && !!(rdo.obra_id || obraId) }
+  );
+  const sortedReports = [...(allReports.data || [])].sort((a: any, b: any) => {
+    const da = a.data || ''; const db2 = b.data || '';
+    return da < db2 ? -1 : da > db2 ? 1 : (a.numero || 0) - (b.numero || 0);
+  });
+  const currentIdx = sortedReports.findIndex((r: any) => r.id === rdo.id);
+  const prevReport = currentIdx > 0 ? sortedReports[currentIdx - 1] : null;
+  const nextReport = currentIdx < sortedReports.length - 1 ? sortedReports[currentIdx + 1] : null;
+
+  const meses = [...new Set(sortedReports.map((r: any) => (r.data || '').substring(0, 7)).filter((m: string) => m.length === 7))].sort();
+  const mesAtual = (rdo.data || '').substring(0, 7);
+  const reportsMesAtual = sortedReports.filter((r: any) => (r.data || '').startsWith(mesAtual));
+
   const dataRel = new Date(rdo.data + "T12:00:00");
   const diaSemana = diasSemana[dataRel.getDay()] || '';
 
@@ -318,6 +334,12 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
   const materiaisOutros = ((rdo.materiais || []) as any[]).filter((m: any) =>
     !['recebido','Recebido','utilizado','Utilizado','usado'].includes(m.tipo)
   );
+
+  const formatMesLabel = (mes: string) => {
+    const [y, m] = mes.split('-');
+    const meses_nome = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    return `${meses_nome[parseInt(m) - 1]} ${y}`;
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
@@ -330,7 +352,19 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
             Visualizar relatório: {dataRel.toLocaleDateString("pt-BR")} n° {rdo.numero}
           </h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {prevReport && (
+            <Button variant="outline" size="sm"
+              onClick={() => setLocation(`/operacional/rdo?obra=${obraId}&id=${prevReport.id}&fonte=importado`)}>
+              ‹ Anterior
+            </Button>
+          )}
+          {nextReport && (
+            <Button variant="outline" size="sm"
+              onClick={() => setLocation(`/operacional/rdo?obra=${obraId}&id=${nextReport.id}&fonte=importado`)}>
+              Próximo ›
+            </Button>
+          )}
           {rdo.pdf_url && (
             <a href={rdo.pdf_url} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm"><Printer className="w-4 h-4 mr-1" /> Imprimir</Button>
@@ -338,6 +372,33 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
           )}
         </div>
       </div>
+
+      {meses.length > 1 && (
+        <div className="mb-4 flex items-center gap-3 flex-wrap">
+          <span className="text-xs text-gray-500 font-medium">Mês:</span>
+          {meses.map((m: string) => (
+            <button key={m}
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${m === mesAtual ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+              onClick={() => {
+                const firstInMonth = sortedReports.find((r: any) => (r.data || '').startsWith(m));
+                if (firstInMonth) setLocation(`/operacional/rdo?obra=${obraId}&id=${firstInMonth.id}&fonte=importado`);
+              }}>
+              {formatMesLabel(m)}
+            </button>
+          ))}
+          {reportsMesAtual.length > 1 && (
+            <select className="text-xs border rounded px-2 py-1 ml-2"
+              value={rdo.id}
+              onChange={(e) => setLocation(`/operacional/rdo?obra=${obraId}&id=${e.target.value}&fonte=importado`)}>
+              {reportsMesAtual.map((r: any) => (
+                <option key={r.id} value={r.id}>
+                  {new Date(r.data + 'T12:00:00').toLocaleDateString('pt-BR')} - n° {r.numero}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
 
       <div className="border border-gray-300 bg-white">
         {rdo.status && (
@@ -618,13 +679,33 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
           {(rdo.fotos || []).length > 0 ? (
             <div className="border border-gray-300 border-t-0 p-3">
               <div className="flex flex-wrap gap-2">
-                {(rdo.fotos as any[]).map((f: any) => (
-                  <img key={f.id} src={`/api/diario-obra/foto/${f.id}`}
+                {(rdo.fotos as any[]).map((f: any, idx: number) => (
+                  <img key={f.dbId || f.url || idx}
+                    src={f.urlMiniatura || f.url || (f.dbId ? `/api/diario-obra/foto/${f.dbId}` : '')}
                     alt={f.descricao || 'Foto'} loading="lazy"
                     className="h-24 w-32 object-cover border rounded cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => setFotoExpandida(f.id)} />
+                    onClick={() => setFotoExpandida(idx)} />
                 ))}
               </div>
+              {fotoExpandida !== null && (rdo.fotos as any[])[fotoExpandida] && (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center" onClick={() => setFotoExpandida(null)}>
+                  <button className="absolute top-4 right-4 text-white text-3xl z-50" onClick={() => setFotoExpandida(null)}>✕</button>
+                  {fotoExpandida > 0 && (
+                    <button className="absolute left-4 text-white text-4xl z-50" onClick={(e) => { e.stopPropagation(); setFotoExpandida(fotoExpandida - 1); }}>‹</button>
+                  )}
+                  {fotoExpandida < (rdo.fotos as any[]).length - 1 && (
+                    <button className="absolute right-4 text-white text-4xl z-50" onClick={(e) => { e.stopPropagation(); setFotoExpandida(fotoExpandida + 1); }}>›</button>
+                  )}
+                  <img
+                    src={(rdo.fotos as any[])[fotoExpandida].url || (rdo.fotos as any[])[fotoExpandida].urlMiniatura}
+                    alt="Foto expandida"
+                    className="max-h-[90vh] max-w-[90vw] object-contain rounded"
+                    onClick={(e) => e.stopPropagation()} />
+                  <div className="absolute bottom-4 text-white text-sm bg-black/50 px-3 py-1 rounded">
+                    {fotoExpandida + 1} / {(rdo.fotos as any[]).length}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="border border-gray-300 border-t-0 p-3 text-sm text-gray-400 text-center">Nenhum registro</div>
@@ -632,8 +713,25 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
         </div>
 
         <div className="mt-4">
-          <SectionHeader title="Vídeos" count={0} />
-          <div className="border border-gray-300 border-t-0 p-3 text-sm text-gray-400 text-center">Nenhum registro</div>
+          <SectionHeader title="Vídeos" count={(rdo.videos || []).length} />
+          {(rdo.videos || []).length > 0 ? (
+            <div className="border border-gray-300 border-t-0 p-3">
+              <div className="flex flex-wrap gap-3">
+                {(rdo.videos as any[]).map((v: any, idx: number) => (
+                  <a key={idx} href={v.url} target="_blank" rel="noopener noreferrer"
+                    className="relative block group">
+                    <img src={v.urlFoto} alt={v.descricao || 'Vídeo'} loading="lazy"
+                      className="h-28 w-40 object-cover border rounded" />
+                    <div className="absolute bottom-1 left-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1">
+                      <span>▶</span> {v.duracao || ''}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="border border-gray-300 border-t-0 p-3 text-sm text-gray-400 text-center">Nenhum registro</div>
+          )}
         </div>
 
         <div className="mt-4">

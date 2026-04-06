@@ -191,7 +191,45 @@ export const operacionalRouter = router({
           db.execute(sql`SELECT id, texto, autor, data_hora FROM diario_obra_comentarios WHERE relatorio_id = ${input.id} ORDER BY data_hora`),
         ]);
         const fotosImport = rows(await db.execute(sql`SELECT id, descricao, mime_type, tamanho_bytes, created_at FROM diario_obra_fotos WHERE relatorio_id = ${input.id} ORDER BY id`));
-        return { ...rel, maoObra: rows(maoObra), equipamentos: rows(equipamentos), atividades: rows(atividades), ocorrencias: rows(ocorrencias), materiais: rows(materiais), comentarios: rows(comentarios), fotos: fotosImport };
+
+        let apiFotos: any[] = [];
+        let apiVideos: any[] = [];
+        const token = process.env.DIARIO_OBRA_API_TOKEN;
+        if (token && rel.external_id) {
+          const obraRow = rows(await db.execute(sql`SELECT external_id FROM diario_obra_obras WHERE id = ${rel.obra_id}`));
+          const obraExtId = obraRow[0]?.external_id;
+          if (obraExtId) {
+            try {
+              const resp = await fetch(`https://api.diariodeobra.app/v2/obras/${obraExtId}/relatorios/${rel.external_id}`, {
+                headers: { 'token': token },
+                signal: AbortSignal.timeout(8000),
+              });
+              if (resp.ok) {
+                const apiData = await resp.json() as any;
+                apiFotos = (apiData.galeriaDeFotos || []).map((f: any) => ({
+                  url: f.url,
+                  urlMiniatura: f.urlMiniatura || f.url,
+                  descricao: f.descricao,
+                }));
+                apiVideos = (apiData.videos || []).map((v: any) => ({
+                  url: v.url,
+                  urlFoto: v.urlFoto || v.arquivoFoto || v.url,
+                  duracao: v.duracao,
+                  descricao: v.descricao,
+                }));
+              }
+            } catch {}
+          }
+        }
+
+        const finalFotos = apiFotos.length > 0 ? apiFotos : fotosImport.map((f: any) => ({
+          url: `/api/diario-obra/foto/${f.id}`,
+          urlMiniatura: `/api/diario-obra/foto/${f.id}`,
+          descricao: f.descricao,
+          dbId: f.id,
+        }));
+
+        return { ...rel, maoObra: rows(maoObra), equipamentos: rows(equipamentos), atividades: rows(atividades), ocorrencias: rows(ocorrencias), materiais: rows(materiais), comentarios: rows(comentarios), fotos: finalFotos, videos: apiVideos };
       }
       const rdoRows = rows(await db.execute(sql`SELECT *, 'principal' as fonte FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
       const rdoData = rdoRows[0] || null;
