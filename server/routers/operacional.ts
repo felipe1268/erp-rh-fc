@@ -1397,6 +1397,293 @@ export const operacionalRouter = router({
       const { url } = await storagePut(key, buf, input.contentType);
       return { url: url || `/api/files/${key}` };
     }),
+
+  listarEnsaios: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().optional(),
+      tipo: z.string().optional(),
+      status: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      let query = sql`
+        SELECT e.*, 
+          (SELECT COUNT(*) FROM ensaios_corpos_prova cp WHERE cp.ensaio_id = e.id) as total_cps,
+          (SELECT COUNT(*) FROM ensaios_corpos_prova cp WHERE cp.ensaio_id = e.id AND cp.status = 'rompido') as cps_rompidos,
+          (SELECT AVG(cp.resistencia_mpa) FROM ensaios_corpos_prova cp WHERE cp.ensaio_id = e.id AND cp.resistencia_mpa IS NOT NULL) as media_resistencia
+        FROM ensaios_tecnologicos e
+        WHERE e.company_id = ${input.companyId}
+      `;
+      if (input.obraId) query = sql`${query} AND e.obra_id = ${input.obraId}`;
+      if (input.tipo) query = sql`${query} AND e.tipo = ${input.tipo}`;
+      if (input.status) query = sql`${query} AND e.status = ${input.status}`;
+      query = sql`${query} ORDER BY e.data_coleta DESC, e.id DESC`;
+      return rows(await db.execute(query));
+    }),
+
+  getEnsaio: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const ensaio = rows(await db.execute(sql`SELECT * FROM ensaios_tecnologicos WHERE id = ${input.id} AND company_id = ${input.companyId}`))[0];
+      if (!ensaio) return null;
+      const cps = rows(await db.execute(sql`SELECT * FROM ensaios_corpos_prova WHERE ensaio_id = ${input.id} ORDER BY idade_dias, numero_cp`));
+      return { ...ensaio, corpos_prova: cps };
+    }),
+
+  criarEnsaio: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().optional(),
+      obraNome: z.string().optional(),
+      tipo: z.string(),
+      subtipo: z.string().optional(),
+      numeroEnsaio: z.string().optional(),
+      dataColeta: z.string(),
+      dataRuptura: z.string().optional(),
+      idadeDias: z.number().optional(),
+      localColeta: z.string().optional(),
+      elementoEstrutural: z.string().optional(),
+      peca: z.string().optional(),
+      fornecedorConcreto: z.string().optional(),
+      notaFiscal: z.string().optional(),
+      traco: z.string().optional(),
+      fckProjeto: z.number().optional(),
+      slumpPrevisto: z.number().optional(),
+      slumpRealizado: z.number().optional(),
+      temperatura: z.number().optional(),
+      volumeM3: z.number().optional(),
+      laboratorio: z.string().optional(),
+      responsavel: z.string().optional(),
+      observacoes: z.string().optional(),
+      corposProva: z.array(z.object({
+        numeroCp: z.string(),
+        idadeDias: z.number(),
+        dataRuptura: z.string().optional(),
+      })).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const userName = ctx.user?.name || ctx.user?.email || 'sistema';
+      const numRes = rows(await db.execute(sql`SELECT COUNT(*) + 1 as num FROM ensaios_tecnologicos WHERE company_id = ${input.companyId}`));
+      const autoNum = input.numeroEnsaio || `ENS-${String(numRes[0]?.num || 1).padStart(4, '0')}`;
+
+      const res = rows(await db.execute(sql`
+        INSERT INTO ensaios_tecnologicos (
+          company_id, obra_id, obra_nome, tipo, subtipo, numero_ensaio,
+          data_coleta, data_ruptura, idade_dias, local_coleta, elemento_estrutural,
+          peca, fornecedor_concreto, nota_fiscal, traco, fck_projeto,
+          slump_previsto, slump_realizado, temperatura, volume_m3,
+          laboratorio, responsavel, observacoes, created_by, status
+        ) VALUES (
+          ${input.companyId}, ${input.obraId || null}, ${input.obraNome || null},
+          ${input.tipo}, ${input.subtipo || null}, ${autoNum},
+          ${input.dataColeta}, ${input.dataRuptura || null}, ${input.idadeDias || null},
+          ${input.localColeta || null}, ${input.elementoEstrutural || null},
+          ${input.peca || null}, ${input.fornecedorConcreto || null},
+          ${input.notaFiscal || null}, ${input.traco || null}, ${input.fckProjeto || null},
+          ${input.slumpPrevisto || null}, ${input.slumpRealizado || null},
+          ${input.temperatura || null}, ${input.volumeM3 || null},
+          ${input.laboratorio || null}, ${input.responsavel || null},
+          ${input.observacoes || null}, ${userName}, 'pendente'
+        ) RETURNING *
+      `));
+
+      const ensaio = res[0];
+      if (ensaio && input.corposProva?.length) {
+        for (const cp of input.corposProva) {
+          await db.execute(sql`
+            INSERT INTO ensaios_corpos_prova (ensaio_id, numero_cp, idade_dias, data_ruptura, status)
+            VALUES (${ensaio.id}, ${cp.numeroCp}, ${cp.idadeDias}, ${cp.dataRuptura || null}, 'pendente')
+          `);
+        }
+      }
+      return ensaio;
+    }),
+
+  atualizarEnsaio: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      obraId: z.number().optional(),
+      obraNome: z.string().optional(),
+      tipo: z.string().optional(),
+      subtipo: z.string().optional(),
+      dataColeta: z.string().optional(),
+      dataRuptura: z.string().optional(),
+      dataResultado: z.string().optional(),
+      idadeDias: z.number().optional(),
+      localColeta: z.string().optional(),
+      elementoEstrutural: z.string().optional(),
+      peca: z.string().optional(),
+      fornecedorConcreto: z.string().optional(),
+      notaFiscal: z.string().optional(),
+      traco: z.string().optional(),
+      fckProjeto: z.number().optional(),
+      slumpPrevisto: z.number().optional(),
+      slumpRealizado: z.number().optional(),
+      temperatura: z.number().optional(),
+      volumeM3: z.number().optional(),
+      laboratorio: z.string().optional(),
+      responsavel: z.string().optional(),
+      status: z.string().optional(),
+      resultado: z.string().optional(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const { id, ...fields } = input;
+      const sets: any[] = [];
+      if (fields.obraId !== undefined) sets.push(sql`obra_id = ${fields.obraId}`);
+      if (fields.obraNome !== undefined) sets.push(sql`obra_nome = ${fields.obraNome}`);
+      if (fields.tipo !== undefined) sets.push(sql`tipo = ${fields.tipo}`);
+      if (fields.subtipo !== undefined) sets.push(sql`subtipo = ${fields.subtipo}`);
+      if (fields.dataColeta !== undefined) sets.push(sql`data_coleta = ${fields.dataColeta}`);
+      if (fields.dataRuptura !== undefined) sets.push(sql`data_ruptura = ${fields.dataRuptura}`);
+      if (fields.dataResultado !== undefined) sets.push(sql`data_resultado = ${fields.dataResultado}`);
+      if (fields.idadeDias !== undefined) sets.push(sql`idade_dias = ${fields.idadeDias}`);
+      if (fields.localColeta !== undefined) sets.push(sql`local_coleta = ${fields.localColeta}`);
+      if (fields.elementoEstrutural !== undefined) sets.push(sql`elemento_estrutural = ${fields.elementoEstrutural}`);
+      if (fields.peca !== undefined) sets.push(sql`peca = ${fields.peca}`);
+      if (fields.fornecedorConcreto !== undefined) sets.push(sql`fornecedor_concreto = ${fields.fornecedorConcreto}`);
+      if (fields.notaFiscal !== undefined) sets.push(sql`nota_fiscal = ${fields.notaFiscal}`);
+      if (fields.traco !== undefined) sets.push(sql`traco = ${fields.traco}`);
+      if (fields.fckProjeto !== undefined) sets.push(sql`fck_projeto = ${fields.fckProjeto}`);
+      if (fields.slumpPrevisto !== undefined) sets.push(sql`slump_previsto = ${fields.slumpPrevisto}`);
+      if (fields.slumpRealizado !== undefined) sets.push(sql`slump_realizado = ${fields.slumpRealizado}`);
+      if (fields.temperatura !== undefined) sets.push(sql`temperatura = ${fields.temperatura}`);
+      if (fields.volumeM3 !== undefined) sets.push(sql`volume_m3 = ${fields.volumeM3}`);
+      if (fields.laboratorio !== undefined) sets.push(sql`laboratorio = ${fields.laboratorio}`);
+      if (fields.responsavel !== undefined) sets.push(sql`responsavel = ${fields.responsavel}`);
+      if (fields.status !== undefined) sets.push(sql`status = ${fields.status}`);
+      if (fields.resultado !== undefined) sets.push(sql`resultado = ${fields.resultado}`);
+      if (fields.observacoes !== undefined) sets.push(sql`observacoes = ${fields.observacoes}`);
+      sets.push(sql`updated_at = NOW()`);
+      if (sets.length === 1) return { success: true };
+      const setCombined = sets.reduce((a, b) => sql`${a}, ${b}`);
+      await db.execute(sql`UPDATE ensaios_tecnologicos SET ${setCombined} WHERE id = ${id} AND company_id = ${input.companyId}`);
+      return { success: true };
+    }),
+
+  deletarEnsaio: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`DELETE FROM ensaios_tecnologicos WHERE id = ${input.id} AND company_id = ${input.companyId}`);
+      return { success: true };
+    }),
+
+  adicionarCorpoProva: protectedProcedure
+    .input(z.object({
+      ensaioId: z.number(),
+      companyId: z.number(),
+      numeroCp: z.string(),
+      idadeDias: z.number(),
+      dataRuptura: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const owner = rows(await db.execute(sql`SELECT id FROM ensaios_tecnologicos WHERE id = ${input.ensaioId} AND company_id = ${input.companyId}`))[0];
+      if (!owner) throw new Error("Ensaio não encontrado");
+      const res = rows(await db.execute(sql`
+        INSERT INTO ensaios_corpos_prova (ensaio_id, numero_cp, idade_dias, data_ruptura, status)
+        VALUES (${input.ensaioId}, ${input.numeroCp}, ${input.idadeDias}, ${input.dataRuptura || null}, 'pendente')
+        RETURNING *
+      `));
+      return res[0];
+    }),
+
+  registrarRuptura: protectedProcedure
+    .input(z.object({
+      cpId: z.number(),
+      companyId: z.number(),
+      resistenciaMpa: z.number(),
+      tipoRuptura: z.string().optional(),
+      massaKg: z.number().optional(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const cpOwner = rows(await db.execute(sql`
+        SELECT cp.id FROM ensaios_corpos_prova cp
+        JOIN ensaios_tecnologicos e ON e.id = cp.ensaio_id
+        WHERE cp.id = ${input.cpId} AND e.company_id = ${input.companyId}
+      `))[0];
+      if (!cpOwner) throw new Error("Corpo de prova não encontrado");
+      await db.execute(sql`
+        UPDATE ensaios_corpos_prova SET
+          resistencia_mpa = ${input.resistenciaMpa},
+          tipo_ruptura = ${input.tipoRuptura || null},
+          massa_kg = ${input.massaKg || null},
+          observacoes = ${input.observacoes || null},
+          data_ruptura = COALESCE(data_ruptura, CURRENT_DATE),
+          status = 'rompido'
+        WHERE id = ${input.cpId}
+      `);
+      const cp = rows(await db.execute(sql`SELECT ensaio_id FROM ensaios_corpos_prova WHERE id = ${input.cpId}`))[0];
+      if (cp) {
+        const allCps = rows(await db.execute(sql`SELECT status FROM ensaios_corpos_prova WHERE ensaio_id = ${cp.ensaio_id}`));
+        const allRompidos = allCps.every((c: any) => c.status === 'rompido');
+        const rompidos = rows(await db.execute(sql`SELECT resistencia_mpa FROM ensaios_corpos_prova WHERE ensaio_id = ${cp.ensaio_id} AND resistencia_mpa IS NOT NULL`));
+        const media = rompidos.length > 0 ? rompidos.reduce((s: number, r: any) => s + parseFloat(r.resistencia_mpa), 0) / rompidos.length : null;
+        const ensaio = rows(await db.execute(sql`SELECT fck_projeto FROM ensaios_tecnologicos WHERE id = ${cp.ensaio_id}`))[0];
+        const fck = ensaio?.fck_projeto ? parseFloat(ensaio.fck_projeto) : null;
+        let resultado = null;
+        if (media !== null && fck !== null) {
+          resultado = media >= fck ? 'aprovado' : 'reprovado';
+        }
+        if (allRompidos) {
+          await db.execute(sql`UPDATE ensaios_tecnologicos SET status = 'concluido', resultado = ${resultado}, data_resultado = CURRENT_DATE, updated_at = NOW() WHERE id = ${cp.ensaio_id}`);
+        } else if (resultado) {
+          await db.execute(sql`UPDATE ensaios_tecnologicos SET resultado = ${resultado}, updated_at = NOW() WHERE id = ${cp.ensaio_id}`);
+        }
+      }
+      return { success: true };
+    }),
+
+  deletarCorpoProva: protectedProcedure
+    .input(z.object({ cpId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const cpOwner = rows(await db.execute(sql`
+        SELECT cp.id FROM ensaios_corpos_prova cp
+        JOIN ensaios_tecnologicos e ON e.id = cp.ensaio_id
+        WHERE cp.id = ${input.cpId} AND e.company_id = ${input.companyId}
+      `))[0];
+      if (!cpOwner) throw new Error("Corpo de prova não encontrado");
+      await db.execute(sql`DELETE FROM ensaios_corpos_prova WHERE id = ${input.cpId}`);
+      return { success: true };
+    }),
+
+  dashboardEnsaios: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const totais = rows(await db.execute(sql`
+        SELECT status, COUNT(*) as count FROM ensaios_tecnologicos WHERE company_id = ${input.companyId} GROUP BY status
+      `));
+      const resultados = rows(await db.execute(sql`
+        SELECT resultado, COUNT(*) as count FROM ensaios_tecnologicos WHERE company_id = ${input.companyId} AND resultado IS NOT NULL GROUP BY resultado
+      `));
+      const porTipo = rows(await db.execute(sql`
+        SELECT tipo, COUNT(*) as count FROM ensaios_tecnologicos WHERE company_id = ${input.companyId} GROUP BY tipo ORDER BY count DESC
+      `));
+      const porObra = rows(await db.execute(sql`
+        SELECT obra_nome, COUNT(*) as count,
+          COUNT(*) FILTER (WHERE resultado = 'aprovado') as aprovados,
+          COUNT(*) FILTER (WHERE resultado = 'reprovado') as reprovados
+        FROM ensaios_tecnologicos WHERE company_id = ${input.companyId} AND obra_nome IS NOT NULL
+        GROUP BY obra_nome ORDER BY count DESC
+      `));
+      const recentes = rows(await db.execute(sql`
+        SELECT e.id, e.numero_ensaio, e.tipo, e.obra_nome, e.data_coleta, e.status, e.resultado, e.fck_projeto,
+          (SELECT AVG(cp.resistencia_mpa) FROM ensaios_corpos_prova cp WHERE cp.ensaio_id = e.id AND cp.resistencia_mpa IS NOT NULL) as media_resistencia
+        FROM ensaios_tecnologicos e WHERE e.company_id = ${input.companyId}
+        ORDER BY e.created_at DESC LIMIT 10
+      `));
+      return { totais, resultados, porTipo, porObra, recentes };
+    }),
 });
 
 async function autoPreencherRDO(db: any, rdoId: number, companyId: number, obraId: number) {
