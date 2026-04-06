@@ -2528,9 +2528,11 @@ export const terceiroContratosRouter = router({
         isNova = true;
       }
 
-      // 5. Consultar datas das atividades do cronograma vinculadas aos itens contratados
-      //    Prioridade: EAP codes dos itens da SC → fallback por descrição → fallback geral da obra
-      let dataInicioContrato = new Date().toISOString().slice(0, 10);
+      // 5. Consultar datas das atividades do cronograma (planejamento) vinculadas ao escopo contratado
+      //    Início = primeira data_inicio das atividades contratadas
+      //    Término = última data_fim das atividades contratadas
+      //    Se não encontrar no cronograma, datas ficam null (preenchidas manualmente)
+      let dataInicioContrato: string | null = null;
       let dataTerminoContrato: string | null = null;
       try {
         if (cot.obraId) {
@@ -2572,7 +2574,7 @@ export const terceiroContratosRouter = router({
                 dataTerminoContrato = String(row.max_fim).slice(0, 10);
                 found = true;
               }
-              if (found) console.log(`[gerarContratoFromCotacao] Datas via EAP (${eapCodes.join(",")}): ${dataInicioContrato} a ${dataTerminoContrato}`);
+              if (found) console.log(`[gerarContratoFromCotacao] Datas via EAP cronograma (${eapCodes.length} códigos): ${dataInicioContrato} a ${dataTerminoContrato}`);
             } catch (eapErr) {
               console.warn("[gerarContratoFromCotacao] Erro na busca por EAP:", eapErr);
             }
@@ -2595,7 +2597,8 @@ export const terceiroContratosRouter = router({
                 const cronoDates = await db.execute(sql`
                   SELECT MIN(pa.data_inicio) as min_inicio, MAX(pa.data_fim) as max_fim
                   FROM planejamento_projetos pp
-                  JOIN planejamento_atividades pa ON pa.projeto_id = pp.id
+                  JOIN planejamento_revisoes pr ON pr.projeto_id = pp.id AND pr.status = 'aprovada'
+                  JOIN planejamento_atividades pa ON pa.projeto_id = pp.id AND pa.revisao_id = pr.id
                   WHERE pp.obra_id = ${cot.obraId}
                     AND pa.data_inicio IS NOT NULL
                     AND pa.disabled IS NOT TRUE
@@ -2610,7 +2613,7 @@ export const terceiroContratosRouter = router({
                   dataTerminoContrato = String(row.max_fim).slice(0, 10);
                   found = true;
                 }
-                if (found) console.log(`[gerarContratoFromCotacao] Datas por descrição: ${dataInicioContrato} a ${dataTerminoContrato}`);
+                if (found) console.log(`[gerarContratoFromCotacao] Datas por descrição no cronograma: ${dataInicioContrato} a ${dataTerminoContrato}`);
               }
             } catch (descErr) {
               console.warn("[gerarContratoFromCotacao] Erro na busca por descrição:", descErr);
@@ -2618,46 +2621,7 @@ export const terceiroContratosRouter = router({
           }
 
           if (!found) {
-            try {
-              const fallback = await db.execute(sql`
-                SELECT MIN(pa.data_inicio) as min_inicio, MAX(pa.data_fim) as max_fim
-                FROM planejamento_projetos pp
-                JOIN planejamento_atividades pa ON pa.projeto_id = pp.id
-                WHERE pp.obra_id = ${cot.obraId}
-                  AND pa.data_inicio IS NOT NULL
-                  AND pa.disabled IS NOT TRUE
-              `);
-              const fbRow = (fallback as any).rows?.[0];
-              if (fbRow?.min_inicio) {
-                dataInicioContrato = String(fbRow.min_inicio).slice(0, 10);
-                found = true;
-              }
-              if (fbRow?.max_fim) {
-                dataTerminoContrato = String(fbRow.max_fim).slice(0, 10);
-                found = true;
-              }
-              if (found) console.log(`[gerarContratoFromCotacao] Datas fallback cronograma: ${dataInicioContrato} a ${dataTerminoContrato}`);
-            } catch (fbErr) {
-              console.warn("[gerarContratoFromCotacao] Erro no fallback cronograma:", fbErr);
-            }
-          }
-
-          if (!found) {
-            try {
-              const [obraInfo] = await db.select({
-                dataInicio: obras.dataInicio,
-                dataPrevisaoFim: obras.dataPrevisaoFim,
-              }).from(obras).where(eq(obras.id, cot.obraId!));
-              if (obraInfo?.dataInicio) {
-                dataInicioContrato = String(obraInfo.dataInicio).slice(0, 10);
-              }
-              if (obraInfo?.dataPrevisaoFim) {
-                dataTerminoContrato = String(obraInfo.dataPrevisaoFim).slice(0, 10);
-              }
-              console.log(`[gerarContratoFromCotacao] Datas fallback obra cadastro: ${dataInicioContrato} a ${dataTerminoContrato}`);
-            } catch (obraErr) {
-              console.warn("[gerarContratoFromCotacao] Erro no fallback obra:", obraErr);
-            }
+            console.log(`[gerarContratoFromCotacao] Obra ${cot.obraId} sem cronograma no planejamento — datas do contrato em branco`);
           }
         }
       } catch (e) {
