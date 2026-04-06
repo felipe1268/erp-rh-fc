@@ -679,7 +679,7 @@ export default function RDO() {
   const [form, setForm] = useState<any>({});
   const [addDialog, setAddDialog] = useState<string | null>(null);
   const [addForm, setAddForm] = useState<any>({});
-  const [viewMode, setViewMode] = useState<'lista' | 'visao'>('lista');
+  const [viewMode, setViewMode] = useState<'lista' | 'visao'>('visao');
   const [buscaObra, setBuscaObra] = useState("");
 
   const rdo = rdoDetalhe.data;
@@ -1125,21 +1125,171 @@ export default function RDO() {
     );
   }
 
+  const rdoStatusLabel = (st: string) => {
+    if (st === 'aprovado') return 'Aprovado';
+    if (st === 'finalizado') return 'Finalizado';
+    if (st === 'revisao' || st === 'revisar') return 'Revisar';
+    return 'Rascunho';
+  };
+  const rdoStatusColor = (st: string) => {
+    if (st === 'aprovado') return 'bg-green-100 text-green-700';
+    if (st === 'finalizado') return 'bg-blue-100 text-blue-700';
+    if (st === 'revisao' || st === 'revisar') return 'bg-yellow-100 text-yellow-700';
+    return 'bg-gray-100 text-gray-600';
+  };
+
+  const rdoList = (rdos.data as any[]) || [];
+
+  const renderVisaoGeral = () => {
+    if (selectedFonte === 'importado') {
+      return <ObraVisaoGeral obraId={selectedObraId} companyId={companyId} setLocation={setLocation} selectedFonte={selectedFonte} />;
+    }
+    const totalRdos = rdoList.length;
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Relatórios", value: totalRdos, icon: ClipboardList, color: "text-blue-600 border-blue-200 bg-blue-50" },
+            { label: "Rascunho", value: rdoList.filter((r: any) => r.status === "rascunho" || (!r.status)).length, icon: FileText, color: "text-gray-600 border-gray-200 bg-gray-50" },
+            { label: "Finalizados", value: rdoList.filter((r: any) => r.status === "finalizado").length, icon: CheckCircle, color: "text-green-600 border-green-200 bg-green-50" },
+            { label: "Aprovados", value: rdoList.filter((r: any) => r.status === "aprovado").length, icon: CheckCircle, color: "text-emerald-600 border-emerald-200 bg-emerald-50" },
+          ].map((item) => (
+            <div key={item.label} className={`border rounded-lg p-4 ${item.color}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xl font-bold">{item.value}</p>
+                  <p className="text-xs mt-1">{item.label}</p>
+                </div>
+                <item.icon className="w-5 h-5 opacity-60" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-orange-600">Relatórios recentes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {rdoList.length > 0 ? (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-gray-500 text-xs">
+                    <th className="py-1.5 px-2">Data</th>
+                    <th className="py-1.5 px-2">N°</th>
+                    <th className="py-1.5 px-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rdoList.slice(0, 10).map((r: any) => (
+                    <tr key={r.id} className="border-b hover:bg-gray-50 cursor-pointer"
+                      onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}&fonte=${r.fonte || selectedFonte}`)}>
+                      <td className="py-1.5 px-2 text-blue-600 hover:underline">
+                        {new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR")}
+                      </td>
+                      <td className="py-1.5 px-2">{r.numero || '—'}</td>
+                      <td className="py-1.5 px-2">
+                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${rdoStatusColor(r.status)}`}>
+                          {rdoStatusLabel(r.status)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : <p className="text-sm text-gray-400">Nenhum relatório</p>}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  const renderRelatorios = () => {
+    if (rdos.isLoading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div>;
+    if (rdoList.length === 0) {
+      return (
+        <div className="text-center py-20 text-gray-400">
+          <ClipboardList className="w-16 h-16 mx-auto mb-4 opacity-30" />
+          <p>Nenhum RDO registrado para esta obra</p>
+          {selectedFonte === 'principal' && (
+            <Button className="mt-4" onClick={() => criarRDO.mutate({ companyId, obraId: selectedObraId, data: hoje, responsavelNome: user?.nome || user?.email })}>
+              <Plus className="w-4 h-4 mr-2" /> Criar Primeiro RDO
+            </Button>
+          )}
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-1">
+        {rdoList.map((r: any) => {
+          const dt = new Date(r.data + "T12:00:00");
+          return (
+            <div key={r.id}
+              className="border rounded-lg px-4 py-3 flex items-center justify-between hover:bg-gray-50 group cursor-pointer"
+              onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}&fonte=${r.fonte || selectedFonte}`)}>
+              <div className="flex items-center gap-4">
+                <div className="min-w-[50px]">
+                  <p className="text-xl font-bold leading-tight">{dt.toLocaleDateString("pt-BR", { day: "2-digit" })}</p>
+                  <p className="text-[10px] text-gray-400 leading-tight">{dt.toLocaleDateString("pt-BR", { month: "short" })} de {dt.getFullYear()}</p>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  {r.clima_manha && <span>{r.clima_manha}</span>}
+                  {r.numero && <span className="text-gray-400">#{r.numero}</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {r.fonte === 'importado' && <span className="text-[10px] text-gray-400 font-medium">Importado</span>}
+                <span className={`text-xs px-2 py-0.5 rounded font-medium ${rdoStatusColor(r.status)}`}>
+                  {rdoStatusLabel(r.status)}
+                </span>
+                {selectedFonte === 'principal' && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}>
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}&fonte=principal`); }}>
+                        <Pencil className="h-4 w-4 mr-2" /> Editar
+                      </DropdownMenuItem>
+                      {r.status === "finalizado" && (
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); if (confirm("Deseja reabrir este RDO como rascunho?")) reabrirRDO.mutate({ id: r.id, companyId }); }}>
+                          <RotateCcw className="h-4 w-4 mr-2" /> Reabrir
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={(e) => { e.stopPropagation(); if (confirm(`Excluir RDO?`)) deletarRDO.mutate({ id: r.id, companyId }); }}>
+                        <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => { setObraId(0); setObraFonte(""); setLocation("/operacional/rdo"); }}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">{selectedObraEntry?.nome || "RDO"}</h1>
-            <p className="text-sm text-gray-500">Relatórios diários de obra</p>
-          </div>
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={() => { setObraId(0); setObraFonte(""); setLocation("/operacional/rdo"); }}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        {selectedObraEntry?.logo_url && (
+          <img src={selectedObraEntry.logo_url} alt={selectedObraEntry.nome}
+            className="w-16 h-16 rounded-lg object-cover border shadow-sm hidden sm:block" />
+        )}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl font-bold truncate">{selectedObraEntry?.nome || "RDO"}</h1>
+          <p className="text-sm text-gray-500">Relatórios diários de obra</p>
         </div>
-        <div className="flex gap-2 flex-wrap items-center">
-          <Select value={selectedObraEntry ? `${selectedObraEntry.fonte}:${selectedObraEntry.id}` : ""} onValueChange={(v) => { const [f, id] = v.split(":"); setObraId(Number(id)); setObraFonte(f); setViewMode('lista'); }}>
-            <SelectTrigger className="w-64"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+        <div className="flex gap-2 items-center">
+          <Select value={selectedObraEntry ? `${selectedObraEntry.fonte}:${selectedObraEntry.id}` : ""} onValueChange={(v) => { const [f, id] = v.split(":"); setObraId(Number(id)); setObraFonte(f); setViewMode('visao'); }}>
+            <SelectTrigger className="w-56"><SelectValue placeholder="Trocar obra" /></SelectTrigger>
             <SelectContent>
               {todasObrasLista.filter((o: any) => o.fonte === 'principal').length > 0 && (
                 <>
@@ -1151,9 +1301,9 @@ export default function RDO() {
               )}
               {todasObrasLista.filter((o: any) => o.fonte === 'importado').length > 0 && (
                 <>
-                  <div className="px-2 py-1 text-xs font-semibold text-gray-400 uppercase mt-1">Importadas (Diário de Obra)</div>
+                  <div className="px-2 py-1 text-xs font-semibold text-gray-400 uppercase mt-1">Importadas</div>
                   {todasObrasLista.filter((o: any) => o.fonte === 'importado').map((o: any) => (
-                    <SelectItem key={`i-${o.id}`} value={`importado:${o.id}`}>{o.nome} ({o.total_relatorios})</SelectItem>
+                    <SelectItem key={`i-${o.id}`} value={`importado:${o.id}`}>{o.nome}</SelectItem>
                   ))}
                 </>
               )}
@@ -1162,101 +1312,28 @@ export default function RDO() {
           {selectedFonte === 'principal' && (
             <Button onClick={() => criarRDO.mutate({ companyId, obraId: selectedObraId, data: hoje, responsavelNome: user?.nome || user?.email })} disabled={criarRDO.isPending || !selectedObraId}>
               {criarRDO.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-              Novo RDO (Hoje)
+              Novo RDO
             </Button>
           )}
         </div>
       </div>
 
-      {selectedFonte === 'importado' && selectedObraId > 0 && (
-        <div className="flex gap-2 border-b pb-2">
-          <Button variant={viewMode === 'visao' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('visao')}>
-            Visão geral
-          </Button>
-          <Button variant={viewMode === 'lista' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('lista')}>
-            Relatórios
-          </Button>
-        </div>
-      )}
+      <div className="flex gap-2 border-b pb-1">
+        <button
+          className={`px-3 py-1.5 text-sm font-medium rounded-t transition-colors ${viewMode === 'visao' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setViewMode('visao')}
+        >
+          Visão geral
+        </button>
+        <button
+          className={`px-3 py-1.5 text-sm font-medium rounded-t transition-colors ${viewMode === 'lista' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setViewMode('lista')}
+        >
+          Relatórios {rdoList.length > 0 && <span className="ml-1 text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">{rdoList.length}</span>}
+        </button>
+      </div>
 
-      {selectedFonte === 'importado' && viewMode === 'visao' && selectedObraId > 0 ? (
-        <ObraVisaoGeral obraId={selectedObraId} companyId={companyId} setLocation={setLocation} selectedFonte={selectedFonte} />
-      ) : (
-        <>
-          {rdos.isLoading ? (
-            <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div>
-          ) : (rdos.data as any[])?.length === 0 ? (
-            <div className="text-center py-20 text-gray-400">
-              <ClipboardList className="w-16 h-16 mx-auto mb-4 opacity-30" />
-              <p>Nenhum RDO registrado para esta obra</p>
-              {selectedFonte === 'principal' && (
-                <Button className="mt-4" onClick={() => criarRDO.mutate({ companyId, obraId: selectedObraId, data: hoje, responsavelNome: user?.nome || user?.email })}>
-                  <Plus className="w-4 h-4 mr-2" /> Criar Primeiro RDO
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {(rdos.data as any[])?.map((r: any) => (
-                <div key={r.id}
-                  className="border rounded-lg p-4 flex items-center justify-between hover:bg-gray-50 group">
-                  <div className="flex items-center gap-4 flex-1 cursor-pointer"
-                    onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}&fonte=${r.fonte || selectedFonte}`)}>
-                    <div className="text-center min-w-[50px]">
-                      <p className="text-lg font-bold">{new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit" })}</p>
-                      <p className="text-xs text-gray-500">{new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR", { month: "short", year: "numeric" })}</p>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        {r.clima_manha && <span className="text-xs text-gray-500">{r.clima_manha}</span>}
-                        {r.choveu && <CloudRain className="w-3 h-3 text-blue-400" />}
-                        {r.numero && <span className="text-xs text-gray-400">#{r.numero}</span>}
-                      </div>
-                      {r.responsavel_nome && <p className="text-xs text-gray-400">{r.responsavel_nome}</p>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {r.fonte === 'importado' && <Badge variant="outline" className="text-xs">Importado</Badge>}
-                    <Badge variant={r.status === "finalizado" || r.status === "aprovado" ? "default" : "secondary"}>
-                      {r.status === "finalizado" ? "Finalizado" : r.status === "aprovado" ? "Aprovado" : r.status === "revisao" || r.status === "revisar" ? "Revisar" : "Rascunho"}
-                    </Badge>
-                    {selectedFonte === 'principal' && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}&fonte=principal`)}>
-                          <Pencil className="h-4 w-4 mr-2" /> Editar
-                        </DropdownMenuItem>
-                        {r.status === "finalizado" && (
-                          <DropdownMenuItem onClick={() => {
-                            if (confirm("Deseja reabrir este RDO como rascunho?")) {
-                              reabrirRDO.mutate({ id: r.id, companyId });
-                            }
-                          }}>
-                            <RotateCcw className="h-4 w-4 mr-2" /> Reabrir
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => {
-                          if (confirm(`Excluir RDO de ${new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR")}? Esta ação não pode ser desfeita.`)) {
-                            deletarRDO.mutate({ id: r.id, companyId });
-                          }
-                        }}>
-                          <Trash2 className="h-4 w-4 mr-2" /> Excluir
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      {viewMode === 'visao' ? renderVisaoGeral() : renderRelatorios()}
     </div>
   );
 }
