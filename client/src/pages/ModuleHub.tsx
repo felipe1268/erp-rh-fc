@@ -9,7 +9,7 @@ import {
   Users, Shield, Gavel, CalendarRange, DollarSign, ShoppingCart, Calculator,
   ArrowRight, Lock, Building2, LogOut, ChevronDown, LayoutGrid,
   Bell, Clock, Zap, Layers, ArrowUpRight, ClipboardCheck,
-  Handshake, TrendingUp, Home, Ruler, BookOpen, FileSignature,
+  Handshake, Home, Ruler, BookOpen,
   HardHat, Warehouse, BarChart3, FolderOpen, Hammer, Truck,
   Settings, FileText, Trash2, GitBranch, Receipt, Scale,
 } from "lucide-react";
@@ -163,16 +163,6 @@ const MODULES: Module[] = [
     features: ["Solicitações (SC)", "Cotações", "Ordens (OC / OS)", "Almoxarifado / Estoque"],
   },
   {
-    id: "crm", title: "CRM", subtitle: "Gestão de Relacionamento",
-    description: "Gestão de leads, clientes, oportunidades e funil de vendas.",
-    icon: Handshake, accentFrom: "#6366F1", accentTo: "#4F46E5", accentGlow: "", iconBg: "", path: "", active: false, features: [],
-  },
-  {
-    id: "comercial", title: "Comercial", subtitle: "Gestão Comercial",
-    description: "Propostas, contratos comerciais, metas e comissões.",
-    icon: TrendingUp, accentFrom: "#14B8A6", accentTo: "#0D9488", accentGlow: "", iconBg: "", path: "", active: false, features: [],
-  },
-  {
     id: "pos-obras", title: "Pós-Obras", subtitle: "Pós-Entrega",
     description: "Acompanhamento pós-entrega, garantias e satisfação do cliente.",
     icon: Home, accentFrom: "#EC4899", accentTo: "#DB2777", accentGlow: "", iconBg: "", path: "", active: false, features: [],
@@ -182,16 +172,6 @@ const MODULES: Module[] = [
     description: "Boletins de medição por avanço físico, fundo de despesas e faturamento de contratos de obra.",
     icon: Ruler, accentFrom: "#14B8A6", accentTo: "#0D9488", accentGlow: "rgba(20,184,166,0.35)", iconBg: "rgba(20,184,166,0.12)", path: "/medicao", active: true,
     features: ["Boletins de Medição", "Fundo de Despesas (FD)", "Avanço Físico", "Faturamento"],
-  },
-  {
-    id: "diario-obras", title: "Diário de Obras", subtitle: "Registro Diário",
-    description: "Registro diário de atividades, clima, equipe e ocorrências por obra.",
-    icon: BookOpen, accentFrom: "#0EA5E9", accentTo: "#0284C7", accentGlow: "", iconBg: "", path: "", active: false, features: [],
-  },
-  {
-    id: "gestao-contratos", title: "Gestão de Contratos", subtitle: "Contratos e Aditivos",
-    description: "Controle de contratos com clientes, subempreiteiros e fornecedores.",
-    icon: FileSignature, accentFrom: "#1B2A4A", accentTo: "#374A6E", accentGlow: "", iconBg: "", path: "", active: false, features: [],
   },
 
   {
@@ -217,11 +197,6 @@ const MODULES: Module[] = [
     description: "Veículos, manutenções, combustível, multas, IPVA, licenciamento, seguros com análise IA e rastreamento.",
     icon: Truck, accentFrom: "#0891B2", accentTo: "#0E7490", accentGlow: "rgba(8,145,178,0.35)", iconBg: "rgba(8,145,178,0.12)", path: "/frotas/painel", active: true,
     features: ["Veículos", "Manutenções", "Combustível", "Multas", "IPVA", "Licenciamento", "Seguros IA", "Rastreamento"],
-  },
-  {
-    id: "indicadores-bi", title: "Indicadores / BI", subtitle: "Business Intelligence",
-    description: "Dashboard executivo consolidando dados de todas as obras (custo previsto vs realizado).",
-    icon: BarChart3, accentFrom: "#D4A843", accentTo: "#B8922E", accentGlow: "", iconBg: "", path: "", active: false, features: [],
   },
 ];
 
