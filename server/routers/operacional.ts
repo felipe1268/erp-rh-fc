@@ -520,6 +520,248 @@ export const operacionalRouter = router({
       return { ok: true };
     }),
 
+  atualizarRDOImportado: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      climaManha: z.string().optional(),
+      climaTarde: z.string().optional(),
+      condicaoManha: z.string().optional(),
+      condicaoTarde: z.string().optional(),
+      horaInicio: z.string().optional(),
+      horaFim: z.string().optional(),
+      horaIntervaloInicio: z.string().optional(),
+      horaIntervaloFim: z.string().optional(),
+      horasTrabalhadas: z.string().optional(),
+      observacoes: z.string().optional(),
+      status: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        UPDATE diario_obra_relatorios SET
+          clima_manha = COALESCE(${input.climaManha ?? null}, clima_manha),
+          clima_tarde = COALESCE(${input.climaTarde ?? null}, clima_tarde),
+          condicao_manha = COALESCE(${input.condicaoManha ?? null}, condicao_manha),
+          condicao_tarde = COALESCE(${input.condicaoTarde ?? null}, condicao_tarde),
+          hora_inicio = COALESCE(${input.horaInicio ?? null}, hora_inicio),
+          hora_fim = COALESCE(${input.horaFim ?? null}, hora_fim),
+          hora_intervalo_inicio = COALESCE(${input.horaIntervaloInicio ?? null}, hora_intervalo_inicio),
+          hora_intervalo_fim = COALESCE(${input.horaIntervaloFim ?? null}, hora_intervalo_fim),
+          horas_trabalhadas = COALESCE(${input.horasTrabalhadas ?? null}, horas_trabalhadas),
+          observacoes = COALESCE(${input.observacoes ?? null}, observacoes),
+          status = COALESCE(${input.status ?? null}, status),
+          updated_at = NOW()
+        WHERE id = ${input.id} AND company_id = ${input.companyId}
+      `);
+      return { ok: true };
+    }),
+
+  validarRDOImportado: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      status: z.enum(['aprovado', 'revisao', 'finalizado', 'rascunho']),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        UPDATE diario_obra_relatorios SET status = ${input.status}, updated_at = NOW()
+        WHERE id = ${input.id} AND company_id = ${input.companyId}
+      `);
+      return { ok: true };
+    }),
+
+  adicionarMaoObraImportado: protectedProcedure
+    .input(z.object({
+      relatorioId: z.number(),
+      companyId: z.number(),
+      nome: z.string(),
+      funcao: z.string().optional(),
+      categoria: z.string().optional(),
+      presente: z.boolean().default(true),
+      horaInicio: z.string().optional(),
+      horaFim: z.string().optional(),
+      horasTrabalhadas: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
+      if (!rel.length) throw new Error("Relatório não encontrado");
+      await db.execute(sql`
+        INSERT INTO diario_obra_mao_obra (relatorio_id, nome, funcao, categoria, presente, hora_inicio, hora_fim, horas_trabalhadas)
+        VALUES (${input.relatorioId}, ${input.nome}, ${input.funcao || null}, ${input.categoria || 'Direta'}, ${input.presente}, ${input.horaInicio || null}, ${input.horaFim || null}, ${input.horasTrabalhadas || null})
+      `);
+      return { ok: true };
+    }),
+
+  removerMaoObraImportado: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM diario_obra_mao_obra WHERE id = ${input.id}
+        AND relatorio_id IN (SELECT id FROM diario_obra_relatorios WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
+  adicionarAtividadeImportado: protectedProcedure
+    .input(z.object({
+      relatorioId: z.number(),
+      companyId: z.number(),
+      descricao: z.string(),
+      item: z.string().optional(),
+      etapa: z.string().optional(),
+      percentualAvanco: z.number().optional(),
+      observacao: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
+      if (!rel.length) throw new Error("Relatório não encontrado");
+      await db.execute(sql`
+        INSERT INTO diario_obra_atividades (relatorio_id, descricao, item, etapa, percentual_avanco, observacao)
+        VALUES (${input.relatorioId}, ${input.descricao}, ${input.item || null}, ${input.etapa || null}, ${input.percentualAvanco || 0}, ${input.observacao || null})
+      `);
+      return { ok: true };
+    }),
+
+  removerAtividadeImportado: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM diario_obra_atividades WHERE id = ${input.id}
+        AND relatorio_id IN (SELECT id FROM diario_obra_relatorios WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
+  adicionarEquipamentoImportado: protectedProcedure
+    .input(z.object({
+      relatorioId: z.number(),
+      companyId: z.number(),
+      nome: z.string(),
+      tipo: z.string().optional(),
+      quantidade: z.number().default(1),
+      situacao: z.string().optional(),
+      observacao: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
+      if (!rel.length) throw new Error("Relatório não encontrado");
+      await db.execute(sql`
+        INSERT INTO diario_obra_equipamentos (relatorio_id, nome, tipo, quantidade, situacao, observacao)
+        VALUES (${input.relatorioId}, ${input.nome}, ${input.tipo || null}, ${input.quantidade}, ${input.situacao || 'operando'}, ${input.observacao || null})
+      `);
+      return { ok: true };
+    }),
+
+  removerEquipamentoImportado: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM diario_obra_equipamentos WHERE id = ${input.id}
+        AND relatorio_id IN (SELECT id FROM diario_obra_relatorios WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
+  adicionarOcorrenciaImportado: protectedProcedure
+    .input(z.object({
+      relatorioId: z.number(),
+      companyId: z.number(),
+      descricao: z.string(),
+      tipo: z.string().optional(),
+      providencia: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
+      if (!rel.length) throw new Error("Relatório não encontrado");
+      await db.execute(sql`
+        INSERT INTO diario_obra_ocorrencias (relatorio_id, descricao, tipo, providencia)
+        VALUES (${input.relatorioId}, ${input.descricao}, ${input.tipo || null}, ${input.providencia || null})
+      `);
+      return { ok: true };
+    }),
+
+  removerOcorrenciaImportado: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM diario_obra_ocorrencias WHERE id = ${input.id}
+        AND relatorio_id IN (SELECT id FROM diario_obra_relatorios WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
+  adicionarComentarioImportado: protectedProcedure
+    .input(z.object({
+      relatorioId: z.number(),
+      companyId: z.number(),
+      texto: z.string(),
+      autor: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
+      if (!rel.length) throw new Error("Relatório não encontrado");
+      await db.execute(sql`
+        INSERT INTO diario_obra_comentarios (relatorio_id, texto, autor, data_hora)
+        VALUES (${input.relatorioId}, ${input.texto}, ${input.autor || 'Usuário'}, NOW())
+      `);
+      return { ok: true };
+    }),
+
+  removerComentarioImportado: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM diario_obra_comentarios WHERE id = ${input.id}
+        AND relatorio_id IN (SELECT id FROM diario_obra_relatorios WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
+  adicionarMaterialImportado: protectedProcedure
+    .input(z.object({
+      relatorioId: z.number(),
+      companyId: z.number(),
+      tipo: z.string().default('recebido'),
+      descricao: z.string(),
+      quantidade: z.number().optional(),
+      unidade: z.string().optional(),
+      notaFiscal: z.string().optional(),
+      fornecedor: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
+      if (!rel.length) throw new Error("Relatório não encontrado");
+      await db.execute(sql`
+        INSERT INTO diario_obra_materiais (relatorio_id, tipo, descricao, quantidade, unidade, nota_fiscal, fornecedor)
+        VALUES (${input.relatorioId}, ${input.tipo}, ${input.descricao}, ${input.quantidade || 0}, ${input.unidade || null}, ${input.notaFiscal || null}, ${input.fornecedor || null})
+      `);
+      return { ok: true };
+    }),
+
+  removerMaterialImportado: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM diario_obra_materiais WHERE id = ${input.id}
+        AND relatorio_id IN (SELECT id FROM diario_obra_relatorios WHERE company_id = ${input.companyId})
+      `);
+      return { ok: true };
+    }),
+
   listarNCs: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number(), status: z.string().optional() }))
     .query(async ({ input }) => {

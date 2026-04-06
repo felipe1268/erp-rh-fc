@@ -302,13 +302,34 @@ function ObraVisaoGeral({ obraId, companyId, setLocation, selectedFonte }: any) 
   );
 }
 
-function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
+function RDODocumentoImportado({ rdo, obraId, companyId, setLocation, refetchRdo }: any) {
   const obraData = trpc.operacional.getObraImportada.useQuery(
     { companyId, obraId: rdo.obra_id || obraId },
     { enabled: !!companyId && !!(rdo.obra_id || obraId) }
   );
   const obra = obraData.data || {} as any;
   const [fotoExpandida, setFotoExpandida] = useState<number | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [addDialog, setAddDialog] = useState<string | null>(null);
+  const [addForm, setAddForm] = useState<any>({});
+
+  const [form, setForm] = useState<any>({});
+  useEffect(() => {
+    if (rdo) {
+      setForm({
+        climaManha: rdo.clima_manha || '',
+        climaTarde: rdo.clima_tarde || '',
+        condicaoManha: rdo.condicao_manha || 'Praticável',
+        condicaoTarde: rdo.condicao_tarde || 'Praticável',
+        horaInicio: rdo.hora_inicio || '07:00',
+        horaFim: rdo.hora_fim || '17:00',
+        horaIntervaloInicio: rdo.hora_intervalo_inicio || '12:00',
+        horaIntervaloFim: rdo.hora_intervalo_fim || '13:00',
+        horasTrabalhadas: rdo.horas_trabalhadas || '',
+        observacoes: rdo.observacoes || '',
+      });
+    }
+  }, [rdo]);
 
   const allReports = trpc.operacional.listarRDOs.useQuery(
     { companyId, obraId: rdo.obra_id || obraId, fonte: 'importado' as const },
@@ -326,8 +347,28 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
   const mesAtual = (rdo.data || '').substring(0, 7);
   const reportsMesAtual = sortedReports.filter((r: any) => (r.data || '').startsWith(mesAtual));
 
+  const atualizarRDO = trpc.operacional.atualizarRDOImportado.useMutation({
+    onSuccess: () => { toast.success("Relatório salvo"); refetchRdo?.(); setEditMode(false); },
+  });
+  const validarRDO = trpc.operacional.validarRDOImportado.useMutation({
+    onSuccess: () => { toast.success("Status atualizado"); refetchRdo?.(); allReports.refetch(); },
+  });
+  const addMaoObra = trpc.operacional.adicionarMaoObraImportado.useMutation({ onSuccess: () => { refetchRdo?.(); setAddDialog(null); } });
+  const remMaoObra = trpc.operacional.removerMaoObraImportado.useMutation({ onSuccess: () => refetchRdo?.() });
+  const addAtividade = trpc.operacional.adicionarAtividadeImportado.useMutation({ onSuccess: () => { refetchRdo?.(); setAddDialog(null); } });
+  const remAtividade = trpc.operacional.removerAtividadeImportado.useMutation({ onSuccess: () => refetchRdo?.() });
+  const addEquip = trpc.operacional.adicionarEquipamentoImportado.useMutation({ onSuccess: () => { refetchRdo?.(); setAddDialog(null); } });
+  const remEquip = trpc.operacional.removerEquipamentoImportado.useMutation({ onSuccess: () => refetchRdo?.() });
+  const addOcorrencia = trpc.operacional.adicionarOcorrenciaImportado.useMutation({ onSuccess: () => { refetchRdo?.(); setAddDialog(null); } });
+  const remOcorrencia = trpc.operacional.removerOcorrenciaImportado.useMutation({ onSuccess: () => refetchRdo?.() });
+  const addMaterial = trpc.operacional.adicionarMaterialImportado.useMutation({ onSuccess: () => { refetchRdo?.(); setAddDialog(null); } });
+  const remMaterial = trpc.operacional.removerMaterialImportado.useMutation({ onSuccess: () => refetchRdo?.() });
+  const addComentario = trpc.operacional.adicionarComentarioImportado.useMutation({ onSuccess: () => { refetchRdo?.(); setAddDialog(null); } });
+  const remComentario = trpc.operacional.removerComentarioImportado.useMutation({ onSuccess: () => refetchRdo?.() });
+
   const dataRel = new Date(rdo.data + "T12:00:00");
   const diaSemana = diasSemana[dataRel.getDay()] || '';
+  const isAprovado = rdo.status === 'aprovado';
 
   const materiaisRecebidos = ((rdo.materiais || []) as any[]).filter((m: any) => m.tipo === 'recebido' || m.tipo === 'Recebido');
   const materiaisUtilizados = ((rdo.materiais || []) as any[]).filter((m: any) => m.tipo === 'utilizado' || m.tipo === 'Utilizado' || m.tipo === 'usado');
@@ -341,6 +382,8 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
     return `${meses_nome[parseInt(m) - 1]} ${y}`;
   };
 
+  const CONDICOES = ['Praticável', 'Impraticável'];
+
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-4">
@@ -349,7 +392,7 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <h1 className="text-lg font-semibold">
-            Visualizar relatório: {dataRel.toLocaleDateString("pt-BR")} n° {rdo.numero}
+            {editMode ? 'Editar' : 'Visualizar'} relatório: {dataRel.toLocaleDateString("pt-BR")} n° {rdo.numero}
           </h1>
         </div>
         <div className="flex gap-2 items-center">
@@ -365,11 +408,51 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
               Próximo ›
             </Button>
           )}
+          {!editMode ? (
+            <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
+              <Pencil className="w-4 h-4 mr-1" /> Editar
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setEditMode(false)}>Cancelar</Button>
+              <Button size="sm" onClick={() => atualizarRDO.mutate({ id: rdo.id, companyId, ...form })}
+                disabled={atualizarRDO.isPending}>
+                {atualizarRDO.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />} Salvar
+              </Button>
+            </>
+          )}
           {rdo.pdf_url && (
             <a href={rdo.pdf_url} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm"><Printer className="w-4 h-4 mr-1" /> Imprimir</Button>
             </a>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm"><MoreVertical className="w-4 h-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {rdo.status !== 'aprovado' && (
+                <DropdownMenuItem onClick={() => validarRDO.mutate({ id: rdo.id, companyId, status: 'aprovado' })}>
+                  <CheckCircle className="w-4 h-4 mr-2 text-green-500" /> Aprovar
+                </DropdownMenuItem>
+              )}
+              {rdo.status !== 'revisao' && (
+                <DropdownMenuItem onClick={() => validarRDO.mutate({ id: rdo.id, companyId, status: 'revisao' })}>
+                  <AlertTriangle className="w-4 h-4 mr-2 text-red-500" /> Enviar p/ revisão
+                </DropdownMenuItem>
+              )}
+              {rdo.status !== 'finalizado' && (
+                <DropdownMenuItem onClick={() => validarRDO.mutate({ id: rdo.id, companyId, status: 'finalizado' })}>
+                  <Send className="w-4 h-4 mr-2 text-blue-500" /> Finalizar
+                </DropdownMenuItem>
+              )}
+              {(rdo.status === 'aprovado' || rdo.status === 'finalizado') && (
+                <DropdownMenuItem onClick={() => validarRDO.mutate({ id: rdo.id, companyId, status: 'rascunho' })}>
+                  <RotateCcw className="w-4 h-4 mr-2" /> Reabrir como rascunho
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -486,41 +569,94 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
             <tbody>
               <tr>
                 <TableCell header>Entrada / Saída</TableCell>
-                <TableCell>{rdo.hora_inicio || ''} - {rdo.hora_fim || ''}</TableCell>
-                <TableCell className="text-center" rowSpan={2}>{rdo.horas_trabalhadas || ''}</TableCell>
+                <TableCell>
+                  {editMode ? (
+                    <div className="flex gap-1 items-center">
+                      <Input type="time" className="h-7 w-24 text-xs" value={form.horaInicio} onChange={(e) => setForm({ ...form, horaInicio: e.target.value })} />
+                      <span>-</span>
+                      <Input type="time" className="h-7 w-24 text-xs" value={form.horaFim} onChange={(e) => setForm({ ...form, horaFim: e.target.value })} />
+                    </div>
+                  ) : <>{rdo.hora_inicio || ''} - {rdo.hora_fim || ''}</>}
+                </TableCell>
+                <TableCell className="text-center" rowSpan={2}>
+                  {editMode ? (
+                    <Input className="h-7 w-16 text-xs text-center" value={form.horasTrabalhadas} onChange={(e) => setForm({ ...form, horasTrabalhadas: e.target.value })} />
+                  ) : rdo.horas_trabalhadas || ''}
+                </TableCell>
                 <TableCell header>Manhã</TableCell>
                 <TableCell>
-                  <span className="flex items-center gap-1">
-                    {rdo.clima_manha === 'Nublado' && <Cloud className="w-3.5 h-3.5 text-gray-500" />}
-                    {rdo.clima_manha === 'Chuvoso' && <CloudRain className="w-3.5 h-3.5 text-blue-500" />}
-                    {rdo.clima_manha === 'Ensolarado' && <Sun className="w-3.5 h-3.5 text-yellow-500" />}
-                    {rdo.clima_manha === 'Parcialmente Nublado' && <CloudSun className="w-3.5 h-3.5 text-gray-400" />}
-                    {rdo.clima_manha || ''}
-                  </span>
+                  {editMode ? (
+                    <select className="text-xs border rounded px-1 py-0.5 w-full" value={form.climaManha} onChange={(e) => setForm({ ...form, climaManha: e.target.value })}>
+                      <option value="">Selecione</option>
+                      {CLIMAS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      {rdo.clima_manha === 'Nublado' && <Cloud className="w-3.5 h-3.5 text-gray-500" />}
+                      {rdo.clima_manha === 'Chuvoso' && <CloudRain className="w-3.5 h-3.5 text-blue-500" />}
+                      {rdo.clima_manha === 'Ensolarado' && <Sun className="w-3.5 h-3.5 text-yellow-500" />}
+                      {rdo.clima_manha === 'Parcialmente Nublado' && <CloudSun className="w-3.5 h-3.5 text-gray-400" />}
+                      {rdo.clima_manha || ''}
+                    </span>
+                  )}
                 </TableCell>
-                <TableCell>{rdo.condicao_manha || 'Praticável'}</TableCell>
+                <TableCell>
+                  {editMode ? (
+                    <select className="text-xs border rounded px-1 py-0.5 w-full" value={form.condicaoManha} onChange={(e) => setForm({ ...form, condicaoManha: e.target.value })}>
+                      {CONDICOES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  ) : rdo.condicao_manha || 'Praticável'}
+                </TableCell>
               </tr>
               <tr>
                 <TableCell header>Hs. Intervalo</TableCell>
-                <TableCell>{rdo.hora_intervalo_inicio || ''} - {rdo.hora_intervalo_fim || ''}</TableCell>
+                <TableCell>
+                  {editMode ? (
+                    <div className="flex gap-1 items-center">
+                      <Input type="time" className="h-7 w-24 text-xs" value={form.horaIntervaloInicio} onChange={(e) => setForm({ ...form, horaIntervaloInicio: e.target.value })} />
+                      <span>-</span>
+                      <Input type="time" className="h-7 w-24 text-xs" value={form.horaIntervaloFim} onChange={(e) => setForm({ ...form, horaIntervaloFim: e.target.value })} />
+                    </div>
+                  ) : <>{rdo.hora_intervalo_inicio || ''} - {rdo.hora_intervalo_fim || ''}</>}
+                </TableCell>
                 <TableCell header>Tarde</TableCell>
                 <TableCell>
-                  <span className="flex items-center gap-1">
-                    {rdo.clima_tarde === 'Nublado' && <Cloud className="w-3.5 h-3.5 text-gray-500" />}
-                    {rdo.clima_tarde === 'Chuvoso' && <CloudRain className="w-3.5 h-3.5 text-blue-500" />}
-                    {rdo.clima_tarde === 'Ensolarado' && <Sun className="w-3.5 h-3.5 text-yellow-500" />}
-                    {rdo.clima_tarde === 'Parcialmente Nublado' && <CloudSun className="w-3.5 h-3.5 text-gray-400" />}
-                    {rdo.clima_tarde || ''}
-                  </span>
+                  {editMode ? (
+                    <select className="text-xs border rounded px-1 py-0.5 w-full" value={form.climaTarde} onChange={(e) => setForm({ ...form, climaTarde: e.target.value })}>
+                      <option value="">Selecione</option>
+                      {CLIMAS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      {rdo.clima_tarde === 'Nublado' && <Cloud className="w-3.5 h-3.5 text-gray-500" />}
+                      {rdo.clima_tarde === 'Chuvoso' && <CloudRain className="w-3.5 h-3.5 text-blue-500" />}
+                      {rdo.clima_tarde === 'Ensolarado' && <Sun className="w-3.5 h-3.5 text-yellow-500" />}
+                      {rdo.clima_tarde === 'Parcialmente Nublado' && <CloudSun className="w-3.5 h-3.5 text-gray-400" />}
+                      {rdo.clima_tarde || ''}
+                    </span>
+                  )}
                 </TableCell>
-                <TableCell>{rdo.condicao_tarde || 'Praticável'}</TableCell>
+                <TableCell>
+                  {editMode ? (
+                    <select className="text-xs border rounded px-1 py-0.5 w-full" value={form.condicaoTarde} onChange={(e) => setForm({ ...form, condicaoTarde: e.target.value })}>
+                      {CONDICOES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  ) : rdo.condicao_tarde || 'Praticável'}
+                </TableCell>
               </tr>
             </tbody>
           </table>
         </div>
 
         <div className="mt-4">
-          <SectionHeader title="Mão de obra" count={(rdo.maoObra || []).length} />
+          <div className="flex items-center justify-between bg-gray-100 border border-gray-300 px-3 py-2">
+            <span className="font-semibold text-sm">Mão de obra ({(rdo.maoObra || []).length})</span>
+            {editMode && (
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setAddForm({ nome: '', funcao: '', categoria: 'Direta', horaInicio: '07:00', horaFim: '17:00' }); setAddDialog('maoObra'); }}>
+                <Plus className="w-3 h-3 mr-1" /> Adicionar
+              </Button>
+            )}
+          </div>
           {(rdo.maoObra || []).length > 0 ? (
             <table className="w-full border-collapse text-sm">
               <thead>
@@ -528,9 +664,9 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
                   <TableCell header>Nome</TableCell>
                   <TableCell header>Função</TableCell>
                   <TableCell header>Entrada / Saída</TableCell>
-                  <TableCell header>Hs. Intervalo</TableCell>
                   <TableCell header>Hs. trabalhadas</TableCell>
-                  <TableCell header></TableCell>
+                  <TableCell header>Categoria</TableCell>
+                  {editMode && <TableCell header className="w-10"></TableCell>}
                 </tr>
               </thead>
               <tbody>
@@ -539,13 +675,18 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
                     <TableCell>{mo.nome}</TableCell>
                     <TableCell>{mo.funcao || ''}</TableCell>
                     <TableCell>{mo.hora_inicio || ''} - {mo.hora_fim || ''}</TableCell>
-                    <TableCell>{mo.dados_json?.hora_intervalo || '01:00'}</TableCell>
                     <TableCell>{mo.horas_trabalhadas || ''}</TableCell>
                     <TableCell className="text-xs text-gray-500">
-                      {mo.categoria === 'Direta' || mo.categoria === 'direta' ? 'Mão de Obra Direta' :
-                       mo.categoria === 'Indireta' || mo.categoria === 'indireta' ? 'Mão de Obra Indireta' :
-                       mo.categoria || ''}
+                      {mo.categoria === 'Direta' || mo.categoria === 'direta' ? 'Direta' :
+                       mo.categoria === 'Indireta' || mo.categoria === 'indireta' ? 'Indireta' : mo.categoria || ''}
                     </TableCell>
+                    {editMode && (
+                      <TableCell>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => remMaoObra.mutate({ id: mo.id, companyId })}>
+                          <Trash2 className="w-3 h-3 text-red-400" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -556,18 +697,22 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
         </div>
 
         <div className="mt-4">
-          <SectionHeader title="Equipamentos" count={(rdo.equipamentos || []).length} />
+          <div className="flex items-center justify-between bg-gray-100 border border-gray-300 px-3 py-2">
+            <span className="font-semibold text-sm">Equipamentos ({(rdo.equipamentos || []).length})</span>
+            {editMode && (
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setAddForm({ nome: '', quantidade: 1, situacao: 'operando' }); setAddDialog('equipamento'); }}>
+                <Plus className="w-3 h-3 mr-1" /> Adicionar
+              </Button>
+            )}
+          </div>
           {(rdo.equipamentos || []).length > 0 ? (
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  <TableCell header></TableCell>
+                  <TableCell header>Nome</TableCell>
                   <TableCell header className="text-center">Qtd</TableCell>
-                  <TableCell header></TableCell>
-                  <TableCell header></TableCell>
-                  <TableCell header></TableCell>
-                  <TableCell header></TableCell>
-                  <TableCell header></TableCell>
+                  <TableCell header>Situação</TableCell>
+                  {editMode && <TableCell header className="w-10"></TableCell>}
                 </tr>
               </thead>
               <tbody>
@@ -575,11 +720,14 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
                   <tr key={eq.id}>
                     <TableCell>{eq.nome}</TableCell>
                     <TableCell className="text-center font-semibold">{eq.quantidade}</TableCell>
-                    <TableCell></TableCell>
-                    <TableCell></TableCell>
-                    <TableCell></TableCell>
-                    <TableCell></TableCell>
-                    <TableCell></TableCell>
+                    <TableCell className="text-xs">{eq.situacao || ''}</TableCell>
+                    {editMode && (
+                      <TableCell>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => remEquip.mutate({ id: eq.id, companyId })}>
+                          <Trash2 className="w-3 h-3 text-red-400" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -590,7 +738,14 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
         </div>
 
         <div className="mt-4">
-          <SectionHeader title="Atividades" count={(rdo.atividades || []).length} />
+          <div className="flex items-center justify-between bg-gray-100 border border-gray-300 px-3 py-2">
+            <span className="font-semibold text-sm">Atividades ({(rdo.atividades || []).length})</span>
+            {editMode && (
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setAddForm({ descricao: '', item: '', etapa: 'Em andamento', percentualAvanco: 0 }); setAddDialog('atividade'); }}>
+                <Plus className="w-3 h-3 mr-1" /> Adicionar
+              </Button>
+            )}
+          </div>
           {(rdo.atividades || []).length > 0 ? (
             <table className="w-full border-collapse text-sm">
               <tbody>
@@ -603,6 +758,13 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
                     <TableCell className="text-right">
                       {at.etapa || (at.percentual_avanco != null ? `${at.percentual_avanco}%` : 'Em andamento')}
                     </TableCell>
+                    {editMode && (
+                      <TableCell className="w-10">
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => remAtividade.mutate({ id: at.id, companyId })}>
+                          <Trash2 className="w-3 h-3 text-red-400" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -613,13 +775,27 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
         </div>
 
         <div className="mt-4">
-          <SectionHeader title="Ocorrências" count={(rdo.ocorrencias || []).length} />
+          <div className="flex items-center justify-between bg-gray-100 border border-gray-300 px-3 py-2">
+            <span className="font-semibold text-sm">Ocorrências ({(rdo.ocorrencias || []).length})</span>
+            {editMode && (
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setAddForm({ descricao: '', providencia: '' }); setAddDialog('ocorrencia'); }}>
+                <Plus className="w-3 h-3 mr-1" /> Adicionar
+              </Button>
+            )}
+          </div>
           {(rdo.ocorrencias || []).length > 0 ? (
             <div className="border border-gray-300 border-t-0 p-3 text-sm space-y-2">
               {(rdo.ocorrencias as any[]).map((oc: any) => (
-                <div key={oc.id}>
-                  <p>{oc.descricao}</p>
-                  {oc.providencia && <p className="text-gray-500 text-xs mt-1">Providência: {oc.providencia}</p>}
+                <div key={oc.id} className="flex justify-between items-start">
+                  <div>
+                    <p>{oc.descricao}</p>
+                    {oc.providencia && <p className="text-gray-500 text-xs mt-1">Providência: {oc.providencia}</p>}
+                  </div>
+                  {editMode && (
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => remOcorrencia.mutate({ id: oc.id, companyId })}>
+                      <Trash2 className="w-3 h-3 text-red-400" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -630,11 +806,25 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
 
         <div className="mt-4 grid grid-cols-2">
           <div>
-            <SectionHeader title="Materiais recebidos" count={materiaisRecebidos.length + materiaisOutros.length} />
+            <div className="flex items-center justify-between bg-gray-100 border border-gray-300 px-3 py-2">
+              <span className="font-semibold text-sm">Materiais recebidos ({materiaisRecebidos.length + materiaisOutros.length})</span>
+              {editMode && (
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setAddForm({ descricao: '', tipo: 'recebido', quantidade: 0, unidade: 'un' }); setAddDialog('material'); }}>
+                  <Plus className="w-3 h-3 mr-1" />
+                </Button>
+              )}
+            </div>
             {(materiaisRecebidos.length + materiaisOutros.length) > 0 ? (
               <div className="border border-gray-300 border-t-0 p-3 text-sm space-y-1">
                 {[...materiaisRecebidos, ...materiaisOutros].map((m: any) => (
-                  <p key={m.id}>{m.descricao}{m.quantidade ? ` — ${m.quantidade} ${m.unidade || ''}` : ''}</p>
+                  <div key={m.id} className="flex justify-between items-center">
+                    <p>{m.descricao}{m.quantidade ? ` — ${m.quantidade} ${m.unidade || ''}` : ''}</p>
+                    {editMode && (
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => remMaterial.mutate({ id: m.id, companyId })}>
+                        <Trash2 className="w-3 h-3 text-red-400" />
+                      </Button>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (
@@ -642,11 +832,25 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
             )}
           </div>
           <div>
-            <SectionHeader title="Materiais utilizados" count={materiaisUtilizados.length} />
+            <div className="flex items-center justify-between bg-gray-100 border border-gray-300 px-3 py-2">
+              <span className="font-semibold text-sm">Materiais utilizados ({materiaisUtilizados.length})</span>
+              {editMode && (
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setAddForm({ descricao: '', tipo: 'utilizado', quantidade: 0, unidade: 'un' }); setAddDialog('material'); }}>
+                  <Plus className="w-3 h-3 mr-1" />
+                </Button>
+              )}
+            </div>
             {materiaisUtilizados.length > 0 ? (
               <div className="border border-gray-300 border-t-0 p-3 text-sm space-y-1">
                 {materiaisUtilizados.map((m: any) => (
-                  <p key={m.id}>{m.descricao}{m.quantidade ? ` — ${m.quantidade} ${m.unidade || ''}` : ''}</p>
+                  <div key={m.id} className="flex justify-between items-center">
+                    <p>{m.descricao}{m.quantidade ? ` — ${m.quantidade} ${m.unidade || ''}` : ''}</p>
+                    {editMode && (
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => remMaterial.mutate({ id: m.id, companyId })}>
+                        <Trash2 className="w-3 h-3 text-red-400" />
+                      </Button>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (
@@ -656,16 +860,30 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
         </div>
 
         <div className="mt-4">
-          <SectionHeader title="Comentários" count={(rdo.comentarios || []).length} />
+          <div className="flex items-center justify-between bg-gray-100 border border-gray-300 px-3 py-2">
+            <span className="font-semibold text-sm">Comentários ({(rdo.comentarios || []).length})</span>
+            {editMode && (
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setAddForm({ texto: '', autor: '' }); setAddDialog('comentario'); }}>
+                <Plus className="w-3 h-3 mr-1" /> Adicionar
+              </Button>
+            )}
+          </div>
           {(rdo.comentarios || []).length > 0 ? (
             <div className="border border-gray-300 border-t-0 p-3 text-sm space-y-2">
               {(rdo.comentarios as any[]).map((c: any) => (
-                <div key={c.id}>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-xs">{c.autor || 'Anônimo'}</span>
-                    {c.data_hora && <span className="text-xs text-gray-400">{new Date(c.data_hora).toLocaleString("pt-BR")}</span>}
+                <div key={c.id} className="flex justify-between items-start">
+                  <div>
+                    <div className="flex gap-2">
+                      <span className="font-medium text-xs">{c.autor || 'Anônimo'}</span>
+                      {c.data_hora && <span className="text-xs text-gray-400">{new Date(c.data_hora).toLocaleString("pt-BR")}</span>}
+                    </div>
+                    <p className="mt-0.5">{c.texto}</p>
                   </div>
-                  <p className="mt-0.5">{c.texto}</p>
+                  {editMode && (
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => remComentario.mutate({ id: c.id, companyId })}>
+                      <Trash2 className="w-3 h-3 text-red-400" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -673,6 +891,22 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
             <div className="border border-gray-300 border-t-0 p-3 text-sm text-gray-400 text-center">Nenhum registro</div>
           )}
         </div>
+
+        {editMode && (
+          <div className="mt-4">
+            <div className="bg-gray-100 border border-gray-300 px-3 py-2 font-semibold text-sm">Observações</div>
+            <div className="border border-gray-300 border-t-0 p-3">
+              <Textarea value={form.observacoes} onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
+                placeholder="Observações gerais do dia..." rows={3} className="text-sm" />
+            </div>
+          </div>
+        )}
+        {!editMode && rdo.observacoes && (
+          <div className="mt-4">
+            <SectionHeader title="Observações" />
+            <div className="border border-gray-300 border-t-0 p-3 text-sm">{rdo.observacoes}</div>
+          </div>
+        )}
 
         <div className="mt-4">
           <SectionHeader title="Fotos" count={(rdo.fotos || []).length} />
@@ -762,14 +996,104 @@ function RDODocumentoImportado({ rdo, obraId, companyId, setLocation }: any) {
         )}
       </div>
 
-      {fotoExpandida && (
-        <Dialog open={!!fotoExpandida} onOpenChange={() => setFotoExpandida(null)}>
-          <DialogContent className="max-w-4xl">
-            <img src={`/api/diario-obra/foto/${fotoExpandida}`} alt="Foto ampliada"
-              className="w-full h-auto max-h-[80vh] object-contain" />
-          </DialogContent>
-        </Dialog>
-      )}
+      <Dialog open={!!addDialog} onOpenChange={() => setAddDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {addDialog === 'maoObra' ? 'Adicionar Mão de Obra' :
+               addDialog === 'atividade' ? 'Adicionar Atividade' :
+               addDialog === 'equipamento' ? 'Adicionar Equipamento' :
+               addDialog === 'ocorrencia' ? 'Adicionar Ocorrência' :
+               addDialog === 'material' ? 'Adicionar Material' :
+               addDialog === 'comentario' ? 'Adicionar Comentário' : ''}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {addDialog === 'maoObra' && (<>
+              <div><Label className="text-xs">Nome</Label><Input value={addForm.nome || ''} onChange={(e) => setAddForm({ ...addForm, nome: e.target.value })} /></div>
+              <div><Label className="text-xs">Função</Label><Input value={addForm.funcao || ''} onChange={(e) => setAddForm({ ...addForm, funcao: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label className="text-xs">Categoria</Label>
+                  <Select value={addForm.categoria || 'Direta'} onValueChange={(v) => setAddForm({ ...addForm, categoria: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="Direta">Direta</SelectItem><SelectItem value="Indireta">Indireta</SelectItem></SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label className="text-xs">Entrada</Label><Input type="time" value={addForm.horaInicio || ''} onChange={(e) => setAddForm({ ...addForm, horaInicio: e.target.value })} /></div>
+                <div><Label className="text-xs">Saída</Label><Input type="time" value={addForm.horaFim || ''} onChange={(e) => setAddForm({ ...addForm, horaFim: e.target.value })} /></div>
+              </div>
+              <Button className="w-full" onClick={() => addMaoObra.mutate({ relatorioId: rdo.id, companyId, nome: addForm.nome, funcao: addForm.funcao, categoria: addForm.categoria, horaInicio: addForm.horaInicio, horaFim: addForm.horaFim })}
+                disabled={!addForm.nome || addMaoObra.isPending}>
+                {addMaoObra.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Adicionar'}
+              </Button>
+            </>)}
+            {addDialog === 'atividade' && (<>
+              <div><Label className="text-xs">Código do item</Label><Input value={addForm.item || ''} onChange={(e) => setAddForm({ ...addForm, item: e.target.value })} placeholder="Ex: 02.01.01" /></div>
+              <div><Label className="text-xs">Descrição</Label><Input value={addForm.descricao || ''} onChange={(e) => setAddForm({ ...addForm, descricao: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label className="text-xs">Etapa</Label><Input value={addForm.etapa || ''} onChange={(e) => setAddForm({ ...addForm, etapa: e.target.value })} placeholder="Em andamento" /></div>
+                <div><Label className="text-xs">% Avanço</Label><Input type="number" value={addForm.percentualAvanco || 0} onChange={(e) => setAddForm({ ...addForm, percentualAvanco: Number(e.target.value) })} /></div>
+              </div>
+              <div><Label className="text-xs">Observação</Label><Input value={addForm.observacao || ''} onChange={(e) => setAddForm({ ...addForm, observacao: e.target.value })} /></div>
+              <Button className="w-full" onClick={() => addAtividade.mutate({ relatorioId: rdo.id, companyId, descricao: addForm.descricao, item: addForm.item, etapa: addForm.etapa, percentualAvanco: addForm.percentualAvanco, observacao: addForm.observacao })}
+                disabled={!addForm.descricao || addAtividade.isPending}>
+                {addAtividade.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Adicionar'}
+              </Button>
+            </>)}
+            {addDialog === 'equipamento' && (<>
+              <div><Label className="text-xs">Nome</Label><Input value={addForm.nome || ''} onChange={(e) => setAddForm({ ...addForm, nome: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label className="text-xs">Quantidade</Label><Input type="number" value={addForm.quantidade || 1} onChange={(e) => setAddForm({ ...addForm, quantidade: Number(e.target.value) })} /></div>
+                <div><Label className="text-xs">Situação</Label>
+                  <Select value={addForm.situacao || 'operando'} onValueChange={(v) => setAddForm({ ...addForm, situacao: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="operando">Operando</SelectItem><SelectItem value="parado">Parado</SelectItem><SelectItem value="manutencao">Manutenção</SelectItem></SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button className="w-full" onClick={() => addEquip.mutate({ relatorioId: rdo.id, companyId, nome: addForm.nome, quantidade: addForm.quantidade, situacao: addForm.situacao })}
+                disabled={!addForm.nome || addEquip.isPending}>
+                {addEquip.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Adicionar'}
+              </Button>
+            </>)}
+            {addDialog === 'ocorrencia' && (<>
+              <div><Label className="text-xs">Descrição</Label><Textarea value={addForm.descricao || ''} onChange={(e) => setAddForm({ ...addForm, descricao: e.target.value })} rows={3} /></div>
+              <div><Label className="text-xs">Providência</Label><Input value={addForm.providencia || ''} onChange={(e) => setAddForm({ ...addForm, providencia: e.target.value })} /></div>
+              <Button className="w-full" onClick={() => addOcorrencia.mutate({ relatorioId: rdo.id, companyId, descricao: addForm.descricao, providencia: addForm.providencia })}
+                disabled={!addForm.descricao || addOcorrencia.isPending}>
+                {addOcorrencia.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Adicionar'}
+              </Button>
+            </>)}
+            {addDialog === 'material' && (<>
+              <div><Label className="text-xs">Descrição</Label><Input value={addForm.descricao || ''} onChange={(e) => setAddForm({ ...addForm, descricao: e.target.value })} /></div>
+              <div className="grid grid-cols-3 gap-2">
+                <div><Label className="text-xs">Tipo</Label>
+                  <Select value={addForm.tipo || 'recebido'} onValueChange={(v) => setAddForm({ ...addForm, tipo: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="recebido">Recebido</SelectItem><SelectItem value="utilizado">Utilizado</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                <div><Label className="text-xs">Qtd</Label><Input type="number" value={addForm.quantidade || 0} onChange={(e) => setAddForm({ ...addForm, quantidade: Number(e.target.value) })} /></div>
+                <div><Label className="text-xs">Unidade</Label><Input value={addForm.unidade || 'un'} onChange={(e) => setAddForm({ ...addForm, unidade: e.target.value })} /></div>
+              </div>
+              <Button className="w-full" onClick={() => addMaterial.mutate({ relatorioId: rdo.id, companyId, descricao: addForm.descricao, tipo: addForm.tipo, quantidade: addForm.quantidade, unidade: addForm.unidade })}
+                disabled={!addForm.descricao || addMaterial.isPending}>
+                {addMaterial.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Adicionar'}
+              </Button>
+            </>)}
+            {addDialog === 'comentario' && (<>
+              <div><Label className="text-xs">Comentário</Label><Textarea value={addForm.texto || ''} onChange={(e) => setAddForm({ ...addForm, texto: e.target.value })} rows={3} /></div>
+              <div><Label className="text-xs">Autor</Label><Input value={addForm.autor || ''} onChange={(e) => setAddForm({ ...addForm, autor: e.target.value })} placeholder="Seu nome" /></div>
+              <Button className="w-full" onClick={() => addComentario.mutate({ relatorioId: rdo.id, companyId, texto: addForm.texto, autor: addForm.autor })}
+                disabled={!addForm.texto || addComentario.isPending}>
+                {addComentario.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Adicionar'}
+              </Button>
+            </>)}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
