@@ -674,7 +674,7 @@ export const comprasRouter = router({
         agencia:         input.agencia ?? null,
         conta:           input.conta ?? null,
         pix:             input.pix ?? null,
-        categorias:      JSON.stringify(input.categorias ?? []),
+        categorias:      sql`${JSON.stringify(input.categorias ?? [])}::json`,
         observacoes:     input.observacoes ?? null,
         ativo:           true,
       }).returning();
@@ -713,7 +713,7 @@ export const comprasRouter = router({
       const { id, categorias, ...rest } = input;
       const data: any = { ...rest, atualizadoEm: new Date().toISOString() };
       if (categorias !== undefined) {
-        data.categorias = JSON.stringify(categorias);
+        data.categorias = sql`${JSON.stringify(categorias)}::json`;
       }
       await db.update(fornecedores)
         .set(data)
