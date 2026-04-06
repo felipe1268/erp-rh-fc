@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { normalizarTexto } from "@shared/textNormalization";
+import { normalizarTexto, stripAccents } from "@shared/textNormalization";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
@@ -1691,7 +1691,7 @@ export default function Solicitacoes() {
                                 if (form.tipo === "material") return it.temMat !== false;
                                 return true;
                               })
-                              .filter((it: any) => !eapSearch || `${it.eapCodigo} ${it.descricao}`.toLowerCase().includes(eapSearch.toLowerCase()));
+                              .filter((it: any) => !eapSearch || stripAccents(`${it.eapCodigo} ${it.descricao}`.toLowerCase()).includes(stripAccents(eapSearch.toLowerCase())));
                             const allSelected = visibleItems.length > 0 && visibleItems.every((it: any) => selectedEapIds.has(it.id) || (parseFloat(eapQtdServico[it.id] || "") > 0));
                             return (
                               <button
@@ -1733,7 +1733,7 @@ export default function Solicitacoes() {
                               if (form.tipo === "material") return (it as any).temMat !== false;
                               return true;
                             })
-                            .filter(it => !eapSearch || `${it.eapCodigo} ${it.descricao}`.toLowerCase().includes(eapSearch.toLowerCase()))
+                            .filter(it => !eapSearch || stripAccents(`${it.eapCodigo} ${it.descricao}`.toLowerCase()).includes(stripAccents(eapSearch.toLowerCase())))
                             .map(it => {
                               const expanded = eapExpanded === it.id;
                               const insLista = eapInsumos[it.id];

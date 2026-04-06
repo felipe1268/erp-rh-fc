@@ -95,7 +95,7 @@ const ACENTUACAO: Record<string, string> = {
   "colete": "colete", "coletes": "coletes",
 };
 
-function stripAccents(str: string): string {
+export function stripAccents(str: string): string {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 

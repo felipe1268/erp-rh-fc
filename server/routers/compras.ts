@@ -599,14 +599,15 @@ export const comprasRouter = router({
 
       let result = rows;
       if (input.busca) {
-        const b = input.busca.toLowerCase();
+        const strip = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const b = strip(input.busca.toLowerCase());
         const bDigits = b.replace(/\D/g, "");
         result = result.filter(f =>
-          f.razaoSocial?.toLowerCase().includes(b) ||
-          f.nomeFantasia?.toLowerCase().includes(b) ||
-          f.cnpj?.includes(b) ||
+          strip(f.razaoSocial?.toLowerCase() ?? "").includes(b) ||
+          strip(f.nomeFantasia?.toLowerCase() ?? "").includes(b) ||
+          f.cnpj?.includes(input.busca) ||
           (bDigits.length >= 3 && f.cnpj?.replace(/\D/g, "").includes(bDigits)) ||
-          f.cidade?.toLowerCase().includes(b)
+          strip(f.cidade?.toLowerCase() ?? "").includes(b)
         );
       }
       if (input.categoria) {
