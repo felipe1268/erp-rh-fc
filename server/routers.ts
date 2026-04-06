@@ -1509,11 +1509,19 @@ export const appRouter = router({
           sql`LOWER(${users.email}) = LOWER(${loginInput})`
         )
       );
+      // Filtrar usuários deletados
+      const activeResults = results.filter(u => !u.deletedAt);
       // Priorizar usuário com loginMethod = 'local' e senha definida
-      let user = results.find(u => u.loginMethod === 'local' && u.password) || results.find(u => u.password) || results[0];
-      if (!user || !user.password) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
+      let user = activeResults.find(u => u.loginMethod === 'local' && u.password) || activeResults.find(u => u.password) || activeResults[0];
+      if (!user || !user.password) {
+        console.error(`[Login] Falha: '${loginInput}' - encontrados: ${results.length}, ativos: ${activeResults.length}, com senha: ${activeResults.filter(u => u.password).length}`);
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
+      }
       const valid = bcrypt.compareSync(input.password, user.password);
-      if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
+      if (!valid) {
+        console.error(`[Login] Senha inválida para: '${loginInput}' (userId: ${user.id})`);
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
+      }
       // Usar o SDK para gerar o token no formato correto (openId, appId, name)
       const { sdk } = await import("./_core/sdk");
       const token = await sdk.createSessionToken(user.openId, { expiresInMs: 7 * 24 * 60 * 60 * 1000, name: user.name || user.username || user.openId });
