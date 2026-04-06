@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import { useLocation } from "wouter";
 
 export type ModuleId = "rh-dp" | "sst" | "juridico" | "juridico-trabalhista" | "juridico-tributario" | "juridico-civil" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "operacional" | "frotas" | "admin" | "all";
@@ -7,12 +7,14 @@ interface ModuleContextType {
   activeModule: ModuleId;
   setActiveModule: (mod: ModuleId) => void;
   moduleLabel: string;
+  isSharedRoute: boolean;
 }
 
 const ModuleContext = createContext<ModuleContextType>({
   activeModule: "all",
   setActiveModule: () => {},
   moduleLabel: "Todos",
+  isSharedRoute: false,
 });
 
 // Map routes to their primary module
@@ -141,16 +143,15 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/frotas/seguros":                 "frotas" as ModuleId,
   // Admin routes
   "/admin/telemetria":               "admin" as ModuleId,
-  // Shared routes (appear in all modules)
-  "/empresas": "all",
-  "/obras": "all",
-  "/setores": "all",
-  "/funcoes": "all",
-  "/usuarios": "all",
-  "/auditoria": "all",
-  "/configuracoes": "all",
-  "/lixeira": "all",
-  "/revisoes": "all",
+  "/empresas": "cadastro",
+  "/obras": "cadastro",
+  "/setores": "cadastro",
+  "/funcoes": "cadastro",
+  "/usuarios": "cadastro",
+  "/auditoria": "cadastro",
+  "/configuracoes": "cadastro",
+  "/lixeira": "cadastro",
+  "/revisoes": "cadastro",
 };
 
 const MODULE_LABELS: Record<ModuleId, string> = {
@@ -186,21 +187,21 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
     if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "juridico-trabalhista" || saved === "juridico-tributario" || saved === "juridico-civil" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "gestao-documentos" || saved === "operacional" || saved === "frotas" || saved === "all")) {
       return saved as ModuleId;
     }
-    return "rh-dp"; // Default to RH & DP
+    return "rh-dp";
   });
-
   const setActiveModule = (mod: ModuleId) => {
     setActiveModuleState(mod);
     localStorage.setItem(STORAGE_KEY, mod);
   };
 
-  // Auto-detect module from route (exact match first, then longest-prefix match).
-  // Rotas dinâmicas como /planejamento/123 precisam do prefixo /planejamento.
+  const isSharedRoute = useMemo(() => {
+    const sharedPaths = ["/empresas", "/obras", "/setores", "/funcoes", "/usuarios", "/auditoria", "/configuracoes", "/lixeira", "/revisoes"];
+    return sharedPaths.some(p => location === p || location.startsWith(p + "/"));
+  }, [location]);
+
   useEffect(() => {
-    // 1. tentativa: match exato
     let routeModule = ROUTE_MODULE_MAP[location] as ModuleId | undefined;
 
-    // 2. tentativa: longest prefix match (cobre /planejamento/123, /orcamento/lista/5, etc.)
     if (!routeModule) {
       let bestLen = 0;
       for (const [route, mod] of Object.entries(ROUTE_MODULE_MAP)) {
@@ -210,7 +211,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    if (routeModule && routeModule !== "all" && routeModule !== activeModule) {
+    if (routeModule && routeModule !== activeModule) {
       setActiveModule(routeModule);
     }
   }, [location]);
@@ -221,6 +222,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
         activeModule,
         setActiveModule,
         moduleLabel: MODULE_LABELS[activeModule],
+        isSharedRoute,
       }}
     >
       {children}

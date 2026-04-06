@@ -581,6 +581,16 @@ const menuSectionsCadastro: MenuSection[] = [
       { icon: Truck,         label: "Fornecedores",        path: "/compras/fornecedores" },
     ],
   },
+  {
+    title: "Sistema",
+    items: [
+      { icon: Lock,          label: "Usuários e Permissões", path: "/usuarios"           },
+      { icon: Settings,      label: "Configurações",         path: "/configuracoes"      },
+      { icon: FileText,      label: "Auditoria do Sistema",  path: "/auditoria"          },
+      { icon: Trash2,        label: "Lixeira",               path: "/lixeira"            },
+      { icon: GitBranch,     label: "Revisões",              path: "/revisoes"           },
+    ],
+  },
 ];
 
 const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
