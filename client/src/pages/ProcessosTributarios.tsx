@@ -101,6 +101,7 @@ export default function ProcessosTributarios() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRisco, setFilterRisco] = useState("all");
+  const [filterEntidade, setFilterEntidade] = useState("all");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -265,8 +266,16 @@ export default function ProcessosTributarios() {
     }
     if (filterStatus !== "all") items = items.filter(p => p.status === filterStatus);
     if (filterRisco !== "all") items = items.filter(p => p.risco === filterRisco);
+    if (filterEntidade !== "all") {
+      items = items.filter(p => {
+        const c = (p.contribuinte || "").toLowerCase();
+        if (filterEntidade === "jf") return c.includes("julio ferraz");
+        if (filterEntidade === "fc") return c.includes("fc engenharia") || c.includes("felipe costa");
+        return true;
+      });
+    }
     return items;
-  }, [processos.data, searchTerm, filterStatus, filterRisco]);
+  }, [processos.data, searchTerm, filterStatus, filterRisco, filterEntidade]);
 
   const toggleSelect = (id: number) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -739,6 +748,11 @@ export default function ProcessosTributarios() {
           <select className="border rounded px-3 py-2 text-sm" value={filterRisco} onChange={e => setFilterRisco(e.target.value)}>
             <option value="all">Todos os Riscos</option>
             {Object.entries(RISCO_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+          <select className="border rounded px-3 py-2 text-sm" value={filterEntidade} onChange={e => setFilterEntidade(e.target.value)}>
+            <option value="all">Todas as Entidades</option>
+            <option value="jf">Julio Ferraz</option>
+            <option value="fc">FC Engenharia</option>
           </select>
           {selectedIds.length > 0 && (
             <Button size="sm" variant="destructive" onClick={() => setShowBatchDeleteDialog(true)}>

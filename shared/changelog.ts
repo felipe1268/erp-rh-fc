@@ -8262,4 +8262,69 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-05 23:45:00",
   },
+  {
+    version: 1049,
+    titulo: "Módulo Jurídico — Separação Passivo vs Crédito",
+    descricao:
+      "Dashboard civil e trabalhista agora exibem passivoProvavel e creditoReceber separadamente. " +
+      "Cards e filtros atualizados em ProcessosCivis, PainelCivil e PainelJuridico. " +
+      "Campo polo adicionado nas mutations criar/atualizar do processosCivis.",
+    tipo: "melhoria",
+    modulos: "Jurídico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 01:00:00",
+  },
+  {
+    version: 1050,
+    titulo: "Importação Tributária — 29 Processos da Planilha V3",
+    descricao:
+      "29 processos tributários importados da planilha FC_Engenharia/Julio_Ferraz V3 para processos_tributarios. " +
+      "Separação JF vs FC via campo contribuinte com sufixos (Julio Ferraz) e (FC Engenharia).",
+    tipo: "feature",
+    modulos: "Jurídico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 02:00:00",
+  },
+  {
+    version: 1051,
+    titulo: "Dívida Consolidada — Mapeamento Completo",
+    descricao:
+      "Dívida consolidada mapeada: FC ~R$10,19M (RFB CC); JF ~R$9,96M (PGFN CNPJ + RFB CC + Municipal); Total ~R$20,15M.",
+    tipo: "melhoria",
+    modulos: "Jurídico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 03:00:00",
+  },
+  {
+    version: 1052,
+    titulo: "Correções Rev. 1049-1051",
+    descricao: "Ajustes e correções nas revisões 1049 a 1051.",
+    tipo: "correcao",
+    modulos: "Jurídico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 04:00:00",
+  },
+  {
+    version: 1053,
+    titulo: "Separação Passivo vs Crédito — Consolidação",
+    descricao:
+      "Consolidação completa da separação passivo vs crédito no módulo civil. " +
+      "passivoProvavel e creditoReceber nos dashboards civil e trabalhista.",
+    tipo: "melhoria",
+    modulos: "Jurídico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 05:00:00",
+  },
+  {
+    version: 1054,
+    titulo: "Importação Cível V3 + Filtro Entidade Tributário",
+    descricao:
+      "3 processos cíveis JF importados da planilha V3 (Protesto Indevido R$179K polo ativo, " +
+      "Execução Extrajudicial R$153K polo passivo acordo, Indenização Acidente R$1,16M polo passivo). " +
+      "Duplicatas tributárias removidas (58→29). Filtro Entidade (Julio Ferraz / FC Engenharia) adicionado na listagem tributária.",
+    tipo: "feature",
+    modulos: "Jurídico",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-06 06:00:00",
+  },
 ];
