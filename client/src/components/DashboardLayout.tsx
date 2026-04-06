@@ -180,6 +180,7 @@ const menuSectionsJuridico: MenuSection[] = [
     title: "Principal",
     items: [
       { icon: LayoutDashboard, label: "Painel Jurídico", path: "/painel/juridico" },
+      { icon: BarChart3, label: "Dashboard Geral", path: "/dashboards/juridico-geral" },
     ],
   },
   {

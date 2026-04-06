@@ -113,6 +113,7 @@ const DashFolhaPagamento = lazy(() => import("./pages/dashboards/DashFolhaPagame
 const DashHorasExtras = lazy(() => import("./pages/dashboards/DashHorasExtras"));
 const DashEpis = lazy(() => import("./pages/dashboards/DashEpis"));
 const DashJuridico = lazy(() => import("./pages/dashboards/DashJuridico"));
+const DashJuridicoGeral = lazy(() => import("./pages/dashboards/DashJuridicoGeral"));
 const DashTributario = lazy(() => import("./pages/dashboards/DashTributario"));
 const DashCivil = lazy(() => import("./pages/dashboards/DashCivil"));
 const DashAvisoPrevio = lazy(() => import("./pages/dashboards/DashAvisoPrevio"));
@@ -349,6 +350,7 @@ function Router() {
         <Route path={"/dashboards/horas-extras"} component={DashHorasExtras} />
         <Route path={"/dashboards/epis"} component={DashEpis} />
         <Route path={"/dashboards/juridico"} component={DashJuridico} />
+        <Route path={"/dashboards/juridico-geral"} component={DashJuridicoGeral} />
         <Route path={"/dashboards/tributario"} component={DashTributario} />
         <Route path={"/dashboards/civil"} component={DashCivil} />
         <Route path={"/dashboards/aviso-previo"} component={DashAvisoPrevio} />

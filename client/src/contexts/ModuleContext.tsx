@@ -50,6 +50,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/processos-tributarios": "juridico",
   "/processos-civis": "juridico",
   "/dashboards/juridico": "juridico",
+  "/dashboards/juridico-geral": "juridico",
   "/dashboards/tributario": "juridico",
   "/dashboards/civil": "juridico",
   // Avaliação routes
