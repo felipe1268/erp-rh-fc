@@ -12,6 +12,7 @@ import {
   goldenRules, jobFunctions, obraFuncionarios,
 } from "../../drizzle/schema";
 import { sendEmail } from "../services/smtpService";
+import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
 import { eq, and, desc, sql, isNull, gte, lte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -839,7 +840,12 @@ export const epiAvancadoRouter = router({
         }
       }
 
-      return { success: true, url, hashSha256 };
+      let verif = { primeiraAssinatura: false, assinaturaDivergente: false, similaridade: null as number | null };
+      if (input.tipoAssinante === "funcionario") {
+        verif = await verificarAssinaturaMemorial(db, input.employeeId, input.assinaturaBase64);
+      }
+
+      return { success: true, url, hashSha256, ...verif };
     }),
 
   assinaturasDoFuncionario: protectedProcedure

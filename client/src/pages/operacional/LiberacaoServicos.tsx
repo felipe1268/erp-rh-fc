@@ -89,7 +89,18 @@ export default function LiberacaoServicos() {
     onError: (e) => toast.error(e.message),
   });
   const assinarLib = trpc.operacional.assinarLiberacao.useMutation({
-    onSuccess: () => { toast.success("Assinatura registrada!"); refetchDetalhe(); setShowSignModal(false); },
+    onSuccess: (data: any) => {
+      if (data.primeiraAssinatura) {
+        toast.success("Assinatura registrada! Memorial salvo para futuras verificações.");
+      } else if (data.assinaturaDivergente) {
+        toast.warning(`⚠️ ATENÇÃO: Assinatura divergente do memorial! Similaridade: ${data.similaridade}%. Verificar identidade.`, { duration: 8000 });
+      } else if (data.similaridade !== null && data.similaridade !== undefined) {
+        toast.success(`Assinatura registrada! Compatível com memorial (${data.similaridade}%).`);
+      } else {
+        toast.success("Assinatura registrada!");
+      }
+      refetchDetalhe(); setShowSignModal(false);
+    },
     onError: (e) => toast.error(e.message),
   });
   const finalizarLib = trpc.operacional.finalizarLiberacao.useMutation({
@@ -220,6 +231,7 @@ export default function LiberacaoServicos() {
         papel: signPapel,
         nome: signNome.trim(),
         assinaturaUrl: res.url,
+        assinaturaBase64: dataUrl,
       });
     } catch (e: any) {
       toast.error("Erro ao salvar assinatura: " + e.message);

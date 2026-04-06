@@ -5,6 +5,7 @@ import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, 
 import { eq, and, desc, sql, ne, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
+import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
 
 // Modelos de advertência padrão CLT
 const MODELOS_ADVERTENCIA = {
@@ -840,8 +841,14 @@ export const controleDocumentosRouter = router({
         const key = `documentos/advertencias/assinaturas/${input.advertenciaId}-${input.tipoAssinante}-${Date.now()}.png`;
         const { url } = await storagePut(key, buffer, "image/png");
 
+        let verif = { primeiraAssinatura: false, assinaturaDivergente: false, similaridade: null as number | null };
+
         if (input.tipoAssinante === "funcionario") {
           await db.execute(sql`UPDATE warnings SET assinatura_funcionario_url = ${url} WHERE id = ${input.advertenciaId}`);
+          const [adv] = await db.select({ employeeId: warnings.employeeId }).from(warnings).where(eq(warnings.id, input.advertenciaId));
+          if (adv?.employeeId) {
+            verif = await verificarAssinaturaMemorial(db, adv.employeeId, input.base64Png);
+          }
         } else if (input.tipoAssinante === "aplicador") {
           await db.execute(sql`UPDATE warnings SET assinatura_aplicador_url = ${url} WHERE id = ${input.advertenciaId}`);
         } else {
@@ -858,7 +865,7 @@ export const controleDocumentosRouter = router({
           };
           await db.update(warnings).set({ testemunhas: JSON.stringify(arr) } as any).where(eq(warnings.id, input.advertenciaId));
         }
-        return { url };
+        return { url, ...verif };
       }),
   }),
 

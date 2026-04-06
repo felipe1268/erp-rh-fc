@@ -221,8 +221,20 @@ export default function AdvAssinaturas({
   assinaturaFuncionarioUrl, assinaturaAplicadorUrl, onUpdate,
 }: AdvAssinaturasProps) {
   const salvarMut = trpc.docs.advertencias.salvarAssinatura.useMutation({
-    onSuccess: (_, vars) => {
-      toast.success("Assinatura salva!");
+    onSuccess: (data: any, vars) => {
+      if (vars.tipoAssinante === "funcionario") {
+        if (data.primeiraAssinatura) {
+          toast.success("Assinatura salva! Memorial registrado para futuras verificações.");
+        } else if (data.assinaturaDivergente) {
+          toast.warning(`⚠️ ATENÇÃO: Assinatura divergente do memorial! Similaridade: ${data.similaridade}%. Verificar identidade do funcionário.`, { duration: 8000 });
+        } else if (data.similaridade !== null && data.similaridade !== undefined) {
+          toast.success(`Assinatura salva! Compatível com memorial (${data.similaridade}%).`);
+        } else {
+          toast.success("Assinatura salva!");
+        }
+      } else {
+        toast.success("Assinatura salva!");
+      }
       setSigners(prev => prev.map(s =>
         s.tipo === vars.tipoAssinante ? { ...s, assinaturaUrl: "saved", salvando: false } : s
       ));

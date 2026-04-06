@@ -2,6 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { sql } from "drizzle-orm";
+import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
 
 function rows(result: any): any[] {
   return (result as any).rows ?? result ?? [];
@@ -1345,6 +1346,8 @@ export const operacionalRouter = router({
       papel: z.enum(['fiscal', 'encarregado', 'engenheiro']),
       nome: z.string(),
       assinaturaUrl: z.string(),
+      assinaturaBase64: z.string().optional(),
+      employeeId: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1358,7 +1361,13 @@ export const operacionalRouter = router({
       } else {
         await db.execute(sql`UPDATE liberacao_servicos SET assinatura_engenheiro_nome = ${input.nome}, assinatura_engenheiro_url = ${input.assinaturaUrl}, assinatura_engenheiro_data = NOW() WHERE id = ${input.liberacaoId}`);
       }
-      return { ok: true };
+
+      let verif = { primeiraAssinatura: false, assinaturaDivergente: false, similaridade: null as number | null };
+      if (input.employeeId && input.assinaturaBase64) {
+        verif = await verificarAssinaturaMemorial(db, input.employeeId, input.assinaturaBase64);
+      }
+
+      return { ok: true, ...verif };
     }),
 
   finalizarLiberacao: protectedProcedure

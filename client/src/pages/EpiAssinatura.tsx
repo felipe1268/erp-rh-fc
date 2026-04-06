@@ -41,8 +41,16 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
     : tipo === "entrega" ? TERMO_ENTREGA : TERMO_DEVOLUCAO;
 
   const salvarMut = trpc.epiAvancado.salvarAssinatura.useMutation({
-    onSuccess: (data) => {
-      toast.success("Assinatura salva com sucesso! Hash: " + data.hashSha256?.slice(0, 12) + "...");
+    onSuccess: (data: any) => {
+      if (data.primeiraAssinatura) {
+        toast.success("Assinatura salva! Memorial registrado para futuras verificações. Hash: " + data.hashSha256?.slice(0, 12) + "...");
+      } else if (data.assinaturaDivergente) {
+        toast.warning(`⚠️ ATENÇÃO: Assinatura divergente do memorial! Similaridade: ${data.similaridade}%. Verificar identidade do funcionário.`, { duration: 8000 });
+      } else if (data.similaridade !== null && data.similaridade !== undefined) {
+        toast.success(`Assinatura salva! Compatível com memorial (${data.similaridade}%). Hash: ${data.hashSha256?.slice(0, 12)}...`);
+      } else {
+        toast.success("Assinatura salva com sucesso! Hash: " + data.hashSha256?.slice(0, 12) + "...");
+      }
       onComplete?.(data.url);
     },
     onError: (err) => toast.error(err.message),
