@@ -135,10 +135,6 @@ export default function ProcessosTributarios() {
     { companyId: queryCompanyId, companyIds: companyIds.length > 0 ? companyIds : undefined },
     { enabled: queryCompanyId > 0 || companyIds.length > 0 }
   );
-  const stats = trpc.processosTributarios.estatisticas.useQuery(
-    { companyId: queryCompanyId, companyIds: companyIds.length > 0 ? companyIds : undefined },
-    { enabled: queryCompanyId > 0 || companyIds.length > 0 }
-  );
   const detalhe = trpc.processosTributarios.getById.useQuery(
     { id: selectedProcessoId!, companyId: queryCompanyId, companyIds: companyIds.length > 0 ? companyIds : undefined },
     { enabled: !!selectedProcessoId && viewMode === "detalhe" && queryCompanyId > 0 }
@@ -147,7 +143,7 @@ export default function ProcessosTributarios() {
   const criarMut = trpc.processosTributarios.criar.useMutation({
     onSuccess: () => {
       toast.success("Processo tributário cadastrado!");
-      processos.refetch(); stats.refetch();
+      processos.refetch();
       setViewMode("lista"); resetForm();
     },
     onError: (err) => toast.error(`Erro: ${err.message}`),
@@ -155,7 +151,7 @@ export default function ProcessosTributarios() {
   const atualizarMut = trpc.processosTributarios.atualizar.useMutation({
     onSuccess: () => {
       toast.success("Processo atualizado!");
-      detalhe.refetch(); processos.refetch(); stats.refetch();
+      detalhe.refetch(); processos.refetch();
       setEditingId(null);
     },
     onError: (err) => toast.error(`Erro: ${err.message}`),
@@ -163,7 +159,7 @@ export default function ProcessosTributarios() {
   const excluirMut = trpc.processosTributarios.excluir.useMutation({
     onSuccess: () => {
       toast.success("Processo excluído!");
-      processos.refetch(); stats.refetch();
+      processos.refetch();
       setViewMode("lista"); setSelectedProcessoId(null);
     },
     onError: (err) => toast.error(`Erro: ${err.message}`),
@@ -171,7 +167,7 @@ export default function ProcessosTributarios() {
   const excluirLoteMut = trpc.processosTributarios.excluirLote.useMutation({
     onSuccess: (res) => {
       toast.success(`${res.count} processo(s) excluído(s)!`);
-      processos.refetch(); stats.refetch();
+      processos.refetch();
       setSelectedIds([]); setShowBatchDeleteDialog(false);
     },
     onError: (err) => toast.error(`Erro: ${err.message}`),
@@ -719,23 +715,27 @@ export default function ProcessosTributarios() {
           </div>
         </div>
 
-        {stats.data && (() => {
+        {processos.data && (() => {
+          const isEnc = (s: string) => ["encerrado", "arquivado"].includes(s);
+          const filtTotal = filtered.length;
+          const filtEmAndamento = filtered.filter(p => !isEnc(p.status)).length;
+          const filtEncerrados = filtered.filter(p => isEnc(p.status)).length;
           const altoCritico = filtered.filter(p => p.risco === "alto" || p.risco === "critico").length;
           const parseBRL2 = (v: any) => { if (!v) return 0; const s = String(v).replace(/[R$\s.]/g, "").replace(",", "."); return parseFloat(s) || 0; };
-          const passivoAberto = filtered.filter(p => p.status !== "encerrado" && p.status !== "arquivado").reduce((s, p) => s + parseBRL2(p.valorCausa), 0);
+          const valorCausa = filtered.reduce((s, p) => s + parseBRL2(p.valorCausa), 0);
           const fBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
           return (
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
               <div className="bg-blue-50 rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-blue-700">{stats.data.total}</p>
+                <p className="text-xl font-bold text-blue-700">{filtTotal}</p>
                 <p className="text-xs text-muted-foreground">Total</p>
               </div>
               <div className="bg-amber-50 rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-amber-700">{stats.data.emAndamento}</p>
+                <p className="text-xl font-bold text-amber-700">{filtEmAndamento}</p>
                 <p className="text-xs text-muted-foreground">Em Andamento</p>
               </div>
               <div className="bg-green-50 rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-green-700">{stats.data.encerrados}</p>
+                <p className="text-xl font-bold text-green-700">{filtEncerrados}</p>
                 <p className="text-xs text-muted-foreground">Encerrados</p>
               </div>
               <div className="bg-red-50 rounded-lg p-3 text-center">
@@ -743,7 +743,7 @@ export default function ProcessosTributarios() {
                 <p className="text-xs text-muted-foreground">Alto/Crítico</p>
               </div>
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-orange-700">{fBRL(passivoAberto)}</p>
+                <p className="text-xl font-bold text-orange-700">{fBRL(valorCausa)}</p>
                 <p className="text-xs font-semibold text-orange-600">Valor em Causa</p>
               </div>
             </div>
