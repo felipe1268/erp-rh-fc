@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -2136,7 +2136,18 @@ export default function Cotacoes() {
                       <Undo2 className="h-4 w-4" /> Cancelar Aprovação
                     </Button>
                   )}
-                  {!["cancelada", "aprovada", "concluida"].includes(detalheFullscreen.status ?? "") && (
+                  {["cancelada", "recusada"].includes(detalheFullscreen.status ?? "") && (
+                    <Button variant="outline" onClick={() => {
+                      if (confirm("Deseja reabrir esta cotação? O status voltará para 'Pendente' e será possível aprová-la novamente.")) {
+                        atualizarStatus.mutate({ id: detalheFullscreen.id, status: "pendente" });
+                      }
+                    }}
+                      disabled={atualizarStatus.isPending}
+                      className="border-emerald-200 text-emerald-600 hover:bg-emerald-50 gap-2">
+                      {atualizarStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Reabrir Cotação
+                    </Button>
+                  )}
+                  {!["cancelada", "recusada", "aprovada", "concluida"].includes(detalheFullscreen.status ?? "") && (
                     <Button variant="outline" onClick={() => {
                       if (confirm("Tem certeza que deseja cancelar esta cotação? A SC voltará para o status 'Aprovado' e poderá gerar nova cotação.")) {
                         cancelarCotacaoMut.mutate({ cotacaoId: showDetalhe!, companyId });
@@ -4441,6 +4452,17 @@ export default function Cotacoes() {
                     <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalhe as any).contratoTerceiroId}`); }}
                       className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs gap-1">
                       <FileText className="h-3 w-3" /> Ver Contrato de Serviço
+                    </Button>
+                  )}
+                  {["cancelada", "recusada"].includes(detalhe.status ?? "") && (
+                    <Button size="sm" variant="outline" onClick={() => {
+                      if (confirm("Deseja reabrir esta cotação? O status voltará para 'Pendente' e será possível aprová-la novamente.")) {
+                        atualizarStatus.mutate({ id: detalhe.id, status: "pendente" });
+                      }
+                    }}
+                      disabled={atualizarStatus.isPending}
+                      className="border-emerald-200 text-emerald-600 hover:bg-emerald-50 text-xs gap-1">
+                      <RotateCcw className="h-3 w-3" /> Reabrir Cotação
                     </Button>
                   )}
                   <Button size="sm" variant="outline" onClick={() => excluir.mutate({ id: detalhe.id })}
