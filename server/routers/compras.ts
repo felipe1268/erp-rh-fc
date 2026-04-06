@@ -674,7 +674,7 @@ export const comprasRouter = router({
         agencia:         input.agencia ?? null,
         conta:           input.conta ?? null,
         pix:             input.pix ?? null,
-        categorias:      input.categorias ?? [],
+        categorias:      JSON.stringify(input.categorias ?? []),
         observacoes:     input.observacoes ?? null,
         ativo:           true,
       }).returning();
@@ -710,9 +710,13 @@ export const comprasRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const { id, ...data } = input;
+      const { id, categorias, ...rest } = input;
+      const data: any = { ...rest, atualizadoEm: new Date().toISOString() };
+      if (categorias !== undefined) {
+        data.categorias = JSON.stringify(categorias);
+      }
       await db.update(fornecedores)
-        .set({ ...data, atualizadoEm: new Date().toISOString() })
+        .set(data)
         .where(eq(fornecedores.id, id));
       return { success: true };
     }),
