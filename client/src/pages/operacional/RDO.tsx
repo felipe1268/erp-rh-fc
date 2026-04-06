@@ -31,27 +31,37 @@ export default function RDO() {
   const obraIdParam = Number(params.get("obra")) || 0;
   const rdoIdParam = Number(params.get("id")) || 0;
 
-  const [filtroStatusObra, setFiltroStatusObra] = useState<string>("Em_Andamento");
-  const todasObras = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
-  const obrasFiltradas = (todasObras.data as any[])?.filter((o: any) =>
-    filtroStatusObra === "todas" ? true : o.status === filtroStatusObra
-  ) || [];
+  const [filtroStatusObra, setFiltroStatusObra] = useState<string>("todas");
+  const obrasUnificadas = trpc.operacional.listarObrasUnificadas.useQuery({ companyId }, { enabled: !!companyId });
+  const fonteParam = params.get("fonte") || "";
+
+  const todasObrasLista = [
+    ...((obrasUnificadas.data as any)?.principais || []).map((o: any) => ({ ...o, fonte: 'principal' })),
+    ...((obrasUnificadas.data as any)?.importadas || []).filter((o: any) => Number(o.total_relatorios) > 0).map((o: any) => ({ ...o, fonte: 'importado' })),
+  ].filter((o: any) => filtroStatusObra === "todas" || o.status === filtroStatusObra);
+
   const [obraId, setObraId] = useState(obraIdParam);
-  const selectedObraId = obraId || obrasFiltradas[0]?.id || 0;
+  const [obraFonte, setObraFonte] = useState<string>(fonteParam || "");
+
+  const selectedObraEntry = todasObrasLista.find((o: any) => o.id === obraId && o.fonte === obraFonte)
+    || todasObrasLista.find((o: any) => o.id === obraId)
+    || todasObrasLista[0];
+  const selectedObraId = selectedObraEntry?.id || 0;
+  const selectedFonte = selectedObraEntry?.fonte || 'principal';
 
   const rdos = trpc.operacional.listarRDOs.useQuery(
-    { companyId, obraId: selectedObraId },
+    { companyId, obraId: selectedObraId, fonte: selectedFonte as any },
     { enabled: !!companyId && !!selectedObraId },
   );
   const rdoDetalhe = trpc.operacional.getRDO.useQuery(
-    { id: rdoIdParam, companyId },
+    { id: rdoIdParam, companyId, fonte: (fonteParam || selectedFonte) as any },
     { enabled: !!rdoIdParam && !!companyId },
   );
 
   const criarRDO = trpc.operacional.criarRDO.useMutation({
     onSuccess: (data) => {
       toast.success(data.jaExistia ? "RDO já existente" : "RDO criado com sucesso");
-      setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${data.id}`);
+      setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${data.id}&fonte=principal`);
       rdos.refetch();
     },
   });
@@ -103,12 +113,173 @@ export default function RDO() {
 
   const hoje = new Date().toISOString().split("T")[0];
 
+  if (rdoIdParam && rdo && (rdo as any).fonte === 'importado') {
+    return (
+      <div className="p-6 space-y-4 max-w-6xl mx-auto">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&fonte=importado`)}>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <h1 className="text-xl font-bold">RDO #{(rdo as any).numero} — {new Date(rdo.data + "T12:00:00").toLocaleDateString("pt-BR")}</h1>
+          <Badge variant={(rdo as any).status === "aprovado" ? "default" : (rdo as any).status === "finalizado" ? "default" : "secondary"}>
+            {(rdo as any).status === "aprovado" ? "Aprovado" : (rdo as any).status === "finalizado" ? "Finalizado" : "Rascunho"}
+          </Badge>
+          <Badge variant="outline" className="text-xs">Importado</Badge>
+          {(rdo as any).responsavel_nome && <span className="text-sm text-gray-500">Resp: {(rdo as any).responsavel_nome}</span>}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Condições Climáticas</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                {['manha','tarde','noite'].map(p => (
+                  <div key={p}>
+                    <span className="text-xs text-gray-400 capitalize">{p === 'manha' ? 'Manhã' : p === 'tarde' ? 'Tarde' : 'Noite'}</span>
+                    <p>{(rdo as any)[`clima_${p}`] || '—'}</p>
+                    {(rdo as any)[`condicao_${p}`] && <p className="text-xs text-gray-500">{(rdo as any)[`condicao_${p}`]}</p>}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Horário de Trabalho</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div><span className="text-xs text-gray-400">Início</span><p>{(rdo as any).hora_inicio || '—'}</p></div>
+                <div><span className="text-xs text-gray-400">Fim</span><p>{(rdo as any).hora_fim || '—'}</p></div>
+                <div><span className="text-xs text-gray-400">Intervalo</span><p>{(rdo as any).hora_intervalo_inicio || '—'} - {(rdo as any).hora_intervalo_fim || '—'}</p></div>
+                <div><span className="text-xs text-gray-400">Horas Trabalhadas</span><p>{(rdo as any).horas_trabalhadas || '—'}</p></div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {(rdo as any).maoObra?.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Users className="w-4 h-4" /> Mão de Obra ({(rdo as any).maoObra.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-xs text-gray-400 border-b"><th className="text-left py-1">Nome</th><th className="text-left py-1">Função</th><th className="text-left py-1">Categoria</th><th className="text-center py-1">Presente</th></tr></thead>
+                  <tbody>{(rdo as any).maoObra.map((mo: any) => (
+                    <tr key={mo.id} className="border-b last:border-0"><td className="py-1">{mo.nome}</td><td className="py-1">{mo.funcao || '—'}</td><td className="py-1">{mo.categoria || '—'}</td><td className="py-1 text-center">{mo.presente ? <CheckCircle className="w-3 h-3 text-green-500 mx-auto" /> : '—'}</td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {(rdo as any).atividades?.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Wrench className="w-4 h-4" /> Atividades ({(rdo as any).atividades.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {(rdo as any).atividades.map((at: any) => (
+                  <div key={at.id} className="border rounded p-2 text-sm">
+                    <div className="flex justify-between"><span className="font-medium">{at.item ? `${at.item} - ` : ''}{at.descricao}</span>{at.percentual_avanco != null && <Badge variant="outline">{at.percentual_avanco}%</Badge>}</div>
+                    {at.etapa && <p className="text-xs text-gray-500">Etapa: {at.etapa}</p>}
+                    {at.observacao && <p className="text-xs text-gray-400 mt-1">{at.observacao}</p>}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {(rdo as any).equipamentos?.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Wrench className="w-4 h-4" /> Equipamentos ({(rdo as any).equipamentos.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-xs text-gray-400 border-b"><th className="text-left py-1">Equipamento</th><th className="text-center py-1">Qtd</th><th className="text-left py-1">Horário</th><th className="text-center py-1">Operativo</th></tr></thead>
+                  <tbody>{(rdo as any).equipamentos.map((eq: any) => (
+                    <tr key={eq.id} className="border-b last:border-0"><td className="py-1">{eq.nome}</td><td className="py-1 text-center">{eq.quantidade}</td><td className="py-1">{eq.hora_inicio || ''} - {eq.hora_fim || ''}</td><td className="py-1 text-center">{eq.operativo ? <CheckCircle className="w-3 h-3 text-green-500 mx-auto" /> : '—'}</td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {(rdo as any).materiais?.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><FileText className="w-4 h-4" /> Materiais ({(rdo as any).materiais.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-xs text-gray-400 border-b"><th className="text-left py-1">Tipo</th><th className="text-left py-1">Descrição</th><th className="text-center py-1">Qtd</th><th className="text-left py-1">Unidade</th></tr></thead>
+                  <tbody>{(rdo as any).materiais.map((m: any) => (
+                    <tr key={m.id} className="border-b last:border-0"><td className="py-1"><Badge variant="outline" className="text-xs">{m.tipo}</Badge></td><td className="py-1">{m.descricao}</td><td className="py-1 text-center">{m.quantidade || '—'}</td><td className="py-1">{m.unidade || '—'}</td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {(rdo as any).ocorrencias?.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Ocorrências ({(rdo as any).ocorrencias.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {(rdo as any).ocorrencias.map((oc: any) => (
+                  <div key={oc.id} className="border rounded p-2 text-sm">
+                    <p>{oc.descricao}</p>
+                    {oc.tipo && <Badge variant="outline" className="text-xs mt-1">{oc.tipo}</Badge>}
+                    {oc.providencia && <p className="text-xs text-gray-500 mt-1">Providência: {oc.providencia}</p>}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {(rdo as any).comentarios?.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Comentários ({(rdo as any).comentarios.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {(rdo as any).comentarios.map((c: any) => (
+                  <div key={c.id} className="border rounded p-2 text-sm">
+                    <div className="flex justify-between"><span className="font-medium text-xs">{c.autor || 'Anônimo'}</span>{c.data_hora && <span className="text-xs text-gray-400">{new Date(c.data_hora).toLocaleString("pt-BR")}</span>}</div>
+                    <p className="mt-1">{c.texto}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {(rdo as any).pdf_url && (
+          <Card>
+            <CardContent className="py-3">
+              <a href={(rdo as any).pdf_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm flex items-center gap-2">
+                <FileText className="w-4 h-4" /> Abrir PDF do Relatório
+              </a>
+            </CardContent>
+          </Card>
+        )}
+
+        {(rdo as any).observacoes && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Observações</CardTitle></CardHeader>
+            <CardContent><p className="text-sm whitespace-pre-wrap">{(rdo as any).observacoes}</p></CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
   if (rdoIdParam && rdo) {
     const isFinalizado = rdo.status === "finalizado";
     return (
       <div className="p-6 space-y-4 max-w-6xl mx-auto">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}`)}>
+          <Button variant="ghost" size="sm" onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&fonte=${fonteParam || selectedFonte}`)}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <h1 className="text-xl font-bold">RDO — {new Date(rdo.data + "T12:00:00").toLocaleDateString("pt-BR")}</h1>
@@ -374,16 +545,33 @@ export default function RDO() {
               <SelectItem value="todas">Todas</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={String(selectedObraId || "")} onValueChange={(v) => setObraId(Number(v))}>
-            <SelectTrigger className="w-56"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+          <Select value={selectedObraEntry ? `${selectedObraEntry.fonte}:${selectedObraEntry.id}` : ""} onValueChange={(v) => { const [f, id] = v.split(":"); setObraId(Number(id)); setObraFonte(f); }}>
+            <SelectTrigger className="w-64"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
             <SelectContent>
-              {obrasFiltradas.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+              {todasObrasLista.filter((o: any) => o.fonte === 'principal').length > 0 && (
+                <>
+                  <div className="px-2 py-1 text-xs font-semibold text-gray-400 uppercase">Obras Próprias</div>
+                  {todasObrasLista.filter((o: any) => o.fonte === 'principal').map((o: any) => (
+                    <SelectItem key={`p-${o.id}`} value={`principal:${o.id}`}>{o.nome}</SelectItem>
+                  ))}
+                </>
+              )}
+              {todasObrasLista.filter((o: any) => o.fonte === 'importado').length > 0 && (
+                <>
+                  <div className="px-2 py-1 text-xs font-semibold text-gray-400 uppercase mt-1">Importadas (Diário de Obra)</div>
+                  {todasObrasLista.filter((o: any) => o.fonte === 'importado').map((o: any) => (
+                    <SelectItem key={`i-${o.id}`} value={`importado:${o.id}`}>{o.nome} ({o.total_relatorios})</SelectItem>
+                  ))}
+                </>
+              )}
             </SelectContent>
           </Select>
-          <Button onClick={() => criarRDO.mutate({ companyId, obraId: selectedObraId, data: hoje, responsavelNome: user?.nome || user?.email })} disabled={criarRDO.isPending || !selectedObraId}>
-            {criarRDO.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-            Novo RDO (Hoje)
-          </Button>
+          {selectedFonte === 'principal' && (
+            <Button onClick={() => criarRDO.mutate({ companyId, obraId: selectedObraId, data: hoje, responsavelNome: user?.nome || user?.email })} disabled={criarRDO.isPending || !selectedObraId}>
+              {criarRDO.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              Novo RDO (Hoje)
+            </Button>
+          )}
         </div>
       </div>
 
@@ -403,7 +591,7 @@ export default function RDO() {
             <div key={r.id}
               className="border rounded-lg p-4 flex items-center justify-between hover:bg-gray-50 group">
               <div className="flex items-center gap-4 flex-1 cursor-pointer"
-                onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}`)}>
+                onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}&fonte=${r.fonte || selectedFonte}`)}>
                 <div className="text-center min-w-[50px]">
                   <p className="text-lg font-bold">{new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit" })}</p>
                   <p className="text-xs text-gray-500">{new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR", { month: "short", year: "numeric" })}</p>
@@ -412,14 +600,17 @@ export default function RDO() {
                   <div className="flex items-center gap-2">
                     {r.clima_manha && <span className="text-xs text-gray-500">{r.clima_manha}</span>}
                     {r.choveu && <CloudRain className="w-3 h-3 text-blue-400" />}
+                    {r.numero && <span className="text-xs text-gray-400">#{r.numero}</span>}
                   </div>
                   {r.responsavel_nome && <p className="text-xs text-gray-400">{r.responsavel_nome}</p>}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant={r.status === "finalizado" ? "default" : "secondary"}>
-                  {r.status === "finalizado" ? "Finalizado" : "Rascunho"}
+                {r.fonte === 'importado' && <Badge variant="outline" className="text-xs">Importado</Badge>}
+                <Badge variant={r.status === "finalizado" || r.status === "aprovado" ? "default" : "secondary"}>
+                  {r.status === "finalizado" ? "Finalizado" : r.status === "aprovado" ? "Aprovado" : "Rascunho"}
                 </Badge>
+                {selectedFonte === 'principal' && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -427,7 +618,7 @@ export default function RDO() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}`)}>
+                    <DropdownMenuItem onClick={() => setLocation(`/operacional/rdo?obra=${selectedObraId}&id=${r.id}&fonte=principal`)}>
                       <Pencil className="h-4 w-4 mr-2" /> Editar
                     </DropdownMenuItem>
                     {r.status === "finalizado" && (
@@ -448,6 +639,7 @@ export default function RDO() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                )}
               </div>
             </div>
           ))}

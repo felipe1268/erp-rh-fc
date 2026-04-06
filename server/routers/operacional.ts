@@ -8,10 +8,45 @@ function rows(result: any): any[] {
 }
 
 export const operacionalRouter = router({
-  listarRDOs: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number(), mes: z.string().optional() }))
+  listarObrasUnificadas: protectedProcedure
+    .input(z.object({ companyId: z.number(), status: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
+      const mainObras = rows(await db.execute(sql`
+        SELECT id, nome, status, "companyId" as company_id, 'principal' as fonte
+        FROM obras WHERE "companyId" = ${input.companyId}
+        ${input.status && input.status !== 'todas' ? sql`AND status = ${input.status}` : sql``}
+        ORDER BY nome
+      `));
+      const dioObras = rows(await db.execute(sql`
+        SELECT id, nome, status, company_id, 'importado' as fonte,
+          (SELECT COUNT(*) FROM diario_obra_relatorios r WHERE r.obra_id = diario_obra_obras.id) as total_relatorios
+        FROM diario_obra_obras WHERE company_id = ${input.companyId}
+        ${input.status && input.status !== 'todas' ? sql`AND status = ${input.status}` : sql``}
+        ORDER BY nome
+      `));
+      return { principais: mainObras, importadas: dioObras };
+    }),
+
+  listarRDOs: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number(), mes: z.string().optional(), fonte: z.enum(['principal', 'importado']).optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (input.fonte === 'importado') {
+        const conditions = [
+          sql`company_id = ${input.companyId}`,
+          sql`obra_id = ${input.obraId}`,
+        ];
+        if (input.mes) conditions.push(sql`TO_CHAR(data, 'YYYY-MM') = ${input.mes}`);
+        const where = sql.join(conditions, sql` AND `);
+        const result = rows(await db.execute(sql`
+          SELECT id, obra_id, company_id, external_id, numero, data, status, responsavel_nome,
+                 clima_manha, clima_tarde, clima_noite, hora_inicio, hora_fim, horas_trabalhadas,
+                 observacoes, importado_em, created_at, updated_at, 'importado' as fonte
+          FROM diario_obra_relatorios WHERE ${where} ORDER BY data DESC, numero DESC
+        `));
+        return result;
+      }
       const conditions = [
         sql`company_id = ${input.companyId}`,
         sql`obra_id = ${input.obraId}`,
@@ -20,14 +55,34 @@ export const operacionalRouter = router({
         conditions.push(sql`TO_CHAR(data, 'YYYY-MM') = ${input.mes}`);
       }
       const where = sql.join(conditions, sql` AND `);
-      return rows(await db.execute(sql`SELECT * FROM rdo_relatorios WHERE ${where} ORDER BY data DESC`));
+      return rows(await db.execute(sql`SELECT *, 'principal' as fonte FROM rdo_relatorios WHERE ${where} ORDER BY data DESC`));
     }),
 
   getRDO: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .input(z.object({ id: z.number(), companyId: z.number(), fonte: z.enum(['principal', 'importado']).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      const rdoRows = rows(await db.execute(sql`SELECT * FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
+      if (input.fonte === 'importado') {
+        const relRows = rows(await db.execute(sql`
+          SELECT id, obra_id, company_id, external_id, numero, data, status, responsavel_nome,
+                 clima_manha, clima_tarde, clima_noite, condicao_manha, condicao_tarde, condicao_noite,
+                 hora_inicio, hora_fim, hora_intervalo_inicio, hora_intervalo_fim, horas_trabalhadas,
+                 observacoes, pdf_url, dados_json, importado_em, created_at, updated_at, 'importado' as fonte
+          FROM diario_obra_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}
+        `));
+        if (!relRows[0]) return null;
+        const rel = relRows[0];
+        const [maoObra, equipamentos, atividades, ocorrencias, materiais, comentarios] = await Promise.all([
+          db.execute(sql`SELECT id, nome, funcao, categoria, presente, hora_inicio, hora_fim, horas_trabalhadas, dados_json FROM diario_obra_mao_obra WHERE relatorio_id = ${input.id} ORDER BY nome`),
+          db.execute(sql`SELECT id, nome, tipo, quantidade, hora_inicio, hora_fim, horas_trabalhadas, operativo, situacao, observacao FROM diario_obra_equipamentos WHERE relatorio_id = ${input.id} ORDER BY nome`),
+          db.execute(sql`SELECT id, item, descricao, etapa, percentual_avanco, observacao, unidade, quantidade_prevista, quantidade_realizada, quantidade_acumulada FROM diario_obra_atividades WHERE relatorio_id = ${input.id} ORDER BY item, id`),
+          db.execute(sql`SELECT id, descricao, tipo, providencia FROM diario_obra_ocorrencias WHERE relatorio_id = ${input.id} ORDER BY id`),
+          db.execute(sql`SELECT id, tipo, descricao, quantidade, unidade, nota_fiscal, fornecedor FROM diario_obra_materiais WHERE relatorio_id = ${input.id} ORDER BY tipo, id`),
+          db.execute(sql`SELECT id, texto, autor, data_hora FROM diario_obra_comentarios WHERE relatorio_id = ${input.id} ORDER BY data_hora`),
+        ]);
+        return { ...rel, maoObra: rows(maoObra), equipamentos: rows(equipamentos), atividades: rows(atividades), ocorrencias: rows(ocorrencias), materiais: rows(materiais), comentarios: rows(comentarios), fotos: [] };
+      }
+      const rdoRows = rows(await db.execute(sql`SELECT *, 'principal' as fonte FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
       const rdoData = rdoRows[0] || null;
       if (!rdoData) return null;
 
