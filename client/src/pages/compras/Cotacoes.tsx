@@ -966,8 +966,7 @@ export default function Cotacoes() {
 
       // Sobrescrever com respostas já salvas (têm prioridade)
       for (const [key, val] of Object.entries(mapaQ.data.respostaMap)) {
-        const saved = parseFloat((val as any).precoUnitario ?? "0");
-        if (saved > 0) {
+        if ((val as any).precoUnitario != null) {
           inicialPrecos[key] = (val as any).precoUnitario ?? "0";
           inicialQtds[key] = (val as any).quantidade ?? inicialQtds[key] ?? "0";
         }
