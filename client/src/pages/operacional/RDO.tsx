@@ -681,6 +681,12 @@ export default function RDO() {
 
   const [obraId, setObraId] = useState(obraIdParam);
   const [obraFonte, setObraFonte] = useState<string>(fonteParam || "");
+
+  useEffect(() => {
+    if (obraIdParam > 0) setObraId(obraIdParam);
+    if (fonteParam) setObraFonte(fonteParam);
+  }, [obraIdParam, fonteParam]);
+
   const hasObraParam = obraIdParam > 0;
 
   const selectedObraEntry = hasObraParam
