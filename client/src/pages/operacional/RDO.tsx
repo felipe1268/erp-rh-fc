@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
@@ -48,6 +48,11 @@ function ObraVisaoGeral({ obraId, companyId, setLocation, selectedFonte }: any) 
     { enabled: !!companyId && !!obraId && selectedFonte === 'importado' }
   );
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [showAllReports, setShowAllReports] = useState(false);
+  const allRdos = trpc.operacional.listarRDOs.useQuery(
+    { companyId, obraId, fonte: 'importado' as any },
+    { enabled: !!companyId && !!obraId && showAllReports }
+  );
   const obra = obraData.data;
   if (obraData.isLoading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div>;
   if (!obra) return <div className="text-center py-16 text-gray-400">Dados da obra não disponíveis</div>;
@@ -99,35 +104,49 @@ function ObraVisaoGeral({ obraId, companyId, setLocation, selectedFonte }: any) 
         <div className="border rounded-lg bg-white p-4">
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-sm font-semibold text-orange-600">Relatórios recentes</h3>
-            <span className="text-xs text-gray-400">Ver tudo</span>
+            <button className="text-xs text-blue-500 hover:underline cursor-pointer"
+              onClick={() => setShowAllReports(!showAllReports)}>
+              {showAllReports ? 'Menos' : 'Ver tudo'}
+            </button>
           </div>
-          {(obra.relatoriosRecentes as any[])?.length > 0 ? (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 text-xs">
-                  <th className="py-1 px-1">Data</th>
-                  <th className="py-1 px-1">N°</th>
-                  <th className="py-1 px-1">Status</th>
-                  <th className="py-1 px-1">Modelo de relatório</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(obra.relatoriosRecentes as any[]).map((r: any) => (
-                  <tr key={r.id} className="border-t hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setLocation(`/operacional/rdo?obra=${obraId}&id=${r.id}&fonte=importado`)}>
-                    <td className="py-1.5 px-1 text-blue-600 hover:underline text-xs">{formatDate(r.data)}</td>
-                    <td className="py-1.5 px-1 text-xs">{r.numero}</td>
-                    <td className="py-1.5 px-1">
-                      <span className={`text-[10px] px-2 py-0.5 rounded ${statusBg(r.status)}`}>
-                        {statusLabel(r.status)}
-                      </span>
-                    </td>
-                    <td className="py-1.5 px-1 text-xs text-gray-400">Relatório Diário de Obra (RDO)</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : <p className="text-sm text-gray-400">Nenhum relatório</p>}
+          {(() => {
+            const reportsList = showAllReports && allRdos.data
+              ? (allRdos.data as any[])
+              : (obra.relatoriosRecentes as any[]) || [];
+            if (reportsList.length === 0) return <p className="text-sm text-gray-400">Nenhum relatório</p>;
+            return (
+              <div style={{ maxHeight: showAllReports ? '400px' : 'none', overflowY: showAllReports ? 'auto' : 'visible' }}>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500 text-xs">
+                      <th className="py-1 px-1">Data</th>
+                      <th className="py-1 px-1">N°</th>
+                      <th className="py-1 px-1">Status</th>
+                      <th className="py-1 px-1">Modelo de relatório</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportsList.map((r: any) => (
+                      <tr key={r.id} className="border-t hover:bg-gray-50 cursor-pointer"
+                        onClick={() => setLocation(`/operacional/rdo?obra=${obraId}&id=${r.id}&fonte=importado`)}>
+                        <td className="py-1.5 px-1 text-blue-600 hover:underline text-xs">{formatDate(r.data)}</td>
+                        <td className="py-1.5 px-1 text-xs">{r.numero}</td>
+                        <td className="py-1.5 px-1">
+                          <span className={`text-[10px] px-2 py-0.5 rounded ${statusBg(r.status)}`}>
+                            {statusLabel(r.status)}
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-1 text-xs text-gray-400">Relatório Diário de Obra (RDO)</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {showAllReports && allRdos.isLoading && (
+                  <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-orange-500" /></div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="border rounded-lg bg-white p-4">
@@ -661,7 +680,8 @@ export default function RDO() {
   const { companyId } = useCompany();
   const { user } = useAuth();
   const [location, setLocation] = useLocation();
-  const params = new URLSearchParams(location.split("?")[1] || "");
+  const searchString = useSearch();
+  const params = new URLSearchParams(searchString);
   const obraIdParam = Number(params.get("obra")) || 0;
   const rdoIdParam = Number(params.get("id")) || 0;
 
