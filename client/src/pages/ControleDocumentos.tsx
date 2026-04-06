@@ -1304,8 +1304,9 @@ export default function ControleDocumentos() {
         if (!s) return true;
         const nome = (e.nomeCompleto || "").toLowerCase();
         const cpf = (e.cpf || "").replace(/\D/g, "");
+        const codigo = (e.codigoInterno || "").toLowerCase();
         const searchClean = s.replace(/\D/g, "");
-        return nome.includes(s) || (searchClean && cpf.includes(searchClean));
+        return nome.includes(s) || (searchClean && cpf.includes(searchClean)) || codigo.includes(s);
       }).slice(0, 50);
     }, [activeEmployees, empSearch]);
 
@@ -1342,7 +1343,7 @@ export default function ControleDocumentos() {
             enterKeyHint="search"
             className="flex-1 bg-transparent outline-none text-sm text-foreground min-w-0 appearance-none"
             style={{ fontSize: '16px', WebkitAppearance: 'none' }}
-            placeholder={selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Digite nome ou CPF..."}
+            placeholder={selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Digite nome, CPF ou código (JFC)..."}
             value={empSearch}
             onChange={e => {
               setEmpSearch(e.target.value);
@@ -1390,7 +1391,10 @@ export default function ControleDocumentos() {
                     onClick={() => { onChange(e.id); setEmpFocused(false); setEmpSearch(""); inputRef.current?.blur(); }}
                   >
                     <span className="text-gray-900 dark:text-gray-100">{e.nomeCompleto}</span>
-                    <span className="text-xs text-muted-foreground ml-2 shrink-0">{formatCPF(e.cpf)}</span>
+                    <span className="text-xs text-muted-foreground ml-2 shrink-0">
+                      {e.codigoInterno && <span className="text-blue-600 font-medium mr-2">{e.codigoInterno}</span>}
+                      {formatCPF(e.cpf)}
+                    </span>
                   </div>
                 ))}
               </>

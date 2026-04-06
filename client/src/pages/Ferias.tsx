@@ -533,7 +533,8 @@ export default function Ferias() {
     if (!empSearch) return true;
     const s = removeAccents(empSearch);
     const sDigits = s.replace(/\D/g, "");
-    return removeAccents(e.nomeCompleto || "").includes(s) || (sDigits.length > 0 && (e.cpf || "").replace(/\D/g, "").includes(sDigits));
+    const codigo = (e.codigoInterno || "").toLowerCase();
+    return removeAccents(e.nomeCompleto || "").includes(s) || (sDigits.length > 0 && (e.cpf || "").replace(/\D/g, "").includes(sDigits)) || codigo.includes(s);
   }), [activeEmployees, empSearch]);
 
   // Filtered list
@@ -2344,7 +2345,7 @@ export default function Ferias() {
                   <div className="flex items-center border rounded-md px-3 py-2 bg-background cursor-pointer hover:bg-muted/30 relative" style={{ zIndex: 61 }} onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}>
                     <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
                     {empDropdownOpen ? (
-                      <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Digite nome ou CPF..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }} onClick={e => e.stopPropagation()} />
+                      <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Digite nome, CPF ou código (JFC)..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }} onClick={e => e.stopPropagation()} />
                     ) : (
                       <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
                         {selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Selecione..."}
@@ -2365,7 +2366,10 @@ export default function Ferias() {
                         ) : filteredEmps.slice(0, empSearch ? 50 : 200).map((e: any) => (
                           <div key={e.id} className="px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm flex justify-between" onClick={() => { setForm({ ...form, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); }}>
                             <span className="font-medium">{e.nomeCompleto}</span>
-                            <span className="text-muted-foreground">{formatCPF(e.cpf)}</span>
+                            <span className="text-muted-foreground">
+                              {e.codigoInterno && <span className="text-blue-600 font-medium mr-2">{e.codigoInterno}</span>}
+                              {formatCPF(e.cpf)}
+                            </span>
                           </div>
                         ))}
                       </div>
