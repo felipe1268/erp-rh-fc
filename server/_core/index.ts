@@ -65,7 +65,12 @@ async function startServer() {
     try {
       const db = await (await import("../db")).getDb();
       const { sql } = await import("drizzle-orm");
-      const result = (await db.execute(sql`SELECT foto_data, mime_type FROM diario_obra_fotos WHERE id = ${Number(req.params.id)}`)) as any;
+      const result = (await db.execute(sql`
+        SELECT f.foto_data, f.mime_type
+        FROM diario_obra_fotos f
+        JOIN diario_obra_relatorios r ON f.relatorio_id = r.id
+        WHERE f.id = ${Number(req.params.id)}
+      `)) as any;
       const row = (result.rows ?? result)?.[0];
       if (!row || !row.foto_data) return res.status(404).send("Foto não encontrada");
       res.setHeader("Content-Type", row.mime_type || "image/jpeg");

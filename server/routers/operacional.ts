@@ -28,6 +28,55 @@ export const operacionalRouter = router({
       return { principais: mainObras, importadas: dioObras };
     }),
 
+  getObraImportada: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const obraRows = rows(await db.execute(sql`
+        SELECT id, nome, status, company_id, endereco, cliente as contratante, responsavel,
+               data_inicio, data_previsao_fim as data_previsao_termino, contrato as numero_contrato,
+               prazo_contratual as prazo_contratual_original
+        FROM diario_obra_obras WHERE id = ${input.obraId} AND company_id = ${input.companyId}
+      `));
+      if (!obraRows[0]) return null;
+      const obra = obraRows[0];
+      const stats = rows(await db.execute(sql`
+        SELECT
+          (SELECT COUNT(*) FROM diario_obra_relatorios WHERE obra_id = ${input.obraId}) as total_relatorios,
+          (SELECT COUNT(*) FROM diario_obra_atividades a JOIN diario_obra_relatorios r ON a.relatorio_id = r.id WHERE r.obra_id = ${input.obraId}) as total_atividades,
+          (SELECT COUNT(*) FROM diario_obra_ocorrencias o JOIN diario_obra_relatorios r ON o.relatorio_id = r.id WHERE r.obra_id = ${input.obraId}) as total_ocorrencias,
+          (SELECT COUNT(*) FROM diario_obra_comentarios c JOIN diario_obra_relatorios r ON c.relatorio_id = r.id WHERE r.obra_id = ${input.obraId}) as total_comentarios,
+          (SELECT COUNT(*) FROM diario_obra_fotos f JOIN diario_obra_relatorios r ON f.relatorio_id = r.id WHERE r.obra_id = ${input.obraId}) as total_fotos
+      `));
+      const fotosRecentes = rows(await db.execute(sql`
+        SELECT f.id, f.descricao FROM diario_obra_fotos f
+        JOIN diario_obra_relatorios r ON f.relatorio_id = r.id
+        WHERE r.obra_id = ${input.obraId}
+        ORDER BY f.id DESC LIMIT 8
+      `));
+      const relatoriosRecentes = rows(await db.execute(sql`
+        SELECT id, numero, data, status FROM diario_obra_relatorios
+        WHERE obra_id = ${input.obraId} ORDER BY data DESC LIMIT 5
+      `));
+      let prazoContratual = obra.prazo_contratual_original ? Number(obra.prazo_contratual_original) : null;
+      let prazoDecorrido = null;
+      let prazoVencer = null;
+      if (obra.data_inicio && obra.data_previsao_termino) {
+        const inicio = new Date(obra.data_inicio);
+        const fim = new Date(obra.data_previsao_termino);
+        const hoje = new Date();
+        if (!prazoContratual) prazoContratual = Math.ceil((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24));
+        prazoDecorrido = Math.max(0, Math.ceil((hoje.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
+        prazoVencer = Math.max(0, prazoContratual - prazoDecorrido);
+      } else if (obra.data_inicio && prazoContratual) {
+        const inicio = new Date(obra.data_inicio);
+        const hoje = new Date();
+        prazoDecorrido = Math.max(0, Math.ceil((hoje.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
+        prazoVencer = Math.max(0, prazoContratual - prazoDecorrido);
+      }
+      return { ...obra, stats: stats[0] || {}, fotosRecentes, relatoriosRecentes, prazoContratual, prazoDecorrido, prazoVencer };
+    }),
+
   listarRDOs: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number(), mes: z.string().optional(), fonte: z.enum(['principal', 'importado']).optional() }))
     .query(async ({ input }) => {
