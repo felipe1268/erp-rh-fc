@@ -2524,7 +2524,7 @@ export const processosAndamentos = pgTable("processos_andamentos", {
 export const processosTrabalhistas = pgTable("processos_trabalhistas", {
         id: serial().notNull(),
         companyId: integer().notNull(),
-        employeeId: integer().notNull(),
+        employeeId: integer(),
         numeroProcesso: varchar({ length: 50 }).notNull(),
         vara: varchar({ length: 100 }),
         comarca: varchar({ length: 100 }),
@@ -2574,6 +2574,10 @@ export const processosTrabalhistas = pgTable("processos_trabalhistas", {
         datajudMovimentos: json("datajud_movimentos"),
         datajudTotalMovimentos: integer(),
         datajudAutoDetectado: smallint().default(0).notNull(),
+        reclamados: varchar({ length: 500 }),
+        regiao: varchar({ length: 50 }),
+        resultado: varchar({ length: 50 }),
+        andamentoProcessual: text(),
 },
 (table) => [
         index("pt_company").on(table.companyId),
@@ -2652,6 +2656,8 @@ export const processosCivis = pgTable("processos_civis", {
         deletedAt: timestamp({ mode: 'string' }),
         deletedBy: varchar({ length: 255 }),
         deletedByUserId: integer(),
+        resultado: varchar({ length: 50 }),
+        andamentoProcessual: text(),
 },
 (table) => [
         index("pciv_company").on(table.companyId),

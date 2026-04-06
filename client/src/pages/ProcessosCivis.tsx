@@ -23,6 +23,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   execucao: { label: "Execução", color: "text-red-700", bg: "bg-red-100" },
   sentenca: { label: "Sentença", color: "text-purple-700", bg: "bg-purple-100" },
   acordo: { label: "Acordo", color: "text-green-700", bg: "bg-green-100" },
+  suspenso: { label: "Suspenso", color: "text-yellow-700", bg: "bg-yellow-100" },
   arquivado: { label: "Arquivado", color: "text-gray-500", bg: "bg-gray-100" },
   encerrado: { label: "Encerrado", color: "text-gray-600", bg: "bg-gray-200" },
 };
@@ -49,9 +50,12 @@ const TIPO_ACAO_LABELS: Record<string, string> = {
 };
 
 const FASE_LABELS: Record<string, string> = {
+  inicial: "Fase Inicial",
   conhecimento: "Conhecimento",
   instrucao: "Instrução",
+  sentenca: "Sentença",
   decisoria: "Decisória",
+  recurso: "Recurso",
   recursal: "Recursal",
   execucao: "Execução",
   encerrado: "Encerrado",
@@ -88,6 +92,7 @@ export default function ProcessosCivis() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRisco, setFilterRisco] = useState("all");
+  const [filterResultado, setFilterResultado] = useState("all");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -249,8 +254,9 @@ export default function ProcessosCivis() {
     }
     if (filterStatus !== "all") items = items.filter(p => p.status === filterStatus);
     if (filterRisco !== "all") items = items.filter(p => p.risco === filterRisco);
+    if (filterResultado !== "all") items = items.filter((p: any) => p.resultado === filterResultado);
     return items;
-  }, [processos.data, searchTerm, filterStatus, filterRisco]);
+  }, [processos.data, searchTerm, filterStatus, filterRisco, filterResultado]);
 
   const toggleSelect = (id: number) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -712,6 +718,13 @@ export default function ProcessosCivis() {
           <select className="border rounded px-3 py-2 text-sm" value={filterRisco} onChange={e => setFilterRisco(e.target.value)}>
             <option value="all">Todos os Riscos</option>
             {Object.entries(RISCO_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+          <select className="border rounded px-3 py-2 text-sm" value={filterResultado} onChange={e => setFilterResultado(e.target.value)}>
+            <option value="all">Todos os Resultados</option>
+            <option value="improcedente">Improcedente</option>
+            <option value="acordo">Acordo</option>
+            <option value="condenacao_estimada">Condenação Estimada</option>
+            <option value="pendente">Pendente</option>
           </select>
           {selectedIds.length > 0 && (
             <Button size="sm" variant="destructive" onClick={() => setShowBatchDeleteDialog(true)}>

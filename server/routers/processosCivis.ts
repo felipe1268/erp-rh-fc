@@ -38,7 +38,7 @@ export const processosCivisRouter = router({
       return filtered.sort((a, b) => {
         const statusOrder: Record<string, number> = {
           em_andamento: 0, aguardando_audiencia: 1, aguardando_pericia: 2,
-          recurso: 3, execucao: 4, sentenca: 5, acordo: 6, arquivado: 7, encerrado: 8,
+          recurso: 3, execucao: 4, sentenca: 5, suspenso: 6, acordo: 7, arquivado: 8, encerrado: 9,
         };
         return (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5);
       });
@@ -83,12 +83,14 @@ export const processosCivisRouter = router({
       dataDistribuicao: z.string().optional(),
       dataCitacao: z.string().optional(),
       dataAudiencia: z.string().optional(),
-      status: z.enum(['em_andamento', 'aguardando_audiencia', 'aguardando_pericia', 'recurso', 'execucao', 'sentenca', 'acordo', 'arquivado', 'encerrado']).default('em_andamento'),
-      fase: z.enum(['conhecimento', 'instrucao', 'decisoria', 'recursal', 'execucao', 'encerrado']).default('conhecimento'),
+      status: z.enum(['em_andamento', 'aguardando_audiencia', 'aguardando_pericia', 'recurso', 'execucao', 'sentenca', 'acordo', 'suspenso', 'arquivado', 'encerrado']).default('em_andamento'),
+      fase: z.enum(['conhecimento', 'inicial', 'instrucao', 'sentenca', 'decisoria', 'recurso', 'recursal', 'execucao', 'encerrado']).default('conhecimento'),
       risco: z.enum(['baixo', 'medio', 'alto', 'critico']).default('medio'),
       objetoAcao: z.string().optional(),
       observacoes: z.string().optional(),
       criadoPor: z.string().optional(),
+      resultado: z.string().optional(),
+      andamentoProcessual: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -114,6 +116,8 @@ export const processosCivisRouter = router({
         objetoAcao: emptyToNull(input.objetoAcao),
         observacoes: emptyToNull(input.observacoes),
         criadoPor: emptyToNull(input.criadoPor),
+        resultado: emptyToNull(input.resultado),
+        andamentoProcessual: emptyToNull(input.andamentoProcessual),
       }).returning();
       return { id: result[0].id };
     }),
@@ -145,6 +149,8 @@ export const processosCivisRouter = router({
       risco: z.string().optional(),
       objetoAcao: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),
+      resultado: z.string().nullable().optional(),
+      andamentoProcessual: z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const { id, companyId, companyIds, ...data } = input;
@@ -173,6 +179,8 @@ export const processosCivisRouter = router({
       if (data.risco !== undefined) updateData.risco = data.risco;
       if (data.objetoAcao !== undefined) updateData.objetoAcao = data.objetoAcao;
       if (data.observacoes !== undefined) updateData.observacoes = data.observacoes;
+      if (data.resultado !== undefined) (updateData as any).resultado = emptyToNull(data.resultado);
+      if (data.andamentoProcessual !== undefined) (updateData as any).andamentoProcessual = emptyToNull(data.andamentoProcessual);
       await db.update(processosCivis).set(updateData)
         .where(and(
           eq(processosCivis.id, id),

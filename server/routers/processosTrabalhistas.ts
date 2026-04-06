@@ -126,7 +126,7 @@ export const processosTrabRouter = router({
   criar: protectedProcedure
     .input(z.object({
       companyId: z.number(),
-      employeeId: z.number(),
+      employeeId: z.number().optional(),
       numeroProcesso: z.string().min(1),
       vara: z.string().optional(),
       comarca: z.string().optional(),
@@ -134,6 +134,7 @@ export const processosTrabRouter = router({
       justica: z.enum(['trabalho','federal','estadual','outros']).default('trabalho'),
       tipoAcao: z.enum(['reclamatoria', 'indenizatoria', 'rescisao_indireta', 'acidente_trabalho', 'doenca_ocupacional', 'assedio', 'execucao_fiscal', 'mandado_seguranca', 'acao_civil_publica', 'outros']).default('reclamatoria'),
       reclamante: z.string().min(1),
+      reclamados: z.string().optional(),
       advogadoReclamante: z.string().optional(),
       advogadoEmpresa: z.string().optional(),
       valorCausa: z.string().optional(),
@@ -141,8 +142,8 @@ export const processosTrabRouter = router({
       dataDesligamento: z.string().optional(),
       dataCitacao: z.string().optional(),
       dataAudiencia: z.string().optional(),
-      status: z.enum(['em_andamento', 'aguardando_audiencia', 'aguardando_pericia', 'acordo', 'sentenca', 'recurso', 'execucao', 'arquivado', 'encerrado']).default('em_andamento'),
-      fase: z.enum(['conhecimento', 'instrucao', 'decisoria', 'recursal', 'execucao', 'encerrado']).default('conhecimento'),
+      status: z.enum(['em_andamento', 'aguardando_audiencia', 'aguardando_pericia', 'acordo', 'sentenca', 'recurso', 'execucao', 'suspenso', 'arquivado', 'encerrado']).default('em_andamento'),
+      fase: z.enum(['conhecimento', 'inicial', 'instrucao', 'decisoria', 'sentenca', 'recursal', 'recurso', 'execucao', 'encerrado']).default('conhecimento'),
       risco: z.enum(['baixo', 'medio', 'alto', 'critico']).default('medio'),
       pedidos: z.array(z.string()).optional(),
       clienteCnpj: z.string().optional(),
@@ -150,6 +151,9 @@ export const processosTrabRouter = router({
       clienteNomeFantasia: z.string().optional(),
       observacoes: z.string().optional(),
       criadoPor: z.string().optional(),
+      regiao: z.string().optional(),
+      resultado: z.string().optional(),
+      andamentoProcessual: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -157,7 +161,7 @@ export const processosTrabRouter = router({
       const emptyToNull = (v: string | undefined) => (v && v.trim() !== '' ? v : null);
       const result = await db.insert(processosTrabalhistas).values({
         companyId: input.companyId,
-        employeeId: input.employeeId,
+        employeeId: input.employeeId || null,
         numeroProcesso: input.numeroProcesso,
         vara: emptyToNull(input.vara),
         comarca: emptyToNull(input.comarca),
@@ -165,6 +169,7 @@ export const processosTrabRouter = router({
         justica: input.justica,
         tipoAcao: input.tipoAcao,
         reclamante: input.reclamante,
+        reclamados: emptyToNull(input.reclamados),
         advogadoReclamante: emptyToNull(input.advogadoReclamante),
         advogadoEmpresa: emptyToNull(input.advogadoEmpresa),
         valorCausa: emptyToNull(input.valorCausa),
@@ -181,6 +186,9 @@ export const processosTrabRouter = router({
         clienteNomeFantasia: emptyToNull(input.clienteNomeFantasia),
         observacoes: emptyToNull(input.observacoes),
         criadoPor: emptyToNull(input.criadoPor),
+        regiao: emptyToNull(input.regiao),
+        resultado: emptyToNull(input.resultado),
+        andamentoProcessual: emptyToNull(input.andamentoProcessual),
       }).returning();
       return { id: result[0].id };
     }),
@@ -208,14 +216,18 @@ export const processosTrabRouter = router({
       dataCitacao: z.string().nullable().optional(),
       dataAudiencia: z.string().nullable().optional(),
       dataEncerramento: z.string().nullable().optional(),
-      status: z.enum(['em_andamento', 'aguardando_audiencia', 'aguardando_pericia', 'acordo', 'sentenca', 'recurso', 'execucao', 'arquivado', 'encerrado']).optional(),
-      fase: z.enum(['conhecimento', 'instrucao', 'decisoria', 'recursal', 'execucao', 'encerrado']).optional(),
+      status: z.enum(['em_andamento', 'aguardando_audiencia', 'aguardando_pericia', 'acordo', 'sentenca', 'recurso', 'execucao', 'suspenso', 'arquivado', 'encerrado']).optional(),
+      fase: z.enum(['conhecimento', 'inicial', 'instrucao', 'decisoria', 'sentenca', 'recursal', 'recurso', 'execucao', 'encerrado']).optional(),
       risco: z.enum(['baixo', 'medio', 'alto', 'critico']).optional(),
       pedidos: z.array(z.string()).optional(),
       clienteCnpj: z.string().nullable().optional(),
       clienteRazaoSocial: z.string().nullable().optional(),
       clienteNomeFantasia: z.string().nullable().optional(),
       observacoes: z.string().optional(),
+      reclamados: z.string().optional(),
+      regiao: z.string().optional(),
+      resultado: z.string().optional(),
+      andamentoProcessual: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const { id, pedidos, ...data } = input;

@@ -32,6 +32,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   sentenca: { label: "Sentença", color: "text-purple-700", bg: "bg-purple-100" },
   recurso: { label: "Recurso", color: "text-indigo-700", bg: "bg-indigo-100" },
   execucao: { label: "Execução", color: "text-red-700", bg: "bg-red-100" },
+  suspenso: { label: "Suspenso", color: "text-yellow-700", bg: "bg-yellow-100" },
   arquivado: { label: "Arquivado", color: "text-gray-500", bg: "bg-gray-100" },
   encerrado: { label: "Encerrado", color: "text-gray-600", bg: "bg-gray-200" },
 };
@@ -54,9 +55,12 @@ const TIPO_ACAO_LABELS: Record<string, string> = {
 };
 
 const FASE_LABELS: Record<string, string> = {
+  inicial: "Fase Inicial",
   conhecimento: "Conhecimento",
   instrucao: "Instrução",
+  sentenca: "Sentença",
   decisoria: "Decisória (Sentença)",
+  recurso: "Recurso",
   recursal: "Recursal (Opcional)",
   execucao: "Execução (Cumprimento de Sentença)",
   encerrado: "Encerrado",
@@ -121,6 +125,9 @@ export default function ProcessosTrabalhistas() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRisco, setFilterRisco] = useState("all");
   const [filterArquivo, setFilterArquivo] = useState("all");
+  const [filterEntidade, setFilterEntidade] = useState("all");
+  const [filterRegiao, setFilterRegiao] = useState("all");
+  const [filterResultado, setFilterResultado] = useState("all");
   const [showAndamentoDialog, setShowAndamentoDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: "processo" | "andamento"; id: number; processoId?: number } | null>(null);
@@ -396,7 +403,8 @@ export default function ProcessosTrabalhistas() {
         p.reclamante.toUpperCase().includes(term) ||
         p.numeroProcesso.toUpperCase().includes(term) ||
         (p.employee?.nomeCompleto || "").toUpperCase().includes(term) ||
-        (p.vara || "").toUpperCase().includes(term)
+        (p.vara || "").toUpperCase().includes(term) ||
+        ((p as any).reclamados || "").toUpperCase().includes(term)
       );
     }
     if (filterStatus === "encerrados_todos") {
@@ -409,8 +417,22 @@ export default function ProcessosTrabalhistas() {
     if (filterRisco !== "all") items = items.filter(p => p.risco === filterRisco);
     if (filterArquivo === "com") items = items.filter((p: any) => (p.totalDocumentos || 0) > 0);
     if (filterArquivo === "sem") items = items.filter((p: any) => (p.totalDocumentos || 0) === 0);
+    if (filterEntidade !== "all") {
+      items = items.filter((p: any) => {
+        const rec = (p.reclamados || "").toUpperCase();
+        if (filterEntidade === "felipe_pf") return rec.includes("FELIPE COSTA") && !rec.includes("CHLORUM") && !rec.includes("JÚLIO") && !rec.includes("JULIO");
+        if (filterEntidade === "chlorum") return rec.includes("CHLORUM");
+        if (filterEntidade === "julio_ferraz_pj") return rec.includes("JULIO FERRAZ PROJETOS") || rec.includes("JÚLIO FERRAZ PROJETOS");
+        if (filterEntidade === "cf_hotelaria") return rec.includes("CF HOTELARIA");
+        if (filterEntidade === "julio_cesar_pf") return rec.includes("JULIO CESAR FERRAZ") || rec.includes("JÚLIO CESAR FERRAZ");
+        if (filterEntidade === "chlorum_julio") return (rec.includes("CHLORUM") && (rec.includes("JÚLIO") || rec.includes("JULIO")));
+        return true;
+      });
+    }
+    if (filterRegiao !== "all") items = items.filter((p: any) => p.regiao === filterRegiao);
+    if (filterResultado !== "all") items = items.filter((p: any) => p.resultado === filterResultado);
     return items;
-  }, [processos.data, searchTerm, filterStatus, filterRisco, filterArquivo]);
+  }, [processos.data, searchTerm, filterStatus, filterRisco, filterArquivo, filterEntidade, filterRegiao, filterResultado]);
 
   // ===== DETALHE VIEW =====
   if (viewMode === "detalhe" && selectedProcessoId) {
@@ -1480,6 +1502,31 @@ export default function ProcessosTrabalhistas() {
               <option value="all">Todos os Riscos</option>
               {Object.entries(RISCO_LABELS).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
             </select>
+            <select value={filterEntidade} onChange={e => setFilterEntidade(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
+              <option value="all">Todas as Entidades</option>
+              <option value="felipe_pf">Felipe Costa Alves (PF)</option>
+              <option value="chlorum">Felipe + Chlorum</option>
+              <option value="chlorum_julio">Felipe + Chlorum + Júlio Ferraz</option>
+              <option value="julio_ferraz_pj">Julio Ferraz Projetos e Obras</option>
+              <option value="cf_hotelaria">CF Hotelaria Ltda</option>
+              <option value="julio_cesar_pf">Júlio Cesar Ferraz de Araújo (PF)</option>
+            </select>
+            <select value={filterRegiao} onChange={e => setFilterRegiao(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
+              <option value="all">Todas as Regiões</option>
+              <option value="igarassu_pe">Igarassu - PE</option>
+              <option value="demais_regioes">Demais Regiões</option>
+              <option value="vidracaria_ferraz">Vidraçaria Ferraz</option>
+            </select>
+            <select value={filterResultado} onChange={e => setFilterResultado(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
+              <option value="all">Todos os Resultados</option>
+              <option value="improcedente">Improcedente</option>
+              <option value="acordo">Acordo</option>
+              <option value="condenacao_estimada">Condenação Estimada</option>
+              <option value="pendente">Pendente</option>
+            </select>
             <select value={filterArquivo} onChange={e => setFilterArquivo(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
               <option value="all">Todos os Arquivos</option>
@@ -1522,6 +1569,7 @@ export default function ProcessosTrabalhistas() {
                       <th className="p-2.5 w-10"><input type="checkbox" checked={selectedIds.length === filtered.length && filtered.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded" /></th>
                       <th className="p-2.5 font-medium">Nº Processo</th>
                       <th className="p-2.5 font-medium">Reclamante</th>
+                      <th className="p-2.5 font-medium">Reclamados</th>
                       <th className="p-2.5 font-medium">Tipo</th>
                       <th className="p-2.5 font-medium">Comarca</th>
                       <th className="p-2.5 font-medium text-center">Status</th>
@@ -1546,6 +1594,7 @@ export default function ProcessosTrabalhistas() {
                             <p className="font-medium text-sm">{p.reclamante}</p>
                             {p.employee && <p className="text-xs text-muted-foreground">{p.employee.funcao || ""}</p>}
                           </td>
+                          <td className="p-2.5 text-xs max-w-[180px] truncate" title={p.reclamados || "—"}>{p.reclamados || "—"}</td>
                           <td className="p-2.5 text-xs">{TIPO_ACAO_LABELS[p.tipoAcao] || p.tipoAcao}</td>
                           <td className="p-2.5 text-xs">{p.comarca || p.vara ? `${p.comarca || ''}${p.comarca && p.tribunal ? ` - ${p.tribunal.replace('TRT', '').replace(/\d+/g, '').trim()}` : ''}` : '—'}</td>
                           <td className="p-2.5 text-center">
