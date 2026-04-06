@@ -47,6 +47,7 @@ function ObraVisaoGeral({ obraId, companyId, setLocation, selectedFonte }: any) 
     { companyId, obraId },
     { enabled: !!companyId && !!obraId && selectedFonte === 'importado' }
   );
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const obra = obraData.data;
   if (obraData.isLoading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div>;
   if (!obra) return <div className="text-center py-16 text-gray-400">Dados da obra não disponíveis</div>;
@@ -140,7 +141,7 @@ function ObraVisaoGeral({ obraId, companyId, setLocation, selectedFonte }: any) 
                 <img key={i} src={f.urlMiniatura || f.url} alt="Foto"
                   loading="lazy"
                   className="w-full h-20 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
-                  onClick={() => window.open(f.url, '_blank')} />
+                  onClick={() => setLightboxIdx(i)} />
               ))}
             </div>
           ) : <p className="text-sm text-gray-400">Nenhuma foto</p>}
@@ -255,6 +256,29 @@ function ObraVisaoGeral({ obraId, companyId, setLocation, selectedFonte }: any) 
           )}
         </div>
       </div>
+
+      {lightboxIdx !== null && fotosApi.length > 0 && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center"
+          onClick={() => setLightboxIdx(null)}>
+          <button className="absolute top-4 right-4 text-white text-3xl font-bold hover:text-gray-300 z-50"
+            onClick={() => setLightboxIdx(null)}>✕</button>
+          {lightboxIdx > 0 && (
+            <button className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-4xl font-bold hover:text-gray-300 z-50 bg-black/40 rounded-full w-12 h-12 flex items-center justify-center"
+              onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx - 1); }}>‹</button>
+          )}
+          {lightboxIdx < fotosApi.length - 1 && (
+            <button className="absolute right-4 top-1/2 -translate-y-1/2 text-white text-4xl font-bold hover:text-gray-300 z-50 bg-black/40 rounded-full w-12 h-12 flex items-center justify-center"
+              onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx + 1); }}>›</button>
+          )}
+          <img src={fotosApi[lightboxIdx]?.url || fotosApi[lightboxIdx]?.urlMiniatura}
+            alt={`Foto ${lightboxIdx + 1}`}
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()} />
+          <div className="absolute bottom-4 text-white text-sm bg-black/50 px-3 py-1 rounded">
+            {lightboxIdx + 1} / {fotosApi.length}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
