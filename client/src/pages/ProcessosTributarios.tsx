@@ -280,6 +280,10 @@ export default function ProcessosTributarios() {
   const toggleSelect = (id: number) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filtered.length) setSelectedIds([]);
+    else setSelectedIds(filtered.map(p => p.id));
+  };
 
   if (viewMode === "detalhe" && selectedProcessoId) {
     const p = detalhe.data;
@@ -715,95 +719,146 @@ export default function ProcessosTributarios() {
           </div>
         </div>
 
-        {stats.data && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Card><CardContent className="p-3">
-              <div className="text-xs text-muted-foreground">Total</div>
-              <div className="text-2xl font-bold">{stats.data.total}</div>
-            </CardContent></Card>
-            <Card><CardContent className="p-3">
-              <div className="text-xs text-muted-foreground">Em Andamento</div>
-              <div className="text-2xl font-bold text-blue-600">{stats.data.emAndamento}</div>
-            </CardContent></Card>
-            <Card><CardContent className="p-3">
-              <div className="text-xs text-muted-foreground">Encerrados</div>
-              <div className="text-2xl font-bold text-green-600">{stats.data.encerrados}</div>
-            </CardContent></Card>
-            <Card><CardContent className="p-3">
-              <div className="text-xs text-muted-foreground">Valor em Causa</div>
-              <div className="text-lg font-bold text-red-600">{stats.data.totalValorCausa.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}</div>
-            </CardContent></Card>
-          </div>
-        )}
+        {stats.data && (() => {
+          const altoCritico = filtered.filter(p => p.risco === "alto" || p.risco === "critico").length;
+          const parseBRL2 = (v: any) => { if (!v) return 0; const s = String(v).replace(/[R$\s.]/g, "").replace(",", "."); return parseFloat(s) || 0; };
+          const passivoAberto = filtered.filter(p => p.status !== "encerrado" && p.status !== "arquivado").reduce((s, p) => s + parseBRL2(p.valorCausa), 0);
+          const fBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+              <div className="bg-blue-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-blue-700">{stats.data.total}</p>
+                <p className="text-xs text-muted-foreground">Total</p>
+              </div>
+              <div className="bg-amber-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-amber-700">{stats.data.emAndamento}</p>
+                <p className="text-xs text-muted-foreground">Em Andamento</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-green-700">{stats.data.encerrados}</p>
+                <p className="text-xs text-muted-foreground">Encerrados</p>
+              </div>
+              <div className="bg-red-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-red-700">{altoCritico}</p>
+                <p className="text-xs text-muted-foreground">Alto/Crítico</p>
+              </div>
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-orange-700">{fBRL(passivoAberto)}</p>
+                <p className="text-xs font-semibold text-orange-600">Valor em Causa</p>
+              </div>
+            </div>
+          );
+        })()}
 
-        <div className="flex flex-wrap gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <input className="w-full pl-9 pr-3 py-2 border rounded text-sm" placeholder="Buscar por número, contribuinte..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+        <div className="flex flex-col gap-3">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input type="text" placeholder="Buscar por número, contribuinte, auto de infração..." value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm bg-background" />
           </div>
-          <select className="border rounded px-3 py-2 text-sm" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-            <option value="all">Todos os Status</option>
-            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </select>
-          <select className="border rounded px-3 py-2 text-sm" value={filterRisco} onChange={e => setFilterRisco(e.target.value)}>
-            <option value="all">Todos os Riscos</option>
-            {Object.entries(RISCO_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </select>
-          <select className="border rounded px-3 py-2 text-sm" value={filterEntidade} onChange={e => setFilterEntidade(e.target.value)}>
-            <option value="all">Todas as Entidades</option>
-            <option value="jf">Julio Ferraz</option>
-            <option value="fc">FC Engenharia</option>
-          </select>
-          {selectedIds.length > 0 && (
-            <Button size="sm" variant="destructive" onClick={() => setShowBatchDeleteDialog(true)}>
-              <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir ({selectedIds.length})
-            </Button>
-          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
+              <option value="all">Todos os Status</option>
+              {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <select value={filterRisco} onChange={e => setFilterRisco(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
+              <option value="all">Todos os Riscos</option>
+              {Object.entries(RISCO_LABELS).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+            </select>
+            <select value={filterEntidade} onChange={e => setFilterEntidade(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
+              <option value="all">Todas as Entidades</option>
+              <option value="jf">Julio Ferraz</option>
+              <option value="fc">FC Engenharia</option>
+            </select>
+          </div>
         </div>
 
         {processos.isLoading ? (
-          <div className="text-center py-12 text-muted-foreground">Carregando...</div>
+          <div className="text-center py-12 text-muted-foreground">Carregando processos...</div>
         ) : filtered.length === 0 ? (
-          <Card><CardContent className="flex flex-col items-center py-12">
-            <Scale className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Nenhum processo tributário</h3>
-            <p className="text-sm text-muted-foreground mb-4">Cadastre o primeiro processo tributário.</p>
-            <Button onClick={() => setViewMode("novo")}><Plus className="h-4 w-4 mr-1" /> Novo Processo</Button>
-          </CardContent></Card>
+          <Card>
+            <CardContent className="text-center py-12">
+              <Scale className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+              <p className="text-muted-foreground">Nenhum processo tributário encontrado</p>
+              <Button className="mt-3" onClick={() => setViewMode("novo")}><Plus className="h-4 w-4 mr-1" /> Cadastrar Primeiro Processo</Button>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="space-y-2">
-            {filtered.map((p) => (
-              <Card key={p.id} className={`cursor-pointer hover:shadow-md transition-shadow ${selectedIds.includes(p.id) ? "ring-2 ring-teal-500" : ""}`}>
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-3">
-                    <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => toggleSelect(p.id)} onClick={e => e.stopPropagation()} className="h-4 w-4" />
-                    <div className="flex-1 min-w-0" onClick={() => { setSelectedProcessoId(p.id); setViewMode("detalhe"); }}>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-sm font-semibold">{p.numeroProcesso}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_LABELS[p.status]?.bg} ${STATUS_LABELS[p.status]?.color}`}>
-                          {STATUS_LABELS[p.status]?.label}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${RISCO_LABELS[p.risco]?.bg} ${RISCO_LABELS[p.risco]?.color}`}>
-                          {RISCO_LABELS[p.risco]?.icon} {RISCO_LABELS[p.risco]?.label}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-teal-100 text-teal-700">
-                          {TRIBUTO_LABELS[p.tipoTributo] || p.tipoTributo}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                        <span>{p.contribuinte}</span>
-                        {p.valorCausa && <span className="font-semibold">{formatBRL(p.valorCausa)}</span>}
-                        {p.dataDistribuicao && <span>{formatDate(p.dataDistribuicao)}</span>}
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => { setSelectedProcessoId(p.id); setViewMode("detalhe"); }}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <>
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-3 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <span className="text-sm font-medium text-blue-700">{selectedIds.length} processo(s) selecionado(s)</span>
+              <Button variant="destructive" size="sm" onClick={() => setShowBatchDeleteDialog(true)}>
+                <Trash2 className="h-4 w-4 mr-1" /> Excluir Selecionados
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setSelectedIds([])}>
+                <X className="h-4 w-4 mr-1" /> Limpar Seleção
+              </Button>
+            </div>
+          )}
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left bg-muted/50">
+                      <th className="p-2.5 w-10"><input type="checkbox" checked={selectedIds.length === filtered.length && filtered.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded" /></th>
+                      <th className="p-2.5 font-medium">Nº Processo</th>
+                      <th className="p-2.5 font-medium">Contribuinte</th>
+                      <th className="p-2.5 font-medium">Tributo</th>
+                      <th className="p-2.5 font-medium">Esfera</th>
+                      <th className="p-2.5 font-medium text-center">Status</th>
+                      <th className="p-2.5 font-medium text-center">Risco</th>
+                      <th className="p-2.5 font-medium text-center">Fase</th>
+                      <th className="p-2.5 font-medium">Valor Causa</th>
+                      <th className="p-2.5 font-medium">Próx. Audiência</th>
+                      <th className="p-2.5 font-medium text-center w-24">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((p) => {
+                      const statusInfo = STATUS_LABELS[p.status] || STATUS_LABELS.em_andamento;
+                      const riscoInfo = RISCO_LABELS[p.risco] || RISCO_LABELS.medio;
+                      return (
+                        <tr key={p.id} className={`border-b hover:bg-muted/30 ${selectedIds.includes(p.id) ? "bg-blue-50" : ""}`}>
+                          <td className="p-2.5" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => toggleSelect(p.id)} className="w-4 h-4 rounded" /></td>
+                          <td className="p-2.5 font-mono text-xs cursor-pointer" onClick={() => { setSelectedProcessoId(p.id); setViewMode("detalhe"); }}>{p.numeroProcesso}</td>
+                          <td className="p-2.5">
+                            <p className="font-medium text-sm truncate max-w-[200px]" title={p.contribuinte}>{p.contribuinte}</p>
+                          </td>
+                          <td className="p-2.5">
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">{TRIBUTO_LABELS[p.tipoTributo] || p.tipoTributo}</span>
+                          </td>
+                          <td className="p-2.5 text-xs">{ESFERA_LABELS[p.esfera] || p.esfera || "—"}</td>
+                          <td className="p-2.5 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>{statusInfo.label}</span>
+                          </td>
+                          <td className="p-2.5 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${riscoInfo.bg} ${riscoInfo.color}`}>{riscoInfo.icon} {riscoInfo.label}</span>
+                          </td>
+                          <td className="p-2.5 text-center text-xs">{FASE_LABELS[p.fase] || p.fase || "—"}</td>
+                          <td className="p-2.5 text-xs">{formatBRL(p.valorCausa)}</td>
+                          <td className="p-2.5 text-xs">{p.dataAudiencia ? formatDate(p.dataAudiencia) : "—"}</td>
+                          <td className="p-2.5">
+                            <div className="flex items-center gap-1">
+                              <button onClick={(e) => { e.stopPropagation(); setSelectedProcessoId(p.id); setViewMode("detalhe"); }} className="p-1 hover:bg-blue-100 rounded" title="Ver"><Eye className="h-4 w-4 text-muted-foreground" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); setSelectedProcessoId(p.id); setViewMode("detalhe"); }} className="p-1 hover:bg-amber-100 rounded" title="Editar"><Pencil className="h-4 w-4 text-amber-600" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); setDeleteTargetId(p.id); setShowDeleteDialog(true); }} className="p-1 hover:bg-red-100 rounded" title="Excluir"><Trash2 className="h-4 w-4 text-red-500" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+          </>
         )}
       </div>
 
