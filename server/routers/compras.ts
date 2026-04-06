@@ -8761,4 +8761,142 @@ Retorne APENAS um JSON válido neste formato:
 
       return { success: true, adminNome: admin.name };
     }),
+
+  getSugestoesContratacao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      eapCodigoSelecionado: z.string(),
+      tipo: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const prefix = input.eapCodigoSelecionado.split(".").slice(0, 2).join(".");
+
+      const allItems = await db.select({
+        id: orcamentoItens.id,
+        eapCodigo: orcamentoItens.eapCodigo,
+        descricao: orcamentoItens.descricao,
+        unidade: orcamentoItens.unidade,
+        quantidade: orcamentoItens.quantidade,
+      }).from(orcamentoItens)
+        .innerJoin(orcamentos, eq(orcamentos.id, orcamentoItens.orcamentoId))
+        .where(and(
+          eq(orcamentos.companyId, input.companyId),
+          eq(orcamentos.obraId, input.obraId),
+          sql`${orcamentoItens.eapCodigo} LIKE ${prefix + '.%'}`,
+          sql`COALESCE(${orcamentoItens.quantidade}::numeric, 0) > 0`,
+        ));
+
+      const jaRequisitados = await db.select({
+        orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+      }).from(comprasSolicitacoesItens)
+        .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasSolicitacoesItens.solicitacaoId))
+        .where(and(
+          eq(comprasSolicitacoes.companyId, input.companyId),
+          eq(comprasSolicitacoes.obraId, input.obraId),
+          sql`${comprasSolicitacoesItens.orcamentoItemId} IS NOT NULL`,
+        ));
+      const jaReqSet = new Set(jaRequisitados.map(r => r.orcamentoItemId));
+
+      const sugestoes = allItems.filter(it =>
+        it.eapCodigo !== input.eapCodigoSelecionado && !jaReqSet.has(it.id)
+      );
+
+      const descBase = input.eapCodigoSelecionado.split(".").slice(0, 2).join(".");
+      const termosBusca = allItems
+        .filter(it => it.eapCodigo === input.eapCodigoSelecionado)
+        .map(it => it.descricao?.toLowerCase().split(/\s+/).filter(w => w.length > 3).slice(0, 3))
+        .flat()
+        .filter(Boolean) as string[];
+
+      let fornecedoresSugeridos: any[] = [];
+      try {
+        const strip = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const selectedItem = allItems.find(it => it.eapCodigo === input.eapCodigoSelecionado);
+        const selectedDesc = strip((selectedItem?.descricao ?? "").toLowerCase());
+        const keywords = selectedDesc.split(/\s+/).filter(w => w.length > 3).slice(0, 4);
+
+        const historicoRows = await db.execute(sql`
+          SELECT DISTINCT ON (f.id)
+            f.id as fornecedor_id, f.razao_social, f.nome_fantasia, f.cidade, f.estado,
+            cr.preco_unitario, cr.total as resp_total,
+            cci.descricao as item_descricao,
+            cc.numero_cotacao, cc.obra_id,
+            o.nome as obra_nome,
+            cc.criado_em
+          FROM compras_cotacao_respostas cr
+          JOIN compras_cotacoes cc ON cc.id = cr.cotacao_id
+          JOIN compras_cotacoes_itens cci ON cci.id = cr.item_id
+          JOIN fornecedores f ON f.id = cr.fornecedor_id AND f.ativo = true
+          LEFT JOIN obras o ON o.id = cc.obra_id
+          WHERE cc.company_id = ${input.companyId}
+            AND cc.status IN ('concluida', 'aprovada')
+            AND cr.preco_unitario::numeric > 0
+            AND cc.tipo = 'servico'
+          ORDER BY f.id, cc.criado_em DESC
+        `);
+
+        const rows = historicoRows.rows || historicoRows;
+
+        const matched = keywords.length > 0
+          ? (rows as any[]).filter((r: any) => {
+              const itemDesc = strip((r.item_descricao || "").toLowerCase());
+              return keywords.some(kw => itemDesc.includes(kw));
+            })
+          : (rows as any[]).slice(0, 5);
+
+        const contratosAtivos = await db.select({
+          empresaTerceiraId: terceiroContratos.empresaTerceiraId,
+          cnt: sql<number>`count(*)`,
+        }).from(terceiroContratos)
+          .where(and(
+            eq(terceiroContratos.companyId, input.companyId),
+            eq(terceiroContratos.status, "ativo"),
+          ))
+          .groupBy(terceiroContratos.empresaTerceiraId);
+
+        const empresaFornMap: Record<number, number> = {};
+        const etRows = await db.select({
+          id: empresasTerceiras.id,
+          fornecedorId: (empresasTerceiras as any).fornecedorId,
+        }).from(empresasTerceiras)
+          .where(eq(empresasTerceiras.companyId, input.companyId));
+        for (const et of etRows) {
+          if (et.fornecedorId) empresaFornMap[et.fornecedorId as number] = et.id;
+        }
+
+        const contratoCountMap: Record<number, number> = {};
+        for (const c of contratosAtivos) {
+          contratoCountMap[c.empresaTerceiraId] = Number(c.cnt);
+        }
+
+        fornecedoresSugeridos = (matched as any[]).slice(0, 5).map((r: any) => {
+          const etId = empresaFornMap[r.fornecedor_id];
+          const qtdContratos = etId ? (contratoCountMap[etId] || 0) : 0;
+          return {
+            fornecedorId: r.fornecedor_id,
+            razaoSocial: r.razao_social,
+            nomeFantasia: r.nome_fantasia,
+            cidade: r.cidade,
+            estado: r.estado,
+            precoUnitario: r.preco_unitario,
+            obraNome: r.obra_nome,
+            numeroCotacao: r.numero_cotacao,
+            data: r.criado_em,
+            qtdContratosAtivos: qtdContratos,
+            alertaConcentracao: qtdContratos >= 3,
+          };
+        });
+      } catch (e) {
+        console.error("[getSugestoesContratacao] erro fornecedores:", e);
+      }
+
+      return {
+        atividadesRelacionadas: sugestoes.slice(0, 10),
+        grupoEap: descBase,
+        totalDisponiveis: sugestoes.length,
+        fornecedoresSugeridos,
+      };
+    }),
 });

@@ -503,6 +503,8 @@ export default function Solicitacoes() {
   const [editItens, setEditItens] = useState<any[]>([]);
   const [editingSc, setEditingSc] = useState<{ id: number; companyId: number } | null>(null);
   const [editingOriginalEapIds, setEditingOriginalEapIds] = useState<Set<number>>(new Set());
+  const [sugestaoEap, setSugestaoEap] = useState<string | null>(null);
+  const [sugestaoAberta, setSugestaoAberta] = useState(false);
 
   const q = trpc.compras.listarSolicitacoes.useQuery(
     { companyId, busca: busca || undefined, status: filtroStatus === "todos" ? undefined : filtroStatus },
@@ -531,6 +533,11 @@ export default function Solicitacoes() {
   const insumosConsolidadosQ = trpc.compras.getInsumosConsolidados.useQuery(
     { companyId, obraId: parseInt(form.obraId), busca: modoSC === "insumo" ? (insumoBusca || undefined) : undefined, tipoSC: form.tipo as "material" | "servico" | "pacote" | "equipamento", incluirEquip: form.incluirEquipamentos },
     { enabled: (modoSC === "insumo" || modoSC === "eap") && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 30_000 }
+  );
+
+  const sugestoesContratQ = trpc.compras.getSugestoesContratacao.useQuery(
+    { companyId, obraId: parseInt(form.obraId), eapCodigoSelecionado: sugestaoEap!, tipo: form.tipo },
+    { enabled: !!sugestaoEap && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 && form.tipo === "servico", staleTime: 60_000 }
   );
 
   const conversaoInput = useMemo(() => {
@@ -820,6 +827,11 @@ export default function Solicitacoes() {
     const qtdServ = parseFloat(qtdStr) || 0;
     const insumosList = eapInsumos[orcItemId] || [];
 
+    if (qtdServ > 0 && eapItem?.eapCodigo) {
+      setSugestaoEap(eapItem.eapCodigo);
+      setSugestaoAberta(true);
+    }
+
     if (qtdServ > 0) {
       let newItems: ItemForm[];
 
@@ -981,6 +993,7 @@ export default function Solicitacoes() {
         setEapQtdServico(prev => { const n = { ...prev }; delete n[it.id]; return n; });
       } else {
         next.add(it.id);
+        if (it.eapCodigo) { setSugestaoEap(it.eapCodigo); setSugestaoAberta(true); }
         const novoItem: ItemForm = {
           descricao: `[${it.eapCodigo}] ${it.descricao}`,
           unidade: it.unidade || "vb",
@@ -2047,6 +2060,93 @@ export default function Solicitacoes() {
                     ) : (
                       <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                         Nenhum serviço encontrado para esta obra.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {sugestaoAberta && sugestoesContratQ.data && (sugestoesContratQ.data.atividadesRelacionadas.length > 0 || sugestoesContratQ.data.fornecedoresSugeridos.length > 0) && (
+                  <div className="mt-3 space-y-2">
+                    {sugestoesContratQ.data.atividadesRelacionadas.length > 0 && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg overflow-hidden">
+                        <div className="px-3 py-2 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Zap className="h-3.5 w-3.5 text-blue-600" />
+                            <span className="text-xs font-semibold text-blue-800">
+                              Sugestão: +{sugestoesContratQ.data.totalDisponiveis} atividade{sugestoesContratQ.data.totalDisponiveis > 1 ? "s" : ""} relacionada{sugestoesContratQ.data.totalDisponiveis > 1 ? "s" : ""} disponíve{sugestoesContratQ.data.totalDisponiveis > 1 ? "is" : "l"} no grupo {sugestoesContratQ.data.grupoEap}
+                            </span>
+                          </div>
+                          <button type="button" onClick={() => setSugestaoAberta(false)} className="text-blue-400 hover:text-blue-600">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <p className="px-3 text-[10px] text-blue-600 -mt-1 mb-1.5">Incluir mais atividades pode gerar economia na contratação por volume.</p>
+                        <div className="max-h-[120px] overflow-y-auto divide-y divide-blue-100">
+                          {sugestoesContratQ.data.atividadesRelacionadas.map((s: any) => {
+                            const jaIncluido = selectedEapIds.has(s.id);
+                            return (
+                              <div key={s.id} className={`px-3 py-1.5 flex items-center justify-between text-xs ${jaIncluido ? "bg-blue-100" : "hover:bg-blue-100/50"}`}>
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-mono text-blue-700 mr-1.5">{s.eapCodigo}</span>
+                                  <span className="text-gray-700">{s.descricao}</span>
+                                  <span className="text-gray-400 ml-1">({parseFloat(s.quantidade || "0").toLocaleString("pt-BR")} {s.unidade})</span>
+                                </div>
+                                {jaIncluido ? (
+                                  <span className="text-[10px] text-blue-600 font-semibold flex items-center gap-0.5"><CheckCircle2 className="h-3 w-3" /> Incluído</span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const eapItems = eapQ.data?.items;
+                                      const found = eapItems?.find((e: any) => e.id === s.id);
+                                      if (found) {
+                                        if (form.tipo === "servico") {
+                                          const mdoSaldo = (found as any).mdoSaldo;
+                                          handleEapQtdChange(found.id, mdoSaldo > 0 ? String(mdoSaldo) : "1", found);
+                                        } else {
+                                          toggleEapItem(found);
+                                        }
+                                      }
+                                    }}
+                                    className="text-[10px] font-semibold text-blue-700 bg-white border border-blue-300 rounded px-2 py-0.5 hover:bg-blue-100 transition-colors"
+                                  >
+                                    + Incluir
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {sugestoesContratQ.data.fornecedoresSugeridos.length > 0 && (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-lg overflow-hidden">
+                        <div className="px-3 py-2 flex items-center gap-2">
+                          <Users className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="text-xs font-semibold text-emerald-800">Fornecedores que já realizaram serviços similares</span>
+                        </div>
+                        <div className="max-h-[100px] overflow-y-auto divide-y divide-emerald-100">
+                          {sugestoesContratQ.data.fornecedoresSugeridos.map((f: any) => (
+                            <div key={f.fornecedorId} className="px-3 py-1.5 flex items-center justify-between text-xs">
+                              <div className="flex-1 min-w-0">
+                                <span className="font-semibold text-gray-800">{f.nomeFantasia || f.razaoSocial}</span>
+                                {f.cidade && <span className="text-gray-400 ml-1">({f.cidade}/{f.estado})</span>}
+                                {f.obraNome && <span className="text-gray-400 ml-1.5 text-[10px]">Obra: {f.obraNome}</span>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {f.alertaConcentracao && (
+                                  <span className="text-[9px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 flex items-center gap-0.5">
+                                    <AlertTriangle className="h-2.5 w-2.5" />
+                                    {f.qtdContratosAtivos} contratos ativos
+                                  </span>
+                                )}
+                                {!f.alertaConcentracao && f.qtdContratosAtivos > 0 && (
+                                  <span className="text-[9px] text-gray-500">{f.qtdContratosAtivos} contrato{f.qtdContratosAtivos > 1 ? "s" : ""}</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
