@@ -721,6 +721,16 @@ export default function Cotacoes() {
     }
   }, [showDetalhe]);
 
+  const coberturaAutoQ = trpc.compras.buscarSaldosRealocacao.useQuery(
+    { companyId, obraId: (detalheQ.data as any)?.obraId, cotacaoId: showDetalhe ?? undefined, deficit: 1 },
+    { enabled: showDetalhe !== null && !!detalheQ.data }
+  );
+  useEffect(() => {
+    if (coberturaAutoQ.data?.cobertoPorRisco && coberturaAutoQ.data.totalDebitadoEstaCotacao > 0) {
+      setCobertoPorRisco(true);
+    }
+  }, [coberturaAutoQ.data?.cobertoPorRisco, coberturaAutoQ.data?.totalDebitadoEstaCotacao]);
+
   const q = trpc.compras.listarCotacoes.useQuery(
     { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus },
     { enabled: companyId > 0 }
