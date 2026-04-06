@@ -624,7 +624,7 @@ export const heSolicitacoesRouter = router({
 
     const companyIds = resolveCompanyIds(ctx.user);
     const [sol] = await db.select({ id: heSolicitacoes.id }).from(heSolicitacoes)
-      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyFilter(heSolicitacoes, companyIds)));
+      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyIds.length === 1 ? eq(heSolicitacoes.companyId, companyIds[0]) : inArray(heSolicitacoes.companyId, companyIds)));
     if (!sol) return [];
 
     const rows = await db.select({
@@ -658,7 +658,7 @@ export const heSolicitacoesRouter = router({
 
     const companyIds = resolveCompanyIds(ctx.user);
     const [sol] = await db.select({ id: heSolicitacoes.id, status: heSolicitacoes.status }).from(heSolicitacoes)
-      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyFilter(heSolicitacoes, companyIds)));
+      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyIds.length === 1 ? eq(heSolicitacoes.companyId, companyIds[0]) : inArray(heSolicitacoes.companyId, companyIds)));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
 
     const [funcVinculado] = await db.select({ id: heSolicitacaoFuncionarios.id }).from(heSolicitacaoFuncionarios)
@@ -707,7 +707,7 @@ export const heSolicitacoesRouter = router({
 
     const companyIds = resolveCompanyIds(ctx.user);
     const [sol] = await db.select({ id: heSolicitacoes.id }).from(heSolicitacoes)
-      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyFilter(heSolicitacoes, companyIds)));
+      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyIds.length === 1 ? eq(heSolicitacoes.companyId, companyIds[0]) : inArray(heSolicitacoes.companyId, companyIds)));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
 
     const userName = ctx.user?.name || "sistema";
