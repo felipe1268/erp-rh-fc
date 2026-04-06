@@ -21,6 +21,14 @@ import {
   CreditCard, FileText, Tag, MessageSquare, Landmark, Hash, KeyRound,
 } from "lucide-react";
 
+function maskPhone(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
 function StarRating({ value, onChange, size = 18 }: { value: number; onChange?: (v: number) => void; size?: number }) {
   const [hover, setHover] = useState(0);
   return (
@@ -356,8 +364,8 @@ export default function Fornecedores() {
       cnpj: f.cnpj ?? "", razaoSocial: f.razaoSocial, nomeFantasia: f.nomeFantasia ?? "",
       situacaoReceita: f.situacaoReceita ?? "", endereco: f.endereco ?? "", numero: f.numero ?? "",
       complemento: f.complemento ?? "", bairro: f.bairro ?? "", cidade: f.cidade ?? "",
-      estado: f.estado ?? "", cep: f.cep ?? "", telefone: f.telefone ?? "", email: f.email ?? "",
-      contatoNome: f.contatoNome ?? "", contatoCelular: f.contatoCelular ?? "", contatoEmail: f.contatoEmail ?? "",
+      estado: f.estado ?? "", cep: f.cep ?? "", telefone: maskPhone(f.telefone ?? ""), email: f.email ?? "",
+      contatoNome: f.contatoNome ?? "", contatoCelular: maskPhone(f.contatoCelular ?? ""), contatoEmail: f.contatoEmail ?? "",
       banco: f.banco ?? "", agencia: f.agencia ?? "", conta: f.conta ?? "", pix: f.pix ?? "",
       categorias: Array.isArray(f.categorias) ? f.categorias : [], observacoes: f.observacoes ?? "",
     });
@@ -413,7 +421,7 @@ export default function Fornecedores() {
         cidade: d.cidade || prev.cidade,
         estado: d.estado || prev.estado,
         cep: d.cep || prev.cep,
-        telefone: d.telefone || prev.telefone,
+        telefone: maskPhone(d.telefone || prev.telefone),
         email: d.email || prev.email,
       }));
       toast.success("Dados do CNPJ carregados com sucesso!");
@@ -900,7 +908,7 @@ export default function Fornecedores() {
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <Label className="text-[11px] text-slate-500">Telefone</Label>
-                          <Input value={form.telefone} onChange={e => setForm(p => ({ ...p, telefone: e.target.value }))} className="mt-0.5 h-8 text-sm" placeholder="(00) 0000-0000" />
+                          <Input value={form.telefone} onChange={e => setForm(p => ({ ...p, telefone: maskPhone(e.target.value) }))} className="mt-0.5 h-8 text-sm" placeholder="(00) 0000-0000" />
                         </div>
                         <div>
                           <Label className="text-[11px] text-slate-500">E-mail</Label>
@@ -926,7 +934,7 @@ export default function Fornecedores() {
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <Label className="text-[11px] text-slate-500">Celular</Label>
-                          <Input value={form.contatoCelular} onChange={e => setForm(p => ({ ...p, contatoCelular: e.target.value }))} className="mt-0.5 h-8 text-sm" placeholder="(00) 90000-0000" />
+                          <Input value={form.contatoCelular} onChange={e => setForm(p => ({ ...p, contatoCelular: maskPhone(e.target.value) }))} className="mt-0.5 h-8 text-sm" placeholder="(00) 90000-0000" />
                         </div>
                         <div>
                           <Label className="text-[11px] text-slate-500">E-mail do Contato</Label>
