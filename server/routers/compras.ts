@@ -1826,6 +1826,20 @@ Responda APENAS com um objeto JSON no formato:
       return { ok: true, statusItem: novoStatus };
     }),
 
+  cancelarItemSc: protectedProcedure
+    .input(z.object({ itemId: z.number(), solicitacaoId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [item] = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.id, input.itemId));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
+      if (item.solicitacaoId !== input.solicitacaoId) throw new TRPCError({ code: "BAD_REQUEST", message: "Item não pertence a esta solicitação" });
+      await db.update(comprasSolicitacoesItens).set({
+        statusItem: "cancelado",
+      }).where(eq(comprasSolicitacoesItens.id, input.itemId));
+      await db.update(comprasSolicitacoes).set({ atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+      return { ok: true };
+    }),
+
   excluirSolicitacao: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {

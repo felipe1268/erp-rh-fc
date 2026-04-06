@@ -605,6 +605,10 @@ export default function Solicitacoes() {
     onSuccess: () => { toast.success("Recebimento registrado!"); detalheQ.refetch(); q.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const cancelarItem = trpc.compras.cancelarItemSc.useMutation({
+    onSuccess: () => { toast.success("Item cancelado!"); detalheQ.refetch(); q.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
   const excluirBatchRef = useRef(false);
   const excluir = trpc.compras.excluirSolicitacao.useMutation({
     onSuccess: () => { if (!excluirBatchRef.current) { toast.success("SC excluída!"); q.refetch(); setShowDetalhe(null); } },
@@ -2916,10 +2920,10 @@ export default function Solicitacoes() {
                   const qtdAtend = parseFloat(it.quantidadeAtendida ?? "0");
                   const pct = qtdTotal > 0 ? Math.round((qtdAtend / qtdTotal) * 100) : 0;
                   return (
-                    <div key={it.id} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+                    <div key={it.id} className={`border rounded-lg p-3 space-y-2 ${it.statusItem === "cancelado" ? "border-red-200 bg-red-50/50 opacity-60" : "border-gray-200 bg-gray-50"}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-gray-900 text-sm font-medium">{it.descricao}</p>
+                          <p className={`text-sm font-medium ${it.statusItem === "cancelado" ? "text-gray-400 line-through" : "text-gray-900"}`}>{it.descricao}</p>
                           <p className="text-gray-400 text-xs">{it.unidade || "un"} · Qtd: {qtdTotal.toLocaleString("pt-BR")}</p>
                           {it.semVerba && (
                             <div className="flex items-center gap-1.5 mt-1">
@@ -2928,8 +2932,8 @@ export default function Solicitacoes() {
                             </div>
                           )}
                         </div>
-                        <span className={`text-xs px-2 py-0.5 rounded border ${it.statusItem === "recebido" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : it.statusItem === "recebido_parcial" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
-                          {it.statusItem === "recebido" ? "Recebido" : it.statusItem === "recebido_parcial" ? `Parcial (${pct}%)` : "Pendente"}
+                        <span className={`text-xs px-2 py-0.5 rounded border ${it.statusItem === "cancelado" ? "bg-red-50 text-red-700 border-red-200 line-through" : it.statusItem === "recebido" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : it.statusItem === "recebido_parcial" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
+                          {it.statusItem === "cancelado" ? "Cancelado" : it.statusItem === "recebido" ? "Recebido" : it.statusItem === "recebido_parcial" ? `Parcial (${pct}%)` : "Pendente"}
                         </span>
                       </div>
                       {qtdTotal > 0 && (
@@ -2940,7 +2944,7 @@ export default function Solicitacoes() {
                           <span className="text-xs text-gray-400">{qtdAtend}/{qtdTotal}</span>
                         </div>
                       )}
-                      {!["aprovado"].includes(detalhe.status) && (
+                      {it.statusItem !== "cancelado" && !["aprovado"].includes(detalhe.status) && (
                         <div className="flex gap-2 items-center">
                           <Input
                             type="number" min="0" max={qtdTotal} step="0.01"
@@ -2954,6 +2958,12 @@ export default function Solicitacoes() {
                             disabled={receber.isPending || !recebQtd[it.id]}
                             className="h-7 text-xs border-gray-300 text-gray-600 hover:bg-gray-50">
                             Registrar Recebimento
+                          </Button>
+                          <Button size="sm" variant="outline"
+                            onClick={() => { if (confirm(`Cancelar o item "${it.descricao}"?`)) cancelarItem.mutate({ itemId: it.id, solicitacaoId: detalhe.id }); }}
+                            disabled={cancelarItem.isPending}
+                            className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50">
+                            <X className="h-3 w-3 mr-1" />Cancelar Item
                           </Button>
                         </div>
                       )}
