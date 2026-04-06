@@ -37,7 +37,7 @@ export const operacionalRouter = router({
       const obraRows = rows(await db.execute(sql`
         SELECT id, nome, status, company_id, endereco, cliente as contratante, responsavel,
                data_inicio, data_previsao_fim as data_previsao_termino, contrato as numero_contrato,
-               prazo_contratual as prazo_contratual_original
+               prazo_contratual as prazo_contratual_original, logo_url, observacoes, external_id
         FROM diario_obra_obras WHERE id = ${input.obraId} AND company_id = ${input.companyId}
       `));
       if (!obraRows[0]) return null;
@@ -50,15 +50,9 @@ export const operacionalRouter = router({
           (SELECT COUNT(*) FROM diario_obra_comentarios c JOIN diario_obra_relatorios r ON c.relatorio_id = r.id WHERE r.obra_id = ${input.obraId}) as total_comentarios,
           (SELECT COUNT(*) FROM diario_obra_fotos f JOIN diario_obra_relatorios r ON f.relatorio_id = r.id WHERE r.obra_id = ${input.obraId}) as total_fotos
       `));
-      const fotosRecentes = rows(await db.execute(sql`
-        SELECT f.id, f.descricao FROM diario_obra_fotos f
-        JOIN diario_obra_relatorios r ON f.relatorio_id = r.id
-        WHERE r.obra_id = ${input.obraId}
-        ORDER BY f.id DESC LIMIT 8
-      `));
       const relatoriosRecentes = rows(await db.execute(sql`
         SELECT id, numero, data, status FROM diario_obra_relatorios
-        WHERE obra_id = ${input.obraId} ORDER BY data DESC LIMIT 5
+        WHERE obra_id = ${input.obraId} ORDER BY data DESC LIMIT 7
       `));
       let prazoContratual = obra.prazo_contratual_original ? Number(obra.prazo_contratual_original) : null;
       let prazoDecorrido = null;
@@ -76,7 +70,72 @@ export const operacionalRouter = router({
         prazoDecorrido = Math.max(0, Math.ceil((hoje.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
         prazoVencer = Math.max(0, prazoContratual - prazoDecorrido);
       }
-      return { ...obra, stats: stats[0] || {}, fotosRecentes, relatoriosRecentes, prazoContratual, prazoDecorrido, prazoVencer };
+
+      const dbFotos = rows(await db.execute(sql`
+        SELECT f.id, f.descricao FROM diario_obra_fotos f
+        JOIN diario_obra_relatorios r ON f.relatorio_id = r.id
+        WHERE r.obra_id = ${input.obraId}
+        ORDER BY f.id DESC LIMIT 12
+      `));
+      let apiPhotos: any[] = [];
+      let apiVideos: any[] = [];
+      let apiStats: any = null;
+      const token = process.env.DIARIO_OBRA_API_TOKEN;
+      if (token && obra.external_id) {
+        try {
+          const resp = await fetch(`https://api.diariodeobra.app/v2/obras/${obra.external_id}`, {
+            headers: { 'token': token },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (resp.ok) {
+            const apiData = await resp.json() as any;
+            apiPhotos = (apiData.visaoGeral?.ultimasFotos || []).slice(0, 12).map((f: any) => ({
+              url: f.url,
+              urlMiniatura: f.urlMiniatura,
+            }));
+            apiVideos = (apiData.visaoGeral?.ultimosVideos || apiData.visaoGeral?.ultimasVideos || []).slice(0, 6).map((v: any) => ({
+              url: v.url,
+              urlMiniatura: v.urlFoto || v.urlMiniatura || v.url,
+              duracao: v.duracao,
+            }));
+            apiStats = apiData.visaoGeral?.total || null;
+            if (!obra.endereco && apiData.endereco) obra.endereco = apiData.endereco;
+            if (!obra.responsavel && apiData.responsavel) obra.responsavel = apiData.responsavel;
+            if (!obra.numero_contrato && apiData.numeroContrato) obra.numero_contrato = apiData.numeroContrato;
+            if (!obra.observacoes && apiData.observacao) obra.observacoes = apiData.observacao;
+            if (!obra.contratante && apiData.cliente) obra.contratante = apiData.cliente;
+            if (apiData.prazo) {
+              prazoContratual = apiData.prazo.contratual || prazoContratual;
+              prazoDecorrido = apiData.prazo.decorrido ?? prazoDecorrido;
+              prazoVencer = apiData.prazo.aVencer ?? prazoVencer;
+            }
+          }
+        } catch {}
+      }
+
+      const mergedStats = apiStats ? {
+        total_relatorios: apiStats.relatorios ?? stats[0]?.total_relatorios ?? 0,
+        total_atividades: apiStats.atividades ?? stats[0]?.total_atividades ?? 0,
+        total_ocorrencias: apiStats.ocorrencias ?? stats[0]?.total_ocorrencias ?? 0,
+        total_comentarios: apiStats.comentarios ?? stats[0]?.total_comentarios ?? 0,
+        total_fotos: apiStats.fotos ?? stats[0]?.total_fotos ?? 0,
+        total_videos: apiStats.videos ?? 0,
+      } : { ...(stats[0] || {}), total_videos: 0 };
+
+      const finalPhotos = apiPhotos.length > 0 ? apiPhotos : dbFotos.map((f: any) => ({
+        url: `/api/diario-obra/foto/${f.id}`,
+        urlMiniatura: `/api/diario-obra/foto/${f.id}`,
+        dbId: f.id,
+      }));
+
+      return {
+        ...obra,
+        stats: mergedStats,
+        fotosRecentes: finalPhotos,
+        relatoriosRecentes,
+        prazoContratual, prazoDecorrido, prazoVencer,
+        videosRecentes: apiVideos,
+      };
     }),
 
   listarRDOs: protectedProcedure

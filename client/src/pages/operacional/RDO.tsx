@@ -16,7 +16,7 @@ import {
   ClipboardList, Plus, Loader2, CheckCircle, ArrowLeft,
   Sun, CloudRain, CloudSun, Cloud, Trash2, Users, Wrench,
   FileText, Camera, Save, Send, Pencil, RotateCcw, MoreVertical,
-  AlertTriangle, MessageSquare, Image, Printer, Building2, Search,
+  AlertTriangle, MessageSquare, Image, Printer, Building2, Search, Video,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -55,175 +55,206 @@ function ObraVisaoGeral({ obraId, companyId, setLocation, selectedFonte }: any) 
   const statusLabel = (st: string) => {
     if (st === 'aprovado') return 'Aprovado';
     if (st === 'finalizado') return 'Finalizado';
-    if (st === 'revisao' || st === 'revisar') return 'Revisar';
-    return st || 'Rascunho';
+    if (st === 'revisao' || st === 'revisar') return 'Preenchendo';
+    return st || 'Preenchendo';
   };
-  const statusColor = (st: string) => {
-    if (st === 'aprovado') return 'bg-green-500';
-    if (st === 'finalizado') return 'bg-blue-500';
-    if (st === 'revisao' || st === 'revisar') return 'bg-yellow-500';
-    return 'bg-gray-400';
+  const statusBg = (st: string) => {
+    if (st === 'aprovado') return 'bg-green-500 text-white';
+    if (st === 'finalizado') return 'bg-blue-500 text-white';
+    if (st === 'revisao' || st === 'revisar') return 'bg-yellow-400 text-gray-800';
+    return 'bg-orange-400 text-white';
   };
 
   const prazoPercent = obra.prazoContratual && obra.prazoDecorrido != null
     ? Math.min(100, Math.round((Number(obra.prazoDecorrido) / Number(obra.prazoContratual)) * 100))
     : null;
 
+  const fotosApi = (obra.fotosRecentes as any[]) || [];
+  const videosApi = (obra.videosRecentes as any[]) || [];
+  const formatDate = (d: string) => { try { return new Date(d + "T12:00:00").toLocaleDateString("pt-BR"); } catch { return d; } };
+
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
         {[
-          { label: "Relatórios", value: s.total_relatorios, icon: ClipboardList, color: "text-blue-600 border-blue-200 bg-blue-50" },
-          { label: "Atividades", value: s.total_atividades, icon: Wrench, color: "text-orange-600 border-orange-200 bg-orange-50" },
-          { label: "Ocorrências", value: s.total_ocorrencias, icon: AlertTriangle, color: "text-yellow-600 border-yellow-200 bg-yellow-50" },
-          { label: "Comentários", value: s.total_comentarios, icon: MessageSquare, color: "text-green-600 border-green-200 bg-green-50" },
-          { label: "Fotos", value: s.total_fotos, icon: Camera, color: "text-purple-600 border-purple-200 bg-purple-50" },
+          { label: "Relatórios", value: s.total_relatorios, icon: ClipboardList, color: "text-orange-600" },
+          { label: "Atividades", value: s.total_atividades, icon: Wrench, color: "text-orange-600" },
+          { label: "Ocorrências", value: s.total_ocorrencias, icon: AlertTriangle, color: "text-orange-600" },
+          { label: "Comentários", value: s.total_comentarios, icon: MessageSquare, color: "text-orange-600" },
+          { label: "Fotos", value: s.total_fotos, icon: Camera, color: "text-orange-600" },
+          { label: "Vídeos", value: s.total_videos ?? 0, icon: Video, color: "text-orange-600" },
         ].map((item) => (
-          <div key={item.label} className={`border rounded-lg p-4 ${item.color}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-bold">{Number(item.value) || 0}</p>
-                <p className="text-xs mt-1">{item.label}</p>
-              </div>
-              <item.icon className="w-5 h-5 opacity-60" />
+          <div key={item.label} className="border rounded-lg p-3 bg-white">
+            <p className={`text-2xl font-bold ${item.color}`}>{Number(item.value) || 0}</p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-[11px] text-gray-500">{item.label}</p>
+              <item.icon className="w-4 h-4 text-gray-300" />
             </div>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-sm text-blue-700">Relatórios recentes</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {(obra.relatoriosRecentes as any[])?.length > 0 ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-gray-500 text-xs">
-                    <th className="py-1.5 px-2">Data</th>
-                    <th className="py-1.5 px-2">N°</th>
-                    <th className="py-1.5 px-2">Status</th>
+        <div className="border rounded-lg bg-white p-4">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-sm font-semibold text-orange-600">Relatórios recentes</h3>
+            <span className="text-xs text-gray-400">Ver tudo</span>
+          </div>
+          {(obra.relatoriosRecentes as any[])?.length > 0 ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 text-xs">
+                  <th className="py-1 px-1">Data</th>
+                  <th className="py-1 px-1">N°</th>
+                  <th className="py-1 px-1">Status</th>
+                  <th className="py-1 px-1">Modelo de relatório</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(obra.relatoriosRecentes as any[]).map((r: any) => (
+                  <tr key={r.id} className="border-t hover:bg-gray-50 cursor-pointer"
+                    onClick={() => setLocation(`/operacional/rdo?obra=${obraId}&id=${r.id}&fonte=importado`)}>
+                    <td className="py-1.5 px-1 text-blue-600 hover:underline text-xs">{formatDate(r.data)}</td>
+                    <td className="py-1.5 px-1 text-xs">{r.numero}</td>
+                    <td className="py-1.5 px-1">
+                      <span className={`text-[10px] px-2 py-0.5 rounded ${statusBg(r.status)}`}>
+                        {statusLabel(r.status)}
+                      </span>
+                    </td>
+                    <td className="py-1.5 px-1 text-xs text-gray-400">Relatório Diário de Obra (RDO)</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {(obra.relatoriosRecentes as any[]).map((r: any) => (
-                    <tr key={r.id} className="border-b hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setLocation(`/operacional/rdo?obra=${obraId}&id=${r.id}&fonte=importado`)}>
-                      <td className="py-1.5 px-2 text-blue-600 hover:underline">
-                        {new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR")}
-                      </td>
-                      <td className="py-1.5 px-2">{r.numero}</td>
-                      <td className="py-1.5 px-2">
-                        <span className={`text-xs text-white px-2 py-0.5 rounded ${statusColor(r.status)}`}>
-                          {statusLabel(r.status)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : <p className="text-sm text-gray-400">Nenhum relatório</p>}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-blue-700">Fotos recentes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {(obra.fotosRecentes as any[])?.length > 0 ? (
-              <div className="grid grid-cols-4 gap-2">
-                {(obra.fotosRecentes as any[]).map((f: any) => (
-                  <img key={f.id} src={`/api/diario-obra/foto/${f.id}`}
-                    alt={f.descricao || 'Foto'} loading="lazy"
-                    className="w-full h-20 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => window.open(`/api/diario-obra/foto/${f.id}`, '_blank')} />
                 ))}
-              </div>
-            ) : <p className="text-sm text-gray-400">Nenhuma foto</p>}
-          </CardContent>
-        </Card>
+              </tbody>
+            </table>
+          ) : <p className="text-sm text-gray-400">Nenhum relatório</p>}
+        </div>
+
+        <div className="border rounded-lg bg-white p-4">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-sm font-semibold text-orange-600">Fotos recentes</h3>
+            {fotosApi.length > 0 && <span className="text-xs text-blue-500">Ver tudo</span>}
+          </div>
+          {fotosApi.length > 0 ? (
+            <div className="grid grid-cols-4 gap-2">
+              {fotosApi.map((f: any, i: number) => (
+                <img key={i} src={f.urlMiniatura || f.url} alt="Foto"
+                  loading="lazy"
+                  className="w-full h-20 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => window.open(f.url, '_blank')} />
+              ))}
+            </div>
+          ) : <p className="text-sm text-gray-400">Nenhuma foto</p>}
+        </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-blue-700">Informações da obra</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <p className="text-gray-500 text-xs mb-1">Status</p>
-                <Badge variant="outline" className="text-xs">{obra.status === 'Em_Andamento' ? 'Em andamento' : obra.status || '—'}</Badge>
+      {videosApi.length > 0 && (
+        <div className="border rounded-lg bg-white p-4">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-sm font-semibold text-orange-600">Vídeos recentes</h3>
+            <span className="text-xs text-blue-500">Ver tudo</span>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {videosApi.map((v: any, i: number) => (
+              <div key={i} className="relative min-w-[160px] h-24 rounded overflow-hidden cursor-pointer group"
+                onClick={() => v.url && window.open(v.url, '_blank')}>
+                <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+                  {v.urlMiniatura ? (
+                    <img src={v.urlMiniatura} alt="Vídeo" className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <FileText className="w-8 h-8 text-gray-500" />
+                  )}
+                </div>
+                {v.duracao && (
+                  <span className="absolute bottom-1 left-1 text-[10px] bg-black/70 text-white px-1.5 py-0.5 rounded">
+                    ▶ {v.duracao}
+                  </span>
+                )}
               </div>
-              <div>
-                <p className="text-gray-500 text-xs mb-1">N° do contrato</p>
-                <p>{obra.numero_contrato || '—'}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-gray-500 text-xs mb-1">Prazo decorrido</p>
-                {prazoPercent != null ? (
-                  <div className="w-full bg-gray-200 rounded-full h-5 relative">
-                    <div className="bg-blue-600 h-5 rounded-full flex items-center justify-center text-white text-xs font-medium"
-                      style={{ width: `${prazoPercent}%`, minWidth: '40px' }}>
-                      {prazoPercent} %
-                    </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="border rounded-lg bg-white p-4">
+        <h3 className="text-sm font-semibold text-orange-600 mb-3">Informações da obra</h3>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <p className="text-gray-500 text-xs mb-1">Status</p>
+              <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded">
+                {obra.status === 'em_andamento' || obra.status === 'Em_Andamento' ? 'Em andamento' : obra.status || '—'}
+              </span>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs mb-1">N° do contrato</p>
+              <p className="font-medium">{obra.numero_contrato || '—'}</p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs mb-1">Prazo decorrido</p>
+              {prazoPercent != null ? (
+                <div className="w-full bg-gray-200 rounded-full h-5 relative">
+                  <div className="bg-blue-500 h-5 rounded-full flex items-center justify-center text-white text-[11px] font-medium"
+                    style={{ width: `${Math.max(prazoPercent, 10)}%` }}>
+                    {prazoPercent} %
                   </div>
-                ) : <p>—</p>}
-              </div>
-            </div>
-            <div className="text-sm">
-              <p className="text-gray-500 text-xs mb-1">Endereço</p>
-              <p>{obra.endereco || '—'}</p>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              {obra.prazoContratual != null && (
-                <div>
-                  <p className="text-gray-500 text-xs mb-1">Prazo contratual</p>
-                  <p>{obra.prazoContratual} dias</p>
                 </div>
-              )}
-              {obra.prazoDecorrido != null && (
-                <div>
-                  <p className="text-gray-500 text-xs mb-1">Prazo decorrido</p>
-                  <p>{obra.prazoDecorrido} dias</p>
-                </div>
-              )}
-              {obra.prazoVencer != null && (
-                <div>
-                  <p className="text-gray-500 text-xs mb-1">Prazo a vencer</p>
-                  <p>{obra.prazoVencer} dias</p>
-                </div>
-              )}
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <p className="text-gray-500 text-xs mb-1">Responsável</p>
-                <p>{obra.responsavel || '—'}</p>
-              </div>
-              <div>
-                <p className="text-gray-500 text-xs mb-1">Contratante</p>
-                <p>{obra.contratante || 'FC Engenharia'}</p>
-              </div>
-              {obra.data_inicio && (
-                <div>
-                  <p className="text-gray-500 text-xs mb-1">Data início</p>
-                  <p>{new Date(obra.data_inicio + "T12:00:00").toLocaleDateString("pt-BR")}</p>
-                </div>
-              )}
-              {obra.data_previsao_termino && (
-                <div>
-                  <p className="text-gray-500 text-xs mb-1">Previsão de término</p>
-                  <p>{new Date(obra.data_previsao_termino + "T12:00:00").toLocaleDateString("pt-BR")}</p>
-                </div>
-              )}
+              ) : <p>—</p>}
             </div>
           </div>
-        </CardContent>
-      </Card>
+          <div className="text-sm">
+            <p className="text-gray-500 text-xs mb-1">Endereço</p>
+            <p>{obra.endereco || '—'}</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            {obra.prazoContratual != null && (
+              <div>
+                <p className="text-gray-500 text-xs mb-1">Prazo contratual</p>
+                <p className="font-medium">{obra.prazoContratual} dias</p>
+              </div>
+            )}
+            {obra.prazoDecorrido != null && (
+              <div>
+                <p className="text-gray-500 text-xs mb-1">Prazo decorrido</p>
+                <p className="font-medium">{obra.prazoDecorrido} dias</p>
+              </div>
+            )}
+            {obra.prazoVencer != null && (
+              <div>
+                <p className="text-gray-500 text-xs mb-1">Prazo a vencer</p>
+                <p className="font-medium">{obra.prazoVencer} dias</p>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-gray-500 text-xs mb-1">Responsável</p>
+              <p>{obra.responsavel || '—'}</p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs mb-1">Contratante</p>
+              <p>{obra.contratante || 'FC Engenharia'}</p>
+            </div>
+            {obra.data_inicio && (
+              <div>
+                <p className="text-gray-500 text-xs mb-1">Data início</p>
+                <p>{formatDate(obra.data_inicio)}</p>
+              </div>
+            )}
+            {obra.data_previsao_termino && (
+              <div>
+                <p className="text-gray-500 text-xs mb-1">Previsão de término</p>
+                <p>{formatDate(obra.data_previsao_termino)}</p>
+              </div>
+            )}
+          </div>
+          {obra.observacoes && (
+            <div className="text-sm">
+              <p className="text-gray-500 text-xs mb-1">Observação</p>
+              <p>{obra.observacoes}</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1274,14 +1305,14 @@ export default function RDO() {
   };
 
   return (
-    <div className="p-6 space-y-4">
+    <div className={`p-6 space-y-4 ${selectedFonte === 'importado' ? 'bg-gray-100 min-h-screen' : ''}`}>
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => { setObraId(0); setObraFonte(""); setLocation("/operacional/rdo"); }}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         {selectedObraEntry?.logo_url && (
           <img src={selectedObraEntry.logo_url} alt={selectedObraEntry.nome}
-            className="w-16 h-16 rounded-lg object-cover border shadow-sm hidden sm:block" />
+            className={`rounded-lg object-cover border shadow-sm hidden sm:block ${selectedFonte === 'importado' ? 'w-20 h-20' : 'w-16 h-16'}`} />
         )}
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold truncate">{selectedObraEntry?.nome || "RDO"}</h1>
@@ -1318,22 +1349,27 @@ export default function RDO() {
         </div>
       </div>
 
-      <div className="flex gap-2 border-b pb-1">
-        <button
-          className={`px-3 py-1.5 text-sm font-medium rounded-t transition-colors ${viewMode === 'visao' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-          onClick={() => setViewMode('visao')}
-        >
-          Visão geral
-        </button>
-        <button
-          className={`px-3 py-1.5 text-sm font-medium rounded-t transition-colors ${viewMode === 'lista' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-          onClick={() => setViewMode('lista')}
-        >
-          Relatórios {rdoList.length > 0 && <span className="ml-1 text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">{rdoList.length}</span>}
-        </button>
-      </div>
-
-      {viewMode === 'visao' ? renderVisaoGeral() : renderRelatorios()}
+      {selectedFonte === 'importado' ? (
+        <ObraVisaoGeral obraId={selectedObraId} companyId={companyId} setLocation={setLocation} selectedFonte={selectedFonte} />
+      ) : (
+        <>
+          <div className="flex gap-2 border-b pb-1">
+            <button
+              className={`px-3 py-1.5 text-sm font-medium rounded-t transition-colors ${viewMode === 'visao' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              onClick={() => setViewMode('visao')}
+            >
+              Visão geral
+            </button>
+            <button
+              className={`px-3 py-1.5 text-sm font-medium rounded-t transition-colors ${viewMode === 'lista' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              onClick={() => setViewMode('lista')}
+            >
+              Relatórios {rdoList.length > 0 && <span className="ml-1 text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">{rdoList.length}</span>}
+            </button>
+          </div>
+          {viewMode === 'visao' ? renderVisaoGeral() : renderRelatorios()}
+        </>
+      )}
     </div>
   );
 }
