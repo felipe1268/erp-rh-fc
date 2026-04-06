@@ -169,9 +169,9 @@ export default function EpiEntrega() {
 
   const confirmarEntrega = () => {
     if (!funcionario || itens.length === 0) return;
-    const itensComAlerta = itens.filter(i => i.alertaVidaUtil?.alerta && !i.fotoEstadoAnteriorBase64);
+    const itensComAlerta = itens.filter(i => i.alertaVidaUtil?.alerta && ['desgaste_normal', 'mau_uso'].includes(i.motivoTroca || '') && !i.fotoEstadoAnteriorBase64);
     if (itensComAlerta.length > 0) {
-      toast({ title: "Foto obrigatória", description: `Anexe a foto do estado do EPI anterior para: ${itensComAlerta.map(i => i.epiNome).join(', ')}`, variant: "destructive" });
+      toast({ title: "Foto obrigatória", description: `Anexe a foto do estado do EPI danificado para: ${itensComAlerta.map(i => i.epiNome).join(', ')}`, variant: "destructive" });
       return;
     }
     const itensComAlertaSemMotivo = itens.filter(i => i.alertaVidaUtil?.alerta && !i.motivoTroca);
@@ -390,8 +390,9 @@ export default function EpiEntrega() {
                             </SelectContent>
                           </Select>
                         </div>
+                        {item.motivoTroca && ['desgaste_normal', 'mau_uso'].includes(item.motivoTroca) && (
                         <div>
-                          <Label className="text-xs text-amber-800 font-semibold">Foto do EPI anterior *</Label>
+                          <Label className="text-xs text-amber-800 font-semibold">Foto do EPI danificado *</Label>
                           <div className="mt-1">
                             {item.fotoEstadoAnteriorBase64 ? (
                               <div className="flex items-center gap-2">
@@ -424,6 +425,7 @@ export default function EpiEntrega() {
                             )}
                           </div>
                         </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -623,7 +625,7 @@ export default function EpiEntrega() {
                 </div>
               </div>
               <p className="text-xs text-slate-600">
-                Para prosseguir, será necessário informar o <strong>motivo da troca</strong> e anexar a <strong>foto do EPI anterior</strong> para análise (desgaste normal ou mau uso).
+                Para prosseguir, será necessário informar o <strong>motivo da troca</strong>. Para desgaste normal ou mau uso, é obrigatório anexar a <strong>foto do EPI danificado</strong>.
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setPendingEpiAlert(null)}>

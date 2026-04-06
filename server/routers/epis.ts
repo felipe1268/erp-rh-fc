@@ -320,7 +320,7 @@ export const episRouter = router({
           diasRestantes,
           fotoAnteriorUrl: lastDelivery.fotoEstadoUrl,
           fotoObrigatoria: true,
-          mensagem: `Este EPI (${epi.nome}) foi entregue em ${lastDelivery.dataEntrega} e tem vida útil de ${epi.vidaUtilMeses} meses. Ainda restam ${diasRestantes} dias. É necessário anexar foto do estado atual do EPI anterior para análise (desgaste normal ou mau uso).`,
+          mensagem: `Este EPI (${epi.nome}) foi entregue em ${lastDelivery.dataEntrega} e tem vida útil de ${epi.vidaUtilMeses} meses. Ainda restam ${diasRestantes} dias. É necessário informar o motivo da troca. Para desgaste normal ou mau uso, é obrigatório anexar foto do EPI danificado.`,
         };
       }
 
@@ -345,6 +345,11 @@ export const episRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
+
+      if (input.motivoTroca && ['desgaste_normal', 'mau_uso'].includes(input.motivoTroca) && !input.fotoEstadoBase64) {
+        const motivoLabel = input.motivoTroca === 'desgaste_normal' ? 'desgaste normal' : 'mau uso';
+        throw new Error(`Foto do EPI danificado é obrigatória para troca por ${motivoLabel}.`);
+      }
 
       // Upload foto do estado do EPI se fornecida
       let fotoEstadoUrl: string | null = null;

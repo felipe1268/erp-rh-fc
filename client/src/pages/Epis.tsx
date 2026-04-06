@@ -1511,13 +1511,13 @@ export default function Epis() {
                 )
               ) : null}
 
-              {/* Foto obrigatória para troca por desgaste/perda/mau uso */}
-              {entregaForm.motivoTroca && ['desgaste_normal', 'perda', 'mau_uso', 'furto'].includes(entregaForm.motivoTroca) && (
+              {/* Foto obrigatória para troca por desgaste/mau uso */}
+              {entregaForm.motivoTroca && ['desgaste_normal', 'mau_uso'].includes(entregaForm.motivoTroca) && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                   <Label className="flex items-center gap-2 text-amber-800 font-semibold mb-2">
                     📷 Foto do Estado do EPI (Obrigatória)
                   </Label>
-                  <p className="text-xs text-amber-600 mb-3">Para registrar troca por {entregaForm.motivoTroca === 'desgaste_normal' ? 'desgaste' : entregaForm.motivoTroca === 'mau_uso' ? 'mau uso/dano' : entregaForm.motivoTroca === 'perda' ? 'perda' : 'furto'}, é obrigatório anexar uma foto do estado atual do EPI.</p>
+                  <p className="text-xs text-amber-600 mb-3">Para registrar troca por {entregaForm.motivoTroca === 'desgaste_normal' ? 'desgaste' : 'mau uso/dano'}, é obrigatório anexar uma foto do estado atual do EPI danificado.</p>
                   <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={e => {
                     const file = e.target.files?.[0];
                     if (file) {
@@ -1550,7 +1550,7 @@ export default function Epis() {
                 <Button onClick={async () => {
                   if (!entregaForm.epiId || !entregaForm.employeeId) return toast.error("Selecione EPI e funcionário");
                   // Validar foto obrigatória para troca
-                  const requiresFoto = entregaForm.motivoTroca && ['desgaste_normal', 'perda', 'mau_uso', 'furto'].includes(entregaForm.motivoTroca);
+                  const requiresFoto = entregaForm.motivoTroca && ['desgaste_normal', 'mau_uso'].includes(entregaForm.motivoTroca);
                   if (requiresFoto && !fotoEstado.file) return toast.error("Foto do estado do EPI é obrigatória para este tipo de troca");
                   
                   let fotoBase64: string | undefined;

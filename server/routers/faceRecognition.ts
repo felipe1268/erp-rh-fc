@@ -175,8 +175,11 @@ export const faceRecognitionRouter = router({
             const dataExpiracao = new Date(dataEntrega);
             dataExpiracao.setMonth(dataExpiracao.getMonth() + epiInfo.vidaUtilMeses);
             if (new Date() < dataExpiracao) {
-              if (!item.motivoTroca || !item.fotoEstadoAnteriorBase64) {
-                throw new Error(`EPI "${epiInfo.nome}" está dentro da vida útil (expira em ${dataExpiracao.toISOString().split('T')[0]}). Motivo da troca e foto do EPI anterior são obrigatórios.`);
+              if (!item.motivoTroca) {
+                throw new Error(`EPI "${epiInfo.nome}" está dentro da vida útil (expira em ${dataExpiracao.toISOString().split('T')[0]}). Motivo da troca é obrigatório.`);
+              }
+              if (['desgaste_normal', 'mau_uso'].includes(item.motivoTroca) && !item.fotoEstadoAnteriorBase64) {
+                throw new Error(`EPI "${epiInfo.nome}" está dentro da vida útil. Foto do EPI danificado é obrigatória para troca por ${item.motivoTroca === 'desgaste_normal' ? 'desgaste normal' : 'mau uso'}.`);
               }
             }
           }
