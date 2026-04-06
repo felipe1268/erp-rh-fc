@@ -88,6 +88,7 @@ const PJMedicoes = lazy(() => import("./pages/PJMedicoes"));
 const PainelRH = lazy(() => import("./pages/PainelRH"));
 const PainelSST = lazy(() => import("./pages/PainelSST"));
 const PainelJuridico = lazy(() => import("./pages/PainelJuridico"));
+const PainelTrabalhista = lazy(() => import("./pages/PainelTrabalhista"));
 const PainelTributario = lazy(() => import("./pages/PainelTributario"));
 const PainelCivil = lazy(() => import("./pages/PainelCivil"));
 const ProcessosTributarios = lazy(() => import("./pages/ProcessosTributarios"));
@@ -271,7 +272,7 @@ function Router() {
         <Route path={"/painel/rh"} component={PainelRH} />
         <Route path={"/painel/sst"} component={PainelSST} />
         <Route path={"/painel/juridico"} component={PainelJuridico} />
-        <Route path={"/painel/juridico-trabalhista"} component={PainelJuridico} />
+        <Route path={"/painel/juridico-trabalhista"} component={PainelTrabalhista} />
         <Route path={"/painel/tributario"} component={PainelTributario} />
         <Route path={"/painel/civil"} component={PainelCivil} />
         <Route path={"/empresas"} component={Empresas} />

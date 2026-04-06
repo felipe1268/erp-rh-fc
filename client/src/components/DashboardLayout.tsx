@@ -185,6 +185,7 @@ const menuSectionsJuridico: MenuSection[] = [
   {
     title: "Trabalhista",
     items: [
+      { icon: LayoutDashboard, label: "Painel Trabalhista", path: "/painel/juridico-trabalhista" },
       { icon: Gavel, label: "Processos Trabalhistas", path: "/processos-trabalhistas" },
       { icon: Gavel, label: "Dashboard Trabalhista", path: "/dashboards/juridico" },
     ],
@@ -192,6 +193,7 @@ const menuSectionsJuridico: MenuSection[] = [
   {
     title: "Tributário",
     items: [
+      { icon: LayoutDashboard, label: "Painel Tributário", path: "/painel/tributario" },
       { icon: Scale, label: "Processos Tributários", path: "/processos-tributarios" },
       { icon: Scale, label: "Dashboard Tributário", path: "/dashboards/tributario" },
     ],
@@ -199,6 +201,7 @@ const menuSectionsJuridico: MenuSection[] = [
   {
     title: "Civil",
     items: [
+      { icon: LayoutDashboard, label: "Painel Civil", path: "/painel/civil" },
       { icon: FileText, label: "Processos Cíveis", path: "/processos-civis" },
       { icon: FileText, label: "Dashboard Civil", path: "/dashboards/civil" },
     ],
@@ -656,9 +659,9 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "rh-dp": "/painel/rh",
   "sst": "/painel/sst",
   "juridico": "/painel/juridico",
-  "juridico-trabalhista": "/painel/juridico",
-  "juridico-tributario": "/painel/juridico",
-  "juridico-civil": "/painel/juridico",
+  "juridico-trabalhista": "/painel/juridico-trabalhista",
+  "juridico-tributario": "/painel/tributario",
+  "juridico-civil": "/painel/civil",
   "avaliacao": "/avaliacao-desempenho",
   "terceiros":      "/terceiros/painel",
   "parceiros":      "/parceiros/painel",

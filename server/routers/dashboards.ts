@@ -4,6 +4,7 @@ import { getDb, getConstrutorasIds } from "../db";
 import {
   employees, extraPayments, payroll, timeRecords, warnings, atestados,
   epis, epiDeliveries, processosTrabalhistas, processosAndamentos,
+  processosTributarios, processosCivis,
   monthlyPayrollSummary, obraHorasRateio, obras, folhaLancamentos, folhaItens,
   epiDiscountAlerts, terminationNotices, vacationPeriods, goldenRules,
   asos, trainings, employeeDocuments, obraFuncionarios,
@@ -1374,6 +1375,191 @@ async function getDashJuridico(companyId: number, companyIds?: number[]) {
       }
       return Object.entries(stateMap).map(([state, count]) => ({ state, count }));
     })(),
+  };
+}
+
+// ============================================================
+// 6b. DASHBOARD TRIBUTÁRIO
+// ============================================================
+async function getDashTributario(companyId: number, companyIds?: number[]) {
+  const db = await getDb();
+  if (!db) return null;
+  const hoje = new Date().toISOString().split("T")[0];
+
+  const allProcessos = await db.select().from(processosTributarios)
+    .where(companyWhere(processosTributarios, companyId, companyIds));
+
+  const parseBRLVal = (val: string | null) => {
+    if (!val) return 0;
+    const clean = val.replace(/R\$\s*/g, "").trim();
+    if (clean.includes(",")) return parseFloat(clean.replace(/\./g, "").replace(",", ".")) || 0;
+    return parseFloat(clean) || 0;
+  };
+
+  let totalValorCausa = 0, totalValorCondenacao = 0, totalAutoInfracao = 0, totalValorPago = 0;
+  for (const p of allProcessos) {
+    totalValorCausa += parseBRLVal(p.valorCausa);
+    totalValorCondenacao += parseBRLVal(p.valorCondenacao);
+    totalAutoInfracao += parseBRLVal(p.valorAutoInfracao);
+    totalValorPago += parseBRLVal(p.valorPago);
+  }
+
+  const porStatus: Record<string, number> = {};
+  for (const p of allProcessos) porStatus[p.status] = (porStatus[p.status] || 0) + 1;
+
+  const porRisco: Record<string, number> = {};
+  for (const p of allProcessos) porRisco[p.risco] = (porRisco[p.risco] || 0) + 1;
+
+  const porFase: Record<string, number> = {};
+  for (const p of allProcessos) porFase[p.fase] = (porFase[p.fase] || 0) + 1;
+
+  const porTributo: Record<string, number> = {};
+  for (const p of allProcessos) porTributo[p.tipoTributo] = (porTributo[p.tipoTributo] || 0) + 1;
+
+  const porEsfera: Record<string, number> = {};
+  for (const p of allProcessos) porEsfera[p.esfera] = (porEsfera[p.esfera] || 0) + 1;
+
+  const porMes: Record<string, number> = {};
+  for (const p of allProcessos) {
+    const mes = p.dataDistribuicao?.substring(0, 7) || "Desconhecido";
+    porMes[mes] = (porMes[mes] || 0) + 1;
+  }
+  const evolucaoMensal = Object.entries(porMes).sort(([a], [b]) => a.localeCompare(b))
+    .map(([mes, count]) => ({ mes, count }));
+
+  const valorPorRisco: Record<string, number> = {};
+  for (const p of allProcessos) {
+    if (p.status !== "encerrado" && p.status !== "arquivado") {
+      const risco = p.risco || "medio";
+      valorPorRisco[risco] = (valorPorRisco[risco] || 0) + parseBRLVal(p.valorCausa);
+    }
+  }
+
+  const processosAtivos = allProcessos.filter(p => p.status !== "encerrado" && p.status !== "arquivado").length;
+  const processosEncerrados = allProcessos.filter(p => p.status === "encerrado" || p.status === "arquivado").length;
+
+  const proximasAudiencias = allProcessos
+    .filter(p => p.dataAudiencia && p.dataAudiencia >= hoje)
+    .map(p => ({
+      numero: p.numeroProcesso,
+      contribuinte: p.contribuinte,
+      tributo: p.tipoTributo,
+      data: p.dataAudiencia,
+      status: p.status,
+      risco: p.risco,
+    }))
+    .sort((a, b) => (a.data || "").localeCompare(b.data || "")).slice(0, 10);
+
+  return {
+    resumo: {
+      totalProcessos: allProcessos.length,
+      processosAtivos,
+      processosEncerrados,
+      totalValorCausa: Math.round(totalValorCausa * 100) / 100,
+      totalValorCondenacao: Math.round(totalValorCondenacao * 100) / 100,
+      totalAutoInfracao: Math.round(totalAutoInfracao * 100) / 100,
+      totalValorPago: Math.round(totalValorPago * 100) / 100,
+      valorEmRisco: Math.round(Object.values(valorPorRisco).reduce((s, v) => s + v, 0) * 100) / 100,
+    },
+    porStatus: Object.entries(porStatus).map(([label, value]) => ({ label: label.replace(/_/g, " "), value })),
+    porRisco: Object.entries(porRisco).map(([label, value]) => ({ label, value })),
+    porFase: Object.entries(porFase).map(([label, value]) => ({ label, value })),
+    porTributo: Object.entries(porTributo).map(([label, value]) => ({ label, value })),
+    porEsfera: Object.entries(porEsfera).map(([label, value]) => ({ label, value })),
+    evolucaoMensal,
+    valorPorRisco: Object.entries(valorPorRisco).map(([risco, valor]) => ({ risco, valor: Math.round(valor * 100) / 100 })),
+    proximasAudiencias,
+  };
+}
+
+// ============================================================
+// 6c. DASHBOARD CIVIL
+// ============================================================
+async function getDashCivil(companyId: number, companyIds?: number[]) {
+  const db = await getDb();
+  if (!db) return null;
+  const hoje = new Date().toISOString().split("T")[0];
+
+  const allProcessos = await db.select().from(processosCivis)
+    .where(companyWhere(processosCivis, companyId, companyIds));
+
+  const parseBRLVal = (val: string | null) => {
+    if (!val) return 0;
+    const clean = val.replace(/R\$\s*/g, "").trim();
+    if (clean.includes(",")) return parseFloat(clean.replace(/\./g, "").replace(",", ".")) || 0;
+    return parseFloat(clean) || 0;
+  };
+
+  let totalValorCausa = 0, totalValorCondenacao = 0, totalValorAcordo = 0, totalValorPago = 0;
+  for (const p of allProcessos) {
+    totalValorCausa += parseBRLVal(p.valorCausa);
+    totalValorCondenacao += parseBRLVal(p.valorCondenacao);
+    totalValorAcordo += parseBRLVal(p.valorAcordo);
+    totalValorPago += parseBRLVal(p.valorPago);
+  }
+
+  const porStatus: Record<string, number> = {};
+  for (const p of allProcessos) porStatus[p.status] = (porStatus[p.status] || 0) + 1;
+
+  const porRisco: Record<string, number> = {};
+  for (const p of allProcessos) porRisco[p.risco] = (porRisco[p.risco] || 0) + 1;
+
+  const porFase: Record<string, number> = {};
+  for (const p of allProcessos) porFase[p.fase] = (porFase[p.fase] || 0) + 1;
+
+  const porTipoAcao: Record<string, number> = {};
+  for (const p of allProcessos) porTipoAcao[p.tipoAcao] = (porTipoAcao[p.tipoAcao] || 0) + 1;
+
+  const porMes: Record<string, number> = {};
+  for (const p of allProcessos) {
+    const mes = p.dataDistribuicao?.substring(0, 7) || "Desconhecido";
+    porMes[mes] = (porMes[mes] || 0) + 1;
+  }
+  const evolucaoMensal = Object.entries(porMes).sort(([a], [b]) => a.localeCompare(b))
+    .map(([mes, count]) => ({ mes, count }));
+
+  const valorPorRisco: Record<string, number> = {};
+  for (const p of allProcessos) {
+    if (p.status !== "encerrado" && p.status !== "arquivado") {
+      const risco = p.risco || "medio";
+      valorPorRisco[risco] = (valorPorRisco[risco] || 0) + parseBRLVal(p.valorCausa);
+    }
+  }
+
+  const processosAtivos = allProcessos.filter(p => p.status !== "encerrado" && p.status !== "arquivado").length;
+  const processosEncerrados = allProcessos.filter(p => p.status === "encerrado" || p.status === "arquivado").length;
+
+  const proximasAudiencias = allProcessos
+    .filter(p => p.dataAudiencia && p.dataAudiencia >= hoje)
+    .map(p => ({
+      numero: p.numeroProcesso,
+      autor: p.autor,
+      reu: p.reu,
+      tipoAcao: p.tipoAcao,
+      data: p.dataAudiencia,
+      status: p.status,
+      risco: p.risco,
+    }))
+    .sort((a, b) => (a.data || "").localeCompare(b.data || "")).slice(0, 10);
+
+  return {
+    resumo: {
+      totalProcessos: allProcessos.length,
+      processosAtivos,
+      processosEncerrados,
+      totalValorCausa: Math.round(totalValorCausa * 100) / 100,
+      totalValorCondenacao: Math.round(totalValorCondenacao * 100) / 100,
+      totalValorAcordo: Math.round(totalValorAcordo * 100) / 100,
+      totalValorPago: Math.round(totalValorPago * 100) / 100,
+      valorEmRisco: Math.round(Object.values(valorPorRisco).reduce((s, v) => s + v, 0) * 100) / 100,
+    },
+    porStatus: Object.entries(porStatus).map(([label, value]) => ({ label: label.replace(/_/g, " "), value })),
+    porRisco: Object.entries(porRisco).map(([label, value]) => ({ label, value })),
+    porFase: Object.entries(porFase).map(([label, value]) => ({ label, value })),
+    porTipoAcao: Object.entries(porTipoAcao).map(([label, value]) => ({ label: label.replace(/_/g, " "), value })),
+    evolucaoMensal,
+    valorPorRisco: Object.entries(valorPorRisco).map(([risco, valor]) => ({ risco, valor: Math.round(valor * 100) / 100 })),
+    proximasAudiencias,
   };
 }
 
@@ -2850,6 +3036,8 @@ export const dashboardsRouter = router({
   })).query(({ input }) => getDashHorasExtras(input.companyId, input.year, input, input.companyIds)),
   epis: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashEpis(input.companyId, input.companyIds)),
   juridico: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashJuridico(input.companyId, input.companyIds)),
+  tributario: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashTributario(input.companyId, input.companyIds)),
+  civil: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCivil(input.companyId, input.companyIds)),
   avisoPrevio: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashAvisoPrevio(input.companyId, input.ano, input.companyIds)),
   ferias: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFerias(input.companyId, input.ano, input.companyIds)),
   perfilTempoCasa: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashPerfilTempoCasa(input.companyId, input.companyIds)),
