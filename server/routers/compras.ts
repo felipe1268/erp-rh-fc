@@ -7632,6 +7632,7 @@ Retorne APENAS um JSON válido neste formato:
           .limit(1);
 
         if (hasLinkedCot.length > 0) {
+          const inputItemIds = input.itens.filter(it => it.id).map(it => it.id!);
           for (const it of input.itens) {
             if (it.id) {
               await db.update(comprasSolicitacoesItens).set({
@@ -7640,6 +7641,19 @@ Retorne APENAS um JSON válido neste formato:
                 quantidade: String(it.quantidade),
                 observacoes: it.observacoes,
               }).where(and(eq(comprasSolicitacoesItens.id, it.id), eq(comprasSolicitacoesItens.solicitacaoId, input.id)));
+            }
+          }
+          if (inputItemIds.length > 0) {
+            const existingItems = await db.select({ id: comprasSolicitacoesItens.id })
+              .from(comprasSolicitacoesItens)
+              .where(and(
+                eq(comprasSolicitacoesItens.solicitacaoId, input.id),
+                sql`${comprasSolicitacoesItens.statusItem} != 'cancelado'`,
+              ));
+            const removedIds = existingItems.map(i => i.id).filter(id => !inputItemIds.includes(id));
+            if (removedIds.length > 0) {
+              await db.update(comprasSolicitacoesItens).set({ statusItem: "cancelado" })
+                .where(inArray(comprasSolicitacoesItens.id, removedIds));
             }
           }
         } else {
