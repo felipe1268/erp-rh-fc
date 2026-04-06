@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { fmtNum } from "@/lib/formatters";
 import {
-  Clock, Plus, CheckCircle, XCircle, AlertTriangle, Send,
+  Clock, Plus, CheckCircle, CheckCircle2, XCircle, AlertTriangle, Send,
   Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare, Trash2, History, Ban,
   TrendingUp, DollarSign, HardHat, Search, X, PenTool, UserCheck, UserX, ClipboardCheck, SquarePen,
 } from "lucide-react";
@@ -360,6 +360,7 @@ export default function SolicitacaoHE() {
   const [assinaturaEmployeeId, setAssinaturaEmployeeId] = useState<number | null>(null);
   const [assinaturaEmployeeName, setAssinaturaEmployeeName] = useState("");
   const [modoComparecimento, setModoComparecimento] = useState(false);
+  const [verAssinatura, setVerAssinatura] = useState<number | null>(null);
 
   const confirmQ = trpc.heSolicitacoes.getConfirmacoes.useQuery(
     { solicitacaoId: detailSolId! },
@@ -367,8 +368,14 @@ export default function SolicitacaoHE() {
   );
 
   const confirmarMut = trpc.heSolicitacoes.confirmarPresenca.useMutation({
-    onSuccess: () => {
-      toast.success("Presença confirmada com sucesso!");
+    onSuccess: (data: any) => {
+      if (data.primeiraAssinatura) {
+        toast.success("Presença confirmada! Assinatura salva como memorial para futuras comparações.");
+      } else if (data.assinaturaDivergente) {
+        toast.warning(`⚠️ ATENÇÃO: Assinatura divergente do memorial! Similaridade: ${data.similaridade}%. Verificar identidade do funcionário.`, { duration: 8000 });
+      } else {
+        toast.success(`Presença confirmada! Assinatura compatível (${data.similaridade}% similaridade).`);
+      }
       utils.heSolicitacoes.getConfirmacoes.invalidate();
       setAssinaturaEmployeeId(null);
       setAssinaturaEmployeeName("");
@@ -1789,46 +1796,83 @@ export default function SolicitacaoHE() {
                         </div>
                         <div className="divide-y divide-amber-200 border border-amber-200 rounded-lg overflow-hidden bg-white">
                           {confs.map((c: any) => (
-                            <div key={c.id} className={`px-3 py-2 flex items-center gap-3 text-sm ${c.compareceu === false ? "bg-red-50" : c.compareceu === true ? "bg-green-50" : ""}`}>
-                              <div className="flex-1 min-w-0">
-                                <span className="font-medium">{c.nomeCompleto || `ID ${c.employeeId}`}</span>
-                                {c.matricula && <span className="text-xs text-muted-foreground ml-1">({c.matricula})</span>}
-                                {c.cargo && <span className="text-xs text-muted-foreground ml-1">— {c.cargo}</span>}
-                              </div>
-                              <div className="text-xs text-muted-foreground shrink-0">
-                                {c.confirmedAt && new Date(c.confirmedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                              </div>
-                              {c.compareceu === true && (
-                                <Badge className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0">
-                                  <UserCheck className="h-3 w-3 mr-1" /> Compareceu
-                                </Badge>
-                              )}
-                              {c.compareceu === false && (
-                                <Badge className="bg-red-100 text-red-800 border-red-300 text-xs shrink-0">
-                                  <UserX className="h-3 w-3 mr-1" /> Ausente
-                                </Badge>
-                              )}
-                              {c.compareceu === null && !modoComparecimento && (
-                                <Badge variant="outline" className="text-xs shrink-0">Aguardando</Badge>
-                              )}
-                              {c.compareceu === null && modoComparecimento && (
-                                <div className="flex gap-1 shrink-0">
-                                  <Button size="sm" className="h-6 text-xs bg-green-600 hover:bg-green-700 px-2"
-                                    onClick={() => comparecMut.mutate({ solicitacaoId: sol.id, registros: [{ employeeId: c.employeeId, compareceu: true }] })}
-                                    disabled={comparecMut.isPending}
-                                  >
-                                    <UserCheck className="h-3 w-3" />
-                                  </Button>
-                                  <Button size="sm" variant="destructive" className="h-6 text-xs px-2"
-                                    onClick={() => comparecMut.mutate({ solicitacaoId: sol.id, registros: [{ employeeId: c.employeeId, compareceu: false, observacao: "Confirmou presença mas não compareceu" }] })}
-                                    disabled={comparecMut.isPending}
-                                  >
-                                    <UserX className="h-3 w-3" />
-                                  </Button>
+                            <div key={c.id} className={`px-3 py-2 space-y-2 ${c.compareceu === false ? "bg-red-50" : c.compareceu === true ? "bg-green-50" : ""}`}>
+                              <div className="flex items-center gap-3 text-sm">
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-medium">{c.nomeCompleto || `ID ${c.employeeId}`}</span>
+                                  {c.matricula && <span className="text-xs text-muted-foreground ml-1">({c.matricula})</span>}
+                                  {c.cargo && <span className="text-xs text-muted-foreground ml-1">— {c.cargo}</span>}
                                 </div>
-                              )}
+                                <div className="text-xs text-muted-foreground shrink-0">
+                                  {c.confirmedAt && new Date(c.confirmedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                </div>
+                                {c.assinaturaDivergente && (
+                                  <Badge className="bg-red-200 text-red-900 border-red-400 text-xs shrink-0 animate-pulse">
+                                    <AlertTriangle className="h-3 w-3 mr-1" /> Assinatura Divergente ({c.similaridade || 0}%)
+                                  </Badge>
+                                )}
+                                {c.compareceu === true && (
+                                  <Badge className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0">
+                                    <UserCheck className="h-3 w-3 mr-1" /> Compareceu
+                                  </Badge>
+                                )}
+                                {c.compareceu === false && (
+                                  <Badge className="bg-red-100 text-red-800 border-red-300 text-xs shrink-0">
+                                    <UserX className="h-3 w-3 mr-1" /> Ausente
+                                  </Badge>
+                                )}
+                                {c.compareceu === null && !modoComparecimento && (
+                                  <Badge variant="outline" className="text-xs shrink-0">Aguardando</Badge>
+                                )}
+                                {c.compareceu === null && modoComparecimento && (
+                                  <div className="flex gap-1 shrink-0">
+                                    <Button size="sm" className="h-6 text-xs bg-green-600 hover:bg-green-700 px-2"
+                                      onClick={() => comparecMut.mutate({ solicitacaoId: sol.id, registros: [{ employeeId: c.employeeId, compareceu: true }] })}
+                                      disabled={comparecMut.isPending}
+                                    >
+                                      <UserCheck className="h-3 w-3" />
+                                    </Button>
+                                    <Button size="sm" variant="destructive" className="h-6 text-xs px-2"
+                                      onClick={() => comparecMut.mutate({ solicitacaoId: sol.id, registros: [{ employeeId: c.employeeId, compareceu: false, observacao: "Confirmou presença mas não compareceu" }] })}
+                                      disabled={comparecMut.isPending}
+                                    >
+                                      <UserX className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
+                                {c.assinaturaUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setVerAssinatura(verAssinatura === c.id ? null : c.id)}
+                                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 shrink-0"
+                                  >
+                                    <SquarePen className="h-3 w-3" />
+                                    {verAssinatura === c.id ? "Ocultar" : "Ver Assinatura"}
+                                  </button>
+                                )}
+                              </div>
                               {c.observacao && c.compareceu === false && (
-                                <span className="text-xs text-red-600 italic">{c.observacao}</span>
+                                <p className="text-xs text-red-600 italic pl-1">{c.observacao}</p>
+                              )}
+                              {verAssinatura === c.id && c.assinaturaUrl && (
+                                <div className={`border rounded-lg p-2 ${c.assinaturaDivergente ? "border-red-300 bg-red-50" : "border-gray-200 bg-white"}`}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-medium text-gray-500">Assinatura digital de {c.nomeCompleto || "funcionário"}</span>
+                                    {c.assinaturaDivergente && (
+                                      <span className="text-xs font-bold text-red-700 flex items-center gap-1">
+                                        <AlertTriangle className="h-3 w-3" />
+                                        Diverge do memorial ({c.similaridade || 0}% similaridade)
+                                      </span>
+                                    )}
+                                    {!c.assinaturaDivergente && c.similaridade && (
+                                      <span className="text-xs text-green-600 flex items-center gap-1">
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        {c.similaridade}% similaridade com memorial
+                                      </span>
+                                    )}
+                                  </div>
+                                  <img src={c.assinaturaUrl} alt={`Assinatura de ${c.nomeCompleto}`} className="max-h-24 mx-auto" />
+                                </div>
                               )}
                             </div>
                           ))}

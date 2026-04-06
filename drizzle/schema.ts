@@ -1015,6 +1015,8 @@ export const employees = pgTable("employees", {
         planoSaudeOperadora: varchar({ length: 100 }),
         planoSaudeValor: varchar({ length: 20 }),
         benefObs: text(),
+        assinaturaMemorial: text("assinatura_memorial"),
+        assinaturaMemorialAt: timestamp("assinatura_memorial_at", { mode: "string" }),
 },
 (table) => [
         index("idx_company_codigo_interno").on(table.companyId, table.codigoInterno),
@@ -1683,6 +1685,8 @@ export const heSolicitacaoConfirmacoes = pgTable("he_solicitacao_confirmacoes", 
   registradoPor: varchar("registrado_por", { length: 255 }),
   registradoEm: timestamp("registrado_em", { mode: "string" }),
   observacao: text(),
+  assinaturaDivergente: boolean("assinatura_divergente").default(false),
+  similaridade: numeric("similaridade", { precision: 5, scale: 2 }),
 },
 (table) => [
   index("he_conf_sol").on(table.solicitacaoId),

@@ -16,6 +16,44 @@ import { z } from "zod";
 // Art. 59 CLT: Acordo individual ou coletivo para prorrogação de jornada
 // ============================================================
 
+function compararAssinaturas(memorialB64: string, novaB64: string): number {
+  try {
+    const extract = (b64: string): Buffer => {
+      const raw = b64.includes(",") ? b64.split(",")[1] : b64;
+      return Buffer.from(raw, "base64");
+    };
+    const bufM = extract(memorialB64);
+    const bufN = extract(novaB64);
+
+    const sizeM = bufM.length;
+    const sizeN = bufN.length;
+    const sizeDiff = Math.abs(sizeM - sizeN) / Math.max(sizeM, sizeN, 1);
+
+    const sampleSize = Math.min(sizeM, sizeN, 2000);
+    const stepM = Math.max(1, Math.floor(sizeM / sampleSize));
+    const stepN = Math.max(1, Math.floor(sizeN / sampleSize));
+
+    let matches = 0;
+    let total = 0;
+    for (let i = 0; i < sampleSize; i++) {
+      const idxM = i * stepM;
+      const idxN = i * stepN;
+      if (idxM < sizeM && idxN < sizeN) {
+        total++;
+        if (Math.abs(bufM[idxM] - bufN[idxN]) < 30) matches++;
+      }
+    }
+
+    const byteSim = total > 0 ? (matches / total) * 100 : 0;
+    const sizeSim = (1 - sizeDiff) * 100;
+    const combined = byteSim * 0.6 + sizeSim * 0.4;
+
+    return Math.round(Math.max(0, Math.min(100, combined)));
+  } catch {
+    return 50;
+  }
+}
+
 export const heSolicitacoesRouter = router({
 
   // ===================== CRIAR SOLICITAÇÃO =====================
@@ -637,9 +675,12 @@ export const heSolicitacoesRouter = router({
       registradoPor: heSolicitacaoConfirmacoes.registradoPor,
       registradoEm: heSolicitacaoConfirmacoes.registradoEm,
       observacao: heSolicitacaoConfirmacoes.observacao,
+      assinaturaDivergente: heSolicitacaoConfirmacoes.assinaturaDivergente,
+      similaridade: heSolicitacaoConfirmacoes.similaridade,
       nomeCompleto: employees.nomeCompleto,
       matricula: employees.matricula,
       cargo: employees.cargo,
+      fotoUrl: employees.fotoUrl,
     }).from(heSolicitacaoConfirmacoes)
       .leftJoin(employees, eq(employees.id, heSolicitacaoConfirmacoes.employeeId))
       .where(eq(heSolicitacaoConfirmacoes.solicitacaoId, input.solicitacaoId))
@@ -675,11 +716,32 @@ export const heSolicitacoesRouter = router({
 
     const ipAddress = (ctx.req as any)?.ip || (ctx.req as any)?.headers?.["x-forwarded-for"] || "desconhecido";
 
+    const [emp] = await db.select({
+      id: employees.id,
+      assinaturaMemorial: employees.assinaturaMemorial,
+      nome: employees.nomeCompleto,
+    }).from(employees).where(eq(employees.id, input.employeeId));
+
+    let assinaturaDivergente = false;
+    let similaridade: number | null = null;
+
+    if (!emp?.assinaturaMemorial) {
+      await db.update(employees)
+        .set({ assinaturaMemorial: input.assinaturaBase64, assinaturaMemorialAt: new Date().toISOString() })
+        .where(eq(employees.id, input.employeeId));
+    } else {
+      const sim = compararAssinaturas(emp.assinaturaMemorial, input.assinaturaBase64);
+      similaridade = sim;
+      assinaturaDivergente = sim < 60;
+    }
+
     const [row] = await db.insert(heSolicitacaoConfirmacoes).values({
       solicitacaoId: input.solicitacaoId,
       employeeId: input.employeeId,
       assinaturaUrl: input.assinaturaBase64,
       ipAddress: String(ipAddress).split(",")[0].trim(),
+      assinaturaDivergente,
+      similaridade: similaridade !== null ? String(similaridade) : null,
     }).returning();
 
     await createAuditLog(db, {
@@ -687,11 +749,11 @@ export const heSolicitacoesRouter = router({
       action: "he_confirmacao_presenca",
       entity: "he_solicitacao_confirmacoes",
       entityId: row.id,
-      details: `Funcionário #${input.employeeId} confirmou presença na HE #${input.solicitacaoId}`,
+      details: `Funcionário #${input.employeeId} (${emp?.nome || "?"}) confirmou presença na HE #${input.solicitacaoId}${assinaturaDivergente ? " ⚠️ ASSINATURA DIVERGENTE (similaridade: " + similaridade + "%)" : ""}`,
       companyId: ctx.user?.companyId,
     });
 
-    return row;
+    return { ...row, assinaturaDivergente, similaridade, primeiraAssinatura: !emp?.assinaturaMemorial };
   }),
 
   registrarComparecimento: protectedProcedure.input(z.object({

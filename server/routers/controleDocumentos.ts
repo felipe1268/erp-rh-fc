@@ -1088,6 +1088,8 @@ export const controleDocumentosRouter = router({
         registradoPor: heSolicitacaoConfirmacoes.registradoPor,
         registradoEm: heSolicitacaoConfirmacoes.registradoEm,
         observacao: heSolicitacaoConfirmacoes.observacao,
+        assinaturaDivergente: heSolicitacaoConfirmacoes.assinaturaDivergente,
+        similaridade: heSolicitacaoConfirmacoes.similaridade,
         dataSolicitacao: heSolicitacoes.dataSolicitacao,
         horaInicio: heSolicitacoes.horaInicio,
         horaFim: heSolicitacoes.horaFim,
@@ -1327,12 +1329,13 @@ export const controleDocumentosRouter = router({
         const dataEvt = c.dataSolicitacao || (c.confirmedAt ? new Date(c.confirmedAt).toISOString().split("T")[0] : null);
         if (!dataEvt) return;
         const horario = c.horaInicio && c.horaFim ? ` (${c.horaInicio}–${c.horaFim})` : "";
+        const alertaAss = c.assinaturaDivergente ? ` ⚠️ ASSINATURA DIVERGENTE (${c.similaridade || 0}% similaridade)` : "";
         if (c.compareceu === false) {
-          timeline.push({ data: dataEvt, tipo: "HE — Ausência Confirmada", descricao: `Confirmou presença na HE${horario} mas NÃO compareceu. Motivo HE: ${c.motivo || "-"}${c.observacao ? `. Obs: ${c.observacao}` : ""}`, cor: "red", icone: "user-x" });
+          timeline.push({ data: dataEvt, tipo: "HE — Ausência Confirmada", descricao: `Confirmou presença na HE${horario} mas NÃO compareceu. Motivo HE: ${c.motivo || "-"}${c.observacao ? `. Obs: ${c.observacao}` : ""}${alertaAss}`, cor: "red", icone: "user-x" });
         } else if (c.compareceu === true) {
-          timeline.push({ data: dataEvt, tipo: "HE — Presença Confirmada", descricao: `Confirmou e compareceu à HE${horario}. Motivo: ${c.motivo || "-"}`, cor: "green", icone: "user-check" });
+          timeline.push({ data: dataEvt, tipo: "HE — Presença Confirmada", descricao: `Confirmou e compareceu à HE${horario}. Motivo: ${c.motivo || "-"}${alertaAss}`, cor: "green", icone: "user-check" });
         } else {
-          timeline.push({ data: dataEvt, tipo: "HE — Assinatura Confirmação", descricao: `Assinou confirmação de presença para HE${horario}. Aguardando registro de comparecimento.`, cor: "amber", icone: "pen-tool" });
+          timeline.push({ data: dataEvt, tipo: "HE — Assinatura Confirmação", descricao: `Assinou confirmação de presença para HE${horario}. Aguardando registro de comparecimento.${alertaAss}`, cor: c.assinaturaDivergente ? "red" : "amber", icone: c.assinaturaDivergente ? "alert-triangle" : "pen-tool" });
         }
       });
 
