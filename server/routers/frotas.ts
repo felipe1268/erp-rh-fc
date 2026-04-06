@@ -5579,29 +5579,32 @@ Sempre retorne JSON válido, sem markdown.`;
         const vehiclesData = await vehiclesResp.json() as any;
         const infleetVehicles = vehiclesData.data?.listVehicles || [];
 
-        const tripsPromises = infleetVehicles.map(async (v: any) => {
-          const tripsQuery = `{
-            trips(filter: { vehicleId: "${v.id}", fixTime: { startAt: "${input.startDate}T00:00:00.000Z", endAt: "${input.endDate}T23:59:59.000Z" } }) {
-              id startedAt finishedAt distanceTraveled averageSpeed maximumSpeed
-              driver { name }
-            }
-          }`;
-          try {
-            const tripsResp = await fetch('https://api.infleet.com.br/v1/graphql', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-              body: JSON.stringify({ query: tripsQuery }),
-              signal: AbortSignal.timeout(12000),
-            });
-            const tripsData = await tripsResp.json() as any;
-            return { vehicleId: v.id, trips: tripsData.data?.trips || [] };
-          } catch { return { vehicleId: v.id, trips: [] }; }
-        });
-        const tripsResults = await Promise.allSettled(tripsPromises);
         const tripsByVehicle: Record<string, any[]> = {};
-        tripsResults.forEach(r => {
-          if (r.status === 'fulfilled') tripsByVehicle[r.value.vehicleId] = r.value.trips;
-        });
+        const BATCH_SIZE = 3;
+        for (let i = 0; i < infleetVehicles.length; i += BATCH_SIZE) {
+          const batch = infleetVehicles.slice(i, i + BATCH_SIZE);
+          const batchResults = await Promise.allSettled(batch.map(async (v: any) => {
+            const tripsQuery = `{
+              trips(filter: { vehicleId: "${v.id}", fixTime: { startAt: "${input.startDate}T00:00:00.000Z", endAt: "${input.endDate}T23:59:59.000Z" } }) {
+                id startedAt finishedAt distanceTraveled averageSpeed maximumSpeed
+                driver { name }
+              }
+            }`;
+            try {
+              const tripsResp = await fetch('https://api.infleet.com.br/v1/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ query: tripsQuery }),
+                signal: AbortSignal.timeout(20000),
+              });
+              const tripsData = await tripsResp.json() as any;
+              return { vehicleId: v.id, trips: tripsData.data?.trips || [] };
+            } catch { return { vehicleId: v.id, trips: [] }; }
+          }));
+          batchResults.forEach(r => {
+            if (r.status === 'fulfilled') tripsByVehicle[r.value.vehicleId] = r.value.trips;
+          });
+        }
 
         const results = [];
         for (const v of infleetVehicles) {
