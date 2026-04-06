@@ -5483,4 +5483,233 @@ Sempre retorne JSON válido, sem markdown.`;
       }
       return template;
     }),
+
+  getInfleetTrips: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      infleetVehicleId: z.string().regex(/^[a-f0-9-]+$/i),
+      placa: z.string(),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }))
+    .query(async ({ input }) => {
+      const token = process.env.FROTA_API_TOKEN;
+      if (!token) return { trips: [], error: 'Token Infleet não configurado' };
+      try {
+        const query = `{
+          trips(filter: { vehicleId: "${input.infleetVehicleId}", fixTime: { startAt: "${input.startDate}T00:00:00.000Z", endAt: "${input.endDate}T23:59:59.000Z" } }) {
+            id startedAt finishedAt distanceTraveled averageSpeed maximumSpeed
+            fuelConsumedLiters
+            driver { name }
+            vehicle { plate displayName }
+          }
+        }`;
+        const resp = await fetch('https://api.infleet.com.br/v1/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ query }),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!resp.ok) return { trips: [], error: `Infleet API: ${resp.status}` };
+        const data = await resp.json() as any;
+        if (data.errors) return { trips: [], error: data.errors[0]?.message || 'Erro GraphQL' };
+        const trips = (data.data?.trips || []).map((t: any) => ({
+          id: t.id,
+          placa: t.vehicle?.plate || input.placa,
+          inicio: t.startedAt,
+          fim: t.finishedAt,
+          kmPercorrido: t.distanceTraveled || 0,
+          velMedia: t.averageSpeed || 0,
+          velMaxima: t.maximumSpeed || 0,
+          combustivel: t.fuelConsumedLiters || 0,
+          motorista: t.driver?.name || null,
+        }));
+        return { trips, error: null };
+      } catch (e: any) {
+        return { trips: [], error: e.message || 'Erro ao conectar com Infleet' };
+      }
+    }),
+
+  getInfleetVehiclePositions: protectedProcedure
+    .input(z.object({
+      infleetVehicleId: z.string().regex(/^[a-f0-9-]+$/i),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }))
+    .query(async ({ input }) => {
+      const token = process.env.FROTA_API_TOKEN;
+      if (!token) return { positions: [], error: 'Token Infleet não configurado' };
+      try {
+        const query = `{
+          listVehiclePositions(filter: { vehicleId: "${input.infleetVehicleId}", fixTime: { startAt: "${input.startDate}T00:00:00.000Z", endAt: "${input.endDate}T23:59:59.000Z" } }) {
+            latitude longitude speed fixTime address ignition course
+          }
+        }`;
+        const resp = await fetch('https://api.infleet.com.br/v1/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ query }),
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!resp.ok) return { positions: [], error: `Infleet API: ${resp.status}` };
+        const data = await resp.json() as any;
+        if (data.errors) return { positions: [], error: data.errors[0]?.message || 'Erro GraphQL' };
+        return { positions: data.data?.listVehiclePositions || [], error: null };
+      } catch (e: any) {
+        return { positions: [], error: e.message || 'Erro ao conectar com Infleet' };
+      }
+    }),
+
+  getControleKm: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }))
+    .query(async ({ input }) => {
+      const token = process.env.FROTA_API_TOKEN;
+      if (!token) return { vehicles: [], error: 'Token Infleet não configurado' };
+      try {
+        const vehiclesResp = await fetch('https://api.infleet.com.br/v1/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ query: `{ listVehicles { id plate displayName brand model type status odometer driver { name } } }` }),
+          signal: AbortSignal.timeout(12000),
+        });
+        const vehiclesData = await vehiclesResp.json() as any;
+        const infleetVehicles = vehiclesData.data?.listVehicles || [];
+
+        const tripsPromises = infleetVehicles.map(async (v: any) => {
+          const tripsQuery = `{
+            trips(filter: { vehicleId: "${v.id}", fixTime: { startAt: "${input.startDate}T00:00:00.000Z", endAt: "${input.endDate}T23:59:59.000Z" } }) {
+              id startedAt finishedAt distanceTraveled averageSpeed maximumSpeed
+              driver { name }
+            }
+          }`;
+          try {
+            const tripsResp = await fetch('https://api.infleet.com.br/v1/graphql', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+              body: JSON.stringify({ query: tripsQuery }),
+              signal: AbortSignal.timeout(12000),
+            });
+            const tripsData = await tripsResp.json() as any;
+            return { vehicleId: v.id, trips: tripsData.data?.trips || [] };
+          } catch { return { vehicleId: v.id, trips: [] }; }
+        });
+        const tripsResults = await Promise.allSettled(tripsPromises);
+        const tripsByVehicle: Record<string, any[]> = {};
+        tripsResults.forEach(r => {
+          if (r.status === 'fulfilled') tripsByVehicle[r.value.vehicleId] = r.value.trips;
+        });
+
+        const results = [];
+        for (const v of infleetVehicles) {
+          const trips = tripsByVehicle[v.id] || [];
+
+          const byDay: Record<string, { km: number; trips: number; tempoMin: number; velMedia: number; velMax: number; motoristas: Set<string> }> = {};
+          trips.forEach((t: any) => {
+            const day = new Date(t.startedAt).toISOString().slice(0, 10);
+            if (!byDay[day]) byDay[day] = { km: 0, trips: 0, tempoMin: 0, velMedia: 0, velMax: 0, motoristas: new Set() };
+            byDay[day].km += t.distanceTraveled || 0;
+            byDay[day].trips++;
+            const durMin = (new Date(t.finishedAt).getTime() - new Date(t.startedAt).getTime()) / 60000;
+            byDay[day].tempoMin += durMin;
+            byDay[day].velMedia += (t.averageSpeed || 0) * (t.distanceTraveled || 0);
+            byDay[day].velMax = Math.max(byDay[day].velMax, t.maximumSpeed || 0);
+            if (t.driver?.name) byDay[day].motoristas.add(t.driver.name);
+          });
+
+          const dailyData = Object.entries(byDay).map(([day, d]) => ({
+            data: day,
+            km: Math.round(d.km * 10) / 10,
+            viagens: d.trips,
+            tempoRodandoMin: Math.round(d.tempoMin),
+            velMedia: d.km > 0 ? Math.round(d.velMedia / d.km * 10) / 10 : 0,
+            velMaxima: Math.round(d.velMax * 10) / 10,
+            motoristas: [...d.motoristas],
+          })).sort((a, b) => a.data.localeCompare(b.data));
+
+          const totalKm = dailyData.reduce((s, d) => s + d.km, 0);
+          const totalViagens = dailyData.reduce((s, d) => s + d.viagens, 0);
+          const diasComViagem = dailyData.filter(d => d.km > 0).length;
+
+          results.push({
+            infleetId: v.id,
+            placa: v.plate,
+            nome: v.displayName || `${v.brand || ''} ${v.model || ''}`.trim(),
+            tipo: v.type,
+            status: v.status,
+            kmOdometro: v.odometer ? Math.round(v.odometer) : null,
+            motorista: v.driver?.name || null,
+            totalKm: Math.round(totalKm * 10) / 10,
+            totalViagens,
+            diasComViagem,
+            mediaKmDia: diasComViagem > 0 ? Math.round(totalKm / diasComViagem * 10) / 10 : 0,
+            dailyData,
+          });
+        }
+
+        if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+        const db = await getDb();
+        const fuelRes = await db.execute(sql`
+          SELECT vehicle_id, data, litros, valor_total, km_atual, km_anterior, consumo_km_l,
+                 tipo_combustivel, motorista, posto
+          FROM fleet_fuel_records
+          WHERE company_id = ${input.companyId}
+            AND data >= ${input.startDate}
+            AND data <= ${input.endDate}
+          ORDER BY data
+        `);
+        const fuelRecords = (fuelRes as any).rows || [];
+
+        const vehicleRes = await db.execute(sql`
+          SELECT id, placa FROM vehicles WHERE company_id = ${input.companyId}
+        `);
+        const localVehicles = (vehicleRes as any).rows || [];
+        const plateToId: Record<string, number> = {};
+        localVehicles.forEach((v: any) => { if (v.placa) plateToId[v.placa.replace(/[-\s]/g, '').toUpperCase()] = v.id; });
+
+        const fuelByPlaca: Record<string, any[]> = {};
+        fuelRecords.forEach((f: any) => {
+          const veh = localVehicles.find((v: any) => v.id === f.vehicle_id);
+          if (veh && veh.placa) {
+            const key = veh.placa.replace(/[-\s]/g, '').toUpperCase();
+            if (!fuelByPlaca[key]) fuelByPlaca[key] = [];
+            fuelByPlaca[key].push({
+              data: typeof f.data === 'string' ? f.data.slice(0, 10) : new Date(f.data).toISOString().slice(0, 10),
+              litros: parseFloat(f.litros) || 0,
+              valorTotal: parseFloat(f.valor_total) || 0,
+              kmAtual: parseFloat(f.km_atual) || 0,
+              kmAnterior: parseFloat(f.km_anterior) || 0,
+              consumoKmL: parseFloat(f.consumo_km_l) || 0,
+              combustivel: f.tipo_combustivel,
+              motorista: f.motorista,
+              posto: f.posto,
+            });
+          }
+        });
+
+        const vehiclesWithFuel = results.map(v => {
+          const placaNorm = v.placa.replace(/[-\s]/g, '').toUpperCase();
+          const abastecimentos = fuelByPlaca[placaNorm] || [];
+          const totalLitros = abastecimentos.reduce((s: number, a: any) => s + a.litros, 0);
+          const totalGasto = abastecimentos.reduce((s: number, a: any) => s + a.valorTotal, 0);
+          const consumoReal = totalLitros > 0 && v.totalKm > 0 ? Math.round(v.totalKm / totalLitros * 10) / 10 : null;
+          const custoKm = v.totalKm > 0 ? Math.round(totalGasto / v.totalKm * 100) / 100 : null;
+          return {
+            ...v,
+            abastecimentos,
+            totalLitros: Math.round(totalLitros * 10) / 10,
+            totalGastoCombustivel: Math.round(totalGasto * 100) / 100,
+            consumoRealKmL: consumoReal,
+            custoKm,
+          };
+        });
+
+        return { vehicles: vehiclesWithFuel, error: null };
+      } catch (e: any) {
+        return { vehicles: [], error: e.message || 'Erro ao buscar dados' };
+      }
+    }),
 });

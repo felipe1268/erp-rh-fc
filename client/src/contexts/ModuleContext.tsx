@@ -138,6 +138,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/frotas/manutencoes":             "frotas" as ModuleId,
   "/frotas/combustivel":             "frotas" as ModuleId,
   "/frotas/rastreamento":            "frotas" as ModuleId,
+  "/frotas/controle-km":             "frotas" as ModuleId,
   "/frotas/multas":                  "frotas" as ModuleId,
   "/frotas/ipva":                    "frotas" as ModuleId,
   "/frotas/licenciamento":           "frotas" as ModuleId,

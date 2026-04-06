@@ -210,6 +210,7 @@ const FrotasVeiculos = lazy(() => import("./pages/frotas/Veiculos"));
 const FrotasManutencoes = lazy(() => import("./pages/frotas/Manutencoes"));
 const FrotasCombustivel = lazy(() => import("./pages/frotas/Combustivel"));
 const FrotasRastreamento = lazy(() => import("./pages/frotas/Rastreamento"));
+const FrotasControleKm = lazy(() => import("./pages/frotas/ControleKm"));
 const FrotasMultas = lazy(() => import("./pages/frotas/Multas"));
 const FrotasIpva = lazy(() => import("./pages/frotas/Ipva"));
 const FrotasLicenciamento = lazy(() => import("./pages/frotas/Licenciamento"));
@@ -443,6 +444,7 @@ function Router() {
         <Route path="/frotas/manutencoes" component={FrotasManutencoes} />
         <Route path="/frotas/combustivel" component={FrotasCombustivel} />
         <Route path="/frotas/rastreamento" component={FrotasRastreamento} />
+        <Route path="/frotas/controle-km" component={FrotasControleKm} />
         <Route path="/frotas/multas" component={FrotasMultas} />
         <Route path="/frotas/ipva" component={FrotasIpva} />
         <Route path="/frotas/licenciamento" component={FrotasLicenciamento} />

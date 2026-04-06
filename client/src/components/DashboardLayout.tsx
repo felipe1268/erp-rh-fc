@@ -35,7 +35,7 @@ import {
   Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
-  Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft,
+  Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
   Camera, Blocks, CheckSquare, Repeat, FileCheck2, Milestone,
 } from "lucide-react";
@@ -551,6 +551,7 @@ const menuSectionsFrotas: MenuSection[] = [
     title: "Rastreamento",
     items: [
       { icon: Target, label: "Mapa e Trajetos", path: "/frotas/rastreamento" },
+      { icon: Gauge, label: "Controle de Km", path: "/frotas/controle-km" },
     ],
   },
 ];
