@@ -7134,3 +7134,30 @@ export const databookTerceiroEntregas = pgTable("databook_terceiro_entregas", {
 }, (t) => [
   index("idx_databook_terceiro_contrato").on(t.terceiroContratoId),
 ]);
+
+export const disciplinaClassificacoes = pgTable("disciplina_classificacoes", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  orcamentoId:      integer("orcamento_id").notNull(),
+  disciplina:       varchar({ length: 200 }).notNull(),
+  eapCodigo:        varchar("eap_codigo", { length: 50 }).notNull(),
+  descricaoItem:    text("descricao_item"),
+  classificadoPor:  varchar("classificado_por", { length: 20 }).default("ia"),
+  criadoEm:         timestamp("criado_em", { mode: "string" }).defaultNow(),
+}, (t) => [
+  index("idx_disc_class_orc").on(t.orcamentoId),
+  index("idx_disc_class_company").on(t.companyId),
+]);
+
+export const disciplinaCorrecoes = pgTable("disciplina_correcoes", {
+  id:                    serial().primaryKey(),
+  companyId:             integer("company_id").notNull(),
+  eapDescricao:          text("eap_descricao").notNull(),
+  disciplinaOriginal:    varchar("disciplina_original", { length: 200 }).notNull(),
+  disciplinaCorrigida:   varchar("disciplina_corrigida", { length: 200 }).notNull(),
+  userId:                integer("user_id"),
+  userName:              varchar("user_name", { length: 200 }),
+  criadoEm:              timestamp("criado_em", { mode: "string" }).defaultNow(),
+}, (t) => [
+  index("idx_disc_corr_company").on(t.companyId),
+]);

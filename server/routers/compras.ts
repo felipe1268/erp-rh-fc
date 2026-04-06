@@ -33,6 +33,7 @@ import {
   ocNumberConfig, pjContracts, pjDocumentos, bdiFd, fdAjustes, medicaoFdRegistros, medicaoContratos,
   integrasignEnvelopes, integrasignSignatarios, integrasignAuditLog,
   terceiroContratos, terceiroContratoItens, empresasTerceiras,
+  disciplinaClassificacoes, disciplinaCorrecoes,
 } from "../../drizzle/schema";
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -8899,4 +8900,321 @@ Retorne APENAS um JSON válido neste formato:
         fornecedoresSugeridos,
       };
     }),
+
+  getDisciplinas: protectedProcedure.input(z.object({
+    orcamentoId: z.number(),
+    companyId: z.number(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) return { disciplinas: [], status: "no_db" as const };
+
+    const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+    if (!(allowed || []).some((c: any) => c.id === input.companyId)) throw new TRPCError({ code: "FORBIDDEN" });
+
+    const [orc] = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId }).from(orcamentos)
+      .where(and(eq(orcamentos.id, input.orcamentoId), eq(orcamentos.companyId, input.companyId), isNull(orcamentos.deletedAt)))
+      .limit(1);
+    if (!orc) throw new TRPCError({ code: "NOT_FOUND", message: "Orçamento não encontrado." });
+
+    const rows = await db.select().from(disciplinaClassificacoes)
+      .where(and(
+        eq(disciplinaClassificacoes.orcamentoId, input.orcamentoId),
+        eq(disciplinaClassificacoes.companyId, input.companyId),
+      )).orderBy(asc(disciplinaClassificacoes.disciplina), asc(disciplinaClassificacoes.eapCodigo));
+
+    if (rows.length === 0) return { disciplinas: [], status: "nao_classificado" as const };
+
+    const grouped: Record<string, { itens: typeof rows; count: number }> = {};
+    rows.forEach(r => {
+      if (!grouped[r.disciplina]) grouped[r.disciplina] = { itens: [], count: 0 };
+      grouped[r.disciplina].itens.push(r);
+      grouped[r.disciplina].count++;
+    });
+
+    const saldoRows = await db.select({
+      eapCodigo: orcamentoItens.eapCodigo,
+      descricao: orcamentoItens.descricao,
+      unidade: orcamentoItens.unidade,
+      quantidade: orcamentoItens.quantidade,
+      custoTotal: orcamentoItens.custoTotal,
+      vendaTotal: orcamentoItens.vendaTotal,
+    }).from(orcamentoItens)
+      .where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+
+    const orcMap: Record<string, any> = {};
+    saldoRows.forEach(r => { orcMap[r.eapCodigo || ""] = r; });
+
+    const scItens = await db.select({
+      eapCodigo: comprasSolicitacoesItens.eapCodigo,
+      qtd: comprasSolicitacoesItens.quantidade,
+      status: comprasSolicitacoes.status,
+    }).from(comprasSolicitacoesItens)
+      .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasSolicitacoesItens.solicitacaoId))
+      .where(and(
+        eq(comprasSolicitacoes.companyId, input.companyId),
+        eq(comprasSolicitacoes.obraId, orc.obraId!),
+        inArray(comprasSolicitacoes.status, ["aprovada", "em_cotacao", "cotada", "comprada", "pendente"]),
+      ));
+
+    const scMap: Record<string, number> = {};
+    scItens.forEach(r => {
+      if (r.eapCodigo) scMap[r.eapCodigo] = (scMap[r.eapCodigo] || 0) + n(r.qtd);
+    });
+
+    const disciplinas = Object.entries(grouped).map(([nome, g]) => {
+      let totalItens = g.count;
+      let contratados = 0;
+      let comSaldo = 0;
+      let semContrato = 0;
+      const itens = g.itens.map(item => {
+        const orc = orcMap[item.eapCodigo] || {};
+        const qtdOrc = n(orc.quantidade);
+        const qtdSol = scMap[item.eapCodigo] || 0;
+        const saldo = qtdOrc - qtdSol;
+        const status = qtdSol >= qtdOrc && qtdOrc > 0 ? "contratado" : qtdSol > 0 ? "parcial" : "sem_contrato";
+        if (status === "contratado") contratados++;
+        else if (status === "parcial") comSaldo++;
+        else semContrato++;
+        return {
+          id: item.id,
+          eapCodigo: item.eapCodigo,
+          descricao: item.descricaoItem || orc.descricao || "",
+          unidade: orc.unidade || "",
+          qtdOrcada: qtdOrc,
+          qtdSolicitada: qtdSol,
+          saldo,
+          custoTotal: n(orc.custoTotal),
+          status,
+          classificadoPor: item.classificadoPor,
+        };
+      });
+      const pctContratado = totalItens > 0 ? Math.round(((contratados + comSaldo * 0.5) / totalItens) * 100) : 0;
+      return { nome, totalItens, contratados, comSaldo, semContrato, pctContratado, itens };
+    });
+
+    disciplinas.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    return { disciplinas, status: "ok" as const };
+  }),
+
+  classificarDisciplinas: protectedProcedure.input(z.object({
+    orcamentoId: z.number(),
+    companyId: z.number(),
+    force: z.boolean().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+    if (!(allowed || []).some((c: any) => c.id === input.companyId)) throw new TRPCError({ code: "FORBIDDEN" });
+
+    const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
+      .where(and(eq(orcamentos.id, input.orcamentoId), eq(orcamentos.companyId, input.companyId), isNull(orcamentos.deletedAt)))
+      .limit(1);
+    if (!orc) throw new TRPCError({ code: "NOT_FOUND", message: "Orçamento não encontrado nesta empresa." });
+
+    if (!input.force) {
+      const existing = await db.select({ id: disciplinaClassificacoes.id })
+        .from(disciplinaClassificacoes)
+        .where(and(eq(disciplinaClassificacoes.orcamentoId, input.orcamentoId), eq(disciplinaClassificacoes.companyId, input.companyId)))
+        .limit(1);
+      if (existing.length > 0) return { status: "ja_classificado" as const, msg: "Já classificado. Use force=true para reclassificar." };
+    } else {
+      await db.delete(disciplinaClassificacoes)
+        .where(and(eq(disciplinaClassificacoes.orcamentoId, input.orcamentoId), eq(disciplinaClassificacoes.companyId, input.companyId)));
+    }
+
+    const itens = await db.select({
+      eapCodigo: orcamentoItens.eapCodigo,
+      descricao: orcamentoItens.descricao,
+      unidade: orcamentoItens.unidade,
+      nivel: orcamentoItens.nivel,
+      tipo: orcamentoItens.tipo,
+    }).from(orcamentoItens)
+      .where(eq(orcamentoItens.orcamentoId, input.orcamentoId))
+      .orderBy(asc(orcamentoItens.eapCodigo));
+
+    const servicos = itens.filter(i => {
+      const t = (i.tipo || "").toLowerCase();
+      return t === "composicao" || t === "servico" || t === "serviço";
+    });
+
+    if (servicos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum serviço/composição encontrado neste orçamento." });
+
+    const correcoes = await db.select().from(disciplinaCorrecoes)
+      .where(eq(disciplinaCorrecoes.companyId, input.companyId))
+      .orderBy(desc(disciplinaCorrecoes.criadoEm))
+      .limit(200);
+
+    let correcoesCtx = "";
+    if (correcoes.length > 0) {
+      correcoesCtx = "\n\nHISTÓRICO DE CORREÇÕES DO USUÁRIO (use como referência para melhorar a classificação):\n";
+      const uniq = new Map<string, string>();
+      correcoes.forEach(c => { uniq.set(c.eapDescricao.toLowerCase(), c.disciplinaCorrigida); });
+      uniq.forEach((disc, desc) => { correcoesCtx += `- "${desc}" → ${disc}\n`; });
+    }
+
+    const listaSvc = servicos.map(s => `${s.eapCodigo}: ${s.descricao}`).join("\n");
+
+    const result = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: `Você é um engenheiro civil sênior especialista em orçamentos de construção civil no Brasil. Sua tarefa é classificar serviços/composições de um orçamento de obra em DISCIPLINAS construtivas.
+
+DISCIPLINAS TÍPICAS (pode criar outras se necessário):
+- Serviços Preliminares
+- Movimento de Terra
+- Fundações
+- Estrutural (concreto, armação, formas)
+- Alvenaria
+- Cobertura
+- Impermeabilização
+- Revestimento (chapisco, reboco, contrapiso)
+- Piso / Pavimentação
+- Pintura
+- Esquadrias (portas, janelas, vidros)
+- Elétrica
+- Hidráulica / Esgoto
+- Instalações Especiais (ar condicionado, elevador, incêndio, gás)
+- Limpeza / Acabamento Final
+- Paisagismo / Área Externa
+
+REGRAS:
+1. Cada item recebe EXATAMENTE uma disciplina
+2. Use nomes curtos e padronizados
+3. Se o item não se encaixa em nenhuma típica, crie uma disciplina adequada
+4. Priorize as correções do usuário quando houver${correcoesCtx}
+
+Responda APENAS com JSON válido, sem markdown, no formato:
+[{"eap":"XX.XX.XX.XX","disc":"Nome da Disciplina"},...]`,
+        },
+        {
+          role: "user",
+          content: `Classifique estes ${servicos.length} serviços por disciplina:\n\n${listaSvc}`,
+        },
+      ],
+      maxTokens: 8000,
+    });
+
+    const raw = typeof result.choices?.[0]?.message?.content === "string"
+      ? result.choices[0].message.content
+      : "";
+
+    let classificacoes: Array<{ eap: string; disc: string }> = [];
+    try {
+      const jsonStr = raw.replace(/```json\s*/g, "").replace(/```/g, "").trim();
+      classificacoes = JSON.parse(jsonStr);
+    } catch {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA retornou formato inválido. Tente novamente." });
+    }
+
+    if (!Array.isArray(classificacoes) || classificacoes.length === 0)
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA não retornou classificações." });
+
+    const svcMap = new Map(servicos.map(s => [s.eapCodigo, s]));
+    const values = classificacoes
+      .filter(c => c.eap && c.disc && svcMap.has(c.eap))
+      .map(c => ({
+        companyId: input.companyId,
+        orcamentoId: input.orcamentoId,
+        disciplina: c.disc.trim(),
+        eapCodigo: c.eap,
+        descricaoItem: svcMap.get(c.eap)?.descricao || null,
+        classificadoPor: "ia" as const,
+      }));
+
+    if (values.length === 0)
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Nenhuma classificação válida gerada." });
+
+    const BATCH = 200;
+    for (let i = 0; i < values.length; i += BATCH) {
+      await db.insert(disciplinaClassificacoes).values(values.slice(i, i + BATCH));
+    }
+
+    return { status: "ok" as const, total: values.length, disciplinas: [...new Set(values.map(v => v.disciplina))].length };
+  }),
+
+  corrigirDisciplina: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    orcamentoId: z.number(),
+    itens: z.array(z.object({
+      id: z.number(),
+      eapCodigo: z.string(),
+      descricao: z.string(),
+      disciplinaOriginal: z.string(),
+      disciplinaNova: z.string(),
+    })),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+    if (!(allowed || []).some((c: any) => c.id === input.companyId)) throw new TRPCError({ code: "FORBIDDEN" });
+
+    const userName = ctx.user?.name || "sistema";
+    for (const item of input.itens) {
+      await db.update(disciplinaClassificacoes)
+        .set({ disciplina: item.disciplinaNova, classificadoPor: "usuario" })
+        .where(and(
+          eq(disciplinaClassificacoes.id, item.id),
+          eq(disciplinaClassificacoes.companyId, input.companyId),
+          eq(disciplinaClassificacoes.orcamentoId, input.orcamentoId),
+        ));
+
+      await db.insert(disciplinaCorrecoes).values({
+        companyId: input.companyId,
+        eapDescricao: item.descricao,
+        disciplinaOriginal: item.disciplinaOriginal,
+        disciplinaCorrigida: item.disciplinaNova,
+        userId: ctx.user?.id,
+        userName,
+      });
+    }
+
+    return { ok: true, corrigidos: input.itens.length };
+  }),
+
+  renomearDisciplina: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    orcamentoId: z.number(),
+    nomeAtual: z.string(),
+    nomeNovo: z.string(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+    if (!(allowed || []).some((c: any) => c.id === input.companyId)) throw new TRPCError({ code: "FORBIDDEN" });
+
+    await db.update(disciplinaClassificacoes)
+      .set({ disciplina: input.nomeNovo.trim(), classificadoPor: "usuario" })
+      .where(and(
+        eq(disciplinaClassificacoes.orcamentoId, input.orcamentoId),
+        eq(disciplinaClassificacoes.companyId, input.companyId),
+        eq(disciplinaClassificacoes.disciplina, input.nomeAtual),
+      ));
+
+    const itens = await db.select({ descricaoItem: disciplinaClassificacoes.descricaoItem })
+      .from(disciplinaClassificacoes)
+      .where(and(
+        eq(disciplinaClassificacoes.orcamentoId, input.orcamentoId),
+        eq(disciplinaClassificacoes.companyId, input.companyId),
+        eq(disciplinaClassificacoes.disciplina, input.nomeNovo.trim()),
+      ));
+
+    for (const item of itens) {
+      if (item.descricaoItem) {
+        await db.insert(disciplinaCorrecoes).values({
+          companyId: input.companyId,
+          eapDescricao: item.descricaoItem,
+          disciplinaOriginal: input.nomeAtual,
+          disciplinaCorrigida: input.nomeNovo.trim(),
+          userId: ctx.user?.id,
+          userName: ctx.user?.name || "sistema",
+        });
+      }
+    }
+
+    return { ok: true };
+  }),
 });

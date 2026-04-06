@@ -18,7 +18,7 @@ import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
   Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare,
-  UserCircle, ShieldCheck, FileSearch, Truck, Users,
+  UserCircle, ShieldCheck, FileSearch, Truck, Users, Layers, ArrowRightLeft, Sparkles, RotateCw,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -116,6 +116,233 @@ function DocLinks({ docs, prefix, route, navigate }: { docs: { id: number; numer
         </button>
       ))}
     </>
+  );
+}
+
+function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ, classificarMut, corrigirMut, renomearMut, onAddItem }: {
+  open: boolean; onClose: () => void; orcamentoId?: number; companyId: number;
+  disciplinasQ: any; classificarMut: any; corrigirMut: any; renomearMut: any;
+  onAddItem: (item: any) => void;
+}) {
+  const [expandido, setExpandido] = useState<string | null>(null);
+  const [editandoNome, setEditandoNome] = useState<string | null>(null);
+  const [novoNome, setNovoNome] = useState("");
+  const [moverItem, setMoverItem] = useState<{ id: number; eapCodigo: string; descricao: string; disciplinaOriginal: string } | null>(null);
+  const [moverPara, setMoverPara] = useState("");
+
+  const data = disciplinasQ.data;
+  const status = data?.status;
+  const disciplinas = data?.disciplinas || [];
+  const loading = disciplinasQ.isLoading || classificarMut.isPending;
+
+  const allDisciplinaNames = disciplinas.map((d: any) => d.nome);
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <Layers className="h-5 w-5 text-violet-600" />
+            Visão por Disciplina
+          </DialogTitle>
+        </DialogHeader>
+
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+            <p className="text-sm text-gray-500">{classificarMut.isPending ? "IA classificando serviços..." : "Carregando..."}</p>
+          </div>
+        )}
+
+        {!loading && disciplinasQ.isError && (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <XCircle className="h-10 w-10 text-red-400" />
+            <p className="text-sm text-red-600">{disciplinasQ.error?.message || "Erro ao carregar disciplinas"}</p>
+            <Button variant="outline" size="sm" onClick={() => disciplinasQ.refetch()}>Tentar novamente</Button>
+          </div>
+        )}
+
+        {!loading && !disciplinasQ.isError && status === "nao_classificado" && (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <Sparkles className="h-12 w-12 text-violet-400" />
+            <div className="text-center">
+              <p className="text-sm font-medium text-gray-700">Serviços ainda não classificados por disciplina</p>
+              <p className="text-xs text-gray-500 mt-1">A IA vai analisar os serviços do orçamento e agrupá-los por disciplina construtiva</p>
+            </div>
+            <Button
+              onClick={() => orcamentoId && classificarMut.mutate({ orcamentoId, companyId })}
+              className="bg-violet-600 hover:bg-violet-700 gap-2"
+            >
+              <Sparkles className="h-4 w-4" /> Classificar com IA
+            </Button>
+          </div>
+        )}
+
+        {!loading && status === "ok" && disciplinas.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500">
+                {disciplinas.length} disciplina{disciplinas.length > 1 ? "s" : ""} · {disciplinas.reduce((s: number, d: any) => s + d.totalItens, 0)} serviços classificados
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => orcamentoId && classificarMut.mutate({ orcamentoId, companyId, force: true })}
+                disabled={classificarMut.isPending}
+                className="text-xs gap-1.5"
+              >
+                <RotateCw className="h-3 w-3" /> Reclassificar
+              </Button>
+            </div>
+
+            {disciplinas.map((disc: any) => {
+              const isOpen = expandido === disc.nome;
+              return (
+                <div key={disc.nome} className="border rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setExpandido(isOpen ? null : disc.nome)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      {isOpen ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                      {editandoNome === disc.nome ? (
+                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                          <input
+                            className="text-sm font-medium border rounded px-2 py-0.5 w-48"
+                            value={novoNome}
+                            onChange={e => setNovoNome(e.target.value)}
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === "Enter" && novoNome.trim() && novoNome !== disc.nome) {
+                                renomearMut.mutate({ companyId, orcamentoId: orcamentoId!, nomeAtual: disc.nome, nomeNovo: novoNome.trim() });
+                                setEditandoNome(null);
+                              }
+                              if (e.key === "Escape") setEditandoNome(null);
+                            }}
+                          />
+                          <button type="button" onClick={() => {
+                            if (novoNome.trim() && novoNome !== disc.nome) {
+                              renomearMut.mutate({ companyId, orcamentoId: orcamentoId!, nomeAtual: disc.nome, nomeNovo: novoNome.trim() });
+                            }
+                            setEditandoNome(null);
+                          }} className="text-emerald-600 hover:text-emerald-700"><CheckCircle2 className="h-4 w-4" /></button>
+                          <button type="button" onClick={() => setEditandoNome(null)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-800">{disc.nome}</span>
+                          <button type="button" onClick={e => { e.stopPropagation(); setEditandoNome(disc.nome); setNovoNome(disc.nome); }} className="text-gray-400 hover:text-gray-600">
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-500">{disc.totalItens} ite{disc.totalItens > 1 ? "ns" : "m"}</span>
+                      <div className="flex items-center gap-1.5">
+                        {disc.contratados > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{disc.contratados} contratado{disc.contratados > 1 ? "s" : ""}</span>}
+                        {disc.comSaldo > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{disc.comSaldo} parcial</span>}
+                        {disc.semContrato > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700">{disc.semContrato} s/ contrato</span>}
+                      </div>
+                      <div className="w-16 bg-gray-200 rounded-full h-2">
+                        <div className="bg-violet-500 h-2 rounded-full transition-all" style={{ width: `${disc.pctContratado}%` }} />
+                      </div>
+                      <span className="text-xs font-medium text-gray-600 w-8 text-right">{disc.pctContratado}%</span>
+                    </div>
+                  </button>
+
+                  {isOpen && (
+                    <div className="divide-y">
+                      {disc.itens.map((item: any) => (
+                        <div key={item.id} className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 text-xs">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <code className="text-violet-700 font-mono text-[10px] bg-violet-50 px-1.5 py-0.5 rounded">{item.eapCodigo}</code>
+                              <span className="truncate text-gray-700">{item.descricao}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 ml-2 shrink-0">
+                            <span className="text-gray-500">{item.unidade}</span>
+                            <span className="text-gray-600 font-medium w-14 text-right">{item.qtdOrcada}</span>
+                            {item.qtdSolicitada > 0 && <span className="text-amber-600 w-14 text-right">Sol: {item.qtdSolicitada}</span>}
+                            <span className={`w-14 text-right font-medium ${item.saldo > 0 ? "text-emerald-600" : item.saldo < 0 ? "text-red-600" : "text-gray-400"}`}>
+                              {item.saldo > 0 ? `+${item.saldo}` : item.saldo}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                              item.status === "contratado" ? "bg-emerald-100 text-emerald-700" :
+                              item.status === "parcial" ? "bg-amber-100 text-amber-700" :
+                              "bg-red-100 text-red-700"
+                            }`}>
+                              {item.status === "contratado" ? "Contratado" : item.status === "parcial" ? "Parcial" : "S/ Contrato"}
+                            </span>
+                            {item.classificadoPor === "ia" && <span className="text-violet-400" title="Classificado por IA"><Sparkles className="h-3 w-3" /></span>}
+                            <button
+                              type="button"
+                              onClick={() => setMoverItem({ id: item.id, eapCodigo: item.eapCodigo, descricao: item.descricao, disciplinaOriginal: disc.nome })}
+                              className="text-gray-400 hover:text-violet-600" title="Mover para outra disciplina"
+                            >
+                              <ArrowRightLeft className="h-3.5 w-3.5" />
+                            </button>
+                            {item.status !== "contratado" && item.saldo > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => onAddItem(item)}
+                                className="text-violet-600 hover:text-violet-800 font-medium flex items-center gap-0.5"
+                              >
+                                <Plus className="h-3 w-3" /> SC
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {moverItem && (
+          <Dialog open={!!moverItem} onOpenChange={() => setMoverItem(null)}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="text-sm">Mover para outra disciplina</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Item: <span className="font-medium text-gray-700">{moverItem.eapCodigo}</span></p>
+                  <p className="text-xs text-gray-600 truncate">{moverItem.descricao}</p>
+                  <p className="text-xs text-gray-400 mt-1">De: <span className="font-medium">{moverItem.disciplinaOriginal}</span></p>
+                </div>
+                <div>
+                  <Label className="text-xs">Mover para:</Label>
+                  <Select value={moverPara} onValueChange={setMoverPara}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a disciplina" /></SelectTrigger>
+                    <SelectContent>
+                      {allDisciplinaNames.filter((n: string) => n !== moverItem.disciplinaOriginal).map((n: string) => (
+                        <SelectItem key={n} value={n}>{n}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => { setMoverItem(null); setMoverPara(""); }}>Cancelar</Button>
+                  <Button size="sm" disabled={!moverPara || corrigirMut.isPending} className="bg-violet-600 hover:bg-violet-700" onClick={() => {
+                    corrigirMut.mutate({
+                      companyId, orcamentoId: orcamentoId!,
+                      itens: [{ id: moverItem.id, eapCodigo: moverItem.eapCodigo, descricao: moverItem.descricao, disciplinaOriginal: moverItem.disciplinaOriginal, disciplinaNova: moverPara }],
+                    });
+                    setMoverItem(null); setMoverPara("");
+                  }}>Mover</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -443,6 +670,7 @@ export default function Solicitacoes() {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [showNova, setShowNova] = useState(false);
+  const [showDisciplinas, setShowDisciplinas] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [abaScDetalhe, setAbaScDetalhe] = useState<"detalhes" | "cotacao" | "oc">("detalhes");
   const [destaqueId, setDestaqueId] = useState<number | null>(null);
@@ -539,6 +767,31 @@ export default function Solicitacoes() {
     { companyId, obraId: parseInt(form.obraId), eapCodigoSelecionado: sugestaoEap!, tipo: form.tipo },
     { enabled: !!sugestaoEap && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 && form.tipo === "servico", staleTime: 60_000 }
   );
+
+  const orcIdParaDisciplina = eapQ.data?.orcamentoId as number | undefined;
+  const disciplinasQ = trpc.compras.getDisciplinas.useQuery(
+    { orcamentoId: orcIdParaDisciplina!, companyId },
+    { enabled: showDisciplinas && !!orcIdParaDisciplina && companyId > 0, staleTime: 30_000 }
+  );
+  const classificarMut = trpc.compras.classificarDisciplinas.useMutation({
+    onSuccess: (r) => {
+      if (r.status === "ok") {
+        toast.success(`Classificação concluída: ${r.total} itens em ${r.disciplinas} disciplinas`);
+        disciplinasQ.refetch();
+      } else {
+        toast.info(r.msg || "Já classificado");
+      }
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const corrigirMut = trpc.compras.corrigirDisciplina.useMutation({
+    onSuccess: () => { toast.success("Disciplina corrigida!"); disciplinasQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const renomearMut = trpc.compras.renomearDisciplina.useMutation({
+    onSuccess: () => { toast.success("Disciplina renomeada!"); disciplinasQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const conversaoInput = useMemo(() => {
     const items = insumosConsolidadosQ.data ?? [];
@@ -1623,6 +1876,15 @@ export default function Solicitacoes() {
                   >
                     <FileText className="h-3 w-3" /> Manual / Avulso
                   </button>
+                  {form.tipo === "servico" && orcIdParaDisciplina && (
+                    <button
+                      type="button"
+                      onClick={() => setShowDisciplinas(true)}
+                      className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200"
+                    >
+                      <Layers className="h-3 w-3" /> Por Disciplina
+                    </button>
+                  )}
                 </div>
 
                 {modoSC === "eap" && (
@@ -3505,6 +3767,35 @@ export default function Solicitacoes() {
         </DialogContent>
       </Dialog>
       <ConfirmAprovDialog confirmAprov={confirmAprov} setConfirmAprov={setConfirmAprov} aprovar={aprovar} desaprovar={desaprovar} user={user} companyId={companyId} />
+
+      <DisciplinasModal
+        open={showDisciplinas}
+        onClose={() => setShowDisciplinas(false)}
+        orcamentoId={orcIdParaDisciplina}
+        companyId={companyId}
+        disciplinasQ={disciplinasQ}
+        classificarMut={classificarMut}
+        corrigirMut={corrigirMut}
+        renomearMut={renomearMut}
+        onAddItem={(item: any) => {
+          const newItem: ItemForm = {
+            eapCodigo: item.eapCodigo,
+            descricao: item.descricao,
+            unidade: item.unidade,
+            quantidade: String(item.saldo > 0 ? item.saldo : item.qtdOrcada),
+            observacao: "",
+            origemEap: true,
+          };
+          setItens(prev => {
+            if (prev.some(i => i.eapCodigo === item.eapCodigo)) {
+              toast.info(`Item ${item.eapCodigo} já está na SC`);
+              return prev;
+            }
+            toast.success(`Item ${item.eapCodigo} adicionado à SC`);
+            return [...prev, newItem];
+          });
+        }}
+      />
     </div>
     </DashboardLayout>
   );
