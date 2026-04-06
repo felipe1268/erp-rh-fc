@@ -1671,6 +1671,24 @@ export const heSolicitacaoAtividades = pgTable("he_solicitacao_atividades", {
         index("he_sol_atv_atv").on(table.atividadeId),
 ]);
 
+// ── HE CONFIRMAÇÕES DE PRESENÇA — Rev.1070 ──────────────────────────────────
+export const heSolicitacaoConfirmacoes = pgTable("he_solicitacao_confirmacoes", {
+  id: serial().primaryKey(),
+  solicitacaoId: integer("solicitacao_id").notNull(),
+  employeeId: integer("employee_id").notNull(),
+  assinaturaUrl: text("assinatura_url"),
+  confirmedAt: timestamp("confirmed_at", { mode: "string" }).defaultNow().notNull(),
+  ipAddress: varchar("ip_address", { length: 50 }),
+  compareceu: boolean().default(null),
+  registradoPor: varchar("registrado_por", { length: 255 }),
+  registradoEm: timestamp("registrado_em", { mode: "string" }),
+  observacao: text(),
+},
+(table) => [
+  index("he_conf_sol").on(table.solicitacaoId),
+  index("he_conf_emp").on(table.employeeId),
+]);
+
 // ── HE PERIODS — Rev.646 ─────────────────────────────────────────────────────
 export const hePeriods = pgTable("he_periods", {
   id:                serial().primaryKey(),

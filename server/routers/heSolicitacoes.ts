@@ -1,7 +1,8 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog } from "../db";
 import {
-  heSolicitacoes, heSolicitacaoFuncionarios, heSolicitacaoAtividades, employees, obras, terminationNotices,
+  heSolicitacoes, heSolicitacaoFuncionarios, heSolicitacaoAtividades, heSolicitacaoConfirmacoes,
+  employees, obras, terminationNotices,
   planejamentoAtividades, planejamentoProjetos, planejamentoRevisoes, planejamentoRefis,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray, isNull, asc } from "drizzle-orm";
@@ -611,5 +612,132 @@ export const heSolicitacoesRouter = router({
       ));
 
     return rows;
+  }),
+
+  // ===================== CONFIRMAÇÕES DE PRESENÇA =====================
+
+  getConfirmacoes: protectedProcedure.input(z.object({
+    solicitacaoId: z.number(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+
+    const companyIds = resolveCompanyIds(ctx.user);
+    const [sol] = await db.select({ id: heSolicitacoes.id }).from(heSolicitacoes)
+      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyFilter(heSolicitacoes, companyIds)));
+    if (!sol) return [];
+
+    const rows = await db.select({
+      id: heSolicitacaoConfirmacoes.id,
+      solicitacaoId: heSolicitacaoConfirmacoes.solicitacaoId,
+      employeeId: heSolicitacaoConfirmacoes.employeeId,
+      assinaturaUrl: heSolicitacaoConfirmacoes.assinaturaUrl,
+      confirmedAt: heSolicitacaoConfirmacoes.confirmedAt,
+      compareceu: heSolicitacaoConfirmacoes.compareceu,
+      registradoPor: heSolicitacaoConfirmacoes.registradoPor,
+      registradoEm: heSolicitacaoConfirmacoes.registradoEm,
+      observacao: heSolicitacaoConfirmacoes.observacao,
+      nomeCompleto: employees.nomeCompleto,
+      matricula: employees.matricula,
+      cargo: employees.cargo,
+    }).from(heSolicitacaoConfirmacoes)
+      .leftJoin(employees, eq(employees.id, heSolicitacaoConfirmacoes.employeeId))
+      .where(eq(heSolicitacaoConfirmacoes.solicitacaoId, input.solicitacaoId))
+      .orderBy(asc(heSolicitacaoConfirmacoes.confirmedAt));
+
+    return rows;
+  }),
+
+  confirmarPresenca: protectedProcedure.input(z.object({
+    solicitacaoId: z.number(),
+    employeeId: z.number(),
+    assinaturaBase64: z.string().min(100, "Assinatura inválida"),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    const companyIds = resolveCompanyIds(ctx.user);
+    const [sol] = await db.select({ id: heSolicitacoes.id, status: heSolicitacoes.status }).from(heSolicitacoes)
+      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyFilter(heSolicitacoes, companyIds)));
+    if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+
+    const [funcVinculado] = await db.select({ id: heSolicitacaoFuncionarios.id }).from(heSolicitacaoFuncionarios)
+      .where(and(eq(heSolicitacaoFuncionarios.solicitacaoId, input.solicitacaoId), eq(heSolicitacaoFuncionarios.employeeId, input.employeeId)));
+    if (!funcVinculado) throw new TRPCError({ code: "BAD_REQUEST", message: "Funcionário não vinculado a esta solicitação" });
+
+    const existing = await db.select({ id: heSolicitacaoConfirmacoes.id })
+      .from(heSolicitacaoConfirmacoes)
+      .where(and(
+        eq(heSolicitacaoConfirmacoes.solicitacaoId, input.solicitacaoId),
+        eq(heSolicitacaoConfirmacoes.employeeId, input.employeeId),
+      ));
+    if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "Funcionário já confirmou presença" });
+
+    const ipAddress = (ctx.req as any)?.ip || (ctx.req as any)?.headers?.["x-forwarded-for"] || "desconhecido";
+
+    const [row] = await db.insert(heSolicitacaoConfirmacoes).values({
+      solicitacaoId: input.solicitacaoId,
+      employeeId: input.employeeId,
+      assinaturaUrl: input.assinaturaBase64,
+      ipAddress: String(ipAddress).split(",")[0].trim(),
+    }).returning();
+
+    await createAuditLog(db, {
+      userId: ctx.user?.id,
+      action: "he_confirmacao_presenca",
+      entity: "he_solicitacao_confirmacoes",
+      entityId: row.id,
+      details: `Funcionário #${input.employeeId} confirmou presença na HE #${input.solicitacaoId}`,
+      companyId: ctx.user?.companyId,
+    });
+
+    return row;
+  }),
+
+  registrarComparecimento: protectedProcedure.input(z.object({
+    solicitacaoId: z.number(),
+    registros: z.array(z.object({
+      employeeId: z.number(),
+      compareceu: z.boolean(),
+      observacao: z.string().optional(),
+    })),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    const companyIds = resolveCompanyIds(ctx.user);
+    const [sol] = await db.select({ id: heSolicitacoes.id }).from(heSolicitacoes)
+      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyFilter(heSolicitacoes, companyIds)));
+    if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+
+    const userName = ctx.user?.name || "sistema";
+    const agora = new Date().toISOString();
+    let updated = 0;
+
+    for (const reg of input.registros) {
+      const result = await db.update(heSolicitacaoConfirmacoes)
+        .set({
+          compareceu: reg.compareceu,
+          registradoPor: userName,
+          registradoEm: agora,
+          observacao: reg.observacao || null,
+        })
+        .where(and(
+          eq(heSolicitacaoConfirmacoes.solicitacaoId, input.solicitacaoId),
+          eq(heSolicitacaoConfirmacoes.employeeId, reg.employeeId),
+        ));
+      updated++;
+    }
+
+    await createAuditLog(db, {
+      userId: ctx.user?.id,
+      action: "he_registro_comparecimento",
+      entity: "he_solicitacoes",
+      entityId: input.solicitacaoId,
+      details: `Comparecimento registrado: ${input.registros.filter(r => r.compareceu).length} presentes, ${input.registros.filter(r => !r.compareceu).length} ausentes`,
+      companyId: ctx.user?.companyId,
+    });
+
+    return { updated };
   }),
 });

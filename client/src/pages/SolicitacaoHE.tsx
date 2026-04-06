@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -18,7 +18,7 @@ import { fmtNum } from "@/lib/formatters";
 import {
   Clock, Plus, CheckCircle, XCircle, AlertTriangle, Send,
   Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare, Trash2, History, Ban,
-  TrendingUp, DollarSign, HardHat, Search, X,
+  TrendingUp, DollarSign, HardHat, Search, X, PenTool, UserCheck, UserX, ClipboardCheck, SquarePen,
 } from "lucide-react";
 
 type TabType = "solicitar" | "aprovacoes" | "historico";
@@ -36,6 +36,191 @@ const STATUS_LABELS: Record<string, string> = {
   rejeitada: "Rejeitada",
   cancelada: "Cancelada",
 };
+
+function SignatureModal({ open, onClose, employeeName, solicitacao, onConfirm, isPending }: {
+  open: boolean;
+  onClose: () => void;
+  employeeName: string;
+  solicitacao: any;
+  onConfirm: (base64: string) => void;
+  isPending: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasDrawn, setHasDrawn] = useState(false);
+
+  const getCtx = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    return canvas.getContext("2d");
+  }, []);
+
+  const initCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * 2;
+    canvas.height = rect.height * 2;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.scale(2, 2);
+    ctx.strokeStyle = "#1a1a2e";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, rect.width, rect.height);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      setTimeout(initCanvas, 100);
+      setHasDrawn(false);
+    }
+  }, [open, initCanvas]);
+
+  const getPos = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    if ("touches" in e && e.touches.length > 0) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+    }
+    const me = e as React.MouseEvent;
+    return { x: me.clientX - rect.left, y: me.clientY - rect.top };
+  }, []);
+
+  const startDraw = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    const ctx = getCtx();
+    if (!ctx) return;
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    setIsDrawing(true);
+    setHasDrawn(true);
+  }, [getCtx, getPos]);
+
+  const draw = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const ctx = getCtx();
+    if (!ctx) return;
+    const pos = getPos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  }, [isDrawing, getCtx, getPos]);
+
+  const endDraw = useCallback(() => { setIsDrawing(false); }, []);
+
+  const clearCanvas = useCallback(() => {
+    initCanvas();
+    setHasDrawn(false);
+  }, [initCanvas]);
+
+  const handleConfirm = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !hasDrawn) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    onConfirm(dataUrl);
+  }, [hasDrawn, onConfirm]);
+
+  if (!open) return null;
+
+  const sol = solicitacao;
+  const dataFormatada = sol.dataSolicitacao
+    ? new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })
+    : "-";
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-white flex flex-col">
+      <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-3 flex items-center justify-between shadow-lg">
+        <div className="flex items-center gap-3">
+          <PenTool className="h-5 w-5" />
+          <div>
+            <p className="text-sm font-bold">Confirmação de Presença — Hora Extra</p>
+            <p className="text-xs opacity-80">FC Engenharia</p>
+          </div>
+        </div>
+        <button onClick={onClose} className="text-white/80 hover:text-white p-1">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-lg mx-auto w-full">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+          <p className="text-sm font-bold text-blue-900">Dados da Hora Extra</p>
+          <p className="text-xs text-blue-800"><strong>Data:</strong> {dataFormatada}</p>
+          <p className="text-xs text-blue-800"><strong>Horário:</strong> {sol.horaInicio || "?"} às {sol.horaFim || "?"}</p>
+          <p className="text-xs text-blue-800"><strong>Motivo:</strong> {sol.motivo || "-"}</p>
+          {sol.obraNome && <p className="text-xs text-blue-800"><strong>Obra:</strong> {sol.obraNome}</p>}
+        </div>
+
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <p className="text-sm font-bold text-gray-900 mb-1">Funcionário</p>
+          <p className="text-lg font-bold">{employeeName}</p>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <p className="text-xs text-amber-900 font-medium leading-relaxed">
+            Eu, <strong>{employeeName}</strong>, declaro estar ciente da convocação para realização de horas extras
+            na data e horário acima informados, conforme Art. 59 da CLT e Acordo Coletivo de Trabalho vigente.
+            Comprometo-me a comparecer ao local de trabalho no horário determinado.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-gray-700">Assinatura Digital</p>
+            <button
+              onClick={clearCanvas}
+              className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+            >
+              <RotateCcw className="h-3 w-3" /> Limpar
+            </button>
+          </div>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-white" style={{ touchAction: "none" }}>
+            <canvas
+              ref={canvasRef}
+              className="w-full cursor-crosshair"
+              style={{ height: "180px" }}
+              onMouseDown={startDraw}
+              onMouseMove={draw}
+              onMouseUp={endDraw}
+              onMouseLeave={endDraw}
+              onTouchStart={startDraw}
+              onTouchMove={draw}
+              onTouchEnd={endDraw}
+            />
+          </div>
+          {!hasDrawn && (
+            <p className="text-xs text-center text-muted-foreground">Assine acima com o dedo ou caneta stylus</p>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t bg-gray-50 px-4 py-3 flex gap-3 max-w-lg mx-auto w-full">
+        <Button variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
+          Cancelar
+        </Button>
+        <Button
+          className="flex-1 bg-green-600 hover:bg-green-700"
+          disabled={!hasDrawn || isPending}
+          onClick={handleConfirm}
+        >
+          {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+          Confirmar Presença
+        </Button>
+      </div>
+
+      <div className="bg-gray-100 px-4 py-2 text-center">
+        <p className="text-[10px] text-muted-foreground">
+          Registro eletrônico protegido pela LGPD (Lei nº 13.709/2018). Data/hora e IP armazenados para validade jurídica.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function SolicitacaoHE() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
@@ -171,6 +356,34 @@ export default function SolicitacaoHE() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [buscaFunc, setBuscaFunc] = useState("");
   const [verTodosFuncionarios, setVerTodosFuncionarios] = useState(false);
+
+  const [assinaturaEmployeeId, setAssinaturaEmployeeId] = useState<number | null>(null);
+  const [assinaturaEmployeeName, setAssinaturaEmployeeName] = useState("");
+  const [modoComparecimento, setModoComparecimento] = useState(false);
+
+  const confirmQ = trpc.heSolicitacoes.getConfirmacoes.useQuery(
+    { solicitacaoId: detailSolId! },
+    { enabled: !!detailSolId }
+  );
+
+  const confirmarMut = trpc.heSolicitacoes.confirmarPresenca.useMutation({
+    onSuccess: () => {
+      toast.success("Presença confirmada com sucesso!");
+      utils.heSolicitacoes.getConfirmacoes.invalidate();
+      setAssinaturaEmployeeId(null);
+      setAssinaturaEmployeeName("");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const comparecMut = trpc.heSolicitacoes.registrarComparecimento.useMutation({
+    onSuccess: () => {
+      toast.success("Comparecimento registrado!");
+      utils.heSolicitacoes.getConfirmacoes.invalidate();
+      setModoComparecimento(false);
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const activeEmployees = useMemo(() => {
     return (employeesQuery.data || []).filter((e: any) => e.status === "Ativo" && !e.deletedAt);
@@ -1504,6 +1717,148 @@ export default function SolicitacaoHE() {
                 );
               })()}
 
+              {/* ═══ CONFIRMAÇÃO DE PRESENÇA ═══ */}
+              {(() => {
+                const funcs = sol.funcionarios || [];
+                const confs = confirmQ.data || [];
+                const confirmadosSet = new Set(confs.map((c: any) => c.employeeId));
+                const pendentes = funcs.filter((f: any) => !confirmadosSet.has(f.employeeId));
+                const totalConf = confs.length;
+                const totalFuncs = funcs.length;
+                const compareceuList = confs.filter((c: any) => c.compareceu === true);
+                const ausenteList = confs.filter((c: any) => c.compareceu === false);
+                const semRegistro = confs.filter((c: any) => c.compareceu === null);
+
+                return (
+                  <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ClipboardCheck className="h-4 w-4 text-amber-700" />
+                        <span className="font-bold text-sm text-amber-800">
+                          Confirmação de Presença — {totalConf}/{totalFuncs} assinaram
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {ausenteList.length > 0 && (
+                          <Badge className="bg-red-100 text-red-800 border-red-300 text-xs">
+                            {ausenteList.length} ausente(s)
+                          </Badge>
+                        )}
+                        {compareceuList.length > 0 && (
+                          <Badge className="bg-green-100 text-green-800 border-green-300 text-xs">
+                            {compareceuList.length} compareceu
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {pendentes.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-amber-700">Aguardando assinatura:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {pendentes.map((f: any) => (
+                            <button
+                              key={f.employeeId}
+                              type="button"
+                              onClick={() => { setAssinaturaEmployeeId(f.employeeId); setAssinaturaEmployeeName(f.employeeName || `ID ${f.employeeId}`); }}
+                              className="flex items-center gap-1.5 bg-white border border-amber-300 rounded-lg px-3 py-2 text-sm hover:bg-amber-100 transition-colors"
+                            >
+                              <SquarePen className="h-3.5 w-3.5 text-amber-600" />
+                              <span className="font-medium">{f.employeeName || `ID ${f.employeeId}`}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {totalConf > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-green-700">Já confirmaram ({totalConf}):</p>
+                          {semRegistro.length > 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                              onClick={() => setModoComparecimento(!modoComparecimento)}
+                            >
+                              <UserCheck className="h-3 w-3 mr-1" />
+                              {modoComparecimento ? "Cancelar" : "Registrar Comparecimento"}
+                            </Button>
+                          )}
+                        </div>
+                        <div className="divide-y divide-amber-200 border border-amber-200 rounded-lg overflow-hidden bg-white">
+                          {confs.map((c: any) => (
+                            <div key={c.id} className={`px-3 py-2 flex items-center gap-3 text-sm ${c.compareceu === false ? "bg-red-50" : c.compareceu === true ? "bg-green-50" : ""}`}>
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium">{c.nomeCompleto || `ID ${c.employeeId}`}</span>
+                                {c.matricula && <span className="text-xs text-muted-foreground ml-1">({c.matricula})</span>}
+                                {c.cargo && <span className="text-xs text-muted-foreground ml-1">— {c.cargo}</span>}
+                              </div>
+                              <div className="text-xs text-muted-foreground shrink-0">
+                                {c.confirmedAt && new Date(c.confirmedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                              {c.compareceu === true && (
+                                <Badge className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0">
+                                  <UserCheck className="h-3 w-3 mr-1" /> Compareceu
+                                </Badge>
+                              )}
+                              {c.compareceu === false && (
+                                <Badge className="bg-red-100 text-red-800 border-red-300 text-xs shrink-0">
+                                  <UserX className="h-3 w-3 mr-1" /> Ausente
+                                </Badge>
+                              )}
+                              {c.compareceu === null && !modoComparecimento && (
+                                <Badge variant="outline" className="text-xs shrink-0">Aguardando</Badge>
+                              )}
+                              {c.compareceu === null && modoComparecimento && (
+                                <div className="flex gap-1 shrink-0">
+                                  <Button size="sm" className="h-6 text-xs bg-green-600 hover:bg-green-700 px-2"
+                                    onClick={() => comparecMut.mutate({ solicitacaoId: sol.id, registros: [{ employeeId: c.employeeId, compareceu: true }] })}
+                                    disabled={comparecMut.isPending}
+                                  >
+                                    <UserCheck className="h-3 w-3" />
+                                  </Button>
+                                  <Button size="sm" variant="destructive" className="h-6 text-xs px-2"
+                                    onClick={() => comparecMut.mutate({ solicitacaoId: sol.id, registros: [{ employeeId: c.employeeId, compareceu: false, observacao: "Confirmou presença mas não compareceu" }] })}
+                                    disabled={comparecMut.isPending}
+                                  >
+                                    <UserX className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              )}
+                              {c.observacao && c.compareceu === false && (
+                                <span className="text-xs text-red-600 italic">{c.observacao}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {modoComparecimento && semRegistro.length > 1 && (
+                          <div className="flex gap-2 pt-1">
+                            <Button size="sm" className="text-xs bg-green-600 hover:bg-green-700"
+                              onClick={() => comparecMut.mutate({ solicitacaoId: sol.id, registros: semRegistro.map((c: any) => ({ employeeId: c.employeeId, compareceu: true })) })}
+                              disabled={comparecMut.isPending}
+                            >
+                              <UserCheck className="h-3 w-3 mr-1" /> Todos compareceram
+                            </Button>
+                            <Button size="sm" variant="destructive" className="text-xs"
+                              onClick={() => comparecMut.mutate({ solicitacaoId: sol.id, registros: semRegistro.map((c: any) => ({ employeeId: c.employeeId, compareceu: false, observacao: "Confirmou presença mas não compareceu" })) })}
+                              disabled={comparecMut.isPending}
+                            >
+                              <UserX className="h-3 w-3 mr-1" /> Todos ausentes
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {totalConf === 0 && totalFuncs > 0 && (
+                      <p className="text-xs text-amber-600">Nenhuma confirmação coletada ainda. Clique no nome do funcionário para colher a assinatura.</p>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Histórico de decisão (se já teve) */}
               {sol.aprovadoPor && (
                 <div className={`rounded-lg p-4 ${sol.status === "aprovada" ? "bg-green-50 border border-green-200" : sol.status === "rejeitada" ? "bg-red-50 border border-red-200" : "bg-gray-50 border"}`}>
@@ -1626,6 +1981,23 @@ export default function SolicitacaoHE() {
           <div className="text-center py-12 text-muted-foreground">Solicitação não encontrada</div>
         )}
       </FullScreenDialog>
+
+      {assinaturaEmployeeId && detailSolId && detailQuery.data && (
+        <SignatureModal
+          open={!!assinaturaEmployeeId}
+          onClose={() => { setAssinaturaEmployeeId(null); setAssinaturaEmployeeName(""); }}
+          employeeName={assinaturaEmployeeName}
+          solicitacao={detailQuery.data}
+          onConfirm={(base64: string) => {
+            confirmarMut.mutate({
+              solicitacaoId: detailQuery.data!.id,
+              employeeId: assinaturaEmployeeId!,
+              assinaturaBase64: base64,
+            });
+          }}
+          isPending={confirmarMut.isPending}
+        />
+      )}
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
 

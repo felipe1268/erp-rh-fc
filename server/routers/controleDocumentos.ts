@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1080,6 +1080,24 @@ export const controleDocumentosRouter = router({
         .where(eq(obraHorasRateio.employeeId, input.employeeId))
         .orderBy(desc(obraHorasRateio.mesAno));
 
+      const empHeConfirmacoes = await db.select({
+        id: heSolicitacaoConfirmacoes.id,
+        solicitacaoId: heSolicitacaoConfirmacoes.solicitacaoId,
+        confirmedAt: heSolicitacaoConfirmacoes.confirmedAt,
+        compareceu: heSolicitacaoConfirmacoes.compareceu,
+        registradoPor: heSolicitacaoConfirmacoes.registradoPor,
+        registradoEm: heSolicitacaoConfirmacoes.registradoEm,
+        observacao: heSolicitacaoConfirmacoes.observacao,
+        dataSolicitacao: heSolicitacoes.dataSolicitacao,
+        horaInicio: heSolicitacoes.horaInicio,
+        horaFim: heSolicitacoes.horaFim,
+        motivo: heSolicitacoes.motivo,
+        statusSol: heSolicitacoes.status,
+      }).from(heSolicitacaoConfirmacoes)
+        .innerJoin(heSolicitacoes, eq(heSolicitacoes.id, heSolicitacaoConfirmacoes.solicitacaoId))
+        .where(eq(heSolicitacaoConfirmacoes.employeeId, input.employeeId))
+        .orderBy(desc(heSolicitacaoConfirmacoes.confirmedAt));
+
       // HORAS EXTRAS - TODOS os registros de pagamentos extras tipo HE
       const empHorasExtras = await db.select().from(extraPayments)
         .where(and(
@@ -1302,6 +1320,19 @@ export const controleDocumentosRouter = router({
       processosComAndamentos.forEach((p: any) => {
         if (p.dataAbertura) {
           timeline.push({ data: p.dataAbertura, tipo: 'Processo Trabalhista', descricao: `Processo nº ${p.numeroProcesso || '-'} — ${p.status || '-'}`, cor: 'red', icone: 'gavel' });
+        }
+      });
+
+      empHeConfirmacoes.forEach(c => {
+        const dataEvt = c.dataSolicitacao || (c.confirmedAt ? new Date(c.confirmedAt).toISOString().split("T")[0] : null);
+        if (!dataEvt) return;
+        const horario = c.horaInicio && c.horaFim ? ` (${c.horaInicio}–${c.horaFim})` : "";
+        if (c.compareceu === false) {
+          timeline.push({ data: dataEvt, tipo: "HE — Ausência Confirmada", descricao: `Confirmou presença na HE${horario} mas NÃO compareceu. Motivo HE: ${c.motivo || "-"}${c.observacao ? `. Obs: ${c.observacao}` : ""}`, cor: "red", icone: "user-x" });
+        } else if (c.compareceu === true) {
+          timeline.push({ data: dataEvt, tipo: "HE — Presença Confirmada", descricao: `Confirmou e compareceu à HE${horario}. Motivo: ${c.motivo || "-"}`, cor: "green", icone: "user-check" });
+        } else {
+          timeline.push({ data: dataEvt, tipo: "HE — Assinatura Confirmação", descricao: `Assinou confirmação de presença para HE${horario}. Aguardando registro de comparecimento.`, cor: "amber", icone: "pen-tool" });
         }
       });
 
