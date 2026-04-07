@@ -18,7 +18,7 @@ import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
   Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare,
-  UserCircle, ShieldCheck, FileSearch, Truck, Users, Layers, ArrowRightLeft, Sparkles, RotateCw,
+  UserCircle, ShieldCheck, FileSearch, Truck, Users, Layers, ArrowRightLeft, Sparkles, RotateCw, Car,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -704,10 +704,14 @@ export default function Solicitacoes() {
     titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "",
     tipo: "material" as "material" | "servico" | "pacote" | "equipamento",
     incluirEquipamentos: false,
+    vehicleId: "" as string,
   });
   const [obraSearch, setObraSearch] = useState("");
   const [obraOpen, setObraOpen] = useState(false);
   const obraRef = useRef<HTMLDivElement>(null);
+  const [veiculoSearch, setVeiculoSearch] = useState("");
+  const [veiculoOpen, setVeiculoOpen] = useState(false);
+  const veiculoRef = useRef<HTMLDivElement>(null);
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
   const [recebQtd, setRecebQtd] = useState<Record<number, string>>({});
   const [selectedEapIds, setSelectedEapIds] = useState<Set<number>>(new Set());
@@ -760,6 +764,7 @@ export default function Solicitacoes() {
     if (abaScDetalhe === "oc" && !scOcId) setAbaScDetalhe("detalhes");
   }, [abaScDetalhe, scCotacaoId, scOcId]);
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
+  const veiculosQ = trpc.frotas.listVehicles.useQuery({ companyId }, { enabled: companyId > 0, staleTime: 600000 });
   const eapQ = trpc.compras.getEapParaObra.useQuery(
     { obraId: parseInt(form.obraId), companyId },
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 }
@@ -1028,8 +1033,9 @@ export default function Solicitacoes() {
   }, [batchSaldoQ.data]);
 
   function resetForm() {
-    setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "", tipo: "material" });
+    setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "", tipo: "material", incluirEquipamentos: false, vehicleId: "" });
     setObraSearch(""); setObraOpen(false);
+    setVeiculoSearch(""); setVeiculoOpen(false);
     setItens([newItem()]);
     setSelectedEapIds(new Set());
     setEapSearch(""); setModoSC("eap");
@@ -1273,7 +1279,7 @@ export default function Solicitacoes() {
 
   async function handleSalvar() {
     if (!form.titulo.trim()) return toast.error("Informe o título da solicitação.");
-    if (!form.obraId || form.obraId === "none") return toast.error("Selecione a Obra (centro de custo) para esta solicitação.");
+    if (!form.obraId && modoSC !== "manual") return toast.error("Selecione a Obra ou use o modo Manual para compras sem obra.");
 
     let itensParaSalvar = itens;
     if (modoSC === "insumo") {
@@ -1413,7 +1419,8 @@ export default function Solicitacoes() {
         id: editingSc.id,
         companyId: editingSc.companyId,
         titulo: form.titulo,
-        obraId: parseInt(form.obraId) || null,
+        obraId: form.obraId && form.obraId !== "0" ? parseInt(form.obraId) : null,
+        vehicleId: form.vehicleId ? parseInt(form.vehicleId) : null,
         dataNecessidade: form.dataNecessidade || undefined,
         prioridade: form.prioridade,
         observacoes: form.observacoes || undefined,
@@ -1426,7 +1433,8 @@ export default function Solicitacoes() {
         companyId,
         solicitanteId: user?.id ? parseInt(String(user.id)) : undefined,
         titulo: form.titulo,
-        obraId: parseInt(form.obraId),
+        obraId: form.obraId && form.obraId !== "0" ? parseInt(form.obraId) : null,
+        vehicleId: form.vehicleId ? parseInt(form.vehicleId) : null,
         dataNecessidade: form.dataNecessidade || undefined,
         prioridade: form.prioridade,
         observacoes: form.observacoes || undefined,
@@ -1469,6 +1477,7 @@ export default function Solicitacoes() {
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (obraRef.current && !obraRef.current.contains(e.target as Node)) setObraOpen(false);
+      if (veiculoRef.current && !veiculoRef.current.contains(e.target as Node)) setVeiculoOpen(false);
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -1813,7 +1822,7 @@ export default function Solicitacoes() {
             {/* Obra — combobox com busca */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-700 flex items-center gap-1">
-                <Building2 className="h-3 w-3 text-amber-600" /> Obra / Centro de Custo *
+                <Building2 className="h-3 w-3 text-amber-600" /> Obra / Centro de Custo
               </label>
               <div className="relative" ref={obraRef}>
                 <input
@@ -1822,9 +1831,11 @@ export default function Solicitacoes() {
                   value={obraOpen
                     ? obraSearch
                     : form.obraId
-                      ? (obras.find((o: any) => String(o.id) === form.obraId) as any)
-                          ? `${(obras.find((o: any) => String(o.id) === form.obraId) as any)?.codigo ? `[${(obras.find((o: any) => String(o.id) === form.obraId) as any).codigo}] ` : ""}${(obras.find((o: any) => String(o.id) === form.obraId) as any)?.nome}`
-                          : ""
+                      ? form.obraId === "0"
+                        ? "Escritório Central / Sem Obra"
+                        : (obras.find((o: any) => String(o.id) === form.obraId) as any)
+                            ? `${(obras.find((o: any) => String(o.id) === form.obraId) as any)?.codigo ? `[${(obras.find((o: any) => String(o.id) === form.obraId) as any).codigo}] ` : ""}${(obras.find((o: any) => String(o.id) === form.obraId) as any)?.nome}`
+                            : ""
                       : ""
                   }
                   onFocus={() => { setObraOpen(true); setObraSearch(""); }}
@@ -1832,6 +1843,20 @@ export default function Solicitacoes() {
                 />
                 {obraOpen && (
                   <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-52 overflow-y-auto">
+                    <div
+                      className={`px-3 py-1.5 text-sm cursor-pointer hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 flex items-center gap-1.5 ${form.obraId === "0" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600"}`}
+                      onMouseDown={e => {
+                        e.preventDefault();
+                        setForm(p => ({ ...p, obraId: "0" }));
+                        setModoSC("manual");
+                        setSelectedEapIds(new Set());
+                        setItens([newItem()]);
+                        setObraSearch("");
+                        setObraOpen(false);
+                      }}
+                    >
+                      <Building2 className="h-3 w-3" /> Escritório Central / Sem Obra
+                    </div>
                     {obrasFiltradas.length === 0 ? (
                       <div className="px-3 py-2 text-sm text-gray-400">Nenhuma obra encontrada</div>
                     ) : obrasFiltradas.map((o: any) => (
@@ -1856,8 +1881,59 @@ export default function Solicitacoes() {
               </div>
             </div>
 
+            {/* Veículo (opcional) */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-700 flex items-center gap-1">
+                <Car className="h-3 w-3 text-cyan-600" /> Veículo / Placa <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <div className="relative" ref={veiculoRef}>
+                <input
+                  className="w-full h-8 px-3 text-sm border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent"
+                  placeholder="Digite a placa ou nome do veículo..."
+                  value={veiculoOpen
+                    ? veiculoSearch
+                    : form.vehicleId
+                      ? (() => { const v = (veiculosQ.data || []).find((v: any) => String(v.id) === form.vehicleId); return v ? `${v.placa} — ${v.nome || v.modelo || ""}` : ""; })()
+                      : ""
+                  }
+                  onFocus={() => { setVeiculoOpen(true); setVeiculoSearch(""); }}
+                  onChange={e => { setVeiculoSearch(e.target.value); setVeiculoOpen(true); }}
+                />
+                {form.vehicleId && !veiculoOpen && (
+                  <button type="button" onClick={() => setForm(p => ({ ...p, vehicleId: "" }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {veiculoOpen && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-52 overflow-y-auto">
+                    {(() => {
+                      const veiculos = (veiculosQ.data || []) as any[];
+                      const filtered = veiculoSearch
+                        ? veiculos.filter((v: any) => `${v.placa} ${v.nome || ""} ${v.modelo || ""}`.toLowerCase().includes(veiculoSearch.toLowerCase()))
+                        : veiculos;
+                      if (filtered.length === 0) return <div className="px-3 py-2 text-sm text-gray-400">Nenhum veículo encontrado</div>;
+                      return filtered.slice(0, 20).map((v: any) => (
+                        <div
+                          key={v.id}
+                          className={`px-3 py-1.5 text-sm cursor-pointer hover:bg-cyan-50 hover:text-cyan-700 ${String(v.id) === form.vehicleId ? "bg-cyan-50 text-cyan-700 font-medium" : "text-gray-900"}`}
+                          onMouseDown={e => {
+                            e.preventDefault();
+                            setForm(p => ({ ...p, vehicleId: String(v.id) }));
+                            setVeiculoSearch("");
+                            setVeiculoOpen(false);
+                          }}
+                        >
+                          <span className="font-medium">{v.placa}</span> <span className="text-gray-400">—</span> {v.nome || v.modelo || ""}
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Modo SC: EAP ou Manual */}
-            {form.obraId && (
+            {(form.obraId && form.obraId !== "0") && (
               <div className="space-y-2">
                 <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
                   <button
@@ -3050,6 +3126,7 @@ export default function Solicitacoes() {
                 {[
                   { label: "Obra", value: nomeObra(detalhe.obraId) ?? "—" },
                   { label: "Setor", value: detalhe.departamento || "—" },
+                  { label: "Veículo", value: (() => { const vid = (detalhe as any).vehicleId; if (!vid) return "—"; const v = (veiculosQ.data || []).find((ve: any) => ve.id === vid); return v ? `${v.placa} — ${v.nome || v.modelo || ""}` : `#${vid}`; })() },
                   { label: "Necessidade", value: detalhe.dataNecessidade ? new Date(detalhe.dataNecessidade + "T00:00:00").toLocaleDateString("pt-BR") : "—" },
                   { label: "Prioridade", value: detalhe.prioridade ? (detalhe.prioridade.charAt(0).toUpperCase() + detalhe.prioridade.slice(1)) : "Normal" },
                   { label: "Criado em", value: new Date(detalhe.criadoEm).toLocaleDateString("pt-BR") },
@@ -3386,11 +3463,14 @@ export default function Solicitacoes() {
                         prioridade: detalhe.prioridade || "normal",
                         observacoes: detalhe.observacoes || "",
                         tipo: scTipo,
+                        incluirEquipamentos: (detalhe as any).incluirEquipamentos || false,
+                        vehicleId: (detalhe as any).vehicleId ? String((detalhe as any).vehicleId) : "",
                       });
                       if (detalhe.obraId) {
                         const obra = obrasQ.data?.find((o: any) => o.id === detalhe.obraId);
                         if (obra) setObraSearch(obra.nome || "");
                       }
+                      setVeiculoSearch(""); setVeiculoOpen(false);
                       const scItens = (detalhe.itens as any[]).map((it: any): ItemForm => ({
                         descricao: it.descricao || "",
                         unidade: it.unidade || "un",

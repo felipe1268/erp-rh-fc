@@ -1539,6 +1539,10 @@ Responda APENAS com um objeto JSON no formato:
         aprovadoEm: sc.aprovadoEm,
         observacoes: sc.observacoes,
         imagemReferenciaUrl: sc.imagemReferenciaUrl,
+        vehicleId: sc.vehicleId,
+        maintenanceId: sc.maintenanceId,
+        origemModulo: sc.origemModulo,
+        incluirEquipamentos: sc.incluirEquipamentos,
         criadoEm: sc.criadoEm,
         atualizadoEm: sc.atualizadoEm,
         itens: itens || [],
@@ -1569,6 +1573,7 @@ Responda APENAS com um objeto JSON no formato:
       obraId: z.number().nullable().optional(),
       projetoId: z.number().nullable().optional(),
       solicitanteId: z.number().nullable().optional(),
+      vehicleId: z.number().nullable().optional(),
       departamento: z.string().optional(),
       titulo: z.string().optional(),
       prioridade: z.string().optional(),
@@ -1599,6 +1604,11 @@ Responda APENAS com um objeto JSON no formato:
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      if (input.vehicleId) {
+        const vRows = await db.execute(sql`SELECT id FROM vehicles WHERE id = ${input.vehicleId} AND "companyId" = ${input.companyId}`);
+        const vr = (vRows as any).rows || vRows;
+        if (!vr || vr.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Veículo não encontrado ou não pertence a esta empresa." });
+      }
       const count = await db.select({ c: sql<number>`count(*)` }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId));
       const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
       const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
@@ -1609,6 +1619,7 @@ Responda APENAS com um objeto JSON no formato:
         obraId: input.obraId ?? null,
         projetoId: input.projetoId ?? null,
         solicitanteId: input.solicitanteId ?? null,
+        vehicleId: input.vehicleId ?? null,
         departamento: input.departamento,
         titulo: normalizarTexto(input.titulo),
         prioridade: input.prioridade ?? "normal",
@@ -7569,6 +7580,7 @@ Retorne APENAS um JSON válido neste formato:
       dataNecessidade: z.string().optional(),
       observacoes: z.string().optional(),
       obraId: z.number().nullable().optional(),
+      vehicleId: z.number().nullable().optional(),
       tipo: z.string().optional(),
       itens: z.array(z.object({
         id: z.number().optional(),
@@ -7617,6 +7629,12 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
+      if (input.vehicleId) {
+        const vRows = await db.execute(sql`SELECT id FROM vehicles WHERE id = ${input.vehicleId} AND "companyId" = ${input.companyId}`);
+        const vr = (vRows as any).rows || vRows;
+        if (!vr || vr.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Veículo não encontrado ou não pertence a esta empresa." });
+      }
+
       await db.update(comprasSolicitacoes).set({
         titulo: input.titulo ? normalizarTexto(input.titulo) : sc.titulo,
         departamento: input.departamento ?? sc.departamento,
@@ -7624,6 +7642,7 @@ Retorne APENAS um JSON válido neste formato:
         dataNecessidade: input.dataNecessidade ?? sc.dataNecessidade,
         observacoes: input.observacoes !== undefined ? input.observacoes : sc.observacoes,
         obraId: input.obraId !== undefined ? input.obraId : sc.obraId,
+        vehicleId: input.vehicleId !== undefined ? input.vehicleId : (sc as any).vehicleId,
         tipo: input.tipo ?? sc.tipo,
         atualizadoEm: new Date().toISOString(),
       }).where(eq(comprasSolicitacoes.id, input.id));
