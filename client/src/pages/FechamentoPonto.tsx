@@ -107,7 +107,7 @@ function navigateToAdvertencia(setLocation: (path: string) => void, employeeId: 
   }));
   setLocation("/controle-documentos?tab=advertencias&action=nova");
 }
-type CardFilter = null | "colaboradores" | "registros" | "inconsistencias" | "ajustes" | "multiplasObras" | "conflitos";
+type CardFilter = null | "colaboradores" | "registros" | "inconsistencias" | "ajustes" | "multiplasObras" | "conflitos" | "inativos";
 
 const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -853,6 +853,7 @@ export default function FechamentoPonto() {
     }
     if (cardFilter === "ajustes") data = data.filter((e: any) => e.temAjusteManual);
     if (cardFilter === "multiplasObras") data = data.filter((e: any) => e.multiplasObras);
+    if (cardFilter === "inativos") data = data.filter((e: any) => e.alertaInativo);
     if (cardFilter === "conflitos") {
       const conflitosEmpIds = new Set((conflitos.data || []).map((c: any) => c.employeeId));
       data = data.filter((e: any) => conflitosEmpIds.has(e.employeeId));
@@ -1340,7 +1341,7 @@ export default function FechamentoPonto() {
         )}
 
         {/* ALERTA MÚLTIPLAS OBRAS */}
-        {multiSiteCount > 0 && cardFilter !== "multiplasObras" && cardFilter !== "conflitos" && (
+        {multiSiteCount > 0 && cardFilter !== "multiplasObras" && cardFilter !== "conflitos" && cardFilter !== "inativos" && (
           <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 flex items-start gap-3 cursor-pointer hover:bg-red-100/50 transition-colors"
             onClick={() => { setViewMode("resumo"); setCardFilter("multiplasObras"); }}>
             <MapPin className="h-6 w-6 text-red-600 shrink-0 mt-0.5" />
@@ -1355,8 +1356,9 @@ export default function FechamentoPonto() {
           </div>
         )}
 
-        {inativoCount > 0 && (
-          <div className="bg-rose-50 border-2 border-rose-400 rounded-xl p-4 flex items-start gap-3">
+        {inativoCount > 0 && cardFilter !== "inativos" && (
+          <div className="bg-rose-50 border-2 border-rose-400 rounded-xl p-4 flex items-start gap-3 cursor-pointer hover:bg-rose-100/50 transition-colors"
+            onClick={() => { setViewMode("resumo"); setCardFilter("inativos"); }}>
             <AlertCircle className="h-6 w-6 text-rose-600 shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="font-bold text-rose-800 text-base">Funcionários Inativos com Registros de Ponto</p>
@@ -1699,6 +1701,9 @@ export default function FechamentoPonto() {
                           Resumo por Colaborador — {formatMesAno(mesAno)}
                           {cardFilter === "multiplasObras" && (
                             <Badge variant="destructive" className="ml-2 text-xs"><MapPin className="h-3 w-3 mr-1" /> Múltiplas Obras</Badge>
+                          )}
+                          {cardFilter === "inativos" && (
+                            <Badge className="ml-2 text-xs bg-rose-100 text-rose-700"><AlertCircle className="h-3 w-3 mr-1" /> Inativos com Ponto</Badge>
                           )}
                           {cardFilter === "ajustes" && (
                             <Badge className="ml-2 text-xs bg-purple-100 text-purple-700"><PenLine className="h-3 w-3 mr-1" /> Ajustes Manuais</Badge>
