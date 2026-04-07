@@ -70,15 +70,21 @@ export default function ControleKm() {
   const coletarMut = trpc.frotas.coletarKmDiario.useMutation({
     onSuccess: (res: any) => {
       if (res.erro) {
-        toast.error("Erro na coleta: " + res.erro);
-      } else {
-        toast.success(`Km coletado! ${res.coletados} veículos com movimentação registrada.`);
+        console.warn("[FleetKm] Coleta automática erro:", res.erro);
+      } else if (res.coletados > 0) {
         dailyKmQ.refetch();
         refetch();
       }
     },
-    onError: (err) => toast.error(err.message),
   });
+
+  const coletaFeitaRef = useRef(false);
+  useEffect(() => {
+    if (companyId && !coletaFeitaRef.current) {
+      coletaFeitaRef.current = true;
+      coletarMut.mutate({ companyId });
+    }
+  }, [companyId]);
 
   const tripsQuery = trpc.frotas.getInfleetTrips.useQuery(
     {
@@ -215,14 +221,11 @@ export default function ControleKm() {
               <span className="text-gray-400">a</span>
               <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-36 h-9 text-sm" />
             </div>
-            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? "animate-spin" : ""}`} />
-              Atualizar
-            </Button>
-            <Button size="sm" onClick={() => coletarMut.mutate({ companyId })} disabled={coletarMut.isPending} className="bg-cyan-600 hover:bg-cyan-700">
-              {coletarMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Navigation className="h-4 w-4 mr-1" />}
-              Coletar Km Hoje
-            </Button>
+            {coletarMut.isPending && (
+              <span className="text-xs text-cyan-600 flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" /> Atualizando dados...
+              </span>
+            )}
           </div>
         </div>
 
@@ -625,7 +628,7 @@ export default function ControleKm() {
                       <div className="text-center py-10 text-gray-400">
                         <Navigation className="h-10 w-10 mx-auto mb-2 opacity-30" />
                         <p>Nenhum dado catalogado ainda para este período.</p>
-                        <p className="text-xs mt-1">Clique em "Coletar Km Hoje" para iniciar a coleta.</p>
+                        <p className="text-xs mt-1">Os dados são coletados automaticamente a cada 30 minutos.</p>
                       </div>
                     ) : (() => {
                       const dailyRecords = dailyKmQ.data || [];
