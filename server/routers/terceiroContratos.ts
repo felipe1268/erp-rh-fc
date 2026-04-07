@@ -110,6 +110,7 @@ export const terceiroContratosRouter = router({
 
       let itens: any[] = itensRaw;
       let itensHierarchy: any[] = [];
+      let cronogramaRevisaoInfo: { numero: number; descricao: string | null; dataRevisao: string; status: string | null; isBaseline: boolean | null } | null = null;
       const eapCodes = [...new Set(itensRaw.map(it => (it as any).eapCodigo).filter(Boolean))] as string[];
       if (eapCodes.length > 0 && contrato.obraId) {
         try {
@@ -118,11 +119,19 @@ export const terceiroContratosRouter = router({
             .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
             .orderBy(desc(planejamentoProjetos.id)).limit(1);
           if (proj) {
-            const [rev] = await db.select({ id: planejamentoRevisoes.id })
+            const [rev] = await db.select({
+              id: planejamentoRevisoes.id,
+              numero: planejamentoRevisoes.numero,
+              descricao: planejamentoRevisoes.descricao,
+              dataRevisao: planejamentoRevisoes.dataRevisao,
+              status: planejamentoRevisoes.status,
+              isBaseline: planejamentoRevisoes.isBaseline,
+            })
               .from(planejamentoRevisoes)
               .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
               .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
             if (rev) {
+              cronogramaRevisaoInfo = { numero: rev.numero, descricao: rev.descricao, dataRevisao: rev.dataRevisao, status: rev.status, isBaseline: rev.isBaseline };
               const allAtividades = await db.select({
                 eapCodigo: planejamentoAtividades.eapCodigo,
                 nome: planejamentoAtividades.nome,
@@ -211,6 +220,27 @@ export const terceiroContratosRouter = router({
                 return { ...it, atividadeNome: atv?.nome ?? null, atividadeDataInicio: atv?.dataInicio ?? null, atividadeDataFim: atv?.dataFim ?? null, atividadeNivel: atv?.nivel ?? null, origemPath };
               });
             }
+          }
+        } catch {}
+      }
+
+      if (!cronogramaRevisaoInfo && contrato.obraId) {
+        try {
+          const [proj] = await db.select({ id: planejamentoProjetos.id })
+            .from(planejamentoProjetos)
+            .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
+            .orderBy(desc(planejamentoProjetos.id)).limit(1);
+          if (proj) {
+            const [rev] = await db.select({
+              numero: planejamentoRevisoes.numero,
+              descricao: planejamentoRevisoes.descricao,
+              dataRevisao: planejamentoRevisoes.dataRevisao,
+              status: planejamentoRevisoes.status,
+              isBaseline: planejamentoRevisoes.isBaseline,
+            }).from(planejamentoRevisoes)
+              .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+              .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
+            if (rev) cronogramaRevisaoInfo = { numero: rev.numero, descricao: rev.descricao, dataRevisao: rev.dataRevisao, status: rev.status, isBaseline: rev.isBaseline };
           }
         } catch {}
       }
@@ -313,6 +343,7 @@ export const terceiroContratosRouter = router({
         docsComPendencia: documentos.filter(d => d.status === "pendente" && d.bloqueiaPagemento).length,
         assinaturaStatus,
         portalLogin,
+        cronogramaRevisaoInfo,
       };
       } catch (err: any) { console.error("[getContrato] ERRO:", err?.message || err); throw err; }
     }),
@@ -409,6 +440,7 @@ export const terceiroContratosRouter = router({
       fluxogramaEtapas: z.string().max(5000).optional(),
       prazoEmissaoNf: z.number().min(1).max(60).optional(),
       prazoLiberacaoOp: z.number().min(1).max(60).optional(),
+      textoContrato: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -429,6 +461,7 @@ export const terceiroContratosRouter = router({
       if (rest.fluxogramaEtapas !== undefined) upd.fluxogramaEtapas = rest.fluxogramaEtapas;
       if (rest.prazoEmissaoNf !== undefined) upd.prazoEmissaoNf = rest.prazoEmissaoNf;
       if (rest.prazoLiberacaoOp !== undefined) upd.prazoLiberacaoOp = rest.prazoLiberacaoOp;
+      if (rest.textoContrato !== undefined) upd.textoContrato = rest.textoContrato;
       const [c] = await db.update(terceiroContratos).set(upd).where(and(eq(terceiroContratos.id, id), eq(terceiroContratos.companyId, companyId))).returning();
       if (!c) throw new Error("Contrato não encontrado");
       return c;
@@ -3027,6 +3060,8 @@ CLÁUSULA SEGUNDA – DO PRAZO
 
 2.1 Os serviços deverão ser iniciados em {{DATA_INICIO}} e concluídos até {{DATA_TERMINO}}, salvo prorrogação por acordo escrito entre as partes.
 
+2.2 As datas acima foram definidas com base na revisão do cronograma: {{REVISAO_CRONOGRAMA}}.
+
 CLÁUSULA TERCEIRA – DO VALOR E FORMA DE PAGAMENTO
 
 3.1 O valor total do presente contrato é de {{VALOR_TOTAL}}, a ser pago conforme medições mensais dos serviços executados, mediante aprovação da CONTRATANTE.
@@ -3094,6 +3129,31 @@ TESTEMUNHAS:
         .where(eq(terceiroContratoItens.contratoId, input.contratoId))
         .orderBy(asc(terceiroContratoItens.ordem), asc(terceiroContratoItens.eapCodigo));
 
+      let revisaoCronoLabel = "";
+      if (contrato.obraId) {
+        try {
+          const [proj] = await db.select({ id: planejamentoProjetos.id })
+            .from(planejamentoProjetos)
+            .where(and(eq(planejamentoProjetos.companyId, contrato.companyId), eq(planejamentoProjetos.obraId, contrato.obraId)))
+            .orderBy(desc(planejamentoProjetos.id)).limit(1);
+          if (proj) {
+            const [rev] = await db.select({
+              numero: planejamentoRevisoes.numero,
+              descricao: planejamentoRevisoes.descricao,
+              dataRevisao: planejamentoRevisoes.dataRevisao,
+              isBaseline: planejamentoRevisoes.isBaseline,
+            }).from(planejamentoRevisoes)
+              .where(and(eq(planejamentoRevisoes.projetoId, proj.id), eq(planejamentoRevisoes.status, "aprovada")))
+              .orderBy(desc(planejamentoRevisoes.numero)).limit(1);
+            if (rev) {
+              const nomeRev = rev.isBaseline ? `Baseline (Rev ${String(rev.numero).padStart(2, "0")})` : `Rev ${String(rev.numero).padStart(2, "0")}`;
+              const descPart = rev.descricao ? ` — ${rev.descricao}` : "";
+              revisaoCronoLabel = `${nomeRev}${descPart}`;
+            }
+          }
+        } catch {}
+      }
+
       const fmtDate = (d: string | null | undefined) => {
         if (!d) return "___/___/______";
         const [y, m, day] = d.slice(0, 10).split("-");
@@ -3156,6 +3216,7 @@ TESTEMUNHAS:
         "QTD_ITENS": String(itensContrato.length),
         "TESTEMUNHA_FINANCEIRO": contrato.testemunhaFinanceiro ?? "_______________",
         "TESTEMUNHA_GESTOR_PROJETO": contrato.testemunhaGestorProjeto ?? obra?.responsavel ?? "_______________",
+        "REVISAO_CRONOGRAMA": revisaoCronoLabel || "—",
       };
 
       let texto = template.texto;

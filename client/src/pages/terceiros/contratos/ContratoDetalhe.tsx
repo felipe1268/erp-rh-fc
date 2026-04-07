@@ -84,6 +84,8 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [showObsModal, setShowObsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [logoError, setLogoError] = useState(false);
+  const [editingDocDate, setEditingDocDate] = useState<"inicio" | "termino" | null>(null);
+  const [editDocDateValue, setEditDocDateValue] = useState("");
 
   const utils = trpc.useUtils();
   const { data: contrato, isLoading } = trpc.terceiroContratos.getContrato.useQuery({ id }, { enabled: id > 0 });
@@ -94,7 +96,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   });
 
   const atualizarContratoMut = trpc.terceiroContratos.atualizarContrato.useMutation({
-    onSuccess: () => { toast.success("Contrato atualizado!"); utils.terceiroContratos.getContrato.invalidate({ id }); setEditingDates(false); setEditingCriterios(false); },
+    onSuccess: () => { toast.success("Contrato atualizado!"); utils.terceiroContratos.getContrato.invalidate({ id }); setEditingDates(false); setEditingCriterios(false); setEditingDocDate(null); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -349,6 +351,27 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                         <div className={`h-full rounded-full transition-all ${corBarra}`} style={{ width: `${pctDecorrido}%` }} />
                       </div>
                       <p className="text-[10px] text-gray-500 mt-1 text-right">{pctDecorrido.toFixed(0)}% decorrido</p>
+                    </div>
+                  )}
+                  {(contrato as any).cronogramaRevisaoInfo && (
+                    <div className="mt-3 flex items-center gap-2 text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                      <Clock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <span>
+                        Revisão do cronograma considerada:{" "}
+                        <span className="font-semibold text-gray-700">
+                          {(contrato as any).cronogramaRevisaoInfo.isBaseline ? "Baseline " : ""}
+                          (Rev {String((contrato as any).cronogramaRevisaoInfo.numero).padStart(2, "0")})
+                        </span>
+                        {(contrato as any).cronogramaRevisaoInfo.descricao && (
+                          <span className="text-gray-400"> — {(contrato as any).cronogramaRevisaoInfo.descricao}</span>
+                        )}
+                        <span className="ml-2 text-gray-400">
+                          Data: {fmtDate((contrato as any).cronogramaRevisaoInfo.dataRevisao)}
+                        </span>
+                      </span>
+                      <Badge className="text-[9px] bg-green-50 text-green-600 border-green-200 ml-auto">
+                        {(contrato as any).cronogramaRevisaoInfo.status}
+                      </Badge>
                     </div>
                   )}
                 </>
@@ -754,8 +777,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           if (contrato.numeroContrato) autoFilledValues.add(contrato.numeroContrato);
           if (contrato.descricao) autoFilledValues.add(contrato.descricao);
           if (contrato.valorTotal && Number(contrato.valorTotal) > 0) autoFilledValues.add(BRL(contrato.valorTotal));
-          if (contrato.dataInicio) autoFilledValues.add(fmtDate(contrato.dataInicio));
-          if (contrato.dataTermino) autoFilledValues.add(fmtDate(contrato.dataTermino));
+          
           if (contrato.empresa?.logradouro) {
             const endEmpresa = [contrato.empresa.logradouro, contrato.empresa.numero, contrato.empresa.bairro, contrato.empresa.cidade, contrato.empresa.estado].filter(Boolean).join(", ");
             if (endEmpresa) autoFilledValues.add(endEmpresa);
@@ -763,16 +785,149 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           if (contrato.empresa?.responsavelNome) autoFilledValues.add(contrato.empresa.responsavelNome);
           if ((contrato as any).obraNome) autoFilledValues.add((contrato as any).obraNome);
 
-          const highlightAutoFilled = (text: string) => {
-            if (autoFilledValues.size === 0) return text;
+          const fmtDI = contrato.dataInicio ? fmtDate(contrato.dataInicio) : null;
+          const fmtDT = contrato.dataTermino ? fmtDate(contrato.dataTermino) : null;
+          const datesAreSame = fmtDI && fmtDT && fmtDI === fmtDT;
+
+          const prazoPattern = /iniciados?\s+em\s+(\d{2}\/\d{2}\/\d{4})\s+e\s+conclu[ií]dos?\s+at[ée]\s+(\d{2}\/\d{2}\/\d{4})/i;
+
+          const saveDocDateInline = (tipo: "inicio" | "termino", newIso: string) => {
+            const oldFormatted = tipo === "inicio" ? fmtDI : fmtDT;
+            const newFormatted = fmtDate(newIso);
+            let updatedText: string | undefined;
+            if (oldFormatted && textoAtual) {
+              updatedText = textoAtual.replace(prazoPattern, (match, d1, d2) => {
+                if (tipo === "inicio") return match.replace(d1, newFormatted);
+                return match.replace(d2, newFormatted);
+              });
+              if (updatedText === textoAtual) {
+                updatedText = undefined;
+              }
+            }
+            atualizarContratoMut.mutate({
+              id,
+              companyId: contrato.companyId,
+              ...(tipo === "inicio" ? { dataInicio: newIso } : { dataTermino: newIso }),
+              ...(updatedText ? { textoContrato: updatedText } : {}),
+            });
+            if (updatedText) setTextoEditado(null);
+            setEditingDocDate(null);
+          };
+
+          const renderDateSpan = (part: string, tipo: "inicio" | "termino", key: number) => {
+            if (editingDocDate === tipo) {
+              return (
+                <span key={key} className="inline-flex items-center gap-1">
+                  <input
+                    type="date"
+                    className="border border-blue-400 rounded px-1.5 py-0.5 text-[12px] bg-white shadow-sm focus:ring-2 focus:ring-blue-300 outline-none"
+                    value={editDocDateValue}
+                    onChange={e => setEditDocDateValue(e.target.value)}
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && editDocDateValue) saveDocDateInline(tipo, editDocDateValue);
+                      if (e.key === "Escape") setEditingDocDate(null);
+                    }}
+                  />
+                  <button
+                    onClick={() => editDocDateValue && saveDocDateInline(tipo, editDocDateValue)}
+                    className="text-green-600 hover:text-green-800 p-0.5"
+                    title="Salvar"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setEditingDocDate(null)}
+                    className="text-gray-400 hover:text-gray-600 p-0.5"
+                    title="Cancelar"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              );
+            }
+            return (
+              <span
+                key={key}
+                className="bg-blue-50 text-blue-700 border-b-2 border-blue-400 px-0.5 rounded-sm font-medium cursor-pointer hover:bg-blue-100 hover:border-blue-600 transition-colors"
+                title={`Clique para editar a data de ${tipo === "inicio" ? "início" : "término"}`}
+                onClick={() => {
+                  const iso = tipo === "inicio" ? contrato.dataInicio : contrato.dataTermino;
+                  setEditDocDateValue(iso?.slice(0, 10) || "");
+                  setEditingDocDate(tipo);
+                }}
+              >
+                <Pencil className="w-3 h-3 inline mr-0.5 opacity-50" />{part}
+              </span>
+            );
+          };
+
+          const highlightAutoFilled = (text: string, lineCtx?: string): any => {
+            const isPrazoLine = prazoPattern.test(lineCtx || text);
+
+            if (isPrazoLine && (fmtDI || fmtDT)) {
+              const match = (lineCtx || text).match(prazoPattern);
+              if (match) {
+                const result: any[] = [];
+                let remaining = text;
+                let keyIdx = 0;
+
+                const processDate = (dateStr: string, tipo: "inicio" | "termino") => {
+                  const idx = remaining.indexOf(dateStr);
+                  if (idx === -1) return;
+                  if (idx > 0) {
+                    const before = remaining.slice(0, idx);
+                    result.push(...highlightNonDate(before, keyIdx));
+                    keyIdx += 10;
+                  }
+                  result.push(renderDateSpan(dateStr, tipo, keyIdx++));
+                  remaining = remaining.slice(idx + dateStr.length);
+                };
+
+                if (datesAreSame) {
+                  const firstIdx = remaining.indexOf(fmtDI!);
+                  if (firstIdx !== -1) {
+                    if (firstIdx > 0) {
+                      result.push(...highlightNonDate(remaining.slice(0, firstIdx), keyIdx));
+                      keyIdx += 10;
+                    }
+                    result.push(renderDateSpan(fmtDI!, "inicio", keyIdx++));
+                    remaining = remaining.slice(firstIdx + fmtDI!.length);
+                    const secondIdx = remaining.indexOf(fmtDT!);
+                    if (secondIdx !== -1) {
+                      if (secondIdx > 0) {
+                        result.push(...highlightNonDate(remaining.slice(0, secondIdx), keyIdx));
+                        keyIdx += 10;
+                      }
+                      result.push(renderDateSpan(fmtDT!, "termino", keyIdx++));
+                      remaining = remaining.slice(secondIdx + fmtDT!.length);
+                    }
+                  }
+                } else {
+                  if (fmtDI) processDate(fmtDI, "inicio");
+                  if (fmtDT) processDate(fmtDT, "termino");
+                }
+
+                if (remaining) {
+                  result.push(...highlightNonDate(remaining, keyIdx));
+                }
+                return result;
+              }
+            }
+
+            return highlightNonDate(text, 0);
+          };
+
+          const highlightNonDate = (text: string, startKey: number): any[] => {
+            if (autoFilledValues.size === 0) return [text];
             const escaped = [...autoFilledValues].filter(v => v && v.length > 2).map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-            if (escaped.length === 0) return text;
+            if (escaped.length === 0) return [text];
             const regex = new RegExp(`(${escaped.join("|")})`, "g");
             const parts = text.split(regex);
-            if (parts.length === 1) return text;
+            if (parts.length === 1) return [text];
             return parts.map((part, i) =>
               autoFilledValues.has(part)
-                ? <span key={i} className="bg-blue-50 text-blue-700 border-b-2 border-blue-300 px-0.5 rounded-sm font-medium" title="Preenchido automaticamente">{part}</span>
+                ? <span key={startKey + i} className="bg-blue-50 text-blue-700 border-b-2 border-blue-300 px-0.5 rounded-sm font-medium" title="Preenchido automaticamente">{part}</span>
                 : part
             );
           };

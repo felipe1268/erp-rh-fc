@@ -45,6 +45,7 @@ const VARIAVEIS: { chave: string; descricao: string; categoria: string }[] = [
   { chave: "{{QTD_ITENS}}", descricao: "Quantidade de itens/atividades do contrato", categoria: "Contrato" },
   { chave: "{{TESTEMUNHA_FINANCEIRO}}", descricao: "Nome do responsável financeiro (testemunha 1)", categoria: "Testemunhas" },
   { chave: "{{TESTEMUNHA_GESTOR_PROJETO}}", descricao: "Nome do gestor de projeto (testemunha 2)", categoria: "Testemunhas" },
+  { chave: "{{REVISAO_CRONOGRAMA}}", descricao: "Revisão do cronograma considerada para o prazo (ex: Baseline Rev 00)", categoria: "Contrato" },
 ];
 
 const TEMPLATE_PADRAO = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS Nº {{NUMERO_CONTRATO}}
@@ -66,6 +67,8 @@ CLÁUSULA PRIMEIRA – DO OBJETO
 CLÁUSULA SEGUNDA – DO PRAZO
 
 2.1 Os serviços deverão ser iniciados em {{DATA_INICIO}} e concluídos até {{DATA_TERMINO}}, salvo prorrogação por acordo escrito entre as partes.
+
+2.2 As datas acima foram definidas com base na revisão do cronograma: {{REVISAO_CRONOGRAMA}}.
 
 CLÁUSULA TERCEIRA – DO VALOR E FORMA DE PAGAMENTO
 
@@ -345,7 +348,8 @@ EAP          | Descrição                                             | Un    |
              |                                                       |       |           |         TOTAL: |    R$ 8.955,98`)
     .replace(/\{\{QTD_ITENS\}\}/g, "2")
     .replace(/\{\{TESTEMUNHA_FINANCEIRO\}\}/g, "Maria Souza")
-    .replace(/\{\{TESTEMUNHA_GESTOR_PROJETO\}\}/g, "Carlos Oliveira");
+    .replace(/\{\{TESTEMUNHA_GESTOR_PROJETO\}\}/g, "Carlos Oliveira")
+    .replace(/\{\{REVISAO_CRONOGRAMA\}\}/g, "Baseline (Rev 00)");
 
   return (
     <DashboardLayout noPadding>
