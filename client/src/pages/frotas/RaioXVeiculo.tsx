@@ -15,6 +15,53 @@ import React, { useState, useMemo, useCallback } from "react";
 function fmt(v: any) { return Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtDate(d: any) { if (!d) return "—"; const s = String(d).split("T")[0]; return s.split("-").reverse().join("/"); }
 
+const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+function YearMonthFilter({ ano, mes, onAno, onMes, dataField, items }: {
+  ano: number; mes: number | null;
+  onAno: (a: number) => void; onMes: (m: number | null) => void;
+  dataField: string; items: any[];
+}) {
+  const mesesComDados = useMemo(() => {
+    const set = new Set<number>();
+    for (const item of items) {
+      const d = item[dataField];
+      if (!d) continue;
+      const dt = new Date(String(d).split("T")[0] + "T00:00:00");
+      if (dt.getFullYear() === ano) set.add(dt.getMonth());
+    }
+    return set;
+  }, [items, ano, dataField]);
+
+  return (
+    <div className="mb-4 space-y-2">
+      <div className="flex items-center gap-3">
+        <button onClick={() => { onAno(ano - 1); onMes(null); }} className="p-1 hover:bg-slate-100 rounded"><ChevronDown className="w-4 h-4 rotate-90" /></button>
+        <span className="text-sm font-bold text-slate-700 min-w-[50px] text-center">{ano}</span>
+        <button onClick={() => { onAno(ano + 1); onMes(null); }} className="p-1 hover:bg-slate-100 rounded"><ChevronUp className="w-4 h-4 rotate-90" /></button>
+        {mes !== null && (
+          <button onClick={() => onMes(null)} className="ml-2 text-xs text-blue-600 hover:underline">Todos os meses</button>
+        )}
+      </div>
+      <div className="flex gap-1 flex-wrap">
+        {MESES.map((m, i) => {
+          const temDado = mesesComDados.has(i);
+          const ativo = mes === i;
+          return (
+            <button key={i} onClick={() => onMes(ativo ? null : i)}
+              className={`px-3 py-1.5 text-xs rounded-full transition-all font-medium ${
+                ativo ? "bg-orange-500 text-white shadow-sm" :
+                temDado ? "bg-orange-100 text-orange-700 hover:bg-orange-200" :
+                "bg-slate-100 text-slate-400"
+              }`}
+            >{m}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const TIPO_CORES: Record<string, { bg: string; icon: any; label: string }> = {
   manutencao: { bg: "bg-orange-500", icon: Wrench, label: "Manutenção" },
   combustivel: { bg: "bg-amber-500", icon: Fuel, label: "Combustível" },
@@ -40,6 +87,8 @@ export default function RaioXVeiculo() {
   const [timelineFilter, setTimelineFilter] = useState<string>("todos");
   const [expandedTimeline, setExpandedTimeline] = useState(false);
   const [expandedManut, setExpandedManut] = useState<number | null>(null);
+  const [filterAno, setFilterAno] = useState(new Date().getFullYear());
+  const [filterMes, setFilterMes] = useState<number | null>(null);
 
   const { data: vehicles } = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
   const { data: raioX, isLoading } = trpc.frotas.getVehicleRaioX.useQuery(
@@ -600,12 +649,29 @@ export default function RaioXVeiculo() {
           </Card>
         )}
 
-        {!isLoading && raioX && tab === "manutencoes" && (
+        {!isLoading && raioX && tab === "manutencoes" && (() => {
+          const allManut = raioX.manutencoes || [];
+          const filteredManut = allManut.filter((m: any) => {
+            const d = m.data_manutencao;
+            if (!d) return false;
+            const dt = new Date(String(d).split("T")[0] + "T00:00:00");
+            if (dt.getFullYear() !== filterAno) return false;
+            if (filterMes !== null && dt.getMonth() !== filterMes) return false;
+            return true;
+          });
+          const totalFiltrado = filteredManut.reduce((s: number, m: any) => s + Number(m.custo || 0), 0);
+          return (
           <Card className="border-0 shadow-md">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2"><Wrench className="h-4 w-4 text-orange-500" /> Histórico de Manutenções ({raioX.manutencoes?.length || 0})</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2"><Wrench className="h-4 w-4 text-orange-500" /> Histórico de Manutenções ({filteredManut.length}{filteredManut.length !== allManut.length ? ` de ${allManut.length}` : ""})</CardTitle>
             </CardHeader>
             <CardContent>
+              <YearMonthFilter ano={filterAno} mes={filterMes} onAno={setFilterAno} onMes={setFilterMes} dataField="data_manutencao" items={allManut} />
+              {filteredManut.length > 0 && (
+                <div className="flex justify-end mb-2">
+                  <span className="text-xs font-semibold text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-3 py-1">Total: R$ {fmt(totalFiltrado)}</span>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
@@ -619,7 +685,7 @@ export default function RaioXVeiculo() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(raioX.manutencoes || []).map((m: any) => {
+                    {filteredManut.map((m: any) => {
                       const isExpanded = expandedManut === m.id;
                       const itens = m.itens || [];
                       const hasItens = itens.length > 0;
@@ -691,31 +757,47 @@ export default function RaioXVeiculo() {
                     })}
                   </tbody>
                 </table>
-                {(!raioX.manutencoes || raioX.manutencoes.length === 0) && <p className="text-xs text-slate-400 text-center py-6">Nenhuma manutenção registrada</p>}
+                {filteredManut.length === 0 && <p className="text-xs text-slate-400 text-center py-6">Nenhuma manutenção {filterMes !== null ? `em ${MESES[filterMes]}/${filterAno}` : `em ${filterAno}`}</p>}
               </div>
             </CardContent>
           </Card>
-        )}
+          );
+        })()}
 
-        {!isLoading && raioX && tab === "combustivel" && (
+        {!isLoading && raioX && tab === "combustivel" && (() => {
+          const allComb = raioX.combustivel || [];
+          const filteredComb = allComb.filter((f: any) => {
+            const d = f.data;
+            if (!d) return false;
+            const dt = new Date(String(d).split("T")[0] + "T00:00:00");
+            if (dt.getFullYear() !== filterAno) return false;
+            if (filterMes !== null && dt.getMonth() !== filterMes) return false;
+            return true;
+          });
+          const totalLitros = filteredComb.reduce((s: number, f: any) => s + Number(f.litros || 0), 0);
+          const cComConsumo = filteredComb.filter((f: any) => Number(f.consumo_km_l) > 0);
+          const consumoMedio = cComConsumo.length > 0 ? (cComConsumo.reduce((s: number, f: any) => s + Number(f.consumo_km_l), 0) / cComConsumo.length).toFixed(1) : "—";
+          const gastoTotal = filteredComb.reduce((s: number, f: any) => s + Number(f.valor_total || 0), 0);
+          return (
           <Card className="border-0 shadow-md">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2"><Fuel className="h-4 w-4 text-amber-500" /> Histórico de Abastecimentos ({raioX.combustivel?.length || 0})</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2"><Fuel className="h-4 w-4 text-amber-500" /> Histórico de Abastecimentos ({filteredComb.length}{filteredComb.length !== allComb.length ? ` de ${allComb.length}` : ""})</CardTitle>
             </CardHeader>
             <CardContent>
-              {raioX.combustivel?.length > 0 && (
+              <YearMonthFilter ano={filterAno} mes={filterMes} onAno={setFilterAno} onMes={setFilterMes} dataField="data" items={allComb} />
+              {filteredComb.length > 0 && (
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950 border border-amber-100 dark:border-amber-800 text-center">
                     <p className="text-[10px] text-amber-600">Total Litros</p>
-                    <p className="text-lg font-bold text-amber-700">{raioX.combustivel.reduce((s: number, f: any) => s + Number(f.litros || 0), 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}L</p>
+                    <p className="text-lg font-bold text-amber-700">{totalLitros.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}L</p>
                   </div>
                   <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950 border border-emerald-100 dark:border-emerald-800 text-center">
                     <p className="text-[10px] text-emerald-600">Consumo Médio</p>
-                    <p className="text-lg font-bold text-emerald-700">{(() => { const c = raioX.combustivel.filter((f: any) => Number(f.consumo_km_l) > 0); return c.length > 0 ? (c.reduce((s: number, f: any) => s + Number(f.consumo_km_l), 0) / c.length).toFixed(1) : "—"; })()} km/L</p>
+                    <p className="text-lg font-bold text-emerald-700">{consumoMedio} km/L</p>
                   </div>
                   <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950 border border-blue-100 dark:border-blue-800 text-center">
                     <p className="text-[10px] text-blue-600">Gasto Total</p>
-                    <p className="text-lg font-bold text-blue-700">R$ {fmt(tco?.combustivel)}</p>
+                    <p className="text-lg font-bold text-blue-700">R$ {fmt(gastoTotal)}</p>
                   </div>
                 </div>
               )}
@@ -733,7 +815,7 @@ export default function RaioXVeiculo() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(raioX.combustivel || []).slice(0, 50).map((f: any) => (
+                    {filteredComb.map((f: any) => (
                       <tr key={f.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td className="p-2">{fmtDate(f.data)}</td>
                         <td className="p-2 text-right">{Number(f.litros).toFixed(1)}</td>
@@ -746,11 +828,12 @@ export default function RaioXVeiculo() {
                     ))}
                   </tbody>
                 </table>
-                {(!raioX.combustivel || raioX.combustivel.length === 0) && <p className="text-xs text-slate-400 text-center py-6">Nenhum abastecimento registrado</p>}
+                {filteredComb.length === 0 && <p className="text-xs text-slate-400 text-center py-6">Nenhum abastecimento {filterMes !== null ? `em ${MESES[filterMes]}/${filterAno}` : `em ${filterAno}`}</p>}
               </div>
             </CardContent>
           </Card>
-        )}
+          );
+        })()}
 
         {!isLoading && raioX && tab === "custos" && (
           <div className="space-y-4">
