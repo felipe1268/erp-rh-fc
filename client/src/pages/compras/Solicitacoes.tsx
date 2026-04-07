@@ -122,7 +122,7 @@ function DocLinks({ docs, prefix, route, navigate }: { docs: { id: number; numer
 function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ, classificarMut, corrigirMut, renomearMut, onAddItem, itensNaSC }: {
   open: boolean; onClose: () => void; orcamentoId?: number; companyId: number;
   disciplinasQ: any; classificarMut: any; corrigirMut: any; renomearMut: any;
-  onAddItem: (item: any) => void;
+  onAddItem: (item: any, qtdOverride?: number) => void;
   itensNaSC?: string[];
 }) {
   const [expandido, setExpandido] = useState<string | null>(null);
@@ -133,6 +133,7 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [moverSelecionadosPara, setMoverSelecionadosPara] = useState("");
   const [showMoverSelecionados, setShowMoverSelecionados] = useState(false);
+  const [qtdCustom, setQtdCustom] = useState<Record<string, string>>({});
 
   const data = disciplinasQ.data;
   const status = data?.status;
@@ -167,9 +168,12 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
   const selKey = (disc: string, eap: string) => `${disc}||${eap}`;
   const parseSelKey = (k: string) => { const [disc, eap] = k.split("||"); return { disc, eap }; };
 
-  const toggleItem = (disc: string, eap: string) => {
+  const toggleItem = (disc: string, eap: string, saldo?: number) => {
     const k = selKey(disc, eap);
     setSelecionados(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+    if (!selecionados.has(k) && saldo !== undefined && !qtdCustom[k]) {
+      setQtdCustom(prev => ({ ...prev, [k]: String(saldo > 0 ? saldo : 0) }));
+    }
   };
 
   const toggleDisciplina = (disc: any) => {
@@ -181,6 +185,16 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
       else { keys.forEach((k: string) => n.add(k)); }
       return n;
     });
+    if (!allSelected) {
+      setQtdCustom(prev => {
+        const n = { ...prev };
+        disc.itens.forEach((i: any) => {
+          const k = selKey(disc.nome, i.eapCodigo);
+          if (!n[k]) n[k] = String(i.saldo > 0 ? i.saldo : 0);
+        });
+        return n;
+      });
+    }
   };
 
   const isDisciplinaAllSelected = (disc: any) => disc.itens.length > 0 && disc.itens.every((i: any) => selecionados.has(selKey(disc.nome, i.eapCodigo)));
@@ -392,7 +406,7 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                               <input
                                 type="checkbox"
                                 checked={selecionados.has(selKey(disc.nome, item.eapCodigo))}
-                                onChange={() => toggleItem(disc.nome, item.eapCodigo)}
+                                onChange={() => toggleItem(disc.nome, item.eapCodigo, item.saldo)}
                                 className="h-3.5 w-3.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer accent-violet-600 shrink-0"
                               />
                               <code className="text-violet-700 font-mono text-[10px] bg-violet-50 px-1.5 py-0.5 rounded">{item.eapCodigo}</code>
@@ -407,6 +421,20 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                             <span className={`w-14 text-right font-medium ${item.saldo > 0 ? "text-emerald-600" : item.saldo < 0 ? "text-red-600" : "text-gray-400"}`}>
                               {item.saldo > 0 ? `+${item.saldo}` : item.saldo}
                             </span>
+                            {selecionados.has(selKey(disc.nome, item.eapCodigo)) && item.saldo > 0 && (
+                              <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                <span className="text-[10px] text-gray-500">Qtd:</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={item.saldo}
+                                  step="any"
+                                  value={qtdCustom[selKey(disc.nome, item.eapCodigo)] ?? String(item.saldo)}
+                                  onChange={e => setQtdCustom(prev => ({ ...prev, [selKey(disc.nome, item.eapCodigo)]: e.target.value }))}
+                                  className="w-16 h-6 px-1.5 text-xs text-right border border-violet-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                />
+                              </div>
+                            )}
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                               item.status === "contratado" ? "bg-emerald-100 text-emerald-700" :
                               item.status === "parcial" ? "bg-amber-100 text-amber-700" :
@@ -428,7 +456,11 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={() => onAddItem(item)}
+                                  onClick={() => {
+                                    const k = selKey(disc.nome, item.eapCodigo);
+                                    const customQtd = qtdCustom[k] ? parseFloat(qtdCustom[k]) : undefined;
+                                    onAddItem(item, customQtd && customQtd > 0 ? customQtd : undefined);
+                                  }}
                                   className="text-violet-600 hover:text-violet-800 font-medium flex items-center gap-0.5"
                                 >
                                   <Plus className="h-3 w-3" /> SC
@@ -471,12 +503,18 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                 const d = disciplinas.find((dd: any) => dd.nome === i.disciplinaOriginal);
                 const item = d?.itens?.find((it: any) => it.eapCodigo === i.eapCodigo);
                 if (item && item.status === "contratado") { skippedContratado++; return; }
-                if (item && item.saldo > 0) { onAddItem(item); added++; }
+                if (item && item.saldo > 0) {
+                  const k = selKey(i.disciplinaOriginal, i.eapCodigo);
+                  const customQtd = qtdCustom[k] ? parseFloat(qtdCustom[k]) : undefined;
+                  const qtdFinal = customQtd && customQtd > 0 ? customQtd : undefined;
+                  onAddItem(item, qtdFinal);
+                  added++;
+                }
               });
               if (skippedContratado > 0) toast.warning(`${skippedContratado} ite${skippedContratado > 1 ? "ns" : "m"} ignorado${skippedContratado > 1 ? "s" : ""} — escopo já 100% contratado em outra(s) SC`);
               if (added === 0 && skippedContratado === 0) toast.info("Nenhum item novo para adicionar (já estão na SC ou sem saldo)");
               else if (added > 0) toast.success(`${added} ite${added > 1 ? "ns" : "m"} adicionado${added > 1 ? "s" : ""} à SC`);
-              setSelecionados(new Set());
+              setSelecionados(new Set()); setQtdCustom({});
             }}>
               <Plus className="h-3.5 w-3.5" /> Adicionar à SC ({(() => {
                 const info = selecionadosInfo();
@@ -4132,12 +4170,13 @@ export default function Solicitacoes() {
         corrigirMut={corrigirMut}
         renomearMut={renomearMut}
         itensNaSC={itens.filter(i => i.eapCodigo).map(i => i.eapCodigo!)}
-        onAddItem={(item: any) => {
+        onAddItem={(item: any, qtdOverride?: number) => {
+          const qtd = qtdOverride ?? (item.saldo > 0 ? item.saldo : item.qtdOrcada);
           const newItem: ItemForm = {
             eapCodigo: item.eapCodigo,
             descricao: item.descricao,
             unidade: item.unidade,
-            quantidade: String(item.saldo > 0 ? item.saldo : item.qtdOrcada),
+            quantidade: String(qtd),
             observacoes: "",
             origemEap: true,
           };
@@ -4146,7 +4185,6 @@ export default function Solicitacoes() {
               toast.info(`Item ${item.eapCodigo} já está na SC`);
               return prev;
             }
-            toast.success(`Item ${item.eapCodigo} adicionado à SC`);
             return [...prev, newItem];
           });
         }}
