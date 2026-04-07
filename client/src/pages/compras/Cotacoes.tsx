@@ -3087,7 +3087,7 @@ export default function Cotacoes() {
                                                 {salvarRespostas.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} {salvarRespostas.isPending ? `${Math.round(salvarProgress ?? 0)}%` : "Salvar"}
                                               </Button>
                                               <Button size="sm" variant="outline"
-                                                onClick={() => { setDescontoModal({ fornecedorId: p.fornecedorId }); setDescontoTipo("valor"); setDescontoValor(""); setDescontoPreviewing(false); }}
+                                                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setDescontoModal({ fornecedorId: p.fornecedorId }); setDescontoTipo("valor"); setDescontoValor(""); setDescontoPreviewing(false); }}
                                                 className="h-6 text-[10px] border-amber-200 text-amber-700 hover:bg-amber-50 gap-1 px-2">
                                                 <TrendingDown className="h-3 w-3" /> Desconto
                                               </Button>
