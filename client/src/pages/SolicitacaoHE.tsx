@@ -16,9 +16,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { fmtNum } from "@/lib/formatters";
 import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import {
   Clock, Plus, CheckCircle, CheckCircle2, XCircle, AlertTriangle, Send,
   Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare, Trash2, History, Ban,
   TrendingUp, DollarSign, HardHat, Search, X, PenTool, UserCheck, UserX, ClipboardCheck, SquarePen,
+  ShieldAlert,
 } from "lucide-react";
 
 type TabType = "solicitar" | "aprovacoes" | "historico";
@@ -361,6 +366,8 @@ export default function SolicitacaoHE() {
   const [assinaturaEmployeeName, setAssinaturaEmployeeName] = useState("");
   const [modoComparecimento, setModoComparecimento] = useState(false);
   const [verAssinatura, setVerAssinatura] = useState<number | null>(null);
+  const [ausenciaDialog, setAusenciaDialog] = useState<{ employeeId: number; nome: string; solicitacaoId: number; bulk?: { employeeId: number; nome: string }[] } | null>(null);
+  const [justificativaTexto, setJustificativaTexto] = useState("");
 
   const confirmQ = trpc.heSolicitacoes.getConfirmacoes.useQuery(
     { solicitacaoId: detailSolId! },
@@ -1845,7 +1852,10 @@ export default function SolicitacaoHE() {
                                       <UserCheck className="h-3 w-3" />
                                     </Button>
                                     <Button size="sm" variant="destructive" className="h-6 text-xs px-2"
-                                      onClick={() => comparecMut.mutate({ solicitacaoId: sol.id, registros: [{ employeeId: c.employeeId, compareceu: false, observacao: "Confirmou presença mas não compareceu" }] })}
+                                      onClick={() => {
+                                        setAusenciaDialog({ employeeId: c.employeeId, nome: c.nomeCompleto || "Funcionário", solicitacaoId: sol.id });
+                                        setJustificativaTexto("");
+                                      }}
                                       disabled={comparecMut.isPending}
                                     >
                                       <UserX className="h-3 w-3" />
@@ -1898,7 +1908,16 @@ export default function SolicitacaoHE() {
                               <UserCheck className="h-3 w-3 mr-1" /> Todos compareceram
                             </Button>
                             <Button size="sm" variant="destructive" className="text-xs"
-                              onClick={() => comparecMut.mutate({ solicitacaoId: sol.id, registros: semRegistro.map((c: any) => ({ employeeId: c.employeeId, compareceu: false, observacao: "Confirmou presença mas não compareceu" })) })}
+                              onClick={() => {
+                                const primeiro = semRegistro[0];
+                                setAusenciaDialog({
+                                  employeeId: primeiro.employeeId,
+                                  nome: "Todos os funcionários pendentes",
+                                  solicitacaoId: sol.id,
+                                  bulk: semRegistro.map((c: any) => ({ employeeId: c.employeeId, nome: c.nomeCompleto || "Funcionário" }))
+                                });
+                                setJustificativaTexto("");
+                              }}
                               disabled={comparecMut.isPending}
                             >
                               <UserX className="h-3 w-3 mr-1" /> Todos ausentes
@@ -2141,6 +2160,103 @@ export default function SolicitacaoHE() {
           )}
         </div>
       </FullScreenDialog>
+
+    <AlertDialog open={!!ausenciaDialog} onOpenChange={(open) => { if (!open) setAusenciaDialog(null); }}>
+      <AlertDialogContent className="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-red-700">
+            <ShieldAlert className="h-5 w-5" />
+            Ausência — {ausenciaDialog?.bulk ? `${ausenciaDialog.bulk.length} funcionários` : ausenciaDialog?.nome}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-sm text-gray-700 space-y-3">
+            <p>O funcionário apresentou justificativa para a ausência?</p>
+            <div className="space-y-1.5">
+              <Label htmlFor="justificativa-texto" className="text-xs font-medium">Observação (opcional):</Label>
+              <Textarea
+                id="justificativa-texto"
+                placeholder="Ex: atestado médico, compromisso pessoal..."
+                value={justificativaTexto}
+                onChange={(e) => setJustificativaTexto(e.target.value)}
+                className="text-sm h-16"
+              />
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          <AlertDialogCancel className="text-sm">Cancelar</AlertDialogCancel>
+          <Button
+            className="bg-amber-600 hover:bg-amber-700 text-white text-sm"
+            disabled={comparecMut.isPending}
+            onClick={() => {
+              if (!ausenciaDialog) return;
+              const registros = ausenciaDialog.bulk
+                ? ausenciaDialog.bulk.map((f) => ({
+                    employeeId: f.employeeId,
+                    compareceu: false,
+                    observacao: justificativaTexto
+                      ? `Falta justificada: ${justificativaTexto}`
+                      : "Falta justificada",
+                  }))
+                : [{
+                    employeeId: ausenciaDialog.employeeId,
+                    compareceu: false,
+                    observacao: justificativaTexto
+                      ? `Falta justificada: ${justificativaTexto}`
+                      : "Falta justificada",
+                  }];
+              comparecMut.mutate(
+                { solicitacaoId: ausenciaDialog.solicitacaoId, registros },
+                { onSuccess: () => setAusenciaDialog(null) }
+              );
+            }}
+          >
+            <CheckCircle2 className="h-4 w-4 mr-1" />
+            Sim, justificou
+          </Button>
+          <Button
+            variant="destructive"
+            className="text-sm"
+            disabled={comparecMut.isPending}
+            onClick={() => {
+              if (!ausenciaDialog) return;
+              const registros = ausenciaDialog.bulk
+                ? ausenciaDialog.bulk.map((f) => ({
+                    employeeId: f.employeeId,
+                    compareceu: false,
+                    observacao: justificativaTexto
+                      ? `Falta NÃO justificada — pendente de advertência. Obs: ${justificativaTexto}`
+                      : "Falta NÃO justificada — pendente de advertência",
+                  }))
+                : [{
+                    employeeId: ausenciaDialog.employeeId,
+                    compareceu: false,
+                    observacao: justificativaTexto
+                      ? `Falta NÃO justificada — pendente de advertência. Obs: ${justificativaTexto}`
+                      : "Falta NÃO justificada — pendente de advertência",
+                  }];
+              comparecMut.mutate(
+                { solicitacaoId: ausenciaDialog.solicitacaoId, registros },
+                {
+                  onSuccess: () => {
+                    setAusenciaDialog(null);
+                    const nomes = ausenciaDialog.bulk
+                      ? ausenciaDialog.bulk.map((f) => f.nome).join(", ")
+                      : ausenciaDialog.nome;
+                    toast.warning(
+                      `⚠️ Falta não justificada registrada para: ${nomes}. Providenciar advertência.`,
+                      { duration: 10000 }
+                    );
+                  },
+                }
+              );
+            }}
+          >
+            <ShieldAlert className="h-4 w-4 mr-1" />
+            Não justificou — Advertência
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     <PrintFooterLGPD />
     </DashboardLayout>
