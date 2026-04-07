@@ -51,6 +51,7 @@ export default function ControleKm() {
   const [routeDate, setRouteDate] = useState("");
   const [editMotoristaId, setEditMotoristaId] = useState<number | null>(null);
   const [editMotoristaVal, setEditMotoristaVal] = useState("");
+  const [motoristaBusca, setMotoristaBusca] = useState("");
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
@@ -79,6 +80,18 @@ export default function ControleKm() {
       }
     },
   });
+
+  const employeesQ = trpc.employees.list.useQuery(
+    { companyId, excludeTerminated: true },
+    { enabled: !!companyId && editMotoristaId !== null, staleTime: 300000 }
+  );
+  const funcionariosAtivos = useMemo(() => {
+    if (!employeesQ.data) return [];
+    return (employeesQ.data as any[])
+      .filter((e: any) => e.status === "ativo")
+      .map((e: any) => e.nomeCompleto)
+      .sort((a: string, b: string) => a.localeCompare(b, "pt-BR"));
+  }, [employeesQ.data]);
 
   const motoristaMut = trpc.frotas.atualizarMotorista.useMutation({
     onSuccess: () => {
@@ -755,26 +768,52 @@ export default function ControleKm() {
                                         </td>
                                         <td className="py-2 px-3 text-gray-500 text-xs">
                                           {editMotoristaId === r.id ? (
-                                            <div className="flex items-center gap-1">
-                                              <input
-                                                className="border rounded px-1.5 py-0.5 text-xs w-36"
-                                                value={editMotoristaVal}
-                                                onChange={e => setEditMotoristaVal(e.target.value)}
-                                                autoFocus
-                                                onKeyDown={e => {
-                                                  if (e.key === "Enter") motoristaMut.mutate({ id: r.id, motorista: editMotoristaVal });
-                                                  if (e.key === "Escape") setEditMotoristaId(null);
-                                                }}
-                                              />
-                                              <button type="button" onClick={() => motoristaMut.mutate({ id: r.id, motorista: editMotoristaVal })} className="text-emerald-600 hover:text-emerald-700 p-0.5"><Check className="h-3 w-3" /></button>
-                                              <button type="button" onClick={() => setEditMotoristaId(null)} className="text-gray-400 hover:text-gray-600 p-0.5"><X className="h-3 w-3" /></button>
+                                            <div className="relative flex items-center gap-1">
+                                              <div className="relative">
+                                                <input
+                                                  className="border rounded px-1.5 py-0.5 text-xs w-48"
+                                                  value={motoristaBusca}
+                                                  onChange={e => { setMotoristaBusca(e.target.value); setEditMotoristaVal(""); }}
+                                                  autoFocus
+                                                  placeholder="Buscar funcionário..."
+                                                  onKeyDown={e => {
+                                                    if (e.key === "Escape") { setEditMotoristaId(null); setMotoristaBusca(""); }
+                                                    if (e.key === "Enter" && editMotoristaVal) motoristaMut.mutate({ id: r.id, motorista: editMotoristaVal });
+                                                  }}
+                                                />
+                                                {motoristaBusca.length >= 2 && !editMotoristaVal && (
+                                                  <div className="absolute z-50 top-full left-0 mt-1 w-64 max-h-48 overflow-y-auto bg-white border rounded-lg shadow-lg">
+                                                    {funcionariosAtivos.filter((n: string) => n.toLowerCase().includes(motoristaBusca.toLowerCase())).length === 0 ? (
+                                                      <div className="px-3 py-2 text-xs text-gray-400">Nenhum funcionário encontrado</div>
+                                                    ) : (
+                                                      funcionariosAtivos.filter((n: string) => n.toLowerCase().includes(motoristaBusca.toLowerCase())).slice(0, 15).map((nome: string) => (
+                                                        <button
+                                                          key={nome}
+                                                          type="button"
+                                                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-cyan-50 hover:text-cyan-700 transition-colors"
+                                                          onClick={() => { setEditMotoristaVal(nome); setMotoristaBusca(nome); }}
+                                                        >
+                                                          {nome}
+                                                        </button>
+                                                      ))
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={() => { if (editMotoristaVal) motoristaMut.mutate({ id: r.id, motorista: editMotoristaVal }); }}
+                                                disabled={!editMotoristaVal}
+                                                className={`p-0.5 ${editMotoristaVal ? "text-emerald-600 hover:text-emerald-700" : "text-gray-300"}`}
+                                              ><Check className="h-3 w-3" /></button>
+                                              <button type="button" onClick={() => { setEditMotoristaId(null); setMotoristaBusca(""); }} className="text-gray-400 hover:text-gray-600 p-0.5"><X className="h-3 w-3" /></button>
                                             </div>
                                           ) : (
                                             <button
                                               type="button"
                                               className="text-left hover:text-cyan-700 hover:underline cursor-pointer"
-                                              title="Clique para editar motorista"
-                                              onClick={() => { setEditMotoristaId(r.id); setEditMotoristaVal(r.motoristas || ""); }}
+                                              title="Clique para selecionar motorista"
+                                              onClick={() => { setEditMotoristaId(r.id); setEditMotoristaVal(r.motoristas || ""); setMotoristaBusca(r.motoristas || ""); }}
                                             >
                                               {r.motoristas || "—"}
                                             </button>
