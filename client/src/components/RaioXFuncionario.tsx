@@ -13,11 +13,13 @@ import {
   Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft, Gift, Timer,
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
   Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench,
-  Package, PackageX, CheckCircle, XCircle, ShoppingCart
+  Package, PackageX, CheckCircle, XCircle, ShoppingCart,
+  Trash2, Camera, Video, ImageIcon, Upload
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
+import { toast } from "sonner";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -827,6 +829,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     color: "purple",
                     tabs: [
                       { value: "habilidades", label: "Habilidades", icon: Wrench, count: empSkills.length },
+                      { value: "assinatura", label: "Assinatura", icon: FileSignature, count: 0 },
                     ],
                   },
                   {
@@ -2128,6 +2131,11 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                 </div>
               </TabsContent>
 
+              {/* ============ ASSINATURA MEMORIAL ============ */}
+              <TabsContent value="assinatura" className="mt-4">
+                <AssinaturaMemorialTab employeeId={employeeId!} empNome={emp?.nomeCompleto || ""} />
+              </TabsContent>
+
               {/* ============ CONTRATOS CLT ============ */}
               <TabsContent value="contratos_clt" className="mt-4">
                 <ContratosTab employeeId={employeeId!} companyId={selectedCompany?.id || 0} empNome={emp?.nomeCompleto || ""} />
@@ -2756,6 +2764,121 @@ function ContratosTab({ employeeId, companyId, empNome }: { employeeId: number; 
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function AssinaturaMemorialTab({ employeeId, empNome }: { employeeId: number; empNome: string }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin_master" || user?.role === "admin";
+  const memorialQ = trpc.heSolicitacoes.getAssinaturaMemorial.useQuery({ employeeId }, { enabled: !!employeeId });
+  const limparMut = trpc.heSolicitacoes.limparAssinaturaMemorial.useMutation({
+    onSuccess: () => {
+      toast.success("Assinatura memorial limpa com sucesso! A próxima assinatura será registrada como oficial.");
+      memorialQ.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const [confirmLimpar, setConfirmLimpar] = useState(false);
+
+  const memorial = memorialQ.data;
+  const temAssinatura = !!memorial?.assinaturaMemorial;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <FileSignature className="h-4 w-4 text-purple-600" />
+            Assinatura Memorial (Oficial)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-xs text-gray-500 mb-4 bg-purple-50 border border-purple-200 rounded-lg p-3">
+            <p className="font-medium text-purple-800 mb-1">Como funciona:</p>
+            <ul className="list-disc list-inside space-y-1 text-purple-700">
+              <li>A <strong>primeira assinatura</strong> do funcionário em qualquer HE é salva como memorial (oficial)</li>
+              <li>Nas assinaturas seguintes, o sistema compara com a memorial e exige <strong>mínimo 90% de similaridade</strong></li>
+              <li>Se divergir, o admin pode anexar foto/vídeo do funcionário concordando como prova alternativa</li>
+              <li>Ideal para funcionários que não sabem ler/escrever ou têm dificuldade com assinatura</li>
+            </ul>
+          </div>
+
+          {memorialQ.isLoading ? (
+            <div className="flex justify-center py-8 text-gray-400">
+              <Clock className="h-5 w-5 animate-spin mr-2" /> Carregando...
+            </div>
+          ) : temAssinatura ? (
+            <div className="space-y-4">
+              <div className="bg-white border-2 border-purple-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-purple-700 flex items-center gap-1">
+                    <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                    Assinatura oficial cadastrada
+                  </span>
+                  <span className="text-[10px] text-gray-400">
+                    Registrada em: {memorial?.assinaturaMemorialAt
+                      ? new Date(memorial.assinaturaMemorialAt).toLocaleString("pt-BR")
+                      : "-"}
+                  </span>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3 flex justify-center">
+                  <img
+                    src={memorial!.assinaturaMemorial!}
+                    alt={`Assinatura memorial de ${empNome}`}
+                    className="max-h-32 object-contain"
+                  />
+                </div>
+              </div>
+
+              {isAdmin && (
+                <div className="border border-red-200 bg-red-50 rounded-lg p-3">
+                  <p className="text-xs text-red-700 mb-2">
+                    <strong>Ação do Administrador:</strong> Limpar a assinatura memorial fará com que a próxima assinatura
+                    do funcionário seja registrada como nova memorial oficial.
+                  </p>
+                  {!confirmLimpar ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-700 border-red-300 hover:bg-red-100"
+                      onClick={() => setConfirmLimpar(true)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Limpar Assinatura Memorial
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-800 font-medium">Tem certeza?</span>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={limparMut.isPending}
+                        onClick={() => {
+                          limparMut.mutate({ employeeId });
+                          setConfirmLimpar(false);
+                        }}
+                      >
+                        {limparMut.isPending ? "Limpando..." : "Sim, limpar"}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setConfirmLimpar(false)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-400">
+              <FileSignature className="h-10 w-10 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Nenhuma assinatura memorial cadastrada</p>
+              <p className="text-xs mt-1">A primeira assinatura do funcionário em uma HE será automaticamente registrada como oficial.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

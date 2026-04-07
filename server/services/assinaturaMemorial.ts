@@ -49,7 +49,7 @@ export async function verificarAssinaturaMemorial(
   db: any,
   employeeId: number,
   assinaturaBase64: string,
-  limiarDivergencia = 60,
+  limiarDivergencia = 90,
 ): Promise<VerificacaoResult> {
   const [emp] = await db.select({
     id: employees.id,

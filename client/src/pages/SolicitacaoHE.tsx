@@ -23,7 +23,7 @@ import {
   Clock, Plus, CheckCircle, CheckCircle2, XCircle, AlertTriangle, Send,
   Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare, Trash2, History, Ban,
   TrendingUp, DollarSign, HardHat, Search, X, PenTool, UserCheck, UserX, ClipboardCheck, SquarePen,
-  ShieldAlert,
+  ShieldAlert, Camera, Video, Upload,
 } from "lucide-react";
 
 type TabType = "solicitar" | "aprovacoes" | "historico";
@@ -398,6 +398,36 @@ export default function SolicitacaoHE() {
     },
     onError: (err) => toast.error(err.message),
   });
+
+  const provaAltMut = trpc.heSolicitacoes.enviarProvaAlternativa.useMutation({
+    onSuccess: () => {
+      toast.success("Prova alternativa anexada! Divergência resolvida.");
+      utils.heSolicitacoes.getConfirmacoes.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const handleProvaAlternativa = useCallback((confirmacaoId: number) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*,video/*";
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("Arquivo muito grande. Máximo 10MB.");
+        return;
+      }
+      const tipo = file.type.startsWith("video") ? "video" as const : "foto" as const;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        provaAltMut.mutate({ confirmacaoId, provaBase64: base64, tipo });
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }, [provaAltMut]);
 
   const activeEmployees = useMemo(() => {
     return (employeesQuery.data || []).filter((e: any) => e.status === "Ativo" && !e.deletedAt);
@@ -1835,6 +1865,12 @@ export default function SolicitacaoHE() {
                                     <AlertTriangle className="h-3 w-3 mr-1" /> Assinatura Divergente ({c.similaridade || 0}%)
                                   </Badge>
                                 )}
+                                {c.provaAlternativa && (
+                                  <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-xs shrink-0">
+                                    {c.provaAlternativaTipo === "video" ? <Video className="h-3 w-3 mr-1" /> : <Camera className="h-3 w-3 mr-1" />}
+                                    Prova {c.provaAlternativaTipo === "video" ? "vídeo" : "foto"}
+                                  </Badge>
+                                )}
                                 {c.compareceu === true && (
                                   <Badge className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0">
                                     <UserCheck className="h-3 w-3 mr-1" /> Compareceu
@@ -1899,6 +1935,40 @@ export default function SolicitacaoHE() {
                                     )}
                                   </div>
                                   <img src={c.assinaturaUrl} alt={`Assinatura de ${c.nomeCompleto}`} className="max-h-24 mx-auto" />
+                                  {c.assinaturaDivergente && !c.provaAlternativa && (
+                                    <div className="mt-2 pt-2 border-t border-red-200">
+                                      <p className="text-xs text-red-700 mb-2">
+                                        <AlertTriangle className="h-3 w-3 inline mr-1" />
+                                        Assinatura não confere com o memorial ({c.similaridade || 0}% &lt; 90% mínimo).
+                                        Anexe uma <strong>foto ou vídeo</strong> do funcionário confirmando a HE:
+                                      </p>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-blue-700 border-blue-300 hover:bg-blue-50"
+                                        onClick={() => handleProvaAlternativa(c.id)}
+                                        disabled={provaAltMut.isPending}
+                                      >
+                                        {provaAltMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
+                                        Anexar Foto/Vídeo como Prova
+                                      </Button>
+                                    </div>
+                                  )}
+                                  {c.provaAlternativa && (
+                                    <div className="mt-2 pt-2 border-t border-blue-200">
+                                      <p className="text-xs text-blue-700 mb-1 flex items-center gap-1">
+                                        <CheckCircle2 className="h-3 w-3 text-green-600" />
+                                        Prova alternativa ({c.provaAlternativaTipo}) anexada por {c.provaAlternativaPor} em{" "}
+                                        {c.provaAlternativaEm ? new Date(c.provaAlternativaEm).toLocaleString("pt-BR") : "-"}
+                                      </p>
+                                      {c.provaAlternativaTipo === "foto" && (
+                                        <img src={c.provaAlternativa} alt="Prova foto" className="max-h-32 mx-auto rounded border" />
+                                      )}
+                                      {c.provaAlternativaTipo === "video" && (
+                                        <video src={c.provaAlternativa} controls className="max-h-32 mx-auto rounded border" />
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>

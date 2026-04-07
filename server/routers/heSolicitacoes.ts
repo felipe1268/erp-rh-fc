@@ -633,6 +633,10 @@ export const heSolicitacoesRouter = router({
       observacao: heSolicitacaoConfirmacoes.observacao,
       assinaturaDivergente: heSolicitacaoConfirmacoes.assinaturaDivergente,
       similaridade: heSolicitacaoConfirmacoes.similaridade,
+      provaAlternativa: heSolicitacaoConfirmacoes.provaAlternativa,
+      provaAlternativaTipo: heSolicitacaoConfirmacoes.provaAlternativaTipo,
+      provaAlternativaPor: heSolicitacaoConfirmacoes.provaAlternativaPor,
+      provaAlternativaEm: heSolicitacaoConfirmacoes.provaAlternativaEm,
       nomeCompleto: employees.nomeCompleto,
       matricula: employees.matricula,
       cargo: employees.cargo,
@@ -744,5 +748,91 @@ export const heSolicitacoesRouter = router({
     });
 
     return { updated };
+  }),
+
+  getAssinaturaMemorial: protectedProcedure.input(z.object({
+    employeeId: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return null;
+    const [emp] = await db.select({
+      id: employees.id,
+      nomeCompleto: employees.nomeCompleto,
+      assinaturaMemorial: employees.assinaturaMemorial,
+      assinaturaMemorialAt: employees.assinaturaMemorialAt,
+    }).from(employees).where(eq(employees.id, input.employeeId));
+    return emp || null;
+  }),
+
+  limparAssinaturaMemorial: protectedProcedure.input(z.object({
+    employeeId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    const userRole = (ctx.user as any)?.role || (ctx.user as any)?.tipo;
+    if (userRole !== "admin_master" && userRole !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem limpar a assinatura memorial" });
+    }
+
+    const [emp] = await db.select({ id: employees.id, nome: employees.nomeCompleto })
+      .from(employees).where(eq(employees.id, input.employeeId));
+    if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+
+    await db.update(employees)
+      .set({ assinaturaMemorial: null, assinaturaMemorialAt: null })
+      .where(eq(employees.id, input.employeeId));
+
+    await createAuditLog(db, {
+      userId: ctx.user?.id,
+      action: "limpar_assinatura_memorial",
+      entity: "employees",
+      entityId: input.employeeId,
+      details: `Assinatura memorial limpa para ${emp.nome} por ${ctx.user?.name || "admin"}. Próxima assinatura será registrada como nova memorial.`,
+      companyId: ctx.user?.companyId,
+    });
+
+    return { ok: true };
+  }),
+
+  enviarProvaAlternativa: protectedProcedure.input(z.object({
+    confirmacaoId: z.number(),
+    provaBase64: z.string().min(100, "Arquivo inválido"),
+    tipo: z.enum(["foto", "video"]),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    const [conf] = await db.select({
+      id: heSolicitacaoConfirmacoes.id,
+      employeeId: heSolicitacaoConfirmacoes.employeeId,
+      assinaturaDivergente: heSolicitacaoConfirmacoes.assinaturaDivergente,
+    }).from(heSolicitacaoConfirmacoes).where(eq(heSolicitacaoConfirmacoes.id, input.confirmacaoId));
+
+    if (!conf) throw new TRPCError({ code: "NOT_FOUND", message: "Confirmação não encontrada" });
+
+    await db.update(heSolicitacaoConfirmacoes)
+      .set({
+        provaAlternativa: input.provaBase64,
+        provaAlternativaTipo: input.tipo,
+        provaAlternativaPor: ctx.user?.name || "admin",
+        provaAlternativaEm: new Date().toISOString(),
+        assinaturaDivergente: false,
+      })
+      .where(eq(heSolicitacaoConfirmacoes.id, input.confirmacaoId));
+
+    const [emp] = await db.select({ nome: employees.nomeCompleto })
+      .from(employees).where(eq(employees.id, conf.employeeId));
+
+    await createAuditLog(db, {
+      userId: ctx.user?.id,
+      action: "prova_alternativa_he",
+      entity: "he_solicitacao_confirmacoes",
+      entityId: input.confirmacaoId,
+      details: `Prova alternativa (${input.tipo}) anexada para ${emp?.nome || "?"} — divergência de assinatura resolvida por ${ctx.user?.name || "admin"}`,
+      companyId: ctx.user?.companyId,
+    });
+
+    return { ok: true };
   }),
 });
