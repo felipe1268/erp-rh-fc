@@ -143,10 +143,15 @@ export default function Seguros() {
       }
 
       setUploadProgress(45);
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => prev < 90 ? prev + 1 : prev);
+      }, 800);
       uploadMut.mutate({
         companyId: cId,
         files: filesData,
         criadoPor: user?.name,
+      }, {
+        onSettled: () => clearInterval(progressInterval),
       });
     } catch (err: any) {
       setUploading(false);
@@ -359,11 +364,16 @@ export default function Seguros() {
 
             {uploading && (
               <div className="space-y-3 py-4">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                  <span className="text-sm font-medium">Processando apólices com IA...</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                    <span className="text-sm font-medium">Processando apólices com IA...</span>
+                  </div>
+                  <span className="text-sm font-bold text-blue-700">{Math.round(uploadProgress)}%</span>
                 </div>
-                <Progress value={uploadProgress} className="h-2" />
+                <div className="relative">
+                  <Progress value={uploadProgress} className="h-3" />
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Extraindo dados de {uploadFiles.length} arquivo(s). Isso pode levar alguns minutos.
                 </p>
