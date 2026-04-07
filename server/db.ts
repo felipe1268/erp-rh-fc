@@ -539,7 +539,7 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
   await db.update(employees).set(sanitized).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
 }
 
-export async function getEmployees(companyId: number, search?: string, status?: string, companyIds?: number[], excludeTerminated?: boolean) {
+export async function getEmployees(companyId: number, search?: string, status?: string, companyIds?: number[], excludeTerminated?: boolean, includeTerminatedInMonth?: string) {
   const db = await getDb();
   if (!db) return [];
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
@@ -547,8 +547,17 @@ export async function getEmployees(companyId: number, search?: string, status?: 
   if (status && status !== "Todos") {
     conditions.push(eq(employees.status, status as any));
   } else if (excludeTerminated) {
-    // Em contextos de seleção operacional, excluir desligados e lista negra
-    conditions.push(sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`);
+    if (includeTerminatedInMonth) {
+      const [yStr, mStr] = includeTerminatedInMonth.split('-');
+      const y = parseInt(yStr), m = parseInt(mStr);
+      const mesInicio = `${y}-${String(m).padStart(2, '0')}-01`;
+      const nextM = m === 12 ? 1 : m + 1;
+      const nextY = m === 12 ? y + 1 : y;
+      const mesFim = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+      conditions.push(sql`(${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo') OR (${employees.status} IN ('Desligado', 'Lista_Negra') AND COALESCE(${employees.dataDesligamentoEfetiva}, ${employees.dataDemissao}) >= ${mesInicio}::date AND COALESCE(${employees.dataDesligamentoEfetiva}, ${employees.dataDemissao}) < ${mesFim}::date))`);
+    } else {
+      conditions.push(sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`);
+    }
   }
   if (search) {
     const s = search.toLowerCase();

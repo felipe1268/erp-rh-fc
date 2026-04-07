@@ -367,7 +367,7 @@ export const appRouter = router({
   // EMPLOYEES
   // ============================================================
   employees: router({
-    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), search: z.string().optional(), status: z.string().optional(), excludeTerminated: z.boolean().optional() })).query(({ input }) => getEmployees(input.companyId, input.search, input.status, input.companyIds, input.excludeTerminated)),
+    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), search: z.string().optional(), status: z.string().optional(), excludeTerminated: z.boolean().optional(), includeTerminatedInMonth: z.string().optional() })).query(({ input }) => getEmployees(input.companyId, input.search, input.status, input.companyIds, input.excludeTerminated, input.includeTerminatedInMonth)),
     getById: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).query(({ input }) => getEmployeeById(input.id, input.companyId)),
     stats: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getEmployeeStats(input.companyId, input.companyIds)),
     create: protectedProcedure.input(z.any()).mutation(async ({ input, ctx }) => {

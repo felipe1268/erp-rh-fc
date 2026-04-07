@@ -604,7 +604,7 @@ export default function FechamentoPonto() {
     { enabled: (companyId > 0 || companyIds.length > 0) && selectedEmployeeId !== null }
   );
   const obrasList = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: companyId > 0 || companyIds.length > 0 });
-  const employeesList = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const employeesList = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true, includeTerminatedInMonth: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const monthStatuses = trpc.fechamentoPonto.getMonthStatuses.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 || companyIds.length > 0 });
   const consolidacaoStatus = trpc.fechamentoPonto.getConsolidacaoStatus.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const conflitos = trpc.fechamentoPonto.getConflitosObraDia.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
@@ -3663,9 +3663,14 @@ export default function FechamentoPonto() {
                                 }
                               }} className="flex items-center justify-between py-2 cursor-pointer">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-xs shrink-0">{(e.nomeCompleto || "").charAt(0)}</div>
+                                  <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${e.status === 'Desligado' || e.status === 'Lista_Negra' ? 'bg-red-100 text-red-700' : 'bg-purple-100 text-purple-700'}`}>{(e.nomeCompleto || "").charAt(0)}</div>
                                   <div>
-                                    <p className="font-medium text-sm">{e.nomeCompleto}</p>
+                                    <p className="font-medium text-sm">
+                                      {e.nomeCompleto}
+                                      {(e.status === 'Desligado' || e.status === 'Lista_Negra') && (
+                                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">DESLIGADO</span>
+                                      )}
+                                    </p>
                                     <p className="text-xs text-muted-foreground">
                                       {e.funcao || ""}
                                       {e.obraAtualNome ? <span className="ml-1 text-purple-600">· {e.obraAtualNome}</span> : ""}
