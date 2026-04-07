@@ -1717,8 +1717,8 @@ export default function FolhaPagamento() {
   // ===== CÁLCULO VALE VIEW =====
   if (viewMode === "calculo_vale" && valeResult) {
     const todosFunc = valeResult.funcionarios || [];
-    const funcionariosComAlerta = todosFunc.filter((f: any) => f.temAlerta);
-    const funcionariosSemAlerta = todosFunc.filter((f: any) => !f.temAlerta);
+    const funcionariosComAlerta = todosFunc.filter((f: any) => f.temAlerta).sort((a: any, b: any) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+    const funcionariosSemAlerta = todosFunc.filter((f: any) => !f.temAlerta).sort((a: any, b: any) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
     const totalSemAlerta = funcionariosSemAlerta.reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
     const totalSemAlertaEfetivo = funcionariosSemAlerta
       .filter((f: any) => f.status !== 'rejeitado' && !valeExcluirSel.has(f.employeeId))
