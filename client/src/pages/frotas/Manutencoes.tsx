@@ -62,6 +62,7 @@ export default function Manutencoes() {
   const [maintItems, setMaintItems] = useState<MaintItem[]>([]);
   const [editingMaintId, setEditingMaintId] = useState<number | null>(null);
   const [viewMaint, setViewMaint] = useState<any>(null);
+  const [confirmDlg, setConfirmDlg] = useState<{ msg: string; onOk: () => void } | null>(null);
 
   const vehicles = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
   const manut = trpc.frotas.listMaintenances.useQuery(
@@ -492,9 +493,9 @@ export default function Manutencoes() {
                       variant="ghost" size="sm"
                       className="mt-1 h-6 text-[10px] text-red-600 hover:text-red-700 hover:bg-red-50 px-2"
                       onClick={() => {
-                        if (confirm("Reverter consolidação e cancelar lançamento financeiro?")) {
+                        setConfirmDlg({ msg: "Reverter consolidação e cancelar lançamento financeiro?", onOk: () => {
                           revertMut.mutate({ companyId: cId, financialEntryId: summary.financialEntryId! });
-                        }
+                        }});
                       }}
                       disabled={revertMut.isPending}
                     >
@@ -655,9 +656,9 @@ export default function Manutencoes() {
                             className="h-8 w-8 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950"
                             title="Solicitar Compra"
                             onClick={() => {
-                              if (confirm(`Criar Solicitação de Compra para esta manutenção?\n${m.placa} — ${m.descricao || m.modelo}`)) {
+                              setConfirmDlg({ msg: `Criar Solicitação de Compra para esta manutenção?\n${m.placa} — ${m.descricao || m.modelo}`, onOk: () => {
                                 createPurchaseMut.mutate({ companyId: cId, maintenanceId: m.id });
-                              }
+                              }});
                             }}
                             disabled={createPurchaseMut.isPending}
                           >
@@ -665,7 +666,7 @@ export default function Manutencoes() {
                           </Button>
                         )}
                         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950" onClick={() => openEdit(m)}><Pencil className="h-3.5 w-3.5 text-slate-500" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950" onClick={() => { if (confirm("Excluir esta manutenção?")) deleteMut.mutate({ id: m.id, companyId: cId }); }}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950" onClick={() => { setConfirmDlg({ msg: "Excluir esta manutenção?", onOk: () => deleteMut.mutate({ id: m.id, companyId: cId }) }); }}>
                           <Trash2 className="h-3.5 w-3.5 text-red-400" />
                         </Button>
                       </td>
@@ -951,7 +952,7 @@ export default function Manutencoes() {
                                   <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30"><Download className="h-3.5 w-3.5 text-blue-600" /></Button>
                                 </a>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                                  onClick={() => { if (confirm("Remover este anexo?")) removeAttachMut.mutate({ companyId: cId, maintenanceId: editingMaintId, key: a.key }); }}>
+                                  onClick={() => { setConfirmDlg({ msg: "Remover este anexo?", onOk: () => removeAttachMut.mutate({ companyId: cId, maintenanceId: editingMaintId, key: a.key }) }); }}>
                                   <X className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
@@ -1322,6 +1323,20 @@ export default function Manutencoes() {
         </Dialog>
 
       </div>
+
+      <Dialog open={!!confirmDlg} onOpenChange={v => { if (!v) setConfirmDlg(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirmar</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-700 whitespace-pre-line">{confirmDlg?.msg}</p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setConfirmDlg(null)}>Cancelar</Button>
+            <Button size="sm" onClick={() => { confirmDlg?.onOk(); setConfirmDlg(null); }}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </DashboardLayout>
   );
 }
