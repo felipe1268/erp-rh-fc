@@ -52,6 +52,10 @@ export default function ControleKm() {
   const [editMotoristaId, setEditMotoristaId] = useState<number | null>(null);
   const [editMotoristaVal, setEditMotoristaVal] = useState("");
   const [motoristaBusca, setMotoristaBusca] = useState("");
+  const [editMotPadraoPlaca, setEditMotPadraoPlaca] = useState<string | null>(null);
+  const [motPadraoBusca, setMotPadraoBusca] = useState("");
+  const [motPadraoVal, setMotPadraoVal] = useState("");
+  const [motPadraoInicio, setMotPadraoInicio] = useState("");
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
@@ -98,6 +102,19 @@ export default function ControleKm() {
       toast.success("Motorista atualizado!");
       dailyKmQ.refetch();
       setEditMotoristaId(null);
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const motPadraoMut = trpc.frotas.setMotoristaPadrao.useMutation({
+    onSuccess: () => {
+      toast.success("Motorista padrão definido!");
+      refetch();
+      dailyKmQ.refetch();
+      setEditMotPadraoPlaca(null);
+      setMotPadraoBusca("");
+      setMotPadraoVal("");
+      setMotPadraoInicio("");
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -339,7 +356,50 @@ export default function ControleKm() {
                                   </Badge>
                                 </div>
                                 <div className="text-sm text-gray-500">{v.nome}</div>
-                                {v.motorista && <div className="text-xs text-gray-400">Motorista: {v.motorista}</div>}
+                                {editMotPadraoPlaca === v.placa ? (
+                                  <div className="flex flex-wrap items-center gap-1 mt-1">
+                                    <div className="relative">
+                                      <input
+                                        className="border rounded px-1.5 py-0.5 text-xs w-48"
+                                        value={motPadraoBusca}
+                                        onChange={e => { setMotPadraoBusca(e.target.value); setMotPadraoVal(""); }}
+                                        autoFocus
+                                        placeholder="Buscar motorista..."
+                                        onKeyDown={e => { if (e.key === "Escape") setEditMotPadraoPlaca(null); }}
+                                      />
+                                      {motPadraoBusca.length >= 2 && !motPadraoVal && (
+                                        <div className="absolute z-50 top-full left-0 mt-1 w-64 max-h-48 overflow-y-auto bg-white border rounded-lg shadow-lg">
+                                          {funcionariosAtivos.filter((n: string) => n.toLowerCase().includes(motPadraoBusca.toLowerCase())).length === 0 ? (
+                                            <div className="px-3 py-2 text-xs text-gray-400">Nenhum encontrado</div>
+                                          ) : funcionariosAtivos.filter((n: string) => n.toLowerCase().includes(motPadraoBusca.toLowerCase())).slice(0, 15).map((nome: string) => (
+                                            <button key={nome} type="button" className="w-full text-left px-3 py-1.5 text-xs hover:bg-cyan-50 hover:text-cyan-700"
+                                              onClick={() => { setMotPadraoVal(nome); setMotPadraoBusca(nome); }}
+                                            >{nome}</button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <input type="date" className="border rounded px-1.5 py-0.5 text-xs w-32" value={motPadraoInicio} onChange={e => setMotPadraoInicio(e.target.value)} title="Data início" />
+                                    <button type="button" disabled={!motPadraoVal || !motPadraoInicio || !v.vehicleId}
+                                      onClick={() => motPadraoMut.mutate({ companyId, vehicleId: v.vehicleId, motoristaPadrao: motPadraoVal, motoristaPadraoInicio: motPadraoInicio })}
+                                      className={`p-0.5 ${motPadraoVal && motPadraoInicio ? "text-emerald-600 hover:text-emerald-700" : "text-gray-300"}`}
+                                    ><Check className="h-3.5 w-3.5" /></button>
+                                    <button type="button" onClick={() => setEditMotPadraoPlaca(null)} className="text-gray-400 hover:text-gray-600 p-0.5"><X className="h-3.5 w-3.5" /></button>
+                                  </div>
+                                ) : (
+                                  <button type="button" className="text-xs text-gray-400 hover:text-cyan-700 hover:underline cursor-pointer flex items-center gap-1"
+                                    onClick={() => {
+                                      setEditMotPadraoPlaca(v.placa);
+                                      setMotPadraoBusca(v.motoristaPadrao || "");
+                                      setMotPadraoVal(v.motoristaPadrao || "");
+                                      setMotPadraoInicio(v.motoristaPadraoInicio || new Date().toISOString().slice(0, 10));
+                                    }}
+                                    title={v.motoristaPadrao ? `Motorista padrão desde ${formatDate(v.motoristaPadraoInicio)}` : "Definir motorista padrão"}
+                                  >
+                                    <Car className="h-3 w-3" />
+                                    {v.motoristaPadrao ? `Motorista: ${v.motoristaPadrao}` : "Definir motorista padrão"}
+                                  </button>
+                                )}
                               </div>
                             </div>
                             <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -812,10 +872,11 @@ export default function ControleKm() {
                                             <button
                                               type="button"
                                               className="text-left hover:text-cyan-700 hover:underline cursor-pointer"
-                                              title="Clique para selecionar motorista"
+                                              title={r.motorista_padrao_usado ? "Motorista padrão (clique para alterar)" : "Clique para selecionar motorista"}
                                               onClick={() => { setEditMotoristaId(r.id); setEditMotoristaVal(r.motoristas || ""); setMotoristaBusca(r.motoristas || ""); }}
                                             >
                                               {r.motoristas || "—"}
+                                              {r.motorista_padrao_usado && <span className="ml-1 text-[10px] text-cyan-500" title="Motorista padrão do veículo">(padrão)</span>}
                                             </button>
                                           )}
                                         </td>

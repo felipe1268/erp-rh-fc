@@ -41,6 +41,8 @@ async function ensureFleetTables() {
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS cadastro_consolidado BOOLEAN DEFAULT FALSE;
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS cadastro_consolidado_em TIMESTAMP;
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS cadastro_consolidado_por VARCHAR(255);
+      ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS motorista_padrao VARCHAR(255);
+      ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS motorista_padrao_inicio DATE;
     EXCEPTION WHEN OTHERS THEN NULL;
     END $$;
   `);
@@ -5624,10 +5626,19 @@ Sempre retorne JSON válido, sem markdown.`;
         }
 
         const vehicleRes = (await db.execute(sql`
-          SELECT id, placa FROM vehicles WHERE "companyId" = ${input.companyId}
+          SELECT id, placa, motorista_padrao, motorista_padrao_inicio FROM vehicles WHERE "companyId" = ${input.companyId}
         `) as any).rows || [];
         const plateToId: Record<string, number> = {};
-        vehicleRes.forEach((v: any) => { if (v.placa) plateToId[v.placa.replace(/[-\s]/g, '').toUpperCase()] = v.id; });
+        const plateToMotPadrao: Record<string, { nome: string; inicio: string }> = {};
+        vehicleRes.forEach((v: any) => {
+          if (v.placa) {
+            const pn = v.placa.replace(/[-\s]/g, '').toUpperCase();
+            plateToId[pn] = v.id;
+            if (v.motorista_padrao) {
+              plateToMotPadrao[pn] = { nome: v.motorista_padrao, inicio: v.motorista_padrao_inicio || '2000-01-01' };
+            }
+          }
+        });
 
         const fuelRes = (await db.execute(sql`
           SELECT vehicle_id, data, litros, valor_total, km_atual, km_anterior, consumo_km_l,
@@ -5663,7 +5674,13 @@ Sempre retorne JSON válido, sem markdown.`;
 
         const vehicles = [...allPlacas].map(placaNorm => {
           const kmData = byPlaca[placaNorm];
-          const dailyData = kmData?.days || [];
+          const motPadrao = plateToMotPadrao[placaNorm] || null;
+          const dailyData = (kmData?.days || []).map((d: any) => {
+            if ((!d.motoristas || d.motoristas.length === 0) && motPadrao && d.data >= motPadrao.inicio) {
+              return { ...d, motoristas: [motPadrao.nome], motoristaPadraoUsado: true };
+            }
+            return d;
+          });
           const statusInfo = infleetStatusMap[placaNorm];
           const totalKm = dailyData.reduce((s: number, d: any) => s + d.km, 0);
           const totalViagens = dailyData.reduce((s: number, d: any) => s + d.viagens, 0);
@@ -5677,6 +5694,7 @@ Sempre retorne JSON válido, sem markdown.`;
           const rawPlaca = kmData?.days[0] ? kmRes.find((r: any) => (r.placa || '').replace(/[-\s]/g, '').toUpperCase() === placaNorm)?.placa || placaNorm : placaNorm;
 
           return {
+            vehicleId: plateToId[placaNorm] || null,
             infleetId: kmData?.infleetId || null,
             placa: rawPlaca,
             nome: kmData?.nome || '',
@@ -5684,6 +5702,8 @@ Sempre retorne JSON válido, sem markdown.`;
             status: statusInfo?.status || 'UNKNOWN',
             kmOdometro: statusInfo?.odometer || null,
             motorista: statusInfo?.driver || null,
+            motoristaPadrao: motPadrao?.nome || null,
+            motoristaPadraoInicio: motPadrao?.inicio || null,
             totalKm: Math.round(totalKm * 10) / 10,
             totalViagens,
             diasComViagem,
@@ -5722,17 +5742,26 @@ Sempre retorne JSON válido, sem markdown.`;
     .query(async ({ input }) => {
       const db = await getDb();
       const rows_ = (await db.execute(sql`
-        SELECT id, company_id, placa, COALESCE(nome_veiculo, '') as nome_veiculo,
-               data, km_total, COALESCE(viagens, num_viagens, 0) as viagens,
-               tempo_rodando_min, vel_media, vel_maxima,
-               COALESCE(motoristas, motorista, '') as motoristas,
-               COALESCE(odometro_fim, km_odometro_fim) as odometro_fim,
-               infleet_vehicle_id, updated_at, alerta_gps
-        FROM fleet_daily_km
-        WHERE company_id = ${input.companyId}
-          AND data >= ${input.startDate}
-          AND data <= ${input.endDate}
-        ORDER BY data DESC, km_total DESC
+        SELECT dk.id, dk.company_id, dk.placa, COALESCE(dk.nome_veiculo, '') as nome_veiculo,
+               dk.data, dk.km_total, COALESCE(dk.viagens, dk.num_viagens, 0) as viagens,
+               dk.tempo_rodando_min, dk.vel_media, dk.vel_maxima,
+               CASE
+                 WHEN COALESCE(dk.motoristas, dk.motorista, '') != '' THEN COALESCE(dk.motoristas, dk.motorista, '')
+                 WHEN v.motorista_padrao IS NOT NULL AND v.motorista_padrao_inicio IS NOT NULL AND dk.data >= v.motorista_padrao_inicio THEN v.motorista_padrao
+                 ELSE ''
+               END as motoristas,
+               CASE
+                 WHEN COALESCE(dk.motoristas, dk.motorista, '') = '' AND v.motorista_padrao IS NOT NULL AND dk.data >= v.motorista_padrao_inicio THEN true
+                 ELSE false
+               END as motorista_padrao_usado,
+               COALESCE(dk.odometro_fim, dk.km_odometro_fim) as odometro_fim,
+               dk.infleet_vehicle_id, dk.updated_at, dk.alerta_gps
+        FROM fleet_daily_km dk
+        LEFT JOIN vehicles v ON UPPER(REPLACE(REPLACE(v.placa, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(dk.placa, '-', ''), ' ', '')) AND v."companyId" = dk.company_id
+        WHERE dk.company_id = ${input.companyId}
+          AND dk.data >= ${input.startDate}
+          AND dk.data <= ${input.endDate}
+        ORDER BY dk.data DESC, dk.km_total DESC
       `) as any).rows || [];
       return rows_;
     }),
@@ -5748,6 +5777,26 @@ Sempre retorne JSON válido, sem markdown.`;
         UPDATE fleet_daily_km
         SET motoristas = ${input.motorista}, updated_at = NOW()
         WHERE id = ${input.id}
+      `);
+      return { ok: true };
+    }),
+
+  setMotoristaPadrao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      vehicleId: z.number(),
+      motoristaPadrao: z.string(),
+      motoristaPadraoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const userCompanyId = (ctx as any).user?.companyId || input.companyId;
+      if (input.companyId !== userCompanyId) throw new Error("Sem permissão para alterar veículo de outra empresa");
+      const db = await getDb();
+      const result = await db.execute(sql`
+        UPDATE vehicles
+        SET motorista_padrao = ${input.motoristaPadrao},
+            motorista_padrao_inicio = ${input.motoristaPadraoInicio}
+        WHERE id = ${input.vehicleId} AND "companyId" = ${input.companyId}
       `);
       return { ok: true };
     }),

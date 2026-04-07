@@ -3055,6 +3055,8 @@ export const vehicles = pgTable("vehicles", {
         kmAtual: numeric("km_atual", { precision: 12, scale: 1 }).default("0"),
         responsavel: varchar({ length: 255 }),
         motoristaId: integer("motorista_id"),
+        motoristaPadrao: varchar("motorista_padrao", { length: 255 }),
+        motoristaPadraoInicio: date("motorista_padrao_inicio", { mode: "string" }),
         obraId: integer("obra_id"),
         statusVeiculo: text().default('Ativo').notNull(),
         proximaManutencao: date({ mode: 'string' }),
