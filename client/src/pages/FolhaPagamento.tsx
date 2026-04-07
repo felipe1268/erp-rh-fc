@@ -339,17 +339,37 @@ export default function FolhaPagamento() {
   });
 
   const decidirValeMut = trpc.payrollEngine.decidirVale.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       toast.success(data.message);
-      gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
+      if (valeResult) {
+        const decisoesMap = new Map(variables.decisoes.map(d => [d.employeeId, d.pagar]));
+        const updatedFuncs = (valeResult.funcionarios || []).map((f: any) => {
+          const decisao = decisoesMap.get(f.employeeId);
+          if (decisao === true) {
+            return { ...f, temAlerta: false, bloqueado: false, status: 'calculado' };
+          } else if (decisao === false) {
+            return { ...f, temAlerta: false, bloqueado: false, status: 'rejeitado' };
+          }
+          return f;
+        });
+        setValeResult({ ...valeResult, funcionarios: updatedFuncs });
+      }
     },
     onError: (err) => toast.error(`Erro ao registrar decisão: ${err.message}`),
   });
 
   const reverterValeMut = trpc.payrollEngine.reverterVale.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       toast.success(data.message);
-      gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
+      if (valeResult) {
+        const updatedFuncs = (valeResult.funcionarios || []).map((f: any) => {
+          if (f.employeeId === variables.employeeId) {
+            return { ...f, status: 'calculado' };
+          }
+          return f;
+        });
+        setValeResult({ ...valeResult, funcionarios: updatedFuncs });
+      }
     },
     onError: (err) => toast.error(`Erro ao reverter vale: ${err.message}`),
   });
