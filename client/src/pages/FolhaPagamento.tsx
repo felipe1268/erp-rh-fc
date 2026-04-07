@@ -5869,7 +5869,7 @@ export default function FolhaPagamento() {
         </Dialog>
 
         <Dialog open={!!espelhoPopupEmpId} onOpenChange={(open) => { if (!open) { setEspelhoPopupEmpId(null); setEspelhoEditDate(null); } }}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" resizable={false}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" resizable={false} draggable>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-blue-600" />

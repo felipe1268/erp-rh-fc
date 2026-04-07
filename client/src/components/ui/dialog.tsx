@@ -138,19 +138,59 @@ function useResizableWidth(initialWidth: number, minWidth = 320, maxWidth = 1600
   return { width, onMouseDown };
 }
 
+function useDraggable() {
+  const [offset, setOffset] = React.useState({ x: 0, y: 0 });
+  const isDragging = React.useRef(false);
+  const startPos = React.useRef({ x: 0, y: 0 });
+  const startOffset = React.useRef({ x: 0, y: 0 });
+
+  const reset = React.useCallback(() => setOffset({ x: 0, y: 0 }), []);
+
+  const onDragStart = React.useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, textarea, select, a, [role="button"]')) return;
+    e.preventDefault();
+    isDragging.current = true;
+    startPos.current = { x: e.clientX, y: e.clientY };
+    startOffset.current = { ...offset };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isDragging.current) return;
+      setOffset({
+        x: startOffset.current.x + (ev.clientX - startPos.current.x),
+        y: startOffset.current.y + (ev.clientY - startPos.current.y),
+      });
+    };
+    const onUp = () => {
+      isDragging.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+    };
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [offset]);
+
+  return { offset, onDragStart, resetDrag: reset };
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
   onEscapeKeyDown,
   resizable = true,
+  draggable = false,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
   resizable?: boolean;
+  draggable?: boolean;
 }) {
   const { isComposing } = useDialogComposition();
   const { width, onMouseDown } = useResizableWidth(512);
+  const { offset, onDragStart, resetDrag } = useDraggable();
 
   const handleEscapeKeyDown = React.useCallback(
     (e: KeyboardEvent) => {
@@ -164,6 +204,10 @@ function DialogContent({
     [isComposing, onEscapeKeyDown]
   );
 
+  const dragStyle = draggable && (offset.x !== 0 || offset.y !== 0)
+    ? { transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))` }
+    : undefined;
+
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -171,10 +215,16 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200",
+          draggable && "cursor-grab active:cursor-grabbing",
           className
         )}
-        style={resizable ? { width: `min(${width}px, calc(100vw - 2rem))`, maxWidth: "calc(100vw - 2rem)" } : undefined}
+        style={{
+          ...(resizable ? { width: `min(${width}px, calc(100vw - 2rem))`, maxWidth: "calc(100vw - 2rem)" } : {}),
+          ...dragStyle,
+        }}
         onEscapeKeyDown={handleEscapeKeyDown}
+        onMouseDown={draggable ? onDragStart : undefined}
+        onAnimationEnd={draggable ? resetDrag : undefined}
         {...props}
       >
         {children}
