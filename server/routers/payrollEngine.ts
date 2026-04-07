@@ -1410,7 +1410,7 @@ export const payrollEngineRouter = router({
       const diasUteis = getDiasUteisNoMes(year, month);
 
       // Get active CLT employees — exclui Ferias, Afastado e demais inativos
-      const empList = await db.select({
+      const empListAtivos = await db.select({
         id: employees.id,
         companyId: employees.companyId,
         nomeCompleto: employees.nomeCompleto,
@@ -1427,6 +1427,60 @@ export const payrollEngineRouter = router({
           sql`${employees.valorHora} IS NOT NULL AND ${employees.valorHora} != ''`,
         )
       );
+
+      // ── Desligados com aviso prévio: incluir funcionários que estavam trabalhando no mês ──
+      // Funcionários desligados que tinham aviso prévio cujo último dia (dataFim) cai dentro do mês
+      // devem receber vale proporcional aos dias efetivamente trabalhados no mês.
+      const primeiroDiaMesAviso = `${year}-${String(month).padStart(2, '0')}-01`;
+      const ultimoDiaMesAviso = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`;
+      const companyIdsSqlForAviso = sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`);
+      const avisoDesligadosRows = ((await db.execute(sql`
+        SELECT e.id, e."companyId", e."nomeCompleto", e."valorHora", e."salarioBase", 
+               e."horasMensais", e."dataAdmissao",
+               tn."dataFim" as "avisoUltimoDia"
+        FROM employees e
+        INNER JOIN termination_notices tn ON tn."employeeId" = e.id AND tn."deletedAt" IS NULL
+          AND tn.status NOT IN ('cancelado')
+        WHERE e."companyId" IN (${companyIdsSqlForAviso})
+          AND e."tipoContrato" = 'CLT'
+          AND e.status = 'Desligado'
+          AND e."deletedAt" IS NULL
+          AND e."valorHora" IS NOT NULL AND e."valorHora" != ''
+          AND tn."dataFim" >= ${primeiroDiaMesAviso}::date
+          AND tn."dataInicio" <= ${ultimoDiaMesAviso}::date
+      `)) as any).rows || [];
+
+      // Map: employeeId → último dia trabalhado no mês (para cálculo proporcional)
+      const avisoUltimoDiaMap = new Map<number, number>();
+      const ativosIds = new Set(empListAtivos.map(e => e.id));
+      const desligadosNoMes: typeof empListAtivos = [];
+
+      for (const row of avisoDesligadosRows as any[]) {
+        const empId = Number(row.id);
+        if (ativosIds.has(empId)) continue;
+        const ultimoDiaAviso = new Date(row.avisoUltimoDia);
+        const diaNoMes = ultimoDiaAviso.getUTCDate();
+        const mesAviso = ultimoDiaAviso.getUTCMonth() + 1;
+        const anoAviso = ultimoDiaAviso.getUTCFullYear();
+        const diasNoMesAtual = new Date(year, month, 0).getDate();
+        const diasEfetivos = (anoAviso === year && mesAviso === month)
+          ? diaNoMes
+          : (ultimoDiaAviso >= new Date(`${ultimoDiaMesAviso}T12:00:00Z`) ? diasNoMesAtual : 0);
+        if (diasEfetivos > 0) {
+          avisoUltimoDiaMap.set(empId, diasEfetivos);
+          desligadosNoMes.push({
+            id: empId,
+            companyId: Number(row.companyId),
+            nomeCompleto: row.nomeCompleto,
+            valorHora: row.valorHora,
+            salarioBase: row.salarioBase,
+            horasMensais: row.horasMensais,
+            dataAdmissao: row.dataAdmissao,
+          });
+        }
+      }
+
+      const empList = [...empListAtivos, ...desligadosNoMes];
 
       const excluidos = await db.select({
         id: employees.id,
@@ -1577,11 +1631,13 @@ export const payrollEngineRouter = router({
         const minutosHE = 0;
         const valorHE = 0;
 
-        // ── Férias: salário proporcional ao mês ───────────────────────────
+        // ── Salário proporcional: férias + aviso prévio (desligados) ──────
         // Fórmula: salário = valorHora × (horasMensais × diasTrabalhados / 30)
-        //          diasTrabalhados = diasNoMes − diasDeFerias (calendário)
+        //          diasTrabalhados = diasNoMes − diasDeFerias − diasAusentes(aviso)
         const diasFeriasNoMes = feriasMesMap.get(emp.id) || 0;
-        const diasTrabalhados = Math.max(0, diasNoMes - diasFeriasNoMes);
+        const avisoUltimoDia = avisoUltimoDiaMap.get(emp.id);
+        const diasAusentesAviso = avisoUltimoDia ? Math.max(0, diasNoMes - avisoUltimoDia) : 0;
+        const diasTrabalhados = Math.max(0, diasNoMes - diasFeriasNoMes - diasAusentesAviso);
         const salarioBruto = valorHora * (horasMensaisBase * diasTrabalhados / 30);
         const valorAdiantamento = salarioBruto * (percentual / 100);
         const valorTotalVale = valorAdiantamento;
@@ -1592,12 +1648,19 @@ export const payrollEngineRouter = router({
 
         // ── Regras de bloqueio ────────────────────────────────────────────
         const motivosBloqueio: string[] = [];
+        const isDesligadoAviso = avisoUltimoDiaMap.has(emp.id);
+
+        // 0) Desligado em aviso prévio — alerta informativo (vale proporcional)
+        if (isDesligadoAviso) {
+          motivosBloqueio.push(`Desligado em aviso prévio — vale proporcional (${diasTrabalhados}/${diasNoMes} dias trabalhados no mês)`);
+        }
 
         // 1) Menos de 10 dias trabalhados por faltas + férias na quinzena
         if (diasTrabalhadosNaQuinzena < 10) {
           const detalhes = [
             faltas > 0 ? `${faltas} falta(s)` : null,
             diasFeriasQuinzena > 0 ? `${diasFeriasQuinzena} dia(s) de férias` : null,
+            isDesligadoAviso ? `aviso prévio até dia ${avisoUltimoDia}` : null,
           ].filter(Boolean).join(", ");
           motivosBloqueio.push(`Menos de 10 dias trabalhados na quinzena (${diasTrabalhadosNaQuinzena} dias${detalhes ? ` — ${detalhes}` : ""})`);
         }
@@ -1623,6 +1686,7 @@ export const payrollEngineRouter = router({
         if (bloqueado && !foiAprovadoManualmente && !isRejeitadoPrev) {
           bloqueados++;
           const alertaTipo = motivosBloqueio.length > 1 ? "multiplo"
+            : isDesligadoAviso ? "aviso_previo_proporcional"
             : diasFeriasNoMes > 0 ? "ferias_proporcional"
             : faltas > 0 ? "faltas_excessivas"
             : "admissao_recente";
@@ -1653,15 +1717,18 @@ export const payrollEngineRouter = router({
           totalVale += valorTotalVale;
         }
 
-        const temAlertaInfo = !foiAprovadoManualmente && !isRejeitadoPrev && diasFeriasNoMes > 0;
-        const alertaFerias = temAlertaInfo
-          ? `Férias no mês: ${diasFeriasNoMes} dia(s) — salário proporcional (${diasTrabalhados}/${diasNoMes} dias trabalhados)`
-          : "";
+        const temAlertaFerias = !foiAprovadoManualmente && !isRejeitadoPrev && diasFeriasNoMes > 0;
+        const temAlertaAviso = !foiAprovadoManualmente && !isRejeitadoPrev && isDesligadoAviso;
+        const temAlertaInfo = temAlertaFerias || temAlertaAviso;
+        const alertaMotivoList: string[] = [];
+        if (temAlertaAviso) alertaMotivoList.push(`Desligado em aviso prévio — vale proporcional (${diasTrabalhados}/${diasNoMes} dias trabalhados)`);
+        if (temAlertaFerias) alertaMotivoList.push(`Férias no mês: ${diasFeriasNoMes} dia(s) — salário proporcional (${diasTrabalhados}/${diasNoMes} dias trabalhados)`);
+        const alertaTipoFinal = temAlertaAviso ? "aviso_previo_proporcional" : temAlertaFerias ? "ferias_proporcional" : "";
         results.push({
           employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
           valorAdiantamento, valorHE, valorTotalVale,
-          temAlerta: temAlertaInfo, alertaTipo: temAlertaInfo ? "ferias_proporcional" : "",
-          alertaMotivo: alertaFerias,
+          temAlerta: temAlertaInfo, alertaTipo: alertaTipoFinal,
+          alertaMotivo: alertaMotivoList.join(" | "),
           bloqueado: false, faltas, minutosHE, status: isRejeitadoPrev ? 'rejeitado' : 'calculado',
         });
       }
