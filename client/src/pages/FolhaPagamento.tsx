@@ -402,7 +402,7 @@ export default function FolhaPagamento() {
   // ===== HE MÓDULO =====
   const hePeriods = trpc.horasExtras.listarPeriods.useQuery(
     { companyId, mesReferencia: mesAno },
-    { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "he_modulo" }
+    { enabled: (companyId > 0 || companyIds.length > 0) && !!mesAno }
   );
 
   useEffect(() => {
