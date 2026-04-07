@@ -658,6 +658,10 @@ export default function Cotacoes() {
   const [editTransportadora, setEditTransportadora] = useState<Record<number, string>>({});
   const [editModuloMedicao, setEditModuloMedicao] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
+  const [descontoModal, setDescontoModal] = useState<{ fornecedorId: number } | null>(null);
+  const [descontoTipo, setDescontoTipo] = useState<"valor" | "percentual">("valor");
+  const [descontoValor, setDescontoValor] = useState("");
+  const [descontoPreviewing, setDescontoPreviewing] = useState(false);
   const [showGerenciarCond, setShowGerenciarCond] = useState(false);
   const [novaCondicao, setNovaCondicao] = useState("");
   const [anexoUrl, setAnexoUrl] = useState<Record<number, string>>({});
@@ -1901,6 +1905,59 @@ export default function Cotacoes() {
       });
     }
 
+    function calcDescontoPreview(fornecedorId: number, tipo: "valor" | "percentual", valorInput: string) {
+      if (!mapa) return [];
+      const itens = mapa.itens ?? [];
+      const isPacote = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
+
+      const itemTotais = itens.map((it: any) => {
+        const key = `${it.id}_${fornecedorId}`;
+        const precoAtual = parseFloat(editPrecos[key] ?? "0") || 0;
+        const qtd = parseFloat(editQtds[key] ?? String(it.quantidade ?? "1")) || 1;
+        return { id: it.id, descricao: it.descricao ?? it.titulo ?? `Item #${it.id}`, precoAtual, qtd, total: precoAtual * qtd, key };
+      });
+
+      const totalGeral = itemTotais.reduce((s, i) => s + i.total, 0);
+      if (totalGeral <= 0) return [];
+
+      const valorDesc = tipo === "percentual"
+        ? totalGeral * (parseFloat(valorInput) || 0) / 100
+        : parseFloat(valorInput) || 0;
+
+      if (valorDesc <= 0 || valorDesc > totalGeral) return [];
+
+      let descontoAcumulado = 0;
+      const result = itemTotais.map((it, idx) => {
+        const peso = it.total / totalGeral;
+        let descItem: number;
+        if (idx === itemTotais.length - 1) {
+          descItem = Math.round((valorDesc - descontoAcumulado) * 100) / 100;
+        } else {
+          descItem = Math.round(valorDesc * peso * 100) / 100;
+          descontoAcumulado += descItem;
+        }
+        const novoPreco = Math.max(0, Math.round((it.precoAtual - descItem / it.qtd) * 10000) / 10000);
+        return { ...it, descItem, novoPreco, novoTotal: Math.round(novoPreco * it.qtd * 100) / 100 };
+      });
+
+      return result;
+    }
+
+    function aplicarDesconto() {
+      if (!descontoModal) return;
+      const preview = calcDescontoPreview(descontoModal.fornecedorId, descontoTipo, descontoValor);
+      if (!preview.length) return;
+      const updates: Record<string, string> = {};
+      for (const it of preview) {
+        updates[it.key] = it.novoPreco.toFixed(4);
+      }
+      setEditPrecos(prev => ({ ...prev, ...updates }));
+      setDescontoModal(null);
+      setDescontoValor("");
+      setDescontoPreviewing(false);
+      toast.success("Desconto comercial aplicado! Clique 'Salvar' para gravar.");
+    }
+
     function handleSalvarPrecos(fornecedorId: number) {
       if (!mapa || !showDetalhe) return;
       const isPacote = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
@@ -3028,6 +3085,11 @@ export default function Cotacoes() {
                                               <Button size="sm" onClick={() => handleSalvarPrecos(p.fornecedorId)} disabled={salvarRespostas.isPending}
                                                 className="h-6 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white gap-1 px-2">
                                                 {salvarRespostas.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} {salvarRespostas.isPending ? `${Math.round(salvarProgress ?? 0)}%` : "Salvar"}
+                                              </Button>
+                                              <Button size="sm" variant="outline"
+                                                onClick={() => { setDescontoModal({ fornecedorId: p.fornecedorId }); setDescontoTipo("valor"); setDescontoValor(""); setDescontoPreviewing(false); }}
+                                                className="h-6 text-[10px] border-amber-200 text-amber-700 hover:bg-amber-50 gap-1 px-2">
+                                                <TrendingDown className="h-3 w-3" /> Desconto
                                               </Button>
                                               <Button size="sm" variant="outline" onClick={() => setEditingFornId(null)} className="h-6 text-[10px] border-gray-300 text-gray-600 px-2">
                                                 Cancelar
@@ -4815,6 +4877,140 @@ export default function Cotacoes() {
             )}
           </div>
         </div>
+      )}
+
+      {descontoModal && createPortal(
+        <div className="fixed inset-0 z-[99998] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setDescontoModal(null); setDescontoPreviewing(false); }} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-6 py-4 rounded-t-2xl flex items-center justify-between z-10">
+              <div>
+                <h2 className="text-lg font-bold text-amber-800 flex items-center gap-2"><TrendingDown className="h-5 w-5" /> Desconto Comercial</h2>
+                <p className="text-xs text-amber-600">Distribui o desconto proporcionalmente entre os itens</p>
+              </div>
+              <button onClick={() => { setDescontoModal(null); setDescontoPreviewing(false); }} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              <div className="flex items-end gap-4">
+                <div className="flex-1">
+                  <Label className="text-xs text-gray-600 font-medium">Tipo de Desconto</Label>
+                  <div className="flex gap-2 mt-1.5">
+                    <button
+                      onClick={() => { setDescontoTipo("valor"); setDescontoPreviewing(false); }}
+                      className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors ${descontoTipo === "valor" ? "bg-amber-100 border-amber-400 text-amber-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      <DollarSign className="h-4 w-4 inline mr-1" /> Valor (R$)
+                    </button>
+                    <button
+                      onClick={() => { setDescontoTipo("percentual"); setDescontoPreviewing(false); }}
+                      className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors ${descontoTipo === "percentual" ? "bg-amber-100 border-amber-400 text-amber-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      % Percentual
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <Label className="text-xs text-gray-600 font-medium">
+                    {descontoTipo === "valor" ? "Valor do Desconto (R$)" : "Percentual do Desconto (%)"}
+                  </Label>
+                  <Input
+                    type="number"
+                    step={descontoTipo === "valor" ? "0.01" : "0.1"}
+                    min="0"
+                    value={descontoValor}
+                    onChange={e => { setDescontoValor(e.target.value); setDescontoPreviewing(false); }}
+                    placeholder={descontoTipo === "valor" ? "Ex: 500.00" : "Ex: 3.5"}
+                    className="mt-1.5 h-10 text-sm font-mono"
+                    autoFocus
+                  />
+                </div>
+                <Button
+                  onClick={() => setDescontoPreviewing(true)}
+                  disabled={!descontoValor || parseFloat(descontoValor) <= 0}
+                  className="h-10 bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
+                >
+                  <BarChart3 className="h-4 w-4" /> Calcular
+                </Button>
+              </div>
+
+              {(() => {
+                if (!descontoPreviewing) return null;
+                const preview = calcDescontoPreview(descontoModal.fornecedorId, descontoTipo, descontoValor);
+                if (!preview.length) return (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                    <p className="text-sm text-red-600 font-medium">Valor de desconto inválido</p>
+                    <p className="text-xs text-red-400 mt-1">Verifique se o desconto não excede o total da cotação</p>
+                  </div>
+                );
+                const totalOriginal = preview.reduce((s, i) => s + i.total, 0);
+                const totalNovo = preview.reduce((s, i) => s + i.novoTotal, 0);
+                const totalDesconto = totalOriginal - totalNovo;
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 text-center">
+                        <p className="text-[10px] text-gray-500 uppercase font-semibold">Total Original</p>
+                        <p className="text-lg font-bold text-gray-700">{totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                      </div>
+                      <div className="bg-amber-50 rounded-xl border border-amber-200 p-3 text-center">
+                        <p className="text-[10px] text-amber-600 uppercase font-semibold">Desconto</p>
+                        <p className="text-lg font-bold text-amber-700">- {totalDesconto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                        <p className="text-[10px] text-amber-500">({(totalDesconto / totalOriginal * 100).toFixed(2)}%)</p>
+                      </div>
+                      <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-3 text-center">
+                        <p className="text-[10px] text-emerald-600 uppercase font-semibold">Novo Total</p>
+                        <p className="text-lg font-bold text-emerald-700">{totalNovo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                      </div>
+                    </div>
+
+                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-600">Item</th>
+                            <th className="text-right px-3 py-2 font-semibold text-gray-600">Qtd</th>
+                            <th className="text-right px-3 py-2 font-semibold text-gray-600">Preço Atual</th>
+                            <th className="text-right px-3 py-2 font-semibold text-gray-600">Desc. Item</th>
+                            <th className="text-right px-3 py-2 font-semibold text-emerald-600">Novo Preço</th>
+                            <th className="text-right px-3 py-2 font-semibold text-emerald-600">Novo Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {preview.map(it => (
+                            <tr key={it.id} className="hover:bg-gray-50">
+                              <td className="px-3 py-1.5 text-gray-700 max-w-[200px] truncate" title={it.descricao}>{it.descricao}</td>
+                              <td className="px-3 py-1.5 text-right text-gray-500">{it.qtd}</td>
+                              <td className="px-3 py-1.5 text-right text-gray-500 line-through">{it.precoAtual.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                              <td className="px-3 py-1.5 text-right text-amber-600 font-medium">- {it.descItem.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                              <td className="px-3 py-1.5 text-right text-emerald-700 font-bold">{it.novoPreco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                              <td className="px-3 py-1.5 text-right text-emerald-600">{it.novoTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="sticky bottom-0 border-t border-gray-200 bg-white px-6 py-3 flex justify-between rounded-b-2xl">
+              <p className="text-xs text-gray-400 self-center">Os preços serão ajustados nos campos — depois clique "Salvar" para gravar</p>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => { setDescontoModal(null); setDescontoPreviewing(false); }}>Cancelar</Button>
+                <Button
+                  disabled={!descontoPreviewing || calcDescontoPreview(descontoModal.fornecedorId, descontoTipo, descontoValor).length === 0}
+                  onClick={() => aplicarDesconto()}
+                  className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+                >
+                  <CheckCircle className="h-4 w-4" /> Aplicar Desconto
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {editFornId && createPortal(
