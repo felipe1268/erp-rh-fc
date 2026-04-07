@@ -134,6 +134,28 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
   const status = data?.status;
   const disciplinas = data?.disciplinas || [];
   const loading = disciplinasQ.isLoading || classificarMut.isPending;
+  const [progresso, setProgresso] = useState(0);
+
+  useEffect(() => {
+    if (!classificarMut.isPending) { setProgresso(0); return; }
+    setProgresso(2);
+    const steps = [
+      { t: 500, v: 8 }, { t: 1500, v: 15 }, { t: 3000, v: 25 },
+      { t: 5000, v: 35 }, { t: 8000, v: 48 }, { t: 12000, v: 58 },
+      { t: 16000, v: 68 }, { t: 20000, v: 75 }, { t: 25000, v: 82 },
+      { t: 30000, v: 88 }, { t: 40000, v: 92 }, { t: 50000, v: 95 },
+    ];
+    const timers = steps.map(s => setTimeout(() => setProgresso(s.v), s.t));
+    return () => timers.forEach(clearTimeout);
+  }, [classificarMut.isPending]);
+
+  useEffect(() => {
+    if (!classificarMut.isPending && progresso > 0) {
+      setProgresso(100);
+      const t = setTimeout(() => setProgresso(0), 600);
+      return () => clearTimeout(t);
+    }
+  }, [classificarMut.isPending]);
 
   const allDisciplinaNames = disciplinas.map((d: any) => d.nome);
 
@@ -148,9 +170,23 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
         </DialogHeader>
 
         {loading && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
             <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
             <p className="text-sm text-gray-500">{classificarMut.isPending ? "IA classificando serviços..." : "Carregando..."}</p>
+            {classificarMut.isPending && (
+              <div className="w-72">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-violet-600 font-medium">Analisando orçamento</span>
+                  <span className="text-xs text-violet-600 font-semibold">{progresso}%</span>
+                </div>
+                <div className="h-2.5 bg-violet-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-violet-500 to-violet-600 rounded-full transition-all duration-700 ease-out" style={{ width: `${progresso}%` }} />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1.5 text-center">
+                  {progresso < 20 ? "Lendo serviços do orçamento..." : progresso < 45 ? "Analisando composições e descrições..." : progresso < 70 ? "Classificando por disciplina construtiva..." : progresso < 90 ? "Organizando e agrupando resultados..." : "Finalizando classificação..."}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
