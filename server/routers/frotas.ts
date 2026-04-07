@@ -5568,95 +5568,68 @@ Sempre retorne JSON válido, sem markdown.`;
       endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     }))
     .query(async ({ input }) => {
-      const token = process.env.FROTA_API_TOKEN;
-      if (!token) return { vehicles: [], error: 'Token Infleet não configurado' };
       try {
-        const vehiclesResp = await fetch('https://api.infleet.com.br/v1/graphql', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ query: `{ listVehicles { id plate displayName brand model type status odometer driver { name } } }` }),
-          signal: AbortSignal.timeout(12000),
-        });
-        const vehiclesData = await vehiclesResp.json() as any;
-        const infleetVehicles = vehiclesData.data?.listVehicles || [];
-
-        const tripsByVehicle: Record<string, any[]> = {};
-        const BATCH_SIZE = 3;
-        for (let i = 0; i < infleetVehicles.length; i += BATCH_SIZE) {
-          const batch = infleetVehicles.slice(i, i + BATCH_SIZE);
-          const batchResults = await Promise.allSettled(batch.map(async (v: any) => {
-            const tripsQuery = `{
-              trips(filter: { vehicleId: "${v.id}", fixTime: { startAt: "${input.startDate}T00:00:00.000Z", endAt: "${input.endDate}T23:59:59.000Z" } }) {
-                id startedAt finishedAt distanceTraveled averageSpeed maximumSpeed
-                driver { name }
-              }
-            }`;
-            try {
-              const tripsResp = await fetch('https://api.infleet.com.br/v1/graphql', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ query: tripsQuery }),
-                signal: AbortSignal.timeout(20000),
-              });
-              const tripsData = await tripsResp.json() as any;
-              return { vehicleId: v.id, trips: tripsData.data?.trips || [] };
-            } catch { return { vehicleId: v.id, trips: [] }; }
-          }));
-          batchResults.forEach(r => {
-            if (r.status === 'fulfilled') tripsByVehicle[r.value.vehicleId] = r.value.trips;
-          });
-        }
-
-        const results = [];
-        for (const v of infleetVehicles) {
-          const trips = tripsByVehicle[v.id] || [];
-
-          const byDay: Record<string, { km: number; trips: number; tempoMin: number; velMedia: number; velMax: number; motoristas: Set<string> }> = {};
-          trips.forEach((t: any) => {
-            const day = new Date(t.startedAt).toISOString().slice(0, 10);
-            if (!byDay[day]) byDay[day] = { km: 0, trips: 0, tempoMin: 0, velMedia: 0, velMax: 0, motoristas: new Set() };
-            byDay[day].km += t.distanceTraveled || 0;
-            byDay[day].trips++;
-            const durMin = (new Date(t.finishedAt).getTime() - new Date(t.startedAt).getTime()) / 60000;
-            byDay[day].tempoMin += durMin;
-            byDay[day].velMedia += (t.averageSpeed || 0) * (t.distanceTraveled || 0);
-            byDay[day].velMax = Math.max(byDay[day].velMax, t.maximumSpeed || 0);
-            if (t.driver?.name) byDay[day].motoristas.add(t.driver.name);
-          });
-
-          const dailyData = Object.entries(byDay).map(([day, d]) => ({
-            data: day,
-            km: Math.round(d.km * 10) / 10,
-            viagens: d.trips,
-            tempoRodandoMin: Math.round(d.tempoMin),
-            velMedia: d.km > 0 ? Math.round(d.velMedia / d.km * 10) / 10 : 0,
-            velMaxima: Math.round(d.velMax * 10) / 10,
-            motoristas: [...d.motoristas],
-          })).sort((a, b) => a.data.localeCompare(b.data));
-
-          const totalKm = dailyData.reduce((s, d) => s + d.km, 0);
-          const totalViagens = dailyData.reduce((s, d) => s + d.viagens, 0);
-          const diasComViagem = dailyData.filter(d => d.km > 0).length;
-
-          results.push({
-            infleetId: v.id,
-            placa: v.plate,
-            nome: v.displayName || `${v.brand || ''} ${v.model || ''}`.trim(),
-            tipo: v.type,
-            status: v.status,
-            kmOdometro: v.odometer ? Math.round(v.odometer) : null,
-            motorista: v.driver?.name || null,
-            totalKm: Math.round(totalKm * 10) / 10,
-            totalViagens,
-            diasComViagem,
-            mediaKmDia: diasComViagem > 0 ? Math.round(totalKm / diasComViagem * 10) / 10 : 0,
-            dailyData,
-          });
-        }
-
         if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
         const db = await getDb();
-        const fuelRes = await db.execute(sql`
+
+        const kmRes = (await db.execute(sql`
+          SELECT placa, COALESCE(nome_veiculo, '') as nome_veiculo,
+                 data, km_total, COALESCE(viagens, num_viagens, 0) as viagens,
+                 tempo_rodando_min, vel_media, vel_maxima,
+                 COALESCE(motoristas, motorista, '') as motoristas,
+                 infleet_vehicle_id, alerta_gps
+          FROM fleet_daily_km
+          WHERE company_id = ${input.companyId}
+            AND data >= ${input.startDate}
+            AND data <= ${input.endDate}
+          ORDER BY placa, data
+        `) as any).rows || [];
+
+        const byPlaca: Record<string, { nome: string; infleetId: string | null; days: any[] }> = {};
+        kmRes.forEach((r: any) => {
+          const p = (r.placa || '').replace(/[-\s]/g, '').toUpperCase();
+          if (!byPlaca[p]) byPlaca[p] = { nome: r.nome_veiculo || '', infleetId: r.infleet_vehicle_id || null, days: [] };
+          const km = parseFloat(r.km_total) || 0;
+          const viagens = parseInt(r.viagens) || 0;
+          const dataStr = typeof r.data === 'string' ? r.data.slice(0, 10) : new Date(r.data).toISOString().slice(0, 10);
+          const motoristasArr = r.motoristas ? String(r.motoristas).split(',').map((m: string) => m.trim()).filter(Boolean) : [];
+          byPlaca[p].days.push({
+            data: dataStr,
+            km,
+            viagens,
+            tempoRodandoMin: parseInt(r.tempo_rodando_min) || 0,
+            velMedia: parseFloat(r.vel_media) || 0,
+            velMaxima: parseFloat(r.vel_maxima) || 0,
+            motoristas: motoristasArr,
+            alertaGps: r.alerta_gps || null,
+          });
+        });
+
+        let infleetStatusMap: Record<string, { status: string; odometer: number | null; driver: string | null; type: string }> = {};
+        const token = process.env.FROTA_API_TOKEN;
+        if (token) {
+          try {
+            const vResp = await fetch('https://api.infleet.com.br/v1/graphql', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+              body: JSON.stringify({ query: `{ listVehicles { id plate status odometer type driver { name } } }` }),
+              signal: AbortSignal.timeout(8000),
+            });
+            const vData = await vResp.json() as any;
+            (vData.data?.listVehicles || []).forEach((v: any) => {
+              const p = (v.plate || '').replace(/[-\s]/g, '').toUpperCase();
+              infleetStatusMap[p] = { status: v.status, odometer: v.odometer ? Math.round(v.odometer) : null, driver: v.driver?.name || null, type: v.type };
+            });
+          } catch { /* status info is optional */ }
+        }
+
+        const vehicleRes = (await db.execute(sql`
+          SELECT id, placa FROM vehicles WHERE "companyId" = ${input.companyId}
+        `) as any).rows || [];
+        const plateToId: Record<string, number> = {};
+        vehicleRes.forEach((v: any) => { if (v.placa) plateToId[v.placa.replace(/[-\s]/g, '').toUpperCase()] = v.id; });
+
+        const fuelRes = (await db.execute(sql`
           SELECT vehicle_id, data, litros, valor_total, km_atual, km_anterior, consumo_km_l,
                  tipo_combustivel, motorista, posto
           FROM fleet_fuel_records
@@ -5664,19 +5637,11 @@ Sempre retorne JSON válido, sem markdown.`;
             AND data >= ${input.startDate}
             AND data <= ${input.endDate}
           ORDER BY data
-        `);
-        const fuelRecords = (fuelRes as any).rows || [];
-
-        const vehicleRes = await db.execute(sql`
-          SELECT id, placa FROM vehicles WHERE company_id = ${input.companyId}
-        `);
-        const localVehicles = (vehicleRes as any).rows || [];
-        const plateToId: Record<string, number> = {};
-        localVehicles.forEach((v: any) => { if (v.placa) plateToId[v.placa.replace(/[-\s]/g, '').toUpperCase()] = v.id; });
+        `) as any).rows || [];
 
         const fuelByPlaca: Record<string, any[]> = {};
-        fuelRecords.forEach((f: any) => {
-          const veh = localVehicles.find((v: any) => v.id === f.vehicle_id);
+        fuelRes.forEach((f: any) => {
+          const veh = vehicleRes.find((v: any) => v.id === f.vehicle_id);
           if (veh && veh.placa) {
             const key = veh.placa.replace(/[-\s]/g, '').toUpperCase();
             if (!fuelByPlaca[key]) fuelByPlaca[key] = [];
@@ -5694,24 +5659,45 @@ Sempre retorne JSON válido, sem markdown.`;
           }
         });
 
-        const vehiclesWithFuel = results.map(v => {
-          const placaNorm = v.placa.replace(/[-\s]/g, '').toUpperCase();
+        const allPlacas = new Set([...Object.keys(byPlaca), ...Object.keys(infleetStatusMap)]);
+
+        const vehicles = [...allPlacas].map(placaNorm => {
+          const kmData = byPlaca[placaNorm];
+          const dailyData = kmData?.days || [];
+          const statusInfo = infleetStatusMap[placaNorm];
+          const totalKm = dailyData.reduce((s: number, d: any) => s + d.km, 0);
+          const totalViagens = dailyData.reduce((s: number, d: any) => s + d.viagens, 0);
+          const diasComViagem = dailyData.filter((d: any) => d.km > 0).length;
           const abastecimentos = fuelByPlaca[placaNorm] || [];
           const totalLitros = abastecimentos.reduce((s: number, a: any) => s + a.litros, 0);
           const totalGasto = abastecimentos.reduce((s: number, a: any) => s + a.valorTotal, 0);
-          const consumoReal = totalLitros > 0 && v.totalKm > 0 ? Math.round(v.totalKm / totalLitros * 10) / 10 : null;
-          const custoKm = v.totalKm > 0 ? Math.round(totalGasto / v.totalKm * 100) / 100 : null;
+          const consumoReal = totalLitros > 0 && totalKm > 0 ? Math.round(totalKm / totalLitros * 10) / 10 : null;
+          const custoKm = totalKm > 0 ? Math.round(totalGasto / totalKm * 100) / 100 : null;
+
+          const rawPlaca = kmData?.days[0] ? kmRes.find((r: any) => (r.placa || '').replace(/[-\s]/g, '').toUpperCase() === placaNorm)?.placa || placaNorm : placaNorm;
+
           return {
-            ...v,
+            infleetId: kmData?.infleetId || null,
+            placa: rawPlaca,
+            nome: kmData?.nome || '',
+            tipo: statusInfo?.type || '',
+            status: statusInfo?.status || 'UNKNOWN',
+            kmOdometro: statusInfo?.odometer || null,
+            motorista: statusInfo?.driver || null,
+            totalKm: Math.round(totalKm * 10) / 10,
+            totalViagens,
+            diasComViagem,
+            mediaKmDia: diasComViagem > 0 ? Math.round(totalKm / diasComViagem * 10) / 10 : 0,
+            dailyData,
             abastecimentos,
             totalLitros: Math.round(totalLitros * 10) / 10,
             totalGastoCombustivel: Math.round(totalGasto * 100) / 100,
             consumoRealKmL: consumoReal,
             custoKm,
           };
-        });
+        }).sort((a, b) => b.totalKm - a.totalKm);
 
-        return { vehicles: vehiclesWithFuel, error: null };
+        return { vehicles, error: null };
       } catch (e: any) {
         return { vehicles: [], error: e.message || 'Erro ao buscar dados' };
       }
