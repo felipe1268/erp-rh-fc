@@ -1933,6 +1933,8 @@ export default function Cotacoes() {
 
       if (valorDesc <= 0 || valorDesc > totalGeral) return [];
 
+      const targetTotal = totalGeral - valorDesc;
+
       let descontoAcumulado = 0;
       const result = itemTotais.map((it, idx) => {
         const peso = it.total / totalGeral;
@@ -1946,6 +1948,20 @@ export default function Cotacoes() {
         const novoPreco = Math.max(0, Math.round((it.precoAtual - descItem / it.qtd) * 100) / 100);
         return { ...it, descItem, novoPreco, novoTotal: Math.round(novoPreco * it.qtd * 100) / 100 };
       });
+
+      const somaNovoTotal = result.reduce((s, i) => s + i.novoTotal, 0);
+      const diff = Math.round((targetTotal - somaNovoTotal) * 100) / 100;
+      if (diff !== 0 && result.length > 0) {
+        const last = result[result.length - 1];
+        last.novoTotal = Math.round((last.novoTotal + diff) * 100) / 100;
+        if (last.qtd > 0) {
+          last.novoPreco = Math.round((last.novoTotal / last.qtd) * 100) / 100;
+          last.novoTotal = Math.round(last.novoPreco * last.qtd * 100) / 100;
+          const diffFinal = Math.round((targetTotal - result.reduce((s, i) => s + i.novoTotal, 0)) * 100) / 100;
+          if (diffFinal !== 0) last.novoTotal = Math.round((last.novoTotal + diffFinal) * 100) / 100;
+        }
+        last.descItem = Math.round((last.total - last.novoTotal) * 100) / 100;
+      }
 
       return result;
     }
