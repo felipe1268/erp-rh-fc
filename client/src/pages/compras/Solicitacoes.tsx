@@ -129,6 +129,9 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
   const [novoNome, setNovoNome] = useState("");
   const [moverItem, setMoverItem] = useState<{ id: number; eapCodigo: string; descricao: string; disciplinaOriginal: string } | null>(null);
   const [moverPara, setMoverPara] = useState("");
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [moverSelecionadosPara, setMoverSelecionadosPara] = useState("");
+  const [showMoverSelecionados, setShowMoverSelecionados] = useState(false);
 
   const data = disciplinasQ.data;
   const status = data?.status;
@@ -158,6 +161,46 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
   }, [classificarMut.isPending]);
 
   const allDisciplinaNames = disciplinas.map((d: any) => d.nome);
+
+  const selKey = (disc: string, eap: string) => `${disc}||${eap}`;
+  const parseSelKey = (k: string) => { const [disc, eap] = k.split("||"); return { disc, eap }; };
+
+  const toggleItem = (disc: string, eap: string) => {
+    const k = selKey(disc, eap);
+    setSelecionados(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  };
+
+  const toggleDisciplina = (disc: any) => {
+    const keys = disc.itens.map((i: any) => selKey(disc.nome, i.eapCodigo));
+    const allSelected = keys.every((k: string) => selecionados.has(k));
+    setSelecionados(prev => {
+      const n = new Set(prev);
+      if (allSelected) { keys.forEach((k: string) => n.delete(k)); }
+      else { keys.forEach((k: string) => n.add(k)); }
+      return n;
+    });
+  };
+
+  const isDisciplinaAllSelected = (disc: any) => disc.itens.length > 0 && disc.itens.every((i: any) => selecionados.has(selKey(disc.nome, i.eapCodigo)));
+  const isDisciplinaPartial = (disc: any) => disc.itens.some((i: any) => selecionados.has(selKey(disc.nome, i.eapCodigo))) && !isDisciplinaAllSelected(disc);
+
+  const selecionadosInfo = () => {
+    const items: { id: number; eapCodigo: string; descricao: string; disciplinaOriginal: string }[] = [];
+    selecionados.forEach(k => {
+      const { disc, eap } = parseSelKey(k);
+      const d = disciplinas.find((dd: any) => dd.nome === disc);
+      if (!d) return;
+      const item = d.itens.find((i: any) => i.eapCodigo === eap);
+      if (item) items.push({ id: item.id, eapCodigo: item.eapCodigo, descricao: item.descricao, disciplinaOriginal: disc });
+    });
+    return items;
+  };
+
+  const disciplinasComSelecionados = () => {
+    const discs = new Set<string>();
+    selecionados.forEach(k => { discs.add(parseSelKey(k).disc); });
+    return Array.from(discs);
+  };
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -240,15 +283,23 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
 
             {disciplinas.map((disc: any) => {
               const isOpen = expandido === disc.nome;
+              const discAllSel = isDisciplinaAllSelected(disc);
+              const discPartial = isDisciplinaPartial(disc);
               return (
                 <div key={disc.nome} className="border rounded-lg overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setExpandido(isOpen ? null : disc.nome)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-                  >
+                  <div className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">
                     <div className="flex items-center gap-3">
-                      {isOpen ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                      <input
+                        type="checkbox"
+                        checked={discAllSel}
+                        ref={el => { if (el) el.indeterminate = discPartial; }}
+                        onChange={() => toggleDisciplina(disc)}
+                        className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer accent-violet-600"
+                        onClick={e => e.stopPropagation()}
+                      />
+                      <button type="button" onClick={() => setExpandido(isOpen ? null : disc.nome)} className="flex items-center gap-2">
+                        {isOpen ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                      </button>
                       {editandoNome === disc.nome ? (
                         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                           <input
@@ -293,7 +344,7 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                       </div>
                       <span className="text-xs font-medium text-gray-600 w-8 text-right">{disc.pctContratado}%</span>
                     </div>
-                  </button>
+                  </div>
 
                   {isOpen && (
                     <div className="divide-y">
@@ -301,6 +352,12 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                         <div key={item.id} className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 text-xs">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={selecionados.has(selKey(disc.nome, item.eapCodigo))}
+                                onChange={() => toggleItem(disc.nome, item.eapCodigo)}
+                                className="h-3.5 w-3.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer accent-violet-600 shrink-0"
+                              />
                               <code className="text-violet-700 font-mono text-[10px] bg-violet-50 px-1.5 py-0.5 rounded">{item.eapCodigo}</code>
                               <span className="truncate text-gray-700">{item.descricao}</span>
                             </div>
@@ -345,6 +402,72 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
               );
             })}
           </div>
+        )}
+
+        {selecionados.size > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-violet-700 text-white rounded-xl shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4">
+            <span className="text-sm font-medium">{selecionados.size} ite{selecionados.size > 1 ? "ns" : "m"} selecionado{selecionados.size > 1 ? "s" : ""}</span>
+            <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0 gap-1.5 text-xs" onClick={() => { setShowMoverSelecionados(true); setMoverSelecionadosPara(""); }}>
+              <ArrowRightLeft className="h-3.5 w-3.5" /> Mover para disciplina
+            </Button>
+            <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0 gap-1.5 text-xs" onClick={() => {
+              const itens = selecionadosInfo().filter(i => {
+                const d = disciplinas.find((dd: any) => dd.nome === i.disciplinaOriginal);
+                const item = d?.itens?.find((it: any) => it.eapCodigo === i.eapCodigo);
+                return item && item.status !== "contratado" && item.saldo > 0;
+              });
+              if (itens.length > 0) itens.forEach(i => {
+                const d = disciplinas.find((dd: any) => dd.nome === i.disciplinaOriginal);
+                const item = d?.itens?.find((it: any) => it.eapCodigo === i.eapCodigo);
+                if (item) onAddItem(item);
+              });
+              setSelecionados(new Set());
+            }}>
+              <Plus className="h-3.5 w-3.5" /> + SC
+            </Button>
+            <button type="button" onClick={() => setSelecionados(new Set())} className="text-white/70 hover:text-white ml-1">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {showMoverSelecionados && (
+          <Dialog open={showMoverSelecionados} onOpenChange={() => { setShowMoverSelecionados(false); setMoverSelecionadosPara(""); }}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="text-sm">Mover {selecionados.size} ite{selecionados.size > 1 ? "ns" : "m"} para outra disciplina</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="max-h-32 overflow-y-auto text-xs text-gray-600 space-y-0.5">
+                  {selecionadosInfo().slice(0, 10).map(i => (
+                    <p key={i.eapCodigo} className="truncate"><code className="text-violet-600">{i.eapCodigo}</code> {i.descricao}</p>
+                  ))}
+                  {selecionados.size > 10 && <p className="text-gray-400">...e mais {selecionados.size - 10}</p>}
+                </div>
+                <div>
+                  <Label className="text-xs">Mover todos para:</Label>
+                  <Select value={moverSelecionadosPara} onValueChange={setMoverSelecionadosPara}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a disciplina" /></SelectTrigger>
+                    <SelectContent>
+                      {allDisciplinaNames.map((n: string) => (
+                        <SelectItem key={n} value={n}>{n}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => { setShowMoverSelecionados(false); setMoverSelecionadosPara(""); }}>Cancelar</Button>
+                  <Button size="sm" disabled={!moverSelecionadosPara || corrigirMut.isPending} className="bg-violet-600 hover:bg-violet-700" onClick={() => {
+                    const itens = selecionadosInfo()
+                      .filter(i => i.disciplinaOriginal !== moverSelecionadosPara)
+                      .map(i => ({ id: i.id, eapCodigo: i.eapCodigo, descricao: i.descricao, disciplinaOriginal: i.disciplinaOriginal, disciplinaNova: moverSelecionadosPara }));
+                    if (itens.length > 0) corrigirMut.mutate({ companyId, orcamentoId: orcamentoId!, itens });
+                    setShowMoverSelecionados(false); setMoverSelecionadosPara(""); setSelecionados(new Set());
+                  }}>Mover {selecionados.size}</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         )}
 
         {moverItem && (
