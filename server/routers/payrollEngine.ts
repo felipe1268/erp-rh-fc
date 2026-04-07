@@ -92,6 +92,40 @@ function getDateRange(startDate: string, endDate: string): string[] {
 }
 
 // Parse month reference to year and month
+function calcularINSS(salarioMensal: number): number {
+  const faixas = [
+    { teto: 1412.00, aliquota: 0.075 },
+    { teto: 2666.68, aliquota: 0.09 },
+    { teto: 4000.03, aliquota: 0.12 },
+    { teto: 7786.02, aliquota: 0.14 },
+  ];
+  let inss = 0;
+  let anterior = 0;
+  for (const f of faixas) {
+    if (salarioMensal <= anterior) break;
+    const base = Math.min(salarioMensal, f.teto) - anterior;
+    inss += base * f.aliquota;
+    anterior = f.teto;
+  }
+  return inss;
+}
+
+function calcularIRRF(baseIR: number): number {
+  const faixas = [
+    { limite: 2259.20, aliquota: 0, deducao: 0 },
+    { limite: 2826.65, aliquota: 0.075, deducao: 169.44 },
+    { limite: 3751.05, aliquota: 0.15, deducao: 381.44 },
+    { limite: 4664.68, aliquota: 0.225, deducao: 662.77 },
+    { limite: Infinity, aliquota: 0.275, deducao: 896.00 },
+  ];
+  for (const f of faixas) {
+    if (baseIR <= f.limite) {
+      return Math.max(0, baseIR * f.aliquota - f.deducao);
+    }
+  }
+  return 0;
+}
+
 function parseMesRef(mesRef: string): { year: number; month: number } {
   const [y, m] = mesRef.split("-").map(Number);
   return { year: y, month: m };
@@ -1418,13 +1452,14 @@ export const payrollEngineRouter = router({
         salarioBase: employees.salarioBase,
         horasMensais: employees.horasMensais,
         dataAdmissao: employees.dataAdmissao,
+        tipoRemuneracao: employees.tipoRemuneracao,
       }).from(employees).where(
         and(
           companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, "CLT"),
           eq(employees.status, "Ativo"),
           sql`${employees.deletedAt} IS NULL`,
-          sql`${employees.valorHora} IS NOT NULL AND ${employees.valorHora} != ''`,
+          sql`(${employees.valorHora} IS NOT NULL AND ${employees.valorHora} != '') OR ${employees.tipoRemuneracao} = 'mensalista'`,
         )
       );
 
@@ -1436,7 +1471,7 @@ export const payrollEngineRouter = router({
       const companyIdsSqlForAviso = sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`);
       const avisoDesligadosRows = ((await db.execute(sql`
         SELECT e.id, e."companyId", e."nomeCompleto", e."valorHora", e."salarioBase", 
-               e."horasMensais", e."dataAdmissao",
+               e."horasMensais", e."dataAdmissao", e."tipoRemuneracao",
                tn."dataFim" as "avisoUltimoDia"
         FROM employees e
         INNER JOIN termination_notices tn ON tn."employeeId" = e.id AND tn."deletedAt" IS NULL
@@ -1445,7 +1480,7 @@ export const payrollEngineRouter = router({
           AND e."tipoContrato" = 'CLT'
           AND e.status = 'Desligado'
           AND e."deletedAt" IS NULL
-          AND e."valorHora" IS NOT NULL AND e."valorHora" != ''
+          AND ((e."valorHora" IS NOT NULL AND e."valorHora" != '') OR e."tipoRemuneracao" = 'mensalista')
           AND tn."dataFim" >= ${primeiroDiaMesAviso}::date
           AND tn."dataInicio" <= ${ultimoDiaMesAviso}::date
       `)) as any).rows || [];
@@ -1476,6 +1511,7 @@ export const payrollEngineRouter = router({
             salarioBase: row.salarioBase,
             horasMensais: row.horasMensais,
             dataAdmissao: row.dataAdmissao,
+            tipoRemuneracao: row.tipoRemuneracao || 'horista',
           });
         }
       }
@@ -1492,6 +1528,7 @@ export const payrollEngineRouter = router({
           eq(employees.status, "Ativo"),
           sql`${employees.deletedAt} IS NULL`,
           sql`(${employees.valorHora} IS NULL OR ${employees.valorHora} = '')`,
+          sql`(${employees.tipoRemuneracao} IS NULL OR ${employees.tipoRemuneracao} != 'mensalista')`,
         )
       );
 
@@ -1630,17 +1667,39 @@ export const payrollEngineRouter = router({
         const faltas = faltasMap.get(emp.id) || 0;
         const minutosHE = 0;
         const valorHE = 0;
+        const isMensalista = (emp.tipoRemuneracao === 'mensalista');
 
         // ── Salário proporcional: férias + aviso prévio (desligados) ──────
-        // Fórmula: salário = valorHora × (horasMensais × diasTrabalhados / 30)
-        //          diasTrabalhados = diasNoMes − diasDeFerias − diasAusentes(aviso)
         const diasFeriasNoMes = feriasMesMap.get(emp.id) || 0;
         const avisoUltimoDia = avisoUltimoDiaMap.get(emp.id);
         const diasAusentesAviso = avisoUltimoDia ? Math.max(0, diasNoMes - avisoUltimoDia) : 0;
         const diasTrabalhados = Math.max(0, diasNoMes - diasFeriasNoMes - diasAusentesAviso);
-        const salarioBruto = valorHora * (horasMensaisBase * diasTrabalhados / 30);
+
+        let salarioBruto: number;
+        let salarioMensalCompleto: number;
+
+        if (isMensalista) {
+          const salBase = parseBRL(emp.salarioBase);
+          salarioMensalCompleto = salBase;
+          if (diasFeriasNoMes > 0 || diasAusentesAviso > 0) {
+            salarioBruto = salBase * (diasTrabalhados / diasNoMes);
+          } else {
+            salarioBruto = salBase;
+          }
+        } else {
+          salarioBruto = valorHora * (horasMensaisBase * diasTrabalhados / 30);
+          salarioMensalCompleto = valorHora * (horasMensaisBase * diasNoMes / 30);
+        }
+
         const valorAdiantamento = salarioBruto * (percentual / 100);
+
+        // ── IRRF sobre adiantamento (proporcional ao percentual) ──────
+        const inssEmpregado = calcularINSS(salarioMensalCompleto);
+        const baseIR = salarioMensalCompleto - inssEmpregado;
+        const irrfMensal = calcularIRRF(baseIR);
+        const irAdiantamento = irrfMensal > 0 ? Math.round(irrfMensal * (percentual / 100) * 100) / 100 : 0;
         const valorTotalVale = valorAdiantamento;
+        const valorLiquidoVale = valorTotalVale - irAdiantamento;
 
         // Para regra de bloqueio: férias úteis na quinzena 1-15
         const diasFeriasQuinzena = feriasQuinzenaMap.get(emp.id) || 0;
@@ -1692,11 +1751,14 @@ export const payrollEngineRouter = router({
             : "admissao_recente";
           advanceInsertRows.push(sql`(${emp.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
             ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
+            ${formatMoney(irAdiantamento)}, ${formatMoney(valorLiquidoVale)},
             ${1}, ${motivoBloqueio},
             ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'alerta'})`);
           results.push({
             employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
             valorAdiantamento, valorHE, valorTotalVale,
+            irRetido: irAdiantamento, valorLiquido: valorLiquidoVale,
+            isMensalista,
             temAlerta: true, alertaTipo, alertaMotivo: motivoBloqueio,
             bloqueado: true, faltas, minutosHE, status: 'alerta',
           });
@@ -1707,14 +1769,15 @@ export const payrollEngineRouter = router({
         const savedMotivo = foiAprovadoManualmente ? motivoBloqueio : null;
         advanceInsertRows.push(sql`(${emp.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
           ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
+          ${formatMoney(irAdiantamento)}, ${formatMoney(valorLiquidoVale)},
           ${0}, ${savedMotivo},
           ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'calculado'})`);
 
         if (!isRejeitadoPrev) {
           eventInsertRows.push(sql`(${emp.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista},
-            ${formatMoney(valorTotalVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto},
+            ${formatMoney(valorLiquidoVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto},
             ${`Vale ${input.mesReferencia} - ${emp.nomeCompleto}`}, 'payroll_advance', ${ctx.user.name || "Sistema"})`);
-          totalVale += valorTotalVale;
+          totalVale += valorLiquidoVale;
         }
 
         const temAlertaFerias = !foiAprovadoManualmente && !isRejeitadoPrev && diasFeriasNoMes > 0;
@@ -1727,6 +1790,8 @@ export const payrollEngineRouter = router({
         results.push({
           employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
           valorAdiantamento, valorHE, valorTotalVale,
+          irRetido: irAdiantamento, valorLiquido: valorLiquidoVale,
+          isMensalista,
           temAlerta: temAlertaInfo, alertaTipo: alertaTipoFinal,
           alertaMotivo: alertaMotivoList.join(" | "),
           bloqueado: false, faltas, minutosHE, status: isRejeitadoPrev ? 'rejeitado' : 'calculado',
@@ -1737,7 +1802,9 @@ export const payrollEngineRouter = router({
       if (advanceInsertRows.length > 0) {
         await db.execute(sql`
           INSERT INTO payroll_advances ("companyId", "employeeId", "mesReferencia", "salarioBrutoMes", "percentualAdiantamento",
-            "valorAdiantamento", "valorHorasExtras", "horasExtrasQtd", "valorTotalVale", "bloqueado", "motivoBloqueio",
+            "valorAdiantamento", "valorHorasExtras", "horasExtrasQtd", "valorTotalVale",
+            "irRetidoAdiantamento", "valorLiquidoVale",
+            "bloqueado", "motivoBloqueio",
             "faltasNoPeriodo", "valorHora", "cargaHorariaDiaria", "diasUteisNoMes", status)
           VALUES ${sql.join(advanceInsertRows, sql`,`)}
         `);
@@ -1848,16 +1915,17 @@ export const payrollEngineRouter = router({
           `);
           // Create financial event for approved
           const advRows = ((await db.execute(sql`
-            SELECT "valorTotalVale" FROM payroll_advances 
+            SELECT "valorTotalVale", "valorLiquidoVale" FROM payroll_advances 
             WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${decisao.employeeId}
           `)) as any).rows || [];
           const adv = (advRows as any[])?.[0];
           if (adv) {
+            const valorFinanceiro = adv.valorLiquidoVale ?? adv.valorTotalVale;
             const empRows = ((await db.execute(sql`SELECT "nomeCompleto" FROM employees WHERE id = ${decisao.employeeId}`)) as any).rows || [];
             const empName = (empRows as any[])?.[0]?.nomeCompleto || 'Funcionário';
             await db.execute(sql`
               INSERT INTO financial_events ("companyId", tipo, categoria, "mesCompetencia", "dataPrevista", valor, status, "employeeId", "employeeName", descricao, "origemTipo", "criadoPor")
-              VALUES (${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista}, ${adv.valorTotalVale}, 'consolidado', ${decisao.employeeId}, ${empName}, ${`Vale ${input.mesReferencia} - ${empName} (aprovado manualmente)`}, 'payroll_advance', ${ctx.user.name || "Sistema"})
+              VALUES (${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista}, ${valorFinanceiro}, 'consolidado', ${decisao.employeeId}, ${empName}, ${`Vale ${input.mesReferencia} - ${empName} (aprovado manualmente)`}, 'payroll_advance', ${ctx.user.name || "Sistema"})
             `);
           }
           aprovados++;
@@ -1896,16 +1964,17 @@ export const payrollEngineRouter = router({
       const { year, month } = parseMesRef(input.mesReferencia);
       const dataPrevista = `${year}-${String(month).padStart(2, "0")}-${String(criteria.diaAdiantamento).padStart(2, "0")}`;
       const advRows = ((await db.execute(sql`
-        SELECT "valorTotalVale" FROM payroll_advances
+        SELECT "valorTotalVale", "valorLiquidoVale" FROM payroll_advances
         WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${input.employeeId}
       `)) as any).rows || [];
       const adv = (advRows as any[])?.[0];
       if (adv) {
+        const valorFinanceiro = adv.valorLiquidoVale ?? adv.valorTotalVale;
         const empRows = ((await db.execute(sql`SELECT "nomeCompleto" FROM employees WHERE id = ${input.employeeId}`)) as any).rows || [];
         const empName = (empRows as any[])?.[0]?.nomeCompleto || 'Funcionário';
         await db.execute(sql`
           INSERT INTO financial_events ("companyId", tipo, categoria, "mesCompetencia", "dataPrevista", valor, status, "employeeId", "employeeName", descricao, "origemTipo", "criadoPor")
-          VALUES (${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista}, ${adv.valorTotalVale}, 'consolidado', ${input.employeeId}, ${empName}, ${`Vale ${input.mesReferencia} - ${empName} (revertido)`}, 'payroll_advance', ${ctx.user.name || "Sistema"})
+          VALUES (${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista}, ${valorFinanceiro}, 'consolidado', ${input.employeeId}, ${empName}, ${`Vale ${input.mesReferencia} - ${empName} (revertido)`}, 'payroll_advance', ${ctx.user.name || "Sistema"})
         `);
       }
       return { message: "Vale revertido com sucesso" };
@@ -1933,20 +2002,34 @@ export const payrollEngineRouter = router({
       const valorFormatado = valorNum.toFixed(2);
 
       const oldRows = ((await db.execute(sql`
-        SELECT "valorTotalVale", "valorAdiantamento" FROM payroll_advances
+        SELECT "valorTotalVale", "valorAdiantamento", "irRetidoAdiantamento", "valorLiquidoVale",
+               "salarioBrutoMes", "percentualAdiantamento"
+        FROM payroll_advances
         WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${input.employeeId}
       `)) as any).rows || [];
       if (oldRows.length === 0) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Registro de vale não encontrado." });
       }
-      const valorAnterior = oldRows[0].valorTotalVale;
+      const row = oldRows[0];
+      const valorAnterior = row.valorTotalVale;
       const editadoPor = ctx.user.name || "Master";
       const obs = `[EDITADO por ${editadoPor}: R$ ${valorAnterior} → R$ ${valorFormatado}${input.motivo ? ` | Motivo: ${input.motivo}` : ""}]`;
+
+      const salarioBruto = parseFloat(row.salarioBrutoMes) || 0;
+      const percentual = parseFloat(row.percentualAdiantamento) || 40;
+      const inss = calcularINSS(salarioBruto);
+      const baseIR = salarioBruto - inss;
+      const irrfMensal = calcularIRRF(baseIR);
+      const irProporcional = irrfMensal > 0 ? Math.round(irrfMensal * (percentual / 100) * 100) / 100 : 0;
+      const novoIR = Math.min(irProporcional, valorNum);
+      const novoLiquido = Math.max(valorNum - novoIR, 0);
 
       await db.execute(sql`
         UPDATE payroll_advances
         SET "valorTotalVale" = ${valorFormatado},
             "valorAdiantamento" = ${valorFormatado},
+            "irRetidoAdiantamento" = ${novoIR.toFixed(2)},
+            "valorLiquidoVale" = ${novoLiquido.toFixed(2)},
             "observacoes" = COALESCE("observacoes", '') || ${' ' + obs},
             "updatedAt" = NOW()
         WHERE "companyId" = ${input.companyId}
@@ -1956,8 +2039,8 @@ export const payrollEngineRouter = router({
 
       await db.execute(sql`
         UPDATE financial_events
-        SET valor = ${valorFormatado},
-            descricao = descricao || ${` (valor editado: ${valorAnterior} → ${valorFormatado})`}
+        SET valor = ${novoLiquido.toFixed(2)},
+            descricao = descricao || ${` (valor editado: ${valorAnterior} → ${valorFormatado}, líquido: ${novoLiquido.toFixed(2)})`}
         WHERE "companyId" = ${input.companyId}
           AND "mesCompetencia" = ${input.mesReferencia}
           AND "employeeId" = ${input.employeeId}
@@ -1965,7 +2048,7 @@ export const payrollEngineRouter = router({
           AND tipo = 'saida_vale'
       `);
 
-      return { success: true, valorAnterior, novoValor: valorFormatado, message: `Vale editado: R$ ${valorAnterior} → R$ ${valorFormatado}` };
+      return { success: true, valorAnterior, novoValor: valorFormatado, novoLiquido: novoLiquido.toFixed(2), message: `Vale editado: R$ ${valorAnterior} → R$ ${valorFormatado} (líquido: R$ ${novoLiquido.toFixed(2)})` };
     }),
 
   // ============================================================

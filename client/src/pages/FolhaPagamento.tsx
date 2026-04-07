@@ -1719,12 +1719,13 @@ export default function FolhaPagamento() {
     const todosFunc = valeResult.funcionarios || [];
     const funcionariosComAlerta = todosFunc.filter((f: any) => f.temAlerta).sort((a: any, b: any) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
     const funcionariosSemAlerta = todosFunc.filter((f: any) => !f.temAlerta).sort((a: any, b: any) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
-    const totalSemAlerta = funcionariosSemAlerta.reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
+    const totalSemAlerta = funcionariosSemAlerta.reduce((s: number, f: any) => s + (f.valorLiquido ?? f.valorTotalVale ?? 0), 0);
     const totalSemAlertaEfetivo = funcionariosSemAlerta
       .filter((f: any) => f.status !== 'rejeitado' && !valeExcluirSel.has(f.employeeId))
-      .reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
+      .reduce((s: number, f: any) => s + (f.valorLiquido ?? f.valorTotalVale ?? 0), 0);
     const hasAnyExcluidos = funcionariosSemAlerta.some((f: any) => f.status === 'rejeitado') || valeExcluirSel.size > 0;
-    const totalComAlerta = funcionariosComAlerta.reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
+    const totalComAlerta = funcionariosComAlerta.reduce((s: number, f: any) => s + (f.valorLiquido ?? f.valorTotalVale ?? 0), 0);
+    const totalIRRetido = todosFunc.reduce((s: number, f: any) => s + (f.irRetido || 0), 0);
     const comHE = todosFunc.filter((f: any) => (f.valorHE || 0) > 0);
     const totalHE = comHE.reduce((s: number, f: any) => s + (f.valorHE || 0), 0);
 
@@ -1901,7 +1902,9 @@ export default function FolhaPagamento() {
                         <th className="text-left py-2 px-2">Funcionário</th>
                         <th className="text-left py-2 px-2">Motivo do Alerta</th>
                         <th className="text-right py-2 px-2">Faltas (1-15)</th>
-                        <th className="text-right py-2 px-2">Total Vale</th>
+                        <th className="text-right py-2 px-2">Bruto</th>
+                        <th className="text-right py-2 px-2">IR</th>
+                        <th className="text-right py-2 px-2">Líquido</th>
                         <th className="text-center py-2 px-2 no-print">Decisão</th>
                       </tr>
                     </thead>
@@ -1957,6 +1960,7 @@ export default function FolhaPagamento() {
                             ) : (
                               <div className="flex items-center justify-end gap-1">
                                 {formatBRL(f.valorTotalVale)}
+                                {f.isMensalista && <span className="text-[9px] text-purple-600 font-normal ml-0.5">(M)</span>}
                                 {isMaster && (
                                   <button className="text-slate-300 hover:text-blue-600 transition-colors no-print" title="Editar valor (Master)"
                                     onClick={() => { setValeEditId(f.employeeId); setValeEditValor(String(parseFloat(String(f.valorTotalVale || "0").replace(/[^\d.,]/g, "").replace(",", ".")).toFixed(2))); }}>
@@ -1965,6 +1969,12 @@ export default function FolhaPagamento() {
                                 )}
                               </div>
                             )}
+                          </td>
+                          <td className="text-right py-2 px-2 text-red-600 text-xs">
+                            {(f.irRetido || 0) > 0 ? `-${formatBRL(f.irRetido)}` : '—'}
+                          </td>
+                          <td className="text-right py-2 px-2 font-bold text-green-700">
+                            {formatBRL(f.valorLiquido ?? f.valorTotalVale)}
                           </td>
                           <td className="text-center py-2 px-2 no-print">
                             <div className="flex items-center justify-center gap-1">
@@ -2061,7 +2071,9 @@ export default function FolhaPagamento() {
                       <th className="text-left py-2 px-2">Funcionário</th>
                       <th className="text-right py-2 px-2">Salário</th>
                       <th className="text-right py-2 px-2">Adiantamento ({valeResult.percentual}%)</th>
-                      <th className="text-right py-2 px-2">Total Vale</th>
+                      <th className="text-right py-2 px-2">Bruto</th>
+                      <th className="text-right py-2 px-2">IR</th>
+                      <th className="text-right py-2 px-2">Líquido</th>
                       <th className="text-center py-2 px-2">Status</th>
                     </tr>
                   </thead>
@@ -2130,6 +2142,7 @@ export default function FolhaPagamento() {
                             ) : (
                               <div className="flex items-center justify-end gap-1">
                                 {formatBRL(f.valorTotalVale)}
+                                {f.isMensalista && <span className="text-[9px] text-purple-600 font-normal ml-0.5">(M)</span>}
                                 {isMaster && !isRejeitado && (
                                   <button className="text-slate-300 hover:text-blue-600 transition-colors no-print" title="Editar valor (Master)"
                                     onClick={() => { setValeEditId(f.employeeId); setValeEditValor(String(parseFloat(String(f.valorTotalVale || "0").replace(/[^\d.,]/g, "").replace(",", ".")).toFixed(2))); }}>
@@ -2138,6 +2151,12 @@ export default function FolhaPagamento() {
                                 )}
                               </div>
                             )}
+                          </td>
+                          <td className={`text-right py-2 px-2 text-red-600 text-xs ${isHighlighted ? "line-through" : ""}`}>
+                            {(f.irRetido || 0) > 0 ? `-${formatBRL(f.irRetido)}` : '—'}
+                          </td>
+                          <td className={`text-right py-2 px-2 font-bold text-green-700 ${isHighlighted ? "line-through text-red-500" : ""}`}>
+                            {formatBRL(f.valorLiquido ?? f.valorTotalVale)}
                           </td>
                           <td className="text-center py-2 px-2">
                             {isRejeitado ? (
