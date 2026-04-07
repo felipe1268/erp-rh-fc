@@ -613,13 +613,12 @@ export const heSolicitacoesRouter = router({
 
   getConfirmacoes: protectedProcedure.input(z.object({
     solicitacaoId: z.number(),
-  })).query(async ({ input, ctx }) => {
+  })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
 
-    const companyIds = resolveCompanyIds(ctx.user);
     const [sol] = await db.select({ id: heSolicitacoes.id }).from(heSolicitacoes)
-      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyIds.length === 1 ? eq(heSolicitacoes.companyId, companyIds[0]) : inArray(heSolicitacoes.companyId, companyIds)));
+      .where(eq(heSolicitacoes.id, input.solicitacaoId));
     if (!sol) return [];
 
     const rows = await db.select({
@@ -711,9 +710,8 @@ export const heSolicitacoesRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-    const companyIds = resolveCompanyIds(ctx.user);
     const [sol] = await db.select({ id: heSolicitacoes.id }).from(heSolicitacoes)
-      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyIds.length === 1 ? eq(heSolicitacoes.companyId, companyIds[0]) : inArray(heSolicitacoes.companyId, companyIds)));
+      .where(eq(heSolicitacoes.id, input.solicitacaoId));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
 
     const userName = ctx.user?.name || "sistema";
