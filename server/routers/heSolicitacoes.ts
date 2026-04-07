@@ -654,9 +654,8 @@ export const heSolicitacoesRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-    const companyIds = resolveCompanyIds(ctx.user);
-    const [sol] = await db.select({ id: heSolicitacoes.id, status: heSolicitacoes.status }).from(heSolicitacoes)
-      .where(and(eq(heSolicitacoes.id, input.solicitacaoId), companyIds.length === 1 ? eq(heSolicitacoes.companyId, companyIds[0]) : inArray(heSolicitacoes.companyId, companyIds)));
+    const [sol] = await db.select({ id: heSolicitacoes.id, status: heSolicitacoes.status, companyId: heSolicitacoes.companyId }).from(heSolicitacoes)
+      .where(eq(heSolicitacoes.id, input.solicitacaoId));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
 
     const [funcVinculado] = await db.select({ id: heSolicitacaoFuncionarios.id }).from(heSolicitacaoFuncionarios)
@@ -695,7 +694,7 @@ export const heSolicitacoesRouter = router({
       entity: "he_solicitacao_confirmacoes",
       entityId: row.id,
       details: `Funcionário #${input.employeeId} (${emp?.nome || "?"}) confirmou presença na HE #${input.solicitacaoId}${verif.assinaturaDivergente ? " ⚠️ ASSINATURA DIVERGENTE (similaridade: " + verif.similaridade + "%)" : ""}`,
-      companyId: ctx.user?.companyId,
+      companyId: sol.companyId,
     });
 
     return { ...row, ...verif };
