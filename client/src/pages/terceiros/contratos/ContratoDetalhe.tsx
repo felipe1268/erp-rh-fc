@@ -61,6 +61,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [showAddItem, setShowAddItem] = useState(false);
   const [showGerarMedicao, setShowGerarMedicao] = useState(false);
   const [showAddDoc, setShowAddDoc] = useState(false);
+  const [editingDates, setEditingDates] = useState(false);
+  const [editDI, setEditDI] = useState("");
+  const [editDT, setEditDT] = useState("");
+  const [editingCriterios, setEditingCriterios] = useState(false);
+  const [critForm, setCritForm] = useState({ diaMedicao: 25, diaPagamento: 10, prazoAprovacaoDias: 5, prazoEmissaoNf: 3, prazoLiberacaoOp: 5, documentacaoNecessaria: "" });
   const [periodo, setPeriodo] = useState(() => new Date().toISOString().slice(0, 7));
   const [medicaoDataInicio, setMedicaoDataInicio] = useState(() => {
     const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
@@ -85,6 +90,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
   const recalcularDatasMut = trpc.terceiroContratos.recalcularDatasCronograma.useMutation({
     onSuccess: (r) => { toast.success(`Datas atualizadas do cronograma${r.usouEap ? " (via EAP)" : " (todas atividades)"}: ${fmtDate(r.dataInicio)} → ${fmtDate(r.dataTermino)}`); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const atualizarContratoMut = trpc.terceiroContratos.atualizarContrato.useMutation({
+    onSuccess: () => { toast.success("Contrato atualizado!"); utils.terceiroContratos.getContrato.invalidate({ id }); setEditingDates(false); setEditingCriterios(false); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -271,42 +281,250 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                   <Calendar className="h-5 w-5 text-blue-600" />
                   <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">Vigência do Contrato</span>
                 </div>
-                <button
-                  onClick={() => recalcularDatasMut.mutate({ contratoId: id, companyId: contrato.companyId })}
-                  disabled={recalcularDatasMut.isPending}
-                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
-                  title="Recalcular datas a partir do cronograma"
-                >
-                  <RefreshCw className={`w-3 h-3 ${recalcularDatasMut.isPending ? "animate-spin" : ""}`} />
-                  {recalcularDatasMut.isPending ? "Calculando..." : "Atualizar do Cronograma"}
-                </button>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <p className="text-[10px] text-gray-500 uppercase font-medium">Início</p>
-                  <p className="text-lg font-bold text-gray-900">{ini ? fmtDate(ini) : "—"}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-gray-500 uppercase font-medium">Término</p>
-                  <p className="text-lg font-bold text-gray-900">{fim ? fmtDate(fim) : "—"}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-gray-500 uppercase font-medium">Duração</p>
-                  <p className="text-lg font-bold text-gray-900">{diasVigencia !== null ? `${diasVigencia} dias` : "—"}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-gray-500 uppercase font-medium">Restam</p>
-                  <p className={`text-lg font-bold ${diasRestantes !== null && diasRestantes <= 15 ? "text-red-600" : diasRestantes !== null && diasRestantes <= 30 ? "text-amber-600" : "text-blue-700"}`}>
-                    {diasRestantes !== null ? (diasRestantes <= 0 ? "Encerrado" : `${diasRestantes} dias`) : "—"}
-                  </p>
+                <div className="flex items-center gap-2">
+                  {!editingDates && (
+                    <button
+                      onClick={() => { setEditDI(ini || ""); setEditDT(fim || ""); setEditingDates(true); }}
+                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 hover:underline"
+                    >
+                      <Pencil className="w-3 h-3" /> Editar Datas
+                    </button>
+                  )}
+                  <button
+                    onClick={() => recalcularDatasMut.mutate({ contratoId: id, companyId: contrato.companyId })}
+                    disabled={recalcularDatasMut.isPending}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
+                    title="Recalcular datas a partir do cronograma"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${recalcularDatasMut.isPending ? "animate-spin" : ""}`} />
+                    {recalcularDatasMut.isPending ? "Calculando..." : "Atualizar do Cronograma"}
+                  </button>
                 </div>
               </div>
-              {ini && fim && diasVigencia && diasVigencia > 0 && (
-                <div className="mt-3">
-                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${corBarra}`} style={{ width: `${pctDecorrido}%` }} />
+              {editingDates ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-gray-600">Data de Início (Elaboração)</Label>
+                      <Input type="date" className="mt-1 text-sm" value={editDI} onChange={e => setEditDI(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-600">Data de Término (Última data do cronograma)</Label>
+                      <Input type="date" className="mt-1 text-sm" value={editDT} onChange={e => setEditDT(e.target.value)} />
+                    </div>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-1 text-right">{pctDecorrido.toFixed(0)}% decorrido</p>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setEditingDates(false)}><X className="w-3 h-3 mr-1" /> Cancelar</Button>
+                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700" disabled={atualizarContratoMut.isPending}
+                      onClick={() => atualizarContratoMut.mutate({ id, companyId: contrato.companyId, dataInicio: editDI || undefined, dataTermino: editDT || undefined })}>
+                      <Save className="w-3 h-3 mr-1" /> Salvar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <p className="text-[10px] text-gray-500 uppercase font-medium">Início</p>
+                      <p className="text-lg font-bold text-gray-900">{ini ? fmtDate(ini) : "—"}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] text-gray-500 uppercase font-medium">Término</p>
+                      <p className="text-lg font-bold text-gray-900">{fim ? fmtDate(fim) : "—"}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] text-gray-500 uppercase font-medium">Duração</p>
+                      <p className="text-lg font-bold text-gray-900">{diasVigencia !== null ? `${diasVigencia} dias` : "—"}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] text-gray-500 uppercase font-medium">Restam</p>
+                      <p className={`text-lg font-bold ${diasRestantes !== null && diasRestantes <= 15 ? "text-red-600" : diasRestantes !== null && diasRestantes <= 30 ? "text-amber-600" : "text-blue-700"}`}>
+                        {diasRestantes !== null ? (diasRestantes <= 0 ? "Encerrado" : `${diasRestantes} dias`) : "—"}
+                      </p>
+                    </div>
+                  </div>
+                  {ini && fim && diasVigencia && diasVigencia > 0 && (
+                    <div className="mt-3">
+                      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${corBarra}`} style={{ width: `${pctDecorrido}%` }} />
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-1 text-right">{pctDecorrido.toFixed(0)}% decorrido</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Critérios de Medição e Pagamento */}
+        {(() => {
+          const dm = (contrato as any).diaMedicao ?? 25;
+          const dp = (contrato as any).diaPagamento ?? 10;
+          const pa = (contrato as any).prazoAprovacaoDias ?? 5;
+          const pnf = (contrato as any).prazoEmissaoNf ?? 3;
+          const plop = (contrato as any).prazoLiberacaoOp ?? 5;
+          const docNec = (contrato as any).documentacaoNecessaria || "";
+
+          const etapas = [
+            { num: 1, titulo: "Medição Física", desc: `Dia ${dm} de cada mês — levantamento e conferência do avanço físico`, icon: "📏", cor: "bg-blue-500" },
+            { num: 2, titulo: "Aprovação da Medição", desc: `Até ${pa} dias úteis após medição — aprovação pelo gestor do contrato`, icon: "✅", cor: "bg-green-500" },
+            { num: 3, titulo: "Documentação", desc: docNec || "Envio de NF, certidões e documentação comprobatória", icon: "📄", cor: "bg-amber-500" },
+            { num: 4, titulo: "Emissão da NF", desc: `Até ${pnf} dias úteis após aprovação — liberação para emissão da nota fiscal`, icon: "🧾", cor: "bg-purple-500" },
+            { num: 5, titulo: "Liberação da OP", desc: `Até ${plop} dias úteis após NF — liberação da Ordem de Pagamento`, icon: "💰", cor: "bg-emerald-500" },
+            { num: 6, titulo: "Pagamento", desc: `Dia ${dp} do mês subsequente — crédito em conta`, icon: "🏦", cor: "bg-indigo-500" },
+          ];
+
+          return (
+            <div className="rounded-xl border-2 border-gray-200 bg-white p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5 text-green-600" />
+                  <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">Critérios de Medição e Pagamento</span>
+                </div>
+                {!editingCriterios && (
+                  <button
+                    onClick={() => {
+                      setCritForm({ diaMedicao: dm, diaPagamento: dp, prazoAprovacaoDias: pa, prazoEmissaoNf: pnf, prazoLiberacaoOp: plop, documentacaoNecessaria: docNec });
+                      setEditingCriterios(true);
+                    }}
+                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 hover:underline"
+                  >
+                    <Settings className="w-3 h-3" /> Configurar
+                  </button>
+                )}
+              </div>
+
+              {editingCriterios ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-xs text-gray-600">Dia da Medição (do mês)</Label>
+                      <Input type="number" min={1} max={31} className="mt-1 text-sm" value={critForm.diaMedicao} onChange={e => setCritForm(f => ({ ...f, diaMedicao: parseInt(e.target.value) || 25 }))} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-600">Prazo Aprovação (dias úteis)</Label>
+                      <Input type="number" min={1} max={30} className="mt-1 text-sm" value={critForm.prazoAprovacaoDias} onChange={e => setCritForm(f => ({ ...f, prazoAprovacaoDias: parseInt(e.target.value) || 5 }))} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-600">Prazo Emissão NF (dias úteis)</Label>
+                      <Input type="number" min={1} max={30} className="mt-1 text-sm" value={critForm.prazoEmissaoNf} onChange={e => setCritForm(f => ({ ...f, prazoEmissaoNf: parseInt(e.target.value) || 3 }))} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-600">Prazo Liberação OP (dias úteis)</Label>
+                      <Input type="number" min={1} max={30} className="mt-1 text-sm" value={critForm.prazoLiberacaoOp} onChange={e => setCritForm(f => ({ ...f, prazoLiberacaoOp: parseInt(e.target.value) || 5 }))} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-600">Dia do Pagamento (do mês)</Label>
+                      <Input type="number" min={1} max={31} className="mt-1 text-sm" value={critForm.diaPagamento} onChange={e => setCritForm(f => ({ ...f, diaPagamento: parseInt(e.target.value) || 10 }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-600">Documentação Necessária para Liberação</Label>
+                    <textarea className="w-full mt-1 text-sm border rounded-lg p-2 min-h-[80px] resize-y" placeholder="Ex: Nota Fiscal, CND FGTS, CND INSS, Certidão Trabalhista, Boletim de Medição assinado..."
+                      value={critForm.documentacaoNecessaria} onChange={e => setCritForm(f => ({ ...f, documentacaoNecessaria: e.target.value }))} />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setEditingCriterios(false)}><X className="w-3 h-3 mr-1" /> Cancelar</Button>
+                    <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={atualizarContratoMut.isPending}
+                      onClick={() => atualizarContratoMut.mutate({
+                        id, companyId: contrato.companyId,
+                        diaMedicao: critForm.diaMedicao,
+                        diaPagamento: critForm.diaPagamento,
+                        prazoAprovacaoDias: critForm.prazoAprovacaoDias,
+                        prazoEmissaoNf: critForm.prazoEmissaoNf,
+                        prazoLiberacaoOp: critForm.prazoLiberacaoOp,
+                        documentacaoNecessaria: critForm.documentacaoNecessaria,
+                      })}>
+                      <Save className="w-3 h-3 mr-1" /> Salvar Critérios
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+                    {[
+                      { label: "Dia da Medição", value: `Dia ${dm}` },
+                      { label: "Prazo Aprovação", value: `${pa} dias úteis` },
+                      { label: "Prazo Emissão NF", value: `${pnf} dias úteis` },
+                      { label: "Prazo Liberação OP", value: `${plop} dias úteis` },
+                      { label: "Dia do Pagamento", value: `Dia ${dp}` },
+                    ].map((k, i) => (
+                      <div key={i} className="text-center bg-gray-50 rounded-lg p-2 border border-gray-100">
+                        <p className="text-[10px] text-gray-500 uppercase font-medium">{k.label}</p>
+                        <p className="text-sm font-bold text-gray-800">{k.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {docNec && (
+                    <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-xs font-semibold text-amber-800 mb-1 flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> Documentação Necessária</p>
+                      <p className="text-sm text-amber-900 whitespace-pre-wrap">{docNec}</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wide">Fluxograma do Processo</p>
+                    <div className="relative">
+                      {etapas.map((e, i) => (
+                        <div key={i} className="flex items-start gap-3 mb-0 last:mb-0">
+                          <div className="flex flex-col items-center">
+                            <div className={`w-8 h-8 rounded-full ${e.cor} text-white flex items-center justify-center text-xs font-bold shadow-sm`}>{e.num}</div>
+                            {i < etapas.length - 1 && <div className="w-0.5 h-8 bg-gray-200" />}
+                          </div>
+                          <div className="pt-1 pb-3">
+                            <p className="text-sm font-semibold text-gray-800">{e.icon} {e.titulo}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{e.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Acesso ao Portal do Terceiro */}
+        {(() => {
+          const pl = (contrato as any).portalLogin;
+          const empresaNome = contrato.empresa?.nomeFantasia || contrato.empresa?.razaoSocial || "—";
+          return (
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <ExternalLink className="h-5 w-5 text-indigo-600" />
+                <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">Acesso ao Portal do Terceiro</span>
+              </div>
+              {pl ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                    <p className="text-[10px] text-indigo-500 uppercase font-medium mb-1">Login (CNPJ)</p>
+                    <p className="text-sm font-mono font-bold text-indigo-800">{pl.cnpj}</p>
+                  </div>
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                    <p className="text-[10px] text-indigo-500 uppercase font-medium mb-1">Senha</p>
+                    <p className="text-sm font-bold text-indigo-800">{pl.primeiroAcesso ? "Senha provisória (trocar no 1o acesso)" : "Definida pelo usuário"}</p>
+                  </div>
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                    <p className="text-[10px] text-indigo-500 uppercase font-medium mb-1">Link do Portal</p>
+                    <p className="text-sm font-mono text-indigo-700 break-all">{window.location.origin}/portal/login</p>
+                  </div>
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                    <p className="text-[10px] text-indigo-500 uppercase font-medium mb-1">Status</p>
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full ${pl.ativo ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                        {pl.ativo ? "Ativo" : "Inativo"}
+                      </span>
+                      {pl.ultimoLogin && <span className="text-xs text-gray-500">Último acesso: {fmtDate(pl.ultimoLogin)}</span>}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-gray-400 text-sm">
+                  <p>Nenhum acesso ao portal criado para <strong>{empresaNome}</strong>.</p>
+                  <p className="text-xs mt-1">Crie o acesso em Terceiros &gt; Empresas Terceiras &gt; selecione a empresa &gt; "Criar Acesso Portal".</p>
                 </div>
               )}
             </div>

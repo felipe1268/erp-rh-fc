@@ -27,6 +27,7 @@ import {
   companies,
   orcamentos,
   orcamentoItens,
+  portalCredentials,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(String(v ?? 0)) || 0;
@@ -278,6 +279,25 @@ export const terceiroContratosRouter = router({
         assinaturaStatus = envelope?.status ?? null;
       } catch {}
 
+      let portalLogin: { cnpj: string; ativo: boolean; primeiroAcesso: boolean; ultimoLogin: string | null } | null = null;
+      try {
+        const [cred] = await db.select({
+          cnpj: portalCredentials.cnpj,
+          ativo: portalCredentials.ativo,
+          primeiroAcesso: portalCredentials.primeiroAcesso,
+          ultimoLogin: portalCredentials.ultimoLogin,
+        }).from(portalCredentials)
+          .where(and(
+            eq(portalCredentials.empresaTerceiraId, contrato.empresaTerceiraId),
+            eq(portalCredentials.companyId, contrato.companyId),
+            eq(portalCredentials.tipo, "terceiro"),
+          ))
+          .limit(1);
+        if (cred) {
+          portalLogin = { cnpj: cred.cnpj, ativo: cred.ativo === 1, primeiroAcesso: cred.primeiroAcesso === 1, ultimoLogin: cred.ultimoLogin };
+        }
+      } catch {}
+
       return {
         ...contrato,
         empresa: empresa || null,
@@ -292,6 +312,7 @@ export const terceiroContratosRouter = router({
         saldoALiberar,
         docsComPendencia: documentos.filter(d => d.status === "pendente" && d.bloqueiaPagemento).length,
         assinaturaStatus,
+        portalLogin,
       };
       } catch (err: any) { console.error("[getContrato] ERRO:", err?.message || err); throw err; }
     }),
@@ -381,6 +402,13 @@ export const terceiroContratosRouter = router({
       dataTermino: z.string().optional(),
       status: z.string().optional(),
       observacoes: z.string().optional(),
+      diaMedicao: z.number().min(1).max(31).optional(),
+      diaPagamento: z.number().min(1).max(31).optional(),
+      prazoAprovacaoDias: z.number().min(1).max(60).optional(),
+      documentacaoNecessaria: z.string().max(2000).optional(),
+      fluxogramaEtapas: z.string().max(5000).optional(),
+      prazoEmissaoNf: z.number().min(1).max(60).optional(),
+      prazoLiberacaoOp: z.number().min(1).max(60).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -394,6 +422,13 @@ export const terceiroContratosRouter = router({
       if (rest.dataTermino !== undefined) upd.dataTermino = rest.dataTermino;
       if (rest.status !== undefined) upd.status = rest.status;
       if (rest.observacoes !== undefined) upd.observacoes = rest.observacoes;
+      if (rest.diaMedicao !== undefined) upd.diaMedicao = rest.diaMedicao;
+      if (rest.diaPagamento !== undefined) upd.diaPagamento = rest.diaPagamento;
+      if (rest.prazoAprovacaoDias !== undefined) upd.prazoAprovacaoDias = rest.prazoAprovacaoDias;
+      if (rest.documentacaoNecessaria !== undefined) upd.documentacaoNecessaria = rest.documentacaoNecessaria;
+      if (rest.fluxogramaEtapas !== undefined) upd.fluxogramaEtapas = rest.fluxogramaEtapas;
+      if (rest.prazoEmissaoNf !== undefined) upd.prazoEmissaoNf = rest.prazoEmissaoNf;
+      if (rest.prazoLiberacaoOp !== undefined) upd.prazoLiberacaoOp = rest.prazoLiberacaoOp;
       const [c] = await db.update(terceiroContratos).set(upd).where(and(eq(terceiroContratos.id, id), eq(terceiroContratos.companyId, companyId))).returning();
       if (!c) throw new Error("Contrato não encontrado");
       return c;

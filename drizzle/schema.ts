@@ -3565,6 +3565,13 @@ export const terceiroContratos = pgTable("terceiro_contratos", {
   atualizadoEm:      timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
   databookObrigatorio: boolean("databook_obrigatorio").default(false),
   databookStatus:    varchar("databook_status", { length: 30 }).default("nao_aplicavel"),
+  diaMedicao:        integer("dia_medicao").default(25),
+  diaPagamento:      integer("dia_pagamento").default(10),
+  prazoAprovacaoDias: integer("prazo_aprovacao_dias").default(5),
+  documentacaoNecessaria: text("documentacao_necessaria"),
+  fluxogramaEtapas:  text("fluxograma_etapas"),
+  prazoEmissaoNf:    integer("prazo_emissao_nf").default(3),
+  prazoLiberacaoOp:  integer("prazo_liberacao_op").default(5),
 });
 
 export const terceiroContratoItens = pgTable("terceiro_contrato_itens", {
