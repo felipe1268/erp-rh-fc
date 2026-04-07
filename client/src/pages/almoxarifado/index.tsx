@@ -496,6 +496,8 @@ export default function AlmoxarifadoPage() {
   const [transfDestinoTipo, setTransfDestinoTipo] = useState<"central" | "obra">("obra");
   const [transfDestinoObraId, setTransfDestinoObraId] = useState<number>(0);
   const [transfMotivo, setTransfMotivo] = useState("");
+  const [transfBusca, setTransfBusca] = useState("");
+  const [transfDropOpen, setTransfDropOpen] = useState(false);
   const [transfOk, setTransfOk] = useState<null | { item: string; origem: string; destino: string }>(null);
   const [transfErr, setTransfErr] = useState<string | null>(null);
 
@@ -517,7 +519,7 @@ export default function AlmoxarifadoPage() {
   });
 
   function resetTransf() {
-    setTransfItemId(0); setTransfQtd("1"); setTransfMotivo(""); setTransfOk(null); setTransfErr(null);
+    setTransfItemId(0); setTransfQtd("1"); setTransfMotivo(""); setTransfOk(null); setTransfErr(null); setTransfBusca(""); setTransfDropOpen(false);
   }
 
   // Modal Fechar Dia (devolução)
@@ -1940,20 +1942,61 @@ export default function AlmoxarifadoPage() {
                         const v = e.target.value;
                         if (v === "central") { setTransfOrigemTipo("central"); setTransfOrigemObraId(0); }
                         else { setTransfOrigemTipo("obra"); setTransfOrigemObraId(Number(v)); }
-                        setTransfItemId(0);
+                        setTransfItemId(0); setTransfBusca(""); setTransfDropOpen(false);
                       }}
                     >
                       <option value="central">🏢 Almoxarifado Central</option>
                       {(obrasAtivas as any[]).map((o: any) => <option key={o.id} value={o.id}>🏗️ {o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>)}
                     </select>
-                    <div>
+                    <div className="relative">
                       <label className="text-sm font-semibold text-gray-700 block mb-1">Item a transferir *</label>
-                      <select className="w-full border-2 rounded-xl p-3 text-base" value={transfItemId} onChange={e => setTransfItemId(Number(e.target.value))}>
-                        <option value={0}>— selecione o item —</option>
-                        {(itensOrigem as any[]).map((i: any) => (
-                          <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(parseFloat(i.quantidadeAtual || "0"))} {i.unidade || "un"}</option>
-                        ))}
-                      </select>
+                      <input
+                        type="text"
+                        className="w-full border-2 rounded-xl p-3 text-base"
+                        placeholder="Digite código ou nome para buscar..."
+                        value={transfItemId ? (itensOrigem as any[]).find((i: any) => i.id === transfItemId)?.nome || "" : transfBusca ?? ""}
+                        onChange={e => { setTransfBusca(e.target.value); setTransfItemId(0); setTransfDropOpen(true); }}
+                        onFocus={() => setTransfDropOpen(true)}
+                        onBlur={() => setTimeout(() => setTransfDropOpen(false), 200)}
+                      />
+                      {transfItemId > 0 && (
+                        <button type="button" className="absolute right-3 top-9 text-gray-400 hover:text-gray-600" onClick={() => { setTransfItemId(0); setTransfBusca(""); }}>
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                      {transfDropOpen && !transfItemId && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border-2 border-purple-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                          {(itensOrigem as any[])
+                            .filter((i: any) => {
+                              if (!transfBusca) return true;
+                              const q = transfBusca.toLowerCase();
+                              return (i.nome || "").toLowerCase().includes(q)
+                                || (i.codigoInterno || "").toLowerCase().includes(q)
+                                || (i.codigoBarras || "").toLowerCase().includes(q);
+                            })
+                            .map((i: any) => (
+                              <button
+                                key={i.id}
+                                type="button"
+                                className="w-full text-left px-3 py-2 hover:bg-purple-50 text-sm border-b last:border-b-0 flex justify-between items-center"
+                                onClick={() => { setTransfItemId(i.id); setTransfBusca(""); setTransfDropOpen(false); }}
+                              >
+                                <span className="truncate">
+                                  {i.codigoInterno ? <span className="text-purple-600 font-mono mr-1">{i.codigoInterno}</span> : null}
+                                  {i.nome}
+                                </span>
+                                <span className="text-xs text-gray-500 ml-2 whitespace-nowrap">Estoque: {n(parseFloat(i.quantidadeAtual || "0"))} {i.unidade || "un"}</span>
+                              </button>
+                            ))}
+                          {(itensOrigem as any[]).filter((i: any) => {
+                            if (!transfBusca) return true;
+                            const q = transfBusca.toLowerCase();
+                            return (i.nome || "").toLowerCase().includes(q) || (i.codigoInterno || "").toLowerCase().includes(q) || (i.codigoBarras || "").toLowerCase().includes(q);
+                          }).length === 0 && (
+                            <div className="px-3 py-3 text-sm text-gray-400 text-center">Nenhum item encontrado</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade</label>
