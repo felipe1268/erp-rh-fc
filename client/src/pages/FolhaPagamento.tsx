@@ -4989,7 +4989,7 @@ export default function FolhaPagamento() {
                                     >
                                       <PenLine className="h-3 w-3 mr-0.5" /> Editar
                                     </Button>
-                                    {d.tipo === 'sem_registro' && (
+                                    {(d.tipo === 'sem_registro' || d.tipo === 'falta') && (
                                       <Button
                                         size="sm"
                                         variant="outline"
