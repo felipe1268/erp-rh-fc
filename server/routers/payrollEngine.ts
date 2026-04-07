@@ -1619,8 +1619,8 @@ export const payrollEngineRouter = router({
           ? motivosBloqueio.join(" | ") + " [APROVADO MANUALMENTE]"
           : motivosBloqueio.join(" | ");
 
-        if (bloqueado && !foiAprovadoManualmente) {
-          // Registra o bloqueio mas com o VALOR PROPORCIONAL visível para o RH decidir
+        const isRejeitadoPrev = rejeitadosSet.has(emp.id);
+        if (bloqueado && !foiAprovadoManualmente && !isRejeitadoPrev) {
           bloqueados++;
           const alertaTipo = motivosBloqueio.length > 1 ? "multiplo"
             : diasFeriasNoMes > 0 ? "ferias_proporcional"
@@ -1636,7 +1636,7 @@ export const payrollEngineRouter = router({
             temAlerta: true, alertaTipo, alertaMotivo: motivoBloqueio,
             bloqueado: true, faltas, minutosHE, status: 'alerta',
           });
-          continue; // Não gera evento financeiro — RH decide
+          continue;
         }
 
         // Aprovado automaticamente, aprovado manualmente ou previously rejeitado
@@ -1646,8 +1646,7 @@ export const payrollEngineRouter = router({
           ${0}, ${savedMotivo},
           ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'calculado'})`);
 
-        const isRejeitado = rejeitadosSet.has(emp.id);
-        if (!isRejeitado) {
+        if (!isRejeitadoPrev) {
           eventInsertRows.push(sql`(${emp.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista},
             ${formatMoney(valorTotalVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto},
             ${`Vale ${input.mesReferencia} - ${emp.nomeCompleto}`}, 'payroll_advance', ${ctx.user.name || "Sistema"})`);
@@ -1665,7 +1664,7 @@ export const payrollEngineRouter = router({
           valorAdiantamento, valorHE, valorTotalVale,
           temAlerta: temAlertaInfo, alertaTipo: temAlertaInfo ? "ferias_proporcional" : "",
           alertaMotivo: alertaFerias,
-          bloqueado: false, faltas, minutosHE, status: isRejeitado ? 'rejeitado' : 'calculado',
+          bloqueado: false, faltas, minutosHE, status: isRejeitadoPrev ? 'rejeitado' : 'calculado',
         });
       }
 
