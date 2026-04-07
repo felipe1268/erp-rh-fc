@@ -83,13 +83,13 @@ export default function ControleKm() {
 
   const employeesQ = trpc.employees.list.useQuery(
     { companyId, excludeTerminated: true },
-    { enabled: !!companyId && editMotoristaId !== null, staleTime: 300000 }
+    { enabled: !!companyId, staleTime: 600000 }
   );
   const funcionariosAtivos = useMemo(() => {
     if (!employeesQ.data) return [];
     return (employeesQ.data as any[])
-      .filter((e: any) => e.status === "ativo")
       .map((e: any) => e.nomeCompleto)
+      .filter((n: string) => !!n)
       .sort((a: string, b: string) => a.localeCompare(b, "pt-BR"));
   }, [employeesQ.data]);
 
