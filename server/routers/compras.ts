@@ -5469,6 +5469,26 @@ Retorne APENAS um JSON válido neste formato:
       const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, sc.id));
       if (scItens.length === 0) return [];
 
+      const eapSemOrcId = scItens.filter(i => !i.orcamentoItemId && i.eapCodigo);
+      if (eapSemOrcId.length > 0 && sc.obraId) {
+        const orcRows2 = await db.select({ id: orcamentos.id }).from(orcamentos)
+          .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, sc.obraId), isNull(orcamentos.deletedAt)))
+          .orderBy(desc(orcamentos.createdAt)).limit(1);
+        if (orcRows2.length > 0) {
+          const eapCodes = eapSemOrcId.map(i => i.eapCodigo!);
+          const orcLookup = await db.select({ id: orcamentoItens.id, eapCodigo: orcamentoItens.eapCodigo })
+            .from(orcamentoItens)
+            .where(and(eq(orcamentoItens.orcamentoId, orcRows2[0].id), inArray(orcamentoItens.eapCodigo, eapCodes)));
+          const eapToOrcId: Record<string, number> = {};
+          for (const r of orcLookup) if (r.eapCodigo) eapToOrcId[r.eapCodigo] = r.id;
+          for (const item of scItens) {
+            if (!item.orcamentoItemId && item.eapCodigo && eapToOrcId[item.eapCodigo]) {
+              (item as any).orcamentoItemId = eapToOrcId[item.eapCodigo];
+            }
+          }
+        }
+      }
+
       const orcItemIds = scItens.map(i => i.orcamentoItemId).filter(Boolean) as number[];
       let orcItensData: Record<number, { quantidade: string; descricao: string; unidade: string | null; servicoCodigo: string | null }> = {};
       if (orcItemIds.length > 0) {
@@ -8954,6 +8974,7 @@ Retorne APENAS um JSON válido neste formato:
     });
 
     const saldoRows = await db.select({
+      id: orcamentoItens.id,
       eapCodigo: orcamentoItens.eapCodigo,
       descricao: orcamentoItens.descricao,
       unidade: orcamentoItens.unidade,
@@ -9018,6 +9039,7 @@ Retorne APENAS um JSON válido neste formato:
           status,
           classificadoPor: item.classificadoPor,
           scs: scDetalhe[item.eapCodigo] || [],
+          orcamentoItemId: orc.id ?? null,
         };
       });
       const pctContratado = totalItens > 0 ? Math.round(((contratados + comSaldo * 0.5) / totalItens) * 100) : 0;

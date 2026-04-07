@@ -4187,6 +4187,7 @@ export default function Solicitacoes() {
             quantidade: String(qtd),
             observacoes: "",
             origemEap: true,
+            orcamentoItemId: item.orcamentoItemId ?? undefined,
           };
           setItens(prev => {
             if (prev.some(i => i.eapCodigo === item.eapCodigo)) {
