@@ -3672,7 +3672,8 @@ export default function FolhaPagamento() {
                                               <tr key={e.id} className={`border-b border-gray-100 hover:bg-white/80 ${dest === "banco_horas" ? "bg-blue-50/30" : ""}`}>
                                                 <td className="py-2 px-2 font-medium">
                                                   <button className="text-left hover:text-blue-600 hover:underline focus:outline-none"
-                                                    onClick={() => setLocation(`/fechamento-ponto?funcionario=${e.employeeId}&mes=${mesAno}`)}>
+                                                    onClick={() => { setEspelhoPopupEmpId(Number(e.employeeId)); setEspelhoPopupEmpNome(e.nomeCompleto || e.nome || `ID ${e.employeeId}`); }}
+                                                    title="Abrir espelho de ponto">
                                                     {e.nomeCompleto || e.nome}
                                                   </button>
                                                 </td>
@@ -4722,10 +4723,8 @@ export default function FolhaPagamento() {
                               <td className="py-2 px-3 font-medium">
                                 <button
                                   className="text-left text-blue-700 hover:text-blue-900 hover:underline cursor-pointer font-medium"
-                                  onClick={() => {
-                                    setShowAfericaoReport(false);
-                                    setLocation(`/fechamento-ponto?funcionario=${d.employeeId}&mes=${prevMesAno}`);
-                                  }}
+                                  onClick={() => { setEspelhoPopupEmpId(Number(d.employeeId)); setEspelhoPopupEmpNome(d.employeeName || `ID ${d.employeeId}`); }}
+                                  title="Abrir espelho de ponto"
                                 >
                                   {d.employeeName || `ID ${d.employeeId}`}
                                 </button>
@@ -4794,10 +4793,8 @@ export default function FolhaPagamento() {
                               <td className="py-2 px-3 font-medium">
                                 <button
                                   className="text-left text-blue-700 hover:text-blue-900 hover:underline cursor-pointer font-medium"
-                                  onClick={() => {
-                                    setShowAfericaoReport(false);
-                                    setLocation(`/fechamento-ponto?funcionario=${j.employeeId}&mes=${prevMesAno}`);
-                                  }}
+                                  onClick={() => { setEspelhoPopupEmpId(Number(j.employeeId)); setEspelhoPopupEmpNome(j.employeeName || `ID ${j.employeeId}`); }}
+                                  title="Abrir espelho de ponto"
                                 >
                                   {j.employeeName || `ID ${j.employeeId}`}
                                 </button>
