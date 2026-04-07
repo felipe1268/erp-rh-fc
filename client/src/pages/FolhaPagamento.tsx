@@ -192,6 +192,8 @@ export default function FolhaPagamento() {
   const [detalheAfericaoEmpId, setDetalheAfericaoEmpId] = useState<number | null>(null);
   const [espelhoPopupEmpId, setEspelhoPopupEmpId] = useState<number | null>(null);
   const [espelhoPopupEmpNome, setEspelhoPopupEmpNome] = useState("");
+  const [memorialHePeriodId, setMemorialHePeriodId] = useState<number | null>(null);
+  const [memorialEmployeeId, setMemorialEmployeeId] = useState<number | null>(null);
   const [espelhoEditDate, setEspelhoEditDate] = useState<string | null>(null);
   const [espelhoEditRecord, setEspelhoEditRecord] = useState<any>(null);
   const [espelhoEditForm, setEspelhoEditForm] = useState({ entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: "", motivoAjuste: "Correção manual" });
@@ -326,6 +328,11 @@ export default function FolhaPagamento() {
   const espelhoPopupQ = trpc.horasExtras.getEspelhoPontoRange.useQuery(
     { companyId, employeeId: espelhoPopupEmpId!, dataInicio: espelhoPeriodo.inicio, dataFim: espelhoPeriodo.fim },
     { enabled: !!companyId && !!espelhoPopupEmpId && !!espelhoPeriodo.inicio }
+  );
+
+  const memorialQ = trpc.horasExtras.memorialCalculo.useQuery(
+    { hePeriodId: memorialHePeriodId!, employeeId: memorialEmployeeId! },
+    { enabled: !!memorialHePeriodId && !!memorialEmployeeId }
   );
 
   const espelhoSaveMut = trpc.fechamentoPonto.manualEntry.useMutation({
@@ -2504,6 +2511,102 @@ export default function FolhaPagamento() {
             </DialogContent>
           </Dialog>
 
+          <Dialog open={!!memorialHePeriodId && !!memorialEmployeeId} onOpenChange={(open) => { if (!open) { setMemorialHePeriodId(null); setMemorialEmployeeId(null); } }}>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" resizable={false}>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-purple-600" />
+                  Memorial de Cálculo — Hora Extra
+                </DialogTitle>
+              </DialogHeader>
+              {memorialQ.isLoading ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground">Carregando memorial...</div>
+              ) : memorialQ.error ? (
+                <div className="text-red-600 text-sm py-4">Erro ao carregar memorial: {memorialQ.error.message}</div>
+              ) : memorialQ.data ? (() => {
+                const m = memorialQ.data;
+                const minsToHM = (mins: number) => `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}min`;
+                return (
+                  <div className="space-y-4">
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm space-y-1">
+                      <p className="font-bold text-purple-900">{m.nome}</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-purple-800">
+                        <div><span className="text-purple-500">Período:</span> {m.periodo.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_: any, y: string, mo: string, d: string) => `${d}/${mo}/${y}`)}</div>
+                        <div><span className="text-purple-500">Valor/hora:</span> R$ {m.valorHora.toFixed(2).replace(".", ",")}</div>
+                        <div><span className="text-purple-500">Adic. útil:</span> {m.percentualUtil}%</div>
+                        <div><span className="text-purple-500">Adic. dom/fer:</span> {m.percentualFim}%</div>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border">
+                        <thead>
+                          <tr className="bg-gray-100 text-left">
+                            <th className="py-1.5 px-2 font-semibold">Data</th>
+                            <th className="py-1.5 px-2 font-semibold text-center">Dia</th>
+                            <th className="py-1.5 px-2 font-semibold text-center">Horários</th>
+                            <th className="py-1.5 px-2 font-semibold text-right">Trabalhado</th>
+                            <th className="py-1.5 px-2 font-semibold text-right">Jornada</th>
+                            <th className="py-1.5 px-2 font-semibold text-right">HE</th>
+                            <th className="py-1.5 px-2 font-semibold text-center">Adic.</th>
+                            <th className="py-1.5 px-2 font-semibold text-center">Fonte</th>
+                            <th className="py-1.5 px-2 font-semibold text-right">Cálculo</th>
+                            <th className="py-1.5 px-2 font-semibold text-right">Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {m.dias.map((d: any, i: number) => (
+                            <tr key={i} className={`border-t ${d.diaSemana === "Dom" ? "bg-red-50" : i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
+                              <td className="py-1 px-2 font-mono">{d.data.split("-").reverse().join("/")}</td>
+                              <td className={`py-1 px-2 text-center font-bold ${d.diaSemana === "Dom" ? "text-red-600" : d.diaSemana === "Sáb" ? "text-orange-600" : ""}`}>{d.diaSemana}</td>
+                              <td className="py-1 px-2 text-center font-mono text-muted-foreground">{d.horarios}</td>
+                              <td className="py-1 px-2 text-right font-mono">{d.trabalhado}</td>
+                              <td className="py-1 px-2 text-right font-mono text-muted-foreground">{d.jornada}</td>
+                              <td className="py-1 px-2 text-right font-mono font-bold text-blue-700">{Math.floor(d.heMins / 60)}:{String(d.heMins % 60).padStart(2, "0")}</td>
+                              <td className="py-1 px-2 text-center">{d.percentual}%</td>
+                              <td className="py-1 px-2 text-center">
+                                <span className={`text-[10px] px-1 py-0.5 rounded ${d.fonte === "dixi" ? "bg-green-100 text-green-700" : d.fonte === "manual" ? "bg-purple-100 text-purple-700" : "bg-gray-100"}`}>
+                                  {d.fonte || "—"}
+                                </span>
+                              </td>
+                              <td className="py-1 px-2 text-right text-[10px] text-muted-foreground font-mono">
+                                ({d.heMins}÷60)×{m.valorHora.toFixed(2)}×{d.fator.toFixed(1)}
+                              </td>
+                              <td className="py-1 px-2 text-right font-bold text-purple-700">R$ {d.valorDia.toFixed(2).replace(".", ",")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold">
+                            <td colSpan={5} className="py-2 px-2 text-right">TOTAL</td>
+                            <td className="py-2 px-2 text-right font-mono text-blue-700">{minsToHM(m.totalHEMins)}</td>
+                            <td colSpan={3} className="py-2 px-2 text-right text-xs font-mono text-muted-foreground">
+                              {m.totalHEUtilMins > 0 && <span>Úteis: {minsToHM(m.totalHEUtilMins)} </span>}
+                              {m.totalHEFimMins > 0 && <span>Dom/Fer: {minsToHM(m.totalHEFimMins)}</span>}
+                            </td>
+                            <td className="py-2 px-2 text-right text-lg text-purple-700">R$ {m.valorTotal.toFixed(2).replace(".", ",")}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-3 text-xs text-muted-foreground space-y-1 border">
+                      <p className="font-semibold text-foreground">Fórmula:</p>
+                      <p>Valor HE = (minutos HE ÷ 60) × Valor/Hora × (1 + Adicional%÷100)</p>
+                      {m.totalHEUtilMins > 0 && (
+                        <p>Dias úteis: ({m.totalHEUtilMins}÷60) × R$ {m.valorHora.toFixed(2).replace(".",",")} × {(1 + m.percentualUtil / 100).toFixed(1)} = <strong className="text-purple-700">R$ {m.valorTotalUtil.toFixed(2).replace(".",",")}</strong></p>
+                      )}
+                      {m.totalHEFimMins > 0 && (
+                        <p>Dom/Feriados: ({m.totalHEFimMins}÷60) × R$ {m.valorHora.toFixed(2).replace(".",",")} × {(1 + m.percentualFim / 100).toFixed(1)} = <strong className="text-purple-700">R$ {m.valorTotalFim.toFixed(2).replace(".",",")}</strong></p>
+                      )}
+                      <p className="font-bold text-foreground pt-1">Total: R$ {m.valorTotal.toFixed(2).replace(".",",")}</p>
+                    </div>
+                  </div>
+                );
+              })() : null}
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={!!espelhoPopupEmpId} onOpenChange={(open) => { if (!open) { setEspelhoPopupEmpId(null); setEspelhoEditDate(null); } }}>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" resizable={false}>
               <DialogHeader>
@@ -3684,7 +3787,19 @@ export default function FolhaPagamento() {
                                                   {e.heFimMins > 0 ? minsToHHMM(e.heFimMins) : "—"}
                                                 </td>
                                                 <td className="text-right py-2 px-2 font-medium">{minsToHHMM(e.heTotalMins)}</td>
-                                                <td className="text-right py-2 px-2 font-bold text-purple-700">{formatBRL(Number(e.valorHETotal))}</td>
+                                                <td className="text-right py-2 px-2 font-bold text-purple-700">
+                                                  <span className="inline-flex items-center gap-1">
+                                                    {formatBRL(Number(e.valorHETotal))}
+                                                    <button
+                                                      type="button"
+                                                      title="Memorial de cálculo"
+                                                      onClick={() => { setMemorialHePeriodId(p.id); setMemorialEmployeeId(Number(e.employeeId)); }}
+                                                      className="text-purple-400 hover:text-purple-700 transition-colors ml-0.5"
+                                                    >
+                                                      <FileText className="h-3.5 w-3.5" />
+                                                    </button>
+                                                  </span>
+                                                </td>
                                                 <td className="text-right py-2 px-2">
                                                   {saldo > 0
                                                     ? <span className="text-blue-600 font-medium text-xs">{minsToHHMM(saldo)}</span>

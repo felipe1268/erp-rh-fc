@@ -155,6 +155,97 @@ export const horasExtrasRouter = router({
       return { period, employees };
     }),
 
+  memorialCalculo: protectedProcedure
+    .input(z.object({ hePeriodId: z.number(), employeeId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const periodRows = ((await db.execute(sql`SELECT * FROM he_periods WHERE id = ${input.hePeriodId} LIMIT 1`)) as any).rows || [];
+      if (!periodRows.length) throw new TRPCError({ code: "NOT_FOUND", message: "Período não encontrado" });
+      const period = periodRows[0];
+
+      const criteria = await getHECriteria(db, Number(period.companyId));
+
+      const empRows = ((await db.execute(sql`
+        SELECT "nomeCompleto", "valorHora", "salarioBase", "jornadaTrabalho"
+        FROM employees WHERE id = ${input.employeeId} LIMIT 1
+      `)) as any).rows || [];
+      if (!empRows.length) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+      const emp = empRows[0];
+      const valorHora = parseBRL(String(emp.valorHora || emp.salarioBase || "0")) || 0;
+
+      const trRows = ((await db.execute(sql`
+        SELECT DISTINCT ON (data)
+          data, "horasTrabalhadas", entrada1, saida1, entrada2, saida2, fonte
+        FROM time_records
+        WHERE "employeeId" = ${input.employeeId}
+          AND "companyId" = ${Number(period.companyId)}
+          AND data >= ${period.dataInicio}::date
+          AND data <= ${period.dataFim}::date
+          AND "horasTrabalhadas" IS NOT NULL
+          AND "horasTrabalhadas" != ''
+          AND "horasTrabalhadas" != '0:00'
+        ORDER BY data, "horasTrabalhadas" DESC
+      `)) as any).rows || [];
+
+      const dias: any[] = [];
+      let totalHEUtilMins = 0;
+      let totalHEFimMins = 0;
+
+      for (const r of trRows) {
+        const trabMins = parseTime(String(r.horasTrabalhadas)) || 0;
+        if (trabMins <= 0) continue;
+        const dateStr = r.data instanceof Date ? r.data.toISOString().slice(0, 10) : String(r.data).slice(0, 10);
+        const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
+        const expectedMins = getExpectedMins(emp.jornadaTrabalho, dateStr, criteria.cargaHorariaDiaria);
+        const heMins = Math.max(0, trabMins - expectedMins);
+
+        if (heMins <= 0) continue;
+
+        const isDomingo = dow === 0;
+        const percentual = isDomingo ? criteria.hePercentualDomingo : criteria.hePercentualDiurna;
+        const fator = 1 + percentual / 100;
+        const valorDia = parseFloat(((heMins / 60) * valorHora * fator).toFixed(2));
+
+        if (isDomingo) totalHEFimMins += heMins;
+        else totalHEUtilMins += heMins;
+
+        dias.push({
+          data: dateStr,
+          diaSemana: ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][dow],
+          trabalhado: r.horasTrabalhadas,
+          jornada: `${Math.floor(expectedMins / 60)}:${String(expectedMins % 60).padStart(2, "0")}`,
+          heMins,
+          percentual,
+          fator,
+          valorDia,
+          horarios: `${r.entrada1 || "--:--"}-${r.saida1 || "--:--"} ${r.entrada2 || "--:--"}-${r.saida2 || "--:--"}`,
+          fonte: r.fonte || "",
+        });
+      }
+
+      const totalHEMins = totalHEUtilMins + totalHEFimMins;
+      const valorTotalUtil = parseFloat(((totalHEUtilMins / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100)).toFixed(2));
+      const valorTotalFim = parseFloat(((totalHEFimMins / 60) * valorHora * (1 + criteria.hePercentualDomingo / 100)).toFixed(2));
+
+      return {
+        nome: emp.nomeCompleto,
+        valorHora,
+        percentualUtil: criteria.hePercentualDiurna,
+        percentualFim: criteria.hePercentualDomingo,
+        cargaHorariaDiaria: criteria.cargaHorariaDiaria,
+        periodo: `${period.dataInicio}`.slice(0, 10) + " a " + `${period.dataFim}`.slice(0, 10),
+        dias,
+        totalHEUtilMins,
+        totalHEFimMins,
+        totalHEMins,
+        valorTotalUtil,
+        valorTotalFim,
+        valorTotal: parseFloat((valorTotalUtil + valorTotalFim).toFixed(2)),
+      };
+    }),
+
   // Calculate HE for a period — with overlap detection
   calcularHE: protectedProcedure
     .input(z.object({
