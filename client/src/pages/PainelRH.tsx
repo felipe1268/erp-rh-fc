@@ -1,5 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { EmpStatusBadge } from "@/components/EmpStatusBadge";
 import DashboardLayout from "@/components/DashboardLayout";
 import { usePermissions } from "@/contexts/PermissionsContext";
@@ -8,6 +8,7 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
@@ -19,7 +20,7 @@ import {
   Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw,
   Bell, FileText, CheckCircle2, XCircle, User, Calendar, TrendingDown, Info,
   BarChart2, ArrowRight, TrendingUp, Minus, GitCompareArrows, Award, Trophy, Star,
-  Maximize2
+  Maximize2, Save
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1117,10 +1118,25 @@ function KpiCard({ title, value, icon: Icon, color, onClick, badge, badgeColor, 
 
 function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<'detalhes' | 'comparativo'>('detalhes');
+  const utils = trpc.useUtils();
   const { data: aviso, isLoading } = trpc.avisoPrevio.avisoPrevio.getById.useQuery(
     { id: avisoId! },
     { enabled: !!avisoId }
   );
+  const [mediasForm, setMediasForm] = useState({ mediaInsalubridade: '', mediaHorasExtras: '' });
+  const [savingMedias, setSavingMedias] = useState(false);
+  const editarAcerto = trpc.avisoPrevio.avisoPrevio.editarAcerto.useMutation({
+    onSuccess: () => { setSavingMedias(false); utils.avisoPrevio.avisoPrevio.getById.invalidate({ id: avisoId! }); },
+    onError: () => { setSavingMedias(false); },
+  });
+  useEffect(() => {
+    if (aviso) {
+      setMediasForm({
+        mediaInsalubridade: (aviso as any).mediaInsalubridade || '',
+        mediaHorasExtras: (aviso as any).mediaHorasExtras || '',
+      });
+    }
+  }, [aviso]);
 
   // Comparativo query - uses employeeId and dataInicio from the aviso
   const { data: comparativo, isLoading: isLoadingComp } = trpc.avisoPrevio.avisoPrevio.comparativo.useQuery(
@@ -1161,16 +1177,20 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
   if (previsao) {
     if (parseFloat(previsao.saldoSalario || '0') > 0)
       proventos.push({ label: `Saldo de Salário (${previsao.diasTrabalhadosMes || '?'} dias)`, value: previsao.saldoSalario });
-    if (parseFloat(previsao.feriasProporcional || '0') > 0)
-      proventos.push({ label: `Férias Proporcionais (${previsao.mesesFerias || '?'}/12 avos)`, value: previsao.feriasProporcional });
+    if (parseFloat(previsao.feriasProporcional || '0') > 0) {
+      const hasMedias = parseFloat(previsao.mediaInsalubridade || '0') > 0 || parseFloat(previsao.mediaHorasExtras || '0') > 0;
+      proventos.push({ label: `Férias Proporcionais (${previsao.mesesFerias || '?'}/12 avos)${hasMedias ? ' ★' : ''}`, value: previsao.feriasProporcional });
+    }
     if (parseFloat(previsao.tercoConstitucional || '0') > 0)
       proventos.push({ label: '1/3 Constitucional (Férias Proporcionais)', value: previsao.tercoConstitucional });
     if (parseFloat(previsao.feriasVencidas || '0') > 0)
       proventos.push({ label: `Férias Vencidas${previsao.periodosVencidos ? ` (${previsao.periodosVencidos} período${previsao.periodosVencidos > 1 ? 's' : ''})` : ''}`, value: previsao.feriasVencidas });
     if (parseFloat(previsao.tercoFeriasVencidas || '0') > 0)
       proventos.push({ label: '1/3 Constitucional (Férias Vencidas)', value: previsao.tercoFeriasVencidas });
-    if (parseFloat(previsao.decimoTerceiroProporcional || previsao.decimoTerceiro || '0') > 0)
-      proventos.push({ label: `13º Salário Proporcional (${previsao.meses13o || previsao.meses13 || '?'}/12 avos)`, value: previsao.decimoTerceiroProporcional || previsao.decimoTerceiro });
+    if (parseFloat(previsao.decimoTerceiroProporcional || previsao.decimoTerceiro || '0') > 0) {
+      const hasMedias13 = parseFloat(previsao.mediaInsalubridade || '0') > 0 || parseFloat(previsao.mediaHorasExtras || '0') > 0;
+      proventos.push({ label: `13º Salário Proporcional (${previsao.meses13o || previsao.meses13 || '?'}/12 avos)${hasMedias13 ? ' ★' : ''}`, value: previsao.decimoTerceiroProporcional || previsao.decimoTerceiro });
+    }
     if (parseFloat(previsao.avisoPrevioIndenizado || '0') > 0)
       proventos.push({ label: `Aviso Prévio Indenizado (${previsao.diasAvisoTotal || previsao.diasExtrasAviso || '?'} dias)`, value: previsao.avisoPrevioIndenizado });
     if (parseFloat(previsao.multaFGTS || '0') > 0)
@@ -1402,6 +1422,62 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
                       </div>
                     </>
                   )}
+                </div>
+              </div>
+
+              {/* Médias de Adicionais Habituais */}
+              <div className="rounded-lg border border-violet-200 p-4 bg-violet-50/50">
+                <p className="text-xs font-bold uppercase text-violet-600 mb-1 flex items-center gap-1">
+                  <TrendingUp className="h-3.5 w-3.5" /> Médias de Adicionais Habituais
+                </p>
+                <p className="text-[10px] text-violet-500 mb-3">
+                  CLT Art. 142 §5º — Médias de insalubridade e horas extras habituais integram a base de cálculo de férias e 13º. Preencha e salve para recalcular.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-violet-700">Média Insalubridade (R$/mês)</label>
+                    <Input
+                      type="number" min="0" step="0.01" placeholder="0,00"
+                      value={mediasForm.mediaInsalubridade}
+                      onChange={e => setMediasForm(f => ({ ...f, mediaInsalubridade: e.target.value }))}
+                      className="h-8 text-sm border-violet-200"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-violet-700">Média Horas Extras (R$/mês)</label>
+                    <Input
+                      type="number" min="0" step="0.01" placeholder="0,00"
+                      value={mediasForm.mediaHorasExtras}
+                      onChange={e => setMediasForm(f => ({ ...f, mediaHorasExtras: e.target.value }))}
+                      className="h-8 text-sm border-violet-200"
+                    />
+                  </div>
+                </div>
+                {(parseFloat(mediasForm.mediaInsalubridade || '0') > 0 || parseFloat(mediasForm.mediaHorasExtras || '0') > 0) && (
+                  <div className="mt-2 text-xs text-violet-700">
+                    <span className="font-semibold">Base ampliada:</span> Salário R$ {fmt(aviso?.salarioBase)} + R$ {(parseFloat(mediasForm.mediaInsalubridade || '0') + parseFloat(mediasForm.mediaHorasExtras || '0')).toFixed(2).replace('.', ',')} = <span className="font-bold">R$ {fmt((parseFloat(String(aviso?.salarioBase || '0').replace(',','.')) + parseFloat(mediasForm.mediaInsalubridade || '0') + parseFloat(mediasForm.mediaHorasExtras || '0')).toFixed(2))}</span>
+                  </div>
+                )}
+                <div className="flex justify-end mt-3">
+                  <Button
+                    size="sm" disabled={savingMedias}
+                    className="h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white"
+                    onClick={() => {
+                      setSavingMedias(true);
+                      editarAcerto.mutate({
+                        id: aviso!.id,
+                        descontosAcerto: (aviso as any)?.descontosAcerto || null,
+                        descontosAcertoDesc: (aviso as any)?.descontosAcertoDesc || null,
+                        acrescimosAcerto: (aviso as any)?.acrescimosAcerto || null,
+                        acrescimosAcertoDesc: (aviso as any)?.acrescimosAcertoDesc || null,
+                        mediaInsalubridade: mediasForm.mediaInsalubridade || null,
+                        mediaHorasExtras: mediasForm.mediaHorasExtras || null,
+                      });
+                    }}
+                  >
+                    <Save className="h-3 w-3 mr-1" />
+                    {savingMedias ? 'Recalculando...' : 'Salvar e Recalcular'}
+                  </Button>
                 </div>
               </div>
 
