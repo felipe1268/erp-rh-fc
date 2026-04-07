@@ -187,45 +187,17 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
   const f = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(prev => ({ ...prev, [field]: e.target.value }));
 
-  const TimeInput = ({ label, field }: { label: string; field: keyof EditForm }) => {
-    const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const raw = e.target.value.replace(/[^0-9]/g, '');
-      let formatted = '';
-      if (raw.length === 0) formatted = '';
-      else if (raw.length <= 2) formatted = raw;
-      else formatted = raw.slice(0, 2) + ':' + raw.slice(2, 4);
-      setForm(prev => ({ ...prev, [field]: formatted }));
-    };
-    const handleTimeBlur = () => {
-      const val = (form[field] as string || '').replace(/[^0-9:]/g, '');
-      if (!val) return;
-      const parts = val.split(':');
-      let h = parseInt(parts[0] || '0', 10);
-      let m = parseInt(parts[1] || '0', 10);
-      if (h > 23) h = 23;
-      if (m > 59) m = 59;
-      const final = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-      setForm(prev => ({ ...prev, [field]: final }));
-    };
-    return (
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</label>
-        <div className="relative">
-          <input
-            type="text"
-            inputMode="numeric"
-            maxLength={5}
-            placeholder="-- : --"
-            value={form[field] as string}
-            onChange={handleTimeChange}
-            onBlur={handleTimeBlur}
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full pr-8"
-          />
-          <Clock className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-        </div>
-      </div>
-    );
-  };
+  const TimeInput = ({ label, field }: { label: string; field: keyof EditForm }) => (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</label>
+      <input
+        type="time"
+        value={form[field] as string}
+        onChange={f(field)}
+        className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full"
+      />
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>

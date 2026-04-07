@@ -3854,41 +3854,12 @@ export default function FechamentoPonto() {
                                     {isOffSchedule && <span className="text-[8px] text-amber-700 font-bold leading-none">DIF</span>}
                                   </div>
                                 </td>
-                                {(["entrada1","saida1","entrada2","saida2","entrada3","saida3"] as const).map(fld => {
-                                  const isTurno3 = fld.includes("3");
-                                  return (
-                                    <td key={fld} className="px-0.5 py-0.5">
-                                      <Input
-                                        type="text"
-                                        inputMode="numeric"
-                                        maxLength={5}
-                                        placeholder="--:--"
-                                        value={(day as any)[fld] || ""}
-                                        className={`h-6 text-[11px] font-mono ${isTurno3 ? "border-blue-200 " : ""}${isFaltaMarcada ? "opacity-40" : ""}`}
-                                        style={{width:"100%",paddingLeft:3,paddingRight:1}}
-                                        onChange={e => {
-                                          const raw = e.target.value.replace(/[^0-9]/g, '');
-                                          let fmt = '';
-                                          if (raw.length === 0) fmt = '';
-                                          else if (raw.length <= 2) fmt = raw;
-                                          else fmt = raw.slice(0, 2) + ':' + raw.slice(2, 4);
-                                          setManualDays(p => p.map(d => d.id === day.id ? { ...d, [fld]: fmt } : d));
-                                        }}
-                                        onBlur={() => {
-                                          const val = ((day as any)[fld] || '').replace(/[^0-9:]/g, '');
-                                          if (!val) return;
-                                          const parts = val.split(':');
-                                          let h = parseInt(parts[0] || '0', 10);
-                                          let m = parseInt(parts[1] || '0', 10);
-                                          if (h > 23) h = 23;
-                                          if (m > 59) m = 59;
-                                          const final = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-                                          setManualDays(p => p.map(d => d.id === day.id ? { ...d, [fld]: final } : d));
-                                        }}
-                                      />
-                                    </td>
-                                  );
-                                })}
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.entrada1} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.saida1} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.entrada2} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.saida2} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.entrada3 || ""} className={`h-6 text-[11px] font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada3: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.saida3 || ""} className={`h-6 text-[11px] font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida3: e.target.value } : d))} /></td>
                                 <td className="px-0.5 py-0.5 text-center">
                                   <button
                                     type="button"
@@ -4321,43 +4292,26 @@ export default function FechamentoPonto() {
 
               {/* Campos de horário — apenas os que estão vazios ficam destacados */}
               <div className="grid grid-cols-2 gap-3">
-                {([
-                  { label: "Entrada", field: "entrada1" as const },
-                  { label: "Saída Int.", field: "saida1" as const },
-                  { label: "Retorno", field: "entrada2" as const },
-                  { label: "Saída", field: "saida2" as const },
-                ].map(({ label, field }) => (
-                  <div key={field}>
-                    <Label className="text-xs">{label}</Label>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={5}
-                      placeholder="--:--"
-                      value={(quickFixData as any)[field]}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/[^0-9]/g, '');
-                        let fmt = '';
-                        if (raw.length === 0) fmt = '';
-                        else if (raw.length <= 2) fmt = raw;
-                        else fmt = raw.slice(0, 2) + ':' + raw.slice(2, 4);
-                        setQuickFixData(d => ({ ...d, [field]: fmt }));
-                      }}
-                      onBlur={() => {
-                        const val = ((quickFixData as any)[field] || '').replace(/[^0-9:]/g, '');
-                        if (!val) return;
-                        const parts = val.split(':');
-                        let h = parseInt(parts[0] || '0', 10);
-                        let m = parseInt(parts[1] || '0', 10);
-                        if (h > 23) h = 23;
-                        if (m > 59) m = 59;
-                        setQuickFixData(d => ({ ...d, [field]: String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') }));
-                      }}
-                      className={!(quickFixRec as any)[field] ? "border-amber-400 bg-amber-50" : ""}
-                    />
-                    {!(quickFixRec as any)[field] && <span className="text-[10px] text-amber-600">* Faltando</span>}
-                  </div>
-                )))}
+                <div>
+                  <Label className="text-xs">Entrada</Label>
+                  <Input type="time" value={quickFixData.entrada1} onChange={(e) => setQuickFixData(d => ({ ...d, entrada1: e.target.value }))} className={!quickFixRec.entrada1 ? "border-amber-400 bg-amber-50" : ""} />
+                  {!quickFixRec.entrada1 && <span className="text-[10px] text-amber-600">* Faltando</span>}
+                </div>
+                <div>
+                  <Label className="text-xs">Saída Int.</Label>
+                  <Input type="time" value={quickFixData.saida1} onChange={(e) => setQuickFixData(d => ({ ...d, saida1: e.target.value }))} className={!quickFixRec.saida1 ? "border-amber-400 bg-amber-50" : ""} />
+                  {!quickFixRec.saida1 && <span className="text-[10px] text-amber-600">* Faltando</span>}
+                </div>
+                <div>
+                  <Label className="text-xs">Retorno</Label>
+                  <Input type="time" value={quickFixData.entrada2} onChange={(e) => setQuickFixData(d => ({ ...d, entrada2: e.target.value }))} className={!quickFixRec.entrada2 ? "border-amber-400 bg-amber-50" : ""} />
+                  {!quickFixRec.entrada2 && <span className="text-[10px] text-amber-600">* Faltando</span>}
+                </div>
+                <div>
+                  <Label className="text-xs">Saída</Label>
+                  <Input type="time" value={quickFixData.saida2} onChange={(e) => setQuickFixData(d => ({ ...d, saida2: e.target.value }))} className={!quickFixRec.saida2 ? "border-amber-400 bg-amber-50" : ""} />
+                  {!quickFixRec.saida2 && <span className="text-[10px] text-amber-600">* Faltando</span>}
+                </div>
               </div>
 
               {/* Motivo do ajuste — obrigatório */}
