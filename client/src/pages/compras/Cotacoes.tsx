@@ -879,9 +879,33 @@ export default function Cotacoes() {
     onSuccess: () => { toast.success("Fornecedor removido!"); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const [salvarProgress, setSalvarProgress] = useState<number | null>(null);
+  const salvarProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const salvarRespostas = trpc.compras.salvarRespostasLote.useMutation({
-    onSuccess: (data) => { toast.success(`Preços salvos! Total: ${data.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`); setEditingFornId(null); mapaQ.refetch(); },
-    onError: (e) => toast.error(e.message),
+    onMutate: () => {
+      setSalvarProgress(0);
+      if (salvarProgressRef.current) clearInterval(salvarProgressRef.current);
+      salvarProgressRef.current = setInterval(() => {
+        setSalvarProgress(prev => {
+          if (prev === null) return null;
+          if (prev >= 90) return 90;
+          return prev + Math.random() * 15 + 5;
+        });
+      }, 200);
+    },
+    onSuccess: (data) => {
+      if (salvarProgressRef.current) clearInterval(salvarProgressRef.current);
+      setSalvarProgress(100);
+      setTimeout(() => { setSalvarProgress(null); }, 800);
+      toast.success(`Preços salvos! Total: ${data.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`);
+      setEditingFornId(null);
+      mapaQ.refetch();
+    },
+    onError: (e) => {
+      if (salvarProgressRef.current) clearInterval(salvarProgressRef.current);
+      setSalvarProgress(null);
+      toast.error(e.message);
+    },
   });
   const salvarCondicoesComerciais = trpc.compras.salvarCondicoesComerciais.useMutation({
     onSuccess: () => { mapaQ.refetch(); },
@@ -2989,12 +3013,21 @@ export default function Cotacoes() {
                                         </button>
                                       </div>
                                       {detalheFullscreen?.status !== "aprovada" && (
-                                        <div className="flex items-center gap-1 mt-1">
+                                        <div className="mt-1 space-y-1">
+                                          {salvarProgress !== null && editingFornId === p.fornecedorId && (
+                                            <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                              <div
+                                                className={`h-full rounded-full transition-all duration-300 ${salvarProgress >= 100 ? "bg-emerald-500" : "bg-blue-500"}`}
+                                                style={{ width: `${Math.min(salvarProgress, 100)}%` }}
+                                              />
+                                            </div>
+                                          )}
+                                          <div className="flex items-center gap-1">
                                           {editingFornId === p.fornecedorId ? (
                                             <>
                                               <Button size="sm" onClick={() => handleSalvarPrecos(p.fornecedorId)} disabled={salvarRespostas.isPending}
                                                 className="h-6 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white gap-1 px-2">
-                                                <Save className="h-3 w-3" /> Salvar
+                                                {salvarRespostas.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} {salvarRespostas.isPending ? `${Math.round(salvarProgress ?? 0)}%` : "Salvar"}
                                               </Button>
                                               <Button size="sm" variant="outline" onClick={() => setEditingFornId(null)} className="h-6 text-[10px] border-gray-300 text-gray-600 px-2">
                                                 Cancelar
@@ -3006,6 +3039,7 @@ export default function Cotacoes() {
                                               <Pencil className="h-3 w-3" /> Editar Preços
                                             </Button>
                                           )}
+                                          </div>
                                         </div>
                                       )}
                                       </div>
