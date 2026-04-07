@@ -405,11 +405,53 @@ export default function ControleKm() {
                                 days.push(d.toISOString().slice(0, 10));
                                 d.setDate(d.getDate() + 1);
                               }
-                              return days.slice(-14).map(day => (
-                                <th key={day} className="py-2 px-2 font-medium text-gray-500 text-center whitespace-nowrap text-xs">
-                                  {formatDate(day).slice(0, 5)}
-                                </th>
-                              ));
+                              const DIAS_SEMANA = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+                              const feriadosFixos = ["01-01","04-21","05-01","09-07","10-12","11-02","11-15","11-20","12-25"];
+                              const pascoa = (ano: number) => {
+                                const a=ano%19, b=Math.floor(ano/100), c=ano%100;
+                                const d2=Math.floor(b/4), e2=b%4, f=Math.floor((b+8)/25);
+                                const g=Math.floor((b-f+1)/3), h=(19*a+b-d2-g+15)%30;
+                                const i=Math.floor(c/4), k=c%4, l=(32+2*e2+2*i-h-k)%7;
+                                const m=Math.floor((a+11*h+22*l)/451);
+                                const mes=Math.floor((h+l-7*m+114)/31), dia=(h+l-7*m+114)%31+1;
+                                return new Date(ano, mes-1, dia);
+                              };
+                              const getFeriadosMoveis = (ano: number) => {
+                                const p = pascoa(ano);
+                                const fmt = (dt: Date) => dt.toISOString().slice(0,10);
+                                const add = (dt: Date, n: number) => { const r = new Date(dt); r.setDate(r.getDate()+n); return r; };
+                                return [fmt(add(p,-47)), fmt(add(p,-2)), fmt(p), fmt(add(p,60))];
+                              };
+                              const anosNoPeriodo = new Set(days.map(d2 => parseInt(d2.slice(0,4))));
+                              const feriadosSet = new Set<string>();
+                              anosNoPeriodo.forEach(ano => {
+                                feriadosFixos.forEach(f => feriadosSet.add(`${ano}-${f}`));
+                                getFeriadosMoveis(ano).forEach(f => feriadosSet.add(f));
+                              });
+
+                              return days.slice(-14).map(day => {
+                                const dt = new Date(day + "T12:00:00");
+                                const dow = dt.getDay();
+                                const diaSemana = DIAS_SEMANA[dow];
+                                const isSab = dow === 6;
+                                const isDom = dow === 0;
+                                const isFeriado = feriadosSet.has(day);
+                                const headerClass = isDom || isFeriado
+                                  ? "py-2 px-2 text-center whitespace-nowrap text-xs bg-red-50"
+                                  : isSab
+                                    ? "py-2 px-2 text-center whitespace-nowrap text-xs bg-amber-50"
+                                    : "py-2 px-2 text-center whitespace-nowrap text-xs";
+                                const labelColor = isDom || isFeriado ? "text-red-600 font-bold" : isSab ? "text-amber-600 font-bold" : "text-gray-500 font-medium";
+                                return (
+                                  <th key={day} className={headerClass}>
+                                    <div className={labelColor}>{diaSemana}</div>
+                                    <div className={`${isDom || isFeriado ? "text-red-500" : isSab ? "text-amber-500" : "text-gray-400"} text-[10px]`}>
+                                      {formatDate(day).slice(0, 5)}
+                                    </div>
+                                    {isFeriado && <div className="text-[8px] text-red-500 font-bold leading-tight">FERIADO</div>}
+                                  </th>
+                                );
+                              });
                             })()}
                             <th className="py-2 px-3 font-medium text-gray-500 text-right">Total</th>
                           </tr>
@@ -433,8 +475,11 @@ export default function ControleKm() {
                                 </td>
                                 {days.slice(-14).map(day => {
                                   const dd = dayMap[day];
+                                  const dt2 = new Date(day + "T12:00:00");
+                                  const dow2 = dt2.getDay();
+                                  const cellBg = dow2 === 0 ? "bg-red-50" : dow2 === 6 ? "bg-amber-50" : "";
                                   return (
-                                    <td key={day} className="py-2 px-2 text-center">
+                                    <td key={day} className={`py-2 px-2 text-center ${cellBg}`}>
                                       {dd && dd.km > 0 ? (
                                         <span
                                           className={`text-xs font-medium cursor-pointer hover:underline ${dd.km > 200 ? "text-red-600" : dd.km > 100 ? "text-amber-600" : "text-gray-700"}`}
