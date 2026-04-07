@@ -283,6 +283,32 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "company", entityId: input.companyId, details: `Numeração interna RESETADA para 1` });
       return { success: true };
     }),
+    getGestoresContrato: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [company] = await db.select({
+        gestorFinanceiroId: companies.gestorFinanceiroId,
+        gestorFinanceiroNome: companies.gestorFinanceiroNome,
+        gestorProjetoId: companies.gestorProjetoId,
+        gestorProjetoNome: companies.gestorProjetoNome,
+      }).from(companies).where(eq(companies.id, input.companyId));
+      return company || { gestorFinanceiroId: null, gestorFinanceiroNome: null, gestorProjetoId: null, gestorProjetoNome: null };
+    }),
+    salvarGestoresContrato: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      gestorFinanceiroId: z.number().nullable(),
+      gestorFinanceiroNome: z.string().nullable(),
+      gestorProjetoId: z.number().nullable(),
+      gestorProjetoNome: z.string().nullable(),
+    })).mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      await db.update(companies).set({
+        gestorFinanceiroId: input.gestorFinanceiroId,
+        gestorFinanceiroNome: input.gestorFinanceiroNome,
+        gestorProjetoId: input.gestorProjetoId,
+        gestorProjetoNome: input.gestorProjetoNome,
+      } as any).where(eq(companies.id, input.companyId));
+      return { success: true };
+    }),
   }),
 
   // ============================================================

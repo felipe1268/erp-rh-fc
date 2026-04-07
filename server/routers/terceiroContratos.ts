@@ -3214,8 +3214,8 @@ TESTEMUNHAS:
         "DATA_ASSINATURA": fmtDate(new Date().toISOString()),
         "TABELA_ITENS": tabelaItens,
         "QTD_ITENS": String(itensContrato.length),
-        "TESTEMUNHA_FINANCEIRO": contrato.testemunhaFinanceiro ?? "_______________",
-        "TESTEMUNHA_GESTOR_PROJETO": contrato.testemunhaGestorProjeto ?? obra?.responsavel ?? "_______________",
+        "TESTEMUNHA_FINANCEIRO": contrato.testemunhaFinanceiro || (company as any)?.gestorFinanceiroNome || "_______________",
+        "TESTEMUNHA_GESTOR_PROJETO": contrato.testemunhaGestorProjeto || (company as any)?.gestorProjetoNome || obra?.responsavel || "_______________",
         "REVISAO_CRONOGRAMA": revisaoCronoLabel || "—",
       };
 

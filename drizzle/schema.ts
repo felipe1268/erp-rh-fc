@@ -417,6 +417,10 @@ export const companies = pgTable("companies", {
         docMarcaDaguaUrl: text("doc_marca_dagua_url"),
         docMarcaDaguaOpacidade: numeric("doc_marca_dagua_opacidade", { precision: 3, scale: 2 }).default("0.08"),
         heDestinoPadrao: text("heDestinoPadrao").default("banco_horas"),
+        gestorFinanceiroId: integer("gestor_financeiro_id"),
+        gestorFinanceiroNome: varchar("gestor_financeiro_nome", { length: 255 }),
+        gestorProjetoId: integer("gestor_projeto_id"),
+        gestorProjetoNome: varchar("gestor_projeto_nome", { length: 255 }),
 },
 (table) => [
         index("companies_cnpj_unique").on(table.cnpj),

@@ -81,7 +81,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup";
+type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros";
 
 export default function Configuracoes() {
   const { user } = useAuth();
@@ -304,6 +304,7 @@ export default function Configuracoes() {
     { key: "sindical" as TabKey, label: "Sindical / Dissídio", icon: Landmark, minRole: "admin" },
     { key: "sync_he" as TabKey, label: "Sincronizar HE", icon: RefreshCw, minRole: "admin" },
     { key: "beneficios_alimentacao" as TabKey, label: "Benefícios Alimentação", icon: UtensilsCrossed, minRole: "admin" },
+    { key: "terceiros" as TabKey, label: "Terceiros / Gestores", icon: Building2, minRole: "admin" },
     { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master" },
     { key: "backup" as TabKey, label: "Backup do Banco", icon: Database, minRole: "admin" },
   ];
@@ -796,6 +797,11 @@ export default function Configuracoes() {
           <BeneficiosAlimentacaoTab companyId={companyId} />
         )}
 
+        {/* TAB: Terceiros - Gestores para Contratos */}
+        {activeTab === "terceiros" && (
+          <GestoresContratoTab companyId={companyId} />
+        )}
+
         {/* TAB: Limpeza */}
         {activeTab === "limpeza" && (
           <Card className="border-red-200">
@@ -1135,6 +1141,106 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
 // ============================================================
 // COMPONENTE: Sincronizar HE com Critérios da Empresa
 // ============================================================
+function GestoresContratoTab({ companyId }: { companyId: number }) {
+  const utils = trpc.useUtils();
+  const gestoresQuery = trpc.companies.getGestoresContrato.useQuery({ companyId }, { enabled: companyId > 0 });
+  const empQuery = trpc.employees.list.useQuery({ companyId }, { enabled: companyId > 0 });
+  const salvarMut = trpc.companies.salvarGestoresContrato.useMutation({
+    onSuccess: () => { toast.success("Gestores salvos com sucesso!"); utils.companies.getGestoresContrato.invalidate(); },
+    onError: (e: any) => toast.error("Erro: " + e.message),
+  });
+
+  const [finId, setFinId] = useState<string>("");
+  const [projId, setProjId] = useState<string>("");
+
+  useEffect(() => {
+    if (gestoresQuery.data) {
+      setFinId(gestoresQuery.data.gestorFinanceiroId ? String(gestoresQuery.data.gestorFinanceiroId) : "");
+      setProjId(gestoresQuery.data.gestorProjetoId ? String(gestoresQuery.data.gestorProjetoId) : "");
+    }
+  }, [gestoresQuery.data]);
+
+  const ativos = useMemo(() => (empQuery.data || []).filter((e: any) => (e.status || "").toLowerCase() === "ativo").sort((a: any, b: any) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || "", "pt-BR")), [empQuery.data]);
+
+  const handleSalvar = () => {
+    const finEmp = ativos.find((e: any) => String(e.id) === finId);
+    const projEmp = ativos.find((e: any) => String(e.id) === projId);
+    salvarMut.mutate({
+      companyId,
+      gestorFinanceiroId: finId ? Number(finId) : null,
+      gestorFinanceiroNome: finEmp ? finEmp.nomeCompleto : null,
+      gestorProjetoId: projId ? Number(projId) : null,
+      gestorProjetoNome: projEmp ? projEmp.nomeCompleto : null,
+    });
+  };
+
+  return (
+    <Card className="border-orange-200">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2 text-orange-600">
+          <Building2 className="w-5 h-5" />
+          Gestores para Contratos de Terceiros
+        </CardTitle>
+        <CardDescription>
+          Defina os colaboradores que serão automaticamente preenchidos como testemunhas nos contratos de terceiros (Testemunha Financeiro e Gestor de Projeto).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="font-semibold flex items-center gap-1">
+              <DollarSign className="w-4 h-4 text-green-600" />
+              Gestor Financeiro (Testemunha)
+            </Label>
+            <Select value={finId || "__none__"} onValueChange={(v) => setFinId(v === "__none__" ? "" : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o gestor financeiro..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Nenhum</SelectItem>
+                {ativos.map((e: any) => (
+                  <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto} — {e.funcao || "Sem função"}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {gestoresQuery.data?.gestorFinanceiroNome && (
+              <p className="text-xs text-muted-foreground">Atual: {gestoresQuery.data.gestorFinanceiroNome}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label className="font-semibold flex items-center gap-1">
+              <Hammer className="w-4 h-4 text-blue-600" />
+              Gestor de Projeto (Testemunha)
+            </Label>
+            <Select value={projId || "__none__"} onValueChange={(v) => setProjId(v === "__none__" ? "" : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o gestor de projeto..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Nenhum</SelectItem>
+                {ativos.map((e: any) => (
+                  <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto} — {e.funcao || "Sem função"}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {gestoresQuery.data?.gestorProjetoNome && (
+              <p className="text-xs text-muted-foreground">Atual: {gestoresQuery.data.gestorProjetoNome}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 pt-2">
+          <Button onClick={handleSalvar} disabled={salvarMut.isPending}>
+            {salvarMut.isPending ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-1" /> Salvar Gestores</>}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Os nomes selecionados serão usados automaticamente como testemunhas ao gerar novos contratos de terceiros.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function SyncHETab({ companyId }: { companyId: number }) {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
