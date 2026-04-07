@@ -2791,6 +2791,8 @@ export const terminationNotices = pgTable("termination_notices", {
         novoEmpregoAtivo: smallint().default(0),
         novoEmpregoComunicadoEm: date({ mode: 'string' }),
         novoEmpregoCartaUrl: text(),
+        mediaInsalubridade: varchar("media_insalubridade", { length: 20 }).default('0'),
+        mediaHorasExtras: varchar("media_horas_extras", { length: 20 }).default('0'),
 },
 (table) => [
         index("tn_company").on(table.companyId),

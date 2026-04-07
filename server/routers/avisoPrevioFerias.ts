@@ -282,12 +282,14 @@ export const avisoPrevioFeriasRouter = router({
             const previsao = calcularRescisaoCompleta({
               salarioBase,
               dataAdmissao,
-              dataDesligamento: row.dataInicio, // data de início do aviso
+              dataDesligamento: row.dataInicio,
               dataFimAviso: dataFimParaCalculo,
               tipo: row.tipo,
               vrDiario: 0,
               diasTrabalhadosMes: diasTrabMes,
               periodosVencidosOverride: periodosVencidosRealById,
+              mediaInsalubridade: parseFloat(String((row as any).mediaInsalubridade || '0').replace(',', '.')) || 0,
+              mediaHorasExtras: parseFloat(String((row as any).mediaHorasExtras || '0').replace(',', '.')) || 0,
             });
 
             // Súmula 276: zerar aviso prévio indenizado e recalcular data limite
@@ -1327,6 +1329,8 @@ export const avisoPrevioFeriasRouter = router({
         descontosAcertoDesc: z.string().nullable(),
         acrescimosAcerto: z.string().nullable(),
         acrescimosAcertoDesc: z.string().nullable(),
+        mediaInsalubridade: z.string().nullable().optional(),
+        mediaHorasExtras: z.string().nullable().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
@@ -1341,6 +1345,8 @@ export const avisoPrevioFeriasRouter = router({
             "descontosAcertoDesc" = ${input.descontosAcertoDesc},
             "acrescimosAcerto" = ${input.acrescimosAcerto},
             "acrescimosAcertoDesc" = ${input.acrescimosAcertoDesc},
+            media_insalubridade = ${input.mediaInsalubridade || '0'},
+            media_horas_extras = ${input.mediaHorasExtras || '0'},
             "updatedAt" = NOW()
           WHERE id = ${input.id}
         `);

@@ -116,8 +116,13 @@ export function calcularRescisaoCompleta(params: {
   vrDiario: number;
   diasTrabalhadosMes: number;
   periodosVencidosOverride?: number;
+  mediaInsalubridade?: number;
+  mediaHorasExtras?: number;
 }) {
   const { salarioBase, dataAdmissao, dataDesligamento, tipo, vrDiario, diasTrabalhadosMes } = params;
+  const mediaInsalubridade = params.mediaInsalubridade || 0;
+  const mediaHorasExtras = params.mediaHorasExtras || 0;
+  const totalMediasAdicionais = mediaInsalubridade + mediaHorasExtras;
 
   const dataFimAviso = params.dataFimAviso || dataDesligamento;
   const dtFimAviso = new Date(dataFimAviso + 'T00:00:00');
@@ -139,8 +144,10 @@ export function calcularRescisaoCompleta(params: {
   const saldoSalario = salarioDia * diasTrabalhadosMes;
 
   // 2. Férias proporcionais + 1/3 constitucional
+  // CLT: médias de adicionais habituais (insalubridade, HE) integram a base de férias e 13º
+  const baseFerias13 = salarioBase + totalMediasAdicionais;
   const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataProjecao);
-  const feriasProporcional = (salarioBase * mesesFerias) / 12;
+  const feriasProporcional = (baseFerias13 * mesesFerias) / 12;
   const tercoConstitucional = feriasProporcional / 3;
   const totalFerias = feriasProporcional + tercoConstitucional;
 
@@ -148,11 +155,11 @@ export function calcularRescisaoCompleta(params: {
   const periodosVencidos = params.periodosVencidosOverride !== undefined
     ? params.periodosVencidosOverride
     : Math.max(0, calcularFeriasVencidas(dataAdmissao, dataProjecao) - 1);
-  const feriasVencidas = periodosVencidos > 0 ? (salarioBase + salarioBase / 3) * periodosVencidos : 0;
+  const feriasVencidas = periodosVencidos > 0 ? (baseFerias13 + baseFerias13 / 3) * periodosVencidos : 0;
 
   // 4. 13º proporcional
   const meses13o = calcularMeses13o(dataAdmissao, dataProjecao);
-  const decimoTerceiroProporcional = (salarioBase * meses13o) / 12;
+  const decimoTerceiroProporcional = (baseFerias13 * meses13o) / 12;
 
   // 5. Aviso prévio indenizado
   let avisoPrevioIndenizado = 0;
@@ -201,6 +208,9 @@ export function calcularRescisaoCompleta(params: {
     mesesTotais,
     dataRefCalculo: dataSaida,
     dataProjecao,
+    mediaInsalubridade: mediaInsalubridade.toFixed(2),
+    mediaHorasExtras: mediaHorasExtras.toFixed(2),
+    baseFerias13: baseFerias13.toFixed(2),
     dataLimitePagamento: (() => {
       const dt = new Date(dataFimAviso + 'T00:00:00');
       dt.setDate(dt.getDate() + 10);

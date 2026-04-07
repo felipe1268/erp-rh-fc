@@ -21,7 +21,7 @@ import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
   CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check, Download, Printer, RefreshCw, RotateCcw,
-  UserX, ShieldAlert, Edit2, Briefcase, Save, MinusCircle, PlusCircle, Link, Upload, Loader2, FileCheck,
+  UserX, ShieldAlert, Edit2, Briefcase, Save, MinusCircle, PlusCircle, Link, Upload, Loader2, FileCheck, TrendingUp,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
@@ -153,7 +153,7 @@ export default function AvisoPrevio() {
 
   // Novos: FGTS Real, Acerto, Novo Emprego
   const [fgtsEditDialog, setFgtsEditDialog] = useState<{ open: boolean; valor: string }>({ open: false, valor: '' });
-  const [acertoForm, setAcertoForm] = useState<{ descontosAcerto: string; descontosAcertoDesc: string; acrescimosAcerto: string; acrescimosAcertoDesc: string }>({ descontosAcerto: '', descontosAcertoDesc: '', acrescimosAcerto: '', acrescimosAcertoDesc: '' });
+  const [acertoForm, setAcertoForm] = useState<{ descontosAcerto: string; descontosAcertoDesc: string; acrescimosAcerto: string; acrescimosAcertoDesc: string; mediaInsalubridade: string; mediaHorasExtras: string }>({ descontosAcerto: '', descontosAcertoDesc: '', acrescimosAcerto: '', acrescimosAcertoDesc: '', mediaInsalubridade: '', mediaHorasExtras: '' });
   const [novoEmpregoForm, setNovoEmpregoForm] = useState<{ ativo: boolean; comunicadoEm: string; cartaUrl: string }>({ ativo: false, comunicadoEm: '', cartaUrl: '' });
   const [savingAcerto, setSavingAcerto] = useState(false);
   const [savingNovoEmprego, setSavingNovoEmprego] = useState(false);
@@ -171,6 +171,8 @@ export default function AvisoPrevio() {
           descontosAcertoDesc: (detail as any).descontosAcertoDesc || '',
           acrescimosAcerto: (detail as any).acrescimosAcerto || '',
           acrescimosAcertoDesc: (detail as any).acrescimosAcertoDesc || '',
+          mediaInsalubridade: (detail as any).mediaInsalubridade || '',
+          mediaHorasExtras: (detail as any).mediaHorasExtras || '',
         });
         setNovoEmpregoForm({
           ativo: !!(detail as any).novoEmpregoAtivo,
@@ -667,9 +669,9 @@ export default function AvisoPrevio() {
                             <Button size="icon" variant="ghost" className="h-7 w-7" title="Detalhes" onClick={async () => {
                               setSelectedItem(a);
                               setShowDetailDialog(true);
-                              setAcertoForm({ descontosAcerto: (a as any).descontosAcerto || '', descontosAcertoDesc: (a as any).descontosAcertoDesc || '', acrescimosAcerto: (a as any).acrescimosAcerto || '', acrescimosAcertoDesc: (a as any).acrescimosAcertoDesc || '' });
+                              setAcertoForm({ descontosAcerto: (a as any).descontosAcerto || '', descontosAcertoDesc: (a as any).descontosAcertoDesc || '', acrescimosAcerto: (a as any).acrescimosAcerto || '', acrescimosAcertoDesc: (a as any).acrescimosAcertoDesc || '', mediaInsalubridade: (a as any).mediaInsalubridade || '', mediaHorasExtras: (a as any).mediaHorasExtras || '' });
                               setNovoEmpregoForm({ ativo: !!(a as any).novoEmpregoAtivo, comunicadoEm: (a as any).novoEmpregoComunicadoEm || '', cartaUrl: (a as any).novoEmpregoCartaUrl || '' });
-                              try { const detail = await utils.avisoPrevio.avisoPrevio.getById.fetch({ id: a.id }); if (detail) { setSelectedItem(detail); setAcertoForm({ descontosAcerto: (detail as any).descontosAcerto || '', descontosAcertoDesc: (detail as any).descontosAcertoDesc || '', acrescimosAcerto: (detail as any).acrescimosAcerto || '', acrescimosAcertoDesc: (detail as any).acrescimosAcertoDesc || '' }); setNovoEmpregoForm({ ativo: !!(detail as any).novoEmpregoAtivo, comunicadoEm: (detail as any).novoEmpregoComunicadoEm || '', cartaUrl: (detail as any).novoEmpregoCartaUrl || '' }); } } catch(e) { console.error('Erro ao buscar detalhes:', e); }
+                              try { const detail = await utils.avisoPrevio.avisoPrevio.getById.fetch({ id: a.id }); if (detail) { setSelectedItem(detail); setAcertoForm({ descontosAcerto: (detail as any).descontosAcerto || '', descontosAcertoDesc: (detail as any).descontosAcertoDesc || '', acrescimosAcerto: (detail as any).acrescimosAcerto || '', acrescimosAcertoDesc: (detail as any).acrescimosAcertoDesc || '', mediaInsalubridade: (detail as any).mediaInsalubridade || '', mediaHorasExtras: (detail as any).mediaHorasExtras || '' }); setNovoEmpregoForm({ ativo: !!(detail as any).novoEmpregoAtivo, comunicadoEm: (detail as any).novoEmpregoComunicadoEm || '', cartaUrl: (detail as any).novoEmpregoCartaUrl || '' }); } } catch(e) { console.error('Erro ao buscar detalhes:', e); }
                             }}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
@@ -940,12 +942,24 @@ export default function AvisoPrevio() {
                     </p>
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Saldo de Salário ({prev.diasTrabalhadosMes}/{prev.diasReaisMes || 30} dias):</span><span className="font-semibold">{formatMoeda(prev.saldoSalario)}</span></div>
-                      <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Férias Prop. + 1/3 ({prev.mesesFerias} meses):</span><span className="font-semibold">{formatMoeda(prev.totalFerias)}</span></div>
+                      <div className="flex justify-between py-1 border-b border-green-100">
+                        <span className="text-gray-600">
+                          Férias Prop. + 1/3 ({prev.mesesFerias} meses)
+                          {parseFloat(prev.mediaInsalubridade || '0') > 0 || parseFloat(prev.mediaHorasExtras || '0') > 0 ? <span className="text-violet-500 text-[10px] ml-1">(base: {formatMoeda(prev.baseFerias13)})</span> : null}
+                        </span>
+                        <span className="font-semibold">{formatMoeda(prev.totalFerias)}</span>
+                      </div>
                       {parseFloat(prev.feriasVencidas) > 0 && (
                         <div className="flex justify-between py-1 border-b border-red-100 bg-red-50 px-1 rounded"><span className="text-red-600">Férias Vencidas ({prev.periodosVencidos} per.):</span><span className="font-semibold text-red-700">{formatMoeda(prev.feriasVencidas)}</span></div>
                       )}
                       <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">VR Proporcional (R$ {prev.vrDiario}/dia × {prev.diasTrabalhadosMes}):</span><span className="font-semibold">{formatMoeda(prev.vrProporcional)}</span></div>
-                      <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">13º Proporcional ({prev.meses13o}/12):</span><span className="font-semibold">{formatMoeda(prev.decimoTerceiroProporcional)}</span></div>
+                      <div className="flex justify-between py-1 border-b border-green-100">
+                        <span className="text-gray-600">
+                          13º Proporcional ({prev.meses13o}/12)
+                          {parseFloat(prev.mediaInsalubridade || '0') > 0 || parseFloat(prev.mediaHorasExtras || '0') > 0 ? <span className="text-violet-500 text-[10px] ml-1">(base: {formatMoeda(prev.baseFerias13)})</span> : null}
+                        </span>
+                        <span className="font-semibold">{formatMoeda(prev.decimoTerceiroProporcional)}</span>
+                      </div>
                       <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Aviso Prévio Indenizado ({prev.diasExtrasAviso} dias extras):</span><span className="font-semibold">{formatMoeda(prev.avisoPrevioIndenizado)}</span></div>
                       {/* Aviso prévio indenizado zerado por Súmula 276 */}
                       {prev.novoEmpregoAplicado && (
@@ -995,6 +1009,49 @@ export default function AvisoPrevio() {
                   </div>
                 );
               })()}
+
+              {/* ===== MÉDIAS DE ADICIONAIS (INSALUBRIDADE / HE) ===== */}
+              <div className="rounded-lg border border-violet-200 p-4 bg-violet-50/50">
+                <p className="text-xs font-bold uppercase text-violet-600 mb-1 flex items-center gap-1">
+                  <TrendingUp className="h-3.5 w-3.5" /> Médias de Adicionais Habituais
+                </p>
+                <p className="text-[10px] text-violet-500 mb-3">
+                  CLT Art. 142 §5º — Médias de insalubridade e horas extras habituais integram a base de cálculo de férias e 13º proporcional.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-violet-700">Média Insalubridade (R$/mês)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0,00"
+                      value={acertoForm.mediaInsalubridade}
+                      onChange={e => setAcertoForm(f => ({ ...f, mediaInsalubridade: e.target.value }))}
+                      className="h-8 text-sm border-violet-200"
+                    />
+                    <p className="text-[10px] text-violet-400">Média mensal recebida no período aquisitivo</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-violet-700">Média Horas Extras (R$/mês)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0,00"
+                      value={acertoForm.mediaHorasExtras}
+                      onChange={e => setAcertoForm(f => ({ ...f, mediaHorasExtras: e.target.value }))}
+                      className="h-8 text-sm border-violet-200"
+                    />
+                    <p className="text-[10px] text-violet-400">Média mensal de HE no período aquisitivo</p>
+                  </div>
+                </div>
+                {(parseFloat(acertoForm.mediaInsalubridade || '0') > 0 || parseFloat(acertoForm.mediaHorasExtras || '0') > 0) && (
+                  <div className="mt-3 pt-2 border-t border-violet-200 text-xs text-violet-700">
+                    <span className="font-semibold">Base ampliada para férias/13º:</span> Salário + R$ {(parseFloat(acertoForm.mediaInsalubridade || '0') + parseFloat(acertoForm.mediaHorasExtras || '0')).toFixed(2).replace('.', ',')}
+                  </div>
+                )}
+              </div>
 
               {/* ===== DESCONTOS E ACRÉSCIMOS DO ACERTO ===== */}
               <div className="rounded-lg border border-gray-200 p-4 bg-white">
@@ -1074,6 +1131,8 @@ export default function AvisoPrevio() {
                         descontosAcertoDesc: acertoForm.descontosAcertoDesc || null,
                         acrescimosAcerto: acertoForm.acrescimosAcerto || null,
                         acrescimosAcertoDesc: acertoForm.acrescimosAcertoDesc || null,
+                        mediaInsalubridade: acertoForm.mediaInsalubridade || null,
+                        mediaHorasExtras: acertoForm.mediaHorasExtras || null,
                       });
                     }}
                   >
