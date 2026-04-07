@@ -926,7 +926,7 @@ export default function Colaboradores() {
               <TabsTrigger value="beneficios" className="flex-1 text-xs sm:text-sm">Benefícios</TabsTrigger>
               <TabsTrigger value="obrigacoes" className="flex-1 text-xs sm:text-sm">Obrigações</TabsTrigger>
               <TabsTrigger value="sindical" className="flex-1 text-xs sm:text-sm">Sindical</TabsTrigger>
-              {editingEmployee && <TabsTrigger value="hist_status" className="flex-1 text-xs sm:text-sm">📋 Hist. Status</TabsTrigger>}
+              {editingId && <TabsTrigger value="hist_status" className="flex-1 text-xs sm:text-sm">📋 Hist. Status</TabsTrigger>}
             </TabsList>
 
             {/* ===== ABA PESSOAL ===== */}
@@ -2309,9 +2309,9 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
               </div>
             </TabsContent>
 
-            {editingEmployee && (
+            {editingId && (
               <TabsContent value="hist_status" className="pt-4">
-                <HistoricoStatusTab employeeId={editingEmployee} companyId={selectedCompany} />
+                <HistoricoStatusTab employeeId={editingId} companyId={selectedCompany} />
               </TabsContent>
             )}
           </Tabs>
