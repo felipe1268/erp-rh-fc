@@ -127,6 +127,7 @@ export default function Colaboradores() {
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<any>(null);
+  const [fotoExpandida, setFotoExpandida] = useState<string | null>(null);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
   const [blacklistAlert, setBlacklistAlert] = useState<string | null>(null);
@@ -2484,7 +2485,11 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
             <div className="space-y-8">
               {/* Header */}
               <div className="flex items-center gap-6 pb-6 border-b-2 border-primary/20">
-                <div className="w-[90px] h-[90px] rounded-full border-3 border-primary/40 overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center shrink-0 shadow-lg">
+                <div
+                  className={`w-[90px] h-[90px] rounded-full border-3 border-primary/40 overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center shrink-0 shadow-lg ${viewingEmployee.fotoUrl ? "cursor-pointer hover:ring-4 hover:ring-primary/30 transition-all" : ""}`}
+                  onClick={() => viewingEmployee.fotoUrl && setFotoExpandida(viewingEmployee.fotoUrl)}
+                  title={viewingEmployee.fotoUrl ? "Clique para ampliar a foto" : undefined}
+                >
                   {viewingEmployee.fotoUrl ? (
                     <img src={viewingEmployee.fotoUrl} alt="Foto" className="w-full h-full object-cover object-top" />
                   ) : (
@@ -2729,6 +2734,32 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
       </FullScreenDialog>
        <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
           <PrintFooterLGPD />
+
+      {fotoExpandida && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center cursor-pointer"
+          onClick={() => setFotoExpandida(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <img
+              src={fotoExpandida}
+              alt="Foto do colaborador"
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            />
+            <button
+              type="button"
+              onClick={() => setFotoExpandida(null)}
+              className="absolute -top-3 -right-3 bg-white rounded-full p-1.5 shadow-lg hover:bg-gray-100 transition-colors"
+            >
+              <XIcon className="h-5 w-5 text-gray-700" />
+            </button>
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1 rounded-full">
+              {viewingEmployee?.nomeCompleto || "Colaborador"}
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
