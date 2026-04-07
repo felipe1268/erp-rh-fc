@@ -557,7 +557,10 @@ export default function ControleKm() {
                                     <div>
                                       <span className="font-medium">{formatNum(kmOdoDiff, 0)} km</span>
                                       {divergencia > 15 && (
-                                        <div className="text-xs text-amber-600 flex items-center justify-end gap-0.5">
+                                        <div
+                                          className="text-xs text-amber-600 flex items-center justify-end gap-0.5 cursor-help"
+                                          title={`Divergência de ${formatNum(divergencia, 1)}% entre Km GPS (${formatNum(v.totalKm, 0)} km) e Km Odômetro (${formatNum(kmOdoDiff, 0)} km).\n\nIsso pode indicar:\n• Odômetro descalibrado ou com defeito\n• GPS sem sinal em parte do trajeto\n• Registro manual incorreto no abastecimento\n• Veículo rodou com GPS desligado`}
+                                        >
                                           <AlertTriangle className="h-3 w-3" /> {formatNum(divergencia, 0)}% dif.
                                         </div>
                                       )}
