@@ -225,47 +225,73 @@ async function invokeAnthropic(params: InvokeParams): Promise<InvokeResult> {
     }
   }
 
-  const data = await client.messages.create(body);
+  const MAX_RETRIES = 4;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const data = await client.messages.create(body);
 
-  const textContent = data.content
-    .filter((c) => c.type === "text")
-    .map((c) => (c as Anthropic.Messages.TextBlock).text)
-    .join("");
+      const textContent = data.content
+        .filter((c) => c.type === "text")
+        .map((c) => (c as Anthropic.Messages.TextBlock).text)
+        .join("");
 
-  const toolCalls: ToolCall[] = data.content
-    .filter((c) => c.type === "tool_use")
-    .map((c, i) => {
-      const tu = c as Anthropic.Messages.ToolUseBlock;
+      const toolCalls: ToolCall[] = data.content
+        .filter((c) => c.type === "tool_use")
+        .map((c, i) => {
+          const tu = c as Anthropic.Messages.ToolUseBlock;
+          return {
+            id: tu.id ?? `call_${i}`,
+            type: "function" as const,
+            function: { name: tu.name, arguments: JSON.stringify(tu.input ?? {}) },
+          };
+        });
+
       return {
-        id: tu.id ?? `call_${i}`,
-        type: "function" as const,
-        function: { name: tu.name, arguments: JSON.stringify(tu.input ?? {}) },
+        id: data.id ?? "ant-0",
+        created: Math.floor(Date.now() / 1000),
+        model: data.model ?? CLAUDE_MODEL,
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: textContent,
+              ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+            },
+            finish_reason: data.stop_reason ?? null,
+          },
+        ],
+        usage: data.usage
+          ? {
+              prompt_tokens: data.usage.input_tokens ?? 0,
+              completion_tokens: data.usage.output_tokens ?? 0,
+              total_tokens: (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0),
+            }
+          : undefined,
       };
-    });
-
-  return {
-    id: data.id ?? "ant-0",
-    created: Math.floor(Date.now() / 1000),
-    model: data.model ?? CLAUDE_MODEL,
-    choices: [
-      {
-        index: 0,
-        message: {
-          role: "assistant",
-          content: textContent,
-          ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
-        },
-        finish_reason: data.stop_reason ?? null,
-      },
-    ],
-    usage: data.usage
-      ? {
-          prompt_tokens: data.usage.input_tokens ?? 0,
-          completion_tokens: data.usage.output_tokens ?? 0,
-          total_tokens: (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0),
+    } catch (err: any) {
+      const status = err?.status ?? err?.statusCode ?? (typeof err?.message === "string" && err.message.includes("429") ? 429 : 0);
+      if (status === 429 && attempt < MAX_RETRIES) {
+        const retryAfter = err?.headers?.["retry-after"];
+        let waitMs: number;
+        if (retryAfter) {
+          const secs = parseInt(retryAfter, 10);
+          waitMs = (isNaN(secs) ? 5 : secs) * 1000;
+        } else {
+          waitMs = 1000 * Math.pow(2, attempt) + Math.random() * 500;
         }
-      : undefined,
-  };
+        waitMs = Math.min(waitMs, 60000);
+        console.warn(`[LLM] Claude 429 rate limit (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      if (status === 429) {
+        throw new Error("Limite de requisições da IA atingido. Aguarde alguns minutos e tente novamente.");
+      }
+      throw err;
+    }
+  }
+  throw new Error("Falha ao invocar Claude após múltiplas tentativas.");
 }
 
 const assertApiKey = () => {
@@ -277,9 +303,18 @@ const assertApiKey = () => {
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
-  // Anthropic Claude tem prioridade
+  // Anthropic Claude tem prioridade — com fallback pro Gemini se 429
   if (isAnthropicAvailable()) {
-    return invokeAnthropic(params);
+    try {
+      return await invokeAnthropic(params);
+    } catch (err: any) {
+      const isRateLimit = err?.message?.includes("Limite de requisições") || err?.message?.includes("429");
+      if (isRateLimit && process.env.GOOGLE_API_KEY) {
+        console.warn("[LLM] Claude esgotou tentativas (429). Tentando fallback para Gemini...");
+      } else {
+        throw err;
+      }
+    }
   }
 
   // Fallback: Google Gemini via OpenAI-compat endpoint
