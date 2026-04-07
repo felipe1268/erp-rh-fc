@@ -306,9 +306,11 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
               const isOpen = expandido === disc.nome;
               const discAllSel = isDisciplinaAllSelected(disc);
               const discPartial = isDisciplinaPartial(disc);
+              const discNaSC = disc.itens.filter((i: any) => scSet.has(i.eapCodigo)).length;
+              const discTodosNaSC = discNaSC > 0 && discNaSC === disc.itens.length;
               return (
-                <div key={disc.nome} className="border rounded-lg overflow-hidden">
-                  <div className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">
+                <div key={disc.nome} className={`border rounded-lg overflow-hidden ${discTodosNaSC ? "border-emerald-300 bg-emerald-50/40" : ""}`}>
+                  <div className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${discTodosNaSC ? "bg-emerald-50 hover:bg-emerald-100" : "bg-gray-50 hover:bg-gray-100"}`}>
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
@@ -350,6 +352,15 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                           <button type="button" onClick={e => { e.stopPropagation(); setEditandoNome(disc.nome); setNovoNome(disc.nome); }} className="text-gray-400 hover:text-gray-600">
                             <Pencil className="h-3 w-3" />
                           </button>
+                          {discTodosNaSC ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5">
+                              <CheckCircle2 className="h-3 w-3" /> Todos na SC
+                            </span>
+                          ) : discNaSC > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                              {discNaSC}/{disc.itens.length} na SC
+                            </span>
+                          ) : null}
                         </div>
                       )}
                     </div>
