@@ -2510,7 +2510,7 @@ export default function Cotacoes() {
                                 </span>
                               )}
                               {parseFloat(p.totalOrcado ?? "0") > 0 && <span className="font-normal text-xs opacity-70">· {parseFloat(p.totalOrcado).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
-                              <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); const forn = p.fornecedor || fornecedores.find((ff: any) => ff.id === p.fornecedorId); if (forn) { abrirEditForn(forn); } else { toast.error("Fornecedor não encontrado"); } }} className="ml-1 p-0.5 rounded hover:bg-blue-100 hover:text-blue-600 transition-colors" title="Editar fornecedor"><Pencil className="h-3.5 w-3.5" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); console.log("EDIT CLICK", { fornecedor: p.fornecedor, fornecedorId: p.fornecedorId, fornecedoresLen: fornecedores.length }); const forn = p.fornecedor || fornecedores.find((ff: any) => ff.id === p.fornecedorId); console.log("FORN RESOLVED", forn); if (forn && forn.id) { abrirEditForn(forn); } else { toast.error("Fornecedor não encontrado"); } }} className="ml-1 p-0.5 rounded hover:bg-blue-100 hover:text-blue-600 transition-colors" title="Editar fornecedor"><Pencil className="h-3.5 w-3.5" /></button>
                               <button onClick={() => removerForn.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId })} className="ml-1 hover:text-red-500 transition-colors"><X className="h-3 w-3" /></button>
                             </div>
                           );
