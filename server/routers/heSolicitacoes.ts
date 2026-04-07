@@ -710,9 +710,10 @@ export const heSolicitacoesRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-    const [sol] = await db.select({ id: heSolicitacoes.id }).from(heSolicitacoes)
+    const [sol] = await db.select({ id: heSolicitacoes.id, status: heSolicitacoes.status }).from(heSolicitacoes)
       .where(eq(heSolicitacoes.id, input.solicitacaoId));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+    if (sol.status !== "aprovada") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Só é possível registrar comparecimento após a solicitação ser aprovada" });
 
     const userName = ctx.user?.name || "sistema";
     const agora = new Date().toISOString();

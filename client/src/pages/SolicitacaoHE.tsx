@@ -1801,7 +1801,7 @@ export default function SolicitacaoHE() {
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-semibold text-green-700">Já confirmaram ({totalConf}):</p>
-                          {semRegistro.length > 0 && (
+                          {semRegistro.length > 0 && sol.status === "aprovada" && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -1811,6 +1811,9 @@ export default function SolicitacaoHE() {
                               <UserCheck className="h-3 w-3 mr-1" />
                               {modoComparecimento ? "Cancelar" : "Registrar Comparecimento"}
                             </Button>
+                          )}
+                          {semRegistro.length > 0 && sol.status !== "aprovada" && (
+                            <span className="text-xs text-amber-600 italic">Aprovação necessária para registrar comparecimento</span>
                           )}
                         </div>
                         <div className="divide-y divide-amber-200 border border-amber-200 rounded-lg overflow-hidden bg-white">
