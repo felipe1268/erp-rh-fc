@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { toast } from "sonner";
 import {
   Gauge, Fuel, Route, TrendingUp, Clock, Car, Truck, AlertTriangle,
   MapPin, Calendar, ArrowUpDown, Eye, ChevronDown, ChevronUp, DollarSign,
@@ -60,6 +61,24 @@ export default function ControleKm() {
     { companyId, startDate, endDate },
     { enabled: !!companyId, staleTime: 300000 }
   );
+
+  const dailyKmQ = trpc.frotas.getDailyKm.useQuery(
+    { companyId, startDate, endDate },
+    { enabled: !!companyId, staleTime: 60000 }
+  );
+
+  const coletarMut = trpc.frotas.coletarKmDiario.useMutation({
+    onSuccess: (res: any) => {
+      if (res.erro) {
+        toast.error("Erro na coleta: " + res.erro);
+      } else {
+        toast.success(`Km coletado! ${res.coletados} veículos com movimentação registrada.`);
+        dailyKmQ.refetch();
+        refetch();
+      }
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const tripsQuery = trpc.frotas.getInfleetTrips.useQuery(
     {
@@ -200,6 +219,10 @@ export default function ControleKm() {
               <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? "animate-spin" : ""}`} />
               Atualizar
             </Button>
+            <Button size="sm" onClick={() => coletarMut.mutate({ companyId })} disabled={coletarMut.isPending} className="bg-cyan-600 hover:bg-cyan-700">
+              {coletarMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Navigation className="h-4 w-4 mr-1" />}
+              Coletar Km Hoje
+            </Button>
           </div>
         </div>
 
@@ -260,6 +283,12 @@ export default function ControleKm() {
                 <TabsTrigger value="resumo">Resumo por Veículo</TabsTrigger>
                 <TabsTrigger value="diario">Visão Diária</TabsTrigger>
                 <TabsTrigger value="cruzamento">Cruzamento Km × Combustível</TabsTrigger>
+                <TabsTrigger value="catalogado" className="relative">
+                  Histórico Catalogado
+                  {(dailyKmQ.data?.length || 0) > 0 && (
+                    <span className="ml-1 bg-cyan-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{dailyKmQ.data?.length}</span>
+                  )}
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="resumo" className="mt-4">
@@ -577,6 +606,120 @@ export default function ControleKm() {
                     </Card>
                   ))}
                 </div>
+              </TabsContent>
+
+              <TabsContent value="catalogado" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Route className="h-4 w-4" /> Km Catalogado por Dia (Histórico Persistente)
+                    </CardTitle>
+                    <p className="text-xs text-gray-500">Dados coletados automaticamente a cada 30 min e armazenados no banco de dados</p>
+                  </CardHeader>
+                  <CardContent>
+                    {dailyKmQ.isLoading ? (
+                      <div className="flex items-center justify-center py-10">
+                        <Loader2 className="h-6 w-6 animate-spin text-cyan-500" />
+                      </div>
+                    ) : !(dailyKmQ.data?.length) ? (
+                      <div className="text-center py-10 text-gray-400">
+                        <Navigation className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                        <p>Nenhum dado catalogado ainda para este período.</p>
+                        <p className="text-xs mt-1">Clique em "Coletar Km Hoje" para iniciar a coleta.</p>
+                      </div>
+                    ) : (() => {
+                      const dailyRecords = dailyKmQ.data || [];
+                      const byDate: Record<string, any[]> = {};
+                      dailyRecords.forEach((r: any) => {
+                        const d = typeof r.data === 'string' ? r.data.slice(0, 10) : new Date(r.data).toISOString().slice(0, 10);
+                        if (!byDate[d]) byDate[d] = [];
+                        byDate[d].push(r);
+                      });
+                      const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+                      return (
+                        <div className="space-y-4">
+                          {dates.map(date => {
+                            const recs = byDate[date];
+                            const totalKmDay = recs.reduce((s: number, r: any) => s + parseFloat(r.km_total || 0), 0);
+                            const totalViagensDay = recs.reduce((s: number, r: any) => s + parseInt(r.viagens || 0), 0);
+                            const veiculosAtivosDay = recs.filter((r: any) => parseFloat(r.km_total) > 0).length;
+                            return (
+                              <div key={date} className="border rounded-lg overflow-hidden">
+                                <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <Calendar className="h-4 w-4 text-gray-400" />
+                                    <span className="font-semibold">{formatDate(date)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-4 text-sm">
+                                    <span className="text-cyan-600 font-bold">{formatNum(totalKmDay, 1)} km</span>
+                                    <span className="text-gray-500">{totalViagensDay} viagens</span>
+                                    <span className="text-gray-500">{veiculosAtivosDay} veículos ativos</span>
+                                  </div>
+                                </div>
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b text-left">
+                                      <th className="py-2 px-3 font-medium text-gray-500">Placa</th>
+                                      <th className="py-2 px-3 font-medium text-gray-500">Veículo</th>
+                                      <th className="py-2 px-3 font-medium text-gray-500 text-right">Km Total</th>
+                                      <th className="py-2 px-3 font-medium text-gray-500 text-right">Viagens</th>
+                                      <th className="py-2 px-3 font-medium text-gray-500 text-right">Tempo Rodando</th>
+                                      <th className="py-2 px-3 font-medium text-gray-500 text-right">Vel. Média</th>
+                                      <th className="py-2 px-3 font-medium text-gray-500 text-right">Vel. Máx</th>
+                                      <th className="py-2 px-3 font-medium text-gray-500">Motorista(s)</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {recs.sort((a: any, b: any) => parseFloat(b.km_total) - parseFloat(a.km_total)).map((r: any) => (
+                                      <tr key={r.id} className={`border-b last:border-0 hover:bg-gray-50 ${r.alerta_gps ? "bg-amber-50" : ""}`}>
+                                        <td className="py-2 px-3 font-mono font-medium">
+                                          {r.placa}
+                                          {r.alerta_gps && (
+                                            <div className="flex items-center gap-1 mt-1">
+                                              <AlertTriangle className="h-3 w-3 text-amber-600" />
+                                              <span className="text-[10px] text-amber-700 font-normal">{r.alerta_gps}</span>
+                                            </div>
+                                          )}
+                                        </td>
+                                        <td className="py-2 px-3 text-gray-600">{r.nome_veiculo || "—"}</td>
+                                        <td className="py-2 px-3 text-right font-bold text-cyan-700">{formatNum(parseFloat(r.km_total), 1)} km</td>
+                                        <td className="py-2 px-3 text-right">{r.viagens}</td>
+                                        <td className="py-2 px-3 text-right">{formatDuration(parseInt(r.tempo_rodando_min || 0))}</td>
+                                        <td className="py-2 px-3 text-right">{formatNum(parseFloat(r.vel_media || 0))} km/h</td>
+                                        <td className="py-2 px-3 text-right">
+                                          <span className={parseFloat(r.vel_maxima) > 80 ? "text-red-600 font-bold" : ""}>
+                                            {formatNum(parseFloat(r.vel_maxima || 0))} km/h
+                                          </span>
+                                        </td>
+                                        <td className="py-2 px-3 text-gray-500 text-xs">{r.motoristas || "—"}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            );
+                          })}
+                          <div className="bg-cyan-50 rounded-lg p-4 mt-2">
+                            <div className="grid grid-cols-3 gap-4 text-center">
+                              <div>
+                                <div className="text-2xl font-bold text-cyan-700">{formatNum(dailyRecords.reduce((s: number, r: any) => s + parseFloat(r.km_total || 0), 0), 0)} km</div>
+                                <div className="text-xs text-gray-500">Total do período</div>
+                              </div>
+                              <div>
+                                <div className="text-2xl font-bold text-cyan-700">{dailyRecords.reduce((s: number, r: any) => s + parseInt(r.viagens || 0), 0)}</div>
+                                <div className="text-xs text-gray-500">Total de viagens</div>
+                              </div>
+                              <div>
+                                <div className="text-2xl font-bold text-cyan-700">{dates.length}</div>
+                                <div className="text-xs text-gray-500">Dias com dados</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
 

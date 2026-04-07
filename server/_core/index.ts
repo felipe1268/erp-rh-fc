@@ -711,6 +711,8 @@ async function startServer() {
     import("../services/purchaseAutoJobs").then(m => m.startPurchaseJobs()).catch(e => console.error("[PurchaseJobs] Erro:", e));
     // Jobs do módulo operacional: auto-criar RDO, alertas 18h/20h, clima automático
     import("../services/operacionalJobs").then(m => m.startOperacionalJobs()).catch(e => console.error("[OperacionalJobs] Erro:", e));
+    // Job de coleta automática de km diário da frota (a cada 30 min)
+    import("../services/fleetKmJob").then(m => m.startFleetKmJob()).catch(e => console.error("[FleetKmJob] Erro:", e));
   });
 }
 

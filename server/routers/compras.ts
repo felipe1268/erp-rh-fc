@@ -8953,7 +8953,7 @@ Retorne APENAS um JSON válido neste formato:
       .where(and(
         eq(comprasSolicitacoes.companyId, input.companyId),
         eq(comprasSolicitacoes.obraId, orc.obraId!),
-        inArray(comprasSolicitacoes.status, ["aprovada", "em_cotacao", "cotada", "comprada", "pendente"]),
+        inArray(comprasSolicitacoes.status, ["aprovada", "aprovado", "em_cotacao", "cotada", "comprada", "pendente"]),
       ));
 
     const scMap: Record<string, number> = {};
@@ -9012,15 +9012,13 @@ Retorne APENAS um JSON válido neste formato:
       .limit(1);
     if (!orc) throw new TRPCError({ code: "NOT_FOUND", message: "Orçamento não encontrado nesta empresa." });
 
+    const isReclassify = !!input.force;
     if (!input.force) {
       const existing = await db.select({ id: disciplinaClassificacoes.id })
         .from(disciplinaClassificacoes)
         .where(and(eq(disciplinaClassificacoes.orcamentoId, input.orcamentoId), eq(disciplinaClassificacoes.companyId, input.companyId)))
         .limit(1);
       if (existing.length > 0) return { status: "ja_classificado" as const, msg: "Já classificado. Use force=true para reclassificar." };
-    } else {
-      await db.delete(disciplinaClassificacoes)
-        .where(and(eq(disciplinaClassificacoes.orcamentoId, input.orcamentoId), eq(disciplinaClassificacoes.companyId, input.companyId)));
     }
 
     const itens = await db.select({
@@ -9125,6 +9123,11 @@ Responda APENAS com JSON válido, sem markdown, no formato:
 
     if (values.length === 0)
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Nenhuma classificação válida gerada." });
+
+    if (isReclassify) {
+      await db.delete(disciplinaClassificacoes)
+        .where(and(eq(disciplinaClassificacoes.orcamentoId, input.orcamentoId), eq(disciplinaClassificacoes.companyId, input.companyId)));
+    }
 
     const BATCH = 200;
     for (let i = 0; i < values.length; i += BATCH) {

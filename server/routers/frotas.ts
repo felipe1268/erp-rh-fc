@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { eq, and, desc, asc, sql, gte, lte, inArray } from "drizzle-orm";
+import { resolveCompanyIds } from "../companyHelper";
 import {
   vehicles, fleetMaintenances, fleetFuelRecords,
   fleetTrackingPoints, fleetDocuments,
@@ -5715,4 +5716,152 @@ Sempre retorne JSON válido, sem markdown.`;
         return { vehicles: [], error: e.message || 'Erro ao buscar dados' };
       }
     }),
+
+  coletarKmDiario: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const userCompanies = resolveCompanyIds(ctx.user);
+      if (!userCompanies.includes(input.companyId)) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      const result = await coletarKmDiarioJob(input.companyId, input.data);
+      return result;
+    }),
+
+  getDailyKm: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows_ = (await db.execute(sql`
+        SELECT id, company_id, placa, COALESCE(nome_veiculo, '') as nome_veiculo,
+               data, km_total, COALESCE(viagens, num_viagens, 0) as viagens,
+               tempo_rodando_min, vel_media, vel_maxima,
+               COALESCE(motoristas, motorista, '') as motoristas,
+               COALESCE(odometro_fim, km_odometro_fim) as odometro_fim,
+               infleet_vehicle_id, updated_at, alerta_gps
+        FROM fleet_daily_km
+        WHERE company_id = ${input.companyId}
+          AND data >= ${input.startDate}
+          AND data <= ${input.endDate}
+        ORDER BY data DESC, km_total DESC
+      `) as any).rows || [];
+      return rows_;
+    }),
 });
+
+export async function coletarKmDiarioJob(companyId: number, dataOverride?: string): Promise<{ coletados: number; veiculos: number; erro?: string }> {
+  const token = process.env.FROTA_API_TOKEN;
+  if (!token) return { coletados: 0, veiculos: 0, erro: 'FROTA_API_TOKEN não configurado' };
+
+  const targetDate = dataOverride || new Date().toISOString().slice(0, 10);
+
+  try {
+    const vehiclesResp = await fetch('https://api.infleet.com.br/v1/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ query: `{ listVehicles { id plate displayName brand model type status odometer driver { name } } }` }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const vehiclesData = await vehiclesResp.json() as any;
+    const infleetVehicles = vehiclesData.data?.listVehicles || [];
+    if (!infleetVehicles.length) return { coletados: 0, veiculos: 0, erro: 'Nenhum veículo na API' };
+
+    const db = await getDb();
+
+    const localVehRes = (await db.execute(sql`SELECT id, placa FROM vehicles WHERE "companyId" = ${companyId}`) as any).rows || [];
+    const plateToLocalId: Record<string, number> = {};
+    localVehRes.forEach((v: any) => { if (v.placa) plateToLocalId[v.placa.replace(/[-\s]/g, '').toUpperCase()] = v.id; });
+
+    let coletados = 0;
+    const BATCH = 3;
+    for (let i = 0; i < infleetVehicles.length; i += BATCH) {
+      const batch = infleetVehicles.slice(i, i + BATCH);
+      const results = await Promise.allSettled(batch.map(async (v: any) => {
+        const tripsQuery = `{
+          trips(filter: { vehicleId: "${v.id}", fixTime: { startAt: "${targetDate}T00:00:00.000Z", endAt: "${targetDate}T23:59:59.000Z" } }) {
+            id startedAt finishedAt distanceTraveled averageSpeed maximumSpeed
+            driver { name }
+          }
+        }`;
+        try {
+          const resp = await fetch('https://api.infleet.com.br/v1/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ query: tripsQuery }),
+            signal: AbortSignal.timeout(20000),
+          });
+          const data = await resp.json() as any;
+          return { vehicle: v, trips: data.data?.trips || [] };
+        } catch { return { vehicle: v, trips: [] }; }
+      }));
+
+      for (const r of results) {
+        if (r.status !== 'fulfilled') continue;
+        const { vehicle: v, trips } = r.value;
+        if (!trips.length) continue;
+
+        let kmTotal = 0, totalViagens = 0, tempoMin = 0, velMediaPond = 0, velMax = 0;
+        const motoristasSet = new Set<string>();
+
+        trips.forEach((t: any) => {
+          kmTotal += t.distanceTraveled || 0;
+          totalViagens++;
+          const durMin = (new Date(t.finishedAt).getTime() - new Date(t.startedAt).getTime()) / 60000;
+          tempoMin += durMin;
+          velMediaPond += (t.averageSpeed || 0) * (t.distanceTraveled || 0);
+          velMax = Math.max(velMax, t.maximumSpeed || 0);
+          if (t.driver?.name) motoristasSet.add(t.driver.name);
+        });
+
+        const velMedia = kmTotal > 0 ? velMediaPond / kmTotal : 0;
+        const placaNorm = v.plate.replace(/[-\s]/g, '').toUpperCase();
+        const localVehicleId = plateToLocalId[placaNorm] || null;
+        if (!localVehicleId) continue;
+        const nomeVeiculo = v.displayName || `${v.brand || ''} ${v.model || ''}`.trim();
+
+        let alertaGps: string | null = null;
+        if (kmTotal === 0 && totalViagens > 0 && tempoMin > 5) {
+          alertaGps = `GPS sem dados de deslocamento (${totalViagens} viagens, ${Math.round(tempoMin)} min ligado). Verificar rastreador.`;
+        }
+
+        await db.execute(sql`
+          INSERT INTO fleet_daily_km (company_id, vehicle_id, infleet_vehicle_id, placa, nome_veiculo, data, km_total, viagens, num_viagens, tempo_rodando_min, vel_media, vel_maxima, motoristas, motorista, odometro_fim, km_odometro_fim, alerta_gps, updated_at)
+          VALUES (${companyId}, ${localVehicleId}, ${v.id}, ${v.plate}, ${nomeVeiculo}, ${targetDate},
+                  ${Math.round(kmTotal * 10) / 10}, ${totalViagens}, ${totalViagens}, ${Math.round(tempoMin)},
+                  ${Math.round(velMedia * 10) / 10}, ${Math.round(velMax * 10) / 10},
+                  ${[...motoristasSet].join(', ') || null},
+                  ${[...motoristasSet].join(', ') || null},
+                  ${v.odometer ? Math.round(v.odometer * 100) / 100 : null},
+                  ${v.odometer ? Math.round(v.odometer * 100) / 100 : null},
+                  ${alertaGps},
+                  NOW())
+          ON CONFLICT (company_id, placa, data) DO UPDATE SET
+            km_total = EXCLUDED.km_total,
+            viagens = EXCLUDED.viagens,
+            num_viagens = EXCLUDED.num_viagens,
+            tempo_rodando_min = EXCLUDED.tempo_rodando_min,
+            vel_media = EXCLUDED.vel_media,
+            vel_maxima = EXCLUDED.vel_maxima,
+            motoristas = EXCLUDED.motoristas,
+            motorista = EXCLUDED.motorista,
+            odometro_fim = EXCLUDED.odometro_fim,
+            km_odometro_fim = EXCLUDED.km_odometro_fim,
+            nome_veiculo = EXCLUDED.nome_veiculo,
+            infleet_vehicle_id = EXCLUDED.infleet_vehicle_id,
+            alerta_gps = EXCLUDED.alerta_gps,
+            updated_at = NOW()
+        `);
+        coletados++;
+      }
+    }
+
+    return { coletados, veiculos: infleetVehicles.length };
+  } catch (e: any) {
+    return { coletados: 0, veiculos: 0, erro: e.message };
+  }
+}
