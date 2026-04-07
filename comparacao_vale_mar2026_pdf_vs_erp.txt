@@ -1,0 +1,153 @@
+COMPARAÇÃO: VALE PAGO (PDF Mar/2026) vs ERP (Mar/2026 recalculado)
+========================================================================================================================
+
+FUNCIONÁRIO                                         PDF PAGO           ERP     DIFERENÇA    STATUS ERP  RESULTADO
+------------------------------------------------------------------------------------------------------------------------
+ANDERSON DOS ANJOS ALKMIN                        R$ 2.188,00   R$ 2.406,10    +R$ 218,10     calculado  ❌ DIVERGE
+ANTONIO RENATO DE SANTANA                        R$ 2.021,00   R$ 2.562,50    +R$ 541,50     calculado  ❌ DIVERGE
+CAROLINA DA SILVA PENA FIRME                     R$ 1.000,00   R$ 1.033,00     +R$ 33,00     calculado  ❌ DIVERGE
+CATARINE APARECIDA CORREA LIMA                   R$ 1.272,00   R$ 1.313,99     +R$ 41,99     calculado  ❌ DIVERGE
+DARCY AUGUSTO RIBEIRO                            R$ 1.365,00   R$ 1.566,78    +R$ 201,78     calculado  ❌ DIVERGE
+DESILDO DA COSTA SANTOS                                    —     R$ 408,61    +R$ 408,61     rejeitado  ❌ DIVERGE
+DOUGLAS DE SOUZA ROCHA                                     —   R$ 1.146,67  +R$ 1.146,67     calculado  ❌ DIVERGE
+ELIAS VIEIRA DO NASCIMENTO                                 —     R$ 204,31    +R$ 204,31     rejeitado  ❌ DIVERGE
+ELIZEU FRANCISCO DE SOUZA                        R$ 1.400,00   R$ 1.446,75     +R$ 46,75     calculado  ❌ DIVERGE
+ENIVALDO DA SILVA ANDRIONI                         R$ 883,00   R$ 1.439,47    +R$ 556,47     calculado  ❌ DIVERGE
+FERNANDO RODRIGO DE CASTILHO PRADO               R$ 1.147,00   R$ 1.077,56     -R$ 69,44     calculado  ❌ DIVERGE
+GERALDO CANDIDO DA SILVA                         R$ 1.361,00   R$ 1.146,67    -R$ 214,33     calculado  ❌ DIVERGE
+HENRIQUE LOPES                                   R$ 1.078,00     R$ 904,79    -R$ 173,21     calculado  ❌ DIVERGE
+ISABELA AUGUSTA DA SILVA VELLOSO                   R$ 658,00     R$ 679,27     +R$ 21,27     calculado  ❌ DIVERGE
+JOAO PAULO CORREA DE FREITAS                     R$ 1.448,00   R$ 1.602,25    +R$ 154,25     calculado  ❌ DIVERGE
+JOSE BENEDITO MENDES                             R$ 1.010,00   R$ 1.360,36    +R$ 350,36     calculado  ❌ DIVERGE
+MARCOS ROBERTO CORREA DE FREITAS                 R$ 1.147,00     R$ 904,79    -R$ 242,21     calculado  ❌ DIVERGE
+MARIANA CASTILHO DE LIMA                         R$ 2.278,00   R$ 2.353,35     +R$ 75,35     calculado  ❌ DIVERGE
+MATEUS OLIVEIRA BRITO PIRES                                —     R$ 776,78    +R$ 776,78     rejeitado  ❌ DIVERGE
+MYRIÉLLE FIALHO BORGES ARCANJO                     R$ 665,00     R$ 686,55     +R$ 21,55     calculado  ❌ DIVERGE
+RODRIGO NOGUEIRA DA SILVA MEIRELES BRAGA         R$ 1.147,00     R$ 602,89    -R$ 544,11     calculado  ❌ DIVERGE
+WESLEY LEONARD DE OLIVEIRA                         R$ 800,00     R$ 826,58     +R$ 26,58     calculado  ❌ DIVERGE
+ACACIO LESCURA DE CAMARGO                        R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+ADRIANO PAZ FERREIRA                               R$ 647,00     R$ 646,80      -R$ 0,20        alerta  ✅ OK
+AGOSTINHO DIJALMA FERREIRA                                 —   R$ 1.028,46             —     rejeitado  🔵 SÓ ERP
+ALEX ALESSANDRO MONTEIRO DA SILVA                  R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+ALEX DA SILVA DOMINGOS                           R$ 1.078,00   R$ 1.077,56      -R$ 0,44     calculado  ✅ OK
+ALEX PAULO RODRIGUES                                       —     R$ 437,80             —        alerta  🔵 SÓ ERP
+ALEXANDRO GONCALVES DO NASCIMENTO                  R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+ALEXSANDRO DE LIMA                                 R$ 623,00     R$ 622,78      -R$ 0,22        alerta  ✅ OK
+ANA BEATRIZ SILVA DA CONCEICAO                     R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+ANDERSON BRAGA SILVA                             R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+ANDERSON DOS ANJOS ALKMIN JUNIOR                 R$ 1.078,00   R$ 1.077,56      -R$ 0,44     calculado  ✅ OK
+ANDRE LUIZ BARLETTA DAS CHAGAS                     R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+ANDREI DA SILVA                                    R$ 777,00     R$ 776,78      -R$ 0,22     calculado  ✅ OK
+ANTONIO CARLOS SANTOS                              R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+ANTONIO WAGNER BARBOSA DE SOUSA                  R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+BRUNO LUIS FARIA MACHADO                           R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+BRUNO RAFAEL BATISTA DA SILVA                              —     R$ 408,61             —        alerta  🔵 SÓ ERP
+CAIO AUGUSTO DA SILVA GARUFE                     R$ 1.832,00   R$ 1.831,40      -R$ 0,60     calculado  ✅ OK
+CAIO MATHEUS PEREIRA ANTUNES                       R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+Carlos Alberto Gonçalves                                   —             —             —             -  🔴 SÓ PDF
+CARLOS VITORIANO TOBIAS                            R$ 438,00     R$ 437,80      -R$ 0,20     calculado  ✅ OK
+CLAUDIO JOSE GONCALVES DIAS                        R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+CLAUDIO SILVA                                    R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+Daniel Carneiro Pereira                                    —             —             —             -  🔴 SÓ PDF
+DIEGO HENRIQUE ESPINELI DOS SANTOS                         —     R$ 408,61             —        alerta  🔵 SÓ ERP
+DIOGO SOARES DA SILVA                              R$ 719,00     R$ 718,37      -R$ 0,63     calculado  ✅ OK
+DOUGLAS FELIPPE RIBEIRO                          R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+EDENILSON SOUZA LIMA                             R$ 1.078,00   R$ 1.077,56      -R$ 0,44     calculado  ✅ OK
+EDSON FERNANDO MACHADO                                     —     R$ 408,61             —        alerta  🔵 SÓ ERP
+ELIEL BRENDON DE LIMA MARQUES                    R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+Emerson Rodrigo dos Santos                                 —             —             —             -  🔴 SÓ PDF
+ERIC GUSTAVO DE SOUZA                              R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+ERITON ANDRE SEVERINO DA SILVA                   R$ 1.116,00   R$ 1.115,75      -R$ 0,25     calculado  ✅ OK
+Francisco Ant. de Lima Teixeira                    R$ 905,00             —             —             -  🔴 SÓ PDF
+FRANCISCO DAS CHAGAS DIAS                        R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+FRANCISCO EUDICE CARVALHO BIZERRA                          —     R$ 437,80             —        alerta  🔵 SÓ ERP
+GENILSON DE SOUZA LOPES                          R$ 1.073,00   R$ 1.072,69      -R$ 0,31        alerta  ✅ OK
+Geraldo Machado                                    R$ 643,00             —             —             -  🔴 SÓ PDF
+GILBERTO DA COSTA BARBOZA                                  —     R$ 466,99             —        alerta  🔵 SÓ ERP
+GILMAR PEREIRA DE BRITO                            R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+GILMAR SANTOS DO NASCIMENTO                        R$ 487,00     R$ 486,64      -R$ 0,36        alerta  ✅ OK
+GISLEI RODRIGO DE CARVALHO                       R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+GIVALDO DOS SANTOS                                         —     R$ 799,92             —        alerta  🔵 SÓ ERP
+GLEDSON FERREIRA SANTOS                            R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+Irael Alves de Souza                                       —             —             —             -  🔴 SÓ PDF
+ISAIAS COELHO MUYAGUTI MONTEIRO                    R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+IVAN DOS SANTOS                                            —     R$ 379,43             —        alerta  🔵 SÓ ERP
+JAMIELSON GOMES DOS SANTOS SILVA                   R$ 719,00     R$ 718,37      -R$ 0,63     calculado  ✅ OK
+JEAN CARLOS MARTINS                                        —     R$ 408,61             —        alerta  🔵 SÓ ERP
+JEAN CARLOS RIBEIRO DA SILVA                       R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+JEFTER EMANOEL CRISPINIANO DE MELO SILVA           R$ 863,00     R$ 862,40      -R$ 0,60        alerta  ✅ OK
+JERRYALITON AUGUSTO BEZERRA                                —   R$ 1.146,67             —     rejeitado  🔵 SÓ ERP
+JOAO CARLOS DA SILVA CONCEICAO                     R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+JOAO JOSE DE PAULA OLIVEIRA                      R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+JOAO MACHADO DE AZEVEDO                                    —     R$ 517,85             —        alerta  🔵 SÓ ERP
+João Odair Domingos                              R$ 1.228,00             —             —             -  🔴 SÓ PDF
+JORGE MARCELINO DA SILVA MOREIRA                   R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+JOSE ASTOR BATISTA                                         —     R$ 408,61             —        alerta  🔵 SÓ ERP
+JOSUE DO NASCIMENTO ALVES                        R$ 1.228,00   R$ 1.227,60      -R$ 0,40     calculado  ✅ OK
+JOVANILDO INACIO                                   R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+JULIO CESAR LEMES DE OLIVEIRA                    R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+JURANDI PEREIRA DOS SANTOS                         R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+KELBEM CARLOS DE LIMA SILVA                        R$ 487,00     R$ 486,64      -R$ 0,36        alerta  ✅ OK
+KELLEN LARISSA LOURENCO CLARO                              —   R$ 1.372,18             —     calculado  🔵 SÓ ERP
+LUCAS MATEUS RIBEIRO NEVES                         R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+LUIS CARLOS DA SILVA                                       —     R$ 554,84             —        alerta  🔵 SÓ ERP
+LUIS CLAUDIO ANDRADE CARNEIRO                      R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+LUIS GUSTAVO RODRIGUES DE CASTRO                           —     R$ 904,79             —     calculado  🔵 SÓ ERP
+Luiz Gustavo Rodrigues de Castro                   R$ 905,00             —             —             -  🔴 SÓ PDF
+LUIZ HENRIQUE DE MACEDO                            R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+MANOEL WAGNER ROCHA GUIMARAES                      R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+MARCELO ALEXANDRE PEREIRA                          R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+MARCELO DE LIMA FELISBERTO                       R$ 1.228,00   R$ 1.227,60      -R$ 0,40     calculado  ✅ OK
+MARCIO DE TOLEDO                                 R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+MARCIO ELOY DOS SANTOS                           R$ 1.146,00   R$ 1.146,67      +R$ 0,67     calculado  ✅ OK
+MARCO ANTONIO DOS SANTOS BATISTA                 R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+MATHEUS DONIZETTI ALVES RODRIGUES                          —     R$ 437,80             —        alerta  🔵 SÓ ERP
+MAURICIO BENEDITO ELESBAO                                  —     R$ 437,80             —        alerta  🔵 SÓ ERP
+MAYCON ADREAN POLYCARPO CORREA                     R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+MILTON CESAR DA COSTA                                      —     R$ 437,80             —        alerta  🔵 SÓ ERP
+NELSON MOREIRA GOMES                               R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+ODAIR JOSE PEREIRA                               R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+OSMAR MAGNO DE OLIVEIRA                          R$ 1.396,00   R$ 1.395,83      -R$ 0,17     calculado  ✅ OK
+PAULO DANIEL ALVES                                 R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+PAULO HENRIQUE LIMA GUIMARAES                      R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+PAULO HENRIQUE MONTEIRO XAVIER                     R$ 936,00     R$ 935,79      -R$ 0,21        alerta  ✅ OK
+PAULO ROBERTO DOS SANTOS ESPINELI                          —     R$ 437,80             —        alerta  🔵 SÓ ERP
+PAULO ROSA DA SILVA                                R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+PAULO VINICIUS SALES TEIXEIRA                    R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+PEDRO HENRIQUE MARQUES NOGUEIRA                            —   R$ 1.000,12             —        alerta  🔵 SÓ ERP
+RAFAEL ALEXANDRE MONTEIRO FERREIRA                         —     R$ 437,80             —        alerta  🔵 SÓ ERP
+RAFAELA ALBUQUERQUE DA SILVA                               —     R$ 893,20             —        alerta  🔵 SÓ ERP
+RAY HENRIQUE MOREIRA BERNARDES                             —     R$ 437,80             —        alerta  🔵 SÓ ERP
+REGINALDO VITORIANO LOURENCO                       R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+REGIS MORAES FERNANDES DOS SANTOS                  R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+RICARDO ANTONIO SILVESTRE                          R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+RODRIGO DA SILVA                                   R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+SERGIO AUGUSTO DE OLIVEIRA                         R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+SILVANO MONTEIRO CORREA                                    —     R$ 437,80             —        alerta  🔵 SÓ ERP
+SILVIO CLODOMIRO OLIVEIRA DE MOURA               R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+SYDENEY GOMES DE OLIVEIRA                        R$ 1.074,00   R$ 1.073,92      -R$ 0,08     calculado  ✅ OK
+THIAGO MARTINS MENEZES DE JESUS                    R$ 555,00     R$ 554,55      -R$ 0,45     calculado  ✅ OK
+THOMAS BARBOSA DE MATOS JESUS                              —     R$ 437,80             —        alerta  🔵 SÓ ERP
+TIAGO AUGUSTO DE OLIVEIRA                          R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+TIAGO MACHADO DA SILVA                             R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+VAGNER FELIPE OLIVEIRA REZENDE                     R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+VALDIR DONIZETTI GONCALVES JUNIOR                R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+WALMIR JOSE DA SILVA                             R$ 1.078,00   R$ 1.077,56      -R$ 0,44     calculado  ✅ OK
+WANDERSON ANTONIO DA COSTA                       R$ 1.147,00   R$ 1.146,67      -R$ 0,33     calculado  ✅ OK
+WELINGTON SILVA BRITO                              R$ 905,00     R$ 904,79      -R$ 0,21     calculado  ✅ OK
+Wellington Valeriano Braz Lemes da Silva                   —             —             —             -  🔴 SÓ PDF
+WEMERSON BARBOSA DA HORA                           R$ 955,00     R$ 954,80      -R$ 0,20     calculado  ✅ OK
+WESLEY CASSIO LIBANIO DA SILVA                     R$ 487,00     R$ 486,64      -R$ 0,36        alerta  ✅ OK
+WILLIAN GUSTAVO FARIA DA SILVA                     R$ 613,00     R$ 612,92      -R$ 0,08     calculado  ✅ OK
+Willians Felipe da Silva                                   —             —             —             -  🔴 SÓ PDF
+ZENAIDO DE SOUZA CHRISTINO FILHO                           —     R$ 437,80             —        alerta  🔵 SÓ ERP
+------------------------------------------------------------------------------------------------------------------------
+
+RESUMO:
+  ✅ Valores iguais (diff < R$1): 79
+  ≈ Diferença de centavos (R$1-5): 0
+  ❌ Divergências significativas: 22
+  ✅ Ambos zero: 0
+  🔴 Só no PDF (não tem no ERP): 10
+  🔵 Só no ERP (não tem no PDF): 27
+  TOTAL PDF: R$ 102.339,00 | TOTAL ERP (matched): R$ 102.218,83 | Diferença total: R$ 3.560,83

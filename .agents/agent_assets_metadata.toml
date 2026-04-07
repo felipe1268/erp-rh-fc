@@ -155,3 +155,9 @@ id = "_O0hZlmO_JeR0zHamED3f"
 uri = "file://comparacao_vale_erp_vs_planilha.txt"
 type = "text"
 title = "Comparação Lado a Lado — ERP vs Planilha"
+
+[[outputs]]
+id = "HLSN7zzP8TD1zSTUE__9V"
+uri = "file://comparacao_vale_mar2026_pdf_vs_erp.txt"
+type = "text"
+title = "Comparação Vale Março/2026 — PDF Pago vs ERP"
