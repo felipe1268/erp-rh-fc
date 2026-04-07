@@ -382,8 +382,11 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                     <div className="divide-y">
                       {disc.itens.map((item: any) => {
                         const jaNaSC = scSet.has(item.eapCodigo);
+                        const temSCExistente = item.scs && item.scs.length > 0;
+                        const isContratado = item.status === "contratado";
                         return (
-                        <div key={item.id} className={`flex items-center justify-between px-4 py-2 hover:bg-gray-50 text-xs ${jaNaSC ? "bg-emerald-50/60" : ""}`}>
+                        <div key={item.id} className={`px-4 py-2 hover:bg-gray-50 text-xs ${isContratado ? "bg-amber-50/50 border-l-[3px] border-l-amber-400" : jaNaSC ? "bg-emerald-50/60" : ""}`}>
+                          <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <input
@@ -394,7 +397,7 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                               />
                               <code className="text-violet-700 font-mono text-[10px] bg-violet-50 px-1.5 py-0.5 rounded">{item.eapCodigo}</code>
                               <span className="truncate text-gray-700">{item.descricao}</span>
-                              {jaNaSC && <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 shrink-0">Na SC</span>}
+                              {jaNaSC && <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 shrink-0">Na SC atual</span>}
                             </div>
                           </div>
                           <div className="flex items-center gap-3 ml-2 shrink-0">
@@ -433,6 +436,19 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                               )
                             )}
                           </div>
+                          </div>
+                          {temSCExistente && (
+                            <div className="ml-10 mt-1 mb-1 flex flex-wrap items-center gap-1.5">
+                              <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                              <span className="text-[10px] text-amber-700 font-medium">Já solicitado:</span>
+                              {item.scs.map((sc: any) => (
+                                <span key={sc.scId} className="inline-flex items-center gap-1 text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 rounded px-1.5 py-0.5" title={`Qtd: ${sc.qtd} · Status: ${sc.status}`}>
+                                  {sc.numeroSc} <span className="text-amber-600 font-normal">({sc.qtd} {item.unidade})</span>
+                                </span>
+                              ))}
+                              {isContratado && <span className="text-[10px] text-red-600 font-bold ml-1">ESCOPO 100% CONTRATADO</span>}
+                            </div>
+                          )}
                         </div>
                         );
                       })}
@@ -449,16 +465,28 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
             <span className="text-sm font-medium">{selecionados.size} ite{selecionados.size > 1 ? "ns" : "m"} selecionado{selecionados.size > 1 ? "s" : ""}</span>
             <Button size="sm" variant="secondary" className="bg-emerald-500 hover:bg-emerald-400 text-white border-0 gap-1.5 text-xs font-semibold" onClick={() => {
               let added = 0;
+              let skippedContratado = 0;
               selecionadosInfo().forEach(i => {
                 if (scSet.has(i.eapCodigo)) return;
                 const d = disciplinas.find((dd: any) => dd.nome === i.disciplinaOriginal);
                 const item = d?.itens?.find((it: any) => it.eapCodigo === i.eapCodigo);
-                if (item && item.status !== "contratado" && item.saldo > 0) { onAddItem(item); added++; }
+                if (item && item.status === "contratado") { skippedContratado++; return; }
+                if (item && item.saldo > 0) { onAddItem(item); added++; }
               });
-              if (added === 0) toast.info("Nenhum item novo para adicionar (já estão na SC ou sem saldo)");
+              if (skippedContratado > 0) toast.warning(`${skippedContratado} ite${skippedContratado > 1 ? "ns" : "m"} ignorado${skippedContratado > 1 ? "s" : ""} — escopo já 100% contratado em outra(s) SC`);
+              if (added === 0 && skippedContratado === 0) toast.info("Nenhum item novo para adicionar (já estão na SC ou sem saldo)");
+              else if (added > 0) toast.success(`${added} ite${added > 1 ? "ns" : "m"} adicionado${added > 1 ? "s" : ""} à SC`);
               setSelecionados(new Set());
             }}>
-              <Plus className="h-3.5 w-3.5" /> Adicionar à SC ({(() => { const c = selecionadosInfo().filter(i => !scSet.has(i.eapCodigo)).length; return c; })()})
+              <Plus className="h-3.5 w-3.5" /> Adicionar à SC ({(() => {
+                const info = selecionadosInfo();
+                return info.filter(i => {
+                  if (scSet.has(i.eapCodigo)) return false;
+                  const d = disciplinas.find((dd: any) => dd.nome === i.disciplinaOriginal);
+                  const item = d?.itens?.find((it: any) => it.eapCodigo === i.eapCodigo);
+                  return item && item.status !== "contratado" && item.saldo > 0;
+                }).length;
+              })()})
             </Button>
             <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0 gap-1.5 text-xs" onClick={() => { setShowMoverSelecionados(true); setMoverSelecionadosPara(""); }}>
               <ArrowRightLeft className="h-3.5 w-3.5" /> Mover disciplina

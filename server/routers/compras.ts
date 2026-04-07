@@ -8970,6 +8970,8 @@ Retorne APENAS um JSON válido neste formato:
       eapCodigo: comprasSolicitacoesItens.eapCodigo,
       qtd: comprasSolicitacoesItens.quantidade,
       status: comprasSolicitacoes.status,
+      scId: comprasSolicitacoes.id,
+      numeroSc: comprasSolicitacoes.numeroSc,
     }).from(comprasSolicitacoesItens)
       .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasSolicitacoesItens.solicitacaoId))
       .where(and(
@@ -8979,8 +8981,15 @@ Retorne APENAS um JSON válido neste formato:
       ));
 
     const scMap: Record<string, number> = {};
+    const scDetalhe: Record<string, { scId: number; numeroSc: string; qtd: number; status: string }[]> = {};
     scItens.forEach(r => {
-      if (r.eapCodigo) scMap[r.eapCodigo] = (scMap[r.eapCodigo] || 0) + n(r.qtd);
+      if (r.eapCodigo) {
+        scMap[r.eapCodigo] = (scMap[r.eapCodigo] || 0) + n(r.qtd);
+        if (!scDetalhe[r.eapCodigo]) scDetalhe[r.eapCodigo] = [];
+        const existing = scDetalhe[r.eapCodigo].find(s => s.scId === r.scId);
+        if (existing) { existing.qtd += n(r.qtd); }
+        else { scDetalhe[r.eapCodigo].push({ scId: r.scId, numeroSc: r.numeroSc, qtd: n(r.qtd), status: r.status }); }
+      }
     });
 
     const disciplinas = Object.entries(grouped).map(([nome, g]) => {
@@ -9008,6 +9017,7 @@ Retorne APENAS um JSON válido neste formato:
           custoTotal: n(orc.custoTotal),
           status,
           classificadoPor: item.classificadoPor,
+          scs: scDetalhe[item.eapCodigo] || [],
         };
       });
       const pctContratado = totalItens > 0 ? Math.round(((contratados + comSaldo * 0.5) / totalItens) * 100) : 0;
