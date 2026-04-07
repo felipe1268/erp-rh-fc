@@ -979,7 +979,7 @@ export default function FechamentoPonto() {
           const pHM = (s: string) => { if (!s || s === "-" || s === "0:00") return 0; const [hh, mm] = s.split(":").map(Number); return (hh||0)*60+(mm||0); };
           const ext = pHM(r.horasExtras); const atr = pHM(r.atrasos); const trb = pHM(r.horasTrabalhadas);
           const saldoStr = ext > 0 ? `<span style="color:#16a34a;font-weight:600">+${Math.floor(ext/60)}:${String(ext%60).padStart(2,'0')}</span>` : atr > 0 ? `<span style="color:#dc2626;font-weight:600">-${Math.floor(atr/60)}:${String(atr%60).padStart(2,'0')}</span>` : (trb === 0 && !r.entrada1 ? "-" : "0:00");
-          conteudo += `<tr style="background:${bgColor}"><td>${r.data ? new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td><td>${dayOfWeek(r.data)}</td><td>${r.entrada1 || "-"}</td><td>${r.saida1 || "-"}</td><td>${r.entrada2 || "-"}</td><td>${r.saida2 || "-"}</td><td style="font-weight:600">${r.horasTrabalhadas || "-"}</td><td style="color:#16a34a;font-weight:600">${r.horasExtras && r.horasExtras !== "0:00" ? r.horasExtras : "-"}</td><td>${saldoStr}</td><td>${r.ajusteManual ? "Manual" : "DIXI"}</td><td>${hasIncons ? "⚠ Inconsistente" : "✓ OK"}</td></tr>`;
+          conteudo += `<tr style="background:${bgColor}"><td>${r.data ? new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td><td>${dayOfWeek(r.data)}</td><td>${r.entrada1 || "-"}</td><td>${r.saida1 || "-"}</td><td>${r.entrada2 || "-"}</td><td>${r.saida2 || "-"}</td><td style="font-weight:600">${r.horasTrabalhadas || "-"}</td><td style="color:#16a34a;font-weight:600">${r.horasExtras && r.horasExtras !== "0:00" ? r.horasExtras : "-"}</td><td>${saldoStr}</td><td>${r.ajusteManual ? `Manual${r.ajustadoPor ? ` (${r.ajustadoPor.split(" ").slice(0,2).join(" ")})` : ""}` : "DIXI"}</td><td>${hasIncons ? "⚠ Inconsistente" : "✓ OK"}</td></tr>`;
         });
         conteudo += `</tbody></table>`;
       });
@@ -2161,9 +2161,12 @@ export default function FechamentoPonto() {
                                                           })()}
                                                         </td>
                                                         <td className="px-3 py-1.5 text-center">
-                                                          <Badge variant={rec.ajusteManual ? "secondary" : "outline"} className="text-[10px]">
-                                                            {rec.ajusteManual ? "Manual" : "DIXI"}
-                                                          </Badge>
+                                                          <div className="flex flex-col items-center gap-0.5">
+                                                            <Badge variant={rec.ajusteManual ? "secondary" : "outline"} className="text-[10px]">
+                                                              {rec.ajusteManual ? "Manual" : "DIXI"}
+                                                            </Badge>
+                                                            {rec.ajusteManual && rec.ajustadoPor && <span className="text-[9px] text-purple-500 font-medium truncate max-w-[100px]" title={rec.ajustadoPor}>{rec.ajustadoPor.split(" ").slice(0,2).join(" ")}</span>}
+                                                          </div>
                                                         </td>
                                                       </tr>
                                                     ))}
@@ -2461,7 +2464,7 @@ export default function FechamentoPonto() {
                                                 <td className="px-3 py-1.5 text-center font-mono">{r.entrada2 || "--:--"}</td>
                                                 <td className="px-3 py-1.5 text-center font-mono">{r.saida2 || "--:--"}</td>
                                                 <td className="px-3 py-1.5 text-center font-semibold">{r.horasTrabalhadas || "-"}</td>
-                                                <td className="px-3 py-1.5 text-center"><Badge variant={r.ajusteManual ? "secondary" : "outline"} className="text-[10px]">{r.ajusteManual ? "Manual" : "DIXI"}</Badge></td>
+                                                <td className="px-3 py-1.5 text-center"><div className="flex flex-col items-center gap-0.5"><Badge variant={r.ajusteManual ? "secondary" : "outline"} className="text-[10px]">{r.ajusteManual ? "Manual" : "DIXI"}</Badge>{r.ajusteManual && r.ajustadoPor && <span className="text-[9px] text-purple-500 font-medium truncate max-w-[100px]" title={r.ajustadoPor}>{r.ajustadoPor.split(" ").slice(0,2).join(" ")}</span>}</div></td>
                                               </tr>
                                             ))}
                                           </tbody>
@@ -3016,7 +3019,10 @@ export default function FechamentoPonto() {
                                     </td>
                                     <td className="p-2 text-center">
                                       {rec.ajusteManual ? (
-                                        <Badge variant="outline" className="text-xs text-purple-600 border-purple-300"><PenLine className="h-3 w-3 mr-1" /> Manual</Badge>
+                                        <div className="flex flex-col items-center gap-0.5">
+                                          <Badge variant="outline" className="text-xs text-purple-600 border-purple-300"><PenLine className="h-3 w-3 mr-1" /> Manual</Badge>
+                                          {rec.ajustadoPor && <span className="text-[9px] text-purple-500 font-medium truncate max-w-[120px]" title={rec.ajustadoPor}>{rec.ajustadoPor.split(" ").slice(0,2).join(" ")}</span>}
+                                        </div>
                                       ) : (
                                         <Badge variant="outline" className="text-xs">DIXI</Badge>
                                       )}
