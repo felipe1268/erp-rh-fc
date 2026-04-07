@@ -554,7 +554,7 @@ export async function getEmployees(companyId: number, search?: string, status?: 
       const nextM = m === 12 ? 1 : m + 1;
       const nextY = m === 12 ? y + 1 : y;
       const mesFim = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
-      conditions.push(sql`(${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo') OR (${employees.status} IN ('Desligado', 'Lista_Negra') AND COALESCE(${employees.dataDesligamentoEfetiva}, ${employees.dataDemissao}) >= ${mesInicio}::date AND COALESCE(${employees.dataDesligamentoEfetiva}, ${employees.dataDemissao}) < ${mesFim}::date))`);
+      conditions.push(sql`(${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo') OR (${employees.status} IN ('Desligado', 'Lista_Negra') AND COALESCE(${employees.dataDesligamentoEfetiva}, ${employees.dataDemissao}) >= ${mesInicio}::date))`);
     } else {
       conditions.push(sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`);
     }
