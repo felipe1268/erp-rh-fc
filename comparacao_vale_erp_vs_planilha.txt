@@ -1,0 +1,127 @@
+COMPARAÇÃO LADO A LADO — PLANILHA vs ERP (Vale/Adiantamento)
+==============================================================================================================
+
+FUNCIONÁRIO                                      PLANILHA           ERP     DIFERENÇA  STATUS
+--------------------------------------------------------------------------------------------------------------
+ACACIO LESCURA DE CAMARGO                     R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+Adriano Paz Ferreira                            R$ 647,00             —             —   🔴 SÓ PLANILHA
+AGOSTINHO DIJALMA FERREIRA                              —     R$ 995,28             —   🔵 SÓ ERP
+ALEX ALESSANDRO MONTEIRO DA SILVA               R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+ALEX DA SILVA DOMINGOS                        R$ 1.078,00   R$ 1.042,80     -R$ 35,20   ⚡
+Alexandro de Lima                               R$ 623,00             —             —   🔴 SÓ PLANILHA
+ALEXANDRO GONCALVES DO NASCIMENTO               R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+ANA BEATRIZ SILVA DA CONCEICAO                  R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+ANDERSON BRAGA SILVA                          R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+ANDERSON DOS ANJOS ALKMIN                     R$ 2.188,00   R$ 2.328,48    +R$ 140,48   ⚠️ GRANDE
+ANDERSON DOS ANJOS ALKMIN JUNIOR              R$ 1.078,00   R$ 1.042,80     -R$ 35,20   ⚡
+ANDRE LUIZ BARLETTA DAS CHAGAS                  R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+ANDREI DA SILVA                                 R$ 905,00   R$ 1.109,68    +R$ 204,68   ⚠️ GRANDE
+ANTONIO CARLOS SANTOS                           R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+ANTONIO RENATO DE SANTANA                     R$ 2.021,00   R$ 2.479,84    +R$ 458,84   ⚠️ GRANDE
+ANTONIO WAGNER BARBOSA DE SOUSA               R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+BRUNO LUIS FARIA MACHADO                        R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+CAIO AUGUSTO DA SILVA GARUFE                  R$ 1.832,00   R$ 1.772,32     -R$ 59,68   ⚡
+CAIO MATHEUS PEREIRA ANTUNES                    R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+Carlos Alberto Gonçalves                          R$ 0,00             —             —   🔴 SÓ PLANILHA
+CARLOS VITORIANO TOBIAS                         R$ 438,00     R$ 466,99     +R$ 28,99   ⚡
+CAROLINA DA SILVA PENA FIRME                  R$ 1.000,00     R$ 999,68      -R$ 0,32   ✅
+CATARINE APARECIDA CORREA LIMA                R$ 1.272,00   R$ 1.271,60      -R$ 0,40   ✅
+CLAUDIO JOSE GONCALVES DIAS                     R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+CLAUDIO SILVA                                     R$ 0,00   R$ 1.109,68  +R$ 1.109,68   ⚠️ GRANDE
+Daniel Carneiro Pereira                           R$ 0,00             —             —   🔴 SÓ PLANILHA
+DARCY AUGUSTO RIBEIRO                         R$ 1.365,00   R$ 1.516,24    +R$ 151,24   ⚠️ GRANDE
+DESILDO DA COSTA SANTOS                           R$ 0,00     R$ 875,60    +R$ 875,60   ⚠️ GRANDE
+DIOGO SOARES DA SILVA                           R$ 719,00     R$ 695,20     -R$ 23,80   ⚡
+Douglas de Souza Rocha                            R$ 0,00             —             —   🔴 SÓ PLANILHA
+DOUGLAS FELIPPE RIBEIRO                       R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+EDENILSON SOUZA LIMA                          R$ 1.078,00   R$ 1.042,80     -R$ 35,20   ⚡
+ELIAS VIEIRA DO NASCIMENTO                        R$ 0,00     R$ 875,60    +R$ 875,60   ⚠️ GRANDE
+ELIEL BRENDON DE LIMA MARQUES                 R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+ELIZEU FRANCISCO DE SOUZA                     R$ 1.400,00   R$ 1.400,08      +R$ 0,08   ✅
+Emerson Rodrigo dos Santos                        R$ 0,00             —             —   🔴 SÓ PLANILHA
+ENIVALDO DA SILVA ANDRIONI                      R$ 883,00   R$ 1.393,04    +R$ 510,04   ⚠️ GRANDE
+ERIC GUSTAVO DE SOUZA                           R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+ERITON ANDRE SEVERINO DA SILVA                R$ 1.116,00   R$ 1.079,76     -R$ 36,24   ⚡
+FERNANDO RODRIGO DE CASTILHO PRADO            R$ 1.147,00   R$ 1.042,80    -R$ 104,20   ⚠️ GRANDE
+Francisco Ant. de Lima Teixeira                 R$ 905,00             —             —   🔴 SÓ PLANILHA
+FRANCISCO DAS CHAGAS DIAS                     R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+Genilson de Souza Lopes                       R$ 1.073,00             —             —   🔴 SÓ PLANILHA
+GERALDO CANDIDO DA SILVA                      R$ 1.361,00   R$ 1.109,68    -R$ 251,32   ⚠️ GRANDE
+Geraldo Machado                                 R$ 643,00             —             —   🔴 SÓ PLANILHA
+GILMAR PEREIRA DE BRITO                         R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+Gilmar Santos do Nascimento                     R$ 407,00             —             —   🔴 SÓ PLANILHA
+GISLEI RODRIGO DE CARVALHO                    R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+GLEDSON FERREIRA SANTOS                         R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+HENRIQUE LOPES                                R$ 1.078,00     R$ 875,60    -R$ 202,40   ⚠️ GRANDE
+ISABELA AUGUSTA DA SILVA VELLOSO                R$ 658,00     R$ 657,36      -R$ 0,64   ✅
+ISAIAS COELHO MUYAGUTI MONTEIRO                 R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+Israel Alves de Souza                             R$ 0,00             —             —   🔴 SÓ PLANILHA
+JAMIELSON GOMES DOS SANTOS SILVA                R$ 719,00     R$ 695,20     -R$ 23,80   ⚡
+JEAN CARLOS RIBEIRO DA SILVA                    R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+Jeriel Emanuel                                    R$ 0,00             —             —   🔴 SÓ PLANILHA
+JERRYALITON AUGUSTO BEZERRA                             —   R$ 1.109,68             —   🔵 SÓ ERP
+JOAO CARLOS DA SILVA CONCEICAO                  R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+JOAO JOSE DE PAULA OLIVEIRA                   R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+João Odair Domingos                               R$ 0,00             —             —   🔴 SÓ PLANILHA
+JOAO PAULO CORREA DE FREITAS                  R$ 1.448,00   R$ 1.550,56    +R$ 102,56   ⚠️ GRANDE
+JORGE MARCELINO DA SILVA MOREIRA                R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+JOSE BENEDITO MENDES                          R$ 1.010,00   R$ 1.316,48    +R$ 306,48   ⚠️ GRANDE
+JOSUE DO NASCIMENTO ALVES                     R$ 1.228,00   R$ 1.188,00     -R$ 40,00   ⚡
+JOVANILDO INACIO                                R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+JULIO CESAR LEMES DE OLIVEIRA                 R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+JURANDI PEREIRA DOS SANTOS                      R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+Kelbert Carlos de Lima Silva                    R$ 487,00             —             —   🔴 SÓ PLANILHA
+LUCAS MATEUS RIBEIRO NEVES                      R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+LUIS CLAUDIO ANDRADE CARNEIRO                   R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+LUIS GUSTAVO RODRIGUES DE CASTRO                R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+LUIZ HENRIQUE DE MACEDO                         R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+MANOEL WAGNER ROCHA GUIMARAES                   R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+MARCELO ALEXANDRE PEREIRA                       R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+MARCELO DE LIMA FELISBERTO                      R$ 905,00   R$ 1.188,00    +R$ 283,00   ⚠️ GRANDE
+MARCIO DE TOLEDO                              R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+MARCIO ELOY DOS SANTOS                        R$ 1.146,00   R$ 1.109,68     -R$ 36,32   ⚡
+MARCO ANTONIO DOS SANTOS BATISTA                R$ 905,00   R$ 1.109,68    +R$ 204,68   ⚠️ GRANDE
+MARCOS ROBERTO CORREA DE FREITAS              R$ 1.147,00     R$ 875,60    -R$ 271,40   ⚠️ GRANDE
+MARIANA CASTILHO DE LIMA                      R$ 2.278,00   R$ 2.277,44      -R$ 0,56   ✅
+MATEUS OLIVEIRA BRITO PIRES                             —   R$ 1.109,68             —   🔵 SÓ ERP
+MAYCON ADREAN POLYCARPO CORREA                  R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+MYRIELLE FIALHO BORGES ARCANJO                  R$ 665,00     R$ 664,40      -R$ 0,60   ✅
+NELSON MOREIRA GOMES                            R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+ODAIR JOSE PEREIRA                            R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+OSMAR MAGNO DE OLIVEIRA                       R$ 1.396,00   R$ 1.350,80     -R$ 45,20   ⚡
+PAULO DANIEL ALVES                              R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+PAULO HENRIQUE LIMA GUIMARAES                   R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+Paulo Henrique Monteiro Xavier                    R$ 0,00             —             —   🔴 SÓ PLANILHA
+PAULO ROSA DA SILVA                             R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+PAULO VINICIUS SALES TEIXEIRA                 R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+REGINALDO VITORIANO LOURENCO                    R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+REGIS MORAES FERNANDES DOS SANTOS               R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+RICARDO ANTONIO SILVESTRE                       R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+RODRIGO DA SILVA                                R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+RODRIGO NOGUEIRA DA SILVA MEIRELES BRAGA      R$ 1.147,00     R$ 583,44    -R$ 563,56   ⚠️ GRANDE
+SERGIO AUGUSTO DE OLIVEIRA                      R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+SILVIO CLODOMIRO OLIVEIRA DE MOURA            R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+SYDENEY GOMES DE OLIVEIRA                       R$ 905,00   R$ 1.039,28    +R$ 134,28   ⚠️ GRANDE
+THIAGO MARTINS MENEZES DE JESUS                 R$ 555,00     R$ 875,60    +R$ 320,60   ⚠️ GRANDE
+TIAGO AUGUSTO DE OLIVEIRA                       R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+TIAGO MACHADO DA SILVA                          R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+VAGNER FELIPE OLIVEIRA REZENDE                  R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+VALDIR DONIZETTI GONCALVES JUNIOR             R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+WALMIR JOSE DA SILVA                          R$ 1.078,00   R$ 1.042,80     -R$ 35,20   ⚡
+WANDERSON ANTONIO DA COSTA                    R$ 1.147,00   R$ 1.109,68     -R$ 37,32   ⚡
+WELINGTON SILVA BRITO                           R$ 905,00     R$ 875,60     -R$ 29,40   ⚡
+Wellington Valeriano Braz Lemes da Silva          R$ 0,00             —             —   🔴 SÓ PLANILHA
+WEMERSON BARBOSA DA HORA                        R$ 555,00     R$ 924,00    +R$ 369,00   ⚠️ GRANDE
+Wesley Cassio Libânio da Silva                  R$ 487,00             —             —   🔴 SÓ PLANILHA
+WESLEY LEONARD DE OLIVEIRA                              —     R$ 799,92             —   🔵 SÓ ERP
+WILLIAN GUSTAVO FARIA DA SILVA                  R$ 613,00     R$ 875,60    +R$ 262,60   ⚠️ GRANDE
+Willians Felipe da Silva                          R$ 0,00             —             —   🔴 SÓ PLANILHA
+--------------------------------------------------------------------------------------------------------------
+
+RESUMO:
+  ✅ Valores iguais (diff < R$1): 6
+  ⚡ Diferenças pequenas (R$1-100): 64
+  ⚠️ Diferenças grandes (> R$100): 21
+  🔴 Só na planilha (não tem no ERP): 18
+  🔵 Só no ERP (não tem na planilha): 4
+  TOTAL: 113 funcionários

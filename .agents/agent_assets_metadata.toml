@@ -149,3 +149,9 @@ id = "AtdbpwLixICjUKNUFWwRu"
 uri = "file://attached_assets/stock_images/vw_17250_bomba.jpg"
 type = "image"
 title = "Volkswagen VW 17.250 concrete pump truck white caminhão bomba"
+
+[[outputs]]
+id = "_O0hZlmO_JeR0zHamED3f"
+uri = "file://comparacao_vale_erp_vs_planilha.txt"
+type = "text"
+title = "Comparação Lado a Lado — ERP vs Planilha"
