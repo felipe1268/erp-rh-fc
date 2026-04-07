@@ -127,9 +127,7 @@ export function calcularRescisaoCompleta(params: {
   const dataFimAviso = params.dataFimAviso || dataDesligamento;
   const dtFimAviso = new Date(dataFimAviso + 'T00:00:00');
 
-  const dtDataSaida = new Date(dtFimAviso);
-  dtDataSaida.setDate(dtDataSaida.getDate() + 1);
-  const dataSaida = dtDataSaida.toISOString().split('T')[0];
+  const dataSaida = dataFimAviso;
 
   const dtProjecao = new Date(dtFimAviso.getFullYear(), dtFimAviso.getMonth() + 1, 0);
   const dataProjecao = dtProjecao.toISOString().split('T')[0];

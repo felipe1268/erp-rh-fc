@@ -185,9 +185,7 @@ export const avisoPrevioFeriasRouter = router({
               const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split('T')[0];
               const salarioBase = parseBRL(emp.salarioBase);
               const dtFimAviso = new Date(r.dataFim + 'T00:00:00');
-              const dtDataSaida = new Date(dtFimAviso);
-              dtDataSaida.setDate(dtDataSaida.getDate() + 1);
-              const diasTrabalhadosMes = dtDataSaida.getDate();
+              const diasTrabalhadosMes = dtFimAviso.getDate();
 
               const periodosVencidosRealList = vpCountMap.get(`${r.employeeId}|${r.dataFim}`) ?? 0;
               
@@ -248,11 +246,8 @@ export const avisoPrevioFeriasRouter = router({
             const salarioBase = parseBRL(emp.salarioBase);
             const dataFim = row.dataFim;
             
-            // Data de saída = dia seguinte ao término do aviso
             const dtFimAviso = new Date(dataFim + 'T00:00:00');
-            const dtDataSaida = new Date(dtFimAviso);
-            dtDataSaida.setDate(dtDataSaida.getDate() + 1);
-            const diasTrabalhadosMes = dtDataSaida.getDate();
+            const diasTrabalhadosMes = dtFimAviso.getDate();
             
             let diasTrabMes = diasTrabalhadosMes;
             let dataFimParaCalculo = dataFim;
@@ -373,12 +368,8 @@ export const avisoPrevioFeriasRouter = router({
         const dataFimAviso = calcularDataFim(dataInicioAviso, diasAviso);
         
         // Dias trabalhados no mês da SAÍDA (dia seguinte ao término do aviso)
-        // CLT: a data de saída = dia após o término do aviso
-        // Saldo de salário = dia 1 até dia da saída no mês de saída
         const dtFimAviso = new Date(dataFimAviso + 'T00:00:00');
-        const dtDataSaida = new Date(dtFimAviso);
-        dtDataSaida.setDate(dtDataSaida.getDate() + 1);
-        const diasTrabalhadosMes = input.diasTrabalhadosOverride ?? dtDataSaida.getDate();
+        const diasTrabalhadosMes = input.diasTrabalhadosOverride ?? dtFimAviso.getDate();
         
         // ============================================================
         // VR: buscar da config de benefícios da obra do funcionário
@@ -650,8 +641,7 @@ export const avisoPrevioFeriasRouter = router({
         const dataInicioTrab = calcularDataInicioAviso(input.dataDesligamento);
         const dataFimTrab = calcularDataFim(dataInicioTrab, diasAvisoTrab);
         const dtFimTrab = new Date(dataFimTrab + 'T00:00:00');
-        const dtSaidaTrab = new Date(dtFimTrab); dtSaidaTrab.setDate(dtSaidaTrab.getDate() + 1);
-        const diasTrabMesTrab = dtSaidaTrab.getDate();
+        const diasTrabMesTrab = dtFimTrab.getDate();
 
         const prevTrab = calcularRescisaoCompleta({
           salarioBase, dataAdmissao, dataDesligamento: input.dataDesligamento,
@@ -676,8 +666,7 @@ export const avisoPrevioFeriasRouter = router({
         const dataInicioInd = calcularDataInicioAviso(input.dataDesligamento);
         const dataFimInd = calcularDataFim(dataInicioInd, diasAvisoInd);
         const dtFimInd = new Date(dataFimInd + 'T00:00:00');
-        const dtSaidaInd = new Date(dtFimInd); dtSaidaInd.setDate(dtSaidaInd.getDate() + 1);
-        const diasTrabMesInd = dtSaidaInd.getDate();
+        const diasTrabMesInd = dtFimInd.getDate();
 
         const prevInd = calcularRescisaoCompleta({
           salarioBase, dataAdmissao, dataDesligamento: input.dataDesligamento,
@@ -888,12 +877,8 @@ export const avisoPrevioFeriasRouter = router({
         const salarioBase = parseBRL(emp.salarioBase);
         const dataFim = calcularDataFim(dataInicioAviso, diasAviso);
         
-        // Dias trabalhados no mês da SAÍDA (dia seguinte ao término do aviso)
-        // CLT: data de saída = dia após o término do aviso
         const dtFimAviso = new Date(dataFim + 'T00:00:00');
-        const dtDataSaida = new Date(dtFimAviso);
-        dtDataSaida.setDate(dtDataSaida.getDate() + 1);
-        const diasTrabalhadosMes = input.diasTrabalhados ?? dtDataSaida.getDate();
+        const diasTrabalhadosMes = input.diasTrabalhados ?? dtFimAviso.getDate();
 
         // Contagem real de férias vencidas do banco
         let periodosVencidosRealCreate: number | undefined;
@@ -985,11 +970,8 @@ export const avisoPrevioFeriasRouter = router({
           const diasAviso = calcularDiasAviso(anosServico, tipo);
           const salarioBase = parseBRL(emp.salarioBase);
           const dataFim = calcularDataFim(dataInicioFinal, diasAviso);
-          // Dias trabalhados no mês da SAÍDA (dia seguinte ao término do aviso)
           const dtFimAviso = new Date(dataFim + 'T00:00:00');
-          const dtDataSaida = new Date(dtFimAviso);
-          dtDataSaida.setDate(dtDataSaida.getDate() + 1);
-          const diasTrabalhadosMes = diasTrabalhados ?? dtDataSaida.getDate();
+          const diasTrabalhadosMes = diasTrabalhados ?? dtFimAviso.getDate();
 
           // Contagem real de férias vencidas do banco
           let periodosVencidosRealUpd: number | undefined;
@@ -1078,11 +1060,8 @@ export const avisoPrevioFeriasRouter = router({
             const salarioBase = parseBRL(emp.salarioBase);
             const dataFim = calcularDataFim(dataInicioFinal, diasAviso);
 
-            // Dias trabalhados no mês da SAÍDA
             const dtFimAviso = new Date(dataFim + 'T00:00:00');
-            const dtDataSaida = new Date(dtFimAviso);
-            dtDataSaida.setDate(dtDataSaida.getDate() + 1);
-            const diasTrabalhadosMes = dtDataSaida.getDate();
+            const diasTrabalhadosMes = dtFimAviso.getDate();
 
             // Contagem real de férias vencidas do banco
             let periodosVencidosRealRec: number | undefined;
