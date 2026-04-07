@@ -659,7 +659,7 @@ export default function Cotacoes() {
   const [editModuloMedicao, setEditModuloMedicao] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
   const [descontoModal, setDescontoModal] = useState<{ fornecedorId: number } | null>(null);
-  const [descontoTipo, setDescontoTipo] = useState<"valor" | "percentual">("valor");
+  const [descontoTipo, setDescontoTipo] = useState<"valor" | "percentual" | "final">("valor");
   const [descontoValor, setDescontoValor] = useState("");
   const [descontoPreviewing, setDescontoPreviewing] = useState(false);
   const [showGerenciarCond, setShowGerenciarCond] = useState(false);
@@ -1920,9 +1920,16 @@ export default function Cotacoes() {
       const totalGeral = itemTotais.reduce((s, i) => s + i.total, 0);
       if (totalGeral <= 0) return [];
 
-      const valorDesc = tipo === "percentual"
-        ? totalGeral * (parseFloat(valorInput) || 0) / 100
-        : parseFloat(valorInput) || 0;
+      let valorDesc: number;
+      if (tipo === "percentual") {
+        valorDesc = totalGeral * (parseFloat(valorInput) || 0) / 100;
+      } else if (tipo === "final") {
+        const valorFinal = parseFloat(valorInput) || 0;
+        if (valorFinal <= 0 || valorFinal >= totalGeral) return [];
+        valorDesc = totalGeral - valorFinal;
+      } else {
+        valorDesc = parseFloat(valorInput) || 0;
+      }
 
       if (valorDesc <= 0 || valorDesc > totalGeral) return [];
 
@@ -4147,21 +4154,25 @@ export default function Cotacoes() {
                   <div>
                     <Label className="text-[11px] text-gray-600">Tipo</Label>
                     <div className="flex gap-1.5 mt-1">
-                      <button onClick={() => { setDescontoTipo("valor"); setDescontoPreviewing(false); }}
+                      <button onClick={() => { setDescontoTipo("valor"); setDescontoValor(""); setDescontoPreviewing(false); }}
                         className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${descontoTipo === "valor" ? "bg-amber-100 border-amber-400 text-amber-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                        R$ Valor
+                        R$ Desc.
                       </button>
-                      <button onClick={() => { setDescontoTipo("percentual"); setDescontoPreviewing(false); }}
+                      <button onClick={() => { setDescontoTipo("percentual"); setDescontoValor(""); setDescontoPreviewing(false); }}
                         className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${descontoTipo === "percentual" ? "bg-amber-100 border-amber-400 text-amber-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
                         %
+                      </button>
+                      <button onClick={() => { setDescontoTipo("final"); setDescontoValor(""); setDescontoPreviewing(false); }}
+                        className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${descontoTipo === "final" ? "bg-emerald-100 border-emerald-400 text-emerald-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+                        Valor Final
                       </button>
                     </div>
                   </div>
                   <div className="flex-1">
-                    <Label className="text-[11px] text-gray-600">{descontoTipo === "valor" ? "Valor (R$)" : "Percentual (%)"}</Label>
-                    <Input type="number" step={descontoTipo === "valor" ? "0.01" : "0.1"} min="0" value={descontoValor}
+                    <Label className="text-[11px] text-gray-600">{descontoTipo === "valor" ? "Valor do Desconto (R$)" : descontoTipo === "percentual" ? "Percentual (%)" : "Valor Final Desejado (R$)"}</Label>
+                    <Input type="number" step="0.01" min="0" value={descontoValor}
                       onChange={e => { setDescontoValor(e.target.value); setDescontoPreviewing(false); }}
-                      placeholder={descontoTipo === "valor" ? "500.00" : "3.5"} className="mt-1 h-8 text-sm font-mono" autoFocus />
+                      placeholder={descontoTipo === "valor" ? "500.00" : descontoTipo === "percentual" ? "3.5" : "48000.00"} className="mt-1 h-8 text-sm font-mono" autoFocus />
                   </div>
                   <Button size="sm" onClick={() => setDescontoPreviewing(true)} disabled={!descontoValor || parseFloat(descontoValor) <= 0}
                     className="h-8 bg-amber-600 hover:bg-amber-700 text-white gap-1 text-xs">
