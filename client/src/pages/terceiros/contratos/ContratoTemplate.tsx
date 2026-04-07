@@ -567,8 +567,16 @@ EAP          | Descrição                                             | Un    |
                     if (!trimmed) return <div key={idx} className="h-3" />;
                     const isClausula = /^CL[ÁA]USULA\s/i.test(trimmed);
                     const isTitulo = /^CONTRATO\s+DE\s+/i.test(trimmed);
+                    const isAlinea = /^[a-z]\)\s/.test(trimmed);
+                    const isSubClausulaTitle = /^\d+\.\d+\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ]/.test(trimmed) && /[A-ZÁÉÍÓÚÂÊÔÃÕÇ]{3,}/.test(trimmed.split(/\s+/)[1] || "");
+                    const isBullet = /^[•●▪▸►-]\s/.test(trimmed);
+                    const isSectionHeader = /^RESUMO DOS PRAZOS/i.test(trimmed);
                     if (isTitulo) return <h1 key={idx} className="text-[15px] font-bold text-center mb-6 uppercase tracking-wider">{trimmed}</h1>;
                     if (isClausula) return <h2 key={idx} className="text-[13px] font-bold mt-6 mb-2 uppercase tracking-wide">{trimmed}</h2>;
+                    if (isSectionHeader) return <p key={idx} className="text-[12px] font-bold text-gray-700 mt-4 mb-1 uppercase">{trimmed}</p>;
+                    if (isSubClausulaTitle) return <p key={idx} className="text-[12.5px] font-semibold mt-3 mb-1 pl-3">{trimmed}</p>;
+                    if (isAlinea) return <p key={idx} className="text-[12px] text-gray-700 leading-[1.8] mb-1.5 pl-10 pr-4 text-justify">{trimmed}</p>;
+                    if (isBullet) return <p key={idx} className="text-[12px] text-gray-700 leading-[1.7] mb-0.5 pl-12 pr-4">{trimmed}</p>;
                     return <p key={idx} className="mb-1.5 text-justify">{trimmed}</p>;
                   })}
                 </div>

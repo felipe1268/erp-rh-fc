@@ -1084,11 +1084,14 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
                           const isClausula = /^CL[ÁA]USULA\s/i.test(trimmed);
                           const isTitulo = /^CONTRATO\s+DE\s+/i.test(trimmed);
-                          const isSubItem = /^\d+\.\d+[\s.]/.test(trimmed) || /^[a-z]\)\s/.test(trimmed);
+                          const isAlinea = /^[a-z]\)\s/.test(trimmed);
+                          const isSubClausulaTitle = /^\d+\.\d+\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ]/.test(trimmed) && /[A-ZÁÉÍÓÚÂÊÔÃÕÇ]{3,}/.test(trimmed.split(/\s+/)[1] || "");
+                          const isSubItem = /^\d+\.\d+[\s.]/.test(trimmed) && !isSubClausulaTitle;
                           const isNumericItem = /^\d+\.\s/.test(trimmed);
+                          const isBullet = /^[•●▪▸►-]\s/.test(trimmed);
                           const isSeparator = /^[-|]+$/.test(trimmed.replace(/\s/g, ""));
                           const isTableRow = trimmed.includes(" | ") && !isSeparator;
-                          const isSectionHeader = /^ESCOPO DETALHADO|^QUADRO|^TABELA/i.test(trimmed);
+                          const isSectionHeader = /^ESCOPO DETALHADO|^QUADRO|^TABELA|^RESUMO DOS PRAZOS/i.test(trimmed);
 
                           if (isTitulo) {
                             return (
@@ -1126,6 +1129,27 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                                 <span className="w-[90px] flex-shrink-0 px-1 text-right">{highlightAutoFilled(cells[4] || "")}</span>
                                 <span className="w-[90px] flex-shrink-0 px-1 text-right font-medium">{highlightAutoFilled(cells[5] || "")}</span>
                               </div>
+                            );
+                          }
+                          if (isSubClausulaTitle) {
+                            return (
+                              <p key={idx} className="text-[12.5px] font-semibold text-gray-900 leading-[1.8] mt-4 mb-1.5 pl-3">
+                                {highlightAutoFilled(trimmed)}
+                              </p>
+                            );
+                          }
+                          if (isAlinea) {
+                            return (
+                              <p key={idx} className="text-[12px] text-gray-700 leading-[1.8] mb-2 pl-10 pr-4 text-justify">
+                                {highlightAutoFilled(trimmed)}
+                              </p>
+                            );
+                          }
+                          if (isBullet) {
+                            return (
+                              <p key={idx} className="text-[12px] text-gray-700 leading-[1.7] mb-0.5 pl-12 pr-4">
+                                {highlightAutoFilled(trimmed)}
+                              </p>
                             );
                           }
                           if (isSubItem) {
