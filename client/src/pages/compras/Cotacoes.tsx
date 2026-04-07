@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -681,6 +681,30 @@ export default function Cotacoes() {
   const [iaJobId, setIaJobId] = useState<string | null>(null);
   const [iaPollingFornId, setIaPollingFornId] = useState<number | null>(null);
   const [showPropostas, setShowPropostas] = useState<number | null>(null);
+
+  const [editFornDialog, setEditFornDialog] = useState<any | null>(null);
+  const [editFornForm, setEditFornForm] = useState({
+    cnpj: "", razaoSocial: "", nomeFantasia: "",
+    endereco: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "", cep: "",
+    telefone: "", email: "", contatoNome: "", contatoCelular: "", contatoEmail: "",
+    banco: "", agencia: "", conta: "", pix: "", observacoes: "",
+  });
+  const atualizarFornMut = trpc.compras.atualizarFornecedor.useMutation({
+    onSuccess: () => { mapaQ.refetch(); fornQ.refetch(); setEditFornDialog(null); toast.success("Fornecedor atualizado!"); },
+  });
+  function abrirEditForn(f: any) {
+    const maskP = (v: string) => { const d = (v || "").replace(/\D/g, "").slice(0, 11); if (d.length <= 2) return d; if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`; if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`; return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`; };
+    setEditFornForm({
+      cnpj: f.cnpj ?? "", razaoSocial: f.razaoSocial ?? "", nomeFantasia: f.nomeFantasia ?? "",
+      endereco: f.endereco ?? "", numero: f.numero ?? "", complemento: f.complemento ?? "",
+      bairro: f.bairro ?? "", cidade: f.cidade ?? "", estado: f.estado ?? "", cep: f.cep ?? "",
+      telefone: maskP(f.telefone ?? ""), email: f.email ?? "",
+      contatoNome: f.contatoNome ?? "", contatoCelular: maskP(f.contatoCelular ?? ""), contatoEmail: f.contatoEmail ?? "",
+      banco: f.banco ?? "", agencia: f.agencia ?? "", conta: f.conta ?? "", pix: f.pix ?? "",
+      observacoes: f.observacoes ?? "",
+    });
+    setEditFornDialog(f);
+  }
 
   const startIaProgress = useCallback((fornecedorId: number) => {
     if (iaProgressRef.current) clearInterval(iaProgressRef.current);
@@ -2485,6 +2509,7 @@ export default function Cotacoes() {
                                 </span>
                               )}
                               {parseFloat(p.totalOrcado ?? "0") > 0 && <span className="font-normal text-xs opacity-70">· {parseFloat(p.totalOrcado).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
+                              <button onClick={() => abrirEditForn(p.fornecedor)} className="ml-1 hover:text-blue-500 transition-colors" title="Editar fornecedor"><Pencil className="h-2.5 w-2.5" /></button>
                               <button onClick={() => removerForn.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId })} className="ml-1 hover:text-red-500 transition-colors"><X className="h-3 w-3" /></button>
                             </div>
                           );
@@ -4739,6 +4764,141 @@ export default function Cotacoes() {
             )}
           </div>
         </div>
+      )}
+
+      {editFornDialog && (
+        <Dialog open={!!editFornDialog} onOpenChange={() => setEditFornDialog(null)}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Editar Fornecedor</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">CNPJ</Label>
+                  <Input value={editFornForm.cnpj} onChange={e => setEditFornForm(p => ({ ...p, cnpj: e.target.value }))} placeholder="00.000.000/0000-00" />
+                </div>
+                <div>
+                  <Label className="text-xs">Razão Social *</Label>
+                  <Input value={editFornForm.razaoSocial} onChange={e => setEditFornForm(p => ({ ...p, razaoSocial: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Nome Fantasia</Label>
+                <Input value={editFornForm.nomeFantasia} onChange={e => setEditFornForm(p => ({ ...p, nomeFantasia: e.target.value }))} />
+              </div>
+
+              <div className="border-t pt-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Endereço</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <Label className="text-xs">Endereço</Label>
+                    <Input value={editFornForm.endereco} onChange={e => setEditFornForm(p => ({ ...p, endereco: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Número</Label>
+                    <Input value={editFornForm.numero} onChange={e => setEditFornForm(p => ({ ...p, numero: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 mt-2">
+                  <div>
+                    <Label className="text-xs">Complemento</Label>
+                    <Input value={editFornForm.complemento} onChange={e => setEditFornForm(p => ({ ...p, complemento: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Bairro</Label>
+                    <Input value={editFornForm.bairro} onChange={e => setEditFornForm(p => ({ ...p, bairro: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">CEP</Label>
+                    <Input value={editFornForm.cep} onChange={e => setEditFornForm(p => ({ ...p, cep: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div>
+                    <Label className="text-xs">Cidade</Label>
+                    <Input value={editFornForm.cidade} onChange={e => setEditFornForm(p => ({ ...p, cidade: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Estado</Label>
+                    <Input value={editFornForm.estado} onChange={e => setEditFornForm(p => ({ ...p, estado: e.target.value }))} maxLength={2} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Contato</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Telefone</Label>
+                    <Input value={editFornForm.telefone} onChange={e => setEditFornForm(p => ({ ...p, telefone: e.target.value }))} placeholder="(00) 0000-0000" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">E-mail</Label>
+                    <Input value={editFornForm.email} onChange={e => setEditFornForm(p => ({ ...p, email: e.target.value }))} type="email" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 mt-2">
+                  <div>
+                    <Label className="text-xs">Nome do Contato</Label>
+                    <Input value={editFornForm.contatoNome} onChange={e => setEditFornForm(p => ({ ...p, contatoNome: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Celular Contato</Label>
+                    <Input value={editFornForm.contatoCelular} onChange={e => setEditFornForm(p => ({ ...p, contatoCelular: e.target.value }))} placeholder="(00) 00000-0000" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">E-mail Contato</Label>
+                    <Input value={editFornForm.contatoEmail} onChange={e => setEditFornForm(p => ({ ...p, contatoEmail: e.target.value }))} type="email" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Dados Bancários</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs">Banco</Label>
+                    <Input value={editFornForm.banco} onChange={e => setEditFornForm(p => ({ ...p, banco: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Agência</Label>
+                    <Input value={editFornForm.agencia} onChange={e => setEditFornForm(p => ({ ...p, agencia: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Conta</Label>
+                    <Input value={editFornForm.conta} onChange={e => setEditFornForm(p => ({ ...p, conta: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <Label className="text-xs">Chave PIX</Label>
+                  <Input value={editFornForm.pix} onChange={e => setEditFornForm(p => ({ ...p, pix: e.target.value }))} />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Observações</Label>
+                <Input value={editFornForm.observacoes} onChange={e => setEditFornForm(p => ({ ...p, observacoes: e.target.value }))} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditFornDialog(null)}>Cancelar</Button>
+              <Button
+                disabled={!editFornForm.razaoSocial || atualizarFornMut.isPending}
+                onClick={() => {
+                  atualizarFornMut.mutate({
+                    id: editFornDialog.id,
+                    ...editFornForm,
+                    telefone: editFornForm.telefone.replace(/\D/g, ""),
+                    contatoCelular: editFornForm.contatoCelular.replace(/\D/g, ""),
+                    cnpj: editFornForm.cnpj.replace(/\D/g, ""),
+                  });
+                }}
+              >
+                {atualizarFornMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
     </div>
