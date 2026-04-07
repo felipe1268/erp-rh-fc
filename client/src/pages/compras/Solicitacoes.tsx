@@ -2363,7 +2363,7 @@ export default function Solicitacoes() {
                               })
                               .filter((it: any) => !eapSearch || stripAccents(`${it.eapCodigo} ${it.descricao}`.toLowerCase()).includes(stripAccents(eapSearch.toLowerCase())))
                               .filter((it: any) => !eapLegendFilter || getEapLegendKey(it) === eapLegendFilter);
-                            const allSelected = visibleItems.length > 0 && visibleItems.every((it: any) => selectedEapIds.has(it.id) || (parseFloat(eapQtdServico[it.id] || "") > 0));
+                            const allSelected = visibleItems.length > 0 && visibleItems.every((it: any) => selectedEapIds.has(it.id) || (parseFloat(eapQtdServico[it.id] || "") > 0) || itens.some(x => x.eapCodigo && x.eapCodigo === it.eapCodigo));
                             return (
                               <button
                                 type="button"
@@ -2373,7 +2373,7 @@ export default function Solicitacoes() {
                                       setSelectedEapIds(prev => { const n = new Set(prev); n.delete(it.id); return n; });
                                       setEapQtdServico(prev => { const n = { ...prev }; delete n[it.id]; return n; });
                                     });
-                                    setItens(p => p.filter(x => !visibleItems.some((v: any) => v.id === x.orcamentoItemId)));
+                                    setItens(p => p.filter(x => !visibleItems.some((v: any) => v.id === x.orcamentoItemId || (x.eapCodigo && x.eapCodigo === v.eapCodigo))));
                                   } else {
                                     visibleItems.forEach((it: any) => {
                                       if (!selectedEapIds.has(it.id) && !(parseFloat(eapQtdServico[it.id] || "") > 0)) {
@@ -2428,12 +2428,13 @@ export default function Solicitacoes() {
                                     <span className={`inline-block w-4 h-4 rounded-full shrink-0 ${form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "bg-purple-500" : ((it as any).mdoSaldo ?? 0) <= 0 ? "bg-red-500" : "bg-emerald-500") : cob && cob.totalInsumos > 0 ? (cob.insumosCobertos >= cob.totalInsumos ? "bg-blue-500" : cob.insumosCobertos > 0 ? "bg-orange-500" : "bg-emerald-500") : "bg-gray-300"} ring-1 ring-white shadow-sm`} title={form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "100% contratado" : ((it as any).mdoSaldo ?? 0) <= 0 ? "Sem saldo" : "Disponível") : cob && cob.totalInsumos > 0 ? (cob.insumosCobertos >= cob.totalInsumos ? `Todos ${cob.totalInsumos} insumos solicitados` : cob.insumosCobertos > 0 ? `Parcial: ${cob.insumosCobertos}/${cob.totalInsumos} insumos` : "Disponível") : "Sem info"} />
                                     <input
                                       type="checkbox"
-                                      checked={selectedEapIds.has(it.id) || qtdVal > 0}
+                                      checked={selectedEapIds.has(it.id) || qtdVal > 0 || itens.some(x => x.eapCodigo && x.eapCodigo === it.eapCodigo)}
                                       onClick={(e) => e.stopPropagation()}
                                       onChange={async (e) => {
                                         e.stopPropagation();
-                                        if (selectedEapIds.has(it.id) || qtdVal > 0) {
-                                          setItens(p => p.filter(x => x.orcamentoItemId !== it.id));
+                                        const eapMatch = itens.some(x => x.eapCodigo && x.eapCodigo === it.eapCodigo);
+                                        if (selectedEapIds.has(it.id) || qtdVal > 0 || eapMatch) {
+                                          setItens(p => p.filter(x => x.orcamentoItemId !== it.id && !(x.eapCodigo && x.eapCodigo === it.eapCodigo)));
                                           setSelectedEapIds(prev => { const n = new Set(prev); n.delete(it.id); return n; });
                                           setEapQtdServico(prev => { const n = { ...prev }; delete n[it.id]; return n; });
                                         } else {
@@ -4198,6 +4199,12 @@ export default function Solicitacoes() {
             }
             return [...prev, newItem];
           });
+          if (item.orcamentoItemId) {
+            setSelectedEapIds(prev => { const s = new Set(prev); s.add(item.orcamentoItemId); return s; });
+            if (form.tipo === "servico") {
+              setEapQtdServico(prev => ({ ...prev, [item.orcamentoItemId]: String(qtd) }));
+            }
+          }
         }}
       />
     </div>
