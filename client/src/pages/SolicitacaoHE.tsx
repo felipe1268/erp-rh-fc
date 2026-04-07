@@ -2174,14 +2174,17 @@ export default function SolicitacaoHE() {
           <AlertDialogDescription className="text-sm text-gray-700 space-y-3">
             <p>O funcionário apresentou justificativa para a ausência?</p>
             <div className="space-y-1.5">
-              <Label htmlFor="justificativa-texto" className="text-xs font-medium">Observação (opcional):</Label>
+              <Label htmlFor="justificativa-texto" className="text-xs font-medium">Justificativa: <span className="text-red-600">*</span></Label>
               <Textarea
                 id="justificativa-texto"
                 placeholder="Ex: atestado médico, compromisso pessoal..."
                 value={justificativaTexto}
                 onChange={(e) => setJustificativaTexto(e.target.value)}
-                className="text-sm h-16"
+                className={`text-sm h-16 ${!justificativaTexto.trim() ? "border-red-300 focus:border-red-500" : ""}`}
               />
+              {!justificativaTexto.trim() && (
+                <p className="text-xs text-red-500">Informe a justificativa da ausência</p>
+              )}
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -2189,23 +2192,19 @@ export default function SolicitacaoHE() {
           <AlertDialogCancel className="text-sm">Cancelar</AlertDialogCancel>
           <Button
             className="bg-amber-600 hover:bg-amber-700 text-white text-sm"
-            disabled={comparecMut.isPending}
+            disabled={comparecMut.isPending || !justificativaTexto.trim()}
             onClick={() => {
-              if (!ausenciaDialog) return;
+              if (!ausenciaDialog || !justificativaTexto.trim()) return;
               const registros = ausenciaDialog.bulk
                 ? ausenciaDialog.bulk.map((f) => ({
                     employeeId: f.employeeId,
                     compareceu: false,
-                    observacao: justificativaTexto
-                      ? `Falta justificada: ${justificativaTexto}`
-                      : "Falta justificada",
+                    observacao: `Falta justificada: ${justificativaTexto.trim()}`,
                   }))
                 : [{
                     employeeId: ausenciaDialog.employeeId,
                     compareceu: false,
-                    observacao: justificativaTexto
-                      ? `Falta justificada: ${justificativaTexto}`
-                      : "Falta justificada",
+                    observacao: `Falta justificada: ${justificativaTexto.trim()}`,
                   }];
               comparecMut.mutate(
                 { solicitacaoId: ausenciaDialog.solicitacaoId, registros },
