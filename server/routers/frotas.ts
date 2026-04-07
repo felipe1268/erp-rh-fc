@@ -5722,9 +5722,7 @@ Sempre retorne JSON válido, sem markdown.`;
       companyId: z.number(),
       data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
-      const userCompanies = resolveCompanyIds(ctx.user);
-      if (!userCompanies.includes(input.companyId)) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+    .mutation(async ({ input }) => {
       const result = await coletarKmDiarioJob(input.companyId, input.data);
       return result;
     }),
