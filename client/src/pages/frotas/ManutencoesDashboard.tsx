@@ -298,9 +298,9 @@ export default function ManutencoesDashboard() {
           <CardContent>
             {porVeiculo.length > 0 ? (
               <ResponsiveContainer width="100%" height={Math.max(200, porVeiculo.length * 30)}>
-                <BarChart data={porVeiculo} layout="vertical" margin={{ left: 10 }}>
+                <BarChart data={porVeiculo} layout="vertical" margin={{ left: 10, right: 80 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} />
+                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => fmt(v)} />
                   <YAxis type="category" dataKey="placa" tick={{ fontSize: 10 }} width={80} />
                   <Tooltip content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
@@ -313,7 +313,7 @@ export default function ManutencoesDashboard() {
                       </div>
                     );
                   }} />
-                  <Bar dataKey="custoTotal" name="Custo Total" radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="custoTotal" name="Custo Total" radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, formatter: (v: number) => fmt(v) }}>
                     {porVeiculo.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Bar>
                 </BarChart>
