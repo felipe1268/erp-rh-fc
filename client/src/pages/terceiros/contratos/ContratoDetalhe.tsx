@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
+import FluxogramaPagamento from "./FluxogramaPagamento";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -1081,6 +1082,20 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                         return lines.map((line, idx) => {
                           const trimmed = line.trim();
                           if (!trimmed) return <div key={idx} className="h-3" />;
+
+                          if (/^\{\{FLUXOGRAMA_PAGAMENTO\}\}$/.test(trimmed)) {
+                            const c = contrato as any;
+                            return (
+                              <FluxogramaPagamento
+                                key={idx}
+                                diaMedicao={c?.diaMedicao}
+                                prazoAprovacao={c?.prazoAprovacaoDias}
+                                prazoEmissaoNf={c?.prazoEmissaoNf}
+                                prazoLiberacaoOp={c?.prazoLiberacaoOp}
+                                diaPagamento={c?.diaPagamento}
+                              />
+                            );
+                          }
 
                           const isClausula = /^CL[ÁA]USULA\s/i.test(trimmed);
                           const isTitulo = /^CONTRATO\s+DE\s+/i.test(trimmed);

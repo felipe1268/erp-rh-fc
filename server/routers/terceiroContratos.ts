@@ -3068,6 +3068,8 @@ CLÁUSULA TERCEIRA – DO VALOR E FORMA DE PAGAMENTO
 
 3.2 CRITÉRIOS DE MEDIÇÃO E PAGAMENTO — Os pagamentos serão processados conforme o fluxo obrigatório abaixo, cujos prazos são improrrogáveis salvo acordo formal entre as partes:
 
+{{FLUXOGRAMA_PAGAMENTO}}
+
 a) MEDIÇÃO FÍSICA (Dia {{DIA_MEDICAO}} de cada mês) — Levantamento e conferência do avanço físico dos serviços efetivamente executados, a ser realizado conjuntamente pelo gestor da obra e o representante da CONTRATADA no canteiro;
 
 b) APROVAÇÃO DA MEDIÇÃO (Até {{PRAZO_APROVACAO}} dias úteis após a medição) — Análise e aprovação da medição pelo gestor do contrato da CONTRATANTE. A medição poderá ser aprovada total ou parcialmente, cabendo à CONTRATADA acatar os ajustes solicitados;
@@ -3249,6 +3251,7 @@ TESTEMUNHAS:
         "PRAZO_EMISSAO_NF": String(contrato.prazoEmissaoNf ?? 3),
         "PRAZO_LIBERACAO_OP": String(contrato.prazoLiberacaoOp ?? 5),
         "DIA_PAGAMENTO": String(contrato.diaPagamento ?? 10),
+        "FLUXOGRAMA_PAGAMENTO": "{{FLUXOGRAMA_PAGAMENTO}}",
       };
 
       let texto = template.texto;

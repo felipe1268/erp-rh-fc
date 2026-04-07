@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
+import FluxogramaPagamento from "./FluxogramaPagamento";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +47,7 @@ const VARIAVEIS: { chave: string; descricao: string; categoria: string }[] = [
   { chave: "{{TESTEMUNHA_FINANCEIRO}}", descricao: "Nome do responsável financeiro (testemunha 1)", categoria: "Testemunhas" },
   { chave: "{{TESTEMUNHA_GESTOR_PROJETO}}", descricao: "Nome do gestor de projeto (testemunha 2)", categoria: "Testemunhas" },
   { chave: "{{REVISAO_CRONOGRAMA}}", descricao: "Revisão do cronograma considerada para o prazo (ex: Baseline Rev 00)", categoria: "Contrato" },
+  { chave: "{{FLUXOGRAMA_PAGAMENTO}}", descricao: "Diagrama visual do fluxo de medição e pagamento (6 etapas)", categoria: "Medição/Pagamento" },
   { chave: "{{DIA_MEDICAO}}", descricao: "Dia da medição física (ex: 25)", categoria: "Medição/Pagamento" },
   { chave: "{{PRAZO_APROVACAO}}", descricao: "Prazo de aprovação da medição em dias úteis (ex: 5)", categoria: "Medição/Pagamento" },
   { chave: "{{PRAZO_EMISSAO_NF}}", descricao: "Prazo para emissão da NF em dias úteis (ex: 3)", categoria: "Medição/Pagamento" },
@@ -80,6 +82,8 @@ CLÁUSULA TERCEIRA – DO VALOR E FORMA DE PAGAMENTO
 3.1 O valor total do presente contrato é de {{VALOR_TOTAL}}.
 
 3.2 CRITÉRIOS DE MEDIÇÃO E PAGAMENTO — Os pagamentos serão processados conforme o fluxo obrigatório abaixo, cujos prazos são improrrogáveis salvo acordo formal entre as partes:
+
+{{FLUXOGRAMA_PAGAMENTO}}
 
 a) MEDIÇÃO FÍSICA (Dia {{DIA_MEDICAO}} de cada mês) — Levantamento e conferência do avanço físico dos serviços efetivamente executados, a ser realizado conjuntamente pelo gestor da obra e o representante da CONTRATADA no canteiro;
 
@@ -565,6 +569,9 @@ EAP          | Descrição                                             | Un    |
                   {previewTexto.split("\n").map((line, idx) => {
                     const trimmed = line.trim();
                     if (!trimmed) return <div key={idx} className="h-3" />;
+                    if (/^\{\{FLUXOGRAMA_PAGAMENTO\}\}$/.test(trimmed)) {
+                      return <FluxogramaPagamento key={idx} compact />;
+                    }
                     const isClausula = /^CL[ÁA]USULA\s/i.test(trimmed);
                     const isTitulo = /^CONTRATO\s+DE\s+/i.test(trimmed);
                     const isAlinea = /^[a-z]\)\s/.test(trimmed);
