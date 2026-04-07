@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -662,6 +662,10 @@ export default function Cotacoes() {
   const [descontoTipo, setDescontoTipo] = useState<"valor" | "percentual" | "final">("valor");
   const [descontoValor, setDescontoValor] = useState("");
   const [descontoPreviewing, setDescontoPreviewing] = useState(false);
+  const [acrescimoModal, setAcrescimoModal] = useState<{ fornecedorId: number } | null>(null);
+  const [acrescimoTipo, setAcrescimoTipo] = useState<"valor" | "percentual" | "final">("valor");
+  const [acrescimoValor, setAcrescimoValor] = useState("");
+  const [acrescimoPreviewing, setAcrescimoPreviewing] = useState(false);
   const [showGerenciarCond, setShowGerenciarCond] = useState(false);
   const [novaCondicao, setNovaCondicao] = useState("");
   const [anexoUrl, setAnexoUrl] = useState<Record<number, string>>({});
@@ -1982,6 +1986,82 @@ export default function Cotacoes() {
       toast.success("Desconto comercial aplicado! Clique 'Salvar' para gravar.");
     }
 
+    function calcAcrescimoPreview(fornecedorId: number, tipo: "valor" | "percentual" | "final", valorInput: string) {
+      if (!mapa) return [];
+      const itens = mapa.itens ?? [];
+
+      const itemTotais = itens.map((it: any) => {
+        const key = `${it.id}_${fornecedorId}`;
+        const precoAtual = parseFloat(editPrecos[key] ?? "0") || 0;
+        const qtd = parseFloat(editQtds[key] ?? String(it.quantidade ?? "1")) || 1;
+        return { id: it.id, descricao: it.descricao ?? it.titulo ?? `Item #${it.id}`, precoAtual, qtd, total: precoAtual * qtd, key };
+      });
+
+      const totalGeral = itemTotais.reduce((s, i) => s + i.total, 0);
+      if (totalGeral <= 0) return [];
+
+      const parseBR = (v: string) => parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+      let valorAcr: number;
+      if (tipo === "percentual") {
+        valorAcr = totalGeral * (parseFloat(valorInput) || 0) / 100;
+      } else if (tipo === "final") {
+        const valorFinal = parseBR(valorInput);
+        if (valorFinal <= totalGeral) return [];
+        valorAcr = valorFinal - totalGeral;
+      } else {
+        valorAcr = parseBR(valorInput);
+      }
+
+      if (valorAcr <= 0) return [];
+
+      const targetTotal = totalGeral + valorAcr;
+
+      let acrescimoAcumulado = 0;
+      const result = itemTotais.map((it, idx) => {
+        const peso = it.total / totalGeral;
+        let acrItem: number;
+        if (idx === itemTotais.length - 1) {
+          acrItem = Math.round((valorAcr - acrescimoAcumulado) * 100) / 100;
+        } else {
+          acrItem = Math.round(valorAcr * peso * 100) / 100;
+          acrescimoAcumulado += acrItem;
+        }
+        const novoPreco = Math.round((it.precoAtual + acrItem / it.qtd) * 100) / 100;
+        return { ...it, acrItem, novoPreco, novoTotal: Math.round(novoPreco * it.qtd * 100) / 100 };
+      });
+
+      const somaNovoTotal = result.reduce((s, i) => s + i.novoTotal, 0);
+      const diff = Math.round((targetTotal - somaNovoTotal) * 100) / 100;
+      if (diff !== 0 && result.length > 0) {
+        const last = result[result.length - 1];
+        last.novoTotal = Math.round((last.novoTotal + diff) * 100) / 100;
+        if (last.qtd > 0) {
+          last.novoPreco = Math.round((last.novoTotal / last.qtd) * 100) / 100;
+          last.novoTotal = Math.round(last.novoPreco * last.qtd * 100) / 100;
+          const diffFinal = Math.round((targetTotal - result.reduce((s, i) => s + i.novoTotal, 0)) * 100) / 100;
+          if (diffFinal !== 0) last.novoTotal = Math.round((last.novoTotal + diffFinal) * 100) / 100;
+        }
+        last.acrItem = Math.round((last.novoTotal - last.total) * 100) / 100;
+      }
+
+      return result;
+    }
+
+    function aplicarAcrescimo() {
+      if (!acrescimoModal) return;
+      const preview = calcAcrescimoPreview(acrescimoModal.fornecedorId, acrescimoTipo, acrescimoValor);
+      if (!preview.length) return;
+      const updates: Record<string, string> = {};
+      for (const it of preview) {
+        updates[it.key] = it.novoPreco.toFixed(2);
+      }
+      setEditPrecos(prev => ({ ...prev, ...updates }));
+      setAcrescimoModal(null);
+      setAcrescimoValor("");
+      setAcrescimoPreviewing(false);
+      toast.success("Acréscimo comercial aplicado! Clique 'Salvar' para gravar.");
+    }
+
     function handleSalvarPrecos(fornecedorId: number) {
       if (!mapa || !showDetalhe) return;
       const isPacote = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
@@ -3114,6 +3194,11 @@ export default function Cotacoes() {
                                                 onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setDescontoModal({ fornecedorId: p.fornecedorId }); setDescontoTipo("valor"); setDescontoValor(""); setDescontoPreviewing(false); }}
                                                 className="h-6 text-[10px] border-amber-200 text-amber-700 hover:bg-amber-50 gap-1 px-2">
                                                 <TrendingDown className="h-3 w-3" /> Desconto
+                                              </Button>
+                                              <Button size="sm" variant="outline"
+                                                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setAcrescimoModal({ fornecedorId: p.fornecedorId }); setAcrescimoTipo("valor"); setAcrescimoValor(""); setAcrescimoPreviewing(false); }}
+                                                className="h-6 text-[10px] border-indigo-200 text-indigo-700 hover:bg-indigo-50 gap-1 px-2">
+                                                <TrendingUp className="h-3 w-3" /> Acréscimo
                                               </Button>
                                               <Button size="sm" variant="outline" onClick={() => setEditingFornId(null)} className="h-6 text-[10px] border-gray-300 text-gray-600 px-2">
                                                 Cancelar
@@ -4271,6 +4356,131 @@ export default function Cotacoes() {
                   disabled={!descontoPreviewing || calcDescontoPreview(descontoModal.fornecedorId, descontoTipo, descontoValor).length === 0}
                   onClick={() => aplicarDesconto()}
                   className="h-8 bg-amber-600 hover:bg-amber-700 text-white gap-1.5 text-xs">
+                  <CheckCircle className="h-3.5 w-3.5" /> Aplicar
+                </Button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {acrescimoModal && createPortal(
+          <div className="fixed inset-0 z-[99998] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
+            <div className="absolute inset-0 bg-black/40" onClick={() => { setAcrescimoModal(null); setAcrescimoPreviewing(false); }} />
+            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-200 px-5 py-3 rounded-t-xl flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-indigo-800 flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Acréscimo Comercial</h2>
+                  <p className="text-[11px] text-indigo-600">Distribui proporcionalmente entre os itens</p>
+                </div>
+                <button onClick={() => { setAcrescimoModal(null); setAcrescimoPreviewing(false); }} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+              </div>
+
+              <div className="px-5 py-4 space-y-3">
+                <div className="flex items-end gap-3">
+                  <div>
+                    <Label className="text-[11px] text-gray-600">Tipo</Label>
+                    <div className="flex gap-1.5 mt-1">
+                      <button onClick={() => { setAcrescimoTipo("valor"); setAcrescimoValor(""); setAcrescimoPreviewing(false); }}
+                        className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${acrescimoTipo === "valor" ? "bg-indigo-100 border-indigo-400 text-indigo-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+                        R$ Acrésc.
+                      </button>
+                      <button onClick={() => { setAcrescimoTipo("percentual"); setAcrescimoValor(""); setAcrescimoPreviewing(false); }}
+                        className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${acrescimoTipo === "percentual" ? "bg-indigo-100 border-indigo-400 text-indigo-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+                        %
+                      </button>
+                      <button onClick={() => { setAcrescimoTipo("final"); setAcrescimoValor(""); setAcrescimoPreviewing(false); }}
+                        className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${acrescimoTipo === "final" ? "bg-purple-100 border-purple-400 text-purple-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+                        Valor Final
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <Label className="text-[11px] text-gray-600">{acrescimoTipo === "valor" ? "Valor do Acréscimo (R$)" : acrescimoTipo === "percentual" ? "Percentual (%)" : "Valor Final Desejado (R$)"}</Label>
+                    {acrescimoTipo === "percentual" ? (
+                      <Input type="number" step="0.1" min="0" value={acrescimoValor}
+                        onChange={e => { setAcrescimoValor(e.target.value); setAcrescimoPreviewing(false); }}
+                        placeholder="3,5" className="mt-1 h-8 text-sm font-mono" autoFocus />
+                    ) : (
+                      <Input type="text" inputMode="decimal" value={acrescimoValor}
+                        onChange={e => {
+                          const raw = e.target.value.replace(/[^\d,]/g, "");
+                          const parts = raw.split(",");
+                          const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                          const formatted = parts.length > 1 ? `${intPart},${parts[1].slice(0, 2)}` : intPart;
+                          setAcrescimoValor(formatted);
+                          setAcrescimoPreviewing(false);
+                        }}
+                        placeholder={acrescimoTipo === "valor" ? "1.500,00" : "60.000,00"} className="mt-1 h-8 text-sm font-mono" autoFocus />
+                    )}
+                  </div>
+                  <Button size="sm" onClick={() => setAcrescimoPreviewing(true)} disabled={!acrescimoValor || (() => { const v = acrescimoTipo === "percentual" ? parseFloat(acrescimoValor) : parseFloat(acrescimoValor.replace(/\./g, "").replace(",", ".")); return isNaN(v) || v <= 0; })()}
+                    className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white gap-1 text-xs">
+                    <BarChart3 className="h-3.5 w-3.5" /> Calcular
+                  </Button>
+                </div>
+
+                {(() => {
+                  if (!acrescimoPreviewing) return null;
+                  const preview = calcAcrescimoPreview(acrescimoModal.fornecedorId, acrescimoTipo, acrescimoValor);
+                  if (!preview.length) return (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                      <p className="text-xs text-red-600 font-medium">Valor inválido — verifique o valor informado</p>
+                    </div>
+                  );
+                  const totalOriginal = preview.reduce((s, i) => s + i.total, 0);
+                  const totalNovo = preview.reduce((s, i) => s + i.novoTotal, 0);
+                  const totalAcrescimo = totalNovo - totalOriginal;
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <div className="flex-1 bg-gray-50 rounded-lg border border-gray-200 p-2 text-center">
+                          <p className="text-[9px] text-gray-500 uppercase font-semibold">Original</p>
+                          <p className="text-sm font-bold text-gray-700">{totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                        </div>
+                        <div className="flex-1 bg-indigo-50 rounded-lg border border-indigo-200 p-2 text-center">
+                          <p className="text-[9px] text-indigo-600 uppercase font-semibold">Acréscimo ({(totalAcrescimo / totalOriginal * 100).toFixed(1)}%)</p>
+                          <p className="text-sm font-bold text-indigo-700">+ {totalAcrescimo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                        </div>
+                        <div className="flex-1 bg-purple-50 rounded-lg border border-purple-200 p-2 text-center">
+                          <p className="text-[9px] text-purple-600 uppercase font-semibold">Novo Total</p>
+                          <p className="text-sm font-bold text-purple-700">{totalNovo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                        </div>
+                      </div>
+
+                      <div className="border border-gray-200 rounded-lg overflow-hidden max-h-[30vh] overflow-y-auto">
+                        <table className="w-full text-[11px]">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="text-left px-2 py-1.5 font-semibold text-gray-600">Item</th>
+                              <th className="text-right px-2 py-1.5 font-semibold text-gray-600">Atual</th>
+                              <th className="text-right px-2 py-1.5 font-semibold text-indigo-600">Novo</th>
+                              <th className="text-right px-2 py-1.5 font-semibold text-indigo-600">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {preview.map(it => (
+                              <tr key={it.id}>
+                                <td className="px-2 py-1 text-gray-700 max-w-[160px] truncate" title={it.descricao}>{it.descricao}</td>
+                                <td className="px-2 py-1 text-right text-gray-400">{it.precoAtual.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                                <td className="px-2 py-1 text-right text-indigo-700 font-bold">{it.novoPreco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                                <td className="px-2 py-1 text-right text-indigo-600">{it.novoTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="border-t border-gray-200 bg-gray-50 px-5 py-2.5 flex items-center justify-end gap-2 rounded-b-xl">
+                <Button size="sm" variant="outline" onClick={() => { setAcrescimoModal(null); setAcrescimoPreviewing(false); }} className="h-8 text-xs">Cancelar</Button>
+                <Button size="sm"
+                  disabled={!acrescimoPreviewing || calcAcrescimoPreview(acrescimoModal.fornecedorId, acrescimoTipo, acrescimoValor).length === 0}
+                  onClick={() => aplicarAcrescimo()}
+                  className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 text-xs">
                   <CheckCircle className="h-3.5 w-3.5" /> Aplicar
                 </Button>
               </div>
