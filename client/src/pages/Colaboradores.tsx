@@ -927,6 +927,7 @@ export default function Colaboradores() {
               <TabsTrigger value="obrigacoes" className="flex-1 text-xs sm:text-sm">Obrigações</TabsTrigger>
               <TabsTrigger value="sindical" className="flex-1 text-xs sm:text-sm">Sindical</TabsTrigger>
               {editingId && <TabsTrigger value="hist_status" className="flex-1 text-xs sm:text-sm">📋 Hist. Status</TabsTrigger>}
+              {editingId && <TabsTrigger value="hist_alteracoes" className="flex-1 text-xs sm:text-sm">🔍 Alterações</TabsTrigger>}
             </TabsList>
 
             {/* ===== ABA PESSOAL ===== */}
@@ -2314,6 +2315,11 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                 <HistoricoStatusTab employeeId={editingId} companyId={selectedCompany} />
               </TabsContent>
             )}
+            {editingId && (
+              <TabsContent value="hist_alteracoes" className="pt-4">
+                <HistoricoAlteracoesTab employeeId={editingId} />
+              </TabsContent>
+            )}
           </Tabs>
 
           {/* Observações */}
@@ -3017,6 +3023,148 @@ function HistoricoStatusTab({ employeeId, companyId }: { employeeId: number; com
             )}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+const fieldLabels: Record<string, string> = {
+  nomeCompleto: "Nome Completo", cpf: "CPF", rg: "RG", dataNascimento: "Data Nascimento",
+  dataAdmissao: "Data Admissão", funcao: "Função", funcaoRegistro: "Função Registro",
+  setor: "Setor", salarioBase: "Salário Base", status: "Status", tipoContrato: "Tipo Contrato",
+  sexo: "Sexo", estadoCivil: "Estado Civil", nacionalidade: "Nacionalidade",
+  naturalidade: "Naturalidade", nomeMae: "Nome da Mãe", nomePai: "Nome do Pai",
+  celular: "Celular", email: "E-mail", contatoEmergencia: "Contato Emergência",
+  telefoneEmergencia: "Tel. Emergência", parentesco: "Parentesco",
+  cep: "CEP", rua: "Rua", numero: "Número", complemento: "Complemento",
+  bairro: "Bairro", cidade: "Cidade", estado: "Estado",
+  banco: "Banco", agencia: "Agência", conta: "Conta", tipoConta: "Tipo Conta",
+  pixChave: "Chave PIX", pixTipo: "Tipo PIX",
+  pis: "PIS", ctps: "CTPS", ctpsSerie: "CTPS Série",
+  tituloEleitor: "Título Eleitor", zonaEleitoral: "Zona Eleitoral", secaoEleitoral: "Seção Eleitoral",
+  cnh: "CNH", cnhCategoria: "CNH Categoria", cnhValidade: "CNH Validade",
+  reservista: "Reservista", grauInstrucao: "Grau de Instrução",
+  vaRecebe: "Recebe VA", vaValor: "Valor VA", vaOperadora: "Operadora VA", vaNumeroCartao: "Nº Cartão VA",
+  vrRecebe: "Recebe VR", vrValor: "Valor VR",
+  valeTransporte: "Vale Transporte", vtValor: "Valor VT", vtPercDesconto: "% Desconto VT",
+  planoSaude: "Plano de Saúde", planoSaudeDesconto: "Desconto Plano",
+  observacoes: "Observações", codigoInterno: "Código Interno JFC",
+  categoriaDesligamento: "Categoria Desligamento", motivoDesligamento: "Motivo Desligamento",
+  dataDesligamento: "Data Desligamento", dataDesligamentoEfetiva: "Data Desligamento Efetiva",
+  dataDemissao: "Data Demissão", listaNegra: "Blacklist", motivoListaNegra: "Motivo Blacklist",
+  sindicato: "Sindicato", contribuicaoSindical: "Contribuição Sindical",
+  horarioTrabalho: "Horário Trabalho", jornadaSemanal: "Jornada Semanal",
+  experienciaInicio: "Experiência Início", experienciaFim1: "Experiência 1ª Fase",
+  experienciaFim2: "Experiência 2ª Fase",
+};
+
+function HistoricoAlteracoesTab({ employeeId }: { employeeId: number }) {
+  const { data: logs, isLoading } = trpc.employees.changeLog.useQuery(
+    { employeeId },
+    { enabled: !!employeeId }
+  );
+
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  if (isLoading) return <div className="text-center py-8 text-muted-foreground">Carregando histórico...</div>;
+
+  if (!logs || logs.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <FileText className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+        <p className="text-sm text-muted-foreground">Nenhuma alteração registrada ainda.</p>
+        <p className="text-xs text-muted-foreground mt-1">A partir de agora, toda alteração será registrada com nome do usuário, data e hora.</p>
+      </div>
+    );
+  }
+
+  const actionLabels: Record<string, { label: string; color: string }> = {
+    CREATE: { label: "Cadastro", color: "bg-green-100 text-green-800" },
+    UPDATE: { label: "Alteração", color: "bg-blue-100 text-blue-800" },
+    DELETE: { label: "Exclusão", color: "bg-red-100 text-red-800" },
+    RESTORE: { label: "Restauração", color: "bg-purple-100 text-purple-800" },
+  };
+
+  const formatVal = (v: any) => {
+    if (v === null || v === undefined || v === '') return '(vazio)';
+    if (v === true || v === 1) return 'Sim';
+    if (v === false || v === 0) return 'Não';
+    return String(v);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-4">
+        <FileText className="h-4 w-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold">Histórico de Alterações</h3>
+        <Badge variant="secondary" className="text-xs">{logs.length} registro(s)</Badge>
+      </div>
+      <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+        {logs.map((log: any) => {
+          const al = actionLabels[log.action] || { label: log.action, color: "bg-gray-100 text-gray-800" };
+          const changes = log.changes as Record<string, { de: any; para: any }> | null;
+          const isExpanded = expandedId === log.id;
+          const changesArr = changes ? Object.entries(changes) : [];
+          return (
+            <div key={log.id} className="border rounded-lg bg-card hover:bg-accent/50 transition-colors">
+              <button
+                className="w-full text-left p-3"
+                onClick={() => setExpandedId(isExpanded ? null : log.id)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${al.color}`}>
+                      {al.label}
+                    </span>
+                    <span className="text-xs font-medium text-foreground">{log.userName}</span>
+                    {changesArr.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({changesArr.length} campo{changesArr.length > 1 ? 's' : ''})</span>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                    {log.createdAt ? new Date(log.createdAt).toLocaleString("pt-BR") : "-"}
+                  </span>
+                </div>
+                {!isExpanded && log.action === 'CREATE' && (
+                  <p className="text-xs text-muted-foreground mt-1">{log.summary}</p>
+                )}
+                {!isExpanded && changesArr.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1 truncate">
+                    {changesArr.slice(0, 3).map(([k]) => fieldLabels[k] || k).join(', ')}
+                    {changesArr.length > 3 ? ` +${changesArr.length - 3} mais` : ''}
+                  </p>
+                )}
+              </button>
+              {isExpanded && changesArr.length > 0 && (
+                <div className="px-3 pb-3 border-t pt-2">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground border-b">
+                        <th className="text-left py-1 font-medium">Campo</th>
+                        <th className="text-left py-1 font-medium">Antes</th>
+                        <th className="text-left py-1 font-medium">Depois</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {changesArr.map(([field, { de, para }]) => (
+                        <tr key={field} className="border-b border-dashed last:border-0">
+                          <td className="py-1.5 font-medium text-foreground">{fieldLabels[field] || field}</td>
+                          <td className="py-1.5 text-red-600 line-through">{formatVal(de)}</td>
+                          <td className="py-1.5 text-green-700 font-medium">{formatVal(para)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {isExpanded && log.action === 'CREATE' && (
+                <div className="px-3 pb-3 border-t pt-2">
+                  <p className="text-xs text-muted-foreground">{log.summary}</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

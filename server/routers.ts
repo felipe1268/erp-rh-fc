@@ -416,6 +416,13 @@ export const appRouter = router({
       }
       const result = await createEmployee(input);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "colaboradores", entityType: "employee", entityId: result.id, details: `Colaborador criado: ${input.nomeCompleto}` });
+      try {
+        const db = await getDb();
+        if (db) {
+          await db.execute(sql`INSERT INTO employee_change_log ("employeeId", "companyId", "userId", "userName", "action", "summary", "createdAt")
+            VALUES (${result.id}, ${input.companyId || null}, ${ctx.user.id}, ${ctx.user.name ?? 'Sistema'}, 'CREATE', ${'Colaborador cadastrado: ' + (input.nomeCompleto || '')}, NOW())`);
+        }
+      } catch (e) { console.error('[ChangeLog] Erro create:', e); }
       // Disparo automático de notificação de contratação (fire-and-forget, não bloqueia o retorno)
       if (input.status === "Ativo" && input.companyId) {
         (async () => {
@@ -505,7 +512,36 @@ export const appRouter = router({
       }
       
       await updateEmployee(input.id, input.companyId, employeeData, { name: ctx.user.name ?? 'Sistema', id: ctx.user.id });
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador atualizado: ${employeeData.nomeCompleto || input.nomeCompleto || ""}` });
+      
+      const changedFields: Record<string, { de: any; para: any }> = {};
+      if (empAnterior) {
+        const ignoredKeys = new Set(['id','companyId','createdAt','updatedAt','deletedAt','deletedBy','deletedByName','deleteReason','_recontratacao','fotoUrl']);
+        for (const key of Object.keys(employeeData)) {
+          if (ignoredKeys.has(key)) continue;
+          const oldVal = (empAnterior as any)[key];
+          const newVal = employeeData[key];
+          const oldStr = oldVal == null ? '' : String(oldVal).trim();
+          const newStr = newVal == null ? '' : String(newVal).trim();
+          if (oldStr !== newStr) {
+            changedFields[key] = { de: oldVal ?? null, para: newVal ?? null };
+          }
+        }
+      }
+      const changesArr = Object.entries(changedFields);
+      const summaryParts = changesArr.slice(0, 10).map(([k, v]) => `${k}: "${v.de ?? ''}" → "${v.para ?? ''}"`);
+      const summaryText = changesArr.length > 0 
+        ? `${changesArr.length} campo(s) alterado(s): ${summaryParts.join('; ')}${changesArr.length > 10 ? ` (+${changesArr.length - 10} mais)` : ''}`
+        : 'Nenhuma alteração detectada';
+      
+      try {
+        const db = await getDb();
+        if (db && changesArr.length > 0) {
+          await db.execute(sql`INSERT INTO employee_change_log ("employeeId", "companyId", "userId", "userName", "action", "changes", "summary", "createdAt")
+            VALUES (${input.id}, ${input.companyId || null}, ${ctx.user.id}, ${ctx.user.name ?? 'Sistema'}, 'UPDATE', ${JSON.stringify(changedFields)}::jsonb, ${summaryText}, NOW())`);
+        }
+      } catch (e) { console.error('[ChangeLog] Erro:', e); }
+      
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador atualizado: ${employeeData.nomeCompleto || input.nomeCompleto || ""} — ${summaryText}` });
       
       // === AUTO-DESALOCAÇÃO: Remover de obra quando status muda para Desligado ou Lista_Negra ===
       const statusAnterior = empAnterior?.status || null;
@@ -577,6 +613,19 @@ export const appRouter = router({
     history: router({
       list: protectedProcedure.input(z.object({ employeeId: z.number(), companyId: z.number() })).query(({ input }) => getEmployeeHistory(input.employeeId, input.companyId)),
       create: protectedProcedure.input(z.any()).mutation(({ input }) => createEmployeeHistory(input)),
+    }),
+    changeLog: protectedProcedure.input(z.object({ employeeId: z.number() })).query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = (await db.execute(sql`SELECT id, "employeeId", "userId", "userName", "action", "changes", "summary", "createdAt" FROM employee_change_log WHERE "employeeId" = ${input.employeeId} ORDER BY "createdAt" DESC LIMIT 100`)) as any;
+      return (rows.rows || rows || []).map((r: any) => ({
+        id: r.id,
+        userName: r.userName,
+        action: r.action,
+        changes: r.changes,
+        summary: r.summary,
+        createdAt: r.createdAt,
+      }));
     }),
     checkDuplicateCpf: protectedProcedure.input(z.object({ cpf: z.string(), companyId: z.number() })).query(({ input }) => checkDuplicateCpf(input.cpf, input.companyId)),
     uploadFoto: protectedProcedure.input(z.object({
