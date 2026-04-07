@@ -716,6 +716,7 @@ export default function Solicitacoes() {
   const [recebQtd, setRecebQtd] = useState<Record<number, string>>({});
   const [selectedEapIds, setSelectedEapIds] = useState<Set<number>>(new Set());
   const [eapSearch, setEapSearch] = useState("");
+  const [eapLegendFilter, setEapLegendFilter] = useState<string | null>(null);
   const [modoSC, setModoSC] = useState<"eap" | "manual" | "insumo">("eap");
   const [insumoBusca, setInsumoBusca] = useState("");
   const [insumoQtds, setInsumoQtds] = useState<Record<string, string>>({});
@@ -996,6 +997,29 @@ export default function Solicitacoes() {
     }
     return result;
   }, [eapQ.data?.items]);
+
+  function getEapLegendKey(it: any): string {
+    if (form.tipo === "servico") {
+      const mdoSaldo = (it as any).mdoSaldo ?? 0;
+      const mdoContratado = (it as any).mdoContratado ?? 0;
+      if (mdoSaldo <= 0 && mdoContratado > 0) return "contratado";
+      if (mdoSaldo <= 0) return "sem_saldo";
+      return "disponivel";
+    }
+    const cob = coberturaMap[it.id];
+    if (!cob || !cob.totalInsumos) return "disponivel";
+    const insData = (insumosConsolidadosQ?.data ?? []) as any[];
+    const itemInsumos = insData.filter((x: any) => x.eapId === it.id || x.orcamentoItemId === it.id);
+    const statuses = itemInsumos.map((x: any) => x.statusInsumo || "disponivel");
+    if (statuses.includes("estouro")) return "estouro";
+    if (statuses.every((s: string) => s === "recebido") && statuses.length > 0) return "recebido";
+    if (statuses.every((s: string) => s === "comprado" || s === "recebido") && statuses.length > 0) return "comprado";
+    if (statuses.some((s: string) => s === "em_cotacao")) return "em_cotacao";
+    if (statuses.some((s: string) => s === "solicitado" || s === "em_cotacao" || s === "comprado")) return "solicitado";
+    if (cob.insumosCobertos >= cob.totalInsumos) return "solicitado";
+    if (cob.insumosCobertos > 0) return "solicitado";
+    return "disponivel";
+  }
 
   function getStatusColor(itemId: number): { dot: string; label: string; bg: string } {
     const s = batchSaldo[itemId];
@@ -2013,24 +2037,37 @@ export default function Solicitacoes() {
                       </div>
                     ) : eapQ.data && eapQ.data.items.length > 0 ? (
                       <div className="space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-gray-500">
+                        <div className="flex flex-wrap items-center gap-x-1 gap-y-1 px-1 text-[10px] text-gray-500">
                           <span className="font-medium text-gray-600 mr-0.5">Legenda:</span>
                           {form.tipo === "servico" ? (
                             <>
-                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-emerald-500" />Saldo disponível</span>
-                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-purple-500" />100% contratado</span>
-                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-red-500" />Sem saldo</span>
+                              {[
+                                { key: "disponivel", color: "bg-emerald-500", label: "Saldo disponível" },
+                                { key: "contratado", color: "bg-purple-500", label: "100% contratado" },
+                                { key: "sem_saldo", color: "bg-red-500", label: "Sem saldo" },
+                              ].map(lg => (
+                                <button key={lg.key} type="button" onClick={() => setEapLegendFilter(prev => prev === lg.key ? null : lg.key)} className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full transition-all cursor-pointer ${eapLegendFilter === lg.key ? "ring-2 ring-offset-1 ring-gray-400 bg-gray-100 font-semibold" : "hover:bg-gray-100"}`}>
+                                  <span className={`inline-block w-3 h-3 rounded-full ${lg.color}`} />{lg.label}
+                                </button>
+                              ))}
                             </>
                           ) : (
                             <>
-                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-emerald-500" />Disponível</span>
-                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-blue-500" />Solicitado</span>
-                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-amber-500" />Em cotação</span>
-                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-purple-500" />100% comprado</span>
-                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-rose-500" />Recebido</span>
-                              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-red-700" />Estouro</span>
+                              {[
+                                { key: "disponivel", color: "bg-emerald-500", label: "Disponível" },
+                                { key: "solicitado", color: "bg-blue-500", label: "Solicitado" },
+                                { key: "em_cotacao", color: "bg-amber-500", label: "Em cotação" },
+                                { key: "comprado", color: "bg-purple-500", label: "100% comprado" },
+                                { key: "recebido", color: "bg-rose-500", label: "Recebido" },
+                                { key: "estouro", color: "bg-red-700", label: "Estouro" },
+                              ].map(lg => (
+                                <button key={lg.key} type="button" onClick={() => setEapLegendFilter(prev => prev === lg.key ? null : lg.key)} className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full transition-all cursor-pointer ${eapLegendFilter === lg.key ? "ring-2 ring-offset-1 ring-gray-400 bg-gray-100 font-semibold" : "hover:bg-gray-100"}`}>
+                                  <span className={`inline-block w-3 h-3 rounded-full ${lg.color}`} />{lg.label}
+                                </button>
+                              ))}
                             </>
                           )}
+                          {eapLegendFilter && <button type="button" onClick={() => setEapLegendFilter(null)} className="text-[9px] text-red-500 hover:text-red-700 ml-1 font-semibold">✕ Limpar</button>}
                         </div>
                       <div className="border border-gray-200 rounded-lg overflow-hidden">
                         <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
@@ -2051,7 +2088,8 @@ export default function Solicitacoes() {
                                 if (form.tipo === "material") return it.temMat !== false;
                                 return true;
                               })
-                              .filter((it: any) => !eapSearch || stripAccents(`${it.eapCodigo} ${it.descricao}`.toLowerCase()).includes(stripAccents(eapSearch.toLowerCase())));
+                              .filter((it: any) => !eapSearch || stripAccents(`${it.eapCodigo} ${it.descricao}`.toLowerCase()).includes(stripAccents(eapSearch.toLowerCase())))
+                              .filter((it: any) => !eapLegendFilter || getEapLegendKey(it) === eapLegendFilter);
                             const allSelected = visibleItems.length > 0 && visibleItems.every((it: any) => selectedEapIds.has(it.id) || (parseFloat(eapQtdServico[it.id] || "") > 0));
                             return (
                               <button
@@ -2094,6 +2132,7 @@ export default function Solicitacoes() {
                               return true;
                             })
                             .filter(it => !eapSearch || stripAccents(`${it.eapCodigo} ${it.descricao}`.toLowerCase()).includes(stripAccents(eapSearch.toLowerCase())))
+                            .filter(it => !eapLegendFilter || getEapLegendKey(it) === eapLegendFilter)
                             .map(it => {
                               const expanded = eapExpanded === it.id;
                               const insLista = eapInsumos[it.id];
