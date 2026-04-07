@@ -2731,32 +2731,47 @@ export default function FolhaPagamento() {
                   <Info className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
                   <span>Esta edição será gravada como <strong>ajuste manual</strong> e substituirá o registro original.</span>
                 </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 1</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-semibold text-slate-500">Entrada</label>
-                      <input type="time" value={espelhoEditForm.entrada1} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada1: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                {(() => {
+                  const TimeField = ({ label, field }: { label: string; field: string }) => {
+                    const val = (espelhoEditForm as any)[field] || '';
+                    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      let fmt = '';
+                      if (raw.length === 0) fmt = '';
+                      else if (raw.length <= 2) fmt = raw;
+                      else fmt = raw.slice(0, 2) + ':' + raw.slice(2, 4);
+                      setEspelhoEditForm(f => ({ ...f, [field]: fmt }));
+                    };
+                    const handleBlur = () => {
+                      if (!val) return;
+                      const parts = val.replace(/[^0-9:]/g, '').split(':');
+                      let h = parseInt(parts[0] || '0', 10);
+                      let m = parseInt(parts[1] || '0', 10);
+                      if (h > 23) h = 23;
+                      if (m > 59) m = 59;
+                      setEspelhoEditForm(f => ({ ...f, [field]: String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') }));
+                    };
+                    return (
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-semibold text-slate-500">{label}</label>
+                        <div className="relative">
+                          <input type="text" inputMode="numeric" maxLength={5} placeholder="-- : --" value={val} onChange={handleChange} onBlur={handleBlur} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full pr-8" />
+                          <Clock className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                        </div>
+                      </div>
+                    );
+                  };
+                  return (<>
+                    <div>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 1</p>
+                      <div className="grid grid-cols-2 gap-3"><TimeField label="Entrada" field="entrada1" /><TimeField label="Saída" field="saida1" /></div>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-semibold text-slate-500">Saída</label>
-                      <input type="time" value={espelhoEditForm.saida1} onChange={e => setEspelhoEditForm(f => ({ ...f, saida1: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                    <div>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 2 <span className="font-normal normal-case">(intervalo)</span></p>
+                      <div className="grid grid-cols-2 gap-3"><TimeField label="Entrada" field="entrada2" /><TimeField label="Saída" field="saida2" /></div>
                     </div>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 2 <span className="font-normal normal-case">(intervalo)</span></p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-semibold text-slate-500">Entrada</label>
-                      <input type="time" value={espelhoEditForm.entrada2} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada2: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-semibold text-slate-500">Saída</label>
-                      <input type="time" value={espelhoEditForm.saida2} onChange={e => setEspelhoEditForm(f => ({ ...f, saida2: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
-                    </div>
-                  </div>
-                </div>
+                  </>);
+                })()}
                 <div>
                   <label className="text-xs font-semibold text-slate-500 block mb-1">Motivo</label>
                   <input type="text" value={espelhoEditForm.motivoAjuste} onChange={e => setEspelhoEditForm(f => ({ ...f, motivoAjuste: e.target.value }))} placeholder="Motivo do ajuste" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
@@ -5974,32 +5989,47 @@ export default function FolhaPagamento() {
                 <Info className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
                 <span>Esta edição será gravada como <strong>ajuste manual</strong> e substituirá o registro original.</span>
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 1</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Entrada</label>
-                    <input type="time" value={espelhoEditForm.entrada1} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada1: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+              {(() => {
+                const TF = ({ label, field }: { label: string; field: string }) => {
+                  const val = (espelhoEditForm as any)[field] || '';
+                  const hc = (e: React.ChangeEvent<HTMLInputElement>) => {
+                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                    let fmt = '';
+                    if (raw.length === 0) fmt = '';
+                    else if (raw.length <= 2) fmt = raw;
+                    else fmt = raw.slice(0, 2) + ':' + raw.slice(2, 4);
+                    setEspelhoEditForm(f => ({ ...f, [field]: fmt }));
+                  };
+                  const hb = () => {
+                    if (!val) return;
+                    const parts = val.replace(/[^0-9:]/g, '').split(':');
+                    let h = parseInt(parts[0] || '0', 10);
+                    let m = parseInt(parts[1] || '0', 10);
+                    if (h > 23) h = 23;
+                    if (m > 59) m = 59;
+                    setEspelhoEditForm(f => ({ ...f, [field]: String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') }));
+                  };
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-slate-500">{label}</label>
+                      <div className="relative">
+                        <input type="text" inputMode="numeric" maxLength={5} placeholder="-- : --" value={val} onChange={hc} onBlur={hb} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full pr-8" />
+                        <Clock className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  );
+                };
+                return (<>
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 1</p>
+                    <div className="grid grid-cols-2 gap-3"><TF label="Entrada" field="entrada1" /><TF label="Saída" field="saida1" /></div>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Saída</label>
-                    <input type="time" value={espelhoEditForm.saida1} onChange={e => setEspelhoEditForm(f => ({ ...f, saida1: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 2 <span className="font-normal normal-case">(intervalo)</span></p>
+                    <div className="grid grid-cols-2 gap-3"><TF label="Entrada" field="entrada2" /><TF label="Saída" field="saida2" /></div>
                   </div>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 2 <span className="font-normal normal-case">(intervalo)</span></p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Entrada</label>
-                    <input type="time" value={espelhoEditForm.entrada2} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada2: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Saída</label>
-                    <input type="time" value={espelhoEditForm.saida2} onChange={e => setEspelhoEditForm(f => ({ ...f, saida2: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
-                  </div>
-                </div>
-              </div>
+                </>);
+              })()}
               <div>
                 <label className="text-xs font-semibold text-slate-500 block mb-1">Motivo</label>
                 <input type="text" value={espelhoEditForm.motivoAjuste} onChange={e => setEspelhoEditForm(f => ({ ...f, motivoAjuste: e.target.value }))} placeholder="Motivo do ajuste" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
