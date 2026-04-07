@@ -3626,14 +3626,14 @@ export default function FechamentoPonto() {
 
         {/* ===== MANUAL ENTRY DIALOG (FULL SCREEN) ===== */}
         <FullScreenDialog open={showManualDialog} onClose={() => setShowManualDialog(false)} title="Lançamento Manual" subtitle={`Competência: ${formatMesAno(mesAno)}`} icon={<PenLine className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-purple-800 to-purple-600">
-          <div className="w-full max-w-4xl">
-            <div className="space-y-4">
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 text-xs text-purple-800">
+          <div className="w-full max-w-5xl">
+            <div className="space-y-3">
+              <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-1.5 text-xs text-purple-800">
                 Registros manuais ficam <strong>destacados</strong> e são rastreados. Você pode lançar vários dias de uma vez.
               </div>
 
               {/* Colaborador (combobox com busca) + Obra */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <Label className="mb-1 block">Colaborador</Label>
                   <Popover open={manualEmpPopoverOpen} onOpenChange={setManualEmpPopoverOpen}>
@@ -3746,22 +3746,35 @@ export default function FechamentoPonto() {
                     Clique em <strong>"Adicionar dia"</strong> para inserir um dia, ou <strong>"Preencher período"</strong> para gerar dias automaticamente de {formatMesAno(mesAno)} — fins de semana aparecem sem horário.
                   </div>
                 ) : (
-                  <div className="border rounded-lg overflow-x-auto">
+                  <div className="border rounded-lg overflow-hidden">
                     <div>
-                      <table className="text-sm" style={{minWidth:"max-content",width:"100%"}}>
+                      <table className="text-sm w-full table-fixed">
+                        <colgroup>
+                          <col style={{width:"100px"}} />
+                          <col style={{width:"38px"}} />
+                          <col style={{width:"76px"}} />
+                          <col style={{width:"76px"}} />
+                          <col style={{width:"76px"}} />
+                          <col style={{width:"76px"}} />
+                          <col style={{width:"76px"}} />
+                          <col style={{width:"76px"}} />
+                          <col style={{width:"48px"}} />
+                          <col style={{width:"42px"}} />
+                          <col style={{width:"24px"}} />
+                        </colgroup>
                         <thead className="bg-muted/40 sticky top-0 z-10">
                           <tr>
-                            <th className="px-1 py-1.5 text-left font-medium text-xs" style={{minWidth:112}}>Data</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs w-10 text-muted-foreground">Dia</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs" style={{minWidth:100}}>Entrada</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs" style={{minWidth:100}}>Saída Int.</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs" style={{minWidth:100}}>Retorno</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs" style={{minWidth:100}}>Saída</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs text-blue-600" style={{minWidth:100}}>Entr. HE</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs text-blue-600" style={{minWidth:100}}>Saída HE</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs w-16 text-red-600">Falta</th>
-                            <th className="px-1 py-1.5 text-center font-medium text-xs w-20 text-orange-600">Feriado</th>
-                            <th className="px-1 py-1.5 w-6"></th>
+                            <th className="px-0.5 py-1 text-left font-medium text-[11px]">Data</th>
+                            <th className="px-0.5 py-1 text-center font-medium text-[11px] text-muted-foreground">Dia</th>
+                            <th className="px-0.5 py-1 text-center font-medium text-[11px]">Entrada</th>
+                            <th className="px-0.5 py-1 text-center font-medium text-[11px]">Saída Int.</th>
+                            <th className="px-0.5 py-1 text-center font-medium text-[11px]">Retorno</th>
+                            <th className="px-0.5 py-1 text-center font-medium text-[11px]">Saída</th>
+                            <th className="px-0.5 py-1 text-center font-medium text-[11px] text-blue-600">Ent.HE</th>
+                            <th className="px-0.5 py-1 text-center font-medium text-[11px] text-blue-600">Saí.HE</th>
+                            <th className="px-0.5 py-1 text-center font-medium text-[11px] text-red-600">Falta</th>
+                            <th className="px-0.5 py-1 text-center font-medium text-[11px] text-orange-600">Fer.</th>
+                            <th className="px-0.5 py-1"></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3801,8 +3814,8 @@ export default function FechamentoPonto() {
                               : idx % 2 === 0 ? "" : "bg-muted/10";
                             return (
                               <tr key={day.id} className={`border-t ${rowBg}`}>
-                                <td className="px-1 py-1">
-                                  <Input type="date" value={day.data} className="h-7 text-xs" style={{width:112,paddingLeft:6,paddingRight:2}} onChange={e => {
+                                <td className="px-0.5 py-0.5">
+                                  <Input type="date" value={day.data} className="h-7 text-[11px]" style={{width:"100%",paddingLeft:4,paddingRight:1}} onChange={e => {
                                     const newDate = e.target.value;
                                     const emp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
                                     const sc = newDate && emp?.jornadaTrabalho ? getScheduleForDay(emp.jornadaTrabalho, newDate) : null;
@@ -3815,26 +3828,26 @@ export default function FechamentoPonto() {
                                     } : d));
                                   }} />
                                 </td>
-                                <td className="px-1 py-1 text-center">
-                                  <div className="flex flex-col items-center gap-0.5">
-                                    <span className={`text-xs font-bold ${isRed || isFaltaMarcada ? "text-red-600" : isOnSchedule ? "text-green-700" : isHorasExtras ? "text-blue-700" : isOffSchedule ? "text-amber-700" : "text-muted-foreground"}`}>{dow}</span>
-                                    {isFeriadoMarcado && <span className="text-[9px] text-orange-600 font-bold leading-none">feriado</span>}
-                                    {isFaltaMarcada && <span className="text-[9px] text-red-700 font-bold leading-none">FALTA</span>}
-                                    {isOnSchedule && <span className="text-[9px] text-green-700 font-bold leading-none">✓ OK</span>}
-                                    {isHorasExtras && <span className="text-[9px] text-blue-700 font-bold leading-none">H.E.</span>}
-                                    {isOffSchedule && <span className="text-[9px] text-amber-700 font-bold leading-none">DIFER.</span>}
+                                <td className="px-0.5 py-0.5 text-center">
+                                  <div className="flex flex-col items-center leading-none">
+                                    <span className={`text-[11px] font-bold ${isRed || isFaltaMarcada ? "text-red-600" : isOnSchedule ? "text-green-700" : isHorasExtras ? "text-blue-700" : isOffSchedule ? "text-amber-700" : "text-muted-foreground"}`}>{dow}</span>
+                                    {isFeriadoMarcado && <span className="text-[8px] text-orange-600 font-bold leading-none">fer.</span>}
+                                    {isFaltaMarcada && <span className="text-[8px] text-red-700 font-bold leading-none">FALTA</span>}
+                                    {isOnSchedule && <span className="text-[8px] text-green-700 font-bold leading-none">✓OK</span>}
+                                    {isHorasExtras && <span className="text-[8px] text-blue-700 font-bold leading-none">HE</span>}
+                                    {isOffSchedule && <span className="text-[8px] text-amber-700 font-bold leading-none">DIF</span>}
                                   </div>
                                 </td>
-                                <td className="px-1 py-1"><Input type="time" value={day.entrada1} className={`h-7 text-xs font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:98,paddingLeft:5,paddingRight:2}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.saida1} className={`h-7 text-xs font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:98,paddingLeft:5,paddingRight:2}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.entrada2} className={`h-7 text-xs font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:98,paddingLeft:5,paddingRight:2}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.saida2} className={`h-7 text-xs font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:98,paddingLeft:5,paddingRight:2}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.entrada3 || ""} className={`h-7 text-xs font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:98,paddingLeft:5,paddingRight:2}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada3: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1"><Input type="time" value={day.saida3 || ""} className={`h-7 text-xs font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:98,paddingLeft:5,paddingRight:2}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida3: e.target.value } : d))} /></td>
-                                <td className="px-1 py-1 text-center">
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.entrada1} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.saida1} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.entrada2} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.saida2} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.entrada3 || ""} className={`h-6 text-[11px] font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada3: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="time" value={day.saida3 || ""} className={`h-6 text-[11px] font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida3: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5 text-center">
                                   <button
                                     type="button"
-                                    title={isFaltaMarcada ? "Desfazer falta (preencher horários)" : "Marcar como falta (apaga horários)"}
+                                    title={isFaltaMarcada ? "Desfazer falta" : "Marcar como falta"}
                                     onClick={() => {
                                       if (isFaltaMarcada) {
                                         const emp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
@@ -3844,15 +3857,15 @@ export default function FechamentoPonto() {
                                         setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: "", saida1: "", entrada2: "", saida2: "", entrada3: "", saida3: "" } : d));
                                       }
                                     }}
-                                    className={`text-xs font-semibold px-1.5 py-0.5 rounded transition-colors ${isFaltaMarcada ? "bg-red-600 text-white hover:bg-red-700" : "bg-red-100 text-red-700 hover:bg-red-200"}`}
+                                    className={`text-[10px] font-semibold px-1 py-0.5 rounded transition-colors ${isFaltaMarcada ? "bg-red-600 text-white hover:bg-red-700" : "bg-red-100 text-red-700 hover:bg-red-200"}`}
                                   >
-                                    {isFaltaMarcada ? "✕ Falta" : "Falta"}
+                                    {isFaltaMarcada ? "✕" : "F"}
                                   </button>
                                 </td>
-                                <td className="px-1 py-1 text-center">
+                                <td className="px-0.5 py-0.5 text-center">
                                   <button
                                     type="button"
-                                    title={isFeriadoMarcado ? "Desmarcar feriado" : "Marcar como feriado (apaga horários)"}
+                                    title={isFeriadoMarcado ? "Desmarcar feriado" : "Marcar como feriado"}
                                     onClick={() => {
                                       if (isFeriadoMarcado) {
                                         const emp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
@@ -3862,14 +3875,14 @@ export default function FechamentoPonto() {
                                         setManualDays(p => p.map(d => d.id === day.id ? { ...d, feriado: true, entrada1: "", saida1: "", entrada2: "", saida2: "", entrada3: "", saida3: "" } : d));
                                       }
                                     }}
-                                    className={`text-xs font-semibold px-1.5 py-0.5 rounded transition-colors ${isFeriadoMarcado ? "bg-orange-500 text-white hover:bg-orange-600" : "bg-orange-100 text-orange-700 hover:bg-orange-200"}`}
+                                    className={`text-[10px] font-semibold px-1 py-0.5 rounded transition-colors ${isFeriadoMarcado ? "bg-orange-500 text-white hover:bg-orange-600" : "bg-orange-100 text-orange-700 hover:bg-orange-200"}`}
                                   >
-                                    {isFeriadoMarcado ? "✕ Fer." : "Fer."}
+                                    {isFeriadoMarcado ? "✕" : "F"}
                                   </button>
                                 </td>
-                                <td className="px-1 py-1 text-center">
+                                <td className="px-0.5 py-0.5 text-center">
                                   <button type="button" onClick={() => setManualDays(p => p.filter(d => d.id !== day.id))} className="text-muted-foreground hover:text-red-500 transition-colors">
-                                    <X className="h-3.5 w-3.5" />
+                                    <X className="h-3 w-3" />
                                   </button>
                                 </td>
                               </tr>
@@ -3885,12 +3898,12 @@ export default function FechamentoPonto() {
 
               {/* Justificativa */}
               <div>
-                <Label className="mb-1 block">Justificativa <span className="text-xs text-muted-foreground font-normal">(aplica-se a todos os dias)</span></Label>
-                <Textarea value={manualData.justificativa} onChange={e => setManualData(p => ({ ...p, justificativa: e.target.value }))} placeholder="Motivo do lançamento manual..." rows={2} />
+                <Label className="mb-0.5 block text-xs">Justificativa <span className="text-muted-foreground font-normal">(aplica-se a todos os dias)</span></Label>
+                <Textarea value={manualData.justificativa} onChange={e => setManualData(p => ({ ...p, justificativa: e.target.value }))} placeholder="Motivo do lançamento manual..." rows={1} className="text-xs resize-none" />
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+            <div className="flex justify-end gap-3 mt-3 pt-3 border-t">
               <Button variant="outline" onClick={() => setShowManualDialog(false)}>Cancelar</Button>
               <Button onClick={saveManualBatch} disabled={manualSaving} className="bg-[#1B2A4A] hover:bg-[#243660] gap-2">
                 {manualSaving ? "Salvando..." : `Salvar ${manualDays.filter(d => d.data).length > 1 ? manualDays.filter(d => d.data).length + " lançamentos" : "lançamento"}`}
