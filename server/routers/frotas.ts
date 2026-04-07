@@ -5085,9 +5085,10 @@ Sempre retorne JSON válido, sem markdown.`;
       const db = await getDb();
       const { companyId, vehicleId } = input;
 
-      const [vehRes, maintRes, fuelRes, tollRes, finesRes, ipvaRes, licRes, insRes, washRes, parkRes, checkRes, scRes] = await Promise.all([
+      const [vehRes, maintRes, maintItemsRes, fuelRes, tollRes, finesRes, ipvaRes, licRes, insRes, washRes, parkRes, checkRes, scRes] = await Promise.all([
         db.execute(sql`SELECT * FROM vehicles WHERE id = ${vehicleId} AND "companyId" = ${companyId}`),
         db.execute(sql`SELECT fm.*, COALESCE((SELECT SUM(valor_total) FROM fleet_maintenance_items mi WHERE mi.maintenance_id = fm.id AND mi.categoria = 'peca'), 0) as total_pecas, COALESCE((SELECT SUM(valor_total) FROM fleet_maintenance_items mi WHERE mi.maintenance_id = fm.id AND mi.categoria = 'servico'), 0) as total_servico FROM fleet_maintenances fm WHERE fm.vehicle_id = ${vehicleId} AND fm.company_id = ${companyId} ORDER BY fm.data_manutencao DESC`),
+        db.execute(sql`SELECT mi.* FROM fleet_maintenance_items mi JOIN fleet_maintenances fm ON fm.id = mi.maintenance_id WHERE fm.vehicle_id = ${vehicleId} AND fm.company_id = ${companyId} ORDER BY mi.maintenance_id, mi.id`),
         db.execute(sql`SELECT * FROM fleet_fuel_records WHERE vehicle_id = ${vehicleId} AND company_id = ${companyId} ORDER BY data DESC`),
         db.execute(sql`SELECT * FROM fleet_toll_records WHERE vehicle_id = ${vehicleId} AND company_id = ${companyId} ORDER BY data DESC`),
         db.execute(sql`SELECT * FROM fleet_fines WHERE vehicle_id = ${vehicleId} AND company_id = ${companyId} ORDER BY data_infracao DESC`),
@@ -5102,7 +5103,14 @@ Sempre retorne JSON válido, sem markdown.`;
 
       const r = (res: any) => (res as any).rows || res || [];
       const vehicle = r(vehRes)[0] || null;
-      const manutencoes = r(maintRes);
+      const allMaintItems = r(maintItemsRes);
+      const itemsByMaint: Record<number, any[]> = {};
+      for (const mi of allMaintItems) {
+        const mid = mi.maintenance_id;
+        if (!itemsByMaint[mid]) itemsByMaint[mid] = [];
+        itemsByMaint[mid].push(mi);
+      }
+      const manutencoes = r(maintRes).map((m: any) => ({ ...m, itens: itemsByMaint[m.id] || [] }));
       const combustivel = r(fuelRes);
       const pedagios = r(tollRes);
       const multas = r(finesRes);

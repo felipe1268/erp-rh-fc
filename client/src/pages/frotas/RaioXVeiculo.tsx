@@ -10,7 +10,7 @@ import {
   Activity, ClipboardCheck, Droplets, ParkingCircle, Car, Heart, Calendar,
   TrendingUp, ChevronDown, ChevronUp, ShoppingCart, Scale, Receipt, Camera, Printer,
 } from "lucide-react";
-import { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 
 function fmt(v: any) { return Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtDate(d: any) { if (!d) return "—"; const s = String(d).split("T")[0]; return s.split("-").reverse().join("/"); }
@@ -39,6 +39,7 @@ export default function RaioXVeiculo() {
   const [tab, setTab] = useState<Tab>("resumo");
   const [timelineFilter, setTimelineFilter] = useState<string>("todos");
   const [expandedTimeline, setExpandedTimeline] = useState(false);
+  const [expandedManut, setExpandedManut] = useState<number | null>(null);
 
   const { data: vehicles } = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
   const { data: raioX, isLoading } = trpc.frotas.getVehicleRaioX.useQuery(
@@ -618,16 +619,76 @@ export default function RaioXVeiculo() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(raioX.manutencoes || []).map((m: any) => (
-                      <tr key={m.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td className="p-2">{fmtDate(m.data_manutencao)}</td>
-                        <td className="p-2"><Badge variant="outline" className={`text-[9px] ${m.tipo === "preventiva" ? "border-blue-300 text-blue-700" : "border-orange-300 text-orange-700"}`}>{m.tipo}</Badge></td>
-                        <td className="p-2 max-w-[300px] truncate">{m.descricao}</td>
-                        <td className="p-2 text-right">{m.km_na_manutencao ? Number(m.km_na_manutencao).toLocaleString("pt-BR") : "—"}</td>
-                        <td className="p-2 text-right font-semibold">R$ {fmt(m.custo)}</td>
-                        <td className="p-2"><Badge variant="outline" className={`text-[9px] ${m.status === "realizada" ? "border-green-300 text-green-700 bg-green-50" : m.status === "agendada" ? "border-blue-300 text-blue-700 bg-blue-50" : "border-amber-300 text-amber-700 bg-amber-50"}`}>{m.status}</Badge></td>
-                      </tr>
-                    ))}
+                    {(raioX.manutencoes || []).map((m: any) => {
+                      const isExpanded = expandedManut === m.id;
+                      const itens = m.itens || [];
+                      const hasItens = itens.length > 0;
+                      return (
+                        <React.Fragment key={m.id}>
+                          <tr
+                            className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${hasItens ? "cursor-pointer" : ""}`}
+                            onClick={() => hasItens && setExpandedManut(isExpanded ? null : m.id)}
+                          >
+                            <td className="p-2">
+                              <div className="flex items-center gap-1">
+                                {hasItens && (isExpanded ? <ChevronUp className="w-3 h-3 text-slate-400" /> : <ChevronDown className="w-3 h-3 text-slate-400" />)}
+                                {fmtDate(m.data_manutencao)}
+                              </div>
+                            </td>
+                            <td className="p-2"><Badge variant="outline" className={`text-[9px] ${m.tipo === "preventiva" ? "border-blue-300 text-blue-700" : "border-orange-300 text-orange-700"}`}>{m.tipo}</Badge></td>
+                            <td className="p-2 max-w-[300px] truncate">{m.descricao}</td>
+                            <td className="p-2 text-right">{m.km_na_manutencao ? Number(m.km_na_manutencao).toLocaleString("pt-BR") : "—"}</td>
+                            <td className="p-2 text-right font-semibold">R$ {fmt(m.custo)}</td>
+                            <td className="p-2">
+                              <div className="flex items-center gap-1">
+                                <Badge variant="outline" className={`text-[9px] ${m.status === "realizada" ? "border-green-300 text-green-700 bg-green-50" : m.status === "agendada" ? "border-blue-300 text-blue-700 bg-blue-50" : "border-amber-300 text-amber-700 bg-amber-50"}`}>{m.status}</Badge>
+                                {hasItens && <span className="text-[9px] text-slate-400 ml-1">{itens.length} itens</span>}
+                              </div>
+                            </td>
+                          </tr>
+                          {isExpanded && hasItens && (
+                            <tr>
+                              <td colSpan={6} className="p-0">
+                                <div className="bg-slate-50 dark:bg-slate-900 border-l-4 border-orange-400 mx-2 mb-2 rounded-lg overflow-hidden">
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="bg-slate-100 dark:bg-slate-800">
+                                        <th className="text-left p-2 font-semibold text-slate-500">Categoria</th>
+                                        <th className="text-left p-2 font-semibold text-slate-500">Item / Peça / Serviço</th>
+                                        <th className="text-right p-2 font-semibold text-slate-500">Qtd</th>
+                                        <th className="text-right p-2 font-semibold text-slate-500">Vlr. Unit.</th>
+                                        <th className="text-right p-2 font-semibold text-slate-500">Total</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {itens.map((it: any) => (
+                                        <tr key={it.id} className="border-b border-slate-200 dark:border-slate-700 last:border-0">
+                                          <td className="p-2">
+                                            <Badge variant="outline" className={`text-[9px] ${it.categoria === "peca" ? "border-blue-200 text-blue-700 bg-blue-50" : "border-green-200 text-green-700 bg-green-50"}`}>
+                                              {it.categoria === "peca" ? "Peça" : "Serviço"}
+                                            </Badge>
+                                          </td>
+                                          <td className="p-2 font-medium">{it.nome}</td>
+                                          <td className="p-2 text-right">{Number(it.quantidade).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</td>
+                                          <td className="p-2 text-right">R$ {fmt(it.valor_unitario)}</td>
+                                          <td className="p-2 text-right font-bold">R$ {fmt(it.valor_total)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr className="bg-slate-100 dark:bg-slate-800 font-bold">
+                                        <td colSpan={4} className="p-2 text-right text-slate-600">Total dos Itens:</td>
+                                        <td className="p-2 text-right text-orange-700">R$ {fmt(itens.reduce((s: number, it: any) => s + Number(it.valor_total || 0), 0))}</td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {(!raioX.manutencoes || raioX.manutencoes.length === 0) && <p className="text-xs text-slate-400 text-center py-6">Nenhuma manutenção registrada</p>}
