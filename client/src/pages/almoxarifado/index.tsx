@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   Search, Plus, Pencil, Package, ArrowDownCircle, ArrowUpCircle,
   AlertTriangle, Loader2, History, X, BarChart2, Boxes,
-  LayoutGrid, List, Camera, Trash2, ImageOff,
+  LayoutGrid, List, Camera, Trash2, ImageOff, Barcode,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft,
   Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight,
 } from "lucide-react";
@@ -840,8 +840,9 @@ export default function AlmoxarifadoPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
                 className="w-full h-9 pl-9 pr-3 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200"
-                placeholder="Buscar por nome, código ou categoria..."
+                placeholder="Buscar por nome, código de barras ou categoria..."
                 value={busca} onChange={e => setBusca(e.target.value)}
+                autoComplete="off"
               />
             </div>
             {/* Botão de busca por foto (IA) */}
@@ -1143,29 +1144,58 @@ export default function AlmoxarifadoPage() {
                     <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleFotoChange} />
                   </div>
 
-                  {/* Nome */}
-                  <div>
-                    <label className="text-xs font-medium text-gray-700">Nome do Item *</label>
-                    <input
-                      className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200"
-                      placeholder="Ex: Cimento CP-II 50kg"
-                      value={formItem.nome} onChange={e => {
-                        const nome = e.target.value;
-                        if (!categoriaManualment) {
-                          const catList = (categorias as string[]).length > 0 ? categorias as string[] : Object.keys(CATEGORIA_KEYWORDS);
-                          const sugestao = inferirCategoria(nome, catList);
-                          if (sugestao) {
-                            setFormItem(p => ({ ...p, nome, categoria: sugestao }));
-                            setCategoriaAutoSugerida(true);
+                  {/* Código + Nome */}
+                  <div className="grid grid-cols-[140px_1fr] gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-700">Código / Barras</label>
+                      <div className="relative mt-1">
+                        <input
+                          className="w-full h-9 pl-3 pr-8 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200 font-mono"
+                          placeholder="Ex: 001234"
+                          value={formItem.codigoInterno}
+                          onChange={e => setFormItem(p => ({ ...p, codigoInterno: e.target.value }))}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const code = formItem.codigoInterno.trim();
+                              if (code && itens.length > 0) {
+                                const found = itens.find((it: any) => it.codigoInterno && it.codigoInterno.toLowerCase() === code.toLowerCase());
+                                if (found) {
+                                  toast.info(`Item "${found.nome}" encontrado com código ${code}`);
+                                  abrirEditar(found);
+                                }
+                              }
+                            }
+                          }}
+                          autoComplete="off"
+                        />
+                        <Barcode className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300 pointer-events-none" />
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Código de barras ou interno</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-700">Nome do Item *</label>
+                      <input
+                        className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200"
+                        placeholder="Ex: Cimento CP-II 50kg"
+                        value={formItem.nome} onChange={e => {
+                          const nome = e.target.value;
+                          if (!categoriaManualment) {
+                            const catList = (categorias as string[]).length > 0 ? categorias as string[] : Object.keys(CATEGORIA_KEYWORDS);
+                            const sugestao = inferirCategoria(nome, catList);
+                            if (sugestao) {
+                              setFormItem(p => ({ ...p, nome, categoria: sugestao }));
+                              setCategoriaAutoSugerida(true);
+                            } else {
+                              setFormItem(p => ({ ...p, nome, categoria: categoriaAutoSugerida ? "" : p.categoria }));
+                              setCategoriaAutoSugerida(false);
+                            }
                           } else {
-                            setFormItem(p => ({ ...p, nome, categoria: categoriaAutoSugerida ? "" : p.categoria }));
-                            setCategoriaAutoSugerida(false);
+                            setFormItem(p => ({ ...p, nome }));
                           }
-                        } else {
-                          setFormItem(p => ({ ...p, nome }));
-                        }
-                      }}
-                    />
+                        }}
+                      />
+                    </div>
                   </div>
 
                   {/* Unidade + Categoria */}
