@@ -1847,6 +1847,63 @@ export const payrollEngineRouter = router({
       return { message: "Vale revertido com sucesso" };
     }),
 
+  editarValorVale: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      employeeId: z.number(),
+      novoValor: z.string(),
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user?.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas usuários Master podem editar valores de vale." });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const valorNum = parseFloat(input.novoValor.replace(/[^\d.,]/g, "").replace(",", "."));
+      if (isNaN(valorNum) || valorNum < 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Valor inválido." });
+      }
+      const valorFormatado = valorNum.toFixed(2);
+
+      const oldRows = ((await db.execute(sql`
+        SELECT "valorTotalVale", "valorAdiantamento" FROM payroll_advances
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${input.employeeId}
+      `)) as any).rows || [];
+      if (oldRows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Registro de vale não encontrado." });
+      }
+      const valorAnterior = oldRows[0].valorTotalVale;
+      const editadoPor = ctx.user.name || "Master";
+      const obs = `[EDITADO por ${editadoPor}: R$ ${valorAnterior} → R$ ${valorFormatado}${input.motivo ? ` | Motivo: ${input.motivo}` : ""}]`;
+
+      await db.execute(sql`
+        UPDATE payroll_advances
+        SET "valorTotalVale" = ${valorFormatado},
+            "valorAdiantamento" = ${valorFormatado},
+            "observacoes" = COALESCE("observacoes", '') || ${' ' + obs},
+            "updatedAt" = NOW()
+        WHERE "companyId" = ${input.companyId}
+          AND "mesReferencia" = ${input.mesReferencia}
+          AND "employeeId" = ${input.employeeId}
+      `);
+
+      await db.execute(sql`
+        UPDATE financial_events
+        SET valor = ${valorFormatado},
+            descricao = descricao || ${` (valor editado: ${valorAnterior} → ${valorFormatado})`}
+        WHERE "companyId" = ${input.companyId}
+          AND "mesCompetencia" = ${input.mesReferencia}
+          AND "employeeId" = ${input.employeeId}
+          AND "origemTipo" = 'payroll_advance'
+          AND tipo = 'saida_vale'
+      `);
+
+      return { success: true, valorAnterior, novoValor: valorFormatado, message: `Vale editado: R$ ${valorAnterior} → R$ ${valorFormatado}` };
+    }),
+
   // ============================================================
   // 6. SIMULAR PAGAMENTO
   // ============================================================

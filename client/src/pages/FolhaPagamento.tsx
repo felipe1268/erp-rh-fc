@@ -354,6 +354,18 @@ export default function FolhaPagamento() {
     onError: (err) => toast.error(`Erro ao reverter vale: ${err.message}`),
   });
 
+  const editarValeMut = trpc.payrollEngine.editarValorVale.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      setValeEditId(null);
+      setValeEditValor("");
+      gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
+    },
+    onError: (err) => toast.error(`Erro: ${err.message}`),
+  });
+  const [valeEditId, setValeEditId] = useState<number | null>(null);
+  const [valeEditValor, setValeEditValor] = useState("");
+
   // ===== HE MÓDULO =====
   const hePeriods = trpc.horasExtras.listarPeriods.useQuery(
     { companyId, mesReferencia: mesAno },
@@ -1895,7 +1907,45 @@ export default function FolhaPagamento() {
                             </div>
                           </td>
                           <td className="text-right py-2 px-2 font-medium text-red-600">{f.faltas}</td>
-                          <td className="text-right py-2 px-2 font-bold">{formatBRL(f.valorTotalVale)}</td>
+                          <td className="text-right py-2 px-2 font-bold">
+                            {valeEditId === f.employeeId ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-xs text-slate-400">R$</span>
+                                <input
+                                  type="text"
+                                  value={valeEditValor}
+                                  onChange={e => setValeEditValor(e.target.value)}
+                                  className="w-24 h-7 text-right text-sm border rounded px-1 font-bold"
+                                  autoFocus
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") {
+                                      editarValeMut.mutate({ companyId, mesReferencia: mesAno, employeeId: f.employeeId, novoValor: valeEditValor });
+                                    } else if (e.key === "Escape") {
+                                      setValeEditId(null); setValeEditValor("");
+                                    }
+                                  }}
+                                />
+                                <button className="text-green-600 hover:text-green-800" title="Salvar" disabled={editarValeMut.isPending}
+                                  onClick={() => editarValeMut.mutate({ companyId, mesReferencia: mesAno, employeeId: f.employeeId, novoValor: valeEditValor })}>
+                                  <Save className="h-3.5 w-3.5" />
+                                </button>
+                                <button className="text-slate-400 hover:text-slate-600" title="Cancelar"
+                                  onClick={() => { setValeEditId(null); setValeEditValor(""); }}>
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1">
+                                {formatBRL(f.valorTotalVale)}
+                                {isMaster && (
+                                  <button className="text-slate-300 hover:text-blue-600 transition-colors no-print" title="Editar valor (Master)"
+                                    onClick={() => { setValeEditId(f.employeeId); setValeEditValor(String(parseFloat(String(f.valorTotalVale || "0").replace(/[^\d.,]/g, "").replace(",", ".")).toFixed(2))); }}>
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
                           <td className="text-center py-2 px-2 no-print">
                             <div className="flex items-center justify-center gap-1">
                               <Button size="sm" variant="outline" className="h-7 px-2 text-xs border-green-500 text-green-700 hover:bg-green-50"
@@ -2030,7 +2080,45 @@ export default function FolhaPagamento() {
                           </td>
                           <td className="text-right py-2 px-2">{formatBRL(f.salarioBruto)}</td>
                           <td className="text-right py-2 px-2">{formatBRL(f.valorAdiantamento)}</td>
-                          <td className={`text-right py-2 px-2 font-bold ${isHighlighted ? "line-through text-red-500" : ""}`}>{formatBRL(f.valorTotalVale)}</td>
+                          <td className={`text-right py-2 px-2 font-bold ${isHighlighted ? "line-through text-red-500" : ""}`}>
+                            {valeEditId === f.employeeId ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-xs text-slate-400">R$</span>
+                                <input
+                                  type="text"
+                                  value={valeEditValor}
+                                  onChange={e => setValeEditValor(e.target.value)}
+                                  className="w-24 h-7 text-right text-sm border rounded px-1 font-bold"
+                                  autoFocus
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") {
+                                      editarValeMut.mutate({ companyId, mesReferencia: mesAno, employeeId: f.employeeId, novoValor: valeEditValor });
+                                    } else if (e.key === "Escape") {
+                                      setValeEditId(null); setValeEditValor("");
+                                    }
+                                  }}
+                                />
+                                <button className="text-green-600 hover:text-green-800" title="Salvar" disabled={editarValeMut.isPending}
+                                  onClick={() => editarValeMut.mutate({ companyId, mesReferencia: mesAno, employeeId: f.employeeId, novoValor: valeEditValor })}>
+                                  <Save className="h-3.5 w-3.5" />
+                                </button>
+                                <button className="text-slate-400 hover:text-slate-600" title="Cancelar"
+                                  onClick={() => { setValeEditId(null); setValeEditValor(""); }}>
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1">
+                                {formatBRL(f.valorTotalVale)}
+                                {isMaster && !isRejeitado && (
+                                  <button className="text-slate-300 hover:text-blue-600 transition-colors no-print" title="Editar valor (Master)"
+                                    onClick={() => { setValeEditId(f.employeeId); setValeEditValor(String(parseFloat(String(f.valorTotalVale || "0").replace(/[^\d.,]/g, "").replace(",", ".")).toFixed(2))); }}>
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
                           <td className="text-center py-2 px-2">
                             {isRejeitado ? (
                               <button
