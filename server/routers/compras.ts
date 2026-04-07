@@ -651,6 +651,19 @@ export const comprasRouter = router({
       agencia:         z.string().optional(),
       conta:           z.string().optional(),
       pix:             z.string().optional(),
+      naturezaJuridica: z.string().optional(),
+      porte:            z.string().optional(),
+      capitalSocial:    z.string().optional(),
+      atividadePrincipal: z.string().optional(),
+      atividadesCnae:   z.string().optional(),
+      dataAbertura:     z.string().optional(),
+      regimeTributario: z.string().optional(),
+      inscricaoEstadual: z.string().optional(),
+      inscricaoMunicipal: z.string().optional(),
+      representanteLegal: z.string().optional(),
+      representanteCpf:   z.string().optional(),
+      representanteCargo: z.string().optional(),
+      socios:           z.array(z.any()).optional(),
       categorias:      z.array(z.string()).optional(),
       observacoes:     z.string().optional(),
     }))
@@ -678,6 +691,19 @@ export const comprasRouter = router({
         agencia:         input.agencia ?? null,
         conta:           input.conta ?? null,
         pix:             input.pix ?? null,
+        naturezaJuridica: input.naturezaJuridica ?? null,
+        porte:            input.porte ?? null,
+        capitalSocial:    input.capitalSocial ?? null,
+        atividadePrincipal: input.atividadePrincipal ?? null,
+        atividadesCnae:   input.atividadesCnae ?? null,
+        dataAbertura:     input.dataAbertura ?? null,
+        regimeTributario: input.regimeTributario ?? null,
+        inscricaoEstadual: input.inscricaoEstadual ?? null,
+        inscricaoMunicipal: input.inscricaoMunicipal ?? null,
+        representanteLegal: input.representanteLegal ?? null,
+        representanteCpf:   input.representanteCpf ?? null,
+        representanteCargo: input.representanteCargo ?? null,
+        socios:           sql`${JSON.stringify(input.socios ?? [])}::json`,
         categorias:      sql`${JSON.stringify(input.categorias ?? [])}::json`,
         observacoes:     input.observacoes ?? null,
         ativo:           true,
@@ -708,16 +734,32 @@ export const comprasRouter = router({
       agencia:         z.string().optional(),
       conta:           z.string().optional(),
       pix:             z.string().optional(),
+      naturezaJuridica: z.string().optional(),
+      porte:            z.string().optional(),
+      capitalSocial:    z.string().optional(),
+      atividadePrincipal: z.string().optional(),
+      atividadesCnae:   z.string().optional(),
+      dataAbertura:     z.string().optional(),
+      regimeTributario: z.string().optional(),
+      inscricaoEstadual: z.string().optional(),
+      inscricaoMunicipal: z.string().optional(),
+      representanteLegal: z.string().optional(),
+      representanteCpf:   z.string().optional(),
+      representanteCargo: z.string().optional(),
+      socios:           z.array(z.any()).optional(),
       categorias:      z.array(z.string()).optional(),
       observacoes:     z.string().optional(),
       ativo:           z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const { id, categorias, ...rest } = input;
+      const { id, categorias, socios, ...rest } = input;
       const data: any = { ...rest, atualizadoEm: new Date().toISOString() };
       if (categorias !== undefined) {
         data.categorias = sql`${JSON.stringify(categorias)}::json`;
+      }
+      if (socios !== undefined) {
+        data.socios = sql`${JSON.stringify(socios)}::json`;
       }
       await db.update(fornecedores)
         .set(data)
@@ -742,17 +784,48 @@ export const comprasRouter = router({
       const cnpjLimpo = input.cnpj.replace(/\D/g, "");
       if (cnpjLimpo.length !== 14) throw new TRPCError({ code: "BAD_REQUEST", message: "CNPJ inválido" });
 
+      function extrairSocios(qsa: any[]): { nome: string; qualificacao: string; cpfMascarado: string; dataEntrada: string; faixaEtaria: string; representanteLegal: string }[] {
+        if (!Array.isArray(qsa)) return [];
+        return qsa.map((s: any) => ({
+          nome: s.nome_socio || s.nome || "",
+          qualificacao: s.qualificacao_socio || s.qual || "",
+          cpfMascarado: s.cnpj_cpf_do_socio || "",
+          dataEntrada: s.data_entrada_sociedade || "",
+          faixaEtaria: s.faixa_etaria || "",
+          representanteLegal: s.nome_representante_legal || "",
+        }));
+      }
+
+      function encontrarRepresentante(qsa: any[]): { nome: string; cpf: string; cargo: string } {
+        if (!Array.isArray(qsa) || qsa.length === 0) return { nome: "", cpf: "", cargo: "" };
+        const admin = qsa.find((s: any) => {
+          const q = (s.qualificacao_socio || s.qual || "").toLowerCase();
+          return q.includes("administrador") || q.includes("diretor") || q.includes("presidente") || q.includes("gerente");
+        });
+        const rep = admin || qsa[0];
+        return {
+          nome: rep.nome_socio || rep.nome || "",
+          cpf: rep.cnpj_cpf_do_socio || "",
+          cargo: rep.qualificacao_socio || rep.qual || "",
+        };
+      }
+
       async function tentarBrasilAPI() {
         const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) return null;
         const data = await res.json() as any;
+        const socios = extrairSocios(data.qsa);
+        const rep = encontrarRepresentante(data.qsa);
+        const cnaesSecundarios = Array.isArray(data.cnaes_secundarios)
+          ? data.cnaes_secundarios.map((c: any) => `${c.codigo} - ${c.descricao}`).join("; ")
+          : "";
         return {
           cnpj:            cnpjLimpo,
           razaoSocial:     data.razao_social ?? "",
           nomeFantasia:    data.nome_fantasia ?? "",
           situacaoReceita: data.descricao_situacao_cadastral ?? "",
           situacaoCodigo:  data.codigo_situacao_cadastral ?? 0,
-          endereco:        data.logradouro ? `${data.tipo_logradouro ?? ""} ${data.logradouro}`.trim() : "",
+          endereco:        data.logradouro ? `${data.descricao_tipo_de_logradouro ?? ""} ${data.logradouro}`.trim() : "",
           numero:          data.numero ?? "",
           complemento:     data.complemento ?? "",
           bairro:          data.bairro ?? "",
@@ -761,6 +834,17 @@ export const comprasRouter = router({
           cep:             data.cep ?? "",
           telefone:        data.ddd_telefone_1 ?? "",
           email:           data.email ?? "",
+          naturezaJuridica: data.natureza_juridica ?? "",
+          porte:           data.porte ?? "",
+          capitalSocial:   data.capital_social != null ? String(data.capital_social) : "",
+          atividadePrincipal: data.cnae_fiscal_descricao ?? "",
+          atividadesCnae:  cnaesSecundarios,
+          dataAbertura:    data.data_inicio_atividade ?? "",
+          regimeTributario: data.opcao_pelo_simples ? "Simples Nacional" : data.opcao_pelo_mei ? "MEI" : data.regime_tributario ?? "",
+          socios,
+          representanteLegal: rep.nome,
+          representanteCpf:   rep.cpf,
+          representanteCargo: rep.cargo,
         };
       }
 
@@ -772,6 +856,23 @@ export const comprasRouter = router({
         if (!res.ok) return null;
         const d = await res.json() as any;
         if (d.status === "ERROR") return null;
+        const socios = Array.isArray(d.qsa) ? d.qsa.map((s: any) => ({
+          nome: s.nome || "",
+          qualificacao: s.qual || "",
+          cpfMascarado: "",
+          dataEntrada: "",
+          faixaEtaria: "",
+          representanteLegal: "",
+        })) : [];
+        const rep = socios.length > 0 ? {
+          nome: socios.find((s: any) => (s.qualificacao || "").toLowerCase().includes("administrador"))?.nome || socios[0].nome,
+          cpf: "",
+          cargo: socios.find((s: any) => (s.qualificacao || "").toLowerCase().includes("administrador"))?.qualificacao || socios[0].qualificacao,
+        } : { nome: "", cpf: "", cargo: "" };
+        const ativPrincipal = d.atividade_principal?.[0]?.text || "";
+        const cnaesSecundarios = Array.isArray(d.atividades_secundarias)
+          ? d.atividades_secundarias.map((a: any) => `${a.code} - ${a.text}`).join("; ")
+          : "";
         return {
           cnpj:            cnpjLimpo,
           razaoSocial:     d.nome ?? "",
@@ -787,6 +888,17 @@ export const comprasRouter = router({
           cep:             (d.cep ?? "").replace(/[.\-]/g, ""),
           telefone:        d.telefone ?? "",
           email:           d.email ?? "",
+          naturezaJuridica: d.natureza_juridica ?? "",
+          porte:           d.porte ?? "",
+          capitalSocial:   d.capital_social ?? "",
+          atividadePrincipal: ativPrincipal,
+          atividadesCnae:  cnaesSecundarios,
+          dataAbertura:    d.abertura ?? "",
+          regimeTributario: d.simples?.optante ? "Simples Nacional" : "",
+          socios,
+          representanteLegal: rep.nome,
+          representanteCpf:   rep.cpf,
+          representanteCargo: rep.cargo,
         };
       }
 

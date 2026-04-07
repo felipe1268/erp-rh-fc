@@ -221,11 +221,17 @@ function situacaoBadge(s?: string | null) {
   return <Badge variant="outline">{s}</Badge>;
 }
 
+type Socio = { nome: string; qualificacao: string; cpfMascarado: string; dataEntrada: string; faixaEtaria: string; representanteLegal: string };
+
 const EMPTY_FORM = {
   cnpj: "", razaoSocial: "", nomeFantasia: "", situacaoReceita: "",
   endereco: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "", cep: "",
   telefone: "", email: "", contatoNome: "", contatoCelular: "", contatoEmail: "",
   banco: "", agencia: "", conta: "", pix: "", categorias: [] as string[], observacoes: "",
+  naturezaJuridica: "", porte: "", capitalSocial: "", atividadePrincipal: "", atividadesCnae: "",
+  dataAbertura: "", regimeTributario: "", inscricaoEstadual: "", inscricaoMunicipal: "",
+  representanteLegal: "", representanteCpf: "", representanteCargo: "",
+  socios: [] as Socio[],
 };
 
 export default function Fornecedores() {
@@ -367,6 +373,14 @@ export default function Fornecedores() {
       estado: f.estado ?? "", cep: f.cep ?? "", telefone: maskPhone(f.telefone ?? ""), email: f.email ?? "",
       contatoNome: f.contatoNome ?? "", contatoCelular: maskPhone(f.contatoCelular ?? ""), contatoEmail: f.contatoEmail ?? "",
       banco: f.banco ?? "", agencia: f.agencia ?? "", conta: f.conta ?? "", pix: f.pix ?? "",
+      naturezaJuridica: f.naturezaJuridica ?? "", porte: f.porte ?? "",
+      capitalSocial: f.capitalSocial ?? "", atividadePrincipal: f.atividadePrincipal ?? "",
+      atividadesCnae: f.atividadesCnae ?? "", dataAbertura: f.dataAbertura ?? "",
+      regimeTributario: f.regimeTributario ?? "", inscricaoEstadual: f.inscricaoEstadual ?? "",
+      inscricaoMunicipal: f.inscricaoMunicipal ?? "",
+      representanteLegal: f.representanteLegal ?? "", representanteCpf: f.representanteCpf ?? "",
+      representanteCargo: f.representanteCargo ?? "",
+      socios: Array.isArray(f.socios) ? f.socios : [],
       categorias: Array.isArray(f.categorias) ? f.categorias : [], observacoes: f.observacoes ?? "",
     });
     setEditando(f.id);
@@ -440,8 +454,20 @@ export default function Fornecedores() {
         cep: d.cep || prev.cep,
         telefone: maskPhone(d.telefone || prev.telefone),
         email: d.email || prev.email,
+        naturezaJuridica: d.naturezaJuridica ?? "",
+        porte: d.porte ?? "",
+        capitalSocial: d.capitalSocial ?? "",
+        atividadePrincipal: d.atividadePrincipal ?? "",
+        atividadesCnae: d.atividadesCnae ?? "",
+        dataAbertura: d.dataAbertura ?? "",
+        regimeTributario: d.regimeTributario ?? "",
+        representanteLegal: d.representanteLegal ?? "",
+        representanteCpf: d.representanteCpf ?? "",
+        representanteCargo: d.representanteCargo ?? "",
+        socios: Array.isArray(d.socios) ? d.socios : [],
       }));
-      toast.success("Dados do CNPJ carregados com sucesso!");
+      const qtdSocios = Array.isArray(d.socios) ? d.socios.length : 0;
+      toast.success(`Dados do CNPJ carregados! ${qtdSocios > 0 ? `${qtdSocios} sócio(s) encontrado(s).` : ""}`);
     } catch {
       setErroCNPJ("Não foi possível consultar a Receita Federal no momento. Preencha os dados manualmente.");
     } finally {
@@ -840,7 +866,7 @@ export default function Fornecedores() {
 
             {/* Cards de resumo (como na tela de contrato) */}
             <div className="px-6 py-4">
-              <div className="grid grid-cols-4 gap-3 mb-5">
+              <div className="grid grid-cols-5 gap-3 mb-5">
                 <div className="bg-white rounded-xl border border-blue-100 p-3.5 shadow-sm">
                   <p className="text-[10px] font-medium text-blue-500 uppercase tracking-wide mb-1">Endereço</p>
                   <p className="text-sm font-semibold text-slate-800 truncate">
@@ -852,6 +878,11 @@ export default function Fornecedores() {
                   <p className="text-[10px] font-medium text-emerald-500 uppercase tracking-wide mb-1">Contato</p>
                   <p className="text-sm font-semibold text-slate-800 truncate">{form.telefone || "Não informado"}</p>
                   <p className="text-[11px] text-slate-400 truncate">{form.email || "—"}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-rose-100 p-3.5 shadow-sm">
+                  <p className="text-[10px] font-medium text-rose-500 uppercase tracking-wide mb-1">Representante Legal</p>
+                  <p className="text-sm font-semibold text-slate-800 truncate">{form.representanteLegal || "Não informado"}</p>
+                  <p className="text-[11px] text-slate-400 truncate">{form.representanteCargo || "—"}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-amber-100 p-3.5 shadow-sm">
                   <p className="text-[10px] font-medium text-amber-500 uppercase tracking-wide mb-1">Banco</p>
@@ -960,6 +991,65 @@ export default function Fornecedores() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Dados Jurídicos / Receita Federal */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                        <FileText className="h-3.5 w-3.5 text-indigo-600" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-700">Dados Jurídicos / Receita Federal</span>
+                      {form.naturezaJuridica && (
+                        <Badge className="bg-indigo-100 text-indigo-700 text-[10px] border-0 ml-auto">Receita</Badge>
+                      )}
+                    </div>
+                    <div className="p-4 space-y-2.5">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[11px] text-slate-500">Natureza Jurídica</Label>
+                          <Input value={form.naturezaJuridica} onChange={e => setForm(p => ({ ...p, naturezaJuridica: e.target.value }))} className="mt-0.5 h-8 text-sm" placeholder="Ex: Sociedade Empresária Limitada" />
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-slate-500">Porte</Label>
+                          <Input value={form.porte} onChange={e => setForm(p => ({ ...p, porte: e.target.value }))} className="mt-0.5 h-8 text-sm" placeholder="Ex: ME, EPP, Demais" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <Label className="text-[11px] text-slate-500">Capital Social (R$)</Label>
+                          <Input value={form.capitalSocial} onChange={e => setForm(p => ({ ...p, capitalSocial: e.target.value }))} className="mt-0.5 h-8 text-sm" placeholder="100000" />
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-slate-500">Data de Abertura</Label>
+                          <Input value={form.dataAbertura} onChange={e => setForm(p => ({ ...p, dataAbertura: e.target.value }))} className="mt-0.5 h-8 text-sm" placeholder="2023-01-15" />
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-slate-500">Regime Tributário</Label>
+                          <Input value={form.regimeTributario} onChange={e => setForm(p => ({ ...p, regimeTributario: e.target.value }))} className="mt-0.5 h-8 text-sm" placeholder="Simples Nacional" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-slate-500">Atividade Principal (CNAE)</Label>
+                        <Input value={form.atividadePrincipal} onChange={e => setForm(p => ({ ...p, atividadePrincipal: e.target.value }))} className="mt-0.5 h-8 text-sm" />
+                      </div>
+                      {form.atividadesCnae && (
+                        <div>
+                          <Label className="text-[11px] text-slate-500">Atividades Secundárias (CNAEs)</Label>
+                          <Textarea value={form.atividadesCnae} onChange={e => setForm(p => ({ ...p, atividadesCnae: e.target.value }))} className="mt-0.5 text-xs resize-none" rows={2} />
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[11px] text-slate-500">Inscrição Estadual</Label>
+                          <Input value={form.inscricaoEstadual} onChange={e => setForm(p => ({ ...p, inscricaoEstadual: e.target.value }))} className="mt-0.5 h-8 text-sm" />
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-slate-500">Inscrição Municipal</Label>
+                          <Input value={form.inscricaoMunicipal} onChange={e => setForm(p => ({ ...p, inscricaoMunicipal: e.target.value }))} className="mt-0.5 h-8 text-sm" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* COLUNA DIREITA */}
@@ -993,6 +1083,68 @@ export default function Fornecedores() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Representante Legal */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center">
+                        <KeyRound className="h-3.5 w-3.5 text-rose-600" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-700">Representante Legal</span>
+                      {form.representanteLegal && (
+                        <Badge className="bg-rose-100 text-rose-700 text-[10px] border-0 ml-auto">Identificado</Badge>
+                      )}
+                    </div>
+                    <div className="p-4 space-y-2.5">
+                      <div>
+                        <Label className="text-[11px] text-slate-500">Nome Completo</Label>
+                        <Input value={form.representanteLegal} onChange={e => setForm(p => ({ ...p, representanteLegal: e.target.value }))} className="mt-0.5 h-8 text-sm" placeholder="Nome do representante legal / administrador" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[11px] text-slate-500">CPF</Label>
+                          <Input value={form.representanteCpf} onChange={e => setForm(p => ({ ...p, representanteCpf: e.target.value }))} className="mt-0.5 h-8 text-sm" placeholder="***000000**" />
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-slate-500">Cargo / Qualificação</Label>
+                          <Input value={form.representanteCargo} onChange={e => setForm(p => ({ ...p, representanteCargo: e.target.value }))} className="mt-0.5 h-8 text-sm" placeholder="Sócio-Administrador" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quadro Societário (QSA) */}
+                  {form.socios.length > 0 && (
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-cyan-50 flex items-center justify-center">
+                          <Users className="h-3.5 w-3.5 text-cyan-600" />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">Quadro Societário (QSA)</span>
+                        <Badge className="bg-cyan-100 text-cyan-700 text-[10px] border-0 ml-auto">{form.socios.length} sócio{form.socios.length !== 1 ? "s" : ""}</Badge>
+                      </div>
+                      <div className="p-3">
+                        <div className="space-y-2">
+                          {form.socios.map((s, i) => (
+                            <div key={i} className="flex items-start gap-3 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                              <div className="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center shrink-0 mt-0.5">
+                                <span className="text-xs font-bold text-cyan-700">{(s.nome || "?")[0]}</span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-slate-800 truncate">{s.nome}</p>
+                                <p className="text-[11px] text-slate-500">{s.qualificacao}</p>
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                                  {s.cpfMascarado && <span className="text-[10px] text-slate-400">CPF: {s.cpfMascarado}</span>}
+                                  {s.dataEntrada && <span className="text-[10px] text-slate-400">Entrada: {s.dataEntrada}</span>}
+                                  {s.faixaEtaria && <span className="text-[10px] text-slate-400">{s.faixaEtaria}</span>}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Categorias */}
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
