@@ -343,10 +343,32 @@ export default function FolhaPagamento() {
   );
 
   const espelhoSaveMut = trpc.fechamentoPonto.manualEntry.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast.success("Ponto salvo com sucesso");
       setEspelhoEditDate(null);
       espelhoPopupQ.refetch();
+      if (afericaoResult?.divergenciasList) {
+        const editedDate = variables.data;
+        const editedEmpId = variables.employeeId;
+        const removidos = afericaoResult.divergenciasList.filter(
+          (d: any) => String(d.employeeId) === String(editedEmpId) && d.data === editedDate
+        );
+        const updated = {
+          ...afericaoResult,
+          divergenciasList: afericaoResult.divergenciasList.filter(
+            (d: any) => !(String(d.employeeId) === String(editedEmpId) && d.data === editedDate)
+          ),
+        };
+        updated.divergencias = updated.divergenciasList.length;
+        const semRegRemovidos = removidos.filter((d: any) => d.tipo === 'sem_registro').length;
+        const faltasRemovidas = removidos.filter((d: any) => d.tipo === 'falta').length;
+        const atrasosRemovidos = removidos.filter((d: any) => d.tipo === 'atraso').length;
+        if (semRegRemovidos > 0) updated.semRegistro = Math.max(0, (updated.semRegistro || 0) - semRegRemovidos);
+        if (faltasRemovidas > 0) updated.faltas = Math.max(0, (updated.faltas || 0) - faltasRemovidas);
+        if (atrasosRemovidos > 0) updated.atrasos = Math.max(0, (updated.atrasos || 0) - atrasosRemovidos);
+        updated.totalOk = (updated.totalAferidos || 0) - updated.divergencias;
+        setAfericaoResult(updated);
+      }
     },
     onError: (err: any) => toast.error(`Erro ao salvar: ${err.message}`),
   });
@@ -4940,7 +4962,15 @@ export default function FolhaPagamento() {
                                         if (!d.adjustmentId) { toast.error("ID do ajuste não encontrado. Refaça a aferição."); return; }
                                         decidirAfericaoMut.mutate(
                                           { companyId, companyIds, mesReferencia: mesAno, decisoes: [{ adjustmentId: d.adjustmentId, decisao: "falta_real" }] },
-                                          { onSuccess: () => { d._confirmado = true; setAfericaoResult({ ...afericaoResult }); } }
+                                          { onSuccess: () => {
+                                            d._confirmado = true;
+                                            const upd = { ...afericaoResult };
+                                            if (d.tipo === 'sem_registro') upd.semRegistro = Math.max(0, (upd.semRegistro || 0) - 1);
+                                            else if (d.tipo === 'falta') upd.faltas = Math.max(0, (upd.faltas || 0) - 1);
+                                            else if (d.tipo === 'atraso') upd.atrasos = Math.max(0, (upd.atrasos || 0) - 1);
+                                            upd.divergencias = Math.max(0, (upd.divergencias || 0) - 1);
+                                            setAfericaoResult(upd);
+                                          } }
                                         );
                                       }}
                                       title="Confirmar desconto"
@@ -4969,7 +4999,15 @@ export default function FolhaPagamento() {
                                           if (!d.adjustmentId) { toast.error("ID do ajuste não encontrado. Refaça a aferição."); return; }
                                           decidirAfericaoMut.mutate(
                                             { companyId, companyIds, mesReferencia: mesAno, decisoes: [{ adjustmentId: d.adjustmentId, decisao: "erro_relogio" }] },
-                                            { onSuccess: () => { d._cancelado = true; setAfericaoResult({ ...afericaoResult }); } }
+                                            { onSuccess: () => {
+                                              d._cancelado = true;
+                                              const upd = { ...afericaoResult };
+                                              if (d.tipo === 'sem_registro') upd.semRegistro = Math.max(0, (upd.semRegistro || 0) - 1);
+                                              else if (d.tipo === 'falta') upd.faltas = Math.max(0, (upd.faltas || 0) - 1);
+                                              else if (d.tipo === 'atraso') upd.atrasos = Math.max(0, (upd.atrasos || 0) - 1);
+                                              upd.divergencias = Math.max(0, (upd.divergencias || 0) - 1);
+                                              setAfericaoResult(upd);
+                                            } }
                                           );
                                         }}
                                         title="Marcar como erro do relógio (trabalhado normalmente)"
