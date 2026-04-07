@@ -1694,8 +1694,10 @@ export const payrollEngineRouter = router({
         const valorAdiantamento = salarioBruto * (percentual / 100);
 
         // ── IRRF sobre adiantamento (proporcional ao percentual) ──────
-        const inssEmpregado = calcularINSS(salarioMensalCompleto);
-        const baseIR = salarioMensalCompleto - inssEmpregado;
+        // Para desligados/férias, usar salário real do mês (proporcional), não o cheio
+        const salarioBaseIR = (diasAusentesAviso > 0 || diasFeriasNoMes > 0) ? salarioBruto : salarioMensalCompleto;
+        const inssEmpregado = calcularINSS(salarioBaseIR);
+        const baseIR = salarioBaseIR - inssEmpregado;
         const irrfMensal = calcularIRRF(baseIR);
         const irAdiantamento = irrfMensal > 0 ? Math.round(irrfMensal * (percentual / 100) * 100) / 100 : 0;
         const valorTotalVale = valorAdiantamento;
