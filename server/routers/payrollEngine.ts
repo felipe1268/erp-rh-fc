@@ -1405,7 +1405,7 @@ export const payrollEngineRouter = router({
           await db.execute(sql`
             UPDATE payroll_adjustments SET 
               status = 'cancelado',
-              descricao = CONCAT(descricao, ${sufixo})
+              descricao = COALESCE(descricao, '') || ${sufixo}::text
             WHERE id = ${dec.adjustmentId} AND "companyId" = ${input.companyId}
           `);
           const adjRow = ((await db.execute(sql`
@@ -1429,7 +1429,7 @@ export const payrollEngineRouter = router({
             UPDATE payroll_adjustments SET 
               status = 'pendente',
               tipo = 'falta',
-              descricao = CONCAT(descricao, ${sufixo2})
+              descricao = COALESCE(descricao, '') || ${sufixo2}::text
             WHERE id = ${dec.adjustmentId} AND "companyId" = ${input.companyId}
           `);
           const adjRow2 = ((await db.execute(sql`
