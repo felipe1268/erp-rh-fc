@@ -139,7 +139,7 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl w-[95vw] h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Layers className="h-5 w-5 text-violet-600" />
