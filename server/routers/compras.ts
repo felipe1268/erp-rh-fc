@@ -9100,7 +9100,8 @@ DISCIPLINAS TÍPICAS (use estas preferencialmente, pode criar outras se necessá
 - Elétrica (eletroduto, fio, cabo elétrico, disjuntor, quadro elétrico, tomada, interruptor, luminária, iluminação)
 - Hidráulica (tubo água, registro, válvula, torneira, louça sanitária, metais, caixa d'água)
 - Esgoto / Drenagem (tubo esgoto, caixa de gordura, caixa de inspeção, fossa, sumidouro, drenagem pluvial)
-- PCI (prevenção combate incêndio, sprinkler, hidrante, detector fumaça, alarme incêndio, extintor, porta corta-fogo, central de incêndio, mangueira incêndio)
+- PCI Elétrica (detector de fumaça, alarme de incêndio, central de alarme, acionador manual, sirene, sinalização emergência, iluminação emergência, luz emergência, botoeira, painel de incêndio)
+- PCI Hidráulica (sprinkler, hidrante, mangueira incêndio, bomba de incêndio, reservatório incêndio, tubo incêndio, registro recalque, caixa de hidrante, chuveiro automático, válvula governo, extintor, porta corta-fogo)
 - CFTV (câmera, DVR, NVR, monitoramento, vigilância eletrônica)
 - Cabeamento Estruturado / Dados (cabo de rede, patch panel, rack, fibra óptica, switch, ponto de rede, dados, telecom)
 - Automação (controle de acesso, portaria, interfone, automação predial, BMS)
@@ -9114,9 +9115,9 @@ DISCIPLINAS TÍPICAS (use estas preferencialmente, pode criar outras se necessá
 REGRAS IMPORTANTES:
 1. Cada item recebe EXATAMENTE uma disciplina
 2. Use nomes curtos e padronizados — PREFERENCIALMENTE os nomes da lista acima
-3. NÃO USE "Instalações Especiais" como categoria genérica. Separe em: PCI, CFTV, Cabeamento Estruturado / Dados, Automação, Ar Condicionado / HVAC, Elevador, Gás, etc.
+3. NÃO USE "Instalações Especiais" como categoria genérica. Separe em: PCI Elétrica, PCI Hidráulica, CFTV, Cabeamento Estruturado / Dados, Automação, Ar Condicionado / HVAC, Elevador, Gás, etc.
 4. Analise a DESCRIÇÃO do item com cuidado: eletroduto/cabo/fio dentro de um contexto de dados/CFTV é Cabeamento Estruturado, não Elétrica
-5. Itens de combate a incêndio (sprinkler, hidrante, detector, alarme de incêndio) são SEMPRE "PCI", nunca "Elétrica" ou "Hidráulica"
+5. PCI deve ser SEMPRE separado em duas disciplinas: "PCI Elétrica" (detectores, alarmes, central, sirene, iluminação emergência) e "PCI Hidráulica" (sprinkler, hidrante, bomba, mangueira, tubulação incêndio). NUNCA use apenas "PCI" genérico
 6. Priorize as correções do usuário quando houver${correcoesCtx}
 
 Responda APENAS com JSON válido, sem markdown, no formato:
