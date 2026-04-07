@@ -67,6 +67,8 @@ export default function AvisoPrevio() {
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [confirmEncerrar, setConfirmEncerrar] = useState<{ open: boolean; avisoId: number | null }>({ open: false, avisoId: null });
+  const [confirmExcluir, setConfirmExcluir] = useState<{ open: boolean; avisoId: number | null }>({ open: false, avisoId: null });
 
   // Modal "Dar Baixa"
   const [darBaixaModal, setDarBaixaModal] = useState<{ open: boolean; avisoId: number | null; funcionarioNome: string }>({ open: false, avisoId: null, funcionarioNome: '' });
@@ -119,6 +121,7 @@ export default function AvisoPrevio() {
   });
   const updateAviso = trpc.avisoPrevio.avisoPrevio.update.useMutation({
     onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Aviso prévio atualizado!"); },
+    onError: (e: any) => toast.error(e.message || "Erro ao atualizar aviso prévio"),
   });
   const deleteAviso = trpc.avisoPrevio.avisoPrevio.delete.useMutation({
     onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Aviso prévio excluído!"); },
@@ -382,9 +385,14 @@ export default function AvisoPrevio() {
   };
 
   const handleEncerrarPeriodo = (id: number) => {
-    if (confirm("Encerrar período do aviso prévio? O funcionário ficará como 'Aguardando Baixa' até a conferência de descontos e envio ao financeiro.")) {
-      updateAviso.mutate({ id, status: "aguardando_pagamento" });
+    setConfirmEncerrar({ open: true, avisoId: id });
+  };
+
+  const confirmarEncerramento = () => {
+    if (confirmEncerrar.avisoId) {
+      updateAviso.mutate({ id: confirmEncerrar.avisoId, status: "aguardando_pagamento" });
     }
+    setConfirmEncerrar({ open: false, avisoId: null });
   };
 
   const handleDarBaixa = (id: number, funcionarioNome: string) => {
@@ -722,7 +730,7 @@ export default function AvisoPrevio() {
                                 <RotateCcw className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir este aviso prévio?")) deleteAviso.mutate({ id: a.id }); }}>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => setConfirmExcluir({ open: true, avisoId: a.id })}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -1776,6 +1784,38 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
           </div>
         </FullScreenDialog>
       </div>
+
+      <Dialog open={confirmEncerrar.open} onOpenChange={(v) => { if (!v) setConfirmEncerrar({ open: false, avisoId: null }); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <Clock className="h-5 w-5" /> Encerrar Período
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Encerrar período do aviso prévio? O funcionário ficará como <strong>'Aguardando Baixa'</strong> até a conferência de descontos e envio ao financeiro.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmEncerrar({ open: false, avisoId: null })}>Cancelar</Button>
+            <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={confirmarEncerramento}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmExcluir.open} onOpenChange={(v) => { if (!v) setConfirmExcluir({ open: false, avisoId: null }); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" /> Excluir Aviso Prévio
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Tem certeza que deseja excluir este aviso prévio? Esta ação não pode ser desfeita.</p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmExcluir({ open: false, avisoId: null })}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => { if (confirmExcluir.avisoId) deleteAviso.mutate({ id: confirmExcluir.avisoId }); setConfirmExcluir({ open: false, avisoId: null }); }}>Excluir</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
 

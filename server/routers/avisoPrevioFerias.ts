@@ -950,7 +950,7 @@ export const avisoPrevioFeriasRouter = router({
         dataInicio: z.string().optional(),
         dataDesligamento: z.string().optional(),
         reducaoJornada: z.enum(['2h_dia','7_dias_corridos','nenhuma']).optional(),
-        status: z.enum(['em_andamento','concluido','cancelado']).optional(),
+        status: z.enum(['em_andamento','concluido','cancelado','aguardando_pagamento']).optional(),
         dataConclusao: z.string().optional(),
         motivoCancelamento: z.string().optional(),
         observacoes: z.string().optional(),
