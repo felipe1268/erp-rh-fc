@@ -1936,7 +1936,7 @@ export default function Cotacoes() {
           descItem = Math.round(valorDesc * peso * 100) / 100;
           descontoAcumulado += descItem;
         }
-        const novoPreco = Math.max(0, Math.round((it.precoAtual - descItem / it.qtd) * 10000) / 10000);
+        const novoPreco = Math.max(0, Math.round((it.precoAtual - descItem / it.qtd) * 100) / 100);
         return { ...it, descItem, novoPreco, novoTotal: Math.round(novoPreco * it.qtd * 100) / 100 };
       });
 
@@ -1949,7 +1949,7 @@ export default function Cotacoes() {
       if (!preview.length) return;
       const updates: Record<string, string> = {};
       for (const it of preview) {
-        updates[it.key] = it.novoPreco.toFixed(4);
+        updates[it.key] = it.novoPreco.toFixed(2);
       }
       setEditPrecos(prev => ({ ...prev, ...updates }));
       setDescontoModal(null);
