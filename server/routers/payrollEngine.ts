@@ -1401,11 +1401,11 @@ export const payrollEngineRouter = router({
       
       for (const dec of input.decisoes) {
         if (dec.decisao === "erro_relogio") {
-          // Erro do relógio: manter como trabalhado, cancelar o adjustment
+          const sufixo = ` [DECISÃO: Erro do relógio - mantido como trabalhado por ${ctx.user.name || "Usuário"}]`;
           await db.execute(sql`
             UPDATE payroll_adjustments SET 
               status = 'cancelado',
-              descricao = CONCAT(descricao, ' [DECISÃO: Erro do relógio - mantido como trabalhado por ${ctx.user.name || "Usuário"}]')
+              descricao = CONCAT(descricao, ${sufixo})
             WHERE id = ${dec.adjustmentId} AND "companyId" = ${input.companyId}
           `);
           const adjRow = ((await db.execute(sql`
@@ -1424,11 +1424,12 @@ export const payrollEngineRouter = router({
           }
           errosRelogio++;
         } else {
+          const sufixo2 = ` [DECISÃO: Falta real confirmada por ${ctx.user.name || "Usuário"}]`;
           await db.execute(sql`
             UPDATE payroll_adjustments SET 
               status = 'pendente',
               tipo = 'falta',
-              descricao = CONCAT(descricao, ' [DECISÃO: Falta real confirmada por ${ctx.user.name || "Usuário"}]')
+              descricao = CONCAT(descricao, ${sufixo2})
             WHERE id = ${dec.adjustmentId} AND "companyId" = ${input.companyId}
           `);
           const adjRow2 = ((await db.execute(sql`

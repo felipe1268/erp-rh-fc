@@ -4870,10 +4870,10 @@ export default function FolhaPagamento() {
                 </div>
 
                 {/* Divergências */}
-                {(afericaoResult.divergenciasList || []).length > 0 && (
+                {(afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado).length > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm text-red-700 mb-2 flex items-center gap-1">
-                      <AlertTriangle className="h-4 w-4" /> Divergências Encontradas ({afericaoResult.divergenciasList.length})
+                      <AlertTriangle className="h-4 w-4" /> Divergências Encontradas ({(afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado).length})
                     </h4>
                     <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 text-xs text-slate-700 space-y-1">
                       <p className="font-semibold text-slate-800 mb-1">O que significa cada tipo:</p>
@@ -4907,8 +4907,8 @@ export default function FolhaPagamento() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(afericaoResult.divergenciasList || []).map((d: any, i: number) => (
-                            <tr key={i} className={`border-t ${d._confirmado ? 'bg-green-50/50 opacity-60' : d._cancelado ? 'bg-gray-50 opacity-40 line-through' : i % 2 === 0 ? '' : 'bg-red-50/30'}`}>
+                          {(afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado).map((d: any, i: number) => (
+                            <tr key={i} className={`border-t ${i % 2 === 0 ? '' : 'bg-red-50/30'}`}>
                               <td className="py-2 px-3 font-medium">
                                 <button
                                   className="text-left text-blue-700 hover:text-blue-900 hover:underline cursor-pointer font-medium"
@@ -4945,11 +4945,6 @@ export default function FolhaPagamento() {
                                 R$ {typeof d.valorDesconto === 'number' ? d.valorDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : d.valorDesconto || '0,00'}
                               </td>
                               <td className="py-1.5 px-2 text-center">
-                                {d._confirmado ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] text-green-700 font-bold"><CheckCircle className="h-3.5 w-3.5" /> Confirmado</span>
-                                ) : d._cancelado ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] text-gray-500 font-bold"><XCircle className="h-3.5 w-3.5" /> Cancelado</span>
-                                ) : (
                                   <div className="flex items-center gap-1 justify-center">
                                     <Button
                                       size="sm"
@@ -4998,7 +4993,6 @@ export default function FolhaPagamento() {
                                       </Button>
                                     )}
                                   </div>
-                                )}
                               </td>
                             </tr>
                           ))}
@@ -5007,7 +5001,7 @@ export default function FolhaPagamento() {
                           <tr className="border-t-2 border-red-300 bg-red-50 font-bold">
                             <td colSpan={5} className="py-2 px-3 text-right text-red-700">Total Descontos:</td>
                             <td className="py-2 px-3 text-right font-mono text-red-700">
-                              R$ {(afericaoResult.divergenciasList || []).filter((d: any) => !d._cancelado).reduce((s: number, d: any) => s + (typeof d.valorDesconto === 'number' ? d.valorDesconto : 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              R$ {(afericaoResult.divergenciasList || []).filter((d: any) => !d._cancelado && !d._confirmado).reduce((s: number, d: any) => s + (typeof d.valorDesconto === 'number' ? d.valorDesconto : 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                             <td></td>
                           </tr>
