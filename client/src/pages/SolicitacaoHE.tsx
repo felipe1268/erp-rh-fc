@@ -1759,11 +1759,23 @@ export default function SolicitacaoHE() {
                       </div>
                     </div>
 
-                    {pendentes.length > 0 && (
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-semibold text-amber-700">Aguardando assinatura:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {pendentes.map((f: any) => (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-semibold text-gray-600">Funcionários:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {funcs.map((f: any) => {
+                          const jaAssinou = confirmadosSet.has(f.employeeId);
+                          if (jaAssinou) {
+                            return (
+                              <div
+                                key={f.employeeId}
+                                className="flex items-center gap-1.5 bg-green-50 border border-green-400 rounded-lg px-3 py-2 text-sm cursor-default"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                                <span className="font-medium text-green-800">{f.employeeName || `ID ${f.employeeId}`}</span>
+                              </div>
+                            );
+                          }
+                          return (
                             <button
                               key={f.employeeId}
                               type="button"
@@ -1773,10 +1785,10 @@ export default function SolicitacaoHE() {
                               <SquarePen className="h-3.5 w-3.5 text-amber-600" />
                               <span className="font-medium">{f.employeeName || `ID ${f.employeeId}`}</span>
                             </button>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
-                    )}
+                    </div>
 
                     {totalConf > 0 && (
                       <div className="space-y-1.5">
