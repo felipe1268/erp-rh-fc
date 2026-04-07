@@ -3414,17 +3414,17 @@ export default function FolhaPagamento() {
               icon={<Clock className="h-4 w-4 text-amber-500" />} title="Atrasos no mês">
               <table className="w-full text-xs">
                 <thead><tr className="border-b text-left text-muted-foreground">
-                  <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2">Função</th><th className="py-1 px-2 text-center">Minutos</th><th className="py-1 px-2 text-right">Desconto</th>
+                  <th className="py-1 px-2">Funcionário</th><th className="py-1 px-2">Função</th><th className="py-1 px-2 text-center">Tempo</th><th className="py-1 px-2 text-right">Desconto</th>
                 </tr></thead>
                 <tbody>
                   {s.comAtrasos.map((r: any, i: number) => (
-                    <tr key={i} className="border-b border-amber-100"><td className="py-1.5 px-2 font-medium">{r.nome}</td><td className="py-1.5 px-2 text-muted-foreground">{r.funcao || '-'}</td><td className="py-1.5 px-2 text-center">{r.minutos} min</td><td className="py-1.5 px-2 text-right text-red-600">{fmtR(r.valor)}</td></tr>
+                    <tr key={i} className="border-b border-amber-100"><td className="py-1.5 px-2 font-medium">{r.nome}</td><td className="py-1.5 px-2 text-muted-foreground">{r.funcao || '-'}</td><td className="py-1.5 px-2 text-center">{r.minutos >= 60 ? Math.floor(r.minutos/60) + 'h' + (r.minutos%60 > 0 ? String(r.minutos%60).padStart(2,'0') + 'min' : '') : r.minutos + 'min'}</td><td className="py-1.5 px-2 text-right text-red-600">{fmtR(r.valor)}</td></tr>
                   ))}
                 </tbody>
                 {s.comAtrasos.length > 0 && (
                   <tfoot><tr className="bg-amber-100/30 font-semibold">
                     <td className="py-1.5 px-2" colSpan={2}>Total</td>
-                    <td className="py-1.5 px-2 text-center">{s.comAtrasos.reduce((s: number, r: any) => s + r.minutos, 0)} min</td>
+                    <td className="py-1.5 px-2 text-center">{(() => { const t = s.comAtrasos.reduce((s: number, r: any) => s + r.minutos, 0); return t >= 60 ? Math.floor(t/60) + 'h' + (t%60 > 0 ? String(t%60).padStart(2,'0') + 'min' : '') : t + 'min'; })()}</td>
                     <td className="py-1.5 px-2 text-right text-red-600">{fmtR(s.comAtrasos.reduce((s: number, r: any) => s + r.valor, 0))}</td>
                   </tr></tfoot>
                 )}
@@ -4915,7 +4915,7 @@ export default function FolhaPagamento() {
                                   d.tipo === 'atraso' ? 'bg-orange-100 text-orange-700' : 
                                   'bg-amber-100 text-amber-700'
                                 }`}>
-                                  {d.tipo === 'falta' ? 'FALTA' : d.tipo === 'atraso' ? `ATRASO ${d.minutos ? `(${d.minutos}min)` : ''}` : 'SEM REGISTRO'}
+                                  {d.tipo === 'falta' ? 'FALTA' : d.tipo === 'atraso' ? `ATRASO ${d.minutos ? `(${d.minutos >= 60 ? Math.floor(d.minutos/60) + 'h' + (d.minutos%60 > 0 ? String(d.minutos%60).padStart(2,'0') + 'min' : '') : d.minutos + 'min'})` : ''}` : 'SEM REGISTRO'}
                                 </span>
                               </td>
                               <td className="py-2 px-3 text-right font-mono font-bold text-red-600">
