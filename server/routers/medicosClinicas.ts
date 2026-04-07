@@ -41,12 +41,12 @@ export const medicosClinicasRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB not available");
-      const [result] = await db.insert(medicos).values({
+      const result = await db.insert(medicos).values({
         companyId: input.companyId,
         nome: input.nome,
         crm: input.crm,
         especialidade: input.especialidade || null,
-      });
+      }).returning({ id: medicos.id });
       return { id: result[0].id };
     }),
 
