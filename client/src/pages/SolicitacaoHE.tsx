@@ -1734,7 +1734,9 @@ export default function SolicitacaoHE() {
               {/* ═══ CONFIRMAÇÃO DE PRESENÇA ═══ */}
               {(() => {
                 const funcs = sol.funcionarios || [];
-                const confs = confirmQ.data || [];
+                const funcIds = new Set(funcs.map((f: any) => f.employeeId));
+                const allConfs = confirmQ.data || [];
+                const confs = allConfs.filter((c: any) => funcIds.has(c.employeeId));
                 const confirmadosSet = new Set(confs.map((c: any) => c.employeeId));
                 const pendentes = funcs.filter((f: any) => !confirmadosSet.has(f.employeeId));
                 const totalConf = confs.length;
