@@ -110,20 +110,29 @@ function calcularINSS(salarioMensal: number): number {
   return inss;
 }
 
-function calcularIRRF(baseIR: number): number {
+function calcularIRRF(baseIR: number, salarioBrutoMensal: number): number {
   const faixas = [
-    { limite: 2259.20, aliquota: 0, deducao: 0 },
-    { limite: 2826.65, aliquota: 0.075, deducao: 169.44 },
-    { limite: 3751.05, aliquota: 0.15, deducao: 381.44 },
-    { limite: 4664.68, aliquota: 0.225, deducao: 662.77 },
-    { limite: Infinity, aliquota: 0.275, deducao: 896.00 },
+    { limite: 2428.80, aliquota: 0, deducao: 0 },
+    { limite: 2826.65, aliquota: 0.075, deducao: 182.16 },
+    { limite: 3751.05, aliquota: 0.15, deducao: 394.16 },
+    { limite: 4664.68, aliquota: 0.225, deducao: 675.49 },
+    { limite: Infinity, aliquota: 0.275, deducao: 908.73 },
   ];
+  let irrfBruto = 0;
   for (const f of faixas) {
     if (baseIR <= f.limite) {
-      return Math.max(0, baseIR * f.aliquota - f.deducao);
+      irrfBruto = Math.max(0, baseIR * f.aliquota - f.deducao);
+      break;
     }
   }
-  return 0;
+  if (irrfBruto <= 0) return 0;
+  let redutor = 0;
+  if (salarioBrutoMensal <= 5000) {
+    redutor = irrfBruto;
+  } else if (salarioBrutoMensal <= 7350) {
+    redutor = Math.max(0, 978.62 - (0.133145 * salarioBrutoMensal));
+  }
+  return Math.max(0, irrfBruto - redutor);
 }
 
 function parseMesRef(mesRef: string): { year: number; month: number } {
@@ -1698,7 +1707,7 @@ export const payrollEngineRouter = router({
         const salarioBaseIR = (diasAusentesAviso > 0 || diasFeriasNoMes > 0) ? salarioBruto : salarioMensalCompleto;
         const inssEmpregado = calcularINSS(salarioBaseIR);
         const baseIR = salarioBaseIR - inssEmpregado;
-        const irrfMensal = calcularIRRF(baseIR);
+        const irrfMensal = calcularIRRF(baseIR, salarioBaseIR);
         const irAdiantamento = irrfMensal > 0 ? Math.round(irrfMensal * (percentual / 100) * 100) / 100 : 0;
         const valorTotalVale = valorAdiantamento;
         const valorLiquidoVale = valorTotalVale - irAdiantamento;
@@ -2021,7 +2030,7 @@ export const payrollEngineRouter = router({
       const percentual = parseFloat(row.percentualAdiantamento) || 40;
       const inss = calcularINSS(salarioBruto);
       const baseIR = salarioBruto - inss;
-      const irrfMensal = calcularIRRF(baseIR);
+      const irrfMensal = calcularIRRF(baseIR, salarioBruto);
       const irProporcional = irrfMensal > 0 ? Math.round(irrfMensal * (percentual / 100) * 100) / 100 : 0;
       const novoIR = Math.min(irProporcional, valorNum);
       const novoLiquido = Math.max(valorNum - novoIR, 0);
