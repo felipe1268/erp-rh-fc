@@ -1142,6 +1142,21 @@ export const payrollEngineRouter = router({
         }
       }
 
+      // Enrich divergenciasList with adjustmentId for frontend actions
+      if (divergenciasList.length > 0) {
+        const adjRows = ((await db.execute(sql`
+          SELECT id, "employeeId", data, tipo FROM payroll_adjustments
+          WHERE "companyId" = ${input.companyId}
+          AND "mesOrigem" = ${prevMes} AND "mesDesconto" = ${input.mesReferencia}
+          AND tipo IN ('falta','atraso','sem_registro')
+        `)) as any).rows || [];
+        const adjMap = new Map<string, number>();
+        for (const a of adjRows) adjMap.set(`${a.employeeId}-${a.data}-${a.tipo}`, a.id);
+        for (const d of divergenciasList) {
+          d.adjustmentId = adjMap.get(`${d.employeeId}-${d.data}-${d.tipo}`) || null;
+        }
+      }
+
       // ===== BATCH UPDATE timecard_daily for aferido records (parallel chunks of 10) =====
       if (timecardAferidoUpdates.length > 0) {
         const chunkSize = 10;

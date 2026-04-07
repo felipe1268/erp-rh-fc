@@ -10,7 +10,7 @@ import {
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp, TrendingDown,
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
-  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown
+  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -304,6 +304,13 @@ export default function FolhaPagamento() {
       alertasAfericao.refetch();
     },
     onError: (err) => { resetProgress('afericao'); toast.error(`Erro na aferição: ${err.message}`); },
+  });
+  const decidirAfericaoMut = trpc.payrollEngine.decidirAfericao.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message || "Decisão registrada com sucesso");
+      alertasAfericao.refetch();
+    },
+    onError: (err) => { toast.error(`Erro: ${err.message}`); },
   });
   const alertasAfericao = trpc.payrollEngine.listarAlertasAfericao.useQuery(
     { companyId, companyIds, mesReferencia: mesAno },
@@ -4881,11 +4888,12 @@ export default function FolhaPagamento() {
                             <th className="py-2 px-3 text-center font-semibold">Data</th>
                             <th className="py-2 px-3 text-center font-semibold">Tipo</th>
                             <th className="py-2 px-3 text-right font-semibold">Desconto</th>
+                            <th className="py-2 px-3 text-center font-semibold">Ações</th>
                           </tr>
                         </thead>
                         <tbody>
                           {(afericaoResult.divergenciasList || []).map((d: any, i: number) => (
-                            <tr key={i} className={`border-t ${i % 2 === 0 ? '' : 'bg-red-50/30'}`}>
+                            <tr key={i} className={`border-t ${d._confirmado ? 'bg-green-50/50 opacity-60' : d._cancelado ? 'bg-gray-50 opacity-40 line-through' : i % 2 === 0 ? '' : 'bg-red-50/30'}`}>
                               <td className="py-2 px-3 font-medium">
                                 <button
                                   className="text-left text-blue-700 hover:text-blue-900 hover:underline cursor-pointer font-medium"
@@ -4921,6 +4929,62 @@ export default function FolhaPagamento() {
                               <td className="py-2 px-3 text-right font-mono font-bold text-red-600">
                                 R$ {typeof d.valorDesconto === 'number' ? d.valorDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : d.valorDesconto || '0,00'}
                               </td>
+                              <td className="py-1.5 px-2 text-center">
+                                {d._confirmado ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-green-700 font-bold"><CheckCircle className="h-3.5 w-3.5" /> Confirmado</span>
+                                ) : d._cancelado ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-gray-500 font-bold"><XCircle className="h-3.5 w-3.5" /> Cancelado</span>
+                                ) : (
+                                  <div className="flex items-center gap-1 justify-center">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-2 text-[10px] text-green-700 border-green-300 hover:bg-green-50"
+                                      disabled={decidirAfericaoMut.isPending}
+                                      onClick={() => {
+                                        if (!d.adjustmentId) { toast.error("ID do ajuste não encontrado. Refaça a aferição."); return; }
+                                        decidirAfericaoMut.mutate(
+                                          { companyId, companyIds, mesReferencia: mesAno, decisoes: [{ adjustmentId: d.adjustmentId, decisao: "falta_real" }] },
+                                          { onSuccess: () => { d._confirmado = true; setAfericaoResult({ ...afericaoResult }); } }
+                                        );
+                                      }}
+                                      title="Confirmar desconto"
+                                    >
+                                      <CheckCircle className="h-3 w-3 mr-0.5" /> Confirmar
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-2 text-[10px] text-blue-700 border-blue-300 hover:bg-blue-50"
+                                      onClick={() => {
+                                        setEspelhoPopupEmpId(Number(d.employeeId));
+                                        setEspelhoPopupEmpNome(d.employeeName || `ID ${d.employeeId}`);
+                                      }}
+                                      title="Editar ponto no espelho"
+                                    >
+                                      <PenLine className="h-3 w-3 mr-0.5" /> Editar
+                                    </Button>
+                                    {d.tipo === 'sem_registro' && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 px-2 text-[10px] text-gray-600 border-gray-300 hover:bg-gray-50"
+                                        disabled={decidirAfericaoMut.isPending}
+                                        onClick={() => {
+                                          if (!d.adjustmentId) { toast.error("ID do ajuste não encontrado. Refaça a aferição."); return; }
+                                          decidirAfericaoMut.mutate(
+                                            { companyId, companyIds, mesReferencia: mesAno, decisoes: [{ adjustmentId: d.adjustmentId, decisao: "erro_relogio" }] },
+                                            { onSuccess: () => { d._cancelado = true; setAfericaoResult({ ...afericaoResult }); } }
+                                          );
+                                        }}
+                                        title="Marcar como erro do relógio (trabalhado normalmente)"
+                                      >
+                                        <XCircle className="h-3 w-3 mr-0.5" /> Erro Relógio
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -4928,8 +4992,9 @@ export default function FolhaPagamento() {
                           <tr className="border-t-2 border-red-300 bg-red-50 font-bold">
                             <td colSpan={5} className="py-2 px-3 text-right text-red-700">Total Descontos:</td>
                             <td className="py-2 px-3 text-right font-mono text-red-700">
-                              R$ {(afericaoResult.divergenciasList || []).reduce((s: number, d: any) => s + (typeof d.valorDesconto === 'number' ? d.valorDesconto : 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              R$ {(afericaoResult.divergenciasList || []).filter((d: any) => !d._cancelado).reduce((s: number, d: any) => s + (typeof d.valorDesconto === 'number' ? d.valorDesconto : 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
+                            <td></td>
                           </tr>
                         </tfoot>
                       </table>
