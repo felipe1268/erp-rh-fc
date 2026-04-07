@@ -2074,14 +2074,17 @@ export default function Solicitacoes() {
                         : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
                     }`}
                     onClick={() => {
+                      if (form.tipo === opt.value) return;
                       setForm(p => ({ ...p, tipo: opt.value, incluirEquipamentos: false, vehicleId: opt.value !== "pecas_veiculo" ? "" : p.vehicleId }));
-                      setSelectedEapIds(new Set());
-                      setItens([newItem()]);
-                      setEapInsumos({});
-                      setEapQtdServico({});
-                      setEapExpanded(null);
-                      setSaldoData({});
-                      setEapExtraDesbloqueado({});
+                      if (!editingSc) {
+                        setSelectedEapIds(new Set());
+                        setItens([newItem()]);
+                        setEapInsumos({});
+                        setEapQtdServico({});
+                        setEapExpanded(null);
+                        setSaldoData({});
+                        setEapExtraDesbloqueado({});
+                      }
                       if ((opt.value === "servico" || opt.value === "equipamento") && modoSC === "insumo") setModoSC("eap");
                     }}
                   >
@@ -2188,8 +2191,10 @@ export default function Solicitacoes() {
                         e.preventDefault();
                         setForm(p => ({ ...p, obraId: "0" }));
                         setModoSC("manual");
-                        setSelectedEapIds(new Set());
-                        setItens([newItem()]);
+                        if (!editingSc) {
+                          setSelectedEapIds(new Set());
+                          setItens([newItem()]);
+                        }
                         setObraSearch("");
                         setObraOpen(false);
                       }}
@@ -2204,12 +2209,15 @@ export default function Solicitacoes() {
                         className={`px-3 py-1.5 text-sm cursor-pointer hover:bg-amber-50 hover:text-amber-700 ${String(o.id) === form.obraId ? "bg-amber-50 text-amber-700 font-medium" : "text-gray-900"}`}
                         onMouseDown={e => {
                           e.preventDefault();
+                          const obraChanged = form.obraId !== String(o.id);
                           setForm(p => ({ ...p, obraId: String(o.id) }));
-                          setSelectedEapIds(new Set());
-                          setItens([newItem()]);
+                          if (!editingSc && obraChanged) {
+                            setSelectedEapIds(new Set());
+                            setItens([newItem()]);
+                            setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setBatchSaldo({}); setEapExtraDesbloqueado({});
+                          }
                           setObraSearch("");
                           setObraOpen(false);
-                          setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setBatchSaldo({}); setEapExtraDesbloqueado({});
                         }}
                       >
                         {o.codigo ? <span className="text-gray-400 mr-1">[{o.codigo}]</span> : null}{o.nome}
