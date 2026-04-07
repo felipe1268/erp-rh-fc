@@ -295,8 +295,8 @@ export default function FolhaPagamento() {
       finishProgress('afericao');
       setAfericaoResult(data);
       setShowAfericaoReport(true);
-      if ((data.semRegistro || 0) > 0) {
-        toast.warning(`Aferição concluída com ${data.semRegistro} dia(s) sem registro de ponto. Verifique os alertas e corrija no Espelho de Ponto.`);
+      if ((data.faltas || 0) > 0) {
+        toast.warning(`Aferição concluída com ${data.faltas} dia(s) de falta identificados. Verifique os alertas e corrija no Espelho de Ponto.`);
       } else {
         toast.success(data.message);
       }
@@ -360,10 +360,8 @@ export default function FolhaPagamento() {
           ),
         };
         updated.divergencias = updated.divergenciasList.length;
-        const semRegRemovidos = removidos.filter((d: any) => d.tipo === 'sem_registro').length;
         const faltasRemovidas = removidos.filter((d: any) => d.tipo === 'falta').length;
         const atrasosRemovidos = removidos.filter((d: any) => d.tipo === 'atraso').length;
-        if (semRegRemovidos > 0) updated.semRegistro = Math.max(0, (updated.semRegistro || 0) - semRegRemovidos);
         if (faltasRemovidas > 0) updated.faltas = Math.max(0, (updated.faltas || 0) - faltasRemovidas);
         if (atrasosRemovidos > 0) updated.atrasos = Math.max(0, (updated.atrasos || 0) - atrasosRemovidos);
         updated.totalOk = (updated.totalAferidos || 0) - updated.divergencias;
@@ -2489,7 +2487,7 @@ export default function FolhaPagamento() {
                                   {dia.classificacao === 'dia_util' ? (
                                     dia.temRegistro
                                       ? <Badge className="bg-green-100 text-green-700">{dia.afericaoResultado || 'ok'}</Badge>
-                                      : <Badge className="bg-red-100 text-red-700">sem_registro</Badge>
+                                      : <Badge className="bg-red-100 text-red-700">falta</Badge>
                                   ) : (
                                     dia.temRegistro
                                       ? <Badge className="bg-green-100 text-green-700">ok</Badge>
@@ -4648,9 +4646,9 @@ export default function FolhaPagamento() {
                     <Eye className="h-3 w-3 mr-1" /> Ver Resultado
                   </Button>
                 )}
-                {afericaoResult && afericaoResult.semRegistro > 0 && (
+                {afericaoResult && afericaoResult.faltas > 0 && (
                   <Button size="sm" variant="ghost" className="w-full mt-1 text-amber-700 text-[10px] h-6" onClick={() => setViewMode("alertas_afericao")}>
-                    <AlertTriangle className="h-3 w-3 mr-1" /> {afericaoResult.semRegistro} sem registro — Ver Alertas
+                    <AlertTriangle className="h-3 w-3 mr-1" /> {afericaoResult.faltas} falta(s) — Ver Alertas
                   </Button>
                 )}
                 {(alertasAfericao.data as any[] || []).length > 0 && !afericaoResult && (
@@ -4864,10 +4862,6 @@ export default function FolhaPagamento() {
                     <div className="text-2xl font-bold text-orange-700">{afericaoResult.atrasos || 0}</div>
                     <div className="text-[10px] text-orange-600 font-medium">Atrasos</div>
                   </div>
-                  <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
-                    <div className="text-2xl font-bold text-amber-700">{afericaoResult.semRegistro || 0}</div>
-                    <div className="text-[10px] text-amber-600 font-medium">Sem Registro</div>
-                  </div>
                   {(afericaoResult.totalJustificados || 0) > 0 && (
                     <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
                       <div className="text-2xl font-bold text-blue-700">{afericaoResult.totalJustificados}</div>
@@ -4884,14 +4878,10 @@ export default function FolhaPagamento() {
                     </h4>
                     <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 text-xs text-slate-700 space-y-1">
                       <p className="font-semibold text-slate-800 mb-1">O que significa cada tipo:</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div className="flex items-start gap-1.5">
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 whitespace-nowrap mt-0.5">SEM REGISTRO</span>
-                          <span>O sistema estimou jornada normal, mas <strong>não encontrou nenhuma batida</strong> no relógio DIXI neste dia. Corrija no Espelho de Ponto se necessário.</span>
-                        </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div className="flex items-start gap-1.5">
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 whitespace-nowrap mt-0.5">FALTA</span>
-                          <span>Existe registro no DIXI, mas <strong>sem nenhuma entrada/saída</strong> válida — indica que o funcionário não trabalhou neste dia.</span>
+                          <span>O relógio DIXI <strong>não registrou batida válida</strong> neste dia — o funcionário não trabalhou. Corrija no Espelho de Ponto se necessário.</span>
                         </div>
                         <div className="flex items-start gap-1.5">
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 whitespace-nowrap mt-0.5">ATRASO</span>
@@ -4941,11 +4931,10 @@ export default function FolhaPagamento() {
                               <td className="py-2 px-3 text-center font-mono">{d.data ? d.data.split('-').reverse().join('/') : '-'}</td>
                               <td className="py-2 px-3 text-center">
                                 <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  d.tipo === 'falta' ? 'bg-red-100 text-red-700' : 
                                   d.tipo === 'atraso' ? 'bg-orange-100 text-orange-700' : 
-                                  'bg-amber-100 text-amber-700'
+                                  'bg-red-100 text-red-700'
                                 }`}>
-                                  {d.tipo === 'falta' ? 'FALTA' : d.tipo === 'atraso' ? `ATRASO ${d.minutos ? `(${d.minutos >= 60 ? Math.floor(d.minutos/60) + 'h' + (d.minutos%60 > 0 ? String(d.minutos%60).padStart(2,'0') + 'min' : '') : d.minutos + 'min'})` : ''}` : 'SEM REGISTRO'}
+                                  {d.tipo === 'atraso' ? `ATRASO ${d.minutos ? `(${d.minutos >= 60 ? Math.floor(d.minutos/60) + 'h' + (d.minutos%60 > 0 ? String(d.minutos%60).padStart(2,'0') + 'min' : '') : d.minutos + 'min'})` : ''}` : 'FALTA'}
                                 </span>
                               </td>
                               <td className="py-2 px-3 text-right font-mono font-bold text-red-600">
@@ -4965,8 +4954,7 @@ export default function FolhaPagamento() {
                                           { onSuccess: () => {
                                             d._confirmado = true;
                                             const upd = { ...afericaoResult };
-                                            if (d.tipo === 'sem_registro') upd.semRegistro = Math.max(0, (upd.semRegistro || 0) - 1);
-                                            else if (d.tipo === 'falta') upd.faltas = Math.max(0, (upd.faltas || 0) - 1);
+                                            if (d.tipo === 'falta') upd.faltas = Math.max(0, (upd.faltas || 0) - 1);
                                             else if (d.tipo === 'atraso') upd.atrasos = Math.max(0, (upd.atrasos || 0) - 1);
                                             upd.divergencias = Math.max(0, (upd.divergencias || 0) - 1);
                                             setAfericaoResult(upd);
@@ -4989,7 +4977,7 @@ export default function FolhaPagamento() {
                                     >
                                       <PenLine className="h-3 w-3 mr-0.5" /> Editar
                                     </Button>
-                                    {(d.tipo === 'sem_registro' || d.tipo === 'falta') && (
+                                    {d.tipo === 'falta' && (
                                       <Button
                                         size="sm"
                                         variant="outline"
@@ -5002,8 +4990,7 @@ export default function FolhaPagamento() {
                                             { onSuccess: () => {
                                               d._cancelado = true;
                                               const upd = { ...afericaoResult };
-                                              if (d.tipo === 'sem_registro') upd.semRegistro = Math.max(0, (upd.semRegistro || 0) - 1);
-                                              else if (d.tipo === 'falta') upd.faltas = Math.max(0, (upd.faltas || 0) - 1);
+                                              if (d.tipo === 'falta') upd.faltas = Math.max(0, (upd.faltas || 0) - 1);
                                               else if (d.tipo === 'atraso') upd.atrasos = Math.max(0, (upd.atrasos || 0) - 1);
                                               upd.divergencias = Math.max(0, (upd.divergencias || 0) - 1);
                                               setAfericaoResult(upd);
@@ -5126,11 +5113,6 @@ export default function FolhaPagamento() {
               </div>
             )}
             <DialogFooter className="flex gap-2 mt-2">
-              {(afericaoResult?.semRegistro || 0) > 0 && (
-                <Button variant="outline" className="text-amber-700 border-amber-300" onClick={() => { setShowAfericaoReport(false); setViewMode("alertas_afericao"); }}>
-                  <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Ver {afericaoResult.semRegistro} alertas sem registro
-                </Button>
-              )}
               <Button variant="outline" onClick={() => setShowAfericaoReport(false)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>

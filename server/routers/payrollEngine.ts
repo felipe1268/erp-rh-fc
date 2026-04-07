@@ -1078,8 +1078,8 @@ export const payrollEngineRouter = router({
             }
           }
         } else {
-          resultado = "sem_registro";
-          obs = `Sem registro de ponto real no DIXI para ${escuro.data}. Possível erro do relógio ou falta.`;
+          resultado = "falta";
+          obs = `Falta identificada na aferição — sem registro no DIXI para ${escuro.data}`;
           divergencias++;
 
           const valorHoraEmpSR = empValorHoraMap.get(escuro.employeeId) || 0;
@@ -1095,7 +1095,7 @@ export const payrollEngineRouter = router({
 
           const esc = (s: string) => s.replace(/'/g, "''");
           adjustmentInserts.push(
-            `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'sem_registro', '${esc(`Sem registro de ponto dia ${escuro.data} — Período no escuro de ${prevMes}. Aguardando decisão: erro do relógio ou falta real.`)}', '${formatMoney(valorFaltaSR)}', '${vrDescontoSR}', '${vtDescontoSR}', '${formatMoney(totalDescSR)}', ${escuro.id}, 'pendente_decisao')`
+            `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'falta', '${esc(`Falta dia ${escuro.data} — Sem registro no DIXI. Aferição do período no escuro de ${prevMes}`)}', '${formatMoney(valorFaltaSR)}', '${vrDescontoSR}', '${vtDescontoSR}', '${formatMoney(totalDescSR)}', ${escuro.id}, 'pendente')`
           );
 
           divergenciasList.push({
@@ -1104,7 +1104,7 @@ export const payrollEngineRouter = router({
             funcao: empFuncao,
             empStatus,
             data: escuro.data,
-            tipo: "sem_registro",
+            tipo: "falta",
             valorDesconto: totalDescSR,
             escuroEntrada1: escuro.entrada1 || '-',
             escuroSaida1: escuro.saida1 || '-',
@@ -1182,16 +1182,15 @@ export const payrollEngineRouter = router({
         }
       }
 
-      // ===== BATCH UPDATE timecard_daily for sem_registro records =====
       if (timecardSemRegistroIds.length > 0) {
         await db.execute(sql.raw(`
           UPDATE timecard_daily SET 
-            "statusDia" = 'pendente_decisao',
+            "statusDia" = 'pendente',
             "statusAnterior" = 'escuro',
-            "afericaoResultado" = 'sem_registro',
-            "afericaoObs" = 'Sem registro de ponto real no DIXI. Possível erro do relógio ou falta.',
+            "afericaoResultado" = 'falta',
+            "afericaoObs" = 'Falta identificada na aferição — sem registro no DIXI.',
             "afericaoEm" = NOW(),
-            "isFalta" = 0,
+            "isFalta" = 1,
             "isAtraso" = 0
           WHERE id IN (${timecardSemRegistroIds.join(',')})
         `));
@@ -1201,7 +1200,7 @@ export const payrollEngineRouter = router({
       const afericaoResultPayload = {
         totalAferidos, divergencias, totalOk, faltas: divergenciasList.filter((d: any) => d.tipo === 'falta').length,
         atrasos: divergenciasList.filter((d: any) => d.tipo === 'atraso').length,
-        semRegistro: divergenciasList.filter((d: any) => d.tipo === 'sem_registro').length,
+        semRegistro: 0,
         totalJustificados,
         divergenciasList, validadosList, justificadosList,
       };
