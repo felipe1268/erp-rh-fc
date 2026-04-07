@@ -3763,6 +3763,12 @@ export default function FolhaPagamento() {
                                             <th className="text-right py-2 px-2">HE Fim Sem.</th>
                                             <th className="text-right py-2 px-2">Total HE</th>
                                             <th className="text-right py-2 px-2">Valor HE</th>
+                                            {periodEmps.some((e: any) => e.valorPlanilha != null) && (
+                                              <>
+                                                <th className="text-right py-2 px-2 text-orange-700">Ref. Planilha</th>
+                                                <th className="text-right py-2 px-2 text-orange-700">Divergência</th>
+                                              </>
+                                            )}
                                             <th className="text-right py-2 px-2">Saldo Banco</th>
                                             <th className="text-center py-2 px-2">Destinação</th>
                                           </tr>
@@ -3800,6 +3806,29 @@ export default function FolhaPagamento() {
                                                     </button>
                                                   </span>
                                                 </td>
+                                                {periodEmps.some((x: any) => x.valorPlanilha != null) && (() => {
+                                                  const vp = e.valorPlanilha != null ? Number(e.valorPlanilha) : null;
+                                                  const ve = Number(e.valorHETotal);
+                                                  const diff = vp !== null ? vp - ve : null;
+                                                  return (
+                                                    <>
+                                                      <td className="text-right py-2 px-2 text-xs">
+                                                        {vp !== null ? <span className="font-medium text-orange-700">{formatBRL(vp)}</span> : <span className="text-gray-300">—</span>}
+                                                      </td>
+                                                      <td className="text-right py-2 px-2 text-xs font-bold">
+                                                        {diff !== null ? (
+                                                          Math.abs(diff) < 0.02 ? (
+                                                            <span className="text-green-600">✓ OK</span>
+                                                          ) : diff > 0 ? (
+                                                            <span className="text-red-600">+{formatBRL(diff)}</span>
+                                                          ) : (
+                                                            <span className="text-blue-600">{formatBRL(diff)}</span>
+                                                          )
+                                                        ) : <span className="text-gray-300">—</span>}
+                                                      </td>
+                                                    </>
+                                                  );
+                                                })()}
                                                 <td className="text-right py-2 px-2">
                                                   {saldo > 0
                                                     ? <span className="text-blue-600 font-medium text-xs">{minsToHHMM(saldo)}</span>
@@ -3830,13 +3859,35 @@ export default function FolhaPagamento() {
                                           })}
                                         </tbody>
                                         <tfoot>
-                                          <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                                            <td className="py-2 px-2" colSpan={4}>TOTAL</td>
-                                            <td className="text-right py-2 px-2 text-lg text-purple-700">
-                                              {formatBRL(periodEmps.reduce((s: number, e: any) => s + Number(e.valorHETotal), 0))}
-                                            </td>
-                                            <td colSpan={2} />
-                                          </tr>
+                                          {(() => {
+                                            const hasPlanilha = periodEmps.some((e: any) => e.valorPlanilha != null);
+                                            const totalERP = periodEmps.reduce((s: number, e: any) => s + Number(e.valorHETotal), 0);
+                                            const totalPlan = hasPlanilha ? periodEmps.reduce((s: number, e: any) => s + (e.valorPlanilha != null ? Number(e.valorPlanilha) : 0), 0) : 0;
+                                            const totalDiff = totalPlan - totalERP;
+                                            return (
+                                              <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
+                                                <td className="py-2 px-2" colSpan={4}>TOTAL</td>
+                                                <td className="text-right py-2 px-2 text-lg text-purple-700">
+                                                  {formatBRL(totalERP)}
+                                                </td>
+                                                {hasPlanilha && (
+                                                  <>
+                                                    <td className="text-right py-2 px-2 text-orange-700">{formatBRL(totalPlan)}</td>
+                                                    <td className="text-right py-2 px-2">
+                                                      {Math.abs(totalDiff) < 0.02 ? (
+                                                        <span className="text-green-600">✓ OK</span>
+                                                      ) : totalDiff > 0 ? (
+                                                        <span className="text-red-600">+{formatBRL(totalDiff)}</span>
+                                                      ) : (
+                                                        <span className="text-blue-600">{formatBRL(totalDiff)}</span>
+                                                      )}
+                                                    </td>
+                                                  </>
+                                                )}
+                                                <td colSpan={2} />
+                                              </tr>
+                                            );
+                                          })()}
                                         </tfoot>
                                       </table>
                                     </div>
