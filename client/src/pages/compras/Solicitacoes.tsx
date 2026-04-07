@@ -119,10 +119,11 @@ function DocLinks({ docs, prefix, route, navigate }: { docs: { id: number; numer
   );
 }
 
-function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ, classificarMut, corrigirMut, renomearMut, onAddItem }: {
+function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ, classificarMut, corrigirMut, renomearMut, onAddItem, itensNaSC }: {
   open: boolean; onClose: () => void; orcamentoId?: number; companyId: number;
   disciplinasQ: any; classificarMut: any; corrigirMut: any; renomearMut: any;
   onAddItem: (item: any) => void;
+  itensNaSC?: string[];
 }) {
   const [expandido, setExpandido] = useState<string | null>(null);
   const [editandoNome, setEditandoNome] = useState<string | null>(null);
@@ -138,6 +139,7 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
   const disciplinas = data?.disciplinas || [];
   const loading = disciplinasQ.isLoading || classificarMut.isPending;
   const [progresso, setProgresso] = useState(0);
+  const scSet = useMemo(() => new Set(itensNaSC || []), [itensNaSC]);
 
   useEffect(() => {
     if (!classificarMut.isPending) { setProgresso(0); return; }
@@ -267,9 +269,28 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
         {!loading && status === "ok" && disciplinas.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-500">
-                {disciplinas.length} disciplina{disciplinas.length > 1 ? "s" : ""} · {disciplinas.reduce((s: number, d: any) => s + d.totalItens, 0)} serviços classificados
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-gray-500">
+                  {disciplinas.length} disciplina{disciplinas.length > 1 ? "s" : ""} · {disciplinas.reduce((s: number, d: any) => s + d.totalItens, 0)} serviços classificados
+                </p>
+                {(() => {
+                  const totalItens = disciplinas.reduce((s: number, d: any) => s + d.itens.length, 0);
+                  const allKeys = disciplinas.flatMap((d: any) => d.itens.map((i: any) => selKey(d.nome, i.eapCodigo)));
+                  const allSel = totalItens > 0 && allKeys.every((k: string) => selecionados.has(k));
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (allSel) { setSelecionados(new Set()); }
+                        else { setSelecionados(new Set(allKeys)); }
+                      }}
+                      className="text-xs text-violet-600 hover:text-violet-800 font-medium hover:underline"
+                    >
+                      {allSel ? "Desmarcar todos" : "Selecionar todos"}
+                    </button>
+                  );
+                })()}
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -348,8 +369,10 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
 
                   {isOpen && (
                     <div className="divide-y">
-                      {disc.itens.map((item: any) => (
-                        <div key={item.id} className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 text-xs">
+                      {disc.itens.map((item: any) => {
+                        const jaNaSC = scSet.has(item.eapCodigo);
+                        return (
+                        <div key={item.id} className={`flex items-center justify-between px-4 py-2 hover:bg-gray-50 text-xs ${jaNaSC ? "bg-emerald-50/60" : ""}`}>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <input
@@ -360,6 +383,7 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                               />
                               <code className="text-violet-700 font-mono text-[10px] bg-violet-50 px-1.5 py-0.5 rounded">{item.eapCodigo}</code>
                               <span className="truncate text-gray-700">{item.descricao}</span>
+                              {jaNaSC && <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 shrink-0">Na SC</span>}
                             </div>
                           </div>
                           <div className="flex items-center gap-3 ml-2 shrink-0">
@@ -385,17 +409,22 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                               <ArrowRightLeft className="h-3.5 w-3.5" />
                             </button>
                             {item.status !== "contratado" && item.saldo > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => onAddItem(item)}
-                                className="text-violet-600 hover:text-violet-800 font-medium flex items-center gap-0.5"
-                              >
-                                <Plus className="h-3 w-3" /> SC
-                              </button>
+                              jaNaSC ? (
+                                <span className="text-emerald-500 flex items-center gap-0.5 font-medium"><CheckCircle2 className="h-3 w-3" /></span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => onAddItem(item)}
+                                  className="text-violet-600 hover:text-violet-800 font-medium flex items-center gap-0.5"
+                                >
+                                  <Plus className="h-3 w-3" /> SC
+                                </button>
+                              )
                             )}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -407,25 +436,23 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
         {selecionados.size > 0 && (
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-violet-700 text-white rounded-xl shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4">
             <span className="text-sm font-medium">{selecionados.size} ite{selecionados.size > 1 ? "ns" : "m"} selecionado{selecionados.size > 1 ? "s" : ""}</span>
-            <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0 gap-1.5 text-xs" onClick={() => { setShowMoverSelecionados(true); setMoverSelecionadosPara(""); }}>
-              <ArrowRightLeft className="h-3.5 w-3.5" /> Mover para disciplina
-            </Button>
-            <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0 gap-1.5 text-xs" onClick={() => {
-              const itens = selecionadosInfo().filter(i => {
+            <Button size="sm" variant="secondary" className="bg-emerald-500 hover:bg-emerald-400 text-white border-0 gap-1.5 text-xs font-semibold" onClick={() => {
+              let added = 0;
+              selecionadosInfo().forEach(i => {
+                if (scSet.has(i.eapCodigo)) return;
                 const d = disciplinas.find((dd: any) => dd.nome === i.disciplinaOriginal);
                 const item = d?.itens?.find((it: any) => it.eapCodigo === i.eapCodigo);
-                return item && item.status !== "contratado" && item.saldo > 0;
+                if (item && item.status !== "contratado" && item.saldo > 0) { onAddItem(item); added++; }
               });
-              if (itens.length > 0) itens.forEach(i => {
-                const d = disciplinas.find((dd: any) => dd.nome === i.disciplinaOriginal);
-                const item = d?.itens?.find((it: any) => it.eapCodigo === i.eapCodigo);
-                if (item) onAddItem(item);
-              });
+              if (added === 0) toast.info("Nenhum item novo para adicionar (já estão na SC ou sem saldo)");
               setSelecionados(new Set());
             }}>
-              <Plus className="h-3.5 w-3.5" /> + SC
+              <Plus className="h-3.5 w-3.5" /> Adicionar à SC ({(() => { const c = selecionadosInfo().filter(i => !scSet.has(i.eapCodigo)).length; return c; })()})
             </Button>
-            <button type="button" onClick={() => setSelecionados(new Set())} className="text-white/70 hover:text-white ml-1">
+            <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0 gap-1.5 text-xs" onClick={() => { setShowMoverSelecionados(true); setMoverSelecionadosPara(""); }}>
+              <ArrowRightLeft className="h-3.5 w-3.5" /> Mover disciplina
+            </Button>
+            <button type="button" onClick={() => setSelecionados(new Set())} className="text-white/70 hover:text-white ml-1" title="Limpar seleção">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -4065,6 +4092,7 @@ export default function Solicitacoes() {
         classificarMut={classificarMut}
         corrigirMut={corrigirMut}
         renomearMut={renomearMut}
+        itensNaSC={itens.filter(i => i.eapCodigo).map(i => i.eapCodigo!)}
         onAddItem={(item: any) => {
           const newItem: ItemForm = {
             eapCodigo: item.eapCodigo,
