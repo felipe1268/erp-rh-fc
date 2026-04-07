@@ -693,6 +693,7 @@ export default function Cotacoes() {
     onSuccess: () => { mapaQ.refetch(); fornQ.refetch(); setEditFornDialog(null); toast.success("Fornecedor atualizado!"); },
   });
   function abrirEditForn(f: any) {
+    if (!f) return;
     const maskP = (v: string) => { const d = (v || "").replace(/\D/g, "").slice(0, 11); if (d.length <= 2) return d; if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`; if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`; return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`; };
     setEditFornForm({
       cnpj: f.cnpj ?? "", razaoSocial: f.razaoSocial ?? "", nomeFantasia: f.nomeFantasia ?? "",
@@ -2509,7 +2510,7 @@ export default function Cotacoes() {
                                 </span>
                               )}
                               {parseFloat(p.totalOrcado ?? "0") > 0 && <span className="font-normal text-xs opacity-70">· {parseFloat(p.totalOrcado).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
-                              <button onClick={() => abrirEditForn(p.fornecedor)} className="ml-1 hover:text-blue-500 transition-colors" title="Editar fornecedor"><Pencil className="h-2.5 w-2.5" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); const forn = p.fornecedor || fornecedores.find((ff: any) => ff.id === p.fornecedorId); if (forn) { abrirEditForn(forn); } else { toast.error("Fornecedor não encontrado"); } }} className="ml-1 p-0.5 rounded hover:bg-blue-100 hover:text-blue-600 transition-colors" title="Editar fornecedor"><Pencil className="h-3.5 w-3.5" /></button>
                               <button onClick={() => removerForn.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId })} className="ml-1 hover:text-red-500 transition-colors"><X className="h-3 w-3" /></button>
                             </div>
                           );
@@ -4766,9 +4767,9 @@ export default function Cotacoes() {
         </div>
       )}
 
-      {editFornDialog && (
-        <Dialog open={!!editFornDialog} onOpenChange={() => setEditFornDialog(null)}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={!!editFornDialog} onOpenChange={(open) => { if (!open) setEditFornDialog(null); }}>
+        {editFornDialog && (
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto z-[9999]">
             <DialogHeader><DialogTitle>Editar Fornecedor</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -4898,8 +4899,8 @@ export default function Cotacoes() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
-      )}
+        )}
+      </Dialog>
 
     </div>
     </DashboardLayout>
