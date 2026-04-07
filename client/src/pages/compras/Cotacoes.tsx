@@ -1920,15 +1920,16 @@ export default function Cotacoes() {
       const totalGeral = itemTotais.reduce((s, i) => s + i.total, 0);
       if (totalGeral <= 0) return [];
 
+      const parseBR = (v: string) => parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
       let valorDesc: number;
       if (tipo === "percentual") {
         valorDesc = totalGeral * (parseFloat(valorInput) || 0) / 100;
       } else if (tipo === "final") {
-        const valorFinal = parseFloat(valorInput) || 0;
+        const valorFinal = parseBR(valorInput);
         if (valorFinal <= 0 || valorFinal >= totalGeral) return [];
         valorDesc = totalGeral - valorFinal;
       } else {
-        valorDesc = parseFloat(valorInput) || 0;
+        valorDesc = parseBR(valorInput);
       }
 
       if (valorDesc <= 0 || valorDesc > totalGeral) return [];
@@ -4186,11 +4187,24 @@ export default function Cotacoes() {
                   </div>
                   <div className="flex-1">
                     <Label className="text-[11px] text-gray-600">{descontoTipo === "valor" ? "Valor do Desconto (R$)" : descontoTipo === "percentual" ? "Percentual (%)" : "Valor Final Desejado (R$)"}</Label>
-                    <Input type="number" step="0.01" min="0" value={descontoValor}
-                      onChange={e => { setDescontoValor(e.target.value); setDescontoPreviewing(false); }}
-                      placeholder={descontoTipo === "valor" ? "500.00" : descontoTipo === "percentual" ? "3.5" : "48000.00"} className="mt-1 h-8 text-sm font-mono" autoFocus />
+                    {descontoTipo === "percentual" ? (
+                      <Input type="number" step="0.1" min="0" value={descontoValor}
+                        onChange={e => { setDescontoValor(e.target.value); setDescontoPreviewing(false); }}
+                        placeholder="3,5" className="mt-1 h-8 text-sm font-mono" autoFocus />
+                    ) : (
+                      <Input type="text" inputMode="decimal" value={descontoValor}
+                        onChange={e => {
+                          const raw = e.target.value.replace(/[^\d,]/g, "");
+                          const parts = raw.split(",");
+                          const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                          const formatted = parts.length > 1 ? `${intPart},${parts[1].slice(0, 2)}` : intPart;
+                          setDescontoValor(formatted);
+                          setDescontoPreviewing(false);
+                        }}
+                        placeholder={descontoTipo === "valor" ? "1.500,00" : "50.000,00"} className="mt-1 h-8 text-sm font-mono" autoFocus />
+                    )}
                   </div>
-                  <Button size="sm" onClick={() => setDescontoPreviewing(true)} disabled={!descontoValor || parseFloat(descontoValor) <= 0}
+                  <Button size="sm" onClick={() => setDescontoPreviewing(true)} disabled={!descontoValor || (() => { const v = descontoTipo === "percentual" ? parseFloat(descontoValor) : parseFloat(descontoValor.replace(/\./g, "").replace(",", ".")); return isNaN(v) || v <= 0; })()}
                     className="h-8 bg-amber-600 hover:bg-amber-700 text-white gap-1 text-xs">
                     <BarChart3 className="h-3.5 w-3.5" /> Calcular
                   </Button>
