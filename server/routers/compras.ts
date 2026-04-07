@@ -9082,29 +9082,42 @@ Retorne APENAS um JSON válido neste formato:
           role: "system",
           content: `Você é um engenheiro civil sênior especialista em orçamentos de construção civil no Brasil. Sua tarefa é classificar serviços/composições de um orçamento de obra em DISCIPLINAS construtivas.
 
-DISCIPLINAS TÍPICAS (pode criar outras se necessário):
-- Serviços Preliminares
-- Movimento de Terra
-- Fundações
-- Estrutural (concreto, armação, formas)
-- Alvenaria
-- Cobertura
-- Impermeabilização
-- Revestimento (chapisco, reboco, contrapiso)
-- Piso / Pavimentação
-- Pintura
-- Esquadrias (portas, janelas, vidros)
-- Elétrica
-- Hidráulica / Esgoto
-- Instalações Especiais (ar condicionado, elevador, incêndio, gás)
-- Limpeza / Acabamento Final
-- Paisagismo / Área Externa
+DISCIPLINAS TÍPICAS (use estas preferencialmente, pode criar outras se necessário):
+- Serviços Preliminares (canteiro, mobilização, placa, tapume, barracão)
+- Demolição (demolir, remover, arrancar)
+- Movimento de Terra (escavação, aterro, terraplanagem, bota-fora)
+- Fundações (estaca, tubulão, sapata, bloco de fundação, baldrame)
+- Estrutural (concreto, armação, formas, laje, viga, pilar, protensão)
+- Alvenaria (bloco, tijolo, verga, contraverga, encunhamento)
+- Cobertura (telha, cumeeira, rufo, calha, estrutura metálica cobertura)
+- Impermeabilização (manta, membrana, impermeabilizante, cristalização)
+- Revestimento (chapisco, reboco, emboço, contrapiso, massa)
+- Piso / Pavimentação (cerâmica, porcelanato, granito, asfalto, intertravado, paver)
+- Forro (gesso, PVC, mineral, drywall forro)
+- Drywall / Divisórias (parede drywall, divisória, painel)
+- Pintura (tinta, massa corrida, selador, textura, verniz)
+- Esquadrias (porta, janela, vidro, batente, fechadura, ferragem)
+- Elétrica (eletroduto, fio, cabo elétrico, disjuntor, quadro elétrico, tomada, interruptor, luminária, iluminação)
+- Hidráulica (tubo água, registro, válvula, torneira, louça sanitária, metais, caixa d'água)
+- Esgoto / Drenagem (tubo esgoto, caixa de gordura, caixa de inspeção, fossa, sumidouro, drenagem pluvial)
+- PCI (prevenção combate incêndio, sprinkler, hidrante, detector fumaça, alarme incêndio, extintor, porta corta-fogo, central de incêndio, mangueira incêndio)
+- CFTV (câmera, DVR, NVR, monitoramento, vigilância eletrônica)
+- Cabeamento Estruturado / Dados (cabo de rede, patch panel, rack, fibra óptica, switch, ponto de rede, dados, telecom)
+- Automação (controle de acesso, portaria, interfone, automação predial, BMS)
+- Ar Condicionado / HVAC (split, VRF, VRV, fan coil, duto ar, condensadora, evaporadora, climatização)
+- Elevador / Transporte Vertical (elevador, plataforma, monta-carga, escada rolante)
+- Gás (tubulação de gás, central de gás, medidor gás, GLP)
+- Limpeza / Acabamento Final (limpeza, acabamento final, arremate, rejunte)
+- Paisagismo / Área Externa (jardim, grama, plantio, muro, calçada, meio-fio, piso externo, pergolado)
+- Serviços Complementares (outros itens que não se encaixam nas anteriores)
 
-REGRAS:
+REGRAS IMPORTANTES:
 1. Cada item recebe EXATAMENTE uma disciplina
-2. Use nomes curtos e padronizados
-3. Se o item não se encaixa em nenhuma típica, crie uma disciplina adequada
-4. Priorize as correções do usuário quando houver${correcoesCtx}
+2. Use nomes curtos e padronizados — PREFERENCIALMENTE os nomes da lista acima
+3. NÃO USE "Instalações Especiais" como categoria genérica. Separe em: PCI, CFTV, Cabeamento Estruturado / Dados, Automação, Ar Condicionado / HVAC, Elevador, Gás, etc.
+4. Analise a DESCRIÇÃO do item com cuidado: eletroduto/cabo/fio dentro de um contexto de dados/CFTV é Cabeamento Estruturado, não Elétrica
+5. Itens de combate a incêndio (sprinkler, hidrante, detector, alarme de incêndio) são SEMPRE "PCI", nunca "Elétrica" ou "Hidráulica"
+6. Priorize as correções do usuário quando houver${correcoesCtx}
 
 Responda APENAS com JSON válido, sem markdown, no formato:
 [{"eap":"XX.XX.XX.XX","disc":"Nome da Disciplina"},...]`,
