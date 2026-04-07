@@ -2503,6 +2503,17 @@ Sempre retorne JSON válido, sem markdown.`;
     .mutation(async ({ input }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
+      if (input.numeroApolice) {
+        const dupCheck = await db.execute(sql`
+          SELECT id FROM fleet_insurance
+          WHERE company_id = ${input.companyId} AND numero_apolice = ${input.numeroApolice}
+          LIMIT 1
+        `);
+        const dupRows = (dupCheck as any).rows || [];
+        if (dupRows.length > 0) {
+          throw new TRPCError({ code: "CONFLICT", message: `Apólice ${input.numeroApolice} já cadastrada (ID #${dupRows[0].id}). Não é possível duplicar.` });
+        }
+      }
       const [r] = await db.insert(fleetInsurance).values({
         companyId: input.companyId, vehicleId: input.vehicleId, seguradora: input.seguradora,
         numeroApolice: input.numeroApolice || null, tipoCobertura: input.tipoCobertura || "compreensivo",
@@ -2746,6 +2757,24 @@ IMPORTANTE:
               const vc = ((v as any).chassi || "").replace(/\s/g, "").toUpperCase();
               return vc && vc === chassiNorm;
             });
+          }
+
+          if (extractedData.numeroApolice) {
+            const dupCheck = await db.execute(sql`
+              SELECT id FROM fleet_insurance
+              WHERE company_id = ${input.companyId}
+                AND numero_apolice = ${extractedData.numeroApolice}
+              LIMIT 1
+            `);
+            const dupRows = (dupCheck as any).rows || [];
+            if (dupRows.length > 0) {
+              results.push({
+                filename: file.filename,
+                success: false,
+                error: `Apólice ${extractedData.numeroApolice} já cadastrada (ID #${dupRows[0].id}). Upload ignorado para evitar duplicação.`,
+              });
+              continue;
+            }
           }
 
           const storageKey = `seguros/${input.companyId}/${Date.now()}_${safeName}`;
