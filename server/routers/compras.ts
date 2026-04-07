@@ -9054,8 +9054,9 @@ Retorne APENAS um JSON válido neste formato:
       .orderBy(asc(orcamentoItens.eapCodigo));
 
     const servicos = itens.filter(i => {
-      const t = (i.tipo || "").toLowerCase();
-      return t === "composicao" || t === "servico" || t === "serviço";
+      const t = (i.tipo || "").toLowerCase().trim();
+      if (t === "etapa/subetapa" || t === "etapa" || t === "subetapa" || t === "grupo") return false;
+      return true;
     });
 
     if (servicos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum serviço/composição encontrado neste orçamento." });
