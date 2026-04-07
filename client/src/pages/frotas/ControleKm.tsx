@@ -257,7 +257,7 @@ export default function ControleKm() {
               <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
                 <CardContent className="p-4">
                   <div className="text-xs text-blue-600 font-medium">Viagens</div>
-                  <div className="text-xl font-bold text-blue-700">{totals.totalViagens}</div>
+                  <div className="text-xl font-bold text-blue-700">{totals.totalViagens.toLocaleString("pt-BR")}</div>
                 </CardContent>
               </Card>
               <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
@@ -336,7 +336,7 @@ export default function ControleKm() {
                               </div>
                               <div className="text-center">
                                 <div className="text-xs text-gray-400">Viagens</div>
-                                <div className="font-bold text-gray-900">{v.totalViagens}</div>
+                                <div className="font-bold text-gray-900">{v.totalViagens.toLocaleString("pt-BR")}</div>
                               </div>
                               <div className="text-center">
                                 <div className="text-xs text-gray-400">Dias Ativos</div>
@@ -609,7 +609,7 @@ export default function ControleKm() {
                             <td className="py-3 px-3 text-right font-bold text-rose-600">
                               {totals.custoMedioKm > 0 ? "R$ " + formatNum(totals.custoMedioKm, 2) : "—"}
                             </td>
-                            <td className="py-3 px-3 text-right">{vehicles.reduce((s: number, v: any) => s + (v.abastecimentos?.length || 0), 0)}</td>
+                            <td className="py-3 px-3 text-right">{vehicles.reduce((s: number, v: any) => s + (v.abastecimentos?.length || 0), 0).toLocaleString("pt-BR")}</td>
                             <td></td>
                           </tr>
                         </tfoot>
@@ -711,7 +711,7 @@ export default function ControleKm() {
                                   </div>
                                   <div className="flex items-center gap-4 text-sm">
                                     <span className="text-cyan-600 font-bold">{formatNum(totalKmDay, 1)} km</span>
-                                    <span className="text-gray-500">{totalViagensDay} viagens</span>
+                                    <span className="text-gray-500">{totalViagensDay.toLocaleString("pt-BR")} viagens</span>
                                     <span className="text-gray-500">{veiculosAtivosDay} veículos ativos</span>
                                   </div>
                                 </div>
@@ -791,7 +791,7 @@ export default function ControleKm() {
                                 <div className="text-xs text-gray-500">Total do período</div>
                               </div>
                               <div>
-                                <div className="text-2xl font-bold text-cyan-700">{dailyRecords.reduce((s: number, r: any) => s + parseInt(r.viagens || 0), 0)}</div>
+                                <div className="text-2xl font-bold text-cyan-700">{dailyRecords.reduce((s: number, r: any) => s + parseInt(r.viagens || 0), 0).toLocaleString("pt-BR")}</div>
                                 <div className="text-xs text-gray-500">Total de viagens</div>
                               </div>
                               <div>
