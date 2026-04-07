@@ -3265,6 +3265,8 @@ export const fleetInsurance = pgTable("fleet_insurance", {
         iaLimitesIndenizacao: text("ia_limites_indenizacao"),
         status: varchar({ length: 30 }).notNull().default("ativa"),
         observacoes: text(),
+        corretor: varchar({ length: 255 }),
+        apoliceArquivoNome: varchar("apolice_arquivo_nome", { length: 500 }),
         criadoPor: varchar("criado_por", { length: 255 }),
         createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),

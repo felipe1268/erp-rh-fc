@@ -232,6 +232,10 @@ async function ensureFleetTables() {
     )
   `);
   await db.execute(sql`
+    ALTER TABLE fleet_insurance ADD COLUMN IF NOT EXISTS corretor VARCHAR(255);
+    ALTER TABLE fleet_insurance ADD COLUMN IF NOT EXISTS apolice_arquivo_nome VARCHAR(500);
+  `);
+  await db.execute(sql`
     CREATE TABLE IF NOT EXISTS fleet_toll_records (
       id SERIAL PRIMARY KEY,
       company_id INTEGER NOT NULL,
@@ -2480,7 +2484,7 @@ Sempre retorne JSON válido, sem markdown.`;
     .query(async ({ input }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
-      let q = sql`SELECT s.*, v.placa, v.modelo, v.marca FROM fleet_insurance s JOIN vehicles v ON v.id = s.vehicle_id WHERE s.company_id = ${input.companyId}`;
+      let q = sql`SELECT s.*, v.placa, v.modelo, v.marca FROM fleet_insurance s LEFT JOIN vehicles v ON v.id = s.vehicle_id WHERE s.company_id = ${input.companyId}`;
       if (input.vehicleId) q = sql`${q} AND s.vehicle_id = ${input.vehicleId}`;
       q = sql`${q} ORDER BY s.data_fim DESC`;
       const res = await db.execute(q);
@@ -2494,6 +2498,7 @@ Sempre retorne JSON válido, sem markdown.`;
       dataInicio: z.string(), dataFim: z.string(), valorPremio: z.string().optional(),
       franquia: z.string().optional(), coberturas: z.string().optional(), restricoes: z.string().optional(),
       apoliceUrl: z.string().optional(), observacoes: z.string().optional(), criadoPor: z.string().optional(),
+      corretor: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
@@ -2504,7 +2509,7 @@ Sempre retorne JSON válido, sem markdown.`;
         dataInicio: input.dataInicio, dataFim: input.dataFim,
         valorPremio: input.valorPremio || null, franquia: input.franquia || null,
         coberturas: input.coberturas || null, restricoes: input.restricoes || null,
-        apoliceUrl: input.apoliceUrl || null,
+        apoliceUrl: input.apoliceUrl || null, corretor: input.corretor || null,
         observacoes: input.observacoes || null, criadoPor: input.criadoPor || null,
       }).returning();
       return r;
@@ -2516,7 +2521,8 @@ Sempre retorne JSON válido, sem markdown.`;
       dataInicio: z.string().optional(), dataFim: z.string().optional(),
       valorPremio: z.string().optional(), franquia: z.string().optional(),
       coberturas: z.string().optional(), restricoes: z.string().optional(),
-      apoliceUrl: z.string().optional(), status: z.string().optional(), observacoes: z.string().optional() }))
+      apoliceUrl: z.string().optional(), status: z.string().optional(), observacoes: z.string().optional(),
+      corretor: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       const { id, companyId, ...data } = input;
@@ -2595,6 +2601,255 @@ FOCO PRINCIPAL: Identifique TUDO que pode fazer o segurado PERDER o direito ao s
         console.error("[Frotas] Erro ao analisar apólice:", e.message);
         return { success: false, error: e.message };
       }
+    }),
+
+  uploadApolicesPdf: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      files: z.array(z.object({
+        filename: z.string(),
+        base64: z.string(),
+      })).min(1).max(20),
+      criadoPor: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId !== undefined && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar dados desta empresa" });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+
+      const vehiclesRes = await db.execute(sql`
+        SELECT id, placa, modelo, marca FROM vehicles WHERE "companyId" = ${input.companyId}
+      `);
+      const vehicles = (vehiclesRes as any).rows || [];
+
+      const results: any[] = [];
+
+      for (const file of input.files) {
+        try {
+          const maxBase64Len = Math.ceil(15 * 1024 * 1024 * 4 / 3) + 4;
+          if (file.base64.length > maxBase64Len) {
+            results.push({ filename: file.filename, success: false, error: "Arquivo muito grande (máx 15MB)" });
+            continue;
+          }
+
+          const pdfBuffer = Buffer.from(file.base64, "base64");
+
+          if (pdfBuffer.length < 5 || pdfBuffer.subarray(0, 5).toString() !== "%PDF-") {
+            results.push({ filename: file.filename, success: false, error: "Arquivo não é um PDF válido" });
+            continue;
+          }
+
+          const safeName = file.filename.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_{2,}/g, "_").substring(0, 200);
+
+          let pdfText = "";
+          try {
+            const mod = await import('pdf-parse');
+            const pdfParse = mod.default || mod;
+            const parsed = await pdfParse(pdfBuffer);
+            pdfText = parsed.text || "";
+          } catch (parseErr: any) {
+            console.error(`[Frotas] PDF parse fallback para vision: ${parseErr.message}`);
+          }
+
+          let extractedData: any = null;
+
+          if (pdfText.length > 100) {
+            const llmResult = await invokeLLM({
+              messages: [
+                { role: "system", content: `Você é um especialista em seguros de veículos e equipamentos no Brasil. Analise o texto da apólice/proposta de seguro e extraia informações estruturadas. Responda APENAS com JSON válido, sem markdown.
+
+O JSON deve ter este formato:
+{
+  "seguradora": "Nome da seguradora (ex: Zurich, HDI, Suhai, Porto Seguro)",
+  "numeroApolice": "Número da apólice ou proposta",
+  "placa": "Placa do veículo (ex: EUY7E02) ou null se for equipamento",
+  "veiculo": "Descrição do veículo/equipamento (ex: GOL 1.0 FLEX 12V 5P)",
+  "chassi": "Número do chassi",
+  "tipoCobertura": "Tipo: compreensivo, terceiros, equipamento, etc.",
+  "dataInicio": "Data início vigência no formato YYYY-MM-DD",
+  "dataFim": "Data fim vigência no formato YYYY-MM-DD",
+  "valorPremioTotal": "Valor do prêmio TOTAL em número decimal (ex: 2903.40)",
+  "franquiaPrincipal": "Valor da franquia principal em número decimal (ex: 2866.20)",
+  "corretor": "Nome do corretor de seguros",
+  "coberturas": ["Lista de coberturas com valores, ex: 'Colisão/Incêndio/Roubo - 100% FIPE', 'RCV Danos Materiais - R$ 100.000,00'"],
+  "observacoes": "Informações adicionais relevantes (ex: classe de bônus, forma de pagamento, nº parcelas)"
+}
+
+IMPORTANTE:
+- Se houver múltiplos itens/veículos, extraia os dados do item PRINCIPAL (geralmente item 001 ou o mais recente)
+- Datas devem estar no formato YYYY-MM-DD
+- Valores numéricos sem R$, sem pontos de milhar, com ponto decimal (ex: 2903.40)
+- Se não encontrar algum campo, use null` },
+                { role: "user", content: `Extraia os dados desta apólice de seguro:\n\n${pdfText.substring(0, 12000)}` }
+              ],
+              maxTokens: 2048,
+            });
+
+            const content = llmResult.choices[0]?.message?.content || "";
+            const textContent = typeof content === "string" ? content : (content as any[]).map((c: any) => c.text || "").join("");
+            const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              extractedData = JSON.parse(jsonMatch[0]);
+            }
+          }
+
+          if (!extractedData && pdfText.length <= 100) {
+            try {
+              const visionResult = await invokeAnthropicVision({
+                prompt: `Extraia os dados desta apólice de seguro de veículo/equipamento. Responda APENAS com JSON válido:
+{
+  "seguradora": "Nome da seguradora",
+  "numeroApolice": "Número da apólice",
+  "placa": "Placa do veículo ou null",
+  "veiculo": "Descrição do veículo",
+  "chassi": "Chassi",
+  "tipoCobertura": "compreensivo/terceiros/equipamento",
+  "dataInicio": "YYYY-MM-DD",
+  "dataFim": "YYYY-MM-DD",
+  "valorPremioTotal": "número decimal",
+  "franquiaPrincipal": "número decimal",
+  "corretor": "nome do corretor",
+  "coberturas": ["lista de coberturas"],
+  "observacoes": "observações"
+}`,
+                base64: file.base64,
+                mimeType: "application/pdf",
+                maxTokens: 2048,
+              });
+              const jsonMatch = visionResult.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                extractedData = JSON.parse(jsonMatch[0]);
+              }
+            } catch (vErr: any) {
+              console.error(`[Frotas] Vision fallback failed: ${vErr.message}`);
+            }
+          }
+
+          if (!extractedData) {
+            results.push({ filename: file.filename, success: false, error: "Não foi possível extrair dados do PDF" });
+            continue;
+          }
+
+          let matchedVehicle: any = null;
+          if (extractedData.placa) {
+            const placaNorm = extractedData.placa.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+            matchedVehicle = vehicles.find((v: any) => {
+              const vp = (v.placa || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+              return vp === placaNorm;
+            });
+          }
+          if (!matchedVehicle && extractedData.chassi) {
+            const chassiNorm = extractedData.chassi.replace(/\s/g, "").toUpperCase();
+            matchedVehicle = vehicles.find((v: any) => {
+              const vc = ((v as any).chassi || "").replace(/\s/g, "").toUpperCase();
+              return vc && vc === chassiNorm;
+            });
+          }
+
+          const storageKey = `seguros/${input.companyId}/${Date.now()}_${safeName}`;
+          let apoliceUrl = "";
+          try {
+            const stored = await storagePut(storageKey, pdfBuffer, "application/pdf");
+            apoliceUrl = stored.url || `/uploads/${storageKey}`;
+          } catch (stErr: any) {
+            console.error(`[Frotas] Storage error: ${stErr.message}`);
+          }
+
+          const coberturasText = Array.isArray(extractedData.coberturas)
+            ? extractedData.coberturas.join("\n")
+            : (extractedData.coberturas || "");
+
+          const insertData: any = {
+            companyId: input.companyId,
+            vehicleId: matchedVehicle ? matchedVehicle.id : 0,
+            seguradora: extractedData.seguradora || "Não identificada",
+            numeroApolice: extractedData.numeroApolice || null,
+            tipoCobertura: extractedData.tipoCobertura || "compreensivo",
+            dataInicio: extractedData.dataInicio || new Date().toISOString().slice(0, 10),
+            dataFim: extractedData.dataFim || new Date().toISOString().slice(0, 10),
+            valorPremio: extractedData.valorPremioTotal ? String(extractedData.valorPremioTotal) : null,
+            franquia: extractedData.franquiaPrincipal ? String(extractedData.franquiaPrincipal) : null,
+            coberturas: coberturasText || null,
+            apoliceUrl: apoliceUrl || null,
+            apoliceArquivoNome: file.filename,
+            corretor: extractedData.corretor || null,
+            observacoes: extractedData.observacoes || null,
+            criadoPor: input.criadoPor || null,
+            status: "ativa",
+          };
+
+          const [newIns] = await db.insert(fleetInsurance).values(insertData).returning();
+
+          if (pdfText.length > 100 && newIns?.id) {
+            try {
+              const analysisResult = await invokeLLM({
+                messages: [
+                  { role: "system", content: `Você é um especialista em seguros automotivos no Brasil. Analise a apólice e extraia informações estruturadas. Responda APENAS com JSON válido.
+{
+  "resumo": "Resumo geral da apólice em 2-3 parágrafos",
+  "regrasImportantes": ["Regras que o segurado DEVE cumprir"],
+  "alertasRisco": ["Situações que podem causar perda do seguro"],
+  "coberturasDetalhadas": ["Cada cobertura com valores/limites"],
+  "exclusoes": ["O que NÃO está coberto"],
+  "limitesIndenizacao": ["Limites máximos por tipo de cobertura"],
+  "franquias": "Detalhamento das franquias"
+}` },
+                  { role: "user", content: `Analise esta apólice:\n\n${pdfText.substring(0, 10000)}` }
+                ],
+                maxTokens: 3072,
+              });
+              const acontent = analysisResult.choices[0]?.message?.content || "";
+              const atextContent = typeof acontent === "string" ? acontent : (acontent as any[]).map((c: any) => c.text || "").join("");
+              const ajsonMatch = atextContent.match(/\{[\s\S]*\}/);
+              if (ajsonMatch) {
+                const parsed = JSON.parse(ajsonMatch[0]);
+                await db.update(fleetInsurance).set({
+                  iaAnalisada: true,
+                  iaResumo: parsed.resumo || null,
+                  iaRegrasImportantes: JSON.stringify(parsed.regrasImportantes || []),
+                  iaAlertasRisco: JSON.stringify(parsed.alertasRisco || []),
+                  iaCoberturasDetalhadas: JSON.stringify(parsed.coberturasDetalhadas || []),
+                  iaExclusoes: JSON.stringify(parsed.exclusoes || []),
+                  iaLimitesIndenizacao: JSON.stringify([
+                    ...(parsed.limitesIndenizacao || []),
+                    parsed.franquias ? `Franquias: ${parsed.franquias}` : null,
+                  ].filter(Boolean)),
+                  updatedAt: new Date().toISOString(),
+                } as any).where(eq(fleetInsurance.id, newIns.id));
+              }
+            } catch (analysisErr: any) {
+              console.error(`[Frotas] IA analysis for ${file.filename}: ${analysisErr.message}`);
+            }
+          }
+
+          results.push({
+            filename: file.filename,
+            success: true,
+            insuranceId: newIns?.id,
+            extracted: {
+              seguradora: extractedData.seguradora,
+              placa: extractedData.placa,
+              veiculo: extractedData.veiculo,
+              numeroApolice: extractedData.numeroApolice,
+              tipoCobertura: extractedData.tipoCobertura,
+              dataInicio: extractedData.dataInicio,
+              dataFim: extractedData.dataFim,
+              valorPremio: extractedData.valorPremioTotal,
+              franquia: extractedData.franquiaPrincipal,
+              corretor: extractedData.corretor,
+              coberturas: extractedData.coberturas,
+            },
+            vehicleMatched: matchedVehicle ? { id: matchedVehicle.id, placa: matchedVehicle.placa, modelo: matchedVehicle.modelo } : null,
+          });
+        } catch (err: any) {
+          console.error(`[Frotas] Error processing ${file.filename}:`, err.message);
+          results.push({ filename: file.filename, success: false, error: err.message });
+        }
+      }
+
+      return { results, totalProcessed: results.length, totalSuccess: results.filter(r => r.success).length };
     }),
 
   getDashboard: protectedProcedure
