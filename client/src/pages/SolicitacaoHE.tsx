@@ -366,7 +366,7 @@ export default function SolicitacaoHE() {
   const [assinaturaEmployeeName, setAssinaturaEmployeeName] = useState("");
   const [modoComparecimento, setModoComparecimento] = useState(false);
   const [verAssinatura, setVerAssinatura] = useState<number | null>(null);
-  const [ausenciaDialog, setAusenciaDialog] = useState<{ employeeId: number; nome: string; solicitacaoId: number; bulk?: { employeeId: number; nome: string }[] } | null>(null);
+  const [ausenciaDialog, setAusenciaDialog] = useState<{ employeeId: number; nome: string; solicitacaoId: number; dataSolicitacao?: string; bulk?: { employeeId: number; nome: string }[] } | null>(null);
   const [justificativaTexto, setJustificativaTexto] = useState("");
 
   const confirmQ = trpc.heSolicitacoes.getConfirmacoes.useQuery(
@@ -1856,7 +1856,7 @@ export default function SolicitacaoHE() {
                                     </Button>
                                     <Button size="sm" variant="destructive" className="h-6 text-xs px-2"
                                       onClick={() => {
-                                        setAusenciaDialog({ employeeId: c.employeeId, nome: c.nomeCompleto || "Funcionário", solicitacaoId: sol.id });
+                                        setAusenciaDialog({ employeeId: c.employeeId, nome: c.nomeCompleto || "Funcionário", solicitacaoId: sol.id, dataSolicitacao: sol.dataSolicitacao });
                                         setJustificativaTexto("");
                                       }}
                                       disabled={comparecMut.isPending}
@@ -1917,6 +1917,7 @@ export default function SolicitacaoHE() {
                                   employeeId: primeiro.employeeId,
                                   nome: "Todos os funcionários pendentes",
                                   solicitacaoId: sol.id,
+                                  dataSolicitacao: sol.dataSolicitacao,
                                   bulk: semRegistro.map((c: any) => ({ employeeId: c.employeeId, nome: c.nomeCompleto || "Funcionário" }))
                                 });
                                 setJustificativaTexto("");
@@ -2236,18 +2237,23 @@ export default function SolicitacaoHE() {
                       ? `Falta NÃO justificada — pendente de advertência. Obs: ${justificativaTexto}`
                       : "Falta NÃO justificada — pendente de advertência",
                   }];
+              const targetEmployee = ausenciaDialog.bulk ? ausenciaDialog.bulk[0] : { employeeId: ausenciaDialog.employeeId, nome: ausenciaDialog.nome };
+              const dataSol = ausenciaDialog.dataSolicitacao || new Date().toISOString().slice(0, 10);
               comparecMut.mutate(
                 { solicitacaoId: ausenciaDialog.solicitacaoId, registros },
                 {
                   onSuccess: () => {
                     setAusenciaDialog(null);
-                    const nomes = ausenciaDialog.bulk
-                      ? ausenciaDialog.bulk.map((f) => f.nome).join(", ")
-                      : ausenciaDialog.nome;
-                    toast.warning(
-                      `⚠️ Falta não justificada registrada para: ${nomes}. Providenciar advertência.`,
-                      { duration: 10000 }
-                    );
+                    const preFill = {
+                      employeeId: targetEmployee.employeeId,
+                      employeeName: targetEmployee.nome,
+                      dataOcorrencia: dataSol,
+                      motivo: `Falta não justificada na Hora Extra (Solicitação #${ausenciaDialog.solicitacaoId}) do dia ${new Date(dataSol + "T12:00:00").toLocaleDateString("pt-BR")}`,
+                      descricao: `O colaborador ${targetEmployee.nome} confirmou presença na solicitação de Hora Extra #${ausenciaDialog.solicitacaoId}, porém não compareceu e não apresentou justificativa.${justificativaTexto ? ` Observação: ${justificativaTexto}` : ""}`,
+                    };
+                    sessionStorage.setItem("advPreFill", JSON.stringify(preFill));
+                    sessionStorage.setItem("_navParams", "tab=advertencias&action=nova");
+                    window.location.href = "/controle-documentos?tab=advertencias&action=nova";
                   },
                 }
               );
