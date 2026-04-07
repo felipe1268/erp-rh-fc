@@ -317,10 +317,9 @@ export default function FolhaPagamento() {
     const [y, m] = mesAno.split("-").map(Number);
     const pm = m === 1 ? 12 : m - 1;
     const py = m === 1 ? y - 1 : y;
-    const lastDay = new Date(py, pm, 0).getDate();
     return {
       inicio: `${py}-${String(pm).padStart(2,"0")}-16`,
-      fim: `${py}-${String(pm).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`,
+      fim: `${y}-${String(m).padStart(2,"0")}-15`,
     };
   }, [mesAno]);
 
@@ -1914,8 +1913,8 @@ export default function FolhaPagamento() {
                           <td className="py-2 px-2 font-medium">
                             <button
                               className="text-left hover:text-blue-600 hover:underline focus:outline-none"
-                              onClick={() => setLocation(`/fechamento-ponto?funcionario=${f.employeeId}&mes=${mesAno}`)}
-                              title="Abrir cartão de ponto"
+                              onClick={() => { setEspelhoPopupEmpId(f.employeeId); setEspelhoPopupEmpNome(f.nome || `ID ${f.employeeId}`); }}
+                              title="Abrir espelho de ponto"
                             >
                               {f.nome}
                             </button>
@@ -2104,8 +2103,8 @@ export default function FolhaPagamento() {
                           <td className="py-2 px-2 font-medium">
                             <button
                               className="text-left hover:text-blue-600 hover:underline focus:outline-none"
-                              onClick={() => setLocation(`/fechamento-ponto?funcionario=${f.employeeId}&mes=${mesAno}`)}
-                              title="Abrir cartão de ponto"
+                              onClick={() => { setEspelhoPopupEmpId(f.employeeId); setEspelhoPopupEmpNome(f.nome || `ID ${f.employeeId}`); }}
+                              title="Abrir espelho de ponto"
                             >
                               {f.nome}
                             </button>
