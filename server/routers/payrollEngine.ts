@@ -1653,9 +1653,7 @@ export const payrollEngineRouter = router({
           totalVale += valorTotalVale;
         }
 
-        // foiAprovadoManualmente → sem alerta (já resolvido pelo RH)
-        // diasFeriasNoMes > 0 sem aprovação manual → não bloqueia, mas indica proporcional
-        const temAlertaInfo = !foiAprovadoManualmente && diasFeriasNoMes > 0;
+        const temAlertaInfo = !foiAprovadoManualmente && !isRejeitadoPrev && diasFeriasNoMes > 0;
         const alertaFerias = temAlertaInfo
           ? `Férias no mês: ${diasFeriasNoMes} dia(s) — salário proporcional (${diasTrabalhados}/${diasNoMes} dias trabalhados)`
           : "";
