@@ -1596,6 +1596,8 @@ export default function Solicitacoes() {
     for (const it of validos) {
       const key = form.tipo === "servico" && it.orcamentoItemId
         ? `orc_${it.orcamentoItemId}`
+        : it.eapCodigo
+        ? `eap_${it.eapCodigo}`
         : (it.insumoCodigo || it.descricao);
       if (consolidados.has(key)) {
         const prev = consolidados.get(key)!;
