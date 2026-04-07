@@ -9114,18 +9114,30 @@ Responda APENAS com JSON válido, sem markdown, no formato:
           content: `Classifique estes ${servicos.length} serviços por disciplina:\n\n${listaSvc}`,
         },
       ],
-      maxTokens: 8000,
+      maxTokens: 16000,
     });
 
     const raw = typeof result.choices?.[0]?.message?.content === "string"
       ? result.choices[0].message.content
       : "";
 
+    if (!raw || raw.trim().length === 0) {
+      console.error("[ClassificarDisciplinas] IA retornou resposta vazia. Result:", JSON.stringify(result).substring(0, 300));
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA retornou resposta vazia. Tente novamente." });
+    }
+
     let classificacoes: Array<{ eap: string; disc: string }> = [];
     try {
-      const jsonStr = raw.replace(/```json\s*/g, "").replace(/```/g, "").trim();
+      let jsonStr = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const bracketStart = jsonStr.indexOf("[");
+      const bracketEnd = jsonStr.lastIndexOf("]");
+      if (bracketStart >= 0 && bracketEnd > bracketStart) {
+        jsonStr = jsonStr.substring(bracketStart, bracketEnd + 1);
+      }
+      jsonStr = jsonStr.replace(/,\s*]/g, "]").replace(/,\s*}/g, "}");
       classificacoes = JSON.parse(jsonStr);
-    } catch {
+    } catch (parseErr: any) {
+      console.error("[ClassificarDisciplinas] Parse error:", parseErr?.message, "Raw (first 500):", raw.substring(0, 500));
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA retornou formato inválido. Tente novamente." });
     }
 
