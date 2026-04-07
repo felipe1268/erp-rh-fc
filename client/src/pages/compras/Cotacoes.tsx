@@ -2489,29 +2489,42 @@ export default function Cotacoes() {
                           const isRecomendado = scoreVal >= 4.0 && sc && sc.totalOCs >= 1;
                           const isAtencao = scoreVal > 0 && scoreVal < 2.5 && sc && sc.totalOCs >= 1;
                           return (
-                            <div key={p.fornecedorId} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium ${isMelhor ? "bg-emerald-50 border-emerald-300 text-emerald-700" : p.selecionado ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-gray-100 border-gray-300 text-gray-700"}`}>
-                              {isMelhor && <Trophy className="h-3 w-3" />}
-                              {nome}
-                              <FornecedorContatoPopover fornecedor={p.fornecedor} />
-                              {sc && scoreVal > 0 && (
-                                <span className="flex items-center gap-0.5 text-[10px] font-semibold" title={`Score: ${scoreVal}/5`}>
-                                  <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
-                                  {scoreVal}
-                                </span>
-                              )}
-                              {isRecomendado && (
-                                <span className="flex items-center gap-0.5 text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full border border-emerald-200">
-                                  <ShieldCheck className="h-2.5 w-2.5" />Recomendado
-                                </span>
-                              )}
-                              {isAtencao && (
-                                <span className="flex items-center gap-0.5 text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full border border-red-200">
-                                  <ShieldAlert className="h-2.5 w-2.5" />Atenção
-                                </span>
-                              )}
-                              {parseFloat(p.totalOrcado ?? "0") > 0 && <span className="font-normal text-xs opacity-70">· {parseFloat(p.totalOrcado).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
-                              <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); console.log("EDIT CLICK", { fornecedor: p.fornecedor, fornecedorId: p.fornecedorId, fornecedoresLen: fornecedores.length }); const forn = p.fornecedor || fornecedores.find((ff: any) => ff.id === p.fornecedorId); console.log("FORN RESOLVED", forn); if (forn && forn.id) { abrirEditForn(forn); } else { toast.error("Fornecedor não encontrado"); } }} className="ml-1 p-0.5 rounded hover:bg-blue-100 hover:text-blue-600 transition-colors" title="Editar fornecedor"><Pencil className="h-3.5 w-3.5" /></button>
-                              <button onClick={() => removerForn.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId })} className="ml-1 hover:text-red-500 transition-colors"><X className="h-3 w-3" /></button>
+                            <div key={p.fornecedorId} className="flex items-center gap-1">
+                              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium ${isMelhor ? "bg-emerald-50 border-emerald-300 text-emerald-700" : p.selecionado ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-gray-100 border-gray-300 text-gray-700"}`}>
+                                {isMelhor && <Trophy className="h-3 w-3" />}
+                                {nome}
+                                <FornecedorContatoPopover fornecedor={p.fornecedor} />
+                                {sc && scoreVal > 0 && (
+                                  <span className="flex items-center gap-0.5 text-[10px] font-semibold" title={`Score: ${scoreVal}/5`}>
+                                    <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                                    {scoreVal}
+                                  </span>
+                                )}
+                                {isRecomendado && (
+                                  <span className="flex items-center gap-0.5 text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full border border-emerald-200">
+                                    <ShieldCheck className="h-2.5 w-2.5" />Recomendado
+                                  </span>
+                                )}
+                                {isAtencao && (
+                                  <span className="flex items-center gap-0.5 text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full border border-red-200">
+                                    <ShieldAlert className="h-2.5 w-2.5" />Atenção
+                                  </span>
+                                )}
+                                {parseFloat(p.totalOrcado ?? "0") > 0 && <span className="font-normal text-xs opacity-70">· {parseFloat(p.totalOrcado).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
+                                <button type="button" onClick={() => removerForn.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId })} className="ml-1 hover:text-red-500 transition-colors"><X className="h-3 w-3" /></button>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const forn = p.fornecedor || fornecedores.find((ff: any) => ff.id === p.fornecedorId);
+                                  if (forn) abrirEditForn(forn);
+                                  else toast.error("Fornecedor não encontrado");
+                                }}
+                                className="p-1.5 rounded-md border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 text-gray-400 transition-colors shadow-sm"
+                                title="Editar cadastro do fornecedor"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
                             </div>
                           );
                         })}
