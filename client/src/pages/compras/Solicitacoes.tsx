@@ -702,7 +702,7 @@ export default function Solicitacoes() {
 
   const [form, setForm] = useState({
     titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "",
-    tipo: "material" as "material" | "servico" | "pacote" | "equipamento",
+    tipo: "material" as "material" | "servico" | "pacote" | "equipamento" | "pecas_veiculo",
     incluirEquipamentos: false,
     vehicleId: "" as string,
   });
@@ -771,7 +771,7 @@ export default function Solicitacoes() {
   );
 
   const insumosConsolidadosQ = trpc.compras.getInsumosConsolidados.useQuery(
-    { companyId, obraId: parseInt(form.obraId), busca: modoSC === "insumo" ? (insumoBusca || undefined) : undefined, tipoSC: form.tipo as "material" | "servico" | "pacote" | "equipamento", incluirEquip: form.incluirEquipamentos },
+    { companyId, obraId: parseInt(form.obraId), busca: modoSC === "insumo" ? (insumoBusca || undefined) : undefined, tipoSC: (form.tipo === "pecas_veiculo" ? "material" : form.tipo) as "material" | "servico" | "pacote" | "equipamento", incluirEquip: form.incluirEquipamentos },
     { enabled: (modoSC === "insumo" || modoSC === "eap") && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 30_000 }
   );
 
@@ -954,7 +954,7 @@ export default function Solicitacoes() {
     onError: (e) => toast.error(e.message),
   });
 
-  function handleEnviarParaCotacao(tipo: "material" | "servico" | "pacote" | "equipamento") {
+  function handleEnviarParaCotacao(tipo: "material" | "servico" | "pacote" | "equipamento" | "pecas_veiculo") {
     if (!detalhe) return;
     const itens = (detalhe.itens as any[]).map((it: any) => ({
       solicitacaoItemId: it.id,
@@ -1017,7 +1017,7 @@ export default function Solicitacoes() {
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 }
   );
   const coberturaQ = trpc.compras.getCoberturaInsumosEAP.useQuery(
-    { companyId, obraId: parseInt(form.obraId || "0"), tipoSC: form.tipo as "material" | "servico" | "pacote" | "equipamento", incluirEquip: form.incluirEquipamentos },
+    { companyId, obraId: parseInt(form.obraId || "0"), tipoSC: (form.tipo === "pecas_veiculo" ? "material" : form.tipo) as "material" | "servico" | "pacote" | "equipamento", incluirEquip: form.incluirEquipamentos },
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0 }
   );
   const coberturaMap = Object.fromEntries(
@@ -1215,6 +1215,7 @@ export default function Solicitacoes() {
       .filter((it: any) => {
         if (form.tipo === "servico") return !!it.servicoCodigo && (it as any).temMdo;
         if (form.tipo === "equipamento") return !!it.servicoCodigo && (it as any).temEquip;
+        if (form.tipo === "pecas_veiculo") return (it as any).temMat !== false;
         if (!it.servicoCodigo) return true;
         if (form.tipo === "material") return (it as any).temMat !== false;
         return true;
@@ -1280,6 +1281,7 @@ export default function Solicitacoes() {
   async function handleSalvar() {
     if (!form.titulo.trim()) return toast.error("Informe o título da solicitação.");
     if (!form.obraId && modoSC !== "manual") return toast.error("Selecione a Obra ou use o modo Manual para compras sem obra.");
+    if (form.tipo === "pecas_veiculo" && !form.vehicleId) return toast.error("Selecione o veículo para SC de Manutenção de Veículos.");
 
     let itensParaSalvar = itens;
     if (modoSC === "insumo") {
@@ -1644,8 +1646,8 @@ export default function Solicitacoes() {
                         </span>
                       )}
                       {sc.numeroSc}
-                      <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (sc as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : (sc as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : "bg-blue-100 text-blue-700"}`}>
-                        {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "MAT+MDO" : (sc as any).tipo === "equipamento" ? "EQUIP" : "MAT"}
+                      <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (sc as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : (sc as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : (sc as any).tipo === "pecas_veiculo" ? "bg-teal-100 text-teal-700" : "bg-blue-100 text-blue-700"}`}>
+                        {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "MAT+MDO" : (sc as any).tipo === "equipamento" ? "EQUIP" : (sc as any).tipo === "pecas_veiculo" ? "VEÍC" : "MAT"}
                       </span>
                       {((sc as any).origemModulo === "frotas" || (sc as any).origem_modulo === "frotas") && (
                         <span className="ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded bg-orange-100 text-orange-700">FROTAS</span>
@@ -1774,6 +1776,7 @@ export default function Solicitacoes() {
                   { value: "servico" as const, label: "Serviço / MDO", icon: "🔧" },
                   { value: "equipamento" as const, label: "Equipamento", icon: "⚙️" },
                   { value: "pacote" as const, label: "Pacote (MAT + MO)", icon: "📋" },
+                  { value: "pecas_veiculo" as const, label: "Manutenção de Veículos", icon: "🚗" },
                 ].map(opt => (
                   <button
                     key={opt.value}
@@ -1784,7 +1787,7 @@ export default function Solicitacoes() {
                         : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
                     }`}
                     onClick={() => {
-                      setForm(p => ({ ...p, tipo: opt.value, incluirEquipamentos: false }));
+                      setForm(p => ({ ...p, tipo: opt.value, incluirEquipamentos: false, vehicleId: opt.value !== "pecas_veiculo" ? "" : p.vehicleId }));
                       setSelectedEapIds(new Set());
                       setItens([newItem()]);
                       setEapInsumos({});
@@ -1817,6 +1820,55 @@ export default function Solicitacoes() {
                   </label>
                 )}
               </div>
+              {form.tipo === "pecas_veiculo" && (
+                <div className="relative mt-2" ref={veiculoRef}>
+                  <label className="text-xs font-medium text-gray-700 flex items-center gap-1 mb-1">
+                    <Car className="h-3 w-3 text-cyan-600" /> Selecione o Veículo <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    className="w-full h-8 px-3 text-sm border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent"
+                    placeholder="Digite a placa ou nome do veículo..."
+                    value={veiculoOpen
+                      ? veiculoSearch
+                      : form.vehicleId
+                        ? (() => { const v = (veiculosQ.data || []).find((v: any) => String(v.id) === form.vehicleId); return v ? `${v.placa} — ${v.nome || v.modelo || ""}` : ""; })()
+                        : ""
+                    }
+                    onFocus={() => { setVeiculoOpen(true); setVeiculoSearch(""); }}
+                    onChange={e => { setVeiculoSearch(e.target.value); setVeiculoOpen(true); }}
+                  />
+                  {form.vehicleId && !veiculoOpen && (
+                    <button type="button" onClick={() => setForm(p => ({ ...p, vehicleId: "" }))} className="absolute right-2 bottom-1.5 text-gray-400 hover:text-red-500">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {veiculoOpen && (
+                    <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-52 overflow-y-auto">
+                      {(() => {
+                        const veiculos = (veiculosQ.data || []) as any[];
+                        const filtered = veiculoSearch
+                          ? veiculos.filter((v: any) => `${v.placa} ${v.nome || ""} ${v.modelo || ""}`.toLowerCase().includes(veiculoSearch.toLowerCase()))
+                          : veiculos;
+                        if (filtered.length === 0) return <div className="px-3 py-2 text-sm text-gray-400">Nenhum veículo encontrado</div>;
+                        return filtered.slice(0, 20).map((v: any) => (
+                          <div
+                            key={v.id}
+                            className={`px-3 py-1.5 text-sm cursor-pointer hover:bg-cyan-50 hover:text-cyan-700 ${String(v.id) === form.vehicleId ? "bg-cyan-50 text-cyan-700 font-medium" : "text-gray-900"}`}
+                            onMouseDown={e => {
+                              e.preventDefault();
+                              setForm(p => ({ ...p, vehicleId: String(v.id) }));
+                              setVeiculoSearch("");
+                              setVeiculoOpen(false);
+                            }}
+                          >
+                            <span className="font-medium">{v.placa}</span> <span className="text-gray-400">—</span> {v.nome || v.modelo || ""}
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Obra — combobox com busca */}
@@ -1881,56 +1933,6 @@ export default function Solicitacoes() {
               </div>
             </div>
 
-            {/* Veículo (opcional) */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-700 flex items-center gap-1">
-                <Car className="h-3 w-3 text-cyan-600" /> Veículo / Placa <span className="text-gray-400 font-normal">(opcional)</span>
-              </label>
-              <div className="relative" ref={veiculoRef}>
-                <input
-                  className="w-full h-8 px-3 text-sm border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent"
-                  placeholder="Digite a placa ou nome do veículo..."
-                  value={veiculoOpen
-                    ? veiculoSearch
-                    : form.vehicleId
-                      ? (() => { const v = (veiculosQ.data || []).find((v: any) => String(v.id) === form.vehicleId); return v ? `${v.placa} — ${v.nome || v.modelo || ""}` : ""; })()
-                      : ""
-                  }
-                  onFocus={() => { setVeiculoOpen(true); setVeiculoSearch(""); }}
-                  onChange={e => { setVeiculoSearch(e.target.value); setVeiculoOpen(true); }}
-                />
-                {form.vehicleId && !veiculoOpen && (
-                  <button type="button" onClick={() => setForm(p => ({ ...p, vehicleId: "" }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                {veiculoOpen && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-52 overflow-y-auto">
-                    {(() => {
-                      const veiculos = (veiculosQ.data || []) as any[];
-                      const filtered = veiculoSearch
-                        ? veiculos.filter((v: any) => `${v.placa} ${v.nome || ""} ${v.modelo || ""}`.toLowerCase().includes(veiculoSearch.toLowerCase()))
-                        : veiculos;
-                      if (filtered.length === 0) return <div className="px-3 py-2 text-sm text-gray-400">Nenhum veículo encontrado</div>;
-                      return filtered.slice(0, 20).map((v: any) => (
-                        <div
-                          key={v.id}
-                          className={`px-3 py-1.5 text-sm cursor-pointer hover:bg-cyan-50 hover:text-cyan-700 ${String(v.id) === form.vehicleId ? "bg-cyan-50 text-cyan-700 font-medium" : "text-gray-900"}`}
-                          onMouseDown={e => {
-                            e.preventDefault();
-                            setForm(p => ({ ...p, vehicleId: String(v.id) }));
-                            setVeiculoSearch("");
-                            setVeiculoOpen(false);
-                          }}
-                        >
-                          <span className="font-medium">{v.placa}</span> <span className="text-gray-400">—</span> {v.nome || v.modelo || ""}
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                )}
-              </div>
-            </div>
 
             {/* Modo SC: EAP ou Manual */}
             {(form.obraId && form.obraId !== "0") && (
@@ -3071,7 +3073,7 @@ export default function Solicitacoes() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">
-                      {(detalhe as any).tipo === "servico" ? "Solicitação de Serviço" : (detalhe as any).tipo === "pacote" ? "Solicitação de Pacote" : "Solicitação de Compra"}
+                      {(detalhe as any).tipo === "servico" ? "Solicitação de Serviço" : (detalhe as any).tipo === "pacote" ? "Solicitação de Pacote" : (detalhe as any).tipo === "pecas_veiculo" ? "Manutenção de Veículos" : "Solicitação de Compra"}
                     </div>
                     <DialogTitle className="text-gray-900 text-lg">
                       {detalhe.numeroSc}
@@ -3081,9 +3083,10 @@ export default function Solicitacoes() {
                           (detalhe as any).tipo === "servico" ? "bg-purple-100 text-purple-700"
                           : (detalhe as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700"
                           : (detalhe as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700"
+                          : (detalhe as any).tipo === "pecas_veiculo" ? "bg-teal-100 text-teal-700"
                           : "bg-blue-100 text-blue-700"
                         }`}>
-                          {(detalhe as any).tipo === "servico" ? "MDO" : (detalhe as any).tipo === "pacote" ? "MAT+MDO" : (detalhe as any).tipo === "equipamento" ? "EQUIP" : (detalhe as any).tipo?.toUpperCase()}
+                          {(detalhe as any).tipo === "servico" ? "MDO" : (detalhe as any).tipo === "pacote" ? "MAT+MDO" : (detalhe as any).tipo === "equipamento" ? "EQUIP" : (detalhe as any).tipo === "pecas_veiculo" ? "VEÍC" : (detalhe as any).tipo?.toUpperCase()}
                         </span>
                       )}
                     </DialogTitle>
@@ -3438,12 +3441,12 @@ export default function Solicitacoes() {
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
                 {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && detalhe.aprovacaoStatus === "aprovada" && (() => {
                   const scTipo = (detalhe as any).tipo || "material";
-                  const tipoLabel = scTipo === "servico" ? "Mão de Obra" : scTipo === "pacote" ? "Pacote (MAT + MO)" : scTipo === "equipamento" ? "Equipamento" : "Material";
-                  const tipoCor = scTipo === "servico" ? "bg-purple-600 hover:bg-purple-500" : scTipo === "pacote" ? "bg-indigo-600 hover:bg-indigo-500" : "bg-blue-600 hover:bg-blue-500";
-                  const tipoIcon = scTipo === "servico" || scTipo === "pacote" ? <Briefcase className="h-3 w-3" /> : <ShoppingCart className="h-3 w-3" />;
+                  const tipoLabel = scTipo === "servico" ? "Mão de Obra" : scTipo === "pacote" ? "Pacote (MAT + MO)" : scTipo === "equipamento" ? "Equipamento" : scTipo === "pecas_veiculo" ? "Manutenção de Veículos" : "Material";
+                  const tipoCor = scTipo === "servico" ? "bg-purple-600 hover:bg-purple-500" : scTipo === "pacote" ? "bg-indigo-600 hover:bg-indigo-500" : scTipo === "pecas_veiculo" ? "bg-cyan-600 hover:bg-cyan-500" : "bg-blue-600 hover:bg-blue-500";
+                  const tipoIcon = scTipo === "servico" || scTipo === "pacote" ? <Briefcase className="h-3 w-3" /> : scTipo === "pecas_veiculo" ? <Car className="h-3 w-3" /> : <ShoppingCart className="h-3 w-3" />;
                   return (
                     <Button size="sm"
-                      onClick={() => handleEnviarParaCotacao(scTipo as "material" | "servico" | "pacote" | "equipamento")}
+                      onClick={() => handleEnviarParaCotacao(scTipo as "material" | "servico" | "pacote" | "equipamento" | "pecas_veiculo")}
                       disabled={criarCotacao.isPending || (detalhe.itens as any[]).length === 0}
                       className={`${tipoCor} text-white text-xs gap-1.5`}>
                       {criarCotacao.isPending
@@ -3584,7 +3587,7 @@ export default function Solicitacoes() {
 
                         <div className="grid grid-cols-4 gap-3 text-xs bg-gray-50 rounded-lg p-3 border border-gray-200">
                           {[
-                            { label: "Tipo", value: (cot as any).tipo === "pacote" ? "Pacote (MAT+MDO)" : (cot as any).tipo === "servico" ? "Serviço (MDO)" : (cot as any).tipo === "equipamento" ? "Equipamento" : "Material" },
+                            { label: "Tipo", value: (cot as any).tipo === "pacote" ? "Pacote (MAT+MDO)" : (cot as any).tipo === "servico" ? "Serviço (MDO)" : (cot as any).tipo === "equipamento" ? "Equipamento" : (cot as any).tipo === "pecas_veiculo" ? "Manutenção de Veículos" : "Material" },
                             { label: "Fornecedores", value: `${participantes.length} participante(s)` },
                             { label: "Total", value: vencedor ? fmt(n(vencedor.totalOrcado)) : (cot as any).total ? fmt(n((cot as any).total)) : "—" },
                             { label: "Validade", value: (cot as any).dataValidade ? new Date((cot as any).dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—" },

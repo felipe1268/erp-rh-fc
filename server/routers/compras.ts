@@ -1580,7 +1580,7 @@ Responda APENAS com um objeto JSON no formato:
       dataNecessidade: z.string().optional(),
       observacoes: z.string().optional(),
       imagemReferenciaUrl: z.string().optional(),
-      tipo: z.enum(["material", "servico", "pacote", "equipamento"]).optional(),
+      tipo: z.enum(["material", "servico", "pacote", "equipamento", "pecas_veiculo"]).optional(),
       incluirEquipamentos: z.boolean().optional(),
       itens: z.array(z.object({
         descricao: z.string(),
@@ -1604,6 +1604,9 @@ Responda APENAS com um objeto JSON no formato:
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      if (input.tipo === "pecas_veiculo" && !input.vehicleId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione um veículo para SC de Peças Veículo." });
+      }
       if (input.vehicleId) {
         const vRows = await db.execute(sql`SELECT id FROM vehicles WHERE id = ${input.vehicleId} AND "companyId" = ${input.companyId}`);
         const vr = (vRows as any).rows || vRows;
@@ -2034,7 +2037,7 @@ Responda APENAS com um objeto JSON no formato:
       companyId: z.number(),
       descricao: z.string().optional(),
       prioridade: z.string().optional(),
-      tipo: z.enum(["material", "servico", "pacote", "equipamento"]).optional().default("material"),
+      tipo: z.enum(["material", "servico", "pacote", "equipamento", "pecas_veiculo"]).optional().default("material"),
       obraId: z.number().nullable().optional(),
       solicitacaoId: z.number().nullable().optional(),
       fornecedorId: z.number().nullable().optional(),
@@ -5330,7 +5333,7 @@ Retorne APENAS um JSON válido neste formato:
   // SEM custos/metas (blind quotation até equalização)
   // ══════════════════════════════════════════════════════════════
   getInsumosComposicao: protectedProcedure
-    .input(z.object({ companyId: z.number(), servicoCodigo: z.string(), orcamentoItemId: z.number().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional(), incluirEquip: z.boolean().optional() }))
+    .input(z.object({ companyId: z.number(), servicoCodigo: z.string(), orcamentoItemId: z.number().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento", "pecas_veiculo"]).optional(), incluirEquip: z.boolean().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const insumos = await db.select({
@@ -5962,7 +5965,7 @@ Retorne APENAS um JSON válido neste formato:
     }),
 
   getInsumosConsolidados: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number(), busca: z.string().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional(), incluirEquip: z.boolean().optional() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), busca: z.string().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento", "pecas_veiculo"]).optional(), incluirEquip: z.boolean().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
@@ -7478,7 +7481,7 @@ Retorne APENAS um JSON válido neste formato:
     }),
 
   getCoberturaInsumosEAP: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento"]).optional(), incluirEquip: z.boolean().optional() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento", "pecas_veiculo"]).optional(), incluirEquip: z.boolean().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
