@@ -46,6 +46,11 @@ const VARIAVEIS: { chave: string; descricao: string; categoria: string }[] = [
   { chave: "{{TESTEMUNHA_FINANCEIRO}}", descricao: "Nome do responsável financeiro (testemunha 1)", categoria: "Testemunhas" },
   { chave: "{{TESTEMUNHA_GESTOR_PROJETO}}", descricao: "Nome do gestor de projeto (testemunha 2)", categoria: "Testemunhas" },
   { chave: "{{REVISAO_CRONOGRAMA}}", descricao: "Revisão do cronograma considerada para o prazo (ex: Baseline Rev 00)", categoria: "Contrato" },
+  { chave: "{{DIA_MEDICAO}}", descricao: "Dia da medição física (ex: 25)", categoria: "Medição/Pagamento" },
+  { chave: "{{PRAZO_APROVACAO}}", descricao: "Prazo de aprovação da medição em dias úteis (ex: 5)", categoria: "Medição/Pagamento" },
+  { chave: "{{PRAZO_EMISSAO_NF}}", descricao: "Prazo para emissão da NF em dias úteis (ex: 3)", categoria: "Medição/Pagamento" },
+  { chave: "{{PRAZO_LIBERACAO_OP}}", descricao: "Prazo para liberação da OP em dias úteis (ex: 5)", categoria: "Medição/Pagamento" },
+  { chave: "{{DIA_PAGAMENTO}}", descricao: "Dia do pagamento no mês subsequente (ex: 10)", categoria: "Medição/Pagamento" },
 ];
 
 const TEMPLATE_PADRAO = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS Nº {{NUMERO_CONTRATO}}
@@ -74,9 +79,32 @@ CLÁUSULA TERCEIRA – DO VALOR E FORMA DE PAGAMENTO
 
 3.1 O valor total do presente contrato é de {{VALOR_TOTAL}}.
 
-3.2 Os pagamentos serão efetuados conforme medição dos serviços efetivamente executados e aceitos pela CONTRATANTE, mediante apresentação de nota fiscal/fatura, após aprovação da medição.
+3.2 CRITÉRIOS DE MEDIÇÃO E PAGAMENTO — Os pagamentos serão processados conforme o fluxo obrigatório abaixo, cujos prazos são improrrogáveis salvo acordo formal entre as partes:
 
-3.3 Para fins de pagamento, a CONTRATADA deverá apresentar, juntamente com a nota fiscal, os seguintes documentos: INSS, FGTS, certidão negativa de débitos trabalhistas (CNDT) e seguro de vida dos funcionários alocados na obra.
+a) MEDIÇÃO FÍSICA (Dia {{DIA_MEDICAO}} de cada mês) — Levantamento e conferência do avanço físico dos serviços efetivamente executados, a ser realizado conjuntamente pelo gestor da obra e o representante da CONTRATADA no canteiro;
+
+b) APROVAÇÃO DA MEDIÇÃO (Até {{PRAZO_APROVACAO}} dias úteis após a medição) — Análise e aprovação da medição pelo gestor do contrato da CONTRATANTE. A medição poderá ser aprovada total ou parcialmente, cabendo à CONTRATADA acatar os ajustes solicitados;
+
+c) DOCUMENTAÇÃO COMPROBATÓRIA — Após aprovação da medição, a CONTRATADA deverá enviar obrigatoriamente: Nota Fiscal/Fatura, guias de recolhimento de INSS e FGTS quitadas, Certidão Negativa de Débitos Trabalhistas (CNDT), comprovante de seguro de vida dos funcionários alocados na obra e demais documentos que a CONTRATANTE julgar necessários. A ausência de qualquer documento suspende o fluxo de pagamento até a regularização;
+
+d) EMISSÃO DA NOTA FISCAL (Até {{PRAZO_EMISSAO_NF}} dias úteis após aprovação) — Liberação para emissão da Nota Fiscal pela CONTRATADA, que deverá ser emitida com os dados corretos da CONTRATANTE e o valor exato da medição aprovada;
+
+e) LIBERAÇÃO DA ORDEM DE PAGAMENTO (Até {{PRAZO_LIBERACAO_OP}} dias úteis após recebimento da NF) — Conferência da Nota Fiscal e liberação da Ordem de Pagamento (OP) pela área financeira da CONTRATANTE;
+
+f) PAGAMENTO (Dia {{DIA_PAGAMENTO}} do mês subsequente) — Crédito em conta bancária da CONTRATADA, referente à medição aprovada do mês anterior.
+
+3.3 RESUMO DOS PRAZOS:
+• Dia da Medição: dia {{DIA_MEDICAO}} de cada mês
+• Prazo de Aprovação: até {{PRAZO_APROVACAO}} dias úteis após a medição
+• Prazo para Emissão da NF: até {{PRAZO_EMISSAO_NF}} dias úteis após aprovação
+• Prazo para Liberação da OP: até {{PRAZO_LIBERACAO_OP}} dias úteis após NF
+• Dia do Pagamento: dia {{DIA_PAGAMENTO}} do mês subsequente
+
+3.4 O descumprimento dos prazos estabelecidos na subcláusula 3.2 por parte da CONTRATADA (itens "c" e "d") implicará no adiamento automático do pagamento para o ciclo subsequente, sem incidência de juros ou multa a favor da CONTRATADA.
+
+3.5 A CONTRATANTE não será responsabilizada pelo atraso no pagamento quando este decorrer de pendências documentais ou irregularidades na Nota Fiscal emitida pela CONTRATADA.
+
+3.6 Serviços executados sem a devida autorização do gestor do contrato ou em desacordo com as especificações não serão objeto de medição nem de pagamento.
 
 CLÁUSULA QUARTA – DAS OBRIGAÇÕES DA CONTRATADA
 
