@@ -218,6 +218,14 @@ When creating a new module, ALWAYS register it in ALL 3 places:
 2. **`client/src/pages/Configuracoes.tsx`** → `MODULE_INFO` object (label, subtitle, icon, colors, description) AND `MODULE_PAGES` object (sub-features with section/label/path)
 3. **`client/src/pages/ModuleHub.tsx`** → `MODULES` array (icon, label, path, theme colors)
 
+## Auditoria de Status de Funcionários (Rev. 1104)
+- Tabela: `employee_status_log` — registra toda alteração de status com quem/quando/motivo/módulo
+- Helper: `server/lib/employeeStatusHelper.ts` — `updateEmployeeStatus()` e `logStatusChange()`
+- Pontos instrumentados: edição manual (employee.update), aviso prévio (darBaixa + desligamento), férias (em_gozo/concluída/lote), processos trabalhistas (Lista Negra), sync automático (statusSyncJob)
+- Endpoint: `employees.statusLog` — lista log filtrado por empresa/funcionário
+- Frontend: aba "Hist. Status" no dialog de edição do colaborador (Colaboradores.tsx)
+- Schema Drizzle: `employeeStatusLog` em `drizzle/schema.ts`
+
 ## Critical DB Patterns (PostgreSQL/Neon)
 - `db.execute()` returns QueryResult object, NOT array. Use: `((await db.execute(sql`...`)) as any).rows || []`
 - All camelCase column names in raw SQL MUST be quoted: `"companyId"`, `"deletedAt"`, `"nomeCompleto"`, etc.

@@ -7190,6 +7190,23 @@ export const disciplinaClassificacoes = pgTable("disciplina_classificacoes", {
   index("idx_disc_class_company").on(t.companyId),
 ]);
 
+export const employeeStatusLog = pgTable("employee_status_log", {
+  id:                serial().primaryKey(),
+  companyId:         integer("companyId").notNull(),
+  employeeId:        integer("employeeId").notNull(),
+  nomeCompleto:      varchar("nomeCompleto", { length: 255 }),
+  statusAnterior:    varchar("statusAnterior", { length: 50 }),
+  statusNovo:        varchar("statusNovo", { length: 50 }).notNull(),
+  alteradoPor:       varchar("alteradoPor", { length: 255 }).notNull().default("Sistema"),
+  alteradoPorUserId: integer("alteradoPorUserId"),
+  motivo:            text("motivo"),
+  origemModulo:      varchar("origemModulo", { length: 100 }),
+  createdAt:         timestamp("createdAt", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_esl_employee").on(t.employeeId),
+  index("idx_esl_company").on(t.companyId),
+]);
+
 export const disciplinaCorrecoes = pgTable("disciplina_correcoes", {
   id:                    serial().primaryKey(),
   companyId:             integer("company_id").notNull(),

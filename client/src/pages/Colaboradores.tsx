@@ -926,6 +926,7 @@ export default function Colaboradores() {
               <TabsTrigger value="beneficios" className="flex-1 text-xs sm:text-sm">Benefícios</TabsTrigger>
               <TabsTrigger value="obrigacoes" className="flex-1 text-xs sm:text-sm">Obrigações</TabsTrigger>
               <TabsTrigger value="sindical" className="flex-1 text-xs sm:text-sm">Sindical</TabsTrigger>
+              {editingEmployee && <TabsTrigger value="hist_status" className="flex-1 text-xs sm:text-sm">📋 Hist. Status</TabsTrigger>}
             </TabsList>
 
             {/* ===== ABA PESSOAL ===== */}
@@ -2307,6 +2308,12 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                 {/* Dissídio removido — agora é gerenciado em Configurações > Sindical */}
               </div>
             </TabsContent>
+
+            {editingEmployee && (
+              <TabsContent value="hist_status" className="pt-4">
+                <HistoricoStatusTab employeeId={editingEmployee} companyId={selectedCompany} />
+              </TabsContent>
+            )}
           </Tabs>
 
           {/* Observações */}
@@ -2945,6 +2952,72 @@ function EmployeeSkillsSection({ employeeId }: { employeeId: number }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function HistoricoStatusTab({ employeeId, companyId }: { employeeId: number; companyId: number }) {
+  const { data: logs, isLoading } = trpc.employees.statusLog.useQuery(
+    { companyId, employeeId },
+    { enabled: !!employeeId && !!companyId }
+  );
+
+  const statusColors: Record<string, string> = {
+    Ativo: "bg-green-100 text-green-800",
+    Ferias: "bg-blue-100 text-blue-800",
+    Afastado: "bg-yellow-100 text-yellow-800",
+    Recluso: "bg-orange-100 text-orange-800",
+    Desligado: "bg-red-100 text-red-800",
+    Lista_Negra: "bg-red-200 text-red-900",
+    Licenca: "bg-purple-100 text-purple-800",
+  };
+
+  if (isLoading) return <div className="text-center py-8 text-muted-foreground">Carregando histórico...</div>;
+
+  if (!logs || logs.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <Clock className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+        <p className="text-sm text-muted-foreground">Nenhuma alteração de status registrada.</p>
+        <p className="text-xs text-muted-foreground mt-1">A partir de agora, toda mudança de status será registrada aqui.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-4">
+        <Clock className="h-4 w-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold">Histórico de Alterações de Status</h3>
+        <Badge variant="secondary" className="text-xs">{logs.length} registro(s)</Badge>
+      </div>
+      <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+        {logs.map((log: any) => (
+          <div key={log.id} className="border rounded-lg p-3 bg-card hover:bg-accent/50 transition-colors">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[log.statusAnterior] || "bg-gray-100 text-gray-800"}`}>
+                  {log.statusAnterior}
+                </span>
+                <span className="text-muted-foreground text-xs">→</span>
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[log.statusNovo] || "bg-gray-100 text-gray-800"}`}>
+                  {log.statusNovo}
+                </span>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {log.createdAt ? new Date(log.createdAt).toLocaleString("pt-BR") : "-"}
+              </span>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+              <span><strong>Por:</strong> {log.alteradoPor}</span>
+              <span><strong>Módulo:</strong> {log.origemModulo}</span>
+            </div>
+            {log.motivo && (
+              <p className="text-xs text-muted-foreground mt-1 italic">{log.motivo}</p>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -418,7 +418,7 @@ export async function createEmployee(data: InsertEmployee) {
   return { id: result[0].id, codigoInterno };
 }
 
-export async function updateEmployee(id: number, companyId: number, data: Partial<InsertEmployee>) {
+export async function updateEmployee(id: number, companyId: number, data: Partial<InsertEmployee>, auditUser?: { name?: string; id?: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   // Campos válidos da tabela employees (auditado: todos os campos editáveis do schema)
@@ -520,6 +520,22 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     }
   }
   if (Object.keys(sanitized).length === 0) return;
+
+  if (sanitized.status) {
+    const [empAntes] = await db.select({ status: employees.status, nomeCompleto: employees.nomeCompleto })
+      .from(employees).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
+    if (empAntes && empAntes.status !== sanitized.status) {
+      const { logStatusChange } = await import("./lib/employeeStatusHelper");
+      await logStatusChange({
+        db, companyId, employeeId: id,
+        nomeCompleto: empAntes.nomeCompleto, statusAnterior: empAntes.status || 'Desconhecido',
+        statusNovo: sanitized.status, alteradoPor: auditUser?.name || 'Edição Manual',
+        alteradoPorUserId: auditUser?.id, motivo: 'Edição manual do cadastro',
+        origemModulo: 'employee.update',
+      });
+    }
+  }
+
   await db.update(employees).set(sanitized).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
 }
 

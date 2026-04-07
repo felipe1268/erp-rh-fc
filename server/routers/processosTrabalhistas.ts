@@ -6,6 +6,7 @@ import { processosTrabalhistas, processosAndamentos, employees, processoAnalises
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
+import { logStatusChange } from "../lib/employeeStatusHelper";
 
 // Helper: inferir tipo de andamento a partir do nome da movimentação
 function inferirTipoAndamento(nome: string): 'audiencia' | 'despacho' | 'sentenca' | 'recurso' | 'pericia' | 'acordo' | 'pagamento' | 'citacao' | 'intimacao' | 'peticao' | 'outros' {
@@ -777,11 +778,21 @@ export const processosTrabRouter = router({
       const [processo] = await db.select().from(processosTrabalhistas)
         .where(eq(processosTrabalhistas.id, input.processoId));
 
+      const statusAnterior = emp.status || 'Ativo';
       await db.update(employees).set({
         listaNegra: 1,
+        status: 'Lista_Negra',
         listaNegraPor: ctx.user.name || 'DataJud Auto',
         listaNegraUserId: ctx.user.id,
       } as any).where(eq(employees.id, input.employeeId));
+      await logStatusChange({
+        db, companyId: emp.companyId, employeeId: input.employeeId,
+        nomeCompleto: emp.nomeCompleto, statusAnterior,
+        statusNovo: 'Lista_Negra', alteradoPor: ctx.user.name || 'DataJud Auto',
+        alteradoPorUserId: ctx.user.id,
+        motivo: `Processo trabalhista ${processo?.numeroProcesso || 'N/A'}`,
+        origemModulo: 'processosTrabalhistas.adicionarListaNegra',
+      });
 
       return {
         success: true,

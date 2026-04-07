@@ -15,6 +15,7 @@
 import { getDb } from "../db";
 import { employees, vacationPeriods, atestados } from "../../drizzle/schema";
 import { eq, and, sql, isNull, inArray } from "drizzle-orm";
+import { logStatusChange } from "../lib/employeeStatusHelper";
 
 let statusSyncInterval: NodeJS.Timeout | null = null;
 
@@ -143,11 +144,20 @@ export async function syncEmployeeStatus(): Promise<{
         reason = 'Sem férias/licença ativa - retornando para Ativo';
       }
 
-      // Só atualizar se o status mudou
       if (newStatus && newStatus !== emp.status) {
         await db.update(employees)
           .set({ status: newStatus as any })
           .where(eq(employees.id, emp.id));
+
+        try {
+          await logStatusChange({
+            db, companyId: emp.companyId, employeeId: emp.id,
+            nomeCompleto: emp.nomeCompleto, statusAnterior: emp.status || 'Desconhecido',
+            statusNovo: newStatus, alteradoPor: 'Sistema (Sync Automático)',
+            motivo: reason || 'Sincronização automática de status',
+            origemModulo: 'statusSyncJob',
+          });
+        } catch (e) { console.error('[statusSyncJob] Erro ao registrar log:', e); }
 
         result.updated++;
         result.details.push({

@@ -5,6 +5,7 @@ import { terminationNotices, vacationPeriods, employees, companies, obras, obraF
 import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
+import { logStatusChange } from "../lib/employeeStatusHelper";
 import {
   parseBRL,
   calcularAnosServico,
@@ -1168,7 +1169,16 @@ export const avisoPrevioFeriasRouter = router({
             empUpdate.listaNegraUserId = ctx.user.id;
             empUpdate.dataListaNegra = hoje;
           }
+          const [empAntes] = await db.select({ status: employees.status, nomeCompleto: employees.nomeCompleto })
+            .from(employees).where(eq(employees.id, aviso.employeeId));
           await db.update(employees).set(empUpdate).where(eq(employees.id, aviso.employeeId));
+          await logStatusChange({
+            db, companyId: aviso.companyId, employeeId: aviso.employeeId,
+            nomeCompleto: empAntes?.nomeCompleto, statusAnterior: empAntes?.status || 'Desconhecido',
+            statusNovo: novoStatus, alteradoPor: ctx.user.name ?? 'Sistema',
+            alteradoPorUserId: ctx.user.id, motivo: input.motivoDesligamento || 'Baixa de aviso prévio',
+            origemModulo: 'avisoPrevio.darBaixa',
+          });
 
           // Auto-desalocação de obra
           try {
@@ -2023,11 +2033,20 @@ export const avisoPrevioFeriasRouter = router({
         // Sincronizar status do colaborador com status de férias
         if (input.status && periodo) {
           if (input.status === 'em_gozo') {
-            // Colaborador entra em férias
-            await db.update(employees).set({ status: 'Ferias' } as any)
-              .where(eq(employees.id, periodo.employeeId));
+            const [empAnt] = await db.select({ status: employees.status, nomeCompleto: employees.nomeCompleto })
+              .from(employees).where(eq(employees.id, periodo.employeeId));
+            if (empAnt && empAnt.status !== 'Ferias') {
+              await db.update(employees).set({ status: 'Ferias' } as any)
+                .where(eq(employees.id, periodo.employeeId));
+              await logStatusChange({
+                db, companyId: periodo.companyId, employeeId: periodo.employeeId,
+                nomeCompleto: empAnt.nomeCompleto, statusAnterior: empAnt.status || 'Ativo',
+                statusNovo: 'Ferias', alteradoPor: ctx.user?.name ?? 'Sistema',
+                alteradoPorUserId: ctx.user?.id, motivo: 'Início de período de férias',
+                origemModulo: 'ferias.atualizarStatus',
+              });
+            }
           } else if (input.status === 'concluida') {
-            // Férias concluídas: verificar se não tem outra férias em_gozo antes de reverter
             const outrasEmGozo = await db.select({ id: vacationPeriods.id })
               .from(vacationPeriods)
               .where(and(
@@ -2036,8 +2055,19 @@ export const avisoPrevioFeriasRouter = router({
                 isNull(vacationPeriods.deletedAt),
               ));
             if (outrasEmGozo.length === 0) {
-              await db.update(employees).set({ status: 'Ativo' } as any)
-                .where(and(eq(employees.id, periodo.employeeId), eq(employees.status, 'Ferias')));
+              const [empAnt2] = await db.select({ status: employees.status, nomeCompleto: employees.nomeCompleto })
+                .from(employees).where(eq(employees.id, periodo.employeeId));
+              if (empAnt2 && empAnt2.status === 'Ferias') {
+                await db.update(employees).set({ status: 'Ativo' } as any)
+                  .where(and(eq(employees.id, periodo.employeeId), eq(employees.status, 'Ferias')));
+                await logStatusChange({
+                  db, companyId: periodo.companyId, employeeId: periodo.employeeId,
+                  nomeCompleto: empAnt2.nomeCompleto, statusAnterior: 'Ferias',
+                  statusNovo: 'Ativo', alteradoPor: ctx.user?.name ?? 'Sistema',
+                  alteradoPorUserId: ctx.user?.id, motivo: 'Férias concluídas',
+                  origemModulo: 'ferias.atualizarStatus',
+                });
+              }
             }
           }
         }
@@ -2228,13 +2258,23 @@ export const avisoPrevioFeriasRouter = router({
           if (p) employeeIdsProcessados.add(p.employeeId);
           confirmados++;
         }
-        // Sincronizar status dos colaboradores: reverter de Ferias para Ativo se não tem mais em_gozo
         for (const empId of employeeIdsProcessados) {
           const outrasEmGozo = await db.select({ id: vacationPeriods.id }).from(vacationPeriods)
             .where(and(eq(vacationPeriods.employeeId, empId), eq(vacationPeriods.status, 'em_gozo'), isNull(vacationPeriods.deletedAt)));
           if (outrasEmGozo.length === 0) {
-            await db.update(employees).set({ status: 'Ativo' } as any)
-              .where(and(eq(employees.id, empId), eq(employees.status, 'Ferias')));
+            const [empAntLote] = await db.select({ status: employees.status, nomeCompleto: employees.nomeCompleto, companyId: employees.companyId })
+              .from(employees).where(eq(employees.id, empId));
+            if (empAntLote && empAntLote.status === 'Ferias') {
+              await db.update(employees).set({ status: 'Ativo' } as any)
+                .where(and(eq(employees.id, empId), eq(employees.status, 'Ferias')));
+              await logStatusChange({
+                db, companyId: empAntLote.companyId, employeeId: empId,
+                nomeCompleto: empAntLote.nomeCompleto, statusAnterior: 'Ferias',
+                statusNovo: 'Ativo', alteradoPor: ctx.user?.name ?? 'Sistema',
+                alteradoPorUserId: ctx.user?.id, motivo: 'Férias vencidas confirmadas em lote',
+                origemModulo: 'ferias.confirmarVencidasLote',
+              });
+            }
           }
         }
         return { success: true, confirmados };
@@ -2265,12 +2305,22 @@ export const avisoPrevioFeriasRouter = router({
           } as any).where(eq(vacationPeriods.id, v.id));
           confirmados++;
         }
-        // Sincronizar status do colaborador: reverter de Ferias para Ativo se não tem mais em_gozo
-        const outrasEmGozo = await db.select({ id: vacationPeriods.id }).from(vacationPeriods)
+        const outrasEmGozo2 = await db.select({ id: vacationPeriods.id }).from(vacationPeriods)
           .where(and(eq(vacationPeriods.employeeId, input.employeeId), eq(vacationPeriods.status, 'em_gozo'), isNull(vacationPeriods.deletedAt)));
-        if (outrasEmGozo.length === 0) {
-          await db.update(employees).set({ status: 'Ativo' } as any)
-            .where(and(eq(employees.id, input.employeeId), eq(employees.status, 'Ferias')));
+        if (outrasEmGozo2.length === 0) {
+          const [empAntSingle] = await db.select({ status: employees.status, nomeCompleto: employees.nomeCompleto, companyId: employees.companyId })
+            .from(employees).where(eq(employees.id, input.employeeId));
+          if (empAntSingle && empAntSingle.status === 'Ferias') {
+            await db.update(employees).set({ status: 'Ativo' } as any)
+              .where(and(eq(employees.id, input.employeeId), eq(employees.status, 'Ferias')));
+            await logStatusChange({
+              db, companyId: empAntSingle.companyId, employeeId: input.employeeId,
+              nomeCompleto: empAntSingle.nomeCompleto, statusAnterior: 'Ferias',
+              statusNovo: 'Ativo', alteradoPor: ctx.user?.name ?? 'Sistema',
+              alteradoPorUserId: ctx.user?.id, motivo: 'Férias vencidas confirmadas individualmente',
+              origemModulo: 'ferias.confirmarVencidasIndividual',
+            });
+          }
         }
         return { success: true, confirmados };
       }),

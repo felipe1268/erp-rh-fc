@@ -504,7 +504,7 @@ export const appRouter = router({
         }
       }
       
-      await updateEmployee(input.id, input.companyId, employeeData);
+      await updateEmployee(input.id, input.companyId, employeeData, { name: ctx.user.name ?? 'Sistema', id: ctx.user.id });
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador atualizado: ${employeeData.nomeCompleto || input.nomeCompleto || ""}` });
       
       // === AUTO-DESALOCAÇÃO: Remover de obra quando status muda para Desligado ou Lista_Negra ===
@@ -709,6 +709,25 @@ export const appRouter = router({
     syncStatus: protectedProcedure.mutation(async () => {
       const result = await syncEmployeeStatus();
       return result;
+    }),
+    statusLog: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      employeeId: z.number().optional(),
+      limit: z.number().optional(),
+    })).query(async ({ input }) => {
+      const db = (await import("./db")).getDb();
+      const dbInst = await db;
+      if (!dbInst) return [];
+      const { employeeStatusLog } = await import("../drizzle/schema");
+      const { desc, eq, and, inArray } = await import("drizzle-orm");
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      const conditions: any[] = [inArray(employeeStatusLog.companyId, ids)];
+      if (input.employeeId) conditions.push(eq(employeeStatusLog.employeeId, input.employeeId));
+      return dbInst.select().from(employeeStatusLog)
+        .where(and(...conditions))
+        .orderBy(desc(employeeStatusLog.createdAt))
+        .limit(input.limit || 200);
     }),
   }),
 
