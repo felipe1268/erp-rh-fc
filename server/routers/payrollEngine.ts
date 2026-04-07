@@ -782,13 +782,15 @@ export const payrollEngineRouter = router({
         AND ("statusAnterior" = 'escuro' OR "statusDia" IN ('escuro', 'pendente_decisao'))
       `);
 
-      // Buscar registros escuro (inclui os que acabaram de ser resetados)
+      // Buscar registros escuro (inclui os que acabaram de ser resetados) — excluir PJ/Sócio
       const escuroRecords = ((await db.execute(sql`
-        SELECT * FROM timecard_daily 
-        WHERE "companyId" IN (${afericaoCidsSql}) 
-        AND "mesCompetencia" = ${prevMes}
-        AND "statusDia" = 'escuro'
-        ORDER BY "employeeId", data
+        SELECT td.* FROM timecard_daily td
+        JOIN employees e ON e.id = td."employeeId"
+        WHERE td."companyId" IN (${afericaoCidsSql}) 
+        AND td."mesCompetencia" = ${prevMes}
+        AND td."statusDia" = 'escuro'
+        AND COALESCE(e."tipoContrato",'CLT') NOT IN ('PJ','Socio')
+        ORDER BY td."employeeId", td.data
       `)) as any).rows || [];
       if (!escuroRecords || (escuroRecords as any[]).length === 0) {
         for (const cid of afericaoCompanyIds) {
