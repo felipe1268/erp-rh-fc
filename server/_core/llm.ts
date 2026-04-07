@@ -307,24 +307,51 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       payload.response_format = fmt;
     }
 
-    const res = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${googleKey}`,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const MAX_RETRIES = 4;
+    const bodyStr = JSON.stringify(payload);
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Gemini invoke failed: ${res.status} – ${err}`);
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const res = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${googleKey}`,
+          },
+          body: bodyStr,
+        }
+      );
+
+      if (res.ok) {
+        return (await res.json()) as InvokeResult;
+      }
+
+      const errText = await res.text();
+
+      if (res.status === 429 && attempt < MAX_RETRIES) {
+        const retryAfterHeader = res.headers.get("retry-after");
+        let waitMs: number;
+        if (retryAfterHeader) {
+          const secs = parseInt(retryAfterHeader, 10);
+          waitMs = (isNaN(secs) ? 5 : secs) * 1000;
+        } else {
+          waitMs = 1000 * Math.pow(2, attempt) + Math.random() * 500;
+        }
+        waitMs = Math.min(waitMs, 60000);
+        console.warn(`[LLM] Gemini 429 rate limit (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+
+      if (res.status === 429) {
+        throw new Error("Limite de requisições da IA atingido. Aguarde alguns minutos e tente novamente.");
+      }
+
+      throw new Error(`Gemini invoke failed: ${res.status} – ${errText}`);
     }
 
-    return (await res.json()) as InvokeResult;
+    throw new Error("Falha ao invocar Gemini após múltiplas tentativas.");
   }
 
   throw new Error("Nenhuma chave de IA disponível");
