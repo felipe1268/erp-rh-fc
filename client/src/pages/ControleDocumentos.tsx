@@ -1186,13 +1186,29 @@ export default function ControleDocumentos() {
     setShowTreinDialog(false); setTreinForm({}); setEditingTreinId(null);
   };
 
-  const handleSubmitAtest = () => {
+  const handleSubmitAtest = async () => {
     if (!atestForm.employeeId || !atestForm.tipo || !atestForm.dataEmissao) { toast.error("Preencha os campos obrigatórios"); return; }
-    if (editingAtestId) {
-      updateAtest.mutate({ id: editingAtestId, ...atestForm, diasAfastamento: atestForm.diasAfastamento || 0 });
-    } else {
-      createAtest.mutate({ companyId, companyIds, ...atestForm, diasAfastamento: atestForm.diasAfastamento || 0 });
-    }
+    const { _file, ...formData } = atestForm;
+    try {
+      let atestId = editingAtestId;
+      if (editingAtestId) {
+        await updateAtest.mutateAsync({ id: editingAtestId, ...formData, diasAfastamento: formData.diasAfastamento || 0 });
+      } else {
+        const result = await createAtest.mutateAsync({ companyId, companyIds, ...formData, diasAfastamento: formData.diasAfastamento || 0 });
+        atestId = (result as any)?.id || null;
+      }
+      if (_file && atestId) {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(",")[1];
+          try {
+            await uploadAtestDoc.mutateAsync({ id: atestId!, fileBase64: base64, fileName: _file.name });
+            toast.success("Documento anexado com sucesso!");
+          } catch { toast.error("Atestado salvo, mas erro ao anexar documento"); }
+        };
+        reader.readAsDataURL(_file);
+      }
+    } catch { toast.error("Erro ao salvar atestado"); }
     setShowAtestDialog(false); setAtestForm({}); setEditingAtestId(null);
   };
 
@@ -2336,6 +2352,20 @@ export default function ControleDocumentos() {
             <div className="col-span-2">
               <label className="text-sm font-medium">Descrição</label>
               <Textarea value={atestForm.descricao || ""} onChange={e => setAtestForm({ ...atestForm, descricao: e.target.value })} rows={2} />
+            </div>
+            <div className="col-span-2">
+              <label className="text-sm font-medium">Anexar Documento (PDF/Imagem)</label>
+              <div className="mt-1">
+                <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                    setAtestForm({ ...atestForm, _file: file });
+                  }
+                }} />
+                {atestForm._file && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Paperclip className="h-3 w-3" /> {atestForm._file.name}</p>}
+                {editingAtestId && (() => { const at = atestList.find((a: any) => a.id === editingAtestId); return at?.documentoUrl ? <a href={at.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Ver documento atual</a> : null; })()}
+              </div>
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">

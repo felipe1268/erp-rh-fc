@@ -500,7 +500,7 @@ export const controleDocumentosRouter = router({
       )
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
-        await db.insert(atestados).values({
+        const [result] = await db.insert(atestados).values({
           companyId: input.companyId,
           employeeId: input.employeeId,
           tipo: input.tipo,
@@ -513,8 +513,8 @@ export const controleDocumentosRouter = router({
           descricao: input.descricao || null,
           motivo: input.motivo || null,
           motivoOutro: input.motivoOutro || null,
-        });
-        return { success: true };
+        }).returning({ id: atestados.id });
+        return { success: true, id: result?.id };
       }),
 
     update: protectedProcedure
