@@ -3155,7 +3155,7 @@ export default function Solicitacoes() {
                 )}
               </div>
 
-              {modoSC === "eap" && itens.filter(i => i.origemEap).length > 0 ? (
+              {itens.filter(i => i.origemEap).length > 0 ? (
                 <div className="space-y-1 max-h-[40vh] overflow-y-auto pr-1">
                   {(() => {
                     const consolidados = new Map<string, { descricao: string; unidade: string; qtdTotal: number; precoMeta: number; origens: string[]; insumoCodigo?: string }>();
@@ -3203,7 +3203,7 @@ export default function Solicitacoes() {
                     ); });
                   })()}
                 </div>
-              ) : modoSC === "eap" && itens.filter(i => i.origemEap).length === 0 ? (
+              ) : modoSC === "eap" ? (
                 <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-3 text-center">
                   Selecione um serviço acima e informe a quantidade para gerar os itens automaticamente.
                 </div>
