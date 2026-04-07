@@ -627,7 +627,13 @@ export default function AvisoPrevio() {
                     const reducaoShort = a.reducaoJornada === '2h_dia' ? '2 HORAS' : a.reducaoJornada === '7_dias_corridos' ? '7 DIAS' : '-';
                     return (
                       <tr key={a.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
-                        <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>
+                        <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={async () => {
+                              setSelectedItem(a);
+                              setShowDetailDialog(true);
+                              setAcertoForm({ descontosAcerto: (a as any).descontosAcerto || '', descontosAcertoDesc: (a as any).descontosAcertoDesc || '', acrescimosAcerto: (a as any).acrescimosAcerto || '', acrescimosAcertoDesc: (a as any).acrescimosAcertoDesc || '', mediaInsalubridade: (a as any).mediaInsalubridade || '', mediaHorasExtras: (a as any).mediaHorasExtras || '' });
+                              setNovoEmpregoForm({ ativo: !!(a as any).novoEmpregoAtivo, comunicadoEm: (a as any).novoEmpregoComunicadoEm || '', cartaUrl: (a as any).novoEmpregoCartaUrl || '' });
+                              try { const detail = await utils.avisoPrevio.avisoPrevio.getById.fetch({ id: a.id }); if (detail) { setSelectedItem(detail); setAcertoForm({ descontosAcerto: (detail as any).descontosAcerto || '', descontosAcertoDesc: (detail as any).descontosAcertoDesc || '', acrescimosAcerto: (detail as any).acrescimosAcerto || '', acrescimosAcertoDesc: (detail as any).acrescimosAcertoDesc || '', mediaInsalubridade: (detail as any).mediaInsalubridade || '', mediaHorasExtras: (detail as any).mediaHorasExtras || '' }); setNovoEmpregoForm({ ativo: !!(detail as any).novoEmpregoAtivo, comunicadoEm: (detail as any).novoEmpregoComunicadoEm || '', cartaUrl: (detail as any).novoEmpregoCartaUrl || '' }); } } catch(e) { console.error('Erro ao buscar detalhes:', e); }
+                        }}>
                           {a.employeeName}
                           <div className="flex gap-1 mt-0.5 flex-wrap">
                             {(a as any).novoEmpregoAtivo ? <span className="text-[9px] bg-orange-600 text-white px-1.5 py-0.5 rounded-full font-semibold">Novo Emprego · Súmula 276</span> : null}
