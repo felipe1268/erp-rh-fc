@@ -382,6 +382,23 @@ export default function Fornecedores() {
     setBuscaCategoria("");
   }
 
+  const editFromUrlRef = useRef(false);
+  useEffect(() => {
+    if (editFromUrlRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("edit");
+    if (editId && fornecedores.length > 0) {
+      const f = fornecedores.find((ff: any) => ff.id === parseInt(editId));
+      if (f) {
+        editFromUrlRef.current = true;
+        abrirEditar(f);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("edit");
+        window.history.replaceState({}, "", url.pathname);
+      }
+    }
+  }, [fornecedores]);
+
   const lastFetchedCNPJ = useRef("");
 
   const buscarCNPJ = useCallback(async () => {
