@@ -5793,6 +5793,178 @@ export default function FolhaPagamento() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <Dialog open={!!espelhoPopupEmpId} onOpenChange={(open) => { if (!open) { setEspelhoPopupEmpId(null); setEspelhoEditDate(null); } }}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" resizable={false}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-600" />
+                Espelho de Ponto — {espelhoPopupEmpNome}
+              </DialogTitle>
+              <DialogDescription>
+                Período no Escuro: {espelhoPeriodo.inicio ? new Date(espelhoPeriodo.inicio + 'T12:00:00').toLocaleDateString('pt-BR') : ''} a {espelhoPeriodo.fim ? new Date(espelhoPeriodo.fim + 'T12:00:00').toLocaleDateString('pt-BR') : ''}
+                {' • '}Clique em <Pencil className="h-3 w-3 inline" /> para editar as batidas de um dia.
+              </DialogDescription>
+            </DialogHeader>
+            {!espelhoPopupQ.data ? (
+              <div className="text-center py-8 text-muted-foreground">Carregando espelho...</div>
+            ) : (() => {
+              const recordMap = (espelhoPopupQ.data as any)?.records || {};
+              const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+              const dateList: string[] = [];
+              if (espelhoPeriodo.inicio && espelhoPeriodo.fim) {
+                const cur = new Date(espelhoPeriodo.inicio + 'T12:00:00');
+                const end = new Date(espelhoPeriodo.fim + 'T12:00:00');
+                while (cur <= end) { dateList.push(cur.toISOString().split('T')[0]); cur.setDate(cur.getDate() + 1); }
+              }
+              return (
+                <div className="space-y-3">
+                  <div className="rounded-lg border overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left p-2 font-medium">Data</th>
+                          <th className="text-center p-2 font-medium">Dia</th>
+                          <th className="text-center p-2 font-medium">Entrada</th>
+                          <th className="text-center p-2 font-medium">Saída</th>
+                          <th className="text-center p-2 font-medium">Entrada 2</th>
+                          <th className="text-center p-2 font-medium">Saída 2</th>
+                          <th className="text-center p-2 font-medium">Horas</th>
+                          <th className="text-center p-2 font-medium">Status</th>
+                          <th className="text-center p-2 font-medium w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dateList.map((dateStr) => {
+                          const dt = new Date(dateStr + 'T12:00:00');
+                          const dow = dt.getDay();
+                          const isSab = dow === 6;
+                          const isDom = dow === 0;
+                          const d = recordMap[dateStr] || null;
+                          const temBatida = !!(d?.entrada1 || d?.saida1);
+                          const bgClass = isDom ? 'bg-gray-100' : isSab ? 'bg-blue-50/50' : !temBatida ? 'bg-red-50' : '';
+                          return (
+                            <tr key={dateStr} className={`border-t ${bgClass} hover:bg-slate-50`}>
+                              <td className="p-2 font-mono">{dt.toLocaleDateString('pt-BR')}</td>
+                              <td className="p-2 text-center">{diasSemana[dow]}</td>
+                              <td className="p-2 text-center font-mono">{d?.entrada1 || '—'}</td>
+                              <td className="p-2 text-center font-mono">{d?.saida1 || '—'}</td>
+                              <td className="p-2 text-center font-mono">{d?.entrada2 || '—'}</td>
+                              <td className="p-2 text-center font-mono">{d?.saida2 || '—'}</td>
+                              <td className="p-2 text-center font-mono">{d?.horasTrabalhadas || '—'}</td>
+                              <td className="p-2 text-center">
+                                {!temBatida && !isDom && !isSab ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">SEM REG</span>
+                                ) : isDom ? (
+                                  <span className="text-[10px] text-gray-400">DOM</span>
+                                ) : isSab ? (
+                                  <span className="text-[10px] text-blue-400">SÁB</span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">OK</span>
+                                )}
+                              </td>
+                              <td className="p-2 text-center">
+                                {!isDom && (
+                                  <button
+                                    className="p-1 rounded hover:bg-blue-100 text-blue-600"
+                                    title="Editar batidas"
+                                    onClick={() => {
+                                      setEspelhoEditDate(dateStr);
+                                      setEspelhoEditRecord(d);
+                                      setEspelhoEditForm({
+                                        entrada1: d?.entrada1 || "", saida1: d?.saida1 || "",
+                                        entrada2: d?.entrada2 || "", saida2: d?.saida2 || "",
+                                        justificativa: d?.justificativa || "", motivoAjuste: "Correção manual",
+                                      });
+                                    }}>
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setEspelhoPopupEmpId(null); setEspelhoEditDate(null); }}>Fechar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!espelhoEditDate} onOpenChange={(open) => { if (!open) setEspelhoEditDate(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Pencil className="h-4 w-4 text-slate-500" />
+                Editar Ponto — {espelhoEditDate ? new Date(espelhoEditDate + 'T12:00:00').toLocaleDateString('pt-BR') : ''}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-1">
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                <Info className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+                <span>Esta edição será gravada como <strong>ajuste manual</strong> e substituirá o registro original.</span>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 1</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500">Entrada</label>
+                    <input type="time" value={espelhoEditForm.entrada1} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada1: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500">Saída</label>
+                    <input type="time" value={espelhoEditForm.saida1} onChange={e => setEspelhoEditForm(f => ({ ...f, saida1: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 2 <span className="font-normal normal-case">(intervalo)</span></p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500">Entrada</label>
+                    <input type="time" value={espelhoEditForm.entrada2} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada2: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500">Saída</label>
+                    <input type="time" value={espelhoEditForm.saida2} onChange={e => setEspelhoEditForm(f => ({ ...f, saida2: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 block mb-1">Motivo</label>
+                <input type="text" value={espelhoEditForm.motivoAjuste} onChange={e => setEspelhoEditForm(f => ({ ...f, motivoAjuste: e.target.value }))} placeholder="Motivo do ajuste" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 block mb-1">Observação <span className="font-normal">(opcional)</span></label>
+                <textarea value={espelhoEditForm.justificativa} onChange={e => setEspelhoEditForm(f => ({ ...f, justificativa: e.target.value }))} rows={2} placeholder="Justificativa adicional..." className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 resize-none" />
+              </div>
+            </div>
+            <DialogFooter className="gap-2 pt-2">
+              <Button variant="outline" onClick={() => setEspelhoEditDate(null)} className="flex-1">
+                <X className="h-4 w-4 mr-1.5" /> Cancelar
+              </Button>
+              <Button onClick={() => {
+                if (!espelhoEditDate || !espelhoPopupEmpId) return;
+                const dt = new Date(espelhoEditDate + 'T12:00:00');
+                const mesRef = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+                espelhoSaveMut.mutate({
+                  companyId, employeeId: espelhoPopupEmpId, mesReferencia: mesRef, data: espelhoEditDate,
+                  entrada1: espelhoEditForm.entrada1 || undefined, saida1: espelhoEditForm.saida1 || undefined,
+                  entrada2: espelhoEditForm.entrada2 || undefined, saida2: espelhoEditForm.saida2 || undefined,
+                  justificativa: espelhoEditForm.justificativa || undefined, motivoAjuste: espelhoEditForm.motivoAjuste || undefined,
+                });
+              }} disabled={espelhoSaveMut.isPending} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white">
+                {espelhoSaveMut.isPending ? <><RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />Salvando…</> : <><Save className="h-4 w-4 mr-1.5" />Salvar Ajuste</>}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
       </div>
           <PrintFooterLGPD />
     </DashboardLayout>
