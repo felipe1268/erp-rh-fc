@@ -5736,6 +5736,21 @@ Sempre retorne JSON válido, sem markdown.`;
       `) as any).rows || [];
       return rows_;
     }),
+
+  atualizarMotorista: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      motorista: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        UPDATE fleet_daily_km
+        SET motoristas = ${input.motorista}, updated_at = NOW()
+        WHERE id = ${input.id}
+      `);
+      return { ok: true };
+    }),
 });
 
 export async function coletarKmDiarioJob(companyId: number, dataOverride?: string): Promise<{ coletados: number; veiculos: number; erro?: string }> {

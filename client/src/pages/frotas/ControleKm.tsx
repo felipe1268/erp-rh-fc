@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
   Gauge, Fuel, Route, TrendingUp, Clock, Car, Truck, AlertTriangle,
   MapPin, Calendar, ArrowUpDown, Eye, ChevronDown, ChevronUp, DollarSign,
-  Loader2, RefreshCw, Navigation,
+  Loader2, RefreshCw, Navigation, Check, X,
 } from "lucide-react";
 
 function formatDate(d: string) {
@@ -49,6 +49,8 @@ export default function ControleKm() {
   const [showTrips, setShowTrips] = useState(false);
   const [showRoute, setShowRoute] = useState(false);
   const [routeDate, setRouteDate] = useState("");
+  const [editMotoristaId, setEditMotoristaId] = useState<number | null>(null);
+  const [editMotoristaVal, setEditMotoristaVal] = useState("");
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
@@ -76,6 +78,15 @@ export default function ControleKm() {
         refetch();
       }
     },
+  });
+
+  const motoristaMut = trpc.frotas.atualizarMotorista.useMutation({
+    onSuccess: () => {
+      toast.success("Motorista atualizado!");
+      dailyKmQ.refetch();
+      setEditMotoristaId(null);
+    },
+    onError: (err: any) => toast.error(err.message),
   });
 
   const coletaFeitaRef = useRef(false);
@@ -739,7 +750,33 @@ export default function ControleKm() {
                                             {formatNum(parseFloat(r.vel_maxima || 0))} km/h
                                           </span>
                                         </td>
-                                        <td className="py-2 px-3 text-gray-500 text-xs">{r.motoristas || "—"}</td>
+                                        <td className="py-2 px-3 text-gray-500 text-xs">
+                                          {editMotoristaId === r.id ? (
+                                            <div className="flex items-center gap-1">
+                                              <input
+                                                className="border rounded px-1.5 py-0.5 text-xs w-36"
+                                                value={editMotoristaVal}
+                                                onChange={e => setEditMotoristaVal(e.target.value)}
+                                                autoFocus
+                                                onKeyDown={e => {
+                                                  if (e.key === "Enter") motoristaMut.mutate({ id: r.id, motorista: editMotoristaVal });
+                                                  if (e.key === "Escape") setEditMotoristaId(null);
+                                                }}
+                                              />
+                                              <button type="button" onClick={() => motoristaMut.mutate({ id: r.id, motorista: editMotoristaVal })} className="text-emerald-600 hover:text-emerald-700 p-0.5"><Check className="h-3 w-3" /></button>
+                                              <button type="button" onClick={() => setEditMotoristaId(null)} className="text-gray-400 hover:text-gray-600 p-0.5"><X className="h-3 w-3" /></button>
+                                            </div>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              className="text-left hover:text-cyan-700 hover:underline cursor-pointer"
+                                              title="Clique para editar motorista"
+                                              onClick={() => { setEditMotoristaId(r.id); setEditMotoristaVal(r.motoristas || ""); }}
+                                            >
+                                              {r.motoristas || "—"}
+                                            </button>
+                                          )}
+                                        </td>
                                       </tr>
                                     ))}
                                   </tbody>

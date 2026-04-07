@@ -162,6 +162,13 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
           </div>
         )}
 
+        {!loading && !disciplinasQ.isError && status === "no_db" && (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <XCircle className="h-10 w-10 text-red-400" />
+            <p className="text-sm text-red-600">Banco de dados indisponível. Tente novamente mais tarde.</p>
+          </div>
+        )}
+
         {!loading && !disciplinasQ.isError && status === "nao_classificado" && (
           <div className="flex flex-col items-center justify-center py-16 gap-4">
             <Sparkles className="h-12 w-12 text-violet-400" />
@@ -3783,7 +3790,7 @@ export default function Solicitacoes() {
             descricao: item.descricao,
             unidade: item.unidade,
             quantidade: String(item.saldo > 0 ? item.saldo : item.qtdOrcada),
-            observacao: "",
+            observacoes: "",
             origemEap: true,
           };
           setItens(prev => {

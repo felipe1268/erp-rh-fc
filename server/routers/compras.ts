@@ -9110,8 +9110,14 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA não retornou classificações." });
 
     const svcMap = new Map(servicos.map(s => [s.eapCodigo, s]));
+    const seen = new Set<string>();
     const values = classificacoes
-      .filter(c => c.eap && c.disc && svcMap.has(c.eap))
+      .filter(c => {
+        if (!c.eap || !c.disc || !svcMap.has(c.eap)) return false;
+        if (seen.has(c.eap)) return false;
+        seen.add(c.eap);
+        return true;
+      })
       .map(c => ({
         companyId: input.companyId,
         orcamentoId: input.orcamentoId,
@@ -9124,15 +9130,16 @@ Responda APENAS com JSON válido, sem markdown, no formato:
     if (values.length === 0)
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Nenhuma classificação válida gerada." });
 
-    if (isReclassify) {
-      await db.delete(disciplinaClassificacoes)
-        .where(and(eq(disciplinaClassificacoes.orcamentoId, input.orcamentoId), eq(disciplinaClassificacoes.companyId, input.companyId)));
-    }
-
-    const BATCH = 200;
-    for (let i = 0; i < values.length; i += BATCH) {
-      await db.insert(disciplinaClassificacoes).values(values.slice(i, i + BATCH));
-    }
+    await db.transaction(async (tx) => {
+      if (isReclassify) {
+        await tx.delete(disciplinaClassificacoes)
+          .where(and(eq(disciplinaClassificacoes.orcamentoId, input.orcamentoId), eq(disciplinaClassificacoes.companyId, input.companyId)));
+      }
+      const BATCH = 200;
+      for (let i = 0; i < values.length; i += BATCH) {
+        await tx.insert(disciplinaClassificacoes).values(values.slice(i, i + BATCH));
+      }
+    });
 
     return { status: "ok" as const, total: values.length, disciplinas: [...new Set(values.map(v => v.disciplina))].length };
   }),
@@ -9181,7 +9188,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
     companyId: z.number(),
     orcamentoId: z.number(),
     nomeAtual: z.string(),
-    nomeNovo: z.string(),
+    nomeNovo: z.string().trim().min(1, "Nome da disciplina não pode ser vazio"),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
