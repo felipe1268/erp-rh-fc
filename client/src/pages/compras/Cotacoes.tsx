@@ -2515,12 +2515,27 @@ export default function Cotacoes() {
                               </div>
                               <button
                                 type="button"
-                                onClick={() => {
+                                style={{ width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff", cursor: "pointer", position: "relative", zIndex: 50 }}
+                                onMouseDown={(e) => { e.stopPropagation(); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
                                   const forn = p.fornecedor || fornecedores.find((ff: any) => ff.id === p.fornecedorId);
-                                  if (forn) abrirEditForn(forn);
-                                  else toast.error("Fornecedor não encontrado");
+                                  if (forn) {
+                                    setEditFornForm({
+                                      cnpj: forn.cnpj ?? "", razaoSocial: forn.razaoSocial ?? "", nomeFantasia: forn.nomeFantasia ?? "",
+                                      endereco: forn.endereco ?? "", numero: forn.numero ?? "", complemento: forn.complemento ?? "",
+                                      bairro: forn.bairro ?? "", cidade: forn.cidade ?? "", estado: forn.estado ?? "", cep: forn.cep ?? "",
+                                      telefone: forn.telefone ?? "", email: forn.email ?? "",
+                                      contatoNome: forn.contatoNome ?? "", contatoCelular: forn.contatoCelular ?? "", contatoEmail: forn.contatoEmail ?? "",
+                                      banco: forn.banco ?? "", agencia: forn.agencia ?? "", conta: forn.conta ?? "", pix: forn.pix ?? "",
+                                      observacoes: forn.observacoes ?? "",
+                                    });
+                                    setEditFornDialog(forn);
+                                  } else {
+                                    window.alert("Fornecedor não encontrado para edição. ID: " + p.fornecedorId);
+                                  }
                                 }}
-                                className="p-1.5 rounded-md border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 text-gray-400 transition-colors shadow-sm"
                                 title="Editar cadastro do fornecedor"
                               >
                                 <Pencil className="h-3.5 w-3.5" />
