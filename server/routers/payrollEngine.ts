@@ -786,18 +786,27 @@ export const payrollEngineRouter = router({
         AND status NOT IN ('pendente', 'cancelado', 'aplicado')
       `);
 
-      // Resetar status apenas dos registros escuro que NÃO foram decididos
+      // Resetar todos os registros da aferição anterior, EXCETO os que correspondem
+      // a payroll_adjustments já decididos (pendente/cancelado/aplicado)
       await db.execute(sql`
-        UPDATE timecard_daily SET 
+        UPDATE timecard_daily td SET 
           "statusDia" = 'escuro',
           "statusAnterior" = NULL,
           "afericaoResultado" = NULL,
           "afericaoObs" = NULL,
-          "afericaoEm" = NULL
-        WHERE "companyId" IN (${afericaoCidsSql}) 
-        AND "mesCompetencia" = ${prevMes}
-        AND ("statusAnterior" = 'escuro' OR "statusDia" IN ('escuro', 'pendente_decisao'))
-        AND "afericaoResultado" NOT IN ('ok', 'falta', 'atraso')
+          "afericaoEm" = NULL,
+          "entrada1" = NULL, "saida1" = NULL, "entrada2" = NULL, "saida2" = NULL,
+          "entrada3" = NULL, "saida3" = NULL,
+          "isFalta" = 0, "isAtraso" = 0,
+          "origemRegistro" = 'dixi'
+        WHERE td."companyId" IN (${afericaoCidsSql}) 
+        AND td."mesCompetencia" = ${prevMes}
+        AND (td."statusAnterior" = 'escuro' OR td."statusDia" IN ('escuro', 'pendente', 'pendente_decisao', 'aferido'))
+        AND NOT EXISTS (
+          SELECT 1 FROM payroll_adjustments pa 
+          WHERE pa."timecardDailyId" = td.id 
+          AND pa.status IN ('pendente', 'cancelado', 'aplicado')
+        )
       `);
 
       // Buscar registros escuro (inclui os que acabaram de ser resetados) — excluir PJ/Sócio
@@ -832,9 +841,17 @@ export const payrollEngineRouter = router({
         )
       );
 
+      const normalizeDate = (d: any): string => {
+        if (!d) return '';
+        if (d instanceof Date) {
+          return d.toISOString().slice(0, 10);
+        }
+        return String(d).slice(0, 10);
+      };
+
       const actualMap = new Map<string, any>();
       for (const r of actualRecords) {
-        actualMap.set(`${r.employeeId}-${r.data}`, r);
+        actualMap.set(`${r.employeeId}-${normalizeDate(r.data)}`, r);
       }
 
       // Build a map employeeId → jornadaTrabalho for correct HE recalculation per employee
@@ -919,7 +936,7 @@ export const payrollEngineRouter = router({
       const jaDecididoSet = new Set<string>();
       const jaDecididosList: any[] = [];
       for (const adj of jaDecididosRows) {
-        jaDecididoSet.add(`${adj.employeeId}-${adj.data}`);
+        jaDecididoSet.add(`${adj.employeeId}-${normalizeDate(adj.data)}`);
         if (adj.status === 'cancelado') continue;
         jaDecididosList.push(adj);
       }
@@ -935,7 +952,8 @@ export const payrollEngineRouter = router({
       const timecardSemRegistroIds: number[] = [];
       const timecardSemRegistroObs: string[] = [];
 
-      for (const escuro of escuroRecords) {
+      for (const escuroRaw of escuroRecords) {
+        const escuro = { ...escuroRaw, data: normalizeDate(escuroRaw.data) };
         const key = `${escuro.employeeId}-${escuro.data}`;
         const actual = actualMap.get(key);
         let resultado = "ok";
@@ -1195,9 +1213,9 @@ export const payrollEngineRouter = router({
           AND tipo IN ('falta','atraso','sem_registro')
         `)) as any).rows || [];
         const adjMap = new Map<string, number>();
-        for (const a of adjRows) adjMap.set(`${a.employeeId}-${a.data}-${a.tipo}`, a.id);
+        for (const a of adjRows) adjMap.set(`${a.employeeId}-${normalizeDate(a.data)}-${a.tipo}`, a.id);
         for (const d of divergenciasList) {
-          d.adjustmentId = adjMap.get(`${d.employeeId}-${d.data}-${d.tipo}`) || null;
+          d.adjustmentId = adjMap.get(`${d.employeeId}-${normalizeDate(d.data)}-${d.tipo}`) || null;
         }
       }
 
