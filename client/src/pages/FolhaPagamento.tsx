@@ -189,6 +189,7 @@ export default function FolhaPagamento() {
   });
   const [afericaoResult, setAfericaoResult] = useState<any>(null);
   const [showAfericaoReport, setShowAfericaoReport] = useState(false);
+  const [afericaoFilter, setAfericaoFilter] = useState<'todos'|'ok'|'faltas'|'atrasos'|'justificados'>('todos');
   const [detalheAfericaoEmpId, setDetalheAfericaoEmpId] = useState<number | null>(null);
   const [espelhoPopupEmpId, setEspelhoPopupEmpId] = useState<number | null>(null);
   const [espelhoPopupEmpNome, setEspelhoPopupEmpNome] = useState("");
@@ -4832,7 +4833,7 @@ export default function FolhaPagamento() {
         </Dialog>
 
         {/* RELATÓRIO DE AFERIÇÃO */}
-        <Dialog open={showAfericaoReport} onOpenChange={setShowAfericaoReport}>
+        <Dialog open={showAfericaoReport} onOpenChange={(v) => { setShowAfericaoReport(v); if (!v) setAfericaoFilter('todos'); }}>
           <DialogContent resizable={false} className="overflow-hidden flex flex-col" style={{ width: "calc(100vw - 2rem)", maxWidth: "calc(100vw - 2rem)", height: "95vh", maxHeight: "95vh" }}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -4844,37 +4845,117 @@ export default function FolhaPagamento() {
             </DialogHeader>
             {afericaoResult && (
               <div className="flex-1 overflow-y-auto space-y-4">
-                {/* Summary cards */}
+                {/* Summary cards — clicáveis como filtros */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  <div className="bg-slate-50 rounded-lg p-3 text-center">
+                  <button onClick={() => setAfericaoFilter(f => f === 'todos' ? 'todos' : 'todos')} className={`rounded-lg p-3 text-center transition-all cursor-pointer ${afericaoFilter === 'todos' ? 'ring-2 ring-slate-500 bg-slate-100' : 'bg-slate-50 hover:bg-slate-100'}`}>
                     <div className="text-2xl font-bold text-slate-700">{afericaoResult.totalAferidos}</div>
                     <div className="text-[10px] text-slate-500 font-medium">Dias Aferidos</div>
-                  </div>
-                  <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
+                  </button>
+                  <button onClick={() => setAfericaoFilter(f => f === 'ok' ? 'todos' : 'ok')} className={`rounded-lg p-3 text-center transition-all cursor-pointer border ${afericaoFilter === 'ok' ? 'ring-2 ring-green-500 bg-green-100 border-green-400' : 'bg-green-50 border-green-200 hover:bg-green-100'}`}>
                     <div className="text-2xl font-bold text-green-700">{afericaoResult.totalOk || 0}</div>
                     <div className="text-[10px] text-green-600 font-medium">Validados OK</div>
-                  </div>
-                  <div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
+                  </button>
+                  <button onClick={() => setAfericaoFilter(f => f === 'faltas' ? 'todos' : 'faltas')} className={`rounded-lg p-3 text-center transition-all cursor-pointer border ${afericaoFilter === 'faltas' ? 'ring-2 ring-red-500 bg-red-100 border-red-400' : 'bg-red-50 border-red-200 hover:bg-red-100'}`}>
                     <div className="text-2xl font-bold text-red-700">{afericaoResult.faltas || 0}</div>
                     <div className="text-[10px] text-red-600 font-medium">Faltas</div>
-                  </div>
-                  <div className="bg-orange-50 rounded-lg p-3 text-center border border-orange-200">
+                  </button>
+                  <button onClick={() => setAfericaoFilter(f => f === 'atrasos' ? 'todos' : 'atrasos')} className={`rounded-lg p-3 text-center transition-all cursor-pointer border ${afericaoFilter === 'atrasos' ? 'ring-2 ring-orange-500 bg-orange-100 border-orange-400' : 'bg-orange-50 border-orange-200 hover:bg-orange-100'}`}>
                     <div className="text-2xl font-bold text-orange-700">{afericaoResult.atrasos || 0}</div>
                     <div className="text-[10px] text-orange-600 font-medium">Atrasos</div>
-                  </div>
+                  </button>
                   {(afericaoResult.totalJustificados || 0) > 0 && (
-                    <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
+                    <button onClick={() => setAfericaoFilter(f => f === 'justificados' ? 'todos' : 'justificados')} className={`rounded-lg p-3 text-center transition-all cursor-pointer border ${afericaoFilter === 'justificados' ? 'ring-2 ring-blue-500 bg-blue-100 border-blue-400' : 'bg-blue-50 border-blue-200 hover:bg-blue-100'}`}>
                       <div className="text-2xl font-bold text-blue-700">{afericaoResult.totalJustificados}</div>
                       <div className="text-[10px] text-blue-600 font-medium">Justificados</div>
-                    </div>
+                    </button>
                   )}
                 </div>
+                {afericaoFilter !== 'todos' && (
+                  <div className="flex items-center gap-2 text-xs text-slate-600">
+                    <span>Filtrando por: <strong>{afericaoFilter === 'ok' ? 'Validados OK' : afericaoFilter === 'faltas' ? 'Faltas' : afericaoFilter === 'atrasos' ? 'Atrasos' : 'Justificados'}</strong></span>
+                    <button onClick={() => setAfericaoFilter('todos')} className="text-red-600 hover:text-red-800 underline">Limpar filtro</button>
+                  </div>
+                )}
+
+                {/* Validados OK — visível quando filtro = ok */}
+                {afericaoFilter === 'ok' && (afericaoResult.validadosList || []).length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm text-green-700 mb-2 flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4" /> Validados OK ({(afericaoResult.validadosList || []).length})
+                    </h4>
+                    <div className="rounded-lg border border-green-200 overflow-hidden max-h-[400px] overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0">
+                          <tr className="bg-green-50 text-green-700">
+                            <th className="py-2 px-3 text-left font-semibold">Funcionário</th>
+                            <th className="py-2 px-3 text-center font-semibold">Data</th>
+                            <th className="py-2 px-3 text-center font-semibold">Entrada Escuro</th>
+                            <th className="py-2 px-3 text-center font-semibold">Saída Escuro</th>
+                            <th className="py-2 px-3 text-center font-semibold">Entrada Real</th>
+                            <th className="py-2 px-3 text-center font-semibold">Saída Real</th>
+                            <th className="py-2 px-3 text-center font-semibold">Horas</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(afericaoResult.validadosList || []).map((v: any, i: number) => (
+                            <tr key={i} className={`border-t ${i % 2 === 0 ? '' : 'bg-green-50/30'}`}>
+                              <td className="py-1.5 px-3 font-medium">
+                                <button className="text-left text-blue-700 hover:underline cursor-pointer" onClick={() => { setEspelhoPopupEmpId(Number(v.employeeId)); setEspelhoPopupEmpNome(v.employeeName || `ID ${v.employeeId}`); }}>
+                                  {v.employeeName || `ID ${v.employeeId}`}
+                                </button>
+                              </td>
+                              <td className="py-1.5 px-3 text-center font-mono">{v.data ? v.data.split('-').reverse().join('/') : '-'}</td>
+                              <td className="py-1.5 px-3 text-center font-mono text-slate-500">{v.escuroEntrada1 || '-'}</td>
+                              <td className="py-1.5 px-3 text-center font-mono text-slate-500">{v.escuroSaida1 || '-'}</td>
+                              <td className="py-1.5 px-3 text-center font-mono">{v.realEntrada1 || '-'}</td>
+                              <td className="py-1.5 px-3 text-center font-mono">{v.realSaida1 || '-'}</td>
+                              <td className="py-1.5 px-3 text-center font-mono font-bold text-green-700">{v.horasTrabalhadas || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Justificados — visível quando filtro = justificados */}
+                {afericaoFilter === 'justificados' && (afericaoResult.justificadosList || []).length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm text-blue-700 mb-2 flex items-center gap-1">
+                      <Info className="h-4 w-4" /> Justificados ({(afericaoResult.justificadosList || []).length})
+                    </h4>
+                    <div className="rounded-lg border border-blue-200 overflow-hidden max-h-[400px] overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0">
+                          <tr className="bg-blue-50 text-blue-700">
+                            <th className="py-2 px-3 text-left font-semibold">Funcionário</th>
+                            <th className="py-2 px-3 text-left font-semibold">Função</th>
+                            <th className="py-2 px-3 text-center font-semibold">Status</th>
+                            <th className="py-2 px-3 text-center font-semibold">Data</th>
+                            <th className="py-2 px-3 text-center font-semibold">Motivo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(afericaoResult.justificadosList || []).map((j: any, i: number) => (
+                            <tr key={i} className={`border-t ${i % 2 === 0 ? '' : 'bg-blue-50/30'}`}>
+                              <td className="py-1.5 px-3 font-medium">{j.employeeName || `ID ${j.employeeId}`}</td>
+                              <td className="py-1.5 px-3 text-slate-500">{j.funcao || '-'}</td>
+                              <td className="py-1.5 px-3 text-center"><span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">{j.empStatus || '-'}</span></td>
+                              <td className="py-1.5 px-3 text-center font-mono">{j.data ? j.data.split('-').reverse().join('/') : '-'}</td>
+                              <td className="py-1.5 px-3 text-center font-medium text-blue-700">{j.motivo || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
                 {/* Divergências */}
-                {(afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado).length > 0 && (
+                {(afericaoFilter === 'todos' || afericaoFilter === 'faltas' || afericaoFilter === 'atrasos') && (afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado).length > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm text-red-700 mb-2 flex items-center gap-1">
-                      <AlertTriangle className="h-4 w-4" /> Divergências Encontradas ({(afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado).length})
+                      <AlertTriangle className="h-4 w-4" /> {afericaoFilter === 'faltas' ? 'Faltas' : afericaoFilter === 'atrasos' ? 'Atrasos' : 'Divergências Encontradas'} ({(afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado && (afericaoFilter === 'todos' || (afericaoFilter === 'faltas' && d.tipo === 'falta') || (afericaoFilter === 'atrasos' && d.tipo === 'atraso'))).length})
                     </h4>
                     <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 text-xs text-slate-700 space-y-1">
                       <p className="font-semibold text-slate-800 mb-1">O que significa cada tipo:</p>
@@ -4904,7 +4985,7 @@ export default function FolhaPagamento() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado).map((d: any, i: number) => (
+                          {(afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado && (afericaoFilter === 'todos' || (afericaoFilter === 'faltas' && d.tipo === 'falta') || (afericaoFilter === 'atrasos' && d.tipo === 'atraso'))).map((d: any, i: number) => (
                             <tr key={i} className={`border-t ${i % 2 === 0 ? '' : 'bg-red-50/30'}`}>
                               <td className="py-2 px-3 font-medium">
                                 <button
