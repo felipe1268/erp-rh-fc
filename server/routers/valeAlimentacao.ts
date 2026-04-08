@@ -1142,17 +1142,26 @@ export const valeAlimentacaoRouter = router({
           let descJantar = input.descontarJantar ? parseBRL(alert.valorDescontoJantar) : 0;
           const totalDesconto = descCafe + descLanche + descJantar;
           if (totalDesconto > 0) {
-            await db.execute(
-              sql`UPDATE vr_benefits SET 
-                "valorCafe" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorCafe", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descCafe}) AS TEXT),
-                "valorLanche" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorLanche", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descLanche}) AS TEXT),
-                "valorJanta" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorJanta", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${descJantar}) AS TEXT),
-                "valorTotal" = CAST(GREATEST(0, CAST(REPLACE(REPLACE("valorTotal", '.', ''), ',', '.') AS DECIMAL(10,2)) - ${totalDesconto}) AS TEXT),
-                "diasFaltas" = COALESCE("diasFaltas", 0) + 1,
-                "diasDescontados" = COALESCE("diasDescontados", 0) + 1,
-                "updatedAt" = NOW()
-              WHERE id = ${alert.vrBenefitId} AND "companyId" = ${input.companyId}`
-            );
+            const vrRow = ((await db.execute(
+              sql`SELECT "valorCafe", "valorLanche", "valorJanta", "valorTotal" FROM vr_benefits WHERE id = ${alert.vrBenefitId} AND "companyId" = ${input.companyId}`
+            )) as any).rows?.[0];
+            if (vrRow) {
+              const newCafe = Math.max(0, Math.round((parseBRL(vrRow.valorCafe) - descCafe) * 100) / 100);
+              const newLanche = Math.max(0, Math.round((parseBRL(vrRow.valorLanche) - descLanche) * 100) / 100);
+              const newJanta = Math.max(0, Math.round((parseBRL(vrRow.valorJanta) - descJantar) * 100) / 100);
+              const newTotal = Math.max(0, Math.round((parseBRL(vrRow.valorTotal) - totalDesconto) * 100) / 100);
+              await db.execute(
+                sql`UPDATE vr_benefits SET 
+                  "valorCafe" = ${String(newCafe.toFixed(2).replace('.', ','))},
+                  "valorLanche" = ${String(newLanche.toFixed(2).replace('.', ','))},
+                  "valorJanta" = ${String(newJanta.toFixed(2).replace('.', ','))},
+                  "valorTotal" = ${String(newTotal.toFixed(2).replace('.', ','))},
+                  "diasFaltas" = COALESCE("diasFaltas", 0) + 1,
+                  "diasDescontados" = COALESCE("diasDescontados", 0) + 1,
+                  "updatedAt" = NOW()
+                WHERE id = ${alert.vrBenefitId} AND "companyId" = ${input.companyId}`
+              );
+            }
           }
         }
         processados++;
