@@ -29,6 +29,22 @@ function minutesToHHMM(mins: number): string {
 }
 
 // Calculates the expected NET work minutes for a given day based on the employee's
+// Extract expected entry time in minutes from jornadaTrabalho JSON for a given date.
+// Returns 7*60 (07:00) as fallback if jornada is absent or doesn't have entry for that day.
+function getExpectedEntrada(jornadaTrabalho: string | null | undefined, dateStr: string): number {
+  if (!jornadaTrabalho) return 7 * 60;
+  try {
+    const parsed = JSON.parse(jornadaTrabalho);
+    if (typeof parsed !== "object" || Array.isArray(parsed)) return 7 * 60;
+    const keys = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+    const dayKey = keys[new Date(dateStr + "T12:00:00Z").getUTCDay()];
+    const day = parsed[dayKey];
+    if (!day?.entrada) return 7 * 60;
+    const [h, m] = day.entrada.split(":").map(Number);
+    return (h || 0) * 60 + (m || 0);
+  } catch { return 7 * 60; }
+}
+
 // jornadaTrabalho JSON. Returns cargaHorariaDiaria*60 as fallback if jornada is absent.
 // horasTrabalhadas = sum of punch intervals (gaps like lunch are excluded), so
 // expectedMins must also exclude the lunch break (intervalo).
@@ -513,7 +529,7 @@ export const payrollEngineRouter = router({
             // Check for tardiness
             const entrada = parseTime(rec.entrada1);
             if (entrada !== null && tipoDia === "util") {
-              const jornadaEntrada = 7 * 60;
+              const jornadaEntrada = getExpectedEntrada(emp.jornadaTrabalho, dateStr);
               const atraso = entrada - jornadaEntrada;
               if (atraso > criteria.pontoFaltaAposAtraso) {
                 isFalta = 1; totalFaltas++;
@@ -524,7 +540,7 @@ export const payrollEngineRouter = router({
             // Check for early departure
             const saida = parseTime(rec.saida2 || rec.saida1);
             if (saida !== null && tipoDia === "util") {
-              const jornadaSaida = (7 + criteria.cargaHorariaDiaria + 1) * 60;
+              const jornadaSaida = (getExpectedEntrada(emp.jornadaTrabalho, dateStr) / 60 + criteria.cargaHorariaDiaria + 1) * 60;
               const saidaAntecipada = jornadaSaida - saida;
               if (saidaAntecipada > criteria.pontoToleranciaSaida) {
                 isSaidaAntecipada = 1; minutosSaidaAntecipada = saidaAntecipada;
@@ -1021,7 +1037,8 @@ export const payrollEngineRouter = router({
           } else {
             const entrada = parseTime(actual.entrada1);
             if (entrada !== null) {
-              const jornadaEntrada = 7 * 60;
+              const empJornada = empJornadaMap.get(escuro.employeeId) ?? null;
+              const jornadaEntrada = getExpectedEntrada(empJornada, escuro.data);
               const atraso = entrada - jornadaEntrada;
               if (atraso > criteria.pontoToleranciaAtraso) {
                 resultado = "atraso";
