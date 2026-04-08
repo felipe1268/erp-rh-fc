@@ -467,7 +467,7 @@ export const valeAlimentacaoRouter = router({
         const valorDiario = cafeDia + lancheDia + jantaDia;
         const valorBruto = Math.round((valorCafe + valorLanche + valorJanta + valorVA) * 100) / 100;
         const descontoVaPct = parseBRL(cfg.descontoVaPercentual) || 0;
-        const valorDescontoVA = descontoVaPct > 0 ? Math.round(valorBruto * descontoVaPct / 100 * 100) / 100 : 0;
+        const valorDescontoVA = descontoVaPct > 0 ? Math.round(valorVA * descontoVaPct / 100 * 100) / 100 : 0;
         const valorTotal = Math.round((valorBruto - valorDescontoVA) * 100) / 100;
 
         if (valorTotal <= 0) continue;
@@ -714,7 +714,7 @@ export const valeAlimentacaoRouter = router({
           const valorDiario = cafeDia + lancheDia + jantaDia;
           const valorBruto = Math.round((valorCafe + valorLanche + valorJanta + valorVA) * 100) / 100;
           const descontoVaPct = parseBRL(cfg.descontoVaPercentual) || 0;
-          const valorDescontoVA = descontoVaPct > 0 ? Math.round(valorBruto * descontoVaPct / 100 * 100) / 100 : 0;
+          const valorDescontoVA = descontoVaPct > 0 ? Math.round(valorVA * descontoVaPct / 100 * 100) / 100 : 0;
           const valorTotal = Math.round((valorBruto - valorDescontoVA) * 100) / 100;
           if (valorTotal <= 0) continue;
 

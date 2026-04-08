@@ -1518,9 +1518,9 @@ export default function ValeAlimentacao() {
                 <Input type="number" value={configForm.diasUteisRef || 22} onChange={e => setConfigForm((f: any) => ({ ...f, diasUteisRef: Number(e.target.value) }))} className="mt-1" />
               </div>
               <div>
-                <Label className="text-sm">Desconto Convenção (%)</Label>
+                <Label className="text-sm">Desconto s/ VA (%)</Label>
                 <Input value={configForm.descontoVaPercentual || "0"} onChange={e => setConfigForm((f: any) => ({ ...f, descontoVaPercentual: e.target.value }))} className="mt-1" placeholder="Ex: 5" />
-                <p className="text-xs text-muted-foreground mt-1">PAT / Convenção coletiva</p>
+                <p className="text-xs text-muted-foreground mt-1">PAT — incide apenas sobre o VA</p>
               </div>
             </div>
 
@@ -1539,7 +1539,7 @@ export default function ValeAlimentacao() {
               const vaDia = dias > 0 ? vaTotalMes / dias : 0;
 
               const brutoTotal = cafeTotalMes + lancheTotalMes + jantaTotalMes + vaTotalMes;
-              const desconto = brutoTotal * (descPct / 100);
+              const desconto = vaTotalMes * (descPct / 100);
               const totalLiquido = brutoTotal - desconto;
 
               return (
@@ -1603,7 +1603,7 @@ export default function ValeAlimentacao() {
                     </div>
                     <div className="mt-2 pt-2 border-t flex items-center gap-3 text-sm">
                       <span>Bruto: <strong>R$ {fmtNum(brutoTotal)}</strong></span>
-                      {descPct > 0 && <span className="text-red-600">− {descPct}%: <strong>R$ {fmtNum(desconto)}</strong></span>}
+                      {descPct > 0 && <span className="text-red-600">− {descPct}% s/ VA: <strong>R$ {fmtNum(desconto)}</strong></span>}
                       <span className="text-orange-600 font-bold text-base">Total: R$ {fmtNum(totalLiquido)}</span>
                     </div>
                   </div>
@@ -1631,7 +1631,7 @@ export default function ValeAlimentacao() {
 
               const brutoTotal = cafeTotalMes + lancheTotalMes + jantaTotalMes + vaTotalMes;
               const descPct = parseBRL(configForm.descontoVaPercentual) || 0;
-              const totalCalc = brutoTotal - brutoTotal * (descPct / 100);
+              const totalCalc = brutoTotal - vaTotalMes * (descPct / 100);
 
               saveConfigMut.mutate({
                 ...configForm,
