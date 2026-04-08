@@ -928,9 +928,10 @@ export default function ValeAlimentacao() {
                   const fimA = m - 1 <= 0 ? a - 1 : a;
                   const iniM = fimM - 1 <= 0 ? 12 : fimM - 1;
                   const iniA = fimM - 1 <= 0 ? fimA - 1 : fimA;
+                  const mesesNome = ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
                   return (
                     <p className="text-sm text-muted-foreground">
-                      Período de aferição: <strong>{String(iniM).padStart(2,'0')}/{iniA}</strong> (dia 16) a <strong>{String(fimM).padStart(2,'0')}/{fimA}</strong> (dia 15). Faltas sem atestado geram desconto no VA.
+                      Competência das faltas: <strong>16/{String(iniM).padStart(2,'0')}/{iniA} a 15/{String(fimM).padStart(2,'0')}/{fimA}</strong> ({mesesNome[iniM]}/{iniA} – {mesesNome[fimM]}/{fimA}). Faltas sem atestado nesse período geram desconto no VA de {mesLabel}.
                     </p>
                   );
                 })()}
