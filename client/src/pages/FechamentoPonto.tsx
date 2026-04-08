@@ -35,6 +35,20 @@ import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio" | "nao_identificados" | "memoria_dixi" | "simulador_horistas" | "descontos_clt";
 
+function maskTimeValue(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, '');
+  if (digits.length === 0) return '';
+  if (digits.length <= 2) return digits;
+  return digits.slice(0, 2) + ':' + digits.slice(2, 4);
+}
+function normalizeTimeOnBlur(val: string): string {
+  if (!val) return '';
+  const parts = val.split(':');
+  const h = Math.min(23, parseInt(parts[0] || '0', 10));
+  const m = Math.min(59, parseInt(parts[1] || '0', 10));
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 // Easter Sunday calculation (Gaussian algorithm)
 function getEaster(year: number): Date {
   const a = year % 19, b = Math.floor(year / 100), c = year % 100;
@@ -3854,12 +3868,12 @@ export default function FechamentoPonto() {
                                     {isOffSchedule && <span className="text-[8px] text-amber-700 font-bold leading-none">DIF</span>}
                                   </div>
                                 </td>
-                                <td className="px-0.5 py-0.5"><Input type="time" value={day.entrada1} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: e.target.value } : d))} /></td>
-                                <td className="px-0.5 py-0.5"><Input type="time" value={day.saida1} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: e.target.value } : d))} /></td>
-                                <td className="px-0.5 py-0.5"><Input type="time" value={day.entrada2} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: e.target.value } : d))} /></td>
-                                <td className="px-0.5 py-0.5"><Input type="time" value={day.saida2} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: e.target.value } : d))} /></td>
-                                <td className="px-0.5 py-0.5"><Input type="time" value={day.entrada3 || ""} className={`h-6 text-[11px] font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada3: e.target.value } : d))} /></td>
-                                <td className="px-0.5 py-0.5"><Input type="time" value={day.saida3 || ""} className={`h-6 text-[11px] font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida3: e.target.value } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={day.entrada1} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: maskTimeValue(e.target.value) } : d))} onBlur={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada1: normalizeTimeOnBlur(e.target.value) } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={day.saida1} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: maskTimeValue(e.target.value) } : d))} onBlur={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida1: normalizeTimeOnBlur(e.target.value) } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={day.entrada2} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: maskTimeValue(e.target.value) } : d))} onBlur={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada2: normalizeTimeOnBlur(e.target.value) } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={day.saida2} className={`h-6 text-[11px] font-mono ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: maskTimeValue(e.target.value) } : d))} onBlur={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida2: normalizeTimeOnBlur(e.target.value) } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={day.entrada3 || ""} className={`h-6 text-[11px] font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada3: maskTimeValue(e.target.value) } : d))} onBlur={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, entrada3: normalizeTimeOnBlur(e.target.value) } : d))} /></td>
+                                <td className="px-0.5 py-0.5"><Input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={day.saida3 || ""} className={`h-6 text-[11px] font-mono border-blue-200 ${isFaltaMarcada ? "opacity-40" : ""}`} style={{width:"100%",paddingLeft:3,paddingRight:1}} onChange={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida3: maskTimeValue(e.target.value) } : d))} onBlur={e => setManualDays(p => p.map(d => d.id === day.id ? { ...d, saida3: normalizeTimeOnBlur(e.target.value) } : d))} /></td>
                                 <td className="px-0.5 py-0.5 text-center">
                                   <button
                                     type="button"
@@ -4294,22 +4308,22 @@ export default function FechamentoPonto() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Entrada</Label>
-                  <Input type="time" value={quickFixData.entrada1} onChange={(e) => setQuickFixData(d => ({ ...d, entrada1: e.target.value }))} className={!quickFixRec.entrada1 ? "border-amber-400 bg-amber-50" : ""} />
+                  <Input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={quickFixData.entrada1} onChange={(e) => setQuickFixData(d => ({ ...d, entrada1: maskTimeValue(e.target.value) }))} onBlur={(e) => setQuickFixData(d => ({ ...d, entrada1: normalizeTimeOnBlur(e.target.value) }))} className={!quickFixRec.entrada1 ? "border-amber-400 bg-amber-50" : ""} />
                   {!quickFixRec.entrada1 && <span className="text-[10px] text-amber-600">* Faltando</span>}
                 </div>
                 <div>
                   <Label className="text-xs">Saída Int.</Label>
-                  <Input type="time" value={quickFixData.saida1} onChange={(e) => setQuickFixData(d => ({ ...d, saida1: e.target.value }))} className={!quickFixRec.saida1 ? "border-amber-400 bg-amber-50" : ""} />
+                  <Input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={quickFixData.saida1} onChange={(e) => setQuickFixData(d => ({ ...d, saida1: maskTimeValue(e.target.value) }))} onBlur={(e) => setQuickFixData(d => ({ ...d, saida1: normalizeTimeOnBlur(e.target.value) }))} className={!quickFixRec.saida1 ? "border-amber-400 bg-amber-50" : ""} />
                   {!quickFixRec.saida1 && <span className="text-[10px] text-amber-600">* Faltando</span>}
                 </div>
                 <div>
                   <Label className="text-xs">Retorno</Label>
-                  <Input type="time" value={quickFixData.entrada2} onChange={(e) => setQuickFixData(d => ({ ...d, entrada2: e.target.value }))} className={!quickFixRec.entrada2 ? "border-amber-400 bg-amber-50" : ""} />
+                  <Input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={quickFixData.entrada2} onChange={(e) => setQuickFixData(d => ({ ...d, entrada2: maskTimeValue(e.target.value) }))} onBlur={(e) => setQuickFixData(d => ({ ...d, entrada2: normalizeTimeOnBlur(e.target.value) }))} className={!quickFixRec.entrada2 ? "border-amber-400 bg-amber-50" : ""} />
                   {!quickFixRec.entrada2 && <span className="text-[10px] text-amber-600">* Faltando</span>}
                 </div>
                 <div>
                   <Label className="text-xs">Saída</Label>
-                  <Input type="time" value={quickFixData.saida2} onChange={(e) => setQuickFixData(d => ({ ...d, saida2: e.target.value }))} className={!quickFixRec.saida2 ? "border-amber-400 bg-amber-50" : ""} />
+                  <Input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={quickFixData.saida2} onChange={(e) => setQuickFixData(d => ({ ...d, saida2: maskTimeValue(e.target.value) }))} onBlur={(e) => setQuickFixData(d => ({ ...d, saida2: normalizeTimeOnBlur(e.target.value) }))} className={!quickFixRec.saida2 ? "border-amber-400 bg-amber-50" : ""} />
                   {!quickFixRec.saida2 && <span className="text-[10px] text-amber-600">* Faltando</span>}
                 </div>
               </div>

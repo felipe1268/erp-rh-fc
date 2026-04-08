@@ -26,6 +26,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { fmtNum } from "@/lib/formatters";
 import AlertaDivergenciaFolha from "@/components/AlertaDivergenciaFolha";
 
+function maskTimeValue(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, '');
+  if (digits.length === 0) return '';
+  if (digits.length <= 2) return digits;
+  return digits.slice(0, 2) + ':' + digits.slice(2, 4);
+}
+function normalizeTimeOnBlur(val: string): string {
+  if (!val) return '';
+  const parts = val.split(':');
+  const h = Math.min(23, parseInt(parts[0] || '0', 10));
+  const m = Math.min(59, parseInt(parts[1] || '0', 10));
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const fmtDateBR = (d: string | null | undefined) => { if (!d) return '-'; const s = String(d).slice(0,10); const [y,m,dd] = s.split('-'); return `${dd}/${m}/${y}`; };
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -2764,11 +2777,11 @@ export default function FolhaPagamento() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
                       <label className="text-xs font-semibold text-slate-500">Entrada</label>
-                      <input type="time" value={espelhoEditForm.entrada1} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada1: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                      <input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={espelhoEditForm.entrada1} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada1: maskTimeValue(e.target.value) }))} onBlur={e => setEspelhoEditForm(f => ({ ...f, entrada1: normalizeTimeOnBlur(e.target.value) }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
                     </div>
                     <div className="flex flex-col gap-1">
                       <label className="text-xs font-semibold text-slate-500">Saída</label>
-                      <input type="time" value={espelhoEditForm.saida1} onChange={e => setEspelhoEditForm(f => ({ ...f, saida1: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                      <input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={espelhoEditForm.saida1} onChange={e => setEspelhoEditForm(f => ({ ...f, saida1: maskTimeValue(e.target.value) }))} onBlur={e => setEspelhoEditForm(f => ({ ...f, saida1: normalizeTimeOnBlur(e.target.value) }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
                     </div>
                   </div>
                 </div>
@@ -2777,11 +2790,11 @@ export default function FolhaPagamento() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
                       <label className="text-xs font-semibold text-slate-500">Entrada</label>
-                      <input type="time" value={espelhoEditForm.entrada2} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada2: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                      <input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={espelhoEditForm.entrada2} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada2: maskTimeValue(e.target.value) }))} onBlur={e => setEspelhoEditForm(f => ({ ...f, entrada2: normalizeTimeOnBlur(e.target.value) }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
                     </div>
                     <div className="flex flex-col gap-1">
                       <label className="text-xs font-semibold text-slate-500">Saída</label>
-                      <input type="time" value={espelhoEditForm.saida2} onChange={e => setEspelhoEditForm(f => ({ ...f, saida2: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                      <input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={espelhoEditForm.saida2} onChange={e => setEspelhoEditForm(f => ({ ...f, saida2: maskTimeValue(e.target.value) }))} onBlur={e => setEspelhoEditForm(f => ({ ...f, saida2: normalizeTimeOnBlur(e.target.value) }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
                     </div>
                   </div>
                 </div>
@@ -6110,11 +6123,11 @@ export default function FolhaPagamento() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-semibold text-slate-500">Entrada</label>
-                    <input type="time" value={espelhoEditForm.entrada1} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada1: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                    <input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={espelhoEditForm.entrada1} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada1: maskTimeValue(e.target.value) }))} onBlur={e => setEspelhoEditForm(f => ({ ...f, entrada1: normalizeTimeOnBlur(e.target.value) }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-semibold text-slate-500">Saída</label>
-                    <input type="time" value={espelhoEditForm.saida1} onChange={e => setEspelhoEditForm(f => ({ ...f, saida1: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                    <input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={espelhoEditForm.saida1} onChange={e => setEspelhoEditForm(f => ({ ...f, saida1: maskTimeValue(e.target.value) }))} onBlur={e => setEspelhoEditForm(f => ({ ...f, saida1: normalizeTimeOnBlur(e.target.value) }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
                   </div>
                 </div>
               </div>
@@ -6123,11 +6136,11 @@ export default function FolhaPagamento() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-semibold text-slate-500">Entrada</label>
-                    <input type="time" value={espelhoEditForm.entrada2} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada2: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                    <input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={espelhoEditForm.entrada2} onChange={e => setEspelhoEditForm(f => ({ ...f, entrada2: maskTimeValue(e.target.value) }))} onBlur={e => setEspelhoEditForm(f => ({ ...f, entrada2: normalizeTimeOnBlur(e.target.value) }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-semibold text-slate-500">Saída</label>
-                    <input type="time" value={espelhoEditForm.saida2} onChange={e => setEspelhoEditForm(f => ({ ...f, saida2: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
+                    <input type="text" inputMode="numeric" maxLength={5} placeholder="--:--" value={espelhoEditForm.saida2} onChange={e => setEspelhoEditForm(f => ({ ...f, saida2: maskTimeValue(e.target.value) }))} onBlur={e => setEspelhoEditForm(f => ({ ...f, saida2: normalizeTimeOnBlur(e.target.value) }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full" />
                   </div>
                 </div>
               </div>
