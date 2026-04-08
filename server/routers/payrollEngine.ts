@@ -809,13 +809,13 @@ export const payrollEngineRouter = router({
         )
       `);
 
-      // Buscar registros escuro (inclui os que acabaram de ser resetados) — excluir PJ/Sócio
+      // Buscar registros escuro + já decididos (preservados do reset) — excluir PJ/Sócio
       const escuroRecords = ((await db.execute(sql`
         SELECT td.* FROM timecard_daily td
         JOIN employees e ON e.id = td."employeeId"
         WHERE td."companyId" IN (${afericaoCidsSql}) 
         AND td."mesCompetencia" = ${prevMes}
-        AND td."statusDia" = 'escuro'
+        AND (td."statusDia" = 'escuro' OR (td."statusAnterior" = 'escuro' AND td."statusDia" IN ('pendente', 'pendente_decisao', 'aferido')))
         AND COALESCE(e."tipoContrato",'CLT') NOT IN ('PJ','Socio')
         ORDER BY td."employeeId", td.data
       `)) as any).rows || [];
@@ -933,10 +933,11 @@ export const payrollEngineRouter = router({
         AND "mesDesconto" = ${input.mesReferencia}
         AND status IN ('pendente', 'cancelado', 'aplicado')
       `)) as any).rows || [];
-      const jaDecididoSet = new Set<string>();
+      const jaDecididoMap = new Map<string, any>();
       const jaDecididosList: any[] = [];
       for (const adj of jaDecididosRows) {
-        jaDecididoSet.add(`${adj.employeeId}-${normalizeDate(adj.data)}`);
+        const adjKey = `${adj.employeeId}-${normalizeDate(adj.data)}`;
+        jaDecididoMap.set(adjKey, adj);
         if (adj.status === 'cancelado') continue;
         jaDecididosList.push(adj);
       }
@@ -963,9 +964,45 @@ export const payrollEngineRouter = router({
         const empStatus = empStatusMap.get(escuro.employeeId) || 'Ativo';
 
         // Skip items that have already been decided (confirmed/cancelled)
-        if (jaDecididoSet.has(key)) {
+        // but preserve their original classification in the report
+        const jaDecidido = jaDecididoMap.get(key);
+        if (jaDecidido) {
           totalAferidos++;
-          totalOk++;
+          const tipoOriginal = jaDecidido.tipo;
+          if (tipoOriginal === 'falta' && jaDecidido.status !== 'cancelado') {
+            divergencias++;
+            divergenciasList.push({
+              employeeId: escuro.employeeId,
+              employeeName: empNome,
+              funcao: empFuncao,
+              empStatus,
+              data: escuro.data,
+              tipo: "falta",
+              valorDesconto: parseBRL(jaDecidido.valorTotal || jaDecidido.valorDesconto || '0'),
+              escuroEntrada1: escuro.entrada1 || '-',
+              escuroSaida1: escuro.saida1 || '-',
+              adjustmentId: jaDecidido.adjustmentId,
+              jaDecidido: true,
+              statusDecisao: jaDecidido.status,
+            });
+          } else if (tipoOriginal === 'atraso' && jaDecidido.status !== 'cancelado') {
+            divergencias++;
+            divergenciasList.push({
+              employeeId: escuro.employeeId,
+              employeeName: empNome,
+              funcao: empFuncao,
+              empStatus,
+              data: escuro.data,
+              tipo: "atraso",
+              valorDesconto: parseBRL(jaDecidido.valorTotal || jaDecidido.valorDesconto || '0'),
+              realEntrada: actual?.entrada1 || '-',
+              adjustmentId: jaDecidido.adjustmentId,
+              jaDecidido: true,
+              statusDecisao: jaDecidido.status,
+            });
+          } else {
+            totalOk++;
+          }
           continue;
         }
 
@@ -1259,7 +1296,7 @@ export const payrollEngineRouter = router({
       }
 
       const totalJustificados = justificadosList.length;
-      const jaConfirmadosCount = jaDecididosList.length;
+      const jaConfirmadosCount = jaDecididosRows.filter((a: any) => a.status === 'cancelado').length;
       const afericaoResultPayload = {
         totalAferidos, divergencias, totalOk, faltas: divergenciasList.filter((d: any) => d.tipo === 'falta').length,
         atrasos: divergenciasList.filter((d: any) => d.tipo === 'atraso').length,
