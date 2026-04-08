@@ -1146,6 +1146,14 @@ export const payrollEngineRouter = router({
                   minutos: atraso,
                   valorDesconto: valorAtraso,
                   realEntrada: actual.entrada1,
+                  memoria: {
+                    valorHora: valorHoraEmp,
+                    valorMinuto,
+                    minutosAtraso: atraso,
+                    entradaEsperada: minutesToHHMM(jornadaEntrada),
+                    entradaReal: actual.entrada1,
+                    tolerancia: criteria.pontoToleranciaAtraso,
+                  },
                 });
               } else {
                 resultado = "ok";
@@ -1207,6 +1215,14 @@ export const payrollEngineRouter = router({
             valorDesconto: totalDescSR,
             escuroEntrada1: escuro.entrada1 || '-',
             escuroSaida1: escuro.saida1 || '-',
+            memoria: {
+              valorHora: valorHoraEmpSR,
+              cargaHorariaDiaria: criteria.cargaHorariaDiaria,
+              descontoSalarial: valorFaltaSR,
+              descontoVR: parseBRL(vrDescontoSR),
+              descontoVT: parseBRL(vtDescontoSR),
+              totalDesconto: totalDescSR,
+            },
           });
         }
 

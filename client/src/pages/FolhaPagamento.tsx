@@ -5148,8 +5148,38 @@ export default function FolhaPagamento() {
                                   {d.tipo === 'atraso' ? `ATRASO ${d.minutos ? `(${d.minutos >= 60 ? Math.floor(d.minutos/60) + 'h' + (d.minutos%60 > 0 ? String(d.minutos%60).padStart(2,'0') + 'min' : '') : d.minutos + 'min'})` : ''}` : 'FALTA'}
                                 </span>
                               </td>
-                              <td className="py-2 px-3 text-right font-mono font-bold text-red-600">
-                                R$ {typeof d.valorDesconto === 'number' ? d.valorDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : d.valorDesconto || '0,00'}
+                              <td className="py-2 px-3 text-right font-mono font-bold text-red-600 relative">
+                                <div className="inline-flex items-center gap-1">
+                                  <span>R$ {typeof d.valorDesconto === 'number' ? d.valorDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : d.valorDesconto || '0,00'}</span>
+                                  {d.memoria && (
+                                    <button className="text-slate-400 hover:text-blue-600 relative group/mem" onClick={(e) => { e.currentTarget.querySelector('.mem-pop')?.classList.toggle('hidden'); }} title="Ver memória de cálculo">
+                                      <Info className="h-3.5 w-3.5" />
+                                      <div className="mem-pop hidden absolute right-0 top-5 z-50 bg-white border border-slate-300 rounded-lg shadow-xl p-3 text-left text-[11px] text-slate-700 w-64 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                        <p className="font-bold text-slate-900 mb-1.5 text-xs border-b pb-1">Memória de Cálculo</p>
+                                        {d.tipo === 'falta' ? (
+                                          <div className="space-y-0.5">
+                                            <p>Valor/hora: <strong>R$ {(d.memoria.valorHora || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></p>
+                                            <p>Carga diária: <strong>{d.memoria.cargaHorariaDiaria || 0}h</strong></p>
+                                            <p>Desc. salarial: {d.memoria.cargaHorariaDiaria}h × R$ {(d.memoria.valorHora || 0).toFixed(2)} = <strong>R$ {(d.memoria.descontoSalarial || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></p>
+                                            <p>Desc. VR: <strong>R$ {(d.memoria.descontoVR || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></p>
+                                            <p>Desc. VT: <strong>R$ {(d.memoria.descontoVT || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></p>
+                                            <p className="border-t pt-1 mt-1 font-bold text-red-700">Total: R$ {(d.memoria.totalDesconto || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                                          </div>
+                                        ) : (
+                                          <div className="space-y-0.5">
+                                            <p>Entrada esperada: <strong>{d.memoria.entradaEsperada || '-'}</strong></p>
+                                            <p>Entrada real: <strong>{d.memoria.entradaReal || '-'}</strong></p>
+                                            <p>Tolerância: <strong>{d.memoria.tolerancia || 0} min</strong></p>
+                                            <p>Atraso: <strong>{d.memoria.minutosAtraso || 0} min</strong></p>
+                                            <p className="border-t pt-1 mt-1">Valor/hora: <strong>R$ {(d.memoria.valorHora || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></p>
+                                            <p>Valor/min: <strong>R$ {(d.memoria.valorMinuto || 0).toFixed(4)}</strong></p>
+                                            <p className="font-bold text-red-700">{d.memoria.minutosAtraso} min × R$ {(d.memoria.valorMinuto || 0).toFixed(4)} = R$ {(d.valorDesconto || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-1.5 px-2 text-center">
                                   <div className="flex items-center gap-1 justify-center">
