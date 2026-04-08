@@ -1502,11 +1502,11 @@ export default function ValeAlimentacao() {
 
       {/* ===== DIALOG: CONFIGURAÇÃO ===== */}
       <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{editingConfigId ? "Editar Configuração" : "Nova Configuração"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="space-y-4">
             <div>
               <Label className="text-sm">Nome</Label>
               <Input value={configForm.nome || ""} onChange={e => setConfigForm((f: any) => ({ ...f, nome: e.target.value }))} className="mt-1" />
