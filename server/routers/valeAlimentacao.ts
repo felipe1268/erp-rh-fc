@@ -414,6 +414,7 @@ export const valeAlimentacaoRouter = router({
       let gerados = 0;
       let alertasGerados = 0;
       let alertasFeriadoConflito = 0;
+      const alertaInsertBuffer: any[] = [];
       const feriadosCachePorCidade: Record<string, Map<string, { nome: string; tipo: string; cidade?: string; estado?: string }>> = {};
       for (const { emp, obraId, cidade, estado } of Object.values(empMap)) {
         const cfg = (obraId && cfgPorObra[obraId]) || cfgPadrao;
@@ -516,12 +517,20 @@ export const valeAlimentacaoRouter = router({
               });
               alertasFeriadoConflito++;
             }
-            await db.execute(
-              sql`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId", "feriadoInfo")
-              VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${obraId || null}, ${falta.data}, ${tipoFalta}, 0, 'pendente', ${formatBRL(cafeDia)}, ${formatBRL(lancheDia)}, ${formatBRL(jantaDia)}, ${vrId || null}, ${feriadoInfoJson})`
-            );
+            alertaInsertBuffer.push({ companyId: input.companyId, employeeId: emp.id, mesReferencia: input.mesReferencia, obraId: obraId || null, dataFalta: falta.data, tipoFalta, temAtestado: 0, decisao: 'pendente', valorDescontoCafe: formatBRL(cafeDia), valorDescontoLanche: formatBRL(lancheDia), valorDescontoJantar: formatBRL(jantaDia), vrBenefitId: vrId || null, feriadoInfo: feriadoInfoJson });
             alertasGerados++;
           }
+        }
+      }
+
+      if (alertaInsertBuffer.length > 0) {
+        const ALERT_BATCH = 50;
+        for (let i = 0; i < alertaInsertBuffer.length; i += ALERT_BATCH) {
+          const chunk = alertaInsertBuffer.slice(i, i + ALERT_BATCH);
+          const valuesStr = chunk.map(a =>
+            `(${a.companyId}, ${a.employeeId}, '${a.mesReferencia}', ${a.obraId !== null ? a.obraId : 'NULL'}, '${a.dataFalta}', '${a.tipoFalta}', ${a.temAtestado}, '${a.decisao}', '${a.valorDescontoCafe}', '${a.valorDescontoLanche}', '${a.valorDescontoJantar}', ${a.vrBenefitId !== null ? a.vrBenefitId : 'NULL'}, ${a.feriadoInfo !== null ? `'${a.feriadoInfo.replace(/'/g, "''")}'` : 'NULL'})`
+          ).join(',\n');
+          await db.execute(sql.raw(`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId", "feriadoInfo") VALUES ${valuesStr}`));
         }
       }
 
@@ -665,6 +674,7 @@ export const valeAlimentacaoRouter = router({
       let gerados = 0;
       let alertasGerados = 0;
       let alertasFeriadoConflito = 0;
+      const alertaInsertBuffer: any[] = [];
       const feriadosCachePorCidade: Record<string, Map<string, { nome: string; tipo: string; cidade?: string; estado?: string }>> = {};
 
       const empEntries = Object.values(empMap).filter(({ emp }) => !paidEmpIds.has(emp.id));
@@ -770,13 +780,21 @@ export const valeAlimentacaoRouter = router({
                 });
                 alertasFeriadoConflito++;
               }
-              await db.execute(
-                sql`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId", "feriadoInfo")
-                VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${obraId || null}, ${falta.data}, ${tipoFalta}, 0, 'pendente', ${formatBRL(cafeDia)}, ${formatBRL(lancheDia)}, ${formatBRL(jantaDia)}, ${vrId || null}, ${feriadoInfoJson})`
-              );
+              alertaInsertBuffer.push({ companyId: input.companyId, employeeId: emp.id, mesReferencia: input.mesReferencia, obraId: obraId || null, dataFalta: falta.data, tipoFalta, temAtestado: 0, decisao: 'pendente', valorDescontoCafe: formatBRL(cafeDia), valorDescontoLanche: formatBRL(lancheDia), valorDescontoJantar: formatBRL(jantaDia), vrBenefitId: vrId || null, feriadoInfo: feriadoInfoJson });
               alertasGerados++;
             }
           }
+        }
+      }
+
+      if (alertaInsertBuffer.length > 0) {
+        const ALERT_BATCH = 50;
+        for (let i = 0; i < alertaInsertBuffer.length; i += ALERT_BATCH) {
+          const chunk = alertaInsertBuffer.slice(i, i + ALERT_BATCH);
+          const valuesStr = chunk.map(a =>
+            `(${a.companyId}, ${a.employeeId}, '${a.mesReferencia}', ${a.obraId !== null ? a.obraId : 'NULL'}, '${a.dataFalta}', '${a.tipoFalta}', ${a.temAtestado}, '${a.decisao}', '${a.valorDescontoCafe}', '${a.valorDescontoLanche}', '${a.valorDescontoJantar}', ${a.vrBenefitId !== null ? a.vrBenefitId : 'NULL'}, ${a.feriadoInfo !== null ? `'${a.feriadoInfo.replace(/'/g, "''")}'` : 'NULL'})`
+          ).join(',\n');
+          await db.execute(sql.raw(`INSERT INTO va_falta_alerts ("companyId", "employeeId", "mesReferencia", "obraId", "dataFalta", "tipoFalta", "temAtestado", "decisao", "valorDescontoCafe", "valorDescontoLanche", "valorDescontoJantar", "vrBenefitId", "feriadoInfo") VALUES ${valuesStr}`));
         }
       }
 
