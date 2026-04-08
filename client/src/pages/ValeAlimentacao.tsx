@@ -1551,11 +1551,23 @@ export default function ValeAlimentacao() {
                     const janta = configForm.jantaAtivo ? parseBRL(configForm.jantaDia) : 0;
                     const va = parseBRL(configForm.valeAlimentacaoMes);
                     const dias = configForm.diasUteisRef || 22;
-                    const total = (cafe + lanche + janta + va) * dias;
-                    return `R$ ${fmtNum(total)}`;
+                    const bruto = (cafe + lanche + janta + va) * dias;
+                    const descPct = parseBRL(configForm.descontoVaPercentual) || 0;
+                    const desconto = bruto * (descPct / 100);
+                    const total = bruto - desconto;
+                    return (
+                      <>
+                        R$ {fmtNum(total)}
+                        {descPct > 0 && (
+                          <span className="text-xs font-normal text-muted-foreground ml-2">
+                            (bruto R$ {fmtNum(bruto)} − {descPct}% = R$ {fmtNum(desconto)})
+                          </span>
+                        )}
+                      </>
+                    );
                   })()}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">(Café + Lanche + Jantar + VA) × Dias Úteis</p>
+                <p className="text-xs text-muted-foreground mt-1">(Café + Lanche + Jantar + VA) × Dias Úteis − Desconto %</p>
               </div>
             </div>
             <div>
@@ -1571,7 +1583,9 @@ export default function ValeAlimentacao() {
               const janta = configForm.jantaAtivo ? parseBRL(configForm.jantaDia) : 0;
               const va = parseBRL(configForm.valeAlimentacaoMes);
               const dias = configForm.diasUteisRef || 22;
-              const totalCalc = (cafe + lanche + janta + va) * dias;
+              const brutoCalc = (cafe + lanche + janta + va) * dias;
+              const descPctCalc = parseBRL(configForm.descontoVaPercentual) || 0;
+              const totalCalc = brutoCalc - brutoCalc * (descPctCalc / 100);
               saveConfigMut.mutate({
                 ...configForm,
                 totalVA_iFood: totalCalc.toFixed(2).replace(".", ","),
