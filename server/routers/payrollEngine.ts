@@ -1518,7 +1518,7 @@ export const payrollEngineRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       decisoes: z.array(z.object({
         adjustmentId: z.number(),
-        decisao: z.enum(["erro_relogio", "falta_real"]),
+        decisao: z.enum(["erro_relogio", "falta_real", "banco_horas"]),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -1527,9 +1527,55 @@ export const payrollEngineRouter = router({
       
       let errosRelogio = 0;
       let faltasReais = 0;
+      let bancoHoras = 0;
       
       for (const dec of input.decisoes) {
-        if (dec.decisao === "erro_relogio") {
+        if (dec.decisao === "banco_horas") {
+          const adjRows = ((await db.execute(sql`
+            SELECT "employeeId", "timecardDailyId", "companyId", data FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
+          `)) as any).rows || [];
+          const adj = adjRows[0];
+          if (!adj) continue;
+
+          const sufixoBH = ` [DECISÃO: Banco de Horas negativo por ${ctx.user.name || "Usuário"}]`;
+          await db.execute(sql`
+            UPDATE payroll_adjustments SET 
+              status = 'cancelado',
+              descricao = COALESCE(descricao, '') || ${sufixoBH}::text
+            WHERE id = ${dec.adjustmentId} AND "companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
+          `);
+
+          const empJornada = ((await db.execute(sql`
+            SELECT "jornadaTrabalho" FROM employees WHERE id = ${adj.employeeId}
+          `)) as any).rows?.[0]?.jornadaTrabalho || '08:48';
+          const [jH, jM] = empJornada.split(':').map(Number);
+          const jornadaMinutos = (jH || 0) * 60 + (jM || 0);
+
+          await db.execute(sql`
+            INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
+            VALUES (${adj.employeeId}, ${adj.companyId}, ${-jornadaMinutos}, NOW())
+            ON CONFLICT ("employeeId", "companyId")
+            DO UPDATE SET "saldoMinutos" = banco_horas_saldo."saldoMinutos" + ${-jornadaMinutos}, "atualizadoEm" = NOW()
+          `);
+
+          await db.execute(sql`
+            INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, descricao, data, "criadoEm", "criadoPor", "minutosBase", "minutosAcrescimo")
+            VALUES (${adj.employeeId}, ${adj.companyId}, 'debito', ${jornadaMinutos}, ${'Falta aferição convertida em banco de horas negativo — ' + (adj.data ? String(adj.data).slice(0, 10) : '')}, ${adj.data}, NOW(), ${ctx.user.name || 'Sistema'}, ${jornadaMinutos}, 0)
+          `);
+
+          if (adj.timecardDailyId) {
+            await db.execute(sql`
+              UPDATE timecard_daily SET 
+                "statusDia" = 'decidido',
+                "statusAnterior" = 'decidido',
+                "afericaoResultado" = 'banco_horas',
+                "afericaoObs" = CONCAT(COALESCE("afericaoObs", ''), ' [Convertido em banco de horas negativo]'),
+                "isFalta" = 0, "isAtraso" = 0
+              WHERE id = ${adj.timecardDailyId}
+            `);
+          }
+          bancoHoras++;
+        } else if (dec.decisao === "erro_relogio") {
           const sufixo = ` [DECISÃO: Erro do relógio - mantido como trabalhado por ${ctx.user.name || "Usuário"}]`;
           await db.execute(sql`
             UPDATE payroll_adjustments SET 
@@ -1600,9 +1646,10 @@ export const payrollEngineRouter = router({
                   if (dec === 'falta_real') {
                     div.jaDecidido = true;
                     div.statusDecisao = 'pendente';
-                  } else if (dec === 'erro_relogio') {
+                  } else if (dec === 'erro_relogio' || dec === 'banco_horas') {
                     div.jaDecidido = true;
                     div.statusDecisao = 'cancelado';
+                    if (dec === 'banco_horas') div.statusDecisao = 'banco_horas';
                   }
                 }
               }
@@ -1610,7 +1657,7 @@ export const payrollEngineRouter = router({
               cached.faltas = pendentes.filter((d: any) => d.tipo === 'falta').length;
               cached.atrasos = pendentes.filter((d: any) => d.tipo === 'atraso').length;
               cached.divergencias = pendentes.length;
-              cached.jaConfirmados = (cached.jaConfirmados || 0) + errosRelogio;
+              cached.jaConfirmados = (cached.jaConfirmados || 0) + errosRelogio + bancoHoras;
             }
             const updatedJson = JSON.stringify(cached);
             await db.execute(sql`
@@ -1621,10 +1668,15 @@ export const payrollEngineRouter = router({
         }
       }
 
+      const parts = [];
+      if (faltasReais > 0) parts.push(`${faltasReais} falta(s) confirmada(s)`);
+      if (errosRelogio > 0) parts.push(`${errosRelogio} erro(s) de relógio`);
+      if (bancoHoras > 0) parts.push(`${bancoHoras} convertida(s) em banco de horas`);
       return {
         errosRelogio,
         faltasReais,
-        message: `Decisão registrada: ${errosRelogio} erro(s) de relógio, ${faltasReais} falta(s) real(is)`,
+        bancoHoras,
+        message: `Decisão registrada: ${parts.join(', ') || 'nenhuma alteração'}`,
       };
     }),
 
