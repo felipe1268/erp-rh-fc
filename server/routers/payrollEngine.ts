@@ -866,19 +866,21 @@ export const payrollEngineRouter = router({
 
       // ===== BATCH-LOAD employee data upfront to avoid N+1 queries =====
       const empDataRows = escuroEmployeeIds.length > 0
-        ? ((await db.execute(sql`SELECT id, "valorHora", "vtValorDiario", "nomeCompleto", funcao, status FROM employees WHERE id IN (${sql.join(escuroEmployeeIds.map(id => sql`${id}`), sql`,`)})`)) as any).rows || []
+        ? ((await db.execute(sql`SELECT id, "valorHora", "vtValorDiario", "nomeCompleto", funcao, status, "codigoInterno" FROM employees WHERE id IN (${sql.join(escuroEmployeeIds.map(id => sql`${id}`), sql`,`)})`)) as any).rows || []
         : [];
       const empValorHoraMap = new Map<number, number>();
       const empVtDiarioMap = new Map<number, number>();
       const empNomeMap = new Map<number, string>();
       const empFuncaoMap = new Map<number, string>();
       const empStatusMap = new Map<number, string>();
+      const empCodigoMap = new Map<number, string>();
       for (const row of empDataRows) {
         empValorHoraMap.set(row.id, parseBRL(row.valorHora));
         empVtDiarioMap.set(row.id, parseBRL(row.vtValorDiario));
         empNomeMap.set(row.id, row.nomeCompleto || `ID ${row.id}`);
         empFuncaoMap.set(row.id, row.funcao || '');
         empStatusMap.set(row.id, row.status || 'Ativo');
+        if (row.codigoInterno) empCodigoMap.set(row.id, row.codigoInterno);
       }
 
       // ===== BATCH-LOAD vacation periods that overlap the escuro date range =====
@@ -970,6 +972,7 @@ export const payrollEngineRouter = router({
         const empNome = empNomeMap.get(escuro.employeeId) || `ID ${escuro.employeeId}`;
         const empFuncao = empFuncaoMap.get(escuro.employeeId) || '';
         const empStatus = empStatusMap.get(escuro.employeeId) || 'Ativo';
+        const empCodigo = empCodigoMap.get(escuro.employeeId) || null;
         const empObraNome = escuro.obraId ? (obraNomeMap.get(Number(escuro.obraId)) || null) : null;
 
         // Skip items that have already been decided (confirmed/cancelled)
@@ -990,6 +993,7 @@ export const payrollEngineRouter = router({
               employeeName: empNome,
               funcao: empFuncao,
               empStatus,
+              codigoInterno: empCodigo,
               obraNome: empObraNome,
               data: escuro.data,
               tipo: "falta",
@@ -1023,6 +1027,7 @@ export const payrollEngineRouter = router({
               employeeName: empNome,
               funcao: empFuncao,
               empStatus,
+              codigoInterno: empCodigo,
               obraNome: empObraNome,
               data: escuro.data,
               tipo: "atraso",
@@ -1136,6 +1141,7 @@ export const payrollEngineRouter = router({
               employeeName: empNome,
               funcao: empFuncao,
               empStatus,
+              codigoInterno: empCodigo,
               obraNome: empObraNome,
               data: escuro.data,
               tipo: "falta",
@@ -1191,7 +1197,8 @@ export const payrollEngineRouter = router({
                   employeeName: empNome,
                   funcao: empFuncao,
                   empStatus,
-                  obraNome: empObraNome,
+                  codigoInterno: empCodigo,
+              obraNome: empObraNome,
                   data: escuro.data,
                   tipo: "atraso",
                   minutos: atraso,

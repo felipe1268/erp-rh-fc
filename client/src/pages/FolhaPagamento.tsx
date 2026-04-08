@@ -5143,7 +5143,7 @@ export default function FolhaPagamento() {
                                   setAfericaoSel(ns);
                                 }} className="rounded" />
                               </td>
-                              <td className="py-2 px-3 font-medium">
+                              <td className="py-2 px-3">
                                 <button
                                   className="text-left text-blue-700 hover:text-blue-900 hover:underline cursor-pointer font-medium"
                                   onClick={() => { setEspelhoPopupEmpId(Number(d.employeeId)); setEspelhoPopupEmpNome(d.employeeName || `ID ${d.employeeId}`); }}
@@ -5151,6 +5151,9 @@ export default function FolhaPagamento() {
                                 >
                                   {d.employeeName || `ID ${d.employeeId}`}
                                 </button>
+                                {d.codigoInterno && (
+                                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">{d.codigoInterno}</p>
+                                )}
                               </td>
                               <td className="py-2 px-3 text-slate-500">{d.funcao || '-'}</td>
                               <td className="py-2 px-3 text-slate-500 text-xs">{d.obraNome || <span className="text-gray-300">—</span>}</td>
