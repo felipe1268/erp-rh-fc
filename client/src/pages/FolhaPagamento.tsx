@@ -4876,6 +4876,12 @@ export default function FolhaPagamento() {
                       <div className="text-[10px] text-blue-600 font-medium">Justificados</div>
                     </button>
                   )}
+                  {(afericaoResult.jaConfirmados || 0) > 0 && (
+                    <div className="rounded-lg p-3 text-center border bg-emerald-50 border-emerald-200">
+                      <div className="text-2xl font-bold text-emerald-700">{afericaoResult.jaConfirmados}</div>
+                      <div className="text-[10px] text-emerald-600 font-medium">Já Verificados</div>
+                    </div>
+                  )}
                 </div>
                 {afericaoFilter !== 'todos' && (
                   <div className="flex items-center gap-2 text-xs text-slate-600">

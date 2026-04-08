@@ -776,16 +776,17 @@ export const payrollEngineRouter = router({
       const afericaoCompanyIds = resolveCompanyIds(input);
       const afericaoCidsSql = sql.join(afericaoCompanyIds.map(id => sql`${id}`), sql`,`);
 
-      // Limpar ajustes de aferição anteriores para permitir re-aferição
+      // Limpar apenas ajustes NÃO decididos (preservar confirmados/cancelados)
       await db.execute(sql`
         DELETE FROM payroll_adjustments 
         WHERE "companyId" IN (${afericaoCidsSql}) 
         AND "mesOrigem" = ${prevMes}
         AND "mesDesconto" = ${input.mesReferencia}
         AND tipo IN ('falta', 'atraso', 'sem_registro')
+        AND status NOT IN ('pendente', 'cancelado', 'aplicado')
       `);
 
-      // Resetar status dos registros escuro que foram aferidos anteriormente
+      // Resetar status apenas dos registros escuro que NÃO foram decididos
       await db.execute(sql`
         UPDATE timecard_daily SET 
           "statusDia" = 'escuro',
@@ -796,6 +797,7 @@ export const payrollEngineRouter = router({
         WHERE "companyId" IN (${afericaoCidsSql}) 
         AND "mesCompetencia" = ${prevMes}
         AND ("statusAnterior" = 'escuro' OR "statusDia" IN ('escuro', 'pendente_decisao'))
+        AND "afericaoResultado" NOT IN ('ok', 'falta', 'atraso')
       `);
 
       // Buscar registros escuro (inclui os que acabaram de ser resetados) — excluir PJ/Sócio
@@ -905,6 +907,23 @@ export const payrollEngineRouter = router({
         for (const row of vrRows) empVrDiarioMap.set(row.employeeId, parseBRL(row.valorDiario));
       }
 
+      // Load previously decided adjustments to preserve them on re-aferição
+      const jaDecididosRows = ((await db.execute(sql`
+        SELECT "employeeId", data, tipo, status, "valorDesconto", "valorTotal", id as "adjustmentId"
+        FROM payroll_adjustments
+        WHERE "companyId" IN (${afericaoCidsSql})
+        AND "mesOrigem" = ${prevMes}
+        AND "mesDesconto" = ${input.mesReferencia}
+        AND status IN ('pendente', 'cancelado', 'aplicado')
+      `)) as any).rows || [];
+      const jaDecididoSet = new Set<string>();
+      const jaDecididosList: any[] = [];
+      for (const adj of jaDecididosRows) {
+        jaDecididoSet.add(`${adj.employeeId}-${adj.data}`);
+        if (adj.status === 'cancelado') continue;
+        jaDecididosList.push(adj);
+      }
+
       let totalAferidos = 0;
       let divergencias = 0;
       let totalOk = 0;
@@ -924,6 +943,14 @@ export const payrollEngineRouter = router({
         const empNome = empNomeMap.get(escuro.employeeId) || `ID ${escuro.employeeId}`;
         const empFuncao = empFuncaoMap.get(escuro.employeeId) || '';
         const empStatus = empStatusMap.get(escuro.employeeId) || 'Ativo';
+
+        // Skip items that have already been decided (confirmed/cancelled)
+        if (jaDecididoSet.has(key)) {
+          totalAferidos++;
+          totalOk++;
+          continue;
+        }
+
         const isFerias = feriasDateSet.has(key);
         const isStatusJustificado = STATUS_JUSTIFICADO.has(empStatus);
 
@@ -1214,11 +1241,13 @@ export const payrollEngineRouter = router({
       }
 
       const totalJustificados = justificadosList.length;
+      const jaConfirmadosCount = jaDecididosList.length;
       const afericaoResultPayload = {
         totalAferidos, divergencias, totalOk, faltas: divergenciasList.filter((d: any) => d.tipo === 'falta').length,
         atrasos: divergenciasList.filter((d: any) => d.tipo === 'atraso').length,
         semRegistro: 0,
         totalJustificados,
+        jaConfirmados: jaConfirmadosCount,
         divergenciasList, validadosList, justificadosList,
       };
       const resultJson = JSON.stringify(afericaoResultPayload);
