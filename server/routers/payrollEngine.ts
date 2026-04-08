@@ -2613,10 +2613,7 @@ export const payrollEngineRouter = router({
         const descontoVrFaltas = criteria.descontoVrFalta ? faltasQtd * vrDiario : 0;
 
         const vaLancamento = vaMap.get(emp.id) || 0;
-        const vaDescontoPct = 0.05;
-        const vaDescontoBase = vaLancamento * vaDescontoPct;
-        const vaDescontoFaltas = faltasQtd > 0 ? (vaLancamento / diasUteis) * faltasQtd * vaDescontoPct : 0;
-        const descontoVaTotal = vaDescontoBase - vaDescontoFaltas;
+        const descontoVaTotal = 0;
 
         const vtDiario = parseBRL(emp.vtValorDiario);
         const vtValorMensal = vtDiario * diasUteis;
