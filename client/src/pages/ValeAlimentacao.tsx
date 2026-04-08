@@ -145,7 +145,7 @@ export default function ValeAlimentacao() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [diasUteis, setDiasUteis] = useState(22);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({ valorTotal: "", observacoes: "", motivoAlteracao: "" });
+  const [editForm, setEditForm] = useState({ valorTotal: "", valorCafe: "", valorLanche: "", valorVa: "", observacoes: "", motivoAlteracao: "" });
   const [showGerarDialog, setShowGerarDialog] = useState(false);
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [configForm, setConfigForm] = useState<any>({});
@@ -716,7 +716,7 @@ export default function ValeAlimentacao() {
                                   <>
                                     <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar" onClick={() => {
                                       setEditingId(l.id);
-                                      setEditForm({ valorTotal: l.valorTotal, observacoes: l.observacoes || "", motivoAlteracao: "" });
+                                      setEditForm({ valorTotal: l.valorTotal, valorCafe: l.valorCafe || "", valorLanche: l.valorLanche || "", valorVa: l.valorVa || "", observacoes: l.observacoes || "", motivoAlteracao: "" });
                                     }}>
                                       <Pencil className="h-3.5 w-3.5" />
                                     </Button>
@@ -1548,9 +1548,61 @@ export default function ValeAlimentacao() {
             <DialogTitle>Editar Lançamento</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-sm">Café (R$)</Label>
+                <Input value={editForm.valorCafe} onChange={e => {
+                  const valorCafe = e.target.value;
+                  setEditForm(f => {
+                    const cafe = parseFloat(valorCafe.replace(/\./g, "").replace(",", ".")) || 0;
+                    const lanche = parseFloat(f.valorLanche.replace(/\./g, "").replace(",", ".")) || 0;
+                    const va = parseFloat(f.valorVa.replace(/\./g, "").replace(",", ".")) || 0;
+                    const desc = va * 0.05;
+                    const total = (cafe + lanche + va - desc).toFixed(2).replace(".", ",");
+                    return { ...f, valorCafe, valorTotal: total };
+                  });
+                }} className="mt-1" placeholder="0,00" />
+              </div>
+              <div>
+                <Label className="text-sm">Lanche (R$)</Label>
+                <Input value={editForm.valorLanche} onChange={e => {
+                  const valorLanche = e.target.value;
+                  setEditForm(f => {
+                    const cafe = parseFloat(f.valorCafe.replace(/\./g, "").replace(",", ".")) || 0;
+                    const lanche = parseFloat(valorLanche.replace(/\./g, "").replace(",", ".")) || 0;
+                    const va = parseFloat(f.valorVa.replace(/\./g, "").replace(",", ".")) || 0;
+                    const desc = va * 0.05;
+                    const total = (cafe + lanche + va - desc).toFixed(2).replace(".", ",");
+                    return { ...f, valorLanche, valorTotal: total };
+                  });
+                }} className="mt-1" placeholder="0,00" />
+              </div>
+            </div>
             <div>
-              <Label className="text-sm">Valor Total (R$)</Label>
-              <Input value={editForm.valorTotal} onChange={e => setEditForm(f => ({ ...f, valorTotal: e.target.value }))} className="mt-1" />
+              <Label className="text-sm">VA (R$)</Label>
+              <Input value={editForm.valorVa} onChange={e => {
+                const valorVa = e.target.value;
+                setEditForm(f => {
+                  const cafe = parseFloat(f.valorCafe.replace(/\./g, "").replace(",", ".")) || 0;
+                  const lanche = parseFloat(f.valorLanche.replace(/\./g, "").replace(",", ".")) || 0;
+                  const va = parseFloat(valorVa.replace(/\./g, "").replace(",", ".")) || 0;
+                  const desc = va * 0.05;
+                  const total = (cafe + lanche + va - desc).toFixed(2).replace(".", ",");
+                  return { ...f, valorVa, valorTotal: total };
+                });
+              }} className="mt-1" placeholder="0,00" />
+            </div>
+            <div className="rounded-md bg-gray-50 p-3 border">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Desconto VA (5%)</span>
+                <span className="text-red-600 font-medium">
+                  - R$ {((parseFloat(editForm.valorVa.replace(/\./g, "").replace(",", ".")) || 0) * 0.05).toFixed(2).replace(".", ",")}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-semibold mt-1 pt-1 border-t">
+                <span>Valor Total</span>
+                <span className="text-[#1B2A4A]">R$ {editForm.valorTotal}</span>
+              </div>
             </div>
             <div>
               <Label className="text-sm">Motivo da Alteração</Label>
@@ -1565,7 +1617,15 @@ export default function ValeAlimentacao() {
             <Button variant="outline" onClick={() => setEditingId(null)}>Cancelar</Button>
             <Button className="bg-[#1B2A4A] hover:bg-[#243658] text-white" disabled={editarMut.isPending} onClick={() => {
               if (!editingId) return;
-              editarMut.mutate({ id: editingId, companyId, valorTotal: editForm.valorTotal, motivoAlteracao: editForm.motivoAlteracao, observacoes: editForm.observacoes });
+              editarMut.mutate({
+                id: editingId, companyId,
+                valorTotal: editForm.valorTotal,
+                valorCafe: editForm.valorCafe,
+                valorLanche: editForm.valorLanche,
+                valorVA: editForm.valorVa,
+                motivoAlteracao: editForm.motivoAlteracao,
+                observacoes: editForm.observacoes,
+              });
             }}>
               {editarMut.isPending ? "Salvando..." : "Salvar"}
             </Button>
