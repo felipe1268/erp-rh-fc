@@ -382,10 +382,18 @@ export const valeAlimentacaoRouter = router({
       )) as any).rows || [];
       const empLicenca = new Set((licencaRows || []).map((r: any) => r.id));
 
+      const afericaoFimMes = mes - 1 <= 0 ? 12 : mes - 1;
+      const afericaoFimAno = mes - 1 <= 0 ? ano - 1 : ano;
+      const afericaoIniMes = afericaoFimMes - 1 <= 0 ? 12 : afericaoFimMes - 1;
+      const afericaoIniAno = afericaoFimMes - 1 <= 0 ? afericaoFimAno - 1 : afericaoFimAno;
+      const afericaoInicio = `${afericaoIniAno}-${String(afericaoIniMes).padStart(2,'0')}-16`;
+      const afericaoFim = `${afericaoFimAno}-${String(afericaoFimMes).padStart(2,'0')}-15`;
+
       const faltasRows = ((await db.execute(
         sql`SELECT "employeeId", data, "isFalta", "atestadoId"
             FROM timecard_daily
-            WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}
+            WHERE "companyId" = ${input.companyId}
+            AND data >= ${afericaoInicio} AND data <= ${afericaoFim}
             AND "isFalta" = 1`
       )) as any).rows || [];
 
@@ -631,10 +639,18 @@ export const valeAlimentacaoRouter = router({
       )) as any).rows || [];
       const empLicenca = new Set((licencaRows || []).map((r: any) => r.id));
 
+      const afericaoFimMes = mes - 1 <= 0 ? 12 : mes - 1;
+      const afericaoFimAno = mes - 1 <= 0 ? ano - 1 : ano;
+      const afericaoIniMes = afericaoFimMes - 1 <= 0 ? 12 : afericaoFimMes - 1;
+      const afericaoIniAno = afericaoFimMes - 1 <= 0 ? afericaoFimAno - 1 : afericaoFimAno;
+      const afericaoInicio = `${afericaoIniAno}-${String(afericaoIniMes).padStart(2,'0')}-16`;
+      const afericaoFim = `${afericaoFimAno}-${String(afericaoFimMes).padStart(2,'0')}-15`;
+
       const faltasRows = ((await db.execute(
         sql`SELECT "employeeId", data, "isFalta", "atestadoId"
             FROM timecard_daily
-            WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}
+            WHERE "companyId" = ${input.companyId}
+            AND data >= ${afericaoInicio} AND data <= ${afericaoFim}
             AND "isFalta" = 1`
       )) as any).rows || [];
       const faltasPorEmp: Record<number, { comAtestado: number; semAtestado: number; datas: { data: string; temAtestado: boolean }[] }> = {};
