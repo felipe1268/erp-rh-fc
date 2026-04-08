@@ -1020,63 +1020,78 @@ export default function ValeAlimentacao() {
                   const totalGeral = resumoArr.reduce((s, r) => s + r.total, 0);
                   if (resumoArr.length === 0) return null;
                   return (
-                    <Card className="border-red-200 bg-red-50/30">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-sm font-semibold text-red-700">Resumo de Descontos por Funcionário</p>
-                          <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
-                            {resumoArr.length} funcionários · {alertas.length} faltas
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-4 gap-3 mb-4">
-                          <div className="bg-white rounded-lg p-2.5 border border-red-100 text-center">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Café</p>
-                            <p className="text-sm font-bold text-red-600">R$ {totalCafe.toFixed(2)}</p>
+                    <Card className="border-orange-200 bg-gradient-to-b from-orange-50/50 to-white">
+                      <CardContent className="p-0">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-orange-200 bg-orange-50/80">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-orange-600" />
+                            <p className="text-sm font-semibold text-gray-800">Resumo de Descontos por Funcionário</p>
                           </div>
-                          <div className="bg-white rounded-lg p-2.5 border border-red-100 text-center">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Lanche</p>
-                            <p className="text-sm font-bold text-red-600">R$ {totalLanche.toFixed(2)}</p>
-                          </div>
-                          <div className="bg-white rounded-lg p-2.5 border border-red-100 text-center">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Jantar</p>
-                            <p className="text-sm font-bold text-red-600">R$ {totalJantar.toFixed(2)}</p>
-                          </div>
-                          <div className="bg-white rounded-lg p-2.5 border border-red-100 text-center">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total Geral</p>
-                            <p className="text-sm font-bold text-red-700">R$ {totalGeral.toFixed(2)}</p>
+                          <div className="flex items-center gap-3 text-xs">
+                            <span className="text-gray-500">{resumoArr.length} func.</span>
+                            <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-semibold">{alertas.length} faltas</span>
                           </div>
                         </div>
-                        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                          <table className="w-full text-xs">
-                            <thead className="sticky top-0 bg-red-50">
-                              <tr className="border-b border-red-200">
-                                <th className="text-left py-2 px-3 font-semibold text-gray-700 w-[220px]">Funcionário</th>
-                                <th className="text-center py-2 px-2 font-semibold text-gray-700 w-[60px]">Faltas</th>
-                                <th className="text-right py-2 px-2 font-semibold text-gray-700 w-[90px]">Café</th>
-                                <th className="text-right py-2 px-2 font-semibold text-gray-700 w-[90px]">Lanche</th>
-                                <th className="text-right py-2 px-2 font-semibold text-gray-700 w-[90px]">Jantar</th>
-                                <th className="text-right py-2 px-3 font-semibold text-red-700 w-[100px]">Total</th>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-orange-100">
+                          <div className="px-4 py-3 border-r border-orange-100 last:border-r-0">
+                            <p className="text-[10px] text-gray-400 uppercase font-medium mb-0.5">Desc. Café</p>
+                            <p className="text-base font-bold text-gray-800 tabular-nums">R$ {totalCafe.toFixed(2)}</p>
+                          </div>
+                          <div className="px-4 py-3 border-r border-orange-100 last:border-r-0">
+                            <p className="text-[10px] text-gray-400 uppercase font-medium mb-0.5">Desc. Lanche</p>
+                            <p className="text-base font-bold text-gray-800 tabular-nums">R$ {totalLanche.toFixed(2)}</p>
+                          </div>
+                          <div className="px-4 py-3 border-r border-orange-100 last:border-r-0">
+                            <p className="text-[10px] text-gray-400 uppercase font-medium mb-0.5">Desc. Jantar</p>
+                            <p className="text-base font-bold text-gray-800 tabular-nums">R$ {totalJantar.toFixed(2)}</p>
+                          </div>
+                          <div className="px-4 py-3 bg-red-50/50">
+                            <p className="text-[10px] text-red-500 uppercase font-medium mb-0.5">Total Desconto</p>
+                            <p className="text-base font-bold text-red-700 tabular-nums">R$ {totalGeral.toFixed(2)}</p>
+                          </div>
+                        </div>
+
+                        <div className="max-h-[420px] overflow-y-auto">
+                          <table className="w-full text-[13px]">
+                            <thead className="sticky top-0 z-10">
+                              <tr className="bg-gray-50 border-b border-gray-200">
+                                <th className="text-left py-2.5 pl-4 pr-2 font-semibold text-gray-600 text-xs uppercase tracking-wider" style={{width: '40%'}}>Funcionário</th>
+                                <th className="text-center py-2.5 px-2 font-semibold text-gray-600 text-xs uppercase tracking-wider" style={{width: '10%'}}>Faltas</th>
+                                <th className="text-right py-2.5 px-2 font-semibold text-gray-600 text-xs uppercase tracking-wider" style={{width: '14%'}}>Café</th>
+                                <th className="text-right py-2.5 px-2 font-semibold text-gray-600 text-xs uppercase tracking-wider" style={{width: '14%'}}>Lanche</th>
+                                <th className="text-right py-2.5 px-2 font-semibold text-gray-600 text-xs uppercase tracking-wider" style={{width: '14%'}}>Jantar</th>
+                                <th className="text-right py-2.5 pl-2 pr-4 font-semibold text-red-700 text-xs uppercase tracking-wider" style={{width: '14%'}}>Total</th>
                               </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="divide-y divide-gray-100">
                               {resumoArr.map((r, i) => (
-                                <tr key={i} className="border-b border-red-100 hover:bg-red-50/50 group cursor-pointer" title={`Datas: ${r.datas.join(', ')}`}>
-                                  <td className="py-1.5 px-3">
-                                    <span className="font-medium text-gray-800">{r.nome}</span>
+                                <tr key={i} className="hover:bg-orange-50/40 transition-colors" title={`Datas: ${r.datas.join(', ')}`}>
+                                  <td className="py-2 pl-4 pr-2">
+                                    <span className="font-medium text-gray-900 text-[13px]">{r.nome}</span>
                                   </td>
-                                  <td className="text-center py-1.5 px-2">
-                                    <span className="inline-flex items-center justify-center bg-red-100 text-red-700 rounded-full w-7 h-5 text-[11px] font-bold">{r.faltas}</span>
+                                  <td className="text-center py-2 px-2">
+                                    <span className="inline-flex items-center justify-center min-w-[28px] h-6 px-1.5 bg-orange-100 text-orange-800 rounded text-xs font-bold">{r.faltas}</span>
                                   </td>
-                                  <td className="text-right py-1.5 px-2 tabular-nums">{r.cafe > 0 ? `R$ ${r.cafe.toFixed(2)}` : '—'}</td>
-                                  <td className="text-right py-1.5 px-2 tabular-nums">{r.lanche > 0 ? `R$ ${r.lanche.toFixed(2)}` : '—'}</td>
-                                  <td className="text-right py-1.5 px-2 tabular-nums">{r.jantar > 0 ? `R$ ${r.jantar.toFixed(2)}` : '—'}</td>
-                                  <td className="text-right py-1.5 px-3 font-bold text-red-700 tabular-nums">R$ {r.total.toFixed(2)}</td>
+                                  <td className="text-right py-2 px-2 tabular-nums text-gray-700">{r.cafe > 0 ? r.cafe.toLocaleString('pt-BR', {style:'currency',currency:'BRL'}) : '—'}</td>
+                                  <td className="text-right py-2 px-2 tabular-nums text-gray-700">{r.lanche > 0 ? r.lanche.toLocaleString('pt-BR', {style:'currency',currency:'BRL'}) : '—'}</td>
+                                  <td className="text-right py-2 px-2 tabular-nums text-gray-700">{r.jantar > 0 ? r.jantar.toLocaleString('pt-BR', {style:'currency',currency:'BRL'}) : '—'}</td>
+                                  <td className="text-right py-2 pl-2 pr-4 font-bold text-red-700 tabular-nums">{r.total.toLocaleString('pt-BR', {style:'currency',currency:'BRL'})}</td>
                                 </tr>
                               ))}
                             </tbody>
+                            <tfoot>
+                              <tr className="bg-gray-50 border-t-2 border-gray-300">
+                                <td className="py-2.5 pl-4 pr-2 font-bold text-gray-700 text-xs uppercase">Total</td>
+                                <td className="text-center py-2.5 px-2 font-bold text-gray-700 text-xs">{alertas.length}</td>
+                                <td className="text-right py-2.5 px-2 font-bold text-gray-800 tabular-nums text-xs">{totalCafe.toLocaleString('pt-BR', {style:'currency',currency:'BRL'})}</td>
+                                <td className="text-right py-2.5 px-2 font-bold text-gray-800 tabular-nums text-xs">{totalLanche.toLocaleString('pt-BR', {style:'currency',currency:'BRL'})}</td>
+                                <td className="text-right py-2.5 px-2 font-bold text-gray-800 tabular-nums text-xs">{totalJantar.toLocaleString('pt-BR', {style:'currency',currency:'BRL'})}</td>
+                                <td className="text-right py-2.5 pl-2 pr-4 font-bold text-red-700 tabular-nums text-xs">{totalGeral.toLocaleString('pt-BR', {style:'currency',currency:'BRL'})}</td>
+                              </tr>
+                            </tfoot>
                           </table>
                         </div>
-                        <p className="text-[10px] text-muted-foreground mt-2 italic">Passe o mouse sobre um funcionário para ver as datas das faltas.</p>
                       </CardContent>
                     </Card>
                   );
