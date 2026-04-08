@@ -141,6 +141,33 @@ export default function AlmoxarifadoPage() {
     },
     onError: (e) => { toast.error(e.message); setSugerindoPreco(false); },
   });
+  const [buscandoBarcode, setBuscandoBarcode] = useState(false);
+  const buscarBarcodeMut = trpc.compras.buscarPorCodigoBarras.useMutation({
+    onSuccess: (d: any) => {
+      setBuscandoBarcode(false);
+      if (d.found) {
+        setFormItem(p => ({
+          ...p,
+          nome: d.nome || p.nome,
+          unidade: d.unidade || p.unidade,
+          categoria: d.categoria || p.categoria,
+          valorUnitario: d.valorUnitario ? String(d.valorUnitario).replace(".", ",") : p.valorUnitario,
+          fotoUrl: d.fotoUrl || p.fotoUrl,
+        }));
+        if (d.source === "local") {
+          toast.success(`Item encontrado no almoxarifado: ${d.nome}`);
+        } else {
+          toast.success(`IA identificou: ${d.nome}${d.confianca ? ` (confiança ${d.confianca})` : ""}`);
+        }
+      } else {
+        toast.info("Código não identificado — preencha os dados manualmente");
+      }
+    },
+    onError: () => {
+      setBuscandoBarcode(false);
+      toast.info("Não foi possível identificar o código — preencha manualmente");
+    },
+  });
   const { data: categorias = [] } = trpc.compras.listarCategoriasAlmoxarifado.useQuery(
     { companyId }, { enabled: !!companyId }
   );
@@ -1275,28 +1302,38 @@ export default function AlmoxarifadoPage() {
                       <label className="text-xs font-medium text-gray-700">Código / Barras</label>
                       <div className="relative mt-1">
                         <input
-                          className="w-full h-9 pl-3 pr-8 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200 font-mono"
-                          placeholder="Ex: 001234"
+                          className={`w-full h-9 pl-3 pr-8 text-sm rounded-lg border bg-white text-gray-900 placeholder-gray-400 outline-none focus:ring-1 font-mono ${buscandoBarcode ? "border-violet-400 focus:border-violet-400 focus:ring-violet-200" : "border-gray-200 focus:border-emerald-400 focus:ring-emerald-200"}`}
+                          placeholder="Digite ou escaneie o código"
                           value={formItem.codigoInterno}
                           onChange={e => setFormItem(p => ({ ...p, codigoInterno: e.target.value }))}
                           onKeyDown={e => {
                             if (e.key === "Enter") {
                               e.preventDefault();
                               const code = formItem.codigoInterno.trim();
-                              if (code && itens.length > 0) {
-                                const found = itens.find((it: any) => it.codigoInterno && it.codigoInterno.toLowerCase() === code.toLowerCase());
-                                if (found) {
-                                  toast.info(`Item "${found.nome}" encontrado com código ${code}`);
-                                  abrirEditar(found);
-                                }
+                              if (code && code.length >= 3 && !buscandoBarcode) {
+                                setBuscandoBarcode(true);
+                                buscarBarcodeMut.mutate({ companyId, codigo: code });
                               }
                             }
                           }}
+                          onBlur={() => {
+                            const code = formItem.codigoInterno.trim();
+                            if (code && code.length >= 3 && !editandoId && !formItem.nome.trim() && !buscandoBarcode) {
+                              setBuscandoBarcode(true);
+                              buscarBarcodeMut.mutate({ companyId, codigo: code });
+                            }
+                          }}
                           autoComplete="off"
+                          autoFocus
                         />
-                        <Barcode className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300 pointer-events-none" />
+                        {buscandoBarcode
+                          ? <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-violet-500 animate-spin" />
+                          : <Barcode className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300 pointer-events-none" />
+                        }
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Código de barras ou interno</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        {buscandoBarcode ? "Buscando produto..." : "Digite e pressione Enter — a IA identifica automaticamente"}
+                      </p>
                     </div>
                     <div>
                       <label className="text-xs font-medium text-gray-700">Nome do Item *</label>

@@ -1213,6 +1213,86 @@ Responda APENAS com um objeto JSON no formato:
       }
     }),
 
+  buscarPorCodigoBarras: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      codigo: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const code = input.codigo.trim();
+
+      const existing = await db.select().from(almoxarifadoItens)
+        .where(and(
+          eq(almoxarifadoItens.companyId, input.companyId),
+          eq(almoxarifadoItens.ativo, true),
+          sql`LOWER(${almoxarifadoItens.codigoInterno}) = ${code.toLowerCase()}`
+        ))
+        .limit(1);
+
+      if (existing.length > 0) {
+        const item = existing[0];
+        return {
+          found: true as const,
+          source: "local" as const,
+          nome: item.nome,
+          unidade: item.unidade,
+          categoria: item.categoria ?? "",
+          valorUnitario: item.valorUnitario ? parseFloat(String(item.valorUnitario)) : null,
+          fotoUrl: (item as any).fotoUrl ?? null,
+          descricao: `Item já cadastrado no almoxarifado`,
+        };
+      }
+
+      try {
+        const result = await invokeLLM({
+          messages: [{ role: "user", content: `Você é um especialista em materiais de construção civil e produtos em geral no Brasil.
+
+Dado o código de barras / EAN / código interno abaixo, identifique o produto e retorne suas informações.
+
+Código: ${code}
+
+Se for um código EAN-13, EAN-8 ou GTIN válido, identifique o produto real.
+Se for um código interno (não padronizado), tente inferir pelo padrão se possível.
+
+Responda APENAS com um objeto JSON:
+{
+  "identificado": true/false,
+  "nome": "<nome completo do produto>",
+  "descricao": "<breve descrição>",
+  "categoria": "<uma das: Elétrica, Hidráulica, Pisos, Pintura, Ferramentas, Louças e Metais, Alvenaria, Madeira, Serralheria, Impermeabilização, Segurança, Limpeza, Diversos>",
+  "unidade": "<un, m, m², kg, L, sc, cx, pc, rolo, barra, pç>",
+  "precoEstimado": <número em reais ou null se desconhecido>,
+  "confianca": "alta" | "media" | "baixa"
+}
+
+Se não conseguir identificar, retorne {"identificado": false}.` }],
+          maxTokens: 400,
+        });
+
+        const text = result.content ?? "";
+        const match = text.match(/\{[\s\S]*\}/);
+        if (!match) return { found: false as const, source: "ia" as const };
+
+        const parsed = JSON.parse(match[0]);
+        if (!parsed.identificado) return { found: false as const, source: "ia" as const };
+
+        return {
+          found: true as const,
+          source: "ia" as const,
+          nome: parsed.nome || "",
+          unidade: parsed.unidade || "un",
+          categoria: parsed.categoria || "",
+          valorUnitario: parsed.precoEstimado ?? null,
+          fotoUrl: null,
+          descricao: parsed.descricao || "",
+          confianca: parsed.confianca || "baixa",
+        };
+      } catch {
+        return { found: false as const, source: "ia" as const };
+      }
+    }),
+
   // ══════════════════════════════════════════════════════════════
   // ALMOXARIFADO — MOVIMENTAÇÕES
   // ══════════════════════════════════════════════════════════════
