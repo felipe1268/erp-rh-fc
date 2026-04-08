@@ -1579,6 +1579,46 @@ export const payrollEngineRouter = router({
         }
       }
       
+      // Update cached afericaoResultJson to persist decisions
+      const afericaoCids = resolveCompanyIds(input);
+      for (const cid of afericaoCids) {
+        const periodRows = ((await db.execute(sql`
+          SELECT "afericaoResultJson" FROM payroll_periods 
+          WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia} AND "afericaoResultJson" IS NOT NULL
+        `)) as any).rows || [];
+        if (periodRows.length > 0 && periodRows[0].afericaoResultJson) {
+          try {
+            const cached = typeof periodRows[0].afericaoResultJson === 'string' ? JSON.parse(periodRows[0].afericaoResultJson) : periodRows[0].afericaoResultJson;
+            const decidedIds = new Set(input.decisoes.map(d => d.adjustmentId));
+            const decisaoMap = new Map(input.decisoes.map(d => [d.adjustmentId, d.decisao]));
+            if (cached.divergenciasList) {
+              for (const div of cached.divergenciasList) {
+                if (div.adjustmentId && decidedIds.has(div.adjustmentId)) {
+                  const dec = decisaoMap.get(div.adjustmentId);
+                  if (dec === 'falta_real') {
+                    div.jaDecidido = true;
+                    div.statusDecisao = 'pendente';
+                  } else if (dec === 'erro_relogio') {
+                    div.jaDecidido = true;
+                    div.statusDecisao = 'cancelado';
+                  }
+                }
+              }
+              const pendentes = cached.divergenciasList.filter((d: any) => !d.jaDecidido);
+              cached.faltas = pendentes.filter((d: any) => d.tipo === 'falta').length;
+              cached.atrasos = pendentes.filter((d: any) => d.tipo === 'atraso').length;
+              cached.divergencias = pendentes.length;
+              cached.jaConfirmados = (cached.jaConfirmados || 0) + errosRelogio;
+            }
+            const updatedJson = JSON.stringify(cached);
+            await db.execute(sql`
+              UPDATE payroll_periods SET "afericaoResultJson" = ${updatedJson}
+              WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+            `);
+          } catch { /* ignore parse errors */ }
+        }
+      }
+
       return {
         errosRelogio,
         faltasReais,

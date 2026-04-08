@@ -279,7 +279,16 @@ export default function FolhaPagamento() {
     if (lastLoadedPeriodId.current === pd.id) return;
     lastLoadedPeriodId.current = pd.id;
     if (pd.afericaoResultJson && !afericaoResult) {
-      try { setAfericaoResult(JSON.parse(pd.afericaoResultJson)); } catch { /* ignore */ }
+      try {
+        const parsed = JSON.parse(pd.afericaoResultJson);
+        if (parsed.divergenciasList) {
+          for (const d of parsed.divergenciasList) {
+            if (d.jaDecidido && d.statusDecisao === 'pendente') d._confirmado = true;
+            if (d.jaDecidido && d.statusDecisao === 'cancelado') d._cancelado = true;
+          }
+        }
+        setAfericaoResult(parsed);
+      } catch { /* ignore */ }
     }
     if (pd.valeResultJson && !valeResult) {
       try { setValeResult(JSON.parse(pd.valeResultJson)); } catch { /* ignore */ }
@@ -4853,7 +4862,15 @@ export default function FolhaPagamento() {
         </Dialog>
 
         {/* RELATÓRIO DE AFERIÇÃO */}
-        <Dialog open={showAfericaoReport} onOpenChange={(v) => { setShowAfericaoReport(v); if (!v) setAfericaoFilter('todos'); }}>
+        <Dialog open={showAfericaoReport} onOpenChange={(v) => {
+          setShowAfericaoReport(v);
+          if (!v) {
+            setAfericaoFilter('todos');
+            setAfericaoResult(null);
+            lastLoadedPeriodId.current = null;
+            payrollPeriod.refetch();
+          }
+        }}>
           <DialogContent resizable={false} className="overflow-hidden flex flex-col" style={{ width: "calc(100vw - 2rem)", maxWidth: "calc(100vw - 2rem)", height: "95vh", maxHeight: "95vh" }}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
