@@ -971,6 +971,11 @@ export const payrollEngineRouter = router({
           const tipoOriginal = jaDecidido.tipo;
           if (tipoOriginal === 'falta' && jaDecidido.status !== 'cancelado') {
             divergencias++;
+            const valorHoraEmpD = empValorHoraMap.get(escuro.employeeId) || 0;
+            const faltaValD = parseBRL(jaDecidido.valorTotal || jaDecidido.valorDesconto || '0');
+            const vrDescD = parseBRL(jaDecidido.vrDesconto || '0');
+            const vtDescD = parseBRL(jaDecidido.vtDesconto || '0');
+            const salDescD = valorHoraEmpD * criteria.cargaHorariaDiaria;
             divergenciasList.push({
               employeeId: escuro.employeeId,
               employeeName: empNome,
@@ -978,15 +983,31 @@ export const payrollEngineRouter = router({
               empStatus,
               data: escuro.data,
               tipo: "falta",
-              valorDesconto: parseBRL(jaDecidido.valorTotal || jaDecidido.valorDesconto || '0'),
+              valorDesconto: faltaValD,
               escuroEntrada1: escuro.entrada1 || '-',
               escuroSaida1: escuro.saida1 || '-',
               adjustmentId: jaDecidido.adjustmentId,
               jaDecidido: true,
               statusDecisao: jaDecidido.status,
+              memoria: {
+                valorHora: valorHoraEmpD,
+                cargaHorariaDiaria: criteria.cargaHorariaDiaria,
+                descontoSalarial: salDescD,
+                descontoVR: vrDescD,
+                descontoVT: vtDescD,
+                totalDesconto: faltaValD,
+              },
             });
           } else if (tipoOriginal === 'atraso' && jaDecidido.status !== 'cancelado') {
             divergencias++;
+            const valorHoraEmpD = empValorHoraMap.get(escuro.employeeId) || 0;
+            const valorMinutoD = valorHoraEmpD / 60;
+            const atrasoValD = parseBRL(jaDecidido.valorTotal || jaDecidido.valorDesconto || '0');
+            const entradaRealD = actual?.entrada1 || '-';
+            const empJornadaD = empJornadaMap.get(escuro.employeeId) ?? null;
+            const jornadaEntradaD = getExpectedEntrada(empJornadaD, escuro.data);
+            const entradaMinD = parseTime(entradaRealD);
+            const minutosAtrasoD = entradaMinD !== null && entradaMinD > jornadaEntradaD ? entradaMinD - jornadaEntradaD : 0;
             divergenciasList.push({
               employeeId: escuro.employeeId,
               employeeName: empNome,
@@ -994,11 +1015,20 @@ export const payrollEngineRouter = router({
               empStatus,
               data: escuro.data,
               tipo: "atraso",
-              valorDesconto: parseBRL(jaDecidido.valorTotal || jaDecidido.valorDesconto || '0'),
-              realEntrada: actual?.entrada1 || '-',
+              minutos: minutosAtrasoD,
+              valorDesconto: atrasoValD,
+              realEntrada: entradaRealD,
               adjustmentId: jaDecidido.adjustmentId,
               jaDecidido: true,
               statusDecisao: jaDecidido.status,
+              memoria: {
+                valorHora: valorHoraEmpD,
+                valorMinuto: valorMinutoD,
+                minutosAtraso: minutosAtrasoD,
+                entradaEsperada: minutesToHHMM(jornadaEntradaD),
+                entradaReal: entradaRealD,
+                tolerancia: criteria.pontoToleranciaAtraso,
+              },
             });
           } else {
             totalOk++;
@@ -1100,6 +1130,14 @@ export const payrollEngineRouter = router({
               valorDesconto: totalDesc,
               escuroEntrada1: escuro.entrada1,
               escuroSaida1: escuro.saida1,
+              memoria: {
+                valorHora: valorHoraEmp,
+                cargaHorariaDiaria: criteria.cargaHorariaDiaria,
+                descontoSalarial: valorFalta,
+                descontoVR: parseBRL(vrDesconto),
+                descontoVT: parseBRL(vtDesconto),
+                totalDesconto: totalDesc,
+              },
             });
           } else if (isFimDeSemanaOuFeriado) {
             resultado = "ok";
