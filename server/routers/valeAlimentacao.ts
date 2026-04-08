@@ -308,11 +308,12 @@ export const valeAlimentacaoRouter = router({
       const empRows = ((await db.execute(
         sql`SELECT e.id, e."nomeCompleto", e.cpf, e.cargo, e.funcao,
             e."dataAdmissao", e.status as "empStatus",
+            e."licencaDataInicio",
             of2."obraId", o.cidade as "obraCidade", o.estado as "obraEstado"
             FROM employees e
             LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
             LEFT JOIN obras o ON of2."obraId" = o.id
-            WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e."deletedAt" IS NULL
+            WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status IN ('Ativo', 'Ferias', 'Afastado', 'Licenca') AND e."deletedAt" IS NULL
             AND (e."tipoContrato" IS NULL OR e."tipoContrato" NOT IN ('PJ','Socio'))
             ORDER BY e."nomeCompleto" ASC`
       )) as any).rows || [];
@@ -459,18 +460,53 @@ export const valeAlimentacaoRouter = router({
           }
         }
 
+        const isFerias = emp.empStatus === 'Ferias';
+        const isAfastado = emp.empStatus === 'Afastado' || emp.empStatus === 'Licenca';
+
+        let diasAfastadoDentro15 = 0;
+        if (isAfastado) {
+          if (!emp.licencaDataInicio) {
+            continue;
+          }
+          const inicioAfast = new Date(emp.licencaDataInicio + 'T00:00:00');
+          const fimEmpresa = new Date(inicioAfast);
+          fimEmpresa.setDate(fimEmpresa.getDate() + 14);
+
+          const overlapIni = new Date(Math.max(primeiroDiaMes.getTime(), inicioAfast.getTime()));
+          const overlapFim = new Date(Math.min(ultimoDiaMes.getTime(), fimEmpresa.getTime()));
+
+          if (overlapIni > overlapFim) {
+            continue;
+          }
+
+          let diasOverlap = 0;
+          let cur = new Date(overlapIni);
+          while (cur <= overlapFim) {
+            const dow = cur.getDay();
+            if (dow !== 0 && dow !== 6) diasOverlap++;
+            cur.setDate(cur.getDate() + 1);
+          }
+          diasAfastadoDentro15 = diasOverlap;
+          if (diasAfastadoDentro15 <= 0) {
+            continue;
+          }
+        }
+
         const diasFerias = feriasMap[emp.id] || 0;
         let diasLicenca = 0;
-        if (empLicenca.has(emp.id)) {
+        if (empLicenca.has(emp.id) && !isAfastado) {
           diasLicenca = diasUteis;
         }
 
-        const diasEfetivos = Math.max(0, diasUteis - diasFerias - diasLicenca);
+        let diasEfetivos = Math.max(0, diasUteis - diasFerias - diasLicenca);
+        if (isAfastado) {
+          diasEfetivos = diasAfastadoDentro15;
+        }
 
-        const valorCafe = Math.round(cafeDia * diasEfetivos * 100) / 100;
-        const valorLanche = Math.round(lancheDia * diasEfetivos * 100) / 100;
-        const valorJanta = Math.round(jantaDia * diasEfetivos * 100) / 100;
-        const valorVA = isProporcional ? Math.round(vaMensal * diasEfetivos / diasUteisOriginal * 100) / 100 : vaMensal;
+        const valorCafe = (isFerias || isAfastado) ? 0 : Math.round(cafeDia * diasEfetivos * 100) / 100;
+        const valorLanche = (isFerias || isAfastado) ? 0 : Math.round(lancheDia * diasEfetivos * 100) / 100;
+        const valorJanta = (isFerias || isAfastado) ? 0 : Math.round(jantaDia * diasEfetivos * 100) / 100;
+        const valorVA = (isProporcional || isAfastado) ? Math.round(vaMensal * diasEfetivos / diasUteisOriginal * 100) / 100 : vaMensal;
         const valorDiario = cafeDia + lancheDia + jantaDia;
         const valorBruto = Math.round((valorCafe + valorLanche + valorJanta + valorVA) * 100) / 100;
         const descontoVaPct = parseBRL(cfg.descontoVaPercentual) || 0;
@@ -484,6 +520,7 @@ export const valeAlimentacaoRouter = router({
           cafeDia, lancheDia, jantaDia, cafeMensal, lancheMensal, jantaMensal, vaMensal,
           cafeAtivo, lancheAtivo, jantaAtivo,
           diasFerias, diasLicenca, isProporcional, proporcionalDias,
+          isFerias, isAfastado, statusEmp: emp.empStatus,
           valorCafe, valorLanche, valorJanta, valorVA,
           valorBruto, descontoVaPct, valorDescontoVA, valorTotal,
           cidade: cidade || null,
@@ -571,11 +608,12 @@ export const valeAlimentacaoRouter = router({
 
       const empRows = ((await db.execute(
         sql`SELECT e.id, e."nomeCompleto", e."dataAdmissao", e.status as "empStatus",
+            e."licencaDataInicio",
             of2."obraId", o.cidade as "obraCidade", o.estado as "obraEstado"
             FROM employees e
             LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
             LEFT JOIN obras o ON of2."obraId" = o.id
-            WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e."deletedAt" IS NULL
+            WHERE e."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status IN ('Ativo', 'Ferias', 'Afastado', 'Licenca') AND e."deletedAt" IS NULL
             AND (e."tipoContrato" IS NULL OR e."tipoContrato" NOT IN ('PJ','Socio'))
             ORDER BY e."nomeCompleto" ASC`
       )) as any).rows || [];
@@ -723,16 +761,51 @@ export const valeAlimentacaoRouter = router({
             }
           }
 
+          const isFerias = emp.empStatus === 'Ferias';
+          const isAfastado = emp.empStatus === 'Afastado' || emp.empStatus === 'Licenca';
+
+          let diasAfastadoDentro15 = 0;
+          if (isAfastado) {
+            if (!emp.licencaDataInicio) {
+              continue;
+            }
+            const inicioAfast = new Date(emp.licencaDataInicio + 'T00:00:00');
+            const fimEmpresa = new Date(inicioAfast);
+            fimEmpresa.setDate(fimEmpresa.getDate() + 14);
+
+            const overlapIni = new Date(Math.max(primeiroDiaMes.getTime(), inicioAfast.getTime()));
+            const overlapFim = new Date(Math.min(ultimoDiaMes.getTime(), fimEmpresa.getTime()));
+
+            if (overlapIni > overlapFim) {
+              continue;
+            }
+
+            let diasOverlap = 0;
+            let cur = new Date(overlapIni);
+            while (cur <= overlapFim) {
+              const dow = cur.getDay();
+              if (dow !== 0 && dow !== 6) diasOverlap++;
+              cur.setDate(cur.getDate() + 1);
+            }
+            diasAfastadoDentro15 = diasOverlap;
+            if (diasAfastadoDentro15 <= 0) {
+              continue;
+            }
+          }
+
           const diasFerias = feriasMap[emp.id] || 0;
           let diasLicenca = 0;
-          if (empLicenca.has(emp.id)) diasLicenca = diasUteis;
+          if (empLicenca.has(emp.id) && !isAfastado) diasLicenca = diasUteis;
 
-          const diasEfetivos = Math.max(0, diasUteis - diasFerias - diasLicenca);
+          let diasEfetivos = Math.max(0, diasUteis - diasFerias - diasLicenca);
+          if (isAfastado) {
+            diasEfetivos = diasAfastadoDentro15;
+          }
 
-          const valorCafe = Math.round(cafeDia * diasEfetivos * 100) / 100;
-          const valorLanche = Math.round(lancheDia * diasEfetivos * 100) / 100;
-          const valorJanta = Math.round(jantaDia * diasEfetivos * 100) / 100;
-          const valorVA = isProporcional ? Math.round(vaMensal * diasEfetivos / diasUteisOriginal * 100) / 100 : vaMensal;
+          const valorCafe = (isFerias || isAfastado) ? 0 : Math.round(cafeDia * diasEfetivos * 100) / 100;
+          const valorLanche = (isFerias || isAfastado) ? 0 : Math.round(lancheDia * diasEfetivos * 100) / 100;
+          const valorJanta = (isFerias || isAfastado) ? 0 : Math.round(jantaDia * diasEfetivos * 100) / 100;
+          const valorVA = (isProporcional || isAfastado) ? Math.round(vaMensal * diasEfetivos / diasUteisOriginal * 100) / 100 : vaMensal;
           const valorDiario = cafeDia + lancheDia + jantaDia;
           const valorBruto = Math.round((valorCafe + valorLanche + valorJanta + valorVA) * 100) / 100;
           const descontoVaPct = parseBRL(cfg.descontoVaPercentual) || 0;
@@ -745,6 +818,7 @@ export const valeAlimentacaoRouter = router({
             cafeDia, lancheDia, jantaDia, cafeMensal, lancheMensal, jantaMensal, vaMensal,
             cafeAtivo, lancheAtivo, jantaAtivo,
             diasFerias, diasLicenca, isProporcional, proporcionalDias,
+            isFerias, isAfastado, statusEmp: emp.empStatus,
             valorCafe, valorLanche, valorJanta, valorVA,
             valorBruto, descontoVaPct, valorDescontoVA, valorTotal,
             cidade: cidade || null,
