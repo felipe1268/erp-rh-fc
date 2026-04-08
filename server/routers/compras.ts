@@ -1128,15 +1128,16 @@ export const comprasRouter = router({
           map.set(key, {
             nome: item.nome, unidade: item.unidade, categoria: item.categoria,
             codigoInterno: item.codigoInterno,
-            quantidadeTotal: 0, valorUnitario: null,
-            valorTotalEstoque: 0, almoxarifados: [],
+            quantidadeTotal: 0, quantidadeMinima: 0, valorUnitario: null,
+            valorTotalEstoque: 0, almoxarifados: [], fotoUrl: null,
           });
         }
         const entry = map.get(key)!;
         const qty = n(item.quantidadeAtual);
         entry.quantidadeTotal += qty;
+        entry.quantidadeMinima += n(item.quantidadeMinima);
+        if (!entry.fotoUrl && (item as any).fotoUrl) entry.fotoUrl = (item as any).fotoUrl;
         if (!entry.valorUnitario && item.valorUnitario) entry.valorUnitario = item.valorUnitario;
-        const vu = n(entry.valorUnitario);
         if (item.obraId) {
           entry.almoxarifados.push({ tipo: "obra", obraId: item.obraId, quantidade: qty, itemId: item.id });
         } else {

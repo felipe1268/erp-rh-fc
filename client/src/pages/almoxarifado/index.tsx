@@ -726,15 +726,42 @@ export default function AlmoxarifadoPage() {
         </div>
 
         {/* ════════════ VISÃO CONSOLIDADA ════════════ */}
-        {obraContexto === "todos" && (
+        {obraContexto === "todos" && (() => {
+          const consItens = consolidado?.itens ?? [];
+          const consBusca = busca.toLowerCase();
+          const consFiltered = consBusca
+            ? consItens.filter((i: any) => i.nome.toLowerCase().includes(consBusca) || i.categoria?.toLowerCase().includes(consBusca) || i.codigoInterno?.toLowerCase().includes(consBusca))
+            : consItens;
+          const consFinal = filtroCateg !== "todas" ? consFiltered.filter((i: any) => i.categoria === filtroCateg) : consFiltered;
+          const consListFinal = apenasAbaixo ? consFinal.filter((i: any) => i.quantidadeMinima > 0 && i.quantidadeTotal < i.quantidadeMinima) : consFinal;
+
+          const consTotalItens = consItens.length;
+          const consEstoqueOk = consItens.filter((i: any) => i.quantidadeMinima === 0 || i.quantidadeTotal >= i.quantidadeMinima).length;
+          const consEstoqueBaixo = consItens.filter((i: any) => { const a = i.quantidadeTotal, m = i.quantidadeMinima; return m > 0 && a < m && a >= m * 0.5; }).length;
+          const consEstoqueCritico = consItens.filter((i: any) => { const m = i.quantidadeMinima; return m > 0 && i.quantidadeTotal < m * 0.5; }).length;
+          const consCategs = [...new Set(consItens.map((i: any) => i.categoria).filter(Boolean))].sort();
+
+          return (
           <div className="max-w-7xl mx-auto px-4 py-4 space-y-4">
-            {/* Busca */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input type="text" placeholder="Buscar item em todos os almoxarifados..." value={busca} onChange={e => setBusca(e.target.value)}
-                className="w-full pl-9 pr-4 h-10 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Total de Itens", v: consTotalItens, icon: Package, color: "text-blue-600", bg: "bg-blue-50" },
+                { label: "Estoque OK", v: consEstoqueOk, icon: BarChart2, color: "text-emerald-600", bg: "bg-emerald-50" },
+                { label: "Estoque Baixo", v: consEstoqueBaixo, icon: AlertTriangle, color: "text-yellow-600", bg: "bg-yellow-50" },
+                { label: "Estoque Crítico", v: consEstoqueCritico, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50" },
+              ].map((k, i) => (
+                <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+                  <div className={`${k.bg} p-2 rounded-lg`}>
+                    <k.icon className={`h-5 w-5 ${k.color}`} />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wide">{k.label}</p>
+                    <p className={`text-2xl font-bold ${k.color}`}>{k.v}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-            {/* KPI: Valor total */}
+
             {consolidado && (
               <div className="bg-gradient-to-r from-emerald-700 to-emerald-500 rounded-2xl px-6 py-4 flex items-center justify-between text-white shadow-md">
                 <div>
@@ -745,27 +772,119 @@ export default function AlmoxarifadoPage() {
                 <BarChart2 className="h-12 w-12 opacity-30" />
               </div>
             )}
-            {/* Tabela consolidada */}
+
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input type="text" placeholder="Buscar item em todos os almoxarifados..." value={busca} onChange={e => setBusca(e.target.value)}
+                  className="w-full pl-9 pr-4 h-9 rounded-lg text-sm border border-gray-200 bg-white text-gray-800 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200" />
+              </div>
+              <select
+                value={filtroCateg} onChange={e => setFiltroCateg(e.target.value)}
+                className="h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 outline-none focus:border-emerald-400"
+              >
+                <option value="todas">Todas categorias</option>
+                {consCategs.map((c: any) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+                <input type="checkbox" checked={apenasAbaixo} onChange={e => setApenasAbaixo(e.target.checked)} className="rounded border-gray-300" />
+                Apenas abaixo do mínimo
+              </label>
+              <span className="text-xs text-gray-400">{consListFinal.length} resultado{consListFinal.length !== 1 ? "s" : ""}</span>
+              <div className="flex border border-gray-200 rounded-lg overflow-hidden ml-auto">
+                <button onClick={() => setViewMode("cards")} className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 ${viewMode === "cards" ? "bg-emerald-50 text-emerald-700" : "text-gray-500 hover:bg-gray-50"}`}>
+                  <LayoutGrid className="h-3.5 w-3.5" /> Cards
+                </button>
+                <button onClick={() => setViewMode("table")} className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 border-l border-gray-200 ${viewMode === "table" ? "bg-emerald-50 text-emerald-700" : "text-gray-500 hover:bg-gray-50"}`}>
+                  <List className="h-3.5 w-3.5" /> Tabela
+                </button>
+              </div>
+            </div>
+
             {loadingConsolidado ? (
               <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-emerald-500" /></div>
+            ) : consListFinal.length === 0 ? (
+              <div className="bg-white rounded-xl border border-dashed border-gray-200 p-16 text-center">
+                <Boxes className="h-12 w-12 text-gray-200 mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">Nenhum item encontrado</p>
+              </div>
+            ) : viewMode === "cards" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {consListFinal.map((item: any, idx: number) => {
+                  const abaixo = item.quantidadeMinima > 0 && item.quantidadeTotal < item.quantidadeMinima;
+                  return (
+                    <div key={idx} className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${abaixo ? "border-red-200" : "border-gray-100"}`}>
+                      <div className="relative bg-gray-50 flex items-center justify-center" style={{ height: 140 }}>
+                        {item.fotoUrl ? (
+                          <img src={item.fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="flex flex-col items-center gap-1 text-gray-300">
+                            <Camera className="h-8 w-8" />
+                            <span className="text-[10px]">Sem foto</span>
+                          </div>
+                        )}
+                        {abaixo && (
+                          <div className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">!</div>
+                        )}
+                      </div>
+                      <div className="p-3 flex flex-col gap-1.5 flex-1">
+                        <p className="text-sm font-semibold text-gray-800 leading-tight line-clamp-2">{item.nome}</p>
+                        {item.categoria && <p className="text-[11px] text-gray-400">{item.categoria}</p>}
+                        {item.codigoInterno && <p className="text-[11px] font-mono text-gray-400">{item.codigoInterno}</p>}
+                        <div className="mt-auto pt-1">
+                          <p className={`text-lg font-bold ${abaixo ? "text-red-600" : "text-gray-900"}`}>
+                            {item.quantidadeTotal % 1 === 0 ? item.quantidadeTotal : item.quantidadeTotal.toFixed(2)}
+                            <span className="text-xs font-normal text-gray-400 ml-1">{item.unidade}</span>
+                          </p>
+                          <StatusBadge atual={item.quantidadeTotal} minimo={item.quantidadeMinima} />
+                          {item.valorUnitario && parseFloat(item.valorUnitario) > 0 && (
+                            <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
+                              R$ {parseFloat(item.valorUnitario).toFixed(2)}/{item.unidade}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-gray-400 border-t border-gray-50 pt-1 mt-1">
+                          <div className="flex flex-wrap gap-1">
+                            {item.almoxarifados.map((a: any, ai: number) => (
+                              <span key={ai} className={`font-medium px-1.5 py-0.5 rounded-full ${a.tipo === "central" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
+                                {a.tipo === "central" ? "Central" : "Obra"}: {a.quantidade % 1 === 0 ? a.quantidade : a.quantidade.toFixed(2)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b border-gray-100">
                       <tr>
+                        <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 w-12"></th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">ITEM</th>
                         <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">QTD TOTAL</th>
+                        <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">STATUS</th>
                         <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">LOCAIS</th>
                         <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">PREÇO UNIT.</th>
                         <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">VALOR TOTAL</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(consolidado?.itens ?? []).length === 0 ? (
-                        <tr><td colSpan={5} className="text-center py-12 text-gray-400">Nenhum item no estoque</td></tr>
-                      ) : (consolidado?.itens ?? []).map((item: any, idx: number) => (
-                        <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50/70">
+                      {consListFinal.length === 0 ? (
+                        <tr><td colSpan={7} className="text-center py-12 text-gray-400">Nenhum item no estoque</td></tr>
+                      ) : consListFinal.map((item: any, idx: number) => (
+                        <tr key={idx} className={`border-b border-gray-50 hover:bg-gray-50/70 ${item.quantidadeMinima > 0 && item.quantidadeTotal < item.quantidadeMinima ? "bg-red-50/20" : ""}`}>
+                          <td className="px-3 py-2">
+                            <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center">
+                              {item.fotoUrl
+                                ? <img src={item.fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
+                                : <ImageOff className="h-4 w-4 text-gray-300" />
+                              }
+                            </div>
+                          </td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-900">{item.nome}</p>
                             <div className="flex items-center gap-1.5 mt-0.5">
@@ -776,6 +895,9 @@ export default function AlmoxarifadoPage() {
                           <td className="px-3 py-3 text-center">
                             <span className="font-bold text-gray-900">{item.quantidadeTotal % 1 === 0 ? item.quantidadeTotal : item.quantidadeTotal.toFixed(2)}</span>
                             <span className="text-xs text-gray-400 ml-1">{item.unidade}</span>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <StatusBadge atual={item.quantidadeTotal} minimo={item.quantidadeMinima} />
                           </td>
                           <td className="px-3 py-3 text-center">
                             <div className="flex flex-wrap gap-1 justify-center">
@@ -802,7 +924,7 @@ export default function AlmoxarifadoPage() {
                     {consolidado && consolidado.totalGeral > 0 && (
                       <tfoot className="bg-emerald-50 border-t-2 border-emerald-200">
                         <tr>
-                          <td colSpan={4} className="px-4 py-3 font-bold text-emerald-800 text-sm">TOTAL GERAL DO ESTOQUE</td>
+                          <td colSpan={6} className="px-4 py-3 font-bold text-emerald-800 text-sm">TOTAL GERAL DO ESTOQUE</td>
                           <td className="px-4 py-3 text-right font-black text-emerald-700">R$ {consolidado.totalGeral.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
                         </tr>
                       </tfoot>
@@ -812,7 +934,8 @@ export default function AlmoxarifadoPage() {
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {obraContexto !== "todos" && (
         <div className="max-w-7xl mx-auto px-6 py-5 space-y-4">
