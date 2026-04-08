@@ -924,14 +924,12 @@ export default function ValeAlimentacao() {
                 </h2>
                 {(() => {
                   const [a, m] = mesAno.split('-').map(Number);
-                  const fimM = m - 1 <= 0 ? 12 : m - 1;
-                  const fimA = m - 1 <= 0 ? a - 1 : a;
-                  const iniM = fimM - 1 <= 0 ? 12 : fimM - 1;
-                  const iniA = fimM - 1 <= 0 ? fimA - 1 : fimA;
+                  const iniM = m - 1 <= 0 ? 12 : m - 1;
+                  const iniA = m - 1 <= 0 ? a - 1 : a;
                   const mesesNome = ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
                   return (
                     <p className="text-sm text-muted-foreground">
-                      Competência das faltas: <strong>16/{String(iniM).padStart(2,'0')}/{iniA} a 15/{String(fimM).padStart(2,'0')}/{fimA}</strong> ({mesesNome[iniM]}/{iniA} – {mesesNome[fimM]}/{fimA}). Faltas sem atestado nesse período geram desconto no VA de {mesLabel}.
+                      Competência das faltas: <strong>16/{String(iniM).padStart(2,'0')}/{iniA} a 15/{String(m).padStart(2,'0')}/{a}</strong> ({mesesNome[iniM]}/{iniA} – {mesesNome[m]}/{a}). Faltas sem atestado nesse período geram desconto no VA de {mesLabel}.
                     </p>
                   );
                 })()}
