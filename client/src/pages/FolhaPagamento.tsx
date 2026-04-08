@@ -5114,7 +5114,7 @@ export default function FolhaPagamento() {
                           <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px] text-slate-500" onClick={() => setAfericaoSel(new Set())}>Limpar</Button>
                         </div>
                       )}
-                      <div className="rounded-lg border border-red-200 overflow-hidden">
+                      <div className="rounded-lg border border-red-200 overflow-visible">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="bg-red-50 text-red-700">
@@ -5179,9 +5179,27 @@ export default function FolhaPagamento() {
                                 <div className="inline-flex items-center gap-1">
                                   <span>R$ {typeof d.valorDesconto === 'number' ? d.valorDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : d.valorDesconto || '0,00'}</span>
                                   {d.memoria && (
-                                    <button className="text-slate-400 hover:text-blue-600 relative group/mem" onClick={(e) => { e.currentTarget.querySelector('.mem-pop')?.classList.toggle('hidden'); }} title="Ver memória de cálculo">
+                                    <button className="text-slate-400 hover:text-blue-600 relative group/mem" onClick={(e) => {
+                                      const pop = e.currentTarget.querySelector('.mem-pop') as HTMLElement;
+                                      if (!pop) return;
+                                      pop.classList.toggle('hidden');
+                                      if (!pop.classList.contains('hidden')) {
+                                        requestAnimationFrame(() => {
+                                          const rect = pop.getBoundingClientRect();
+                                          if (rect.bottom > window.innerHeight - 10) {
+                                            pop.style.top = 'auto';
+                                            pop.style.bottom = '100%';
+                                            pop.style.marginBottom = '4px';
+                                          } else {
+                                            pop.style.top = '20px';
+                                            pop.style.bottom = 'auto';
+                                            pop.style.marginBottom = '0';
+                                          }
+                                        });
+                                      }
+                                    }} title="Ver memória de cálculo">
                                       <Info className="h-3.5 w-3.5" />
-                                      <div className="mem-pop hidden absolute right-0 top-5 z-50 bg-white border border-slate-300 rounded-lg shadow-xl p-3 text-left text-[11px] text-slate-700 w-64 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                      <div className="mem-pop hidden absolute right-0 top-5 z-[9999] bg-white border border-slate-300 rounded-lg shadow-xl p-3 text-left text-[11px] text-slate-700 w-64 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                         <p className="font-bold text-slate-900 mb-1.5 text-xs border-b pb-1">Memória de Cálculo</p>
                                         {d.tipo === 'falta' ? (
                                           <div className="space-y-0.5">
