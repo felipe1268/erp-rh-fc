@@ -1251,7 +1251,7 @@ export default function ValeAlimentacao() {
                             setEditingConfigId(cfg.id);
                             {
                               const dias = cfg.diasUteisRef || 22;
-                              const hasTotals = parseBRL(cfg.cafeTotalMes) > 0 || parseBRL(cfg.lancheTotalMes) > 0 || parseBRL(cfg.vaTotalMes) > 0 || parseBRL(cfg.jantaTotalMes) > 0;
+                              const hasTotals = parseBRL(cfg.cafe_total_mes || cfg.cafeTotalMes) > 0 || parseBRL(cfg.lanche_total_mes || cfg.lancheTotalMes) > 0 || parseBRL(cfg.va_total_mes || cfg.vaTotalMes) > 0 || parseBRL(cfg.janta_total_mes || cfg.jantaTotalMes) > 0;
                               setConfigForm({
                                 id: cfg.id,
                                 companyId,
@@ -1267,10 +1267,10 @@ export default function ValeAlimentacao() {
                                 lancheAtivo: cfg.lancheAtivo === 1 || cfg.lancheAtivo === true,
                                 jantaAtivo: cfg.jantaAtivo === 1 || cfg.jantaAtivo === true,
                                 descontoVaPercentual: cfg.descontoVaPercentual || "0",
-                                cafeTotalMes: hasTotals ? (cfg.cafeTotalMes || "0") : (parseBRL(cfg.cafeManhaDia) * dias).toFixed(2).replace('.', ','),
-                                lancheTotalMes: hasTotals ? (cfg.lancheTotalMes || "0") : (parseBRL(cfg.lancheTardeDia) * dias).toFixed(2).replace('.', ','),
-                                jantaTotalMes: hasTotals ? (cfg.jantaTotalMes || "0") : (parseBRL(cfg.jantaDia) * dias).toFixed(2).replace('.', ','),
-                                vaTotalMes: hasTotals ? (cfg.vaTotalMes || "0") : (parseBRL(cfg.valeAlimentacaoMes) * dias).toFixed(2).replace('.', ','),
+                                cafeTotalMes: hasTotals ? (cfg.cafe_total_mes || cfg.cafeTotalMes || "0") : (parseBRL(cfg.cafeManhaDia) * dias).toFixed(2).replace('.', ','),
+                                lancheTotalMes: hasTotals ? (cfg.lanche_total_mes || cfg.lancheTotalMes || "0") : (parseBRL(cfg.lancheTardeDia) * dias).toFixed(2).replace('.', ','),
+                                jantaTotalMes: hasTotals ? (cfg.janta_total_mes || cfg.jantaTotalMes || "0") : (parseBRL(cfg.jantaDia) * dias).toFixed(2).replace('.', ','),
+                                vaTotalMes: hasTotals ? (cfg.va_total_mes || cfg.vaTotalMes || "0") : (parseBRL(cfg.valeAlimentacaoMes) * dias).toFixed(2).replace('.', ','),
                                 observacoes: cfg.observacoes || "",
                               });
                             }
@@ -1287,48 +1287,61 @@ export default function ValeAlimentacao() {
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0">
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Coffee className={`h-4 w-4 ${cfg.cafeAtivo ? "text-orange-600" : "text-muted-foreground/30"}`} />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Café/mês</p>
-                            <p className={`font-medium ${cfg.cafeAtivo ? "" : "text-muted-foreground line-through"}`}>
-                              {parseBRL(cfg.cafeTotalMes) > 0 ? fmtValor(cfg.cafeTotalMes) : fmtValor(String((parseBRL(cfg.cafeManhaDia) * (cfg.diasUteisRef || 22)).toFixed(2)))}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">{fmtValor(cfg.cafeManhaDia)}/dia</p>
+                      {(() => {
+                        const dias = cfg.diasUteisRef || 22;
+                        const cafeMes = parseBRL(cfg.cafe_total_mes || cfg.cafeTotalMes) || (parseBRL(cfg.cafeManhaDia) * dias);
+                        const lancheMes = parseBRL(cfg.lanche_total_mes || cfg.lancheTotalMes) || (parseBRL(cfg.lancheTardeDia) * dias);
+                        const jantaMes = parseBRL(cfg.janta_total_mes || cfg.jantaTotalMes) || (parseBRL(cfg.jantaDia) * dias);
+                        const vaMes = parseBRL(cfg.va_total_mes || cfg.vaTotalMes) || (parseBRL(cfg.valeAlimentacaoMes) * dias);
+                        const cafeDia = dias > 0 ? cafeMes / dias : 0;
+                        const lancheDia = dias > 0 ? lancheMes / dias : 0;
+                        const jantaDia = dias > 0 ? jantaMes / dias : 0;
+                        const vaDia = dias > 0 ? vaMes / dias : 0;
+                        return (
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Coffee className={`h-4 w-4 ${cfg.cafeAtivo ? "text-orange-600" : "text-muted-foreground/30"}`} />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Café/mês</p>
+                                <p className={`font-medium ${cfg.cafeAtivo ? "" : "text-muted-foreground line-through"}`}>
+                                  {fmtBRL(cafeMes)}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">R$ {cafeDia.toFixed(2).replace('.', ',')}/dia</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Sandwich className={`h-4 w-4 ${cfg.lancheAtivo ? "text-green-600" : "text-muted-foreground/30"}`} />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Lanche/mês</p>
+                                <p className={`font-medium ${cfg.lancheAtivo ? "" : "text-muted-foreground line-through"}`}>
+                                  {fmtBRL(lancheMes)}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">R$ {lancheDia.toFixed(2).replace('.', ',')}/dia</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Moon className={`h-4 w-4 ${cfg.jantaAtivo ? "text-purple-600" : "text-muted-foreground/30"}`} />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Jantar/mês</p>
+                                <p className={`font-medium ${cfg.jantaAtivo ? "" : "text-muted-foreground line-through"}`}>
+                                  {jantaMes > 0 ? fmtBRL(jantaMes) : '-'}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">R$ {jantaDia.toFixed(2).replace('.', ',')}/dia</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <UtensilsCrossed className="h-4 w-4 text-blue-600" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">VA iFood/mês</p>
+                                <p className="font-medium">
+                                  {fmtBRL(vaMes)}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">R$ {vaDia.toFixed(2).replace('.', ',')}/dia</p>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Sandwich className={`h-4 w-4 ${cfg.lancheAtivo ? "text-green-600" : "text-muted-foreground/30"}`} />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Lanche/mês</p>
-                            <p className={`font-medium ${cfg.lancheAtivo ? "" : "text-muted-foreground line-through"}`}>
-                              {parseBRL(cfg.lancheTotalMes) > 0 ? fmtValor(cfg.lancheTotalMes) : fmtValor(String((parseBRL(cfg.lancheTardeDia) * (cfg.diasUteisRef || 22)).toFixed(2)))}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">{fmtValor(cfg.lancheTardeDia)}/dia</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Moon className={`h-4 w-4 ${cfg.jantaAtivo ? "text-purple-600" : "text-muted-foreground/30"}`} />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Jantar/mês</p>
-                            <p className={`font-medium ${cfg.jantaAtivo ? "" : "text-muted-foreground line-through"}`}>
-                              {parseBRL(cfg.jantaTotalMes) > 0 ? fmtValor(cfg.jantaTotalMes) : fmtValor(String((parseBRL(cfg.jantaDia) * (cfg.diasUteisRef || 22)).toFixed(2)))}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">{fmtValor(cfg.jantaDia)}/dia</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <UtensilsCrossed className="h-4 w-4 text-blue-600" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">VA iFood/mês</p>
-                            <p className="font-medium">
-                              {parseBRL(cfg.vaTotalMes) > 0 ? fmtValor(cfg.vaTotalMes) : fmtValor(String((parseBRL(cfg.valeAlimentacaoMes) * (cfg.diasUteisRef || 22)).toFixed(2)))}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">{fmtValor(cfg.valeAlimentacaoMes)}/dia</p>
-                          </div>
-                        </div>
-                      </div>
+                        );
+                      })()}
                       <div className="mt-3 pt-2 border-t text-xs text-muted-foreground flex items-center gap-4 flex-wrap">
                         <span>Dias úteis ref.: <strong>{cfg.diasUteisRef || 22}</strong></span>
                         {cfg.totalVA_iFood && parseBRL(cfg.totalVA_iFood) > 0 && (
