@@ -1139,6 +1139,7 @@ export default function ValeAlimentacao() {
                   cafeAtivo: true,
                   lancheAtivo: true,
                   jantaAtivo: false,
+                  descontoVaPercentual: "0",
                   observacoes: "",
                 });
                 setShowConfigDialog(true);
@@ -1185,6 +1186,7 @@ export default function ValeAlimentacao() {
                               cafeAtivo: cfg.cafeAtivo === 1 || cfg.cafeAtivo === true,
                               lancheAtivo: cfg.lancheAtivo === 1 || cfg.lancheAtivo === true,
                               jantaAtivo: cfg.jantaAtivo === 1 || cfg.jantaAtivo === true,
+                              descontoVaPercentual: cfg.descontoVaPercentual || "0",
                               observacoes: cfg.observacoes || "",
                             });
                             setShowConfigDialog(true);
@@ -1236,10 +1238,13 @@ export default function ValeAlimentacao() {
                           </div>
                         </div>
                       </div>
-                      <div className="mt-3 pt-2 border-t text-xs text-muted-foreground flex items-center gap-4">
+                      <div className="mt-3 pt-2 border-t text-xs text-muted-foreground flex items-center gap-4 flex-wrap">
                         <span>Dias úteis ref.: <strong>{cfg.diasUteisRef || 22}</strong></span>
                         {cfg.totalVA_iFood && parseBRL(cfg.totalVA_iFood) > 0 && (
                           <span>Total iFood: <strong>{fmtValor(cfg.totalVA_iFood)}</strong></span>
+                        )}
+                        {parseBRL(cfg.descontoVaPercentual) > 0 && (
+                          <span className="text-red-600">Desconto VA: <strong>{cfg.descontoVaPercentual}%</strong></span>
                         )}
                       </div>
                     </CardContent>
@@ -1454,10 +1459,15 @@ export default function ValeAlimentacao() {
                 <Input value={configForm.valeAlimentacaoMes || ""} onChange={e => setConfigForm((f: any) => ({ ...f, valeAlimentacaoMes: e.target.value }))} className="mt-1" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-sm">Dias Úteis Referência</Label>
                 <Input type="number" value={configForm.diasUteisRef || 22} onChange={e => setConfigForm((f: any) => ({ ...f, diasUteisRef: Number(e.target.value) }))} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm">Desconto VA (%)</Label>
+                <Input value={configForm.descontoVaPercentual || "0"} onChange={e => setConfigForm((f: any) => ({ ...f, descontoVaPercentual: e.target.value }))} className="mt-1" placeholder="Ex: 5" />
+                <p className="text-xs text-muted-foreground mt-1">Convenção coletiva (PAT)</p>
               </div>
               <div>
                 <Label className="text-sm">Total VA iFood (R$)</Label>

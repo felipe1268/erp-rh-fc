@@ -797,6 +797,7 @@ export const avisoPrevioFeriasRouter = router({
         cafeAtivo: z.boolean().default(true),
         lancheAtivo: z.boolean().default(true),
         jantaAtivo: z.boolean().default(false),
+        descontoVaPercentual: z.string().default("0"),
         observacoes: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
@@ -818,14 +819,15 @@ export const avisoPrevioFeriasRouter = router({
               "cafeAtivo" = ${cafeAtivoInt},
               "lancheAtivo" = ${lancheAtivoInt},
               "jantaAtivo" = ${jantaAtivoInt},
+              "descontoVaPercentual" = ${input.descontoVaPercentual || '0'},
               observacoes = ${input.observacoes || null}
             WHERE id = ${input.id}`
           );
           return { success: true, id: input.id };
         } else {
           const result = ((await db.execute(
-            sql`INSERT INTO meal_benefit_configs ("companyId", "obraId", nome, "cafeManhaDia", "lancheTardeDia", "valeAlimentacaoMes", "jantaDia", "totalVA_iFood", "diasUteisRef", "cafeAtivo", "lancheAtivo", "jantaAtivo", observacoes)
-            VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${cafeAtivoInt}, ${lancheAtivoInt}, ${jantaAtivoInt}, ${input.observacoes || null}) RETURNING id`
+            sql`INSERT INTO meal_benefit_configs ("companyId", "obraId", nome, "cafeManhaDia", "lancheTardeDia", "valeAlimentacaoMes", "jantaDia", "totalVA_iFood", "diasUteisRef", "cafeAtivo", "lancheAtivo", "jantaAtivo", "descontoVaPercentual", observacoes)
+            VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${cafeAtivoInt}, ${lancheAtivoInt}, ${jantaAtivoInt}, ${input.descontoVaPercentual || '0'}, ${input.observacoes || null}) RETURNING id`
           )) as any).rows || [];
           return { success: true, id: result[0]?.id };
         }
