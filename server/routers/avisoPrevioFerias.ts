@@ -798,6 +798,10 @@ export const avisoPrevioFeriasRouter = router({
         lancheAtivo: z.boolean().default(true),
         jantaAtivo: z.boolean().default(false),
         descontoVaPercentual: z.string().default("0"),
+        cafeTotalMes: z.string().optional(),
+        lancheTotalMes: z.string().optional(),
+        jantaTotalMes: z.string().optional(),
+        vaTotalMes: z.string().optional(),
         observacoes: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
@@ -820,14 +824,18 @@ export const avisoPrevioFeriasRouter = router({
               "lancheAtivo" = ${lancheAtivoInt},
               "jantaAtivo" = ${jantaAtivoInt},
               "descontoVaPercentual" = ${input.descontoVaPercentual || '0'},
+              cafe_total_mes = ${input.cafeTotalMes || '0'},
+              lanche_total_mes = ${input.lancheTotalMes || '0'},
+              janta_total_mes = ${input.jantaTotalMes || '0'},
+              va_total_mes = ${input.vaTotalMes || '0'},
               observacoes = ${input.observacoes || null}
             WHERE id = ${input.id}`
           );
           return { success: true, id: input.id };
         } else {
           const result = ((await db.execute(
-            sql`INSERT INTO meal_benefit_configs ("companyId", "obraId", nome, "cafeManhaDia", "lancheTardeDia", "valeAlimentacaoMes", "jantaDia", "totalVA_iFood", "diasUteisRef", "cafeAtivo", "lancheAtivo", "jantaAtivo", "descontoVaPercentual", observacoes)
-            VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${cafeAtivoInt}, ${lancheAtivoInt}, ${jantaAtivoInt}, ${input.descontoVaPercentual || '0'}, ${input.observacoes || null}) RETURNING id`
+            sql`INSERT INTO meal_benefit_configs ("companyId", "obraId", nome, "cafeManhaDia", "lancheTardeDia", "valeAlimentacaoMes", "jantaDia", "totalVA_iFood", "diasUteisRef", "cafeAtivo", "lancheAtivo", "jantaAtivo", "descontoVaPercentual", cafe_total_mes, lanche_total_mes, janta_total_mes, va_total_mes, observacoes)
+            VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${cafeAtivoInt}, ${lancheAtivoInt}, ${jantaAtivoInt}, ${input.descontoVaPercentual || '0'}, ${input.cafeTotalMes || '0'}, ${input.lancheTotalMes || '0'}, ${input.jantaTotalMes || '0'}, ${input.vaTotalMes || '0'}, ${input.observacoes || null}) RETURNING id`
           )) as any).rows || [];
           return { success: true, id: result[0]?.id };
         }

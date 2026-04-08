@@ -1910,6 +1910,10 @@ export const mealBenefitConfigs = pgTable("meal_benefit_configs", {
         lancheAtivo: smallint().default(1),
         jantaAtivo: smallint().default(0),
         descontoVaPercentual: varchar({ length: 10 }).default('0'),
+        cafeTotalMes: varchar("cafe_total_mes", { length: 20 }).default('0'),
+        lancheTotalMes: varchar("lanche_total_mes", { length: 20 }).default('0'),
+        jantaTotalMes: varchar("janta_total_mes", { length: 20 }).default('0'),
+        vaTotalMes: varchar("va_total_mes", { length: 20 }).default('0'),
 },
 (table) => [
         index("idx_meal_company").on(table.companyId),

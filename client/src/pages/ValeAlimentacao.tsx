@@ -1213,6 +1213,10 @@ export default function ValeAlimentacao() {
                   lancheAtivo: true,
                   jantaAtivo: false,
                   descontoVaPercentual: "0",
+                  cafeTotalMes: "",
+                  lancheTotalMes: "",
+                  jantaTotalMes: "",
+                  vaTotalMes: "",
                   observacoes: "",
                 });
                 setShowConfigDialog(true);
@@ -1245,23 +1249,31 @@ export default function ValeAlimentacao() {
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
                             setEditingConfigId(cfg.id);
-                            setConfigForm({
-                              id: cfg.id,
-                              companyId,
-                              obraId: cfg.obraId || null,
-                              nome: cfg.nome || "Padrão",
-                              cafeManhaDia: cfg.cafeManhaDia || "0",
-                              lancheTardeDia: cfg.lancheTardeDia || "0",
-                              valeAlimentacaoMes: cfg.valeAlimentacaoMes || "0",
-                              jantaDia: cfg.jantaDia || "0",
-                              totalVA_iFood: cfg.totalVA_iFood || "0",
-                              diasUteisRef: cfg.diasUteisRef || 22,
-                              cafeAtivo: cfg.cafeAtivo === 1 || cfg.cafeAtivo === true,
-                              lancheAtivo: cfg.lancheAtivo === 1 || cfg.lancheAtivo === true,
-                              jantaAtivo: cfg.jantaAtivo === 1 || cfg.jantaAtivo === true,
-                              descontoVaPercentual: cfg.descontoVaPercentual || "0",
-                              observacoes: cfg.observacoes || "",
-                            });
+                            {
+                              const dias = cfg.diasUteisRef || 22;
+                              const hasTotals = parseBRL(cfg.cafeTotalMes) > 0 || parseBRL(cfg.lancheTotalMes) > 0 || parseBRL(cfg.vaTotalMes) > 0 || parseBRL(cfg.jantaTotalMes) > 0;
+                              setConfigForm({
+                                id: cfg.id,
+                                companyId,
+                                obraId: cfg.obraId || null,
+                                nome: cfg.nome || "Padrão",
+                                cafeManhaDia: cfg.cafeManhaDia || "0",
+                                lancheTardeDia: cfg.lancheTardeDia || "0",
+                                valeAlimentacaoMes: cfg.valeAlimentacaoMes || "0",
+                                jantaDia: cfg.jantaDia || "0",
+                                totalVA_iFood: cfg.totalVA_iFood || "0",
+                                diasUteisRef: dias,
+                                cafeAtivo: cfg.cafeAtivo === 1 || cfg.cafeAtivo === true,
+                                lancheAtivo: cfg.lancheAtivo === 1 || cfg.lancheAtivo === true,
+                                jantaAtivo: cfg.jantaAtivo === 1 || cfg.jantaAtivo === true,
+                                descontoVaPercentual: cfg.descontoVaPercentual || "0",
+                                cafeTotalMes: hasTotals ? (cfg.cafeTotalMes || "0") : (parseBRL(cfg.cafeManhaDia) * dias).toFixed(2).replace('.', ','),
+                                lancheTotalMes: hasTotals ? (cfg.lancheTotalMes || "0") : (parseBRL(cfg.lancheTardeDia) * dias).toFixed(2).replace('.', ','),
+                                jantaTotalMes: hasTotals ? (cfg.jantaTotalMes || "0") : (parseBRL(cfg.jantaDia) * dias).toFixed(2).replace('.', ','),
+                                vaTotalMes: hasTotals ? (cfg.vaTotalMes || "0") : (parseBRL(cfg.valeAlimentacaoMes) * dias).toFixed(2).replace('.', ','),
+                                observacoes: cfg.observacoes || "",
+                              });
+                            }
                             setShowConfigDialog(true);
                           }}>
                             <Pencil className="h-3.5 w-3.5" />
@@ -1279,35 +1291,41 @@ export default function ValeAlimentacao() {
                         <div className="flex items-center gap-2">
                           <Coffee className={`h-4 w-4 ${cfg.cafeAtivo ? "text-orange-600" : "text-muted-foreground/30"}`} />
                           <div>
-                            <p className="text-xs text-muted-foreground">Café/dia</p>
+                            <p className="text-xs text-muted-foreground">Café/mês</p>
                             <p className={`font-medium ${cfg.cafeAtivo ? "" : "text-muted-foreground line-through"}`}>
-                              {fmtValor(cfg.cafeManhaDia)}
+                              {parseBRL(cfg.cafeTotalMes) > 0 ? fmtValor(cfg.cafeTotalMes) : fmtValor(String((parseBRL(cfg.cafeManhaDia) * (cfg.diasUteisRef || 22)).toFixed(2)))}
                             </p>
+                            <p className="text-[10px] text-muted-foreground">{fmtValor(cfg.cafeManhaDia)}/dia</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <Sandwich className={`h-4 w-4 ${cfg.lancheAtivo ? "text-green-600" : "text-muted-foreground/30"}`} />
                           <div>
-                            <p className="text-xs text-muted-foreground">Lanche/dia</p>
+                            <p className="text-xs text-muted-foreground">Lanche/mês</p>
                             <p className={`font-medium ${cfg.lancheAtivo ? "" : "text-muted-foreground line-through"}`}>
-                              {fmtValor(cfg.lancheTardeDia)}
+                              {parseBRL(cfg.lancheTotalMes) > 0 ? fmtValor(cfg.lancheTotalMes) : fmtValor(String((parseBRL(cfg.lancheTardeDia) * (cfg.diasUteisRef || 22)).toFixed(2)))}
                             </p>
+                            <p className="text-[10px] text-muted-foreground">{fmtValor(cfg.lancheTardeDia)}/dia</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <Moon className={`h-4 w-4 ${cfg.jantaAtivo ? "text-purple-600" : "text-muted-foreground/30"}`} />
                           <div>
-                            <p className="text-xs text-muted-foreground">Jantar/dia</p>
+                            <p className="text-xs text-muted-foreground">Jantar/mês</p>
                             <p className={`font-medium ${cfg.jantaAtivo ? "" : "text-muted-foreground line-through"}`}>
-                              {fmtValor(cfg.jantaDia)}
+                              {parseBRL(cfg.jantaTotalMes) > 0 ? fmtValor(cfg.jantaTotalMes) : fmtValor(String((parseBRL(cfg.jantaDia) * (cfg.diasUteisRef || 22)).toFixed(2)))}
                             </p>
+                            <p className="text-[10px] text-muted-foreground">{fmtValor(cfg.jantaDia)}/dia</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <UtensilsCrossed className="h-4 w-4 text-blue-600" />
                           <div>
-                            <p className="text-xs text-muted-foreground">VA Mensal (iFood)</p>
-                            <p className="font-medium">{fmtValor(cfg.valeAlimentacaoMes)}</p>
+                            <p className="text-xs text-muted-foreground">VA iFood/mês</p>
+                            <p className="font-medium">
+                              {parseBRL(cfg.vaTotalMes) > 0 ? fmtValor(cfg.vaTotalMes) : fmtValor(String((parseBRL(cfg.valeAlimentacaoMes) * (cfg.diasUteisRef || 22)).toFixed(2)))}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">{fmtValor(cfg.valeAlimentacaoMes)}/dia</p>
                           </div>
                         </div>
                       </div>
@@ -1496,80 +1514,102 @@ export default function ValeAlimentacao() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-sm flex items-center gap-1">
-                  <Coffee className="h-3.5 w-3.5" /> Café da Manhã/dia (R$)
-                </Label>
-                <Input value={configForm.cafeManhaDia || ""} onChange={e => setConfigForm((f: any) => ({ ...f, cafeManhaDia: e.target.value }))} className="mt-1" />
-                <label className="flex items-center gap-2 mt-1 text-xs">
-                  <input type="checkbox" checked={configForm.cafeAtivo ?? true} onChange={e => setConfigForm((f: any) => ({ ...f, cafeAtivo: e.target.checked }))} />
-                  Ativo
-                </label>
-              </div>
-              <div>
-                <Label className="text-sm flex items-center gap-1">
-                  <Sandwich className="h-3.5 w-3.5" /> Lanche da Tarde/dia (R$)
-                </Label>
-                <Input value={configForm.lancheTardeDia || ""} onChange={e => setConfigForm((f: any) => ({ ...f, lancheTardeDia: e.target.value }))} className="mt-1" />
-                <label className="flex items-center gap-2 mt-1 text-xs">
-                  <input type="checkbox" checked={configForm.lancheAtivo ?? true} onChange={e => setConfigForm((f: any) => ({ ...f, lancheAtivo: e.target.checked }))} />
-                  Ativo
-                </label>
-              </div>
-              <div>
-                <Label className="text-sm flex items-center gap-1">
-                  <Moon className="h-3.5 w-3.5" /> Jantar/dia (R$)
-                </Label>
-                <Input value={configForm.jantaDia || ""} onChange={e => setConfigForm((f: any) => ({ ...f, jantaDia: e.target.value }))} className="mt-1" />
-                <label className="flex items-center gap-2 mt-1 text-xs">
-                  <input type="checkbox" checked={configForm.jantaAtivo ?? false} onChange={e => setConfigForm((f: any) => ({ ...f, jantaAtivo: e.target.checked }))} />
-                  Ativo
-                </label>
-              </div>
-              <div>
-                <Label className="text-sm flex items-center gap-1">
-                  <UtensilsCrossed className="h-3.5 w-3.5" /> VA Mensal iFood (R$)
-                </Label>
-                <Input value={configForm.valeAlimentacaoMes || ""} onChange={e => setConfigForm((f: any) => ({ ...f, valeAlimentacaoMes: e.target.value }))} className="mt-1" />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
                 <Label className="text-sm">Dias Úteis Referência</Label>
                 <Input type="number" value={configForm.diasUteisRef || 22} onChange={e => setConfigForm((f: any) => ({ ...f, diasUteisRef: Number(e.target.value) }))} className="mt-1" />
               </div>
               <div>
-                <Label className="text-sm">Desconto VA (%)</Label>
+                <Label className="text-sm">Desconto Convenção (%)</Label>
                 <Input value={configForm.descontoVaPercentual || "0"} onChange={e => setConfigForm((f: any) => ({ ...f, descontoVaPercentual: e.target.value }))} className="mt-1" placeholder="Ex: 5" />
-                <p className="text-xs text-muted-foreground mt-1">Convenção coletiva (PAT)</p>
-              </div>
-              <div>
-                <Label className="text-sm">Total VA iFood (R$)</Label>
-                <div className="mt-1 px-3 py-2 rounded-md border bg-muted/50 text-sm font-semibold text-orange-600">
-                  {(() => {
-                    const cafe = configForm.cafeAtivo !== false ? parseBRL(configForm.cafeManhaDia) : 0;
-                    const lanche = configForm.lancheAtivo !== false ? parseBRL(configForm.lancheTardeDia) : 0;
-                    const janta = configForm.jantaAtivo ? parseBRL(configForm.jantaDia) : 0;
-                    const va = parseBRL(configForm.valeAlimentacaoMes);
-                    const dias = configForm.diasUteisRef || 22;
-                    const bruto = (cafe + lanche + janta + va) * dias;
-                    const descPct = parseBRL(configForm.descontoVaPercentual) || 0;
-                    const desconto = bruto * (descPct / 100);
-                    const total = bruto - desconto;
-                    return (
-                      <>
-                        R$ {fmtNum(total)}
-                        {descPct > 0 && (
-                          <span className="text-xs font-normal text-muted-foreground ml-2">
-                            (bruto R$ {fmtNum(bruto)} − {descPct}% = R$ {fmtNum(desconto)})
-                          </span>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">(Café + Lanche + Jantar + VA) × Dias Úteis − Desconto %</p>
+                <p className="text-xs text-muted-foreground mt-1">PAT / Convenção coletiva</p>
               </div>
             </div>
+
+            {(() => {
+              const dias = configForm.diasUteisRef || 22;
+              const descPct = parseBRL(configForm.descontoVaPercentual) || 0;
+
+              const cafeTotalMes = parseBRL(configForm.cafeTotalMes);
+              const lancheTotalMes = parseBRL(configForm.lancheTotalMes);
+              const jantaTotalMes = parseBRL(configForm.jantaTotalMes);
+              const vaTotalMes = parseBRL(configForm.vaTotalMes);
+
+              const cafeDia = dias > 0 ? cafeTotalMes / dias : 0;
+              const lancheDia = dias > 0 ? lancheTotalMes / dias : 0;
+              const jantaDia = dias > 0 ? jantaTotalMes / dias : 0;
+              const vaDia = dias > 0 ? vaTotalMes / dias : 0;
+
+              const brutoTotal = cafeTotalMes + lancheTotalMes + jantaTotalMes + vaTotalMes;
+              const desconto = brutoTotal * (descPct / 100);
+              const totalLiquido = brutoTotal - desconto;
+
+              return (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-sm flex items-center gap-1">
+                        <Coffee className="h-3.5 w-3.5" /> Café da Manhã — Total/mês (R$)
+                      </Label>
+                      <Input value={configForm.cafeTotalMes ?? ""} onChange={e => setConfigForm((f: any) => ({ ...f, cafeTotalMes: e.target.value }))} className="mt-1" placeholder="Ex: 120" />
+                      <div className="flex items-center justify-between mt-1">
+                        <label className="flex items-center gap-2 text-xs">
+                          <input type="checkbox" checked={configForm.cafeAtivo ?? true} onChange={e => setConfigForm((f: any) => ({ ...f, cafeAtivo: e.target.checked }))} />
+                          Ativo
+                        </label>
+                        {cafeTotalMes > 0 && <span className="text-xs text-muted-foreground">= R$ {cafeDia.toFixed(2).replace('.', ',')}/dia</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm flex items-center gap-1">
+                        <Sandwich className="h-3.5 w-3.5" /> Lanche da Tarde — Total/mês (R$)
+                      </Label>
+                      <Input value={configForm.lancheTotalMes ?? ""} onChange={e => setConfigForm((f: any) => ({ ...f, lancheTotalMes: e.target.value }))} className="mt-1" placeholder="Ex: 100" />
+                      <div className="flex items-center justify-between mt-1">
+                        <label className="flex items-center gap-2 text-xs">
+                          <input type="checkbox" checked={configForm.lancheAtivo ?? true} onChange={e => setConfigForm((f: any) => ({ ...f, lancheAtivo: e.target.checked }))} />
+                          Ativo
+                        </label>
+                        {lancheTotalMes > 0 && <span className="text-xs text-muted-foreground">= R$ {lancheDia.toFixed(2).replace('.', ',')}/dia</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm flex items-center gap-1">
+                        <Moon className="h-3.5 w-3.5" /> Jantar — Total/mês (R$)
+                      </Label>
+                      <Input value={configForm.jantaTotalMes ?? ""} onChange={e => setConfigForm((f: any) => ({ ...f, jantaTotalMes: e.target.value }))} className="mt-1" placeholder="Ex: 0" />
+                      <div className="flex items-center justify-between mt-1">
+                        <label className="flex items-center gap-2 text-xs">
+                          <input type="checkbox" checked={configForm.jantaAtivo ?? false} onChange={e => setConfigForm((f: any) => ({ ...f, jantaAtivo: e.target.checked }))} />
+                          Ativo
+                        </label>
+                        {jantaTotalMes > 0 && <span className="text-xs text-muted-foreground">= R$ {jantaDia.toFixed(2).replace('.', ',')}/dia</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm flex items-center gap-1">
+                        <UtensilsCrossed className="h-3.5 w-3.5" /> VA iFood — Total/mês (R$)
+                      </Label>
+                      <Input value={configForm.vaTotalMes ?? ""} onChange={e => setConfigForm((f: any) => ({ ...f, vaTotalMes: e.target.value }))} className="mt-1" placeholder="Ex: 485" />
+                      {vaTotalMes > 0 && <p className="text-xs text-muted-foreground mt-1">= R$ {vaDia.toFixed(2).replace('.', ',')}/dia</p>}
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border bg-muted/30 p-3">
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">Resumo por funcionário/mês</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                      {cafeTotalMes > 0 && <span>Café: <strong>R$ {fmtNum(cafeTotalMes)}</strong></span>}
+                      {lancheTotalMes > 0 && <span>Lanche: <strong>R$ {fmtNum(lancheTotalMes)}</strong></span>}
+                      {jantaTotalMes > 0 && <span>Jantar: <strong>R$ {fmtNum(jantaTotalMes)}</strong></span>}
+                      {vaTotalMes > 0 && <span>VA: <strong>R$ {fmtNum(vaTotalMes)}</strong></span>}
+                    </div>
+                    <div className="mt-2 pt-2 border-t flex items-center gap-3 text-sm">
+                      <span>Bruto: <strong>R$ {fmtNum(brutoTotal)}</strong></span>
+                      {descPct > 0 && <span className="text-red-600">− {descPct}%: <strong>R$ {fmtNum(desconto)}</strong></span>}
+                      <span className="text-orange-600 font-bold text-base">Total: R$ {fmtNum(totalLiquido)}</span>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
             <div>
               <Label className="text-sm">Observações</Label>
               <Textarea value={configForm.observacoes || ""} onChange={e => setConfigForm((f: any) => ({ ...f, observacoes: e.target.value }))} className="mt-1" rows={2} />
@@ -1578,16 +1618,31 @@ export default function ValeAlimentacao() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConfigDialog(false)}>Cancelar</Button>
             <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={saveConfigMut.isPending} onClick={() => {
-              const cafe = configForm.cafeAtivo !== false ? parseBRL(configForm.cafeManhaDia) : 0;
-              const lanche = configForm.lancheAtivo !== false ? parseBRL(configForm.lancheTardeDia) : 0;
-              const janta = configForm.jantaAtivo ? parseBRL(configForm.jantaDia) : 0;
-              const va = parseBRL(configForm.valeAlimentacaoMes);
               const dias = configForm.diasUteisRef || 22;
-              const brutoCalc = (cafe + lanche + janta + va) * dias;
-              const descPctCalc = parseBRL(configForm.descontoVaPercentual) || 0;
-              const totalCalc = brutoCalc - brutoCalc * (descPctCalc / 100);
+              const cafeTotalMes = parseBRL(configForm.cafeTotalMes);
+              const lancheTotalMes = parseBRL(configForm.lancheTotalMes);
+              const jantaTotalMes = parseBRL(configForm.jantaTotalMes);
+              const vaTotalMes = parseBRL(configForm.vaTotalMes);
+
+              const cafeDia = dias > 0 ? cafeTotalMes / dias : 0;
+              const lancheDia = dias > 0 ? lancheTotalMes / dias : 0;
+              const jantaDia = dias > 0 ? jantaTotalMes / dias : 0;
+              const vaDia = dias > 0 ? vaTotalMes / dias : 0;
+
+              const brutoTotal = cafeTotalMes + lancheTotalMes + jantaTotalMes + vaTotalMes;
+              const descPct = parseBRL(configForm.descontoVaPercentual) || 0;
+              const totalCalc = brutoTotal - brutoTotal * (descPct / 100);
+
               saveConfigMut.mutate({
                 ...configForm,
+                cafeManhaDia: cafeDia.toFixed(10).replace(".", ","),
+                lancheTardeDia: lancheDia.toFixed(10).replace(".", ","),
+                jantaDia: jantaDia.toFixed(10).replace(".", ","),
+                valeAlimentacaoMes: vaDia.toFixed(10).replace(".", ","),
+                cafeTotalMes: cafeTotalMes.toFixed(2).replace(".", ","),
+                lancheTotalMes: lancheTotalMes.toFixed(2).replace(".", ","),
+                jantaTotalMes: jantaTotalMes.toFixed(2).replace(".", ","),
+                vaTotalMes: vaTotalMes.toFixed(2).replace(".", ","),
                 totalVA_iFood: totalCalc.toFixed(2).replace(".", ","),
                 id: editingConfigId || undefined,
                 companyId,
