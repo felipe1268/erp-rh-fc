@@ -18,7 +18,7 @@ import {
   UtensilsCrossed, Search, Upload, FileSpreadsheet, Users, DollarSign,
   Settings, ListChecks, History, CheckCircle, XCircle, Pencil, Trash2,
   RefreshCw, Plus, Building2, Coffee, Sandwich, Moon, CreditCard,
-  ChevronDown, ChevronUp, AlertTriangle, Eye, Loader2, Ban, Calculator, Info
+  ChevronDown, ChevronUp, AlertTriangle, Eye, Loader2, Ban, Calculator, Info, MinusCircle
 } from "lucide-react";
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
@@ -616,6 +616,9 @@ export default function ValeAlimentacao() {
                             <span className="flex items-center gap-1 justify-end"><UtensilsCrossed className="h-3.5 w-3.5" /> VA</span>
                           </th>
                           <th className="text-right px-3 py-3 font-medium font-bold">Total</th>
+                          <th className="text-right px-3 py-3 font-medium">
+                            <span className="flex items-center gap-1 justify-end text-red-600"><MinusCircle className="h-3.5 w-3.5" /> Desc. Faltas</span>
+                          </th>
                           <th className="text-center px-3 py-3 font-medium">Dias</th>
                           <th className="text-center px-3 py-3 font-medium">Status</th>
                           <th className="text-center px-3 py-3 font-medium">Ações</th>
@@ -639,6 +642,20 @@ export default function ValeAlimentacao() {
                           </td>
                           <td className="px-3 py-3 text-right text-base">
                             {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorTotal), 0))}
+                          </td>
+                          <td className="px-3 py-3 text-right text-xs text-red-600">
+                            {(() => {
+                              const totalDesc = filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => {
+                                const d = (l.diasDescontados || 0);
+                                if (d <= 0) return s;
+                                try {
+                                  const mc = l.memoriaCalculo ? (typeof l.memoriaCalculo === 'string' ? JSON.parse(l.memoriaCalculo) : l.memoriaCalculo) : null;
+                                  if (mc && mc.valorTotal) return s + (mc.valorTotal - parseBRL(l.valorTotal));
+                                } catch {}
+                                return s;
+                              }, 0);
+                              return totalDesc > 0 ? `- ${fmtBRL(totalDesc)}` : '-';
+                            })()}
                           </td>
                           <td colSpan={3}></td>
                         </tr>
@@ -667,6 +684,20 @@ export default function ValeAlimentacao() {
                             <td className="px-3 py-2.5 text-right text-xs">{fmtValor(l.valorJanta)}</td>
                             <td className="px-3 py-2.5 text-right text-xs">{fmtValor(l.valorVa || l.valorVA)}</td>
                             <td className="px-3 py-2.5 text-right font-bold text-sm">{fmtValor(l.valorTotal)}</td>
+                            <td className="px-3 py-2.5 text-right text-xs text-red-600">
+                              {(() => {
+                                const d = l.diasDescontados || 0;
+                                if (d <= 0) return <span className="text-muted-foreground">-</span>;
+                                try {
+                                  const mcD = l.memoriaCalculo ? (typeof l.memoriaCalculo === 'string' ? JSON.parse(l.memoriaCalculo) : l.memoriaCalculo) : null;
+                                  if (mcD && mcD.valorTotal) {
+                                    const desc = mcD.valorTotal - parseBRL(l.valorTotal);
+                                    return desc > 0 ? <span title={`${d} falta(s) descontada(s)`}>- {fmtBRL(desc)}</span> : <span className="text-muted-foreground">-</span>;
+                                  }
+                                } catch {}
+                                return <span className="text-muted-foreground">-</span>;
+                              })()}
+                            </td>
                             <td className="px-3 py-2.5 text-center text-xs">{l.diasUteis || "-"}</td>
                             <td className="px-3 py-2.5 text-center">
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[l.status] || "bg-gray-100 text-gray-600"}`}>
