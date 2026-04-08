@@ -989,6 +989,72 @@ export default function ValeAlimentacao() {
               </Card>
             ) : (
               <div className="space-y-3">
+
+                {(() => {
+                  const alertas = alertasQ.data || [];
+                  const resumo: Record<string, { nome: string; faltas: number; cafe: number; lanche: number; jantar: number; total: number; datas: string[] }> = {};
+                  for (const a of alertas) {
+                    const key = a.employeeId || a.nomeCompleto;
+                    if (!resumo[key]) resumo[key] = { nome: a.nomeCompleto || '—', faltas: 0, cafe: 0, lanche: 0, jantar: 0, total: 0, datas: [] };
+                    resumo[key].faltas++;
+                    resumo[key].cafe += parseBRL(a.valorDescontoCafe);
+                    resumo[key].lanche += parseBRL(a.valorDescontoLanche);
+                    resumo[key].jantar += parseBRL(a.valorDescontoJantar);
+                    resumo[key].total += parseBRL(a.valorDescontoCafe) + parseBRL(a.valorDescontoLanche) + parseBRL(a.valorDescontoJantar);
+                    if (a.dataFalta) resumo[key].datas.push(new Date(a.dataFalta + 'T12:00:00').toLocaleDateString('pt-BR'));
+                  }
+                  const resumoArr = Object.values(resumo).sort((a, b) => b.total - a.total);
+                  const totalCafe = resumoArr.reduce((s, r) => s + r.cafe, 0);
+                  const totalLanche = resumoArr.reduce((s, r) => s + r.lanche, 0);
+                  const totalJantar = resumoArr.reduce((s, r) => s + r.jantar, 0);
+                  const totalGeral = resumoArr.reduce((s, r) => s + r.total, 0);
+                  if (resumoArr.length === 0) return null;
+                  return (
+                    <Card className="border-red-200 bg-red-50/30">
+                      <CardContent className="p-3">
+                        <p className="text-xs font-semibold text-red-700 mb-2">Memória de Cálculo — Descontos por Falta ({alertaFilter === 'todos' ? 'todos' : alertaFilter})</p>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b text-muted-foreground">
+                                <th className="text-left py-1 px-2 font-medium">Funcionário</th>
+                                <th className="text-center py-1 px-2 font-medium">Faltas</th>
+                                <th className="text-left py-1 px-2 font-medium">Datas</th>
+                                <th className="text-right py-1 px-2 font-medium">Café</th>
+                                <th className="text-right py-1 px-2 font-medium">Lanche</th>
+                                <th className="text-right py-1 px-2 font-medium">Jantar</th>
+                                <th className="text-right py-1 px-2 font-medium text-red-700">Total Desc.</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {resumoArr.map((r, i) => (
+                                <tr key={i} className="border-b last:border-0">
+                                  <td className="py-1 px-2 font-medium">{r.nome}</td>
+                                  <td className="text-center py-1 px-2">{r.faltas}</td>
+                                  <td className="py-1 px-2 text-muted-foreground">{r.datas.join(', ')}</td>
+                                  <td className="text-right py-1 px-2">{r.cafe > 0 ? `R$ ${r.cafe.toFixed(2)}` : '—'}</td>
+                                  <td className="text-right py-1 px-2">{r.lanche > 0 ? `R$ ${r.lanche.toFixed(2)}` : '—'}</td>
+                                  <td className="text-right py-1 px-2">{r.jantar > 0 ? `R$ ${r.jantar.toFixed(2)}` : '—'}</td>
+                                  <td className="text-right py-1 px-2 font-bold text-red-700">R$ {r.total.toFixed(2)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t-2 font-bold text-xs">
+                                <td className="py-1.5 px-2" colSpan={3}>TOTAL ({resumoArr.length} funcionários, {alertas.length} faltas)</td>
+                                <td className="text-right py-1.5 px-2">R$ {totalCafe.toFixed(2)}</td>
+                                <td className="text-right py-1.5 px-2">R$ {totalLanche.toFixed(2)}</td>
+                                <td className="text-right py-1.5 px-2">R$ {totalJantar.toFixed(2)}</td>
+                                <td className="text-right py-1.5 px-2 text-red-700">R$ {totalGeral.toFixed(2)}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+
                 {alertaFilter === 'pendente' && alertasQ.data.length > 0 && (
                   <div className="flex gap-2">
                     <Button
@@ -997,9 +1063,10 @@ export default function ValeAlimentacao() {
                       className="text-red-600 border-red-200 hover:bg-red-50"
                       disabled={decidirAlertaLoteMut.isPending}
                       onClick={() => {
-                        if (confirm(`Descontar café/lanche/jantar de TODAS as ${alertasQ.data.length} faltas pendentes?`)) {
-                          decidirAlertaLoteMut.mutate({ companyId, ids: alertasQ.data.map((a: any) => a.id), decisao: 'descontar' });
-                        }
+                        setConfirmAction({
+                          msg: `Descontar café/lanche/jantar de TODAS as ${alertasQ.data.length} faltas pendentes?`,
+                          onConfirm: () => decidirAlertaLoteMut.mutate({ companyId, ids: alertasQ.data.map((a: any) => a.id), decisao: 'descontar' })
+                        });
                       }}
                     >
                       <XCircle className="h-4 w-4 mr-1" /> Descontar Todos ({alertasQ.data.length})
@@ -1010,9 +1077,10 @@ export default function ValeAlimentacao() {
                       className="text-green-600 border-green-200 hover:bg-green-50"
                       disabled={decidirAlertaLoteMut.isPending}
                       onClick={() => {
-                        if (confirm(`Abonar (NÃO descontar) TODAS as ${alertasQ.data.length} faltas pendentes?`)) {
-                          decidirAlertaLoteMut.mutate({ companyId, ids: alertasQ.data.map((a: any) => a.id), decisao: 'abonar' });
-                        }
+                        setConfirmAction({
+                          msg: `Abonar (NÃO descontar) TODAS as ${alertasQ.data.length} faltas pendentes?`,
+                          onConfirm: () => decidirAlertaLoteMut.mutate({ companyId, ids: alertasQ.data.map((a: any) => a.id), decisao: 'abonar' })
+                        });
                       }}
                     >
                       <CheckCircle className="h-4 w-4 mr-1" /> Abonar Todos ({alertasQ.data.length})
