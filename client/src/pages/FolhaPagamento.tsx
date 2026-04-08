@@ -5175,7 +5175,7 @@ export default function FolhaPagamento() {
                                   d.tipo === 'atraso' ? 'bg-orange-100 text-orange-700' : 
                                   'bg-red-100 text-red-700'
                                 }`}>
-                                  {d.tipo === 'atraso' ? `ATRASO ${d.minutos ? `(${d.minutos >= 60 ? Math.floor(d.minutos/60) + 'h' + (d.minutos%60 > 0 ? String(d.minutos%60).padStart(2,'0') + 'min' : '') : d.minutos + 'min'}${d.minutosTotal && d.minutosTotal !== d.minutos ? ` de ${d.minutosTotal}` : ''})` : ''}` : 'FALTA'}
+                                  {d.tipo === 'atraso' ? `ATRASO ${d.minutos ? `(${d.minutos >= 60 ? Math.floor(d.minutos/60) + 'h' + (d.minutos%60 > 0 ? String(d.minutos%60).padStart(2,'0') + 'min' : '') : d.minutos + 'min'})` : ''}` : 'FALTA'}
                                 </span>
                               </td>
                               <td className="py-2 px-3 text-right font-mono font-bold text-red-600 relative">
@@ -5217,11 +5217,8 @@ export default function FolhaPagamento() {
                                           <div className="space-y-0.5">
                                             <p>Entrada esperada: <strong>{d.memoria.entradaEsperada || '-'}</strong></p>
                                             <p>Entrada real: <strong>{d.memoria.entradaReal || '-'}</strong></p>
-                                            <p>Tolerância legal: <strong>{d.memoria.toleranciaLegal ?? d.memoria.tolerancia ?? 0} min</strong> <span className="text-[9px] text-gray-400">(CLT Art. 58 §1º)</span></p>
-                                            {d.memoria.minutosAtrasoTotal != null && (
-                                              <p>Atraso total: <strong>{d.memoria.minutosAtrasoTotal} min</strong></p>
-                                            )}
-                                            <p>Atraso descontável: <strong>{d.memoria.minutosAtraso || 0} min</strong> {d.memoria.minutosAtrasoTotal != null && <span className="text-[9px] text-gray-400">({d.memoria.minutosAtrasoTotal} - {d.memoria.toleranciaLegal ?? 5} tolerância)</span>}</p>
+                                            <p>Tolerância legal: <strong>{d.memoria.toleranciaLegal ?? 5} min</strong> <span className="text-[9px] text-gray-400">(CLT Art. 58 §1º)</span></p>
+                                            <p>Atraso: <strong>{d.memoria.minutosAtraso || 0} min</strong> <span className="text-[9px] text-gray-400">(ultrapassou {d.memoria.toleranciaLegal ?? 5} min → desconto integral, Súmula 366 TST)</span></p>
                                             <p className="border-t pt-1 mt-1">Valor/hora: <strong>R$ {(d.memoria.valorHora || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></p>
                                             <p>Valor/min: <strong>R$ {(d.memoria.valorMinuto || 0).toFixed(4)}</strong></p>
                                             <p className="font-bold text-red-700">{d.memoria.minutosAtraso} min × R$ {(d.memoria.valorMinuto || 0).toFixed(4)} = R$ {(d.valorDesconto || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>

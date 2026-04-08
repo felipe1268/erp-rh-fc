@@ -527,26 +527,26 @@ export const payrollEngineRouter = router({
             if (numBatidas === 0) {
               if (tipoDia === "util") { isFalta = 1; totalFaltas++; }
             }
-            // Check for tardiness (CLT Art. 58 §1º — tolerância legal de 5 min)
+            // Check for tardiness (CLT Art. 58 §1º + Súmula 366 TST)
+            // ≤ 5 min = OK (tolerância legal), > 5 min = desconta TOTALIDADE
             const entrada = parseTime(rec.entrada1);
             if (entrada !== null && tipoDia === "util") {
               const jornadaEntrada = getExpectedEntrada(emp.jornadaTrabalho, dateStr);
-              const atrasoTotal = entrada - jornadaEntrada;
-              if (atrasoTotal > criteria.pontoFaltaAposAtraso) {
+              const atraso = entrada - jornadaEntrada;
+              if (atraso > criteria.pontoFaltaAposAtraso) {
                 isFalta = 1; totalFaltas++;
-              } else if (atrasoTotal > Math.max(criteria.pontoToleranciaLegal, criteria.pontoToleranciaAtraso)) {
-                const atrasoDescontavel = atrasoTotal - criteria.pontoToleranciaLegal;
-                isAtraso = 1; minutosAtraso = atrasoDescontavel; totalAtrasos++;
+              } else if (atraso > criteria.pontoToleranciaLegal) {
+                isAtraso = 1; minutosAtraso = atraso; totalAtrasos++;
               }
             }
-            // Check for early departure (CLT Art. 58 §1º — tolerância legal de 5 min)
+            // Check for early departure (CLT Art. 58 §1º + Súmula 366 TST)
+            // ≤ 5 min = OK, > 5 min = desconta TOTALIDADE
             const saida = parseTime(rec.saida2 || rec.saida1);
             if (saida !== null && tipoDia === "util") {
               const jornadaSaida = (getExpectedEntrada(emp.jornadaTrabalho, dateStr) / 60 + criteria.cargaHorariaDiaria + 1) * 60;
-              const saidaAntecipadaTotal = jornadaSaida - saida;
-              if (saidaAntecipadaTotal > Math.max(criteria.pontoToleranciaLegal, criteria.pontoToleranciaSaida)) {
-                const saidaDescontavel = saidaAntecipadaTotal - criteria.pontoToleranciaLegal;
-                isSaidaAntecipada = 1; minutosSaidaAntecipada = saidaDescontavel;
+              const saidaAntecipada = jornadaSaida - saida;
+              if (saidaAntecipada > criteria.pontoToleranciaLegal) {
+                isSaidaAntecipada = 1; minutosSaidaAntecipada = saidaAntecipada;
               }
             }
           } else {
@@ -1024,8 +1024,8 @@ export const payrollEngineRouter = router({
             const empJornadaD = empJornadaMap.get(escuro.employeeId) ?? null;
             const jornadaEntradaD = getExpectedEntrada(empJornadaD, escuro.data);
             const entradaMinD = parseTime(entradaRealD);
-            const minutosAtrasoTotalD = entradaMinD !== null && entradaMinD > jornadaEntradaD ? entradaMinD - jornadaEntradaD : 0;
-            const minutosAtrasoDescontavelD = Math.max(0, minutosAtrasoTotalD - criteria.pontoToleranciaLegal);
+            // CLT Art. 58 §1º + Súmula 366 TST: > 5 min = desconta TOTALIDADE
+            const minutosAtrasoD = entradaMinD !== null && entradaMinD > jornadaEntradaD ? entradaMinD - jornadaEntradaD : 0;
             divergenciasList.push({
               employeeId: escuro.employeeId,
               employeeName: empNome,
@@ -1035,8 +1035,7 @@ export const payrollEngineRouter = router({
               obraNome: empObraNome,
               data: escuro.data,
               tipo: "atraso",
-              minutos: minutosAtrasoDescontavelD,
-              minutosTotal: minutosAtrasoTotalD,
+              minutos: minutosAtrasoD,
               valorDesconto: atrasoValD,
               realEntrada: entradaRealD,
               adjustmentId: jaDecidido.adjustmentId,
@@ -1045,12 +1044,10 @@ export const payrollEngineRouter = router({
               memoria: {
                 valorHora: valorHoraEmpD,
                 valorMinuto: valorMinutoD,
-                minutosAtraso: minutosAtrasoDescontavelD,
-                minutosAtrasoTotal: minutosAtrasoTotalD,
+                minutosAtraso: minutosAtrasoD,
                 toleranciaLegal: criteria.pontoToleranciaLegal,
                 entradaEsperada: minutesToHHMM(jornadaEntradaD),
                 entradaReal: entradaRealD,
-                tolerancia: criteria.pontoToleranciaAtraso,
               },
             });
           } else {
@@ -1184,21 +1181,21 @@ export const payrollEngineRouter = router({
             if (entrada !== null) {
               const empJornada = empJornadaMap.get(escuro.employeeId) ?? null;
               const jornadaEntrada = getExpectedEntrada(empJornada, escuro.data);
-              const atrasoTotal = entrada - jornadaEntrada;
-              const toleranciaEfetiva = Math.max(criteria.pontoToleranciaLegal, criteria.pontoToleranciaAtraso);
-              if (atrasoTotal > toleranciaEfetiva) {
-                const atrasoDescontavel = atrasoTotal - criteria.pontoToleranciaLegal;
+              const atraso = entrada - jornadaEntrada;
+              // CLT Art. 58 §1º + Súmula 366 TST:
+              // ≤ 5 min = OK (tolerância legal), > 5 min = desconta TOTALIDADE
+              if (atraso > criteria.pontoToleranciaLegal) {
                 resultado = "atraso";
-                obs = `Atraso de ${minutesToHHMM(atrasoTotal)} (desconto: ${minutesToHHMM(atrasoDescontavel)}, tolerância legal: ${criteria.pontoToleranciaLegal} min) — CLT Art. 58 §1º`;
+                obs = `Atraso de ${minutesToHHMM(atraso)} (ultrapassou tolerância legal de ${criteria.pontoToleranciaLegal} min — CLT Art. 58 §1º / Súmula 366 TST — desconto integral)`;
                 divergencias++;
 
                 const valorHoraEmp = empValorHoraMap.get(escuro.employeeId) || 0;
                 const valorMinuto = valorHoraEmp / 60;
-                const valorAtraso = valorMinuto * atrasoDescontavel;
+                const valorAtraso = valorMinuto * atraso;
 
                 const esc = (s: string) => s.replace(/'/g, "''");
                 adjustmentInserts.push(
-                  `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'atraso', '${esc(`Atraso ${minutesToHHMM(atrasoDescontavel)} dia ${escuro.data} (total ${minutesToHHMM(atrasoTotal)}, tolerância legal ${criteria.pontoToleranciaLegal} min) - Aferição do período no escuro de ${prevMes}`)}', '${formatMoney(valorAtraso)}', '0', '0', '${formatMoney(valorAtraso)}', ${escuro.id}, 'pendente')`
+                  `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'atraso', '${esc(`Atraso ${minutesToHHMM(atraso)} dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`)}', '${formatMoney(valorAtraso)}', '0', '0', '${formatMoney(valorAtraso)}', ${escuro.id}, 'pendente')`
                 );
 
                 divergenciasList.push({
@@ -1210,19 +1207,16 @@ export const payrollEngineRouter = router({
                   obraNome: empObraNome,
                   data: escuro.data,
                   tipo: "atraso",
-                  minutos: atrasoDescontavel,
-                  minutosTotal: atrasoTotal,
+                  minutos: atraso,
                   valorDesconto: valorAtraso,
                   realEntrada: actual.entrada1,
                   memoria: {
                     valorHora: valorHoraEmp,
                     valorMinuto,
-                    minutosAtraso: atrasoDescontavel,
-                    minutosAtrasoTotal: atrasoTotal,
+                    minutosAtraso: atraso,
                     toleranciaLegal: criteria.pontoToleranciaLegal,
                     entradaEsperada: minutesToHHMM(jornadaEntrada),
                     entradaReal: actual.entrada1,
-                    tolerancia: criteria.pontoToleranciaAtraso,
                   },
                 });
               } else {
@@ -3653,8 +3647,7 @@ ANALISE esta inconsistência de ponto e sugira a melhor resolução:
 
 ## Critérios do Sistema
 - Jornada diária: ${criteria.cargaHorariaDiaria}h
-- Tolerância legal (CLT Art. 58 §1º): ${criteria.pontoToleranciaLegal} min (desconto apenas dos minutos excedentes)
-- Tolerância empresa: ${criteria.pontoToleranciaAtraso} min
+- Tolerância legal (CLT Art. 58 §1º + Súmula 366 TST): ${criteria.pontoToleranciaLegal} min (≤${criteria.pontoToleranciaLegal} min = OK, >${criteria.pontoToleranciaLegal} min = desconto integral)
 - Falta após atraso: ${criteria.pontoFaltaAposAtraso} min
 
 ## Histórico Recente (últimos 30 dias)
