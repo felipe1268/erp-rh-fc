@@ -306,6 +306,13 @@ export default function FolhaPagamento() {
     },
     onError: (err) => { resetProgress('afericao'); toast.error(`Erro na aferição: ${err.message}`); },
   });
+  const atualizarAfericaoMut = trpc.payrollEngine.atualizarAfericaoResult.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message || "Progresso salvo");
+      payrollPeriod.refetch();
+    },
+    onError: (err) => { toast.error(`Erro ao salvar: ${err.message}`); },
+  });
   const decidirAfericaoMut = trpc.payrollEngine.decidirAfericao.useMutation({
     onSuccess: (data) => {
       toast.success(data.message || "Decisão registrada com sucesso");
@@ -5194,6 +5201,29 @@ export default function FolhaPagamento() {
               </div>
             )}
             <DialogFooter className="flex gap-2 mt-2">
+              <Button
+                variant="default"
+                className="bg-green-700 hover:bg-green-800 text-white"
+                disabled={atualizarAfericaoMut.isPending}
+                onClick={() => {
+                  if (!afericaoResult) return;
+                  const cleaned = {
+                    ...afericaoResult,
+                    divergenciasList: (afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado),
+                  };
+                  cleaned.divergencias = cleaned.divergenciasList.length;
+                  cleaned.faltas = cleaned.divergenciasList.filter((d: any) => d.tipo === 'falta').length;
+                  cleaned.atrasos = cleaned.divergenciasList.filter((d: any) => d.tipo === 'atraso').length;
+                  cleaned.totalOk = (cleaned.totalAferidos || 0) - cleaned.divergencias;
+                  setAfericaoResult(cleaned);
+                  atualizarAfericaoMut.mutate({
+                    companyId, companyIds, mesReferencia: mesAno,
+                    afericaoResult: cleaned,
+                  });
+                }}
+              >
+                {atualizarAfericaoMut.isPending ? <><RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />Salvando…</> : <><Save className="h-4 w-4 mr-1.5" />Atualizar</>}
+              </Button>
               <Button variant="outline" onClick={() => setShowAfericaoReport(false)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>

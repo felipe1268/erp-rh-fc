@@ -1241,6 +1241,35 @@ export const payrollEngineRouter = router({
     }),
 
   // ============================================================
+  // 3a-2. ATUALIZAR RESULTADO DA AFERIÇÃO (salvar progresso)
+  // ============================================================
+  atualizarAfericaoResult: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      mesReferencia: z.string(),
+      afericaoResult: z.any(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const cids = resolveCompanyIds(input);
+      const resultJson = JSON.stringify(input.afericaoResult);
+      for (const cid of cids) {
+        await db.execute(sql`
+          UPDATE payroll_periods SET "afericaoResultJson" = ${resultJson}
+          WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+        `);
+        const prevMes = getPrevMesRef(input.mesReferencia);
+        await db.execute(sql`
+          UPDATE payroll_periods SET "afericaoResultJson" = ${resultJson}
+          WHERE "companyId" = ${cid} AND "mesReferencia" = ${prevMes}
+        `);
+      }
+      return { message: "Progresso da aferição salvo com sucesso" };
+    }),
+
+  // ============================================================
   // 3b. LISTAR ALERTAS DA AFERIÇÃO (pendente_decisao)
   // ============================================================
   listarAlertasAfericao: protectedProcedure
