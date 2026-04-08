@@ -204,6 +204,8 @@ export default function FolhaPagamento() {
   const [showAfericaoReport, setShowAfericaoReport] = useState(false);
   const [afericaoFilter, setAfericaoFilter] = useState<'todos'|'ok'|'faltas'|'atrasos'|'justificados'>('todos');
   const [afericaoSel, setAfericaoSel] = useState<Set<number>>(new Set());
+  const [bhConfirmOpen, setBhConfirmOpen] = useState(false);
+  const [bhConfirmIds, setBhConfirmIds] = useState<number[]>([]);
   const [detalheAfericaoEmpId, setDetalheAfericaoEmpId] = useState<number | null>(null);
   const [espelhoPopupEmpId, setEspelhoPopupEmpId] = useState<number | null>(null);
   const [espelhoPopupEmpNome, setEspelhoPopupEmpNome] = useState("");
@@ -4862,6 +4864,40 @@ export default function FolhaPagamento() {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={bhConfirmOpen} onOpenChange={setBhConfirmOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Converter em banco de horas negativo?</DialogTitle>
+              <DialogDescription>
+                Não haverá desconto no salário — o saldo será abatido com horas extras futuras.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setBhConfirmOpen(false)}>Cancelar</Button>
+              <Button className="bg-amber-500 hover:bg-amber-600 text-white" disabled={decidirAfericaoMut.isPending} onClick={() => {
+                const ids = bhConfirmIds;
+                decidirAfericaoMut.mutate(
+                  { companyId, companyIds, mesReferencia: mesAno, decisoes: ids.map(id => ({ adjustmentId: id, decisao: "banco_horas" as const })) },
+                  { onSuccess: () => {
+                    const upd = { ...afericaoResult };
+                    (upd.divergenciasList || []).forEach((d: any) => { if (ids.includes(d.adjustmentId)) { d._cancelado = true; } });
+                    const remaining = (upd.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado);
+                    upd.faltas = remaining.filter((d: any) => d.tipo === 'falta').length;
+                    upd.atrasos = remaining.filter((d: any) => d.tipo === 'atraso').length;
+                    upd.divergencias = remaining.length;
+                    setAfericaoResult(upd);
+                    setAfericaoSel(new Set());
+                    setBhConfirmOpen(false);
+                    setBhConfirmIds([]);
+                  }}
+                );
+              }}>
+                OK
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* RELATÓRIO DE AFERIÇÃO */}
         <Dialog open={showAfericaoReport} onOpenChange={(v) => {
           setShowAfericaoReport(v);
@@ -5069,22 +5105,11 @@ export default function FolhaPagamento() {
                             onClick={() => {
                               const ids = Array.from(afericaoSel);
                               if (!ids.length) return;
-                              if (!confirm(`Converter ${ids.length} item(ns) em banco de horas negativo?\n\nNão haverá desconto no salário — o saldo será abatido quando houver hora extra.`)) return;
-                              decidirAfericaoMut.mutate(
-                                { companyId, companyIds, mesReferencia: mesAno, decisoes: ids.map(id => ({ adjustmentId: id, decisao: "banco_horas" as const })) },
-                                { onSuccess: () => {
-                                  const upd = { ...afericaoResult };
-                                  (upd.divergenciasList || []).forEach((d: any) => { if (afericaoSel.has(d.adjustmentId)) { d._cancelado = true; } });
-                                  const remaining = (upd.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado);
-                                  upd.faltas = remaining.filter((d: any) => d.tipo === 'falta').length;
-                                  upd.atrasos = remaining.filter((d: any) => d.tipo === 'atraso').length;
-                                  upd.divergencias = remaining.length;
-                                  setAfericaoResult(upd);
-                                  setAfericaoSel(new Set());
-                                }}
-                              );
-                            }}>
-                            <Clock className="h-3 w-3 mr-1" /> Banco de Horas Selecionados
+                              setBhConfirmIds(ids);
+                              setBhConfirmOpen(true);
+                            }}
+                          >
+                            <Clock className="h-3 w-3 mr-1" /> BH Selecionados
                           </Button>
                           <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px] text-slate-500" onClick={() => setAfericaoSel(new Set())}>Limpar</Button>
                         </div>
@@ -5250,18 +5275,8 @@ export default function FolhaPagamento() {
                                         disabled={decidirAfericaoMut.isPending}
                                         onClick={() => {
                                           if (!d.adjustmentId) { toast.error("ID do ajuste não encontrado. Refaça a aferição."); return; }
-                                          if (!confirm("Converter em banco de horas negativo?\n\nNão haverá desconto — o saldo será abatido com horas extras futuras.")) return;
-                                          decidirAfericaoMut.mutate(
-                                            { companyId, companyIds, mesReferencia: mesAno, decisoes: [{ adjustmentId: d.adjustmentId, decisao: "banco_horas" }] },
-                                            { onSuccess: () => {
-                                              d._cancelado = true;
-                                              const upd = { ...afericaoResult };
-                                              if (d.tipo === 'falta') upd.faltas = Math.max(0, (upd.faltas || 0) - 1);
-                                              else if (d.tipo === 'atraso') upd.atrasos = Math.max(0, (upd.atrasos || 0) - 1);
-                                              upd.divergencias = Math.max(0, (upd.divergencias || 0) - 1);
-                                              setAfericaoResult(upd);
-                                            } }
-                                          );
+                                          setBhConfirmIds([d.adjustmentId]);
+                                          setBhConfirmOpen(true);
                                         }}
                                         title="Converter em banco de horas negativo (sem desconto, abate com HE)"
                                       >
