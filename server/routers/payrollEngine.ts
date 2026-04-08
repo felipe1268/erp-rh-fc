@@ -911,6 +911,14 @@ export const payrollEngineRouter = router({
         }
       }
 
+      // Build obraId → obraNome map for divergências
+      const escuroObraIds = [...new Set((escuroRecords as any[]).map((e: any) => e.obraId).filter(Boolean).map(Number))];
+      const obraNomeMap = new Map<number, string>();
+      if (escuroObraIds.length > 0) {
+        const obraRows = ((await db.execute(sql`SELECT id, nome FROM obras WHERE id IN (${sql.join(escuroObraIds.map(id => sql`${id}`), sql`,`)})`)) as any).rows || [];
+        for (const o of obraRows) obraNomeMap.set(o.id, o.nome || `Obra ${o.id}`);
+      }
+
       const STATUS_JUSTIFICADO = new Set(['Ferias', 'Afastado', 'Desligado', 'Recluso', 'Lista_Negra']);
       const justificadosList: any[] = [];
       const empVrDiarioMap = new Map<number, number>();
@@ -962,6 +970,7 @@ export const payrollEngineRouter = router({
         const empNome = empNomeMap.get(escuro.employeeId) || `ID ${escuro.employeeId}`;
         const empFuncao = empFuncaoMap.get(escuro.employeeId) || '';
         const empStatus = empStatusMap.get(escuro.employeeId) || 'Ativo';
+        const empObraNome = escuro.obraId ? (obraNomeMap.get(Number(escuro.obraId)) || null) : null;
 
         // Skip items that have already been decided (confirmed/cancelled)
         // but preserve their original classification in the report
@@ -981,6 +990,7 @@ export const payrollEngineRouter = router({
               employeeName: empNome,
               funcao: empFuncao,
               empStatus,
+              obraNome: empObraNome,
               data: escuro.data,
               tipo: "falta",
               valorDesconto: faltaValD,
@@ -1013,6 +1023,7 @@ export const payrollEngineRouter = router({
               employeeName: empNome,
               funcao: empFuncao,
               empStatus,
+              obraNome: empObraNome,
               data: escuro.data,
               tipo: "atraso",
               minutos: minutosAtrasoD,
@@ -1125,6 +1136,7 @@ export const payrollEngineRouter = router({
               employeeName: empNome,
               funcao: empFuncao,
               empStatus,
+              obraNome: empObraNome,
               data: escuro.data,
               tipo: "falta",
               valorDesconto: totalDesc,
@@ -1179,6 +1191,7 @@ export const payrollEngineRouter = router({
                   employeeName: empNome,
                   funcao: empFuncao,
                   empStatus,
+                  obraNome: empObraNome,
                   data: escuro.data,
                   tipo: "atraso",
                   minutos: atraso,
@@ -1248,6 +1261,7 @@ export const payrollEngineRouter = router({
             employeeName: empNome,
             funcao: empFuncao,
             empStatus,
+            obraNome: empObraNome,
             data: escuro.data,
             tipo: "falta",
             valorDesconto: totalDescSR,

@@ -5125,6 +5125,7 @@ export default function FolhaPagamento() {
                             </th>
                             <th className="py-2 px-3 text-left font-semibold">Funcionário</th>
                             <th className="py-2 px-3 text-left font-semibold">Função</th>
+                            <th className="py-2 px-3 text-left font-semibold">Obra</th>
                             <th className="py-2 px-3 text-center font-semibold">Status</th>
                             <th className="py-2 px-3 text-center font-semibold">Data</th>
                             <th className="py-2 px-3 text-center font-semibold">Tipo</th>
@@ -5152,6 +5153,7 @@ export default function FolhaPagamento() {
                                 </button>
                               </td>
                               <td className="py-2 px-3 text-slate-500">{d.funcao || '-'}</td>
+                              <td className="py-2 px-3 text-slate-500 text-xs">{d.obraNome || <span className="text-gray-300">—</span>}</td>
                               <td className="py-2 px-3 text-center">
                                 <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
                                   d.empStatus === 'Ferias' ? 'bg-orange-100 text-orange-700' :
