@@ -5047,7 +5047,7 @@ export default function FolhaPagamento() {
                         </div>
                         <div className="flex items-start gap-1.5">
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 whitespace-nowrap mt-0.5">ATRASO</span>
-                          <span>O funcionário registrou entrada, mas <strong>após o horário</strong> previsto (além da tolerância configurada).</span>
+                          <span>O funcionário registrou entrada, mas <strong>após o horário</strong> previsto (além da tolerância de 5 min — CLT Art. 58 §1º / Súm. 366 TST: desconto integral).</span>
                         </div>
                       </div>
                       <p className="text-[10px] text-slate-500 mt-1 italic">Clique no nome do funcionário para abrir o cartão de ponto e validar a informação.</p>
@@ -5177,6 +5177,9 @@ export default function FolhaPagamento() {
                                 }`}>
                                   {d.tipo === 'atraso' ? `ATRASO ${d.minutos ? `(${d.minutos >= 60 ? Math.floor(d.minutos/60) + 'h' + (d.minutos%60 > 0 ? String(d.minutos%60).padStart(2,'0') + 'min' : '') : d.minutos + 'min'})` : ''}` : 'FALTA'}
                                 </span>
+                                {d.tipo === 'atraso' && (
+                                  <span className="block text-[8px] text-gray-400 mt-0.5 italic">Súm. 366 TST</span>
+                                )}
                               </td>
                               <td className="py-2 px-3 text-right font-mono font-bold text-red-600 relative">
                                 <div className="inline-flex items-center gap-1">
