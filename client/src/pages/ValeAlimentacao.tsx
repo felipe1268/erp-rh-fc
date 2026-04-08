@@ -922,7 +922,18 @@ export default function ValeAlimentacao() {
                   <AlertTriangle className="h-5 w-5 text-amber-500" />
                   Alertas de Faltas — {mesLabel}
                 </h2>
-                <p className="text-sm text-muted-foreground">Faltas sem atestado detectadas. O RH decide se desconta o café/lanche/jantar de cada dia.</p>
+                {(() => {
+                  const [a, m] = mesAno.split('-').map(Number);
+                  const fimM = m - 1 <= 0 ? 12 : m - 1;
+                  const fimA = m - 1 <= 0 ? a - 1 : a;
+                  const iniM = fimM - 1 <= 0 ? 12 : fimM - 1;
+                  const iniA = fimM - 1 <= 0 ? fimA - 1 : fimA;
+                  return (
+                    <p className="text-sm text-muted-foreground">
+                      Período de aferição: <strong>{String(iniM).padStart(2,'0')}/{iniA}</strong> (dia 16) a <strong>{String(fimM).padStart(2,'0')}/{fimA}</strong> (dia 15). Faltas sem atestado geram desconto no VA.
+                    </p>
+                  );
+                })()}
               </div>
               <div className="flex items-center gap-2">
                 <MonthSelector value={mesAno} onChange={setMesAno} />
@@ -984,7 +995,7 @@ export default function ValeAlimentacao() {
                 <CardContent className="py-12 text-center text-muted-foreground">
                   <CheckCircle className="h-10 w-10 mx-auto mb-3 opacity-40 text-green-500" />
                   <p className="font-medium">Nenhum alerta de falta {alertaFilter === 'pendente' ? 'pendente' : ''} para {mesLabel}.</p>
-                  <p className="text-xs mt-1">Gere os lançamentos do mês para detectar faltas automaticamente.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Regere os lançamentos do mês para detectar faltas no período de aferição.</p>
                 </CardContent>
               </Card>
             ) : (
