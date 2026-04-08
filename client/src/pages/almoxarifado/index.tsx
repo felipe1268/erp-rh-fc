@@ -76,6 +76,7 @@ export default function AlmoxarifadoPage() {
   const [apenasAbaixo, setApenasAbaixo] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [obraContexto, setObraContexto] = useState<number | null | "todos">(null);
+  const [fotoExpandida, setFotoExpandida] = useState<{ url: string; nome: string } | null>(null);
 
   // Busca por foto (IA)
   const fotoIAInputRef = useRef<HTMLInputElement>(null);
@@ -841,9 +842,18 @@ export default function AlmoxarifadoPage() {
                   const abaixo = item.quantidadeMinima > 0 && item.quantidadeTotal < item.quantidadeMinima;
                   return (
                     <div key={idx} className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${abaixo ? "border-red-200" : "border-gray-100"}`}>
-                      <div className="relative bg-gray-50 flex items-center justify-center" style={{ height: 140 }}>
+                      <div
+                        className={`relative bg-gray-50 flex items-center justify-center ${item.fotoUrl ? "cursor-pointer group" : ""}`}
+                        style={{ height: 140 }}
+                        onClick={() => { if (item.fotoUrl) setFotoExpandida({ url: item.fotoUrl, nome: item.nome }); }}
+                      >
                         {item.fotoUrl ? (
-                          <img src={item.fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
+                          <>
+                            <img src={item.fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
+                              <Search className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition drop-shadow-md" />
+                            </div>
+                          </>
                         ) : (
                           <div className="flex flex-col items-center gap-1 text-gray-300">
                             <Camera className="h-8 w-8" />
@@ -905,7 +915,10 @@ export default function AlmoxarifadoPage() {
                       ) : consListFinal.map((item: any, idx: number) => (
                         <tr key={idx} className={`border-b border-gray-50 hover:bg-gray-50/70 ${item.quantidadeMinima > 0 && item.quantidadeTotal < item.quantidadeMinima ? "bg-red-50/20" : ""}`}>
                           <td className="px-3 py-2">
-                            <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center">
+                            <div
+                              className={`w-10 h-10 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center ${item.fotoUrl ? "cursor-pointer hover:ring-2 hover:ring-emerald-300 transition" : ""}`}
+                              onClick={() => { if (item.fotoUrl) setFotoExpandida({ url: item.fotoUrl, nome: item.nome }); }}
+                            >
                               {item.fotoUrl
                                 ? <img src={item.fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
                                 : <ImageOff className="h-4 w-4 text-gray-300" />
@@ -1052,13 +1065,19 @@ export default function AlmoxarifadoPage() {
                     <div
                       className="relative bg-gray-50 flex items-center justify-center cursor-pointer group"
                       style={{ height: 140 }}
-                      onClick={() => abrirEditar(item)}
+                      onClick={() => {
+                        if ((item as any).fotoUrl) {
+                          setFotoExpandida({ url: (item as any).fotoUrl, nome: item.nome });
+                        } else {
+                          abrirEditar(item);
+                        }
+                      }}
                     >
                       {(item as any).fotoUrl ? (
                         <>
                           <img src={(item as any).fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition flex items-center justify-center">
-                            <Pencil className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition" />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
+                            <Search className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition drop-shadow-md" />
                           </div>
                         </>
                       ) : (
@@ -1157,7 +1176,10 @@ export default function AlmoxarifadoPage() {
                     rows.push(
                       <tr key={item.id} className={`border-b border-gray-50 hover:bg-gray-50/70 ${abaixo ? "bg-red-50/20" : ""}`}>
                         <td className="px-3 py-2">
-                          <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center relative">
+                          <div
+                            className={`w-10 h-10 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center relative ${(item as any).fotoUrl ? "cursor-pointer hover:ring-2 hover:ring-emerald-300 transition" : ""}`}
+                            onClick={() => { if ((item as any).fotoUrl) setFotoExpandida({ url: (item as any).fotoUrl, nome: item.nome }); }}
+                          >
                             {(item as any).fotoUrl
                               ? <img src={(item as any).fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
                               : <ImageOff className="h-4 w-4 text-gray-300" />
@@ -2739,6 +2761,28 @@ export default function AlmoxarifadoPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {fotoExpandida && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setFotoExpandida(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh] animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setFotoExpandida(null)}
+              className="absolute -top-3 -right-3 z-10 bg-white text-gray-700 hover:bg-gray-100 rounded-full p-1.5 shadow-lg transition"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={fotoExpandida.url}
+              alt={fotoExpandida.nome}
+              className="max-w-[90vw] max-h-[85vh] object-contain rounded-xl shadow-2xl"
+            />
+            <p className="text-center text-white text-sm mt-3 font-medium drop-shadow">{fotoExpandida.nome}</p>
           </div>
         </div>
       )}
