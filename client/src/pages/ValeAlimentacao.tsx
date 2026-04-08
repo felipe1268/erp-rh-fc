@@ -6,7 +6,7 @@ import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -153,6 +153,7 @@ export default function ValeAlimentacao() {
   const [histEmployeeId, setHistEmployeeId] = useState<number | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [detailRecord, setDetailRecord] = useState<any>(null);
+  const [confirmAction, setConfirmAction] = useState<{ msg: string; onConfirm: () => void } | null>(null);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [histDialogEmployeeId, setHistDialogEmployeeId] = useState<number | null>(null);
   const [histDialogName, setHistDialogName] = useState<string>("");
@@ -427,19 +428,23 @@ export default function ValeAlimentacao() {
                 ) : (
                   <>
                     <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => {
-                      if (confirm("Regerar todos os lançamentos pendentes? Lançamentos já pagos serão mantidos.")) {
-                        const totalFuncs = lancamentos.length || 50;
-                        startProgress(totalFuncs);
-                        regerarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, diasUteis });
-                      }
+                      setConfirmAction({
+                        msg: "Regerar todos os lançamentos pendentes?\nLançamentos já pagos serão mantidos.",
+                        onConfirm: () => {
+                          const totalFuncs = lancamentos.length || 50;
+                          startProgress(totalFuncs);
+                          regerarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, diasUteis });
+                        }
+                      });
                     }} disabled={regerarMut.isPending || !!progressState}>
                       <RefreshCw className="h-3.5 w-3.5" /> Regerar
                     </Button>
                     {stats && stats.pendentes > 0 && (
                       <Button size="sm" className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white" onClick={() => {
-                        if (confirm(`Aprovar todos os ${stats.pendentes} lançamentos pendentes?`)) {
-                          aprovarMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
-                        }
+                        setConfirmAction({
+                          msg: `Aprovar todos os ${stats.pendentes} lançamentos pendentes?`,
+                          onConfirm: () => aprovarMut.mutate({ companyId, companyIds, mesReferencia: mesAno })
+                        });
                       }} disabled={aprovarMut.isPending}>
                         <CheckCircle className="h-3.5 w-3.5" /> Aprovar Todos ({stats.pendentes})
                       </Button>
@@ -1673,6 +1678,18 @@ export default function ValeAlimentacao() {
         </DialogContent>
       </Dialog>
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+      <Dialog open={!!confirmAction} onOpenChange={(open) => { if (!open) setConfirmAction(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirmação</DialogTitle>
+            <DialogDescription className="whitespace-pre-line pt-2">{confirmAction?.msg}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmAction(null)}>Cancelar</Button>
+            <Button className="bg-orange-600 hover:bg-orange-700 text-white" onClick={() => { confirmAction?.onConfirm(); setConfirmAction(null); }}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
           <PrintFooterLGPD />
     </DashboardLayout>
   );
