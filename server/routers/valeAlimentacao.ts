@@ -439,8 +439,9 @@ export const valeAlimentacaoRouter = router({
         const cafeMensal = Math.round(cafeDia * diasUteisRef * 100) / 100;
         const lancheMensal = Math.round(lancheDia * diasUteisRef * 100) / 100;
         const jantaMensal = Math.round(jantaDia * diasUteisRef * 100) / 100;
+        const vaTotalMes = parseBRL(cfg.va_total_mes || cfg.vaTotalMes);
         const totalIFood = parseBRL(cfg.totalVA_iFood);
-        const vaMensal = totalIFood > 0 ? Math.round((totalIFood - cafeMensal - lancheMensal - jantaMensal) * 100) / 100 : parseBRL(cfg.valeAlimentacaoMes) * diasUteisRef;
+        const vaMensal = vaTotalMes > 0 ? vaTotalMes : (totalIFood > 0 ? Math.round((totalIFood - cafeMensal - lancheMensal - jantaMensal) * 100) / 100 : parseBRL(cfg.valeAlimentacaoMes) * diasUteisRef);
 
         let proporcionalDias: number | null = null;
         let isProporcional = false;
@@ -740,8 +741,9 @@ export const valeAlimentacaoRouter = router({
           const cafeMensal = Math.round(cafeDia * diasUteisRef * 100) / 100;
           const lancheMensal = Math.round(lancheDia * diasUteisRef * 100) / 100;
           const jantaMensal = Math.round(jantaDia * diasUteisRef * 100) / 100;
+          const vaTotalMes = parseBRL(cfg.va_total_mes || cfg.vaTotalMes);
           const totalIFood = parseBRL(cfg.totalVA_iFood);
-          const vaMensal = totalIFood > 0 ? Math.round((totalIFood - cafeMensal - lancheMensal - jantaMensal) * 100) / 100 : parseBRL(cfg.valeAlimentacaoMes) * diasUteisRef;
+          const vaMensal = vaTotalMes > 0 ? vaTotalMes : (totalIFood > 0 ? Math.round((totalIFood - cafeMensal - lancheMensal - jantaMensal) * 100) / 100 : parseBRL(cfg.valeAlimentacaoMes) * diasUteisRef);
 
           let proporcionalDias: number | null = null;
           let isProporcional = false;
