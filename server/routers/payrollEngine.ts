@@ -1600,11 +1600,12 @@ export const payrollEngineRouter = router({
       for (const dec of input.decisoes) {
         if (dec.decisao === "banco_horas") {
           const adjRows = ((await db.execute(sql`
-            SELECT "employeeId", "timecardDailyId", "companyId", data FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
+            SELECT "employeeId", "timecardDailyId", "companyId", data, tipo, descricao FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
           `)) as any).rows || [];
           const adj = adjRows[0];
           if (!adj) continue;
 
+          const isAtraso = adj.tipo === 'atraso';
           const sufixoBH = ` [DECISÃO: Banco de Horas negativo por ${ctx.user.name || "Usuário"}]`;
           await db.execute(sql`
             UPDATE payroll_adjustments SET 
@@ -1613,22 +1614,36 @@ export const payrollEngineRouter = router({
             WHERE id = ${dec.adjustmentId} AND "companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
           `);
 
-          const empJornada = ((await db.execute(sql`
-            SELECT "jornadaTrabalho" FROM employees WHERE id = ${adj.employeeId}
-          `)) as any).rows?.[0]?.jornadaTrabalho || '08:48';
-          const [jH, jM] = empJornada.split(':').map(Number);
-          const jornadaMinutos = (jH || 0) * 60 + (jM || 0);
+          let minutosDebito: number;
+          if (isAtraso) {
+            const atrasoMatch = (adj.descricao || '').match(/Atraso\s+(\d+):(\d+)/);
+            if (atrasoMatch) {
+              minutosDebito = parseInt(atrasoMatch[1]) * 60 + parseInt(atrasoMatch[2]);
+            } else {
+              const atrasoMatch2 = (adj.descricao || '').match(/(\d+)\s*min/i);
+              minutosDebito = atrasoMatch2 ? parseInt(atrasoMatch2[1]) : 30;
+            }
+          } else {
+            const empJornada = ((await db.execute(sql`
+              SELECT "jornadaTrabalho" FROM employees WHERE id = ${adj.employeeId}
+            `)) as any).rows?.[0]?.jornadaTrabalho || '08:48';
+            const [jH, jM] = empJornada.split(':').map(Number);
+            minutosDebito = (jH || 0) * 60 + (jM || 0);
+          }
 
           await db.execute(sql`
             INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
-            VALUES (${adj.employeeId}, ${adj.companyId}, ${-jornadaMinutos}, NOW())
+            VALUES (${adj.employeeId}, ${adj.companyId}, ${-minutosDebito}, NOW())
             ON CONFLICT ("employeeId", "companyId")
-            DO UPDATE SET "saldoMinutos" = banco_horas_saldo."saldoMinutos" + ${-jornadaMinutos}, "atualizadoEm" = NOW()
+            DO UPDATE SET "saldoMinutos" = banco_horas_saldo."saldoMinutos" + ${-minutosDebito}, "atualizadoEm" = NOW()
           `);
 
+          const descBH = isAtraso
+            ? `Atraso aferição convertido em banco de horas negativo (${minutosDebito} min) — ${adj.data ? String(adj.data).slice(0, 10) : ''}`
+            : `Falta aferição convertida em banco de horas negativo — ${adj.data ? String(adj.data).slice(0, 10) : ''}`;
           await db.execute(sql`
             INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, descricao, data, "criadoEm", "criadoPor", "minutosBase", "minutosAcrescimo")
-            VALUES (${adj.employeeId}, ${adj.companyId}, 'debito', ${jornadaMinutos}, ${'Falta aferição convertida em banco de horas negativo — ' + (adj.data ? String(adj.data).slice(0, 10) : '')}, ${adj.data}, NOW(), ${ctx.user.name || 'Sistema'}, ${jornadaMinutos}, 0)
+            VALUES (${adj.employeeId}, ${adj.companyId}, 'debito', ${minutosDebito}, ${descBH}, ${adj.data}, NOW(), ${ctx.user.name || 'Sistema'}, ${minutosDebito}, 0)
           `);
 
           if (adj.timecardDailyId) {

@@ -5263,47 +5263,43 @@ export default function FolhaPagamento() {
                                     >
                                       <PenLine className="h-3 w-3 mr-0.5" /> Editar
                                     </Button>
-                                    {d.tipo === 'falta' && (
-                                      <>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 px-2 text-[10px] text-gray-600 border-gray-300 hover:bg-gray-50"
-                                        disabled={decidirAfericaoMut.isPending}
-                                        onClick={() => {
-                                          if (!d.adjustmentId) { toast.error("ID do ajuste não encontrado. Refaça a aferição."); return; }
-                                          decidirAfericaoMut.mutate(
-                                            { companyId, companyIds, mesReferencia: mesAno, decisoes: [{ adjustmentId: d.adjustmentId, decisao: "erro_relogio" }] },
-                                            { onSuccess: () => {
-                                              d._cancelado = true;
-                                              const upd = { ...afericaoResult };
-                                              if (d.tipo === 'falta') upd.faltas = Math.max(0, (upd.faltas || 0) - 1);
-                                              else if (d.tipo === 'atraso') upd.atrasos = Math.max(0, (upd.atrasos || 0) - 1);
-                                              upd.divergencias = Math.max(0, (upd.divergencias || 0) - 1);
-                                              setAfericaoResult(upd);
-                                            } }
-                                          );
-                                        }}
-                                        title="Marcar como erro do relógio (trabalhado normalmente)"
-                                      >
-                                        <XCircle className="h-3 w-3 mr-0.5" /> Erro Relógio
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 px-2 text-[10px] text-amber-600 border-amber-300 hover:bg-amber-50"
-                                        disabled={decidirAfericaoMut.isPending}
-                                        onClick={() => {
-                                          if (!d.adjustmentId) { toast.error("ID do ajuste não encontrado. Refaça a aferição."); return; }
-                                          setBhConfirmIds([d.adjustmentId]);
-                                          setBhConfirmOpen(true);
-                                        }}
-                                        title="Converter em banco de horas negativo (sem desconto, abate com HE)"
-                                      >
-                                        <Clock className="h-3 w-3 mr-0.5" /> BH
-                                      </Button>
-                                      </>
-                                    )}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-2 text-[10px] text-gray-600 border-gray-300 hover:bg-gray-50"
+                                      disabled={decidirAfericaoMut.isPending}
+                                      onClick={() => {
+                                        if (!d.adjustmentId) { toast.error("ID do ajuste não encontrado. Refaça a aferição."); return; }
+                                        decidirAfericaoMut.mutate(
+                                          { companyId, companyIds, mesReferencia: mesAno, decisoes: [{ adjustmentId: d.adjustmentId, decisao: "erro_relogio" }] },
+                                          { onSuccess: () => {
+                                            d._cancelado = true;
+                                            const upd = { ...afericaoResult };
+                                            if (d.tipo === 'falta') upd.faltas = Math.max(0, (upd.faltas || 0) - 1);
+                                            else if (d.tipo === 'atraso') upd.atrasos = Math.max(0, (upd.atrasos || 0) - 1);
+                                            upd.divergencias = Math.max(0, (upd.divergencias || 0) - 1);
+                                            setAfericaoResult(upd);
+                                          } }
+                                        );
+                                      }}
+                                      title={d.tipo === 'atraso' ? "Desconsiderar atraso (erro do relógio)" : "Marcar como erro do relógio (trabalhado normalmente)"}
+                                    >
+                                      <XCircle className="h-3 w-3 mr-0.5" /> Erro Relógio
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-2 text-[10px] text-amber-600 border-amber-300 hover:bg-amber-50"
+                                      disabled={decidirAfericaoMut.isPending}
+                                      onClick={() => {
+                                        if (!d.adjustmentId) { toast.error("ID do ajuste não encontrado. Refaça a aferição."); return; }
+                                        setBhConfirmIds([d.adjustmentId]);
+                                        setBhConfirmOpen(true);
+                                      }}
+                                      title={d.tipo === 'atraso' ? "Converter atraso em banco de horas negativo (sem desconto)" : "Converter em banco de horas negativo (sem desconto, abate com HE)"}
+                                    >
+                                      <Clock className="h-3 w-3 mr-0.5" /> BH
+                                    </Button>
                                   </div>
                               </td>
                             </tr>
