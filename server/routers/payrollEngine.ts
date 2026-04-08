@@ -1535,7 +1535,7 @@ export const payrollEngineRouter = router({
             UPDATE payroll_adjustments SET 
               status = 'cancelado',
               descricao = COALESCE(descricao, '') || ${sufixo}::text
-            WHERE id = ${dec.adjustmentId} AND "companyId" = ${input.companyId}
+            WHERE id = ${dec.adjustmentId} AND "companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
           `);
           const adjRow = ((await db.execute(sql`
             SELECT "timecardDailyId" FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
@@ -1544,7 +1544,8 @@ export const payrollEngineRouter = router({
           if (tcId) {
             await db.execute(sql`
               UPDATE timecard_daily SET 
-                "statusDia" = 'aferido',
+                "statusDia" = 'decidido',
+                "statusAnterior" = 'decidido',
                 "afericaoResultado" = 'ok',
                 "afericaoObs" = CONCAT(COALESCE("afericaoObs", ''), ' [Erro do relógio - mantido como trabalhado]'),
                 "isFalta" = 0, "isAtraso" = 0
@@ -1556,10 +1557,10 @@ export const payrollEngineRouter = router({
           const sufixo2 = ` [DECISÃO: Falta real confirmada por ${ctx.user.name || "Usuário"}]`;
           await db.execute(sql`
             UPDATE payroll_adjustments SET 
-              status = 'pendente',
+              status = 'aplicado',
               tipo = 'falta',
               descricao = COALESCE(descricao, '') || ${sufixo2}::text
-            WHERE id = ${dec.adjustmentId} AND "companyId" = ${input.companyId}
+            WHERE id = ${dec.adjustmentId} AND "companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
           `);
           const adjRow2 = ((await db.execute(sql`
             SELECT "timecardDailyId" FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
@@ -1568,7 +1569,8 @@ export const payrollEngineRouter = router({
           if (tcId2) {
             await db.execute(sql`
               UPDATE timecard_daily SET 
-                "statusDia" = 'aferido',
+                "statusDia" = 'decidido',
+                "statusAnterior" = 'decidido',
                 "afericaoResultado" = 'falta',
                 "afericaoObs" = CONCAT(COALESCE("afericaoObs", ''), ' [Falta real confirmada]'),
                 "isFalta" = 1

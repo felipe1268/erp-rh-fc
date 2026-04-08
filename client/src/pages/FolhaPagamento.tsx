@@ -203,6 +203,7 @@ export default function FolhaPagamento() {
   const [afericaoResult, setAfericaoResult] = useState<any>(null);
   const [showAfericaoReport, setShowAfericaoReport] = useState(false);
   const [afericaoFilter, setAfericaoFilter] = useState<'todos'|'ok'|'faltas'|'atrasos'|'justificados'>('todos');
+  const [afericaoSel, setAfericaoSel] = useState<Set<number>>(new Set());
   const [detalheAfericaoEmpId, setDetalheAfericaoEmpId] = useState<number | null>(null);
   const [espelhoPopupEmpId, setEspelhoPopupEmpId] = useState<number | null>(null);
   const [espelhoPopupEmpNome, setEspelhoPopupEmpNome] = useState("");
@@ -4866,6 +4867,7 @@ export default function FolhaPagamento() {
           setShowAfericaoReport(v);
           if (!v) {
             setAfericaoFilter('todos');
+            setAfericaoSel(new Set());
             setAfericaoResult(null);
             lastLoadedPeriodId.current = null;
             payrollPeriod.refetch();
@@ -5014,10 +5016,67 @@ export default function FolhaPagamento() {
                       </div>
                       <p className="text-[10px] text-slate-500 mt-1 italic">Clique no nome do funcionário para abrir o cartão de ponto e validar a informação.</p>
                     </div>
-                    <div className="rounded-lg border border-red-200 overflow-hidden">
+                    {(() => {
+                      const filteredDivs = (afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado && (afericaoFilter === 'todos' || (afericaoFilter === 'faltas' && d.tipo === 'falta') || (afericaoFilter === 'atrasos' && d.tipo === 'atraso')));
+                      const allIds = filteredDivs.map((d: any) => d.adjustmentId).filter(Boolean);
+                      const allSelected = allIds.length > 0 && allIds.every((id: number) => afericaoSel.has(id));
+                      return (
+                      <>
+                      {afericaoSel.size > 0 && (
+                        <div className="flex items-center gap-2 mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                          <span className="text-xs font-semibold text-blue-800">{afericaoSel.size} selecionado(s)</span>
+                          <Button size="sm" className="h-7 px-3 text-[10px] bg-green-600 hover:bg-green-700 text-white" disabled={decidirAfericaoMut.isPending}
+                            onClick={() => {
+                              const ids = Array.from(afericaoSel);
+                              if (!ids.length) return;
+                              decidirAfericaoMut.mutate(
+                                { companyId, companyIds, mesReferencia: mesAno, decisoes: ids.map(id => ({ adjustmentId: id, decisao: "falta_real" as const })) },
+                                { onSuccess: () => {
+                                  const upd = { ...afericaoResult };
+                                  (upd.divergenciasList || []).forEach((d: any) => { if (afericaoSel.has(d.adjustmentId)) { d._confirmado = true; } });
+                                  const remaining = (upd.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado);
+                                  upd.faltas = remaining.filter((d: any) => d.tipo === 'falta').length;
+                                  upd.atrasos = remaining.filter((d: any) => d.tipo === 'atraso').length;
+                                  upd.divergencias = remaining.length;
+                                  setAfericaoResult(upd);
+                                  setAfericaoSel(new Set());
+                                }}
+                              );
+                            }}>
+                            <CheckCircle className="h-3 w-3 mr-1" /> Confirmar Selecionados
+                          </Button>
+                          <Button size="sm" className="h-7 px-3 text-[10px] bg-gray-500 hover:bg-gray-600 text-white" disabled={decidirAfericaoMut.isPending}
+                            onClick={() => {
+                              const ids = Array.from(afericaoSel);
+                              if (!ids.length) return;
+                              decidirAfericaoMut.mutate(
+                                { companyId, companyIds, mesReferencia: mesAno, decisoes: ids.map(id => ({ adjustmentId: id, decisao: "erro_relogio" as const })) },
+                                { onSuccess: () => {
+                                  const upd = { ...afericaoResult };
+                                  (upd.divergenciasList || []).forEach((d: any) => { if (afericaoSel.has(d.adjustmentId)) { d._cancelado = true; } });
+                                  const remaining = (upd.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado);
+                                  upd.faltas = remaining.filter((d: any) => d.tipo === 'falta').length;
+                                  upd.atrasos = remaining.filter((d: any) => d.tipo === 'atraso').length;
+                                  upd.divergencias = remaining.length;
+                                  setAfericaoResult(upd);
+                                  setAfericaoSel(new Set());
+                                }}
+                              );
+                            }}>
+                            <XCircle className="h-3 w-3 mr-1" /> Erro Relógio Selecionados
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px] text-slate-500" onClick={() => setAfericaoSel(new Set())}>Limpar</Button>
+                        </div>
+                      )}
+                      <div className="rounded-lg border border-red-200 overflow-hidden">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="bg-red-50 text-red-700">
+                            <th className="py-2 px-1 text-center w-8">
+                              <input type="checkbox" checked={allSelected} onChange={(e) => {
+                                if (e.target.checked) { setAfericaoSel(new Set(allIds)); } else { setAfericaoSel(new Set()); }
+                              }} className="rounded" />
+                            </th>
                             <th className="py-2 px-3 text-left font-semibold">Funcionário</th>
                             <th className="py-2 px-3 text-left font-semibold">Função</th>
                             <th className="py-2 px-3 text-center font-semibold">Status</th>
@@ -5028,8 +5087,15 @@ export default function FolhaPagamento() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(afericaoResult.divergenciasList || []).filter((d: any) => !d._confirmado && !d._cancelado && (afericaoFilter === 'todos' || (afericaoFilter === 'faltas' && d.tipo === 'falta') || (afericaoFilter === 'atrasos' && d.tipo === 'atraso'))).map((d: any, i: number) => (
-                            <tr key={i} className={`border-t ${i % 2 === 0 ? '' : 'bg-red-50/30'}`}>
+                          {filteredDivs.map((d: any, i: number) => (
+                            <tr key={i} className={`border-t ${afericaoSel.has(d.adjustmentId) ? 'bg-blue-50' : i % 2 === 0 ? '' : 'bg-red-50/30'}`}>
+                              <td className="py-2 px-1 text-center">
+                                <input type="checkbox" checked={afericaoSel.has(d.adjustmentId)} onChange={(e) => {
+                                  const ns = new Set(afericaoSel);
+                                  if (e.target.checked) ns.add(d.adjustmentId); else ns.delete(d.adjustmentId);
+                                  setAfericaoSel(ns);
+                                }} className="rounded" />
+                              </td>
                               <td className="py-2 px-3 font-medium">
                                 <button
                                   className="text-left text-blue-700 hover:text-blue-900 hover:underline cursor-pointer font-medium"
@@ -5133,7 +5199,7 @@ export default function FolhaPagamento() {
                         </tbody>
                         <tfoot>
                           <tr className="border-t-2 border-red-300 bg-red-50 font-bold">
-                            <td colSpan={5} className="py-2 px-3 text-right text-red-700">Total Descontos:</td>
+                            <td colSpan={6} className="py-2 px-3 text-right text-red-700">Total Descontos:</td>
                             <td className="py-2 px-3 text-right font-mono text-red-700">
                               R$ {(afericaoResult.divergenciasList || []).filter((d: any) => !d._cancelado && !d._confirmado).reduce((s: number, d: any) => s + (typeof d.valorDesconto === 'number' ? d.valorDesconto : 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
@@ -5142,6 +5208,9 @@ export default function FolhaPagamento() {
                         </tfoot>
                       </table>
                     </div>
+                    </>
+                    );
+                    })()}
                   </div>
                 )}
 
