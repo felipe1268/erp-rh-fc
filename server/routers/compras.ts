@@ -8,6 +8,9 @@ import { normalizarTexto } from "../../shared/textNormalization";
 import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { storagePut } from "../storage";
 import { enviarConviteAssinatura } from "../services/integrasignEmail";
+
+const classificacaoProgress = new Map<string, { etapa: string; loteAtual: number; totalLotes: number; itensProcessados: number; totalItens: number; startedAt: number }>();
+function classifKey(orcId: number, compId: number) { return `${compId}-${orcId}`; }
 import crypto from "crypto";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 import {
@@ -9372,11 +9375,15 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       return JSON.parse(jsonStr);
     }
 
+    const pKey = classifKey(input.orcamentoId, input.companyId);
+    classificacaoProgress.set(pKey, { etapa: "Iniciando classificação...", loteAtual: 0, totalLotes: chunks.length, itensProcessados: 0, totalItens: servicos.length, startedAt: Date.now() });
+
     let classificacoes: Array<{ eap: string; disc: string }> = [];
     for (let ci = 0; ci < chunks.length; ci++) {
       const chunk = chunks[ci];
       const listaSvc = chunk.map(s => `${s.eapCodigo}: ${s.descricao}`).join("\n");
       console.log(`[ClassificarDisciplinas] Processando lote ${ci + 1}/${chunks.length} (${chunk.length} itens)...`);
+      classificacaoProgress.set(pKey, { etapa: `Classificando lote ${ci + 1} de ${chunks.length}...`, loteAtual: ci + 1, totalLotes: chunks.length, itensProcessados: ci * CHUNK_SIZE, totalItens: servicos.length, startedAt: classificacaoProgress.get(pKey)?.startedAt || Date.now() });
 
       const result = await invokeLLM({
         messages: [
@@ -9408,8 +9415,12 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       }
     }
 
-    if (classificacoes.length === 0)
+    classificacaoProgress.set(pKey, { etapa: "Salvando classificações...", loteAtual: chunks.length, totalLotes: chunks.length, itensProcessados: servicos.length, totalItens: servicos.length, startedAt: classificacaoProgress.get(pKey)?.startedAt || Date.now() });
+
+    if (classificacoes.length === 0) {
+      classificacaoProgress.delete(pKey);
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA não retornou classificações. Tente novamente." });
+    }
 
     const svcMap = new Map(servicos.map(s => [s.eapCodigo, s]));
     const seen = new Set<string>();
@@ -9443,7 +9454,18 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       }
     });
 
+    classificacaoProgress.delete(pKey);
     return { status: "ok" as const, total: values.length, disciplinas: [...new Set(values.map(v => v.disciplina))].length };
+  }),
+
+  classificacaoProgresso: protectedProcedure.input(z.object({
+    orcamentoId: z.number(),
+    companyId: z.number(),
+  })).query(({ input }) => {
+    const p = classificacaoProgress.get(classifKey(input.orcamentoId, input.companyId));
+    if (!p) return null;
+    const pct = p.totalLotes > 0 ? Math.round((p.loteAtual / p.totalLotes) * 100) : 0;
+    return { ...p, percentual: Math.min(pct, 99) };
   }),
 
   corrigirDisciplina: protectedProcedure.input(z.object({

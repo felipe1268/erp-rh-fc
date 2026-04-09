@@ -139,28 +139,14 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
   const status = data?.status;
   const disciplinas = data?.disciplinas || [];
   const loading = disciplinasQ.isLoading || classificarMut.isPending;
-  const [progresso, setProgresso] = useState(0);
   const scSet = useMemo(() => new Set(itensNaSC || []), [itensNaSC]);
 
-  useEffect(() => {
-    if (!classificarMut.isPending) { setProgresso(0); return; }
-    setProgresso(2);
-    let current = 2;
-    const interval = setInterval(() => {
-      current += current < 30 ? 3 : current < 60 ? 2 : current < 80 ? 1 : current < 90 ? 0.5 : current < 97 ? 0.15 : 0;
-      if (current > 97) current = 97;
-      setProgresso(Math.round(current));
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [classificarMut.isPending]);
-
-  useEffect(() => {
-    if (!classificarMut.isPending && progresso > 0) {
-      setProgresso(100);
-      const t = setTimeout(() => setProgresso(0), 600);
-      return () => clearTimeout(t);
-    }
-  }, [classificarMut.isPending]);
+  const progressoQ = trpc.compras.classificacaoProgresso.useQuery(
+    { orcamentoId: orcamentoId!, companyId },
+    { enabled: classificarMut.isPending && !!orcamentoId, refetchInterval: 2000 }
+  );
+  const prog = progressoQ.data;
+  const progresso = classificarMut.isPending ? (prog?.percentual ?? 2) : 0;
 
   const allDisciplinaNames = disciplinas.map((d: any) => d.nome);
 
@@ -231,18 +217,42 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
           <div className="flex flex-col items-center justify-center py-16 gap-4">
             <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
             <p className="text-sm text-gray-500">{classificarMut.isPending ? "IA classificando serviços..." : "Carregando..."}</p>
-            {classificarMut.isPending && (
-              <div className="w-72">
+            {classificarMut.isPending && prog && (
+              <div className="w-80">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-violet-600 font-medium">Analisando orçamento</span>
+                  <span className="text-xs text-violet-600 font-medium">
+                    {prog.etapa}
+                  </span>
                   <span className="text-xs text-violet-600 font-semibold">{progresso}%</span>
                 </div>
-                <div className="h-2.5 bg-violet-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-violet-500 to-violet-600 rounded-full transition-all duration-700 ease-out" style={{ width: `${progresso}%` }} />
+                <div className="h-3 bg-violet-100 rounded-full overflow-hidden relative">
+                  <div className="h-full bg-gradient-to-r from-violet-500 to-violet-600 rounded-full transition-all duration-1000 ease-out" style={{ width: `${progresso}%` }} />
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1.5 text-center">
-                  {progresso < 15 ? "Lendo serviços do orçamento..." : progresso < 35 ? "Analisando composições e descrições..." : progresso < 55 ? "Classificando por disciplina construtiva..." : progresso < 75 ? "Processando lotes de serviços..." : progresso < 90 ? "Organizando e agrupando resultados..." : "Finalizando classificação — quase lá..."}
-                </p>
+                <div className="flex items-center justify-between mt-1.5">
+                  <p className="text-[10px] text-gray-400">
+                    Lote {prog.loteAtual} de {prog.totalLotes}
+                  </p>
+                  <p className="text-[10px] text-gray-400">
+                    {prog.itensProcessados.toLocaleString("pt-BR")} / {prog.totalItens.toLocaleString("pt-BR")} itens
+                  </p>
+                </div>
+                {prog.totalLotes > 1 && (
+                  <div className="flex gap-1 mt-2 justify-center">
+                    {Array.from({ length: prog.totalLotes }, (_, i) => (
+                      <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${
+                        i < prog.loteAtual ? "bg-violet-500" : i === prog.loteAtual ? "bg-violet-300 animate-pulse" : "bg-gray-200"
+                      }`} style={{ width: `${Math.max(100 / prog.totalLotes, 6)}%`, maxWidth: 24, minWidth: 6 }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {classificarMut.isPending && !prog && (
+              <div className="w-80">
+                <div className="h-3 bg-violet-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-violet-300 rounded-full animate-pulse" style={{ width: "15%" }} />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1.5 text-center">Preparando classificação...</p>
               </div>
             )}
           </div>
