@@ -268,19 +268,23 @@ export default function Epis() {
     finally { setCnpjLoading(false); }
   };
 
-  // Form state - Entrega
+  // Form state - Entrega (multi-EPI)
   const [entregaForm, setEntregaForm] = useState({
     epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0],
     motivo: "", observacoes: "", motivoTroca: "", obraId: "",
     origemEntrega: "central" as "central" | "obra",
-    origemObraId: "", // obra da qual o estoque será retirado (quando origemEntrega === 'obra')
+    origemObraId: "",
   });
+  const [entregaItens, setEntregaItens] = useState<Array<{ epiId: string; quantidade: number; motivoTroca: string }>>([]);
+  const [entregaSaving, setEntregaSaving] = useState(false);
 
-  // Transferência form state
+  // Transferência form state (multi-EPI)
   const [transForm, setTransForm] = useState({
     epiId: "", quantidade: 1, tipoOrigem: "central" as "central" | "obra",
     origemObraId: "", tipoDestino: "obra" as "central" | "obra", destinoObraId: "", data: new Date().toISOString().split("T")[0], observacoes: "",
   });
+  const [transItens, setTransItens] = useState<Array<{ epiId: string; quantidade: number }>>([]);
+  const [transSaving, setTransSaving] = useState(false);
   const [filterObraEstoque, setFilterObraEstoque] = useState<string>("todas");
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [epiPickerOpen, setEpiPickerOpen] = useState(false);
@@ -446,10 +450,12 @@ export default function Epis() {
   const TAMANHOS_CALCADO = ['34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48'];
   function resetEntregaForm() {
     setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "", obraId: "", origemEntrega: "central", origemObraId: "" });
+    setEntregaItens([]);
     setFotoEstado({ file: null, preview: "" });
   }
   function resetTransForm() {
     setTransForm({ epiId: "", quantidade: 1, tipoOrigem: "central", origemObraId: "", tipoDestino: "obra", destinoObraId: "", data: new Date().toISOString().split("T")[0], observacoes: "" });
+    setTransItens([]);
   }
 
   // CA lookup function
@@ -1195,10 +1201,78 @@ export default function Epis() {
   // FORM: NOVA ENTREGA
   // ============================================================
   if (viewMode === "nova_entrega") {
-    const selectedEpi = episList.find((e: any) => String(e.id) === entregaForm.epiId);
     const bdiPct = bdiQ.data?.bdiPercentual ?? 40;
-    const showCharge = entregaForm.motivoTroca && ['perda', 'mau_uso', 'furto'].includes(entregaForm.motivoTroca) && selectedEpi?.valorProduto;
-    const chargeValue = showCharge ? (parseFloat(String(selectedEpi.valorProduto)) * (1 + bdiPct / 100)).toFixed(2) : null;
+
+    const addEntregaItem = () => {
+      if (!entregaForm.epiId) return toast.error("Selecione o EPI primeiro");
+      if (entregaItens.some(i => i.epiId === entregaForm.epiId)) return toast.error("Este EPI já foi adicionado à lista");
+      setEntregaItens(prev => [...prev, { epiId: entregaForm.epiId, quantidade: entregaForm.quantidade, motivoTroca: entregaForm.motivoTroca }]);
+      setEntregaForm(f => ({ ...f, epiId: "", quantidade: 1, motivoTroca: "" }));
+    };
+
+    const removeEntregaItem = (epiId: string) => {
+      setEntregaItens(prev => prev.filter(i => i.epiId !== epiId));
+    };
+
+    const updateEntregaItemQtd = (epiId: string, qtd: number) => {
+      setEntregaItens(prev => prev.map(i => i.epiId === epiId ? { ...i, quantidade: Math.max(1, qtd) } : i));
+    };
+
+    const handleSubmitEntrega = async () => {
+      const allItens = entregaForm.epiId
+        ? [...entregaItens, { epiId: entregaForm.epiId, quantidade: entregaForm.quantidade, motivoTroca: entregaForm.motivoTroca }]
+        : entregaItens;
+      if (allItens.length === 0) return toast.error("Adicione pelo menos um EPI");
+      if (!entregaForm.employeeId) return toast.error("Selecione o funcionário");
+      if (entregaForm.origemEntrega === 'obra' && !entregaForm.origemObraId) return toast.error("Selecione a obra de origem do estoque");
+
+      let fotoBase64: string | undefined;
+      let fotoFileName: string | undefined;
+      if (fotoEstado.file) {
+        const buffer = await fotoEstado.file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) { binary += String.fromCharCode(bytes[i]); }
+        fotoBase64 = btoa(binary);
+        fotoFileName = fotoEstado.file.name;
+      }
+
+      setEntregaSaving(true);
+      let successCount = 0;
+      let lastError = "";
+      for (const item of allItens) {
+        try {
+          await createDeliveryMut.mutateAsync({
+            companyId: queryCompanyId,
+            epiId: parseInt(item.epiId),
+            employeeId: parseInt(entregaForm.employeeId),
+            quantidade: item.quantidade,
+            dataEntrega: entregaForm.dataEntrega,
+            motivo: entregaForm.motivo || undefined,
+            observacoes: entregaForm.observacoes || undefined,
+            motivoTroca: item.motivoTroca || undefined,
+            fotoEstadoBase64: fotoBase64,
+            fotoEstadoFileName: fotoFileName,
+            origemEntrega: entregaForm.origemEntrega,
+            obraId: entregaForm.origemEntrega === 'obra'
+              ? parseInt(entregaForm.origemObraId)
+              : (entregaForm.obraId ? parseInt(entregaForm.obraId) : undefined),
+          });
+          successCount++;
+        } catch (err: any) {
+          lastError = err?.message || "Erro desconhecido";
+        }
+      }
+      setEntregaSaving(false);
+      deliveriesQ.refetch(); episQ.refetch(); statsQ.refetch();
+      if (successCount === allItens.length) {
+        toast.success(`${successCount} EPI(s) entregue(s) com sucesso!`);
+        resetEntregaForm();
+        setViewMode("entregas");
+      } else {
+        toast.error(`${successCount}/${allItens.length} entregas realizadas. Erro: ${lastError}`);
+      }
+    };
 
     return (
       <DashboardLayout>
@@ -1214,61 +1288,6 @@ export default function Epis() {
           <Card>
             <CardContent className="p-6 space-y-4 w-full">
               <div>
-                <Label>EPI *</Label>
-                <SearchableSelect
-                  options={episList.map((e: any) => ({
-                    value: String(e.id),
-                    label: `${e.nome}${e.tamanho ? ` (Tam: ${e.tamanho})` : ""} ${e.ca ? `(CA: ${e.ca})` : ""}`,
-                    subtitle: `Estoque: ${e.quantidadeEstoque ?? 0}${e.valorProduto ? ` — ${parseFloat(String(e.valorProduto)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ""}`,
-                    searchExtra: `${e.ca || ""} ${e.nome || ""} ${e.tamanho || ""}`,
-                  }))}
-                  value={entregaForm.epiId || undefined}
-                  onValueChange={v => {
-                    // Auto-selecionar origem 'obra' se funcionário já selecionado está em obra com estoque
-                    let origemEntrega = entregaForm.origemEntrega;
-                    let origemObraId = entregaForm.origemObraId;
-                    if (entregaForm.obraId && v) {
-                      const temEstoqueObra = estoqueObraList2.some((e: any) => e.epiId === parseInt(v) && e.obraId === parseInt(entregaForm.obraId) && e.quantidade > 0);
-                      if (temEstoqueObra) { origemEntrega = 'obra'; origemObraId = entregaForm.obraId; }
-                    }
-                    setEntregaForm(f => ({ ...f, epiId: v, origemEntrega, origemObraId }));
-                  }}
-                  placeholder="Selecione o EPI..."
-                  searchPlaceholder="Buscar por nome ou CA..."
-                  emptyMessage="Nenhum EPI encontrado."
-                />
-                {/* FOTO DO EPI — confirmação visual do item */}
-                {entregaForm.epiId && (() => {
-                  const epiSel = episList.find((e: any) => String(e.id) === entregaForm.epiId);
-                  if (!epiSel) return null;
-                  return (
-                    <div className="mt-2 flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
-                      {epiSel.fotoUrl ? (
-                        <img
-                          src={epiSel.fotoUrl}
-                          alt={epiSel.nome}
-                          className="w-14 h-14 rounded-lg object-contain border border-gray-200 bg-white flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0 border border-gray-200">
-                          <HardHat className="h-6 w-6 text-gray-400" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm text-gray-900 truncate">{epiSel.nome}{epiSel.tamanho ? ` (Tam: ${epiSel.tamanho})` : ""}</p>
-                        {epiSel.ca && <p className="text-xs text-gray-500">CA: {epiSel.ca}</p>}
-                        <p className="text-xs text-gray-500">
-                          Estoque: <span className={`font-medium ${(epiSel.quantidadeEstoque ?? 0) > 0 ? "text-green-600" : "text-red-500"}`}>{epiSel.quantidadeEstoque ?? 0} unid.</span>
-                          {epiSel.valorProduto && (
-                            <span className="ml-2 text-gray-400">· {parseFloat(String(epiSel.valorProduto)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-              <div>
                 <Label>Funcionário *</Label>
                 <SearchableSelect
                   options={employeesList.map((e: any) => ({
@@ -1281,153 +1300,63 @@ export default function Epis() {
                   onValueChange={v => {
                     const emp = employeesList.find((e: any) => String(e.id) === v);
                     const obraId = emp?.obraAtualId ? String(emp.obraAtualId) : "";
-                    // Auto-selecionar origem 'obra' e origemObraId se funcionário está em obra com estoque do EPI
-                    let origemEntrega = entregaForm.origemEntrega;
-                    let origemObraId = entregaForm.origemObraId;
-                    if (obraId && entregaForm.epiId) {
-                      const temEstoqueObra = estoqueObraList2.some((e: any) => e.epiId === parseInt(entregaForm.epiId) && e.obraId === parseInt(obraId) && e.quantidade > 0);
-                      if (temEstoqueObra) { origemEntrega = 'obra'; origemObraId = obraId; }
-                    }
-                    setEntregaForm(f => ({ ...f, employeeId: v, obraId, origemEntrega, origemObraId }));
+                    setEntregaForm(f => ({ ...f, employeeId: v, obraId }));
                   }}
                   placeholder="Selecione o funcionário..."
                   searchPlaceholder="Buscar por nome, CPF, matrícula, função..."
                   emptyMessage="Nenhum funcionário encontrado."
                 />
-                {/* FOTO DO FUNCIONÁRIO — confirmação visual da identidade */}
                 {entregaForm.employeeId && (() => {
                   const empSel = employeesList.find((e: any) => String(e.id) === entregaForm.employeeId);
                   if (!empSel) return null;
                   return (
                     <div className="mt-2 flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
                       {empSel.fotoUrl ? (
-                        <img
-                          src={empSel.fotoUrl}
-                          alt={empSel.nomeCompleto}
-                          className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0"
-                        />
+                        <img src={empSel.fotoUrl} alt={empSel.nomeCompleto} className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0" />
                       ) : (
                         <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 border-2 border-white shadow-sm">
-                          <span className="text-xl font-bold text-gray-400">
-                            {empSel.nomeCompleto?.charAt(0)?.toUpperCase() || "?"}
-                          </span>
+                          <span className="text-xl font-bold text-gray-400">{empSel.nomeCompleto?.charAt(0)?.toUpperCase() || "?"}</span>
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm text-gray-900 truncate">{empSel.nomeCompleto}</p>
                         <p className="text-xs text-gray-500 truncate">{empSel.funcao || empSel.cargo || "Sem função"}</p>
-                        {empSel.obraAtualNome && (
-                          <p className="text-xs text-blue-600 mt-0.5 truncate">📍 {empSel.obraAtualNome}</p>
-                        )}
-                        {!empSel.fotoUrl && (
-                          <p className="text-xs text-amber-600 mt-0.5">⚠ Sem foto cadastrada</p>
-                        )}
+                        {empSel.obraAtualNome && <p className="text-xs text-blue-600 mt-0.5 truncate">📍 {empSel.obraAtualNome}</p>}
                       </div>
-                      {empSel.fotoUrl && (
-                        <div className="flex-shrink-0 text-green-600" title="Identidade confirmada por foto">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                      )}
                     </div>
                   );
                 })()}
               </div>
-              {/* ORIGEM DA ENTREGA */}
+
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                 <Label className="text-amber-800 font-semibold flex items-center gap-1.5"><Package className="h-4 w-4" /> Origem da Entrega *</Label>
                 <div className="flex gap-3 mt-2">
                   <button type="button" onClick={() => setEntregaForm(f => ({ ...f, origemEntrega: 'central', origemObraId: '' }))}
-                    className={`flex-1 p-3 rounded-lg border-2 text-center transition-all ${
-                      entregaForm.origemEntrega === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm' : 'border-gray-200 hover:border-gray-300'
-                    }`}>
+                    className={`flex-1 p-3 rounded-lg border-2 text-center transition-all ${entregaForm.origemEntrega === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}>
                     <Package className={`h-5 w-5 mx-auto mb-1 ${entregaForm.origemEntrega === 'central' ? 'text-[#1B2A4A]' : 'text-gray-400'}`} />
                     <p className={`text-sm font-semibold ${entregaForm.origemEntrega === 'central' ? 'text-[#1B2A4A]' : 'text-gray-500'}`}>Escritório Central</p>
                     <p className="text-[10px] text-muted-foreground">Estoque central</p>
                   </button>
                   <button type="button" onClick={() => setEntregaForm(f => ({ ...f, origemEntrega: 'obra', origemObraId: '' }))}
-                    className={`flex-1 p-3 rounded-lg border-2 text-center transition-all ${
-                      entregaForm.origemEntrega === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm' : 'border-gray-200 hover:border-gray-300'
-                    }`}>
+                    className={`flex-1 p-3 rounded-lg border-2 text-center transition-all ${entregaForm.origemEntrega === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}>
                     <HardHat className={`h-5 w-5 mx-auto mb-1 ${entregaForm.origemEntrega === 'obra' ? 'text-[#1B2A4A]' : 'text-gray-400'}`} />
                     <p className={`text-sm font-semibold ${entregaForm.origemEntrega === 'obra' ? 'text-[#1B2A4A]' : 'text-gray-500'}`}>Obra</p>
                     <p className="text-[10px] text-muted-foreground">Estoque do canteiro</p>
                   </button>
                 </div>
-
-                {/* Estoque central */}
-                {entregaForm.origemEntrega === 'central' && entregaForm.epiId && (
-                  <p className="text-xs text-blue-600 mt-2 font-medium">
-                    Estoque Central: {episList.find((e: any) => String(e.id) === entregaForm.epiId)?.quantidadeEstoque ?? 0} unid.
-                  </p>
-                )}
-
-                {/* Seleção de obra de origem */}
                 {entregaForm.origemEntrega === 'obra' && (
                   <div className="mt-3">
-                    <p className="text-xs font-semibold text-amber-800 mb-2">
-                      Selecione a obra de origem *
-                      {!entregaForm.epiId && <span className="font-normal text-amber-600 ml-1">(selecione o EPI primeiro)</span>}
-                    </p>
-                    {entregaForm.epiId ? (() => {
-                      const obrasComEstoque = estoqueObraList2.filter(
-                        (e: any) => e.epiId === parseInt(entregaForm.epiId) && e.quantidade > 0
-                      );
-                      if (obrasComEstoque.length === 0) {
-                        return (
-                          <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5 flex items-center gap-2">
-                            <span>⚠️</span>
-                            <span>Nenhuma obra possui estoque deste EPI. Transfira do estoque central primeiro.</span>
-                          </div>
-                        );
-                      }
-                      return (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {obrasComEstoque.map((e: any) => {
-                            const obraInfo = obrasList.find((o: any) => o.id === e.obraId);
-                            const isSelected = entregaForm.origemObraId === String(e.obraId);
-                            const empObraId = entregaForm.employeeId
-                              ? (employeesList.find((emp: any) => String(emp.id) === entregaForm.employeeId)?.obraAtualId)
-                              : null;
-                            const isEmpObra = empObraId && empObraId === e.obraId;
-                            return (
-                              <button
-                                key={e.obraId}
-                                type="button"
-                                onClick={() => setEntregaForm(f => ({ ...f, origemObraId: String(e.obraId) }))}
-                                className={`text-left p-2.5 rounded-lg border-2 transition-all ${
-                                  isSelected
-                                    ? 'border-green-600 bg-green-50 shadow-sm'
-                                    : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
-                                }`}
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <p className={`text-xs font-semibold truncate ${isSelected ? 'text-green-800' : 'text-gray-700'}`}>
-                                      {obraInfo?.nome || e.obraNome || `Obra #${e.obraId}`}
-                                    </p>
-                                    {isEmpObra && (
-                                      <p className="text-[10px] text-blue-600 font-medium mt-0.5">← obra atual do funcionário</p>
-                                    )}
-                                  </div>
-                                  <span className={`shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-full ${
-                                    isSelected ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600'
-                                  }`}>
-                                    {e.quantidade} un
-                                  </span>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      );
-                    })() : null}
+                    <Label className="text-amber-800 text-xs font-semibold">Obra de Origem *</Label>
+                    <Select value={entregaForm.origemObraId || undefined} onValueChange={v => setEntregaForm(f => ({ ...f, origemObraId: v }))}>
+                      <SelectTrigger className="mt-1 bg-white"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
+                      <SelectContent>
+                        {obrasList.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
               </div>
 
-              {/* OBRA DO FUNCIONÁRIO - informacional */}
               {entregaForm.employeeId && entregaForm.origemEntrega === 'central' && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <Label className="text-blue-800 font-semibold">Local de Trabalho do Funcionário</Label>
@@ -1435,154 +1364,107 @@ export default function Epis() {
                     <SelectTrigger className="mt-1 bg-white"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="sem_obra">Sem obra definida</SelectItem>
-                      {obrasList.map((o: any) => (
-                        <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-                      ))}
+                      {obrasList.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {entregaForm.obraId && (() => {
-                    const emp = employeesList.find((e: any) => String(e.id) === entregaForm.employeeId);
-                    const obraDefault = emp?.obraAtualId ? String(emp.obraAtualId) : "";
-                    if (entregaForm.obraId !== obraDefault) {
-                      return <p className="text-xs text-amber-600 mt-1 font-medium">⚠️ Obra diferente da alocação atual do funcionário</p>;
-                    }
-                    return null;
-                  })()}
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                <div>
-                  <Label>Quantidade *</Label>
-                  <Input type="number" min={1} value={entregaForm.quantidade}
-                    onChange={e => setEntregaForm(f => ({ ...f, quantidade: parseInt(e.target.value) || 1 }))} />
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label>Data da Entrega *</Label>
-                  <Input type="date" value={entregaForm.dataEntrega}
-                    onChange={e => setEntregaForm(f => ({ ...f, dataEntrega: e.target.value }))} />
+                  <Input type="date" value={entregaForm.dataEntrega} onChange={e => setEntregaForm(f => ({ ...f, dataEntrega: e.target.value }))} />
                 </div>
                 <div>
-                  <Label>Motivo da Troca</Label>
-                  <Select value={entregaForm.motivoTroca || "nova_entrega"} onValueChange={v => setEntregaForm(f => ({ ...f, motivoTroca: v === "nova_entrega" ? "" : v }))}>
-                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="nova_entrega">Nova Entrega (sem troca)</SelectItem>
-                      <SelectItem value="desgaste_normal">Desgaste Normal</SelectItem>
-                      <SelectItem value="perda">Perda</SelectItem>
-                      <SelectItem value="mau_uso">Mau Uso / Dano</SelectItem>
-                      <SelectItem value="furto">Furto</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Motivo / Observações</Label>
+                  <Input value={entregaForm.motivo} onChange={e => setEntregaForm(f => ({ ...f, motivo: e.target.value }))} placeholder="Observações gerais" />
                 </div>
               </div>
 
-              {/* Banner de custo dinâmico */}
-              {entregaForm.motivoTroca || !entregaForm.motivoTroca ? (
-                showCharge ? (
-                  <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 shadow-sm">
-                    <div className="flex items-center gap-2 text-red-700 font-bold text-sm mb-1">
-                      <AlertTriangle className="h-5 w-5" />
-                      ATENÇÃO: Este item gerará desconto em folha
-                    </div>
-                    <p className="text-sm text-red-600">
-                      Valor a ser descontado: <strong className="text-lg">R$ {chargeValue}</strong>
-                      <span className="text-xs ml-2">(valor + BDI {bdiPct}%)</span>
-                    </p>
-                    <p className="text-xs text-red-500 mt-1">
-                      Base legal: Art. 462, §1º da CLT — desconto por dano causado pelo empregado.
-                      O desconto será lançado automaticamente na folha do mês de referência.
-                    </p>
+              {entregaItens.length > 0 && (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-[#1B2A4A] text-white px-4 py-2 text-sm font-semibold flex items-center gap-2">
+                    <Package className="h-4 w-4" /> EPIs para Entrega ({entregaItens.length})
                   </div>
-                ) : (
-                  entregaForm.epiId && (
-                    <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 shadow-sm">
-                      <div className="flex items-center gap-2 text-green-700 font-bold text-sm">
-                        <Shield className="h-5 w-5" />
-                        Troca sem custo para o colaborador
-                      </div>
-                      <p className="text-xs text-green-600 mt-1">
-                        {!entregaForm.motivoTroca || entregaForm.motivoTroca === '' 
-                          ? 'Entrega regular de EPI — sem cobrança.'
-                          : 'Troca por desgaste natural de uso — sem cobrança ao colaborador.'}
-                      </p>
-                    </div>
-                  )
-                )
-              ) : null}
-
-              {/* Foto obrigatória para troca por desgaste/mau uso */}
-              {entregaForm.motivoTroca && ['desgaste_normal', 'mau_uso'].includes(entregaForm.motivoTroca) && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                  <Label className="flex items-center gap-2 text-amber-800 font-semibold mb-2">
-                    📷 Foto do Estado do EPI (Obrigatória)
-                  </Label>
-                  <p className="text-xs text-amber-600 mb-3">Para registrar troca por {entregaForm.motivoTroca === 'desgaste_normal' ? 'desgaste' : 'mau uso/dano'}, é obrigatório anexar uma foto do estado atual do EPI danificado.</p>
-                  <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const preview = URL.createObjectURL(file);
-                      setFotoEstado({ file, preview });
-                    }
-                  }} />
-                  <div className="flex items-center gap-3">
-                    <Button type="button" variant="outline" size="sm" onClick={() => fotoInputRef.current?.click()}>
-                      <Upload className="h-4 w-4 mr-1" /> {fotoEstado.file ? 'Trocar Foto' : 'Anexar Foto'}
-                    </Button>
-                    {fotoEstado.preview && (
-                      <div className="relative">
-                        <img src={fotoEstado.preview} alt="Foto EPI" className="h-20 w-20 object-cover rounded border" />
-                        <button onClick={() => setFotoEstado({ file: null, preview: '' })} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">✕</button>
-                      </div>
-                    )}
-                    {!fotoEstado.file && <span className="text-xs text-red-500">* Foto obrigatória</span>}
+                  <div className="divide-y">
+                    {entregaItens.map((item) => {
+                      const epi = episList.find((e: any) => String(e.id) === item.epiId);
+                      if (!epi) return null;
+                      const isCharge = item.motivoTroca && ['perda', 'mau_uso', 'furto'].includes(item.motivoTroca);
+                      return (
+                        <div key={item.epiId} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50">
+                          {epi.fotoUrl ? (
+                            <img src={epi.fotoUrl} alt={epi.nome} className="w-10 h-10 rounded object-cover border flex-shrink-0" />
+                          ) : (
+                            <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center border flex-shrink-0"><HardHat className="h-4 w-4 text-gray-400" /></div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{epi.nome}{epi.tamanho ? ` (${epi.tamanho})` : ""}</p>
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              {epi.ca && <span>CA: {epi.ca}</span>}
+                              {isCharge && <span className="text-red-600 font-medium">Desconto</span>}
+                              {item.motivoTroca && !isCharge && <span className="text-gray-400">{item.motivoTroca === 'desgaste_normal' ? 'Desgaste' : 'Sem troca'}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button type="button" onClick={() => updateEntregaItemQtd(item.epiId, item.quantidade - 1)} className="w-7 h-7 rounded border flex items-center justify-center hover:bg-gray-100"><Minus className="h-3 w-3" /></button>
+                            <Input type="number" min={1} value={item.quantidade} onChange={e => updateEntregaItemQtd(item.epiId, parseInt(e.target.value) || 1)} className="w-14 h-7 text-center text-sm px-1" />
+                            <button type="button" onClick={() => updateEntregaItemQtd(item.epiId, item.quantidade + 1)} className="w-7 h-7 rounded border flex items-center justify-center hover:bg-gray-100"><Plus className="h-3 w-3" /></button>
+                          </div>
+                          <button type="button" onClick={() => removeEntregaItem(item.epiId)} className="text-red-500 hover:text-red-700 p-1"><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              <div>
-                <Label>Motivo / Observações</Label>
-                <Input value={entregaForm.motivo} onChange={e => setEntregaForm(f => ({ ...f, motivo: e.target.value }))}
-                  placeholder="Motivo da entrega ou observações" />
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Plus className="h-4 w-4" /> Adicionar EPI</p>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_160px_auto] gap-2 items-end">
+                  <div>
+                    <Label className="text-xs">EPI</Label>
+                    <SearchableSelect
+                      options={episList.filter((e: any) => !entregaItens.some(i => i.epiId === String(e.id))).map((e: any) => ({
+                        value: String(e.id),
+                        label: `${e.nome}${e.tamanho ? ` (${e.tamanho})` : ""} ${e.ca ? `CA: ${e.ca}` : ""}`,
+                        subtitle: `Estoque: ${e.quantidadeEstoque ?? 0}`,
+                        searchExtra: `${e.ca || ""} ${e.nome || ""} ${e.tamanho || ""}`,
+                      }))}
+                      value={entregaForm.epiId || undefined}
+                      onValueChange={v => setEntregaForm(f => ({ ...f, epiId: v }))}
+                      placeholder="Selecione..."
+                      searchPlaceholder="Buscar EPI..."
+                      emptyMessage="Nenhum EPI encontrado."
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Qtd</Label>
+                    <Input type="number" min={1} value={entregaForm.quantidade} onChange={e => setEntregaForm(f => ({ ...f, quantidade: parseInt(e.target.value) || 1 }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Motivo Troca</Label>
+                    <Select value={entregaForm.motivoTroca || "nova_entrega"} onValueChange={v => setEntregaForm(f => ({ ...f, motivoTroca: v === "nova_entrega" ? "" : v }))}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nova_entrega">Sem troca</SelectItem>
+                        <SelectItem value="desgaste_normal">Desgaste</SelectItem>
+                        <SelectItem value="perda">Perda</SelectItem>
+                        <SelectItem value="mau_uso">Mau Uso</SelectItem>
+                        <SelectItem value="furto">Furto</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="button" size="sm" onClick={addEntregaItem} disabled={!entregaForm.epiId} className="bg-green-600 hover:bg-green-700 h-9">
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar
+                  </Button>
+                </div>
               </div>
+
               <div className="flex justify-end gap-3 pt-4">
                 <Button variant="outline" onClick={() => { setViewMode("entregas"); resetEntregaForm(); }}>Cancelar</Button>
-                <Button onClick={async () => {
-                  if (!entregaForm.epiId || !entregaForm.employeeId) return toast.error("Selecione EPI e funcionário");
-                  // Validar foto obrigatória para troca
-                  const requiresFoto = entregaForm.motivoTroca && ['desgaste_normal', 'mau_uso'].includes(entregaForm.motivoTroca);
-                  if (requiresFoto && !fotoEstado.file) return toast.error("Foto do estado do EPI é obrigatória para este tipo de troca");
-                  
-                  let fotoBase64: string | undefined;
-                  let fotoFileName: string | undefined;
-                  if (fotoEstado.file) {
-                    const buffer = await fotoEstado.file.arrayBuffer();
-                    const bytes = new Uint8Array(buffer);
-                    let binary = '';
-                    for (let i = 0; i < bytes.byteLength; i++) { binary += String.fromCharCode(bytes[i]); }
-                    fotoBase64 = btoa(binary);
-                    fotoFileName = fotoEstado.file.name;
-                  }
-                  if (entregaForm.origemEntrega === 'obra' && !entregaForm.origemObraId) return toast.error("Selecione a obra de origem do estoque");
-                  createDeliveryMut.mutate({
-                    companyId: queryCompanyId,
-                    epiId: parseInt(entregaForm.epiId),
-                    employeeId: parseInt(entregaForm.employeeId),
-                    quantidade: entregaForm.quantidade,
-                    dataEntrega: entregaForm.dataEntrega,
-                    motivo: entregaForm.motivo || undefined,
-                    observacoes: entregaForm.observacoes || undefined,
-                    motivoTroca: entregaForm.motivoTroca || undefined,
-                    fotoEstadoBase64: fotoBase64,
-                    fotoEstadoFileName: fotoFileName,
-                    origemEntrega: entregaForm.origemEntrega,
-                    // quando origem=obra, usa a obra selecionada pelo usuário; senão usa a obra do funcionário
-                    obraId: entregaForm.origemEntrega === 'obra'
-                      ? parseInt(entregaForm.origemObraId)
-                      : (entregaForm.obraId ? parseInt(entregaForm.obraId) : undefined),
-                  });
-                }} disabled={createDeliveryMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
-                  {createDeliveryMut.isPending ? "Salvando..." : "Registrar Entrega"}
+                <Button onClick={handleSubmitEntrega} disabled={entregaSaving || (entregaItens.length === 0 && !entregaForm.epiId)} className="bg-[#1B2A4A] hover:bg-[#243660]">
+                  {entregaSaving ? "Salvando..." : `Registrar ${entregaItens.length > 0 ? entregaItens.length + (entregaForm.epiId ? 1 : 0) : 1} Entrega(s)`}
                 </Button>
               </div>
             </CardContent>
@@ -2697,7 +2579,45 @@ export default function Epis() {
       </div>
 
       {/* Dialog de Transferência */}
-      {showTransferDialog && (
+      {showTransferDialog && (() => {
+        const addTransItem = () => {
+          if (!transForm.epiId) return toast.error('Selecione o EPI primeiro');
+          if (transItens.some(i => i.epiId === transForm.epiId)) return toast.error('Este EPI já foi adicionado');
+          setTransItens(prev => [...prev, { epiId: transForm.epiId, quantidade: transForm.quantidade }]);
+          setTransForm(f => ({ ...f, epiId: '', quantidade: 1 }));
+        };
+        const handleSubmitTransfer = async () => {
+          const allItens = transForm.epiId
+            ? [...transItens, { epiId: transForm.epiId, quantidade: transForm.quantidade }]
+            : transItens;
+          if (allItens.length === 0) return toast.error('Adicione pelo menos um EPI');
+          if (transForm.tipoDestino === 'obra' && !transForm.destinoObraId) return toast.error('Selecione a obra de destino');
+          if (transForm.tipoOrigem === 'obra' && !transForm.origemObraId) return toast.error('Selecione a obra de origem');
+          if (transForm.tipoOrigem === 'central' && transForm.tipoDestino === 'central') return toast.error('Não é possível transferir do central para o central');
+          if (transForm.tipoOrigem === 'obra' && transForm.tipoDestino === 'obra' && transForm.origemObraId === transForm.destinoObraId) return toast.error('Origem e destino não podem ser a mesma obra');
+          setTransSaving(true);
+          let ok = 0, lastErr = "";
+          for (const item of allItens) {
+            try {
+              await transferirMut.mutateAsync({
+                companyId: queryCompanyId, epiId: parseInt(item.epiId), quantidade: item.quantidade,
+                tipoOrigem: transForm.tipoOrigem, origemObraId: transForm.origemObraId ? parseInt(transForm.origemObraId) : undefined,
+                tipoDestino: transForm.tipoDestino, destinoObraId: transForm.destinoObraId ? parseInt(transForm.destinoObraId) : undefined,
+                data: transForm.data, observacoes: transForm.observacoes || undefined,
+              });
+              ok++;
+            } catch (err: any) { lastErr = err?.message || "Erro"; }
+          }
+          setTransSaving(false);
+          estoqueObraQ.refetch(); estoqueObraResumoQ.refetch(); transferenciasQ.refetch(); episQ.refetch(); statsQ.refetch();
+          if (ok === allItens.length) {
+            toast.success(`${ok} EPI(s) transferido(s) com sucesso!`);
+            setShowTransferDialog(false); resetTransForm();
+          } else {
+            toast.error(`${ok}/${allItens.length} transferidos. Erro: ${lastErr}`);
+          }
+        };
+        return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-auto">
             <div className="flex justify-between items-center">
@@ -2709,99 +2629,14 @@ export default function Epis() {
 
             <div className="space-y-3">
               <div>
-                <Label>EPI *</Label>
-                <Popover open={epiPickerOpen} onOpenChange={setEpiPickerOpen}>
-                  <PopoverTrigger asChild>
-                    <button type="button" className="w-full flex items-center gap-2 border rounded-md px-3 py-2 text-sm text-left hover:bg-muted/30 transition-colors">
-                      {transForm.epiId ? (() => {
-                        const sel = episList.find((e: any) => String(e.id) === transForm.epiId);
-                        return sel ? (
-                          <>
-                            {sel.fotoUrl
-                              ? <img src={sel.fotoUrl} alt={sel.nome} className="h-8 w-8 rounded object-cover border flex-shrink-0" />
-                              : <div className="h-8 w-8 rounded border bg-muted flex items-center justify-center flex-shrink-0"><HardHat className="h-4 w-4 text-muted-foreground" /></div>
-                            }
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{sel.nome}</p>
-                              <p className="text-xs text-muted-foreground">{sel.tamanho ? `Tam: ${sel.tamanho} • ` : ''}Estoque: {sel.quantidadeEstoque ?? 0}</p>
-                            </div>
-                          </>
-                        ) : <span className="text-muted-foreground">Selecione o EPI...</span>;
-                      })() : <span className="text-muted-foreground flex-1">Selecione o EPI...</span>}
-                      <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[420px] p-0" align="start">
-                    <div className="flex items-center border-b px-3 py-2 gap-2">
-                      <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <input
-                        autoFocus
-                        value={epiPickerSearch}
-                        onChange={e => setEpiPickerSearch(e.target.value)}
-                        placeholder="Buscar por nome, tamanho, CA..."
-                        className="flex-1 text-sm outline-none bg-transparent placeholder:text-muted-foreground"
-                      />
-                      {epiPickerSearch && <button type="button" onClick={() => setEpiPickerSearch("")} className="text-muted-foreground hover:text-foreground"><XIcon className="h-3.5 w-3.5" /></button>}
-                    </div>
-                    <div className="max-h-[320px] overflow-y-auto p-1">
-                      {episList
-                        .filter((e: any) => {
-                          if (!epiPickerSearch.trim()) return true;
-                          const term = epiPickerSearch.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                          const text = `${e.nome} ${e.tamanho || ''} ${e.ca || ''}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                          return text.includes(term);
-                        })
-                        .map((e: any) => (
-                          <button
-                            key={e.id}
-                            type="button"
-                            onClick={() => { setTransForm(f => ({ ...f, epiId: String(e.id) })); setEpiPickerOpen(false); setEpiPickerSearch(""); }}
-                            className={`w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent text-left transition-colors ${String(e.id) === transForm.epiId ? "bg-accent" : ""}`}
-                          >
-                            {e.fotoUrl
-                              ? <img src={e.fotoUrl} alt={e.nome} className="h-12 w-12 rounded-md object-cover border flex-shrink-0" />
-                              : <div className="h-12 w-12 rounded-md border bg-muted flex items-center justify-center flex-shrink-0"><HardHat className="h-5 w-5 text-muted-foreground" /></div>
-                            }
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm truncate">{e.nome}</p>
-                              <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                                {e.tamanho && <span className="text-xs text-blue-700 font-semibold">Tam: {e.tamanho}</span>}
-                                {e.ca && <span className="text-xs text-muted-foreground">CA: {e.ca}</span>}
-                                <span className={`text-xs font-medium ${(e.quantidadeEstoque ?? 0) === 0 ? "text-red-600" : "text-green-700"}`}>
-                                  Estoque: {e.quantidadeEstoque ?? 0}
-                                </span>
-                              </div>
-                            </div>
-                            {String(e.id) === transForm.epiId && <div className="h-5 w-5 rounded-full bg-[#1B2A4A] flex items-center justify-center flex-shrink-0"><span className="text-white text-xs">✓</span></div>}
-                          </button>
-                        ))}
-                      {episList.filter((e: any) => {
-                        if (!epiPickerSearch.trim()) return true;
-                        const term = epiPickerSearch.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                        const text = `${e.nome} ${e.tamanho || ''} ${e.ca || ''}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                        return text.includes(term);
-                      }).length === 0 && (
-                        <div className="text-center text-sm text-muted-foreground py-6">Nenhum EPI encontrado</div>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              <div>
                 <Label>Origem *</Label>
                 <div className="flex gap-2 mt-1">
                   <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoOrigem: 'central', origemObraId: '' }))}
-                    className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${
-                      transForm.tipoOrigem === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'
-                    }`}>
+                    className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoOrigem === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
                     🏢 Escritório Central
-                    {transForm.epiId && <span className="block text-[10px] text-blue-600 mt-0.5">Estoque: {episList.find((e: any) => String(e.id) === transForm.epiId)?.quantidadeEstoque ?? 0}</span>}
                   </button>
                   <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoOrigem: 'obra' }))}
-                    className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${
-                      transForm.tipoOrigem === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'
-                    }`}>
+                    className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoOrigem === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
                     🏗️ Outra Obra
                   </button>
                 </div>
@@ -2813,14 +2648,9 @@ export default function Epis() {
                   <Select value={transForm.origemObraId || undefined} onValueChange={v => setTransForm(f => ({ ...f, origemObraId: v }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione a obra de origem..." /></SelectTrigger>
                     <SelectContent>
-                      {obrasList.map((o: any) => (
-                        <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-                      ))}
+                      {obrasList.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {transForm.epiId && transForm.origemObraId && (
-                    <p className="text-xs text-green-600 mt-1">Estoque nesta obra: {estoqueObraList2.find((e: any) => e.epiId === parseInt(transForm.epiId) && e.obraId === parseInt(transForm.origemObraId))?.quantidade ?? 0}</p>
-                  )}
                 </div>
               )}
 
@@ -2828,16 +2658,12 @@ export default function Epis() {
                 <Label>Destino *</Label>
                 <div className="flex gap-2 mt-1">
                   <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoDestino: 'obra', destinoObraId: '' }))}
-                    className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${
-                      transForm.tipoDestino === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'
-                    }`}>
+                    className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoDestino === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
                     🏗️ Obra
                   </button>
                   {transForm.tipoOrigem === 'obra' && (
                     <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoDestino: 'central', destinoObraId: '' }))}
-                      className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${
-                        transForm.tipoDestino === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'
-                      }`}>
+                      className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoDestino === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
                       🏢 Escritório Central
                     </button>
                   )}
@@ -2850,9 +2676,7 @@ export default function Epis() {
                   <Select value={transForm.destinoObraId || undefined} onValueChange={v => setTransForm(f => ({ ...f, destinoObraId: v }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione a obra de destino..." /></SelectTrigger>
                     <SelectContent>
-                      {obrasList.filter((o: any) => String(o.id) !== transForm.origemObraId).map((o: any) => (
-                        <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-                      ))}
+                      {obrasList.filter((o: any) => String(o.id) !== transForm.origemObraId).map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -2860,50 +2684,116 @@ export default function Epis() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Quantidade *</Label>
-                  <Input type="number" min={1} value={transForm.quantidade}
-                    onChange={e => setTransForm(f => ({ ...f, quantidade: parseInt(e.target.value) || 1 }))} />
+                  <Label>Data</Label>
+                  <Input type="date" value={transForm.data} onChange={e => setTransForm(f => ({ ...f, data: e.target.value }))} />
                 </div>
                 <div>
-                  <Label>Data</Label>
-                  <Input type="date" value={transForm.data}
-                    onChange={e => setTransForm(f => ({ ...f, data: e.target.value }))} />
+                  <Label>Observações</Label>
+                  <Input value={transForm.observacoes} onChange={e => setTransForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Motivo..." />
                 </div>
               </div>
 
-              <div>
-                <Label>Observações</Label>
-                <Input value={transForm.observacoes} onChange={e => setTransForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Motivo da transferência..." />
+              {transItens.length > 0 && (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-[#1B2A4A] text-white px-3 py-1.5 text-sm font-semibold flex items-center gap-2">
+                    <ArrowLeftRight className="h-3.5 w-3.5" /> EPIs para Transferência ({transItens.length})
+                  </div>
+                  <div className="divide-y">
+                    {transItens.map((item) => {
+                      const epi = episList.find((e: any) => String(e.id) === item.epiId);
+                      if (!epi) return null;
+                      return (
+                        <div key={item.epiId} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50">
+                          {epi.fotoUrl ? (
+                            <img src={epi.fotoUrl} alt={epi.nome} className="w-8 h-8 rounded object-cover border flex-shrink-0" />
+                          ) : (
+                            <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center border flex-shrink-0"><HardHat className="h-3.5 w-3.5 text-gray-400" /></div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{epi.nome}{epi.tamanho ? ` (${epi.tamanho})` : ""}</p>
+                            {epi.ca && <p className="text-xs text-gray-500">CA: {epi.ca}</p>}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button type="button" onClick={() => setTransItens(prev => prev.map(i => i.epiId === item.epiId ? { ...i, quantidade: Math.max(1, i.quantidade - 1) } : i))} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-gray-100"><Minus className="h-3 w-3" /></button>
+                            <Input type="number" min={1} value={item.quantidade} onChange={e => setTransItens(prev => prev.map(i => i.epiId === item.epiId ? { ...i, quantidade: Math.max(1, parseInt(e.target.value) || 1) } : i))} className="w-14 h-6 text-center text-sm px-1" />
+                            <button type="button" onClick={() => setTransItens(prev => prev.map(i => i.epiId === item.epiId ? { ...i, quantidade: i.quantidade + 1 } : i))} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-gray-100"><Plus className="h-3 w-3" /></button>
+                          </div>
+                          <button type="button" onClick={() => setTransItens(prev => prev.filter(i => i.epiId !== item.epiId))} className="text-red-500 hover:text-red-700 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 space-y-2">
+                <p className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Plus className="h-4 w-4" /> Adicionar EPI</p>
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <Popover open={epiPickerOpen} onOpenChange={setEpiPickerOpen}>
+                      <PopoverTrigger asChild>
+                        <button type="button" className="w-full flex items-center gap-2 border rounded-md px-3 py-2 text-sm text-left hover:bg-muted/30 transition-colors">
+                          {transForm.epiId ? (() => {
+                            const sel = episList.find((e: any) => String(e.id) === transForm.epiId);
+                            return sel ? <span className="truncate">{sel.nome}{sel.tamanho ? ` (${sel.tamanho})` : ''}</span> : <span className="text-muted-foreground">Selecione...</span>;
+                          })() : <span className="text-muted-foreground flex-1">Selecione o EPI...</span>}
+                          <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[420px] p-0" align="start">
+                        <div className="flex items-center border-b px-3 py-2 gap-2">
+                          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <input autoFocus value={epiPickerSearch} onChange={e => setEpiPickerSearch(e.target.value)} placeholder="Buscar por nome, tamanho, CA..." className="flex-1 text-sm outline-none bg-transparent placeholder:text-muted-foreground" />
+                          {epiPickerSearch && <button type="button" onClick={() => setEpiPickerSearch("")} className="text-muted-foreground hover:text-foreground"><XIcon className="h-3.5 w-3.5" /></button>}
+                        </div>
+                        <div className="max-h-[320px] overflow-y-auto p-1">
+                          {episList
+                            .filter((e: any) => !transItens.some(i => i.epiId === String(e.id)))
+                            .filter((e: any) => {
+                              if (!epiPickerSearch.trim()) return true;
+                              const term = epiPickerSearch.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                              const text = `${e.nome} ${e.tamanho || ''} ${e.ca || ''}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                              return text.includes(term);
+                            })
+                            .map((e: any) => (
+                              <button key={e.id} type="button" onClick={() => { setTransForm(f => ({ ...f, epiId: String(e.id) })); setEpiPickerOpen(false); setEpiPickerSearch(""); }}
+                                className={`w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent text-left transition-colors ${String(e.id) === transForm.epiId ? "bg-accent" : ""}`}>
+                                {e.fotoUrl ? <img src={e.fotoUrl} alt={e.nome} className="h-10 w-10 rounded object-cover border flex-shrink-0" /> : <div className="h-10 w-10 rounded border bg-muted flex items-center justify-center flex-shrink-0"><HardHat className="h-4 w-4 text-muted-foreground" /></div>}
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm truncate">{e.nome}</p>
+                                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                                    {e.tamanho && <span className="text-xs text-blue-700 font-semibold">Tam: {e.tamanho}</span>}
+                                    {e.ca && <span className="text-xs text-muted-foreground">CA: {e.ca}</span>}
+                                    <span className={`text-xs font-medium ${(e.quantidadeEstoque ?? 0) === 0 ? "text-red-600" : "text-green-700"}`}>Estoque: {e.quantidadeEstoque ?? 0}</span>
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="w-20">
+                    <Input type="number" min={1} value={transForm.quantidade} onChange={e => setTransForm(f => ({ ...f, quantidade: parseInt(e.target.value) || 1 }))} placeholder="Qtd" />
+                  </div>
+                  <Button type="button" size="sm" onClick={addTransItem} disabled={!transForm.epiId} className="bg-green-600 hover:bg-green-700 h-9">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" className="flex-1" onClick={() => { setShowTransferDialog(false); resetTransForm(); }}>Cancelar</Button>
-                <Button className="flex-1 bg-[#1B2A4A] hover:bg-[#243660]" disabled={transferirMut.isPending}
-                  onClick={() => {
-                    if (!transForm.epiId) return toast.error('Selecione o EPI');
-                    if (transForm.tipoDestino === 'obra' && !transForm.destinoObraId) return toast.error('Selecione a obra de destino');
-                    if (transForm.tipoOrigem === 'obra' && !transForm.origemObraId) return toast.error('Selecione a obra de origem');
-                    if (transForm.tipoOrigem === 'central' && transForm.tipoDestino === 'central') return toast.error('Não é possível transferir do central para o central');
-                    if (transForm.tipoOrigem === 'obra' && transForm.tipoDestino === 'obra' && transForm.origemObraId === transForm.destinoObraId) return toast.error('Origem e destino não podem ser a mesma obra');
-                    transferirMut.mutate({
-                      companyId: queryCompanyId,
-                      epiId: parseInt(transForm.epiId),
-                      quantidade: transForm.quantidade,
-                      tipoOrigem: transForm.tipoOrigem,
-                      origemObraId: transForm.origemObraId ? parseInt(transForm.origemObraId) : undefined,
-                      tipoDestino: transForm.tipoDestino,
-                      destinoObraId: transForm.destinoObraId ? parseInt(transForm.destinoObraId) : undefined,
-                      data: transForm.data,
-                      observacoes: transForm.observacoes || undefined,
-                    });
-                  }}>
-                  {transferirMut.isPending ? 'Transferindo...' : 'Confirmar Transferência'}
+                <Button className="flex-1 bg-[#1B2A4A] hover:bg-[#243660]" disabled={transSaving || (transItens.length === 0 && !transForm.epiId)}
+                  onClick={handleSubmitTransfer}>
+                  {transSaving ? 'Transferindo...' : `Transferir ${transItens.length > 0 ? transItens.length + (transForm.epiId ? 1 : 0) : 1} EPI(s)`}
                 </Button>
               </div>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Dialog Entrada Direta na Obra */}
       {showEntradaDiretaDialog && (
