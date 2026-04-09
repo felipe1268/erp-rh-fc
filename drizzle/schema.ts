@@ -101,8 +101,8 @@ export const atestados = pgTable("atestados", {
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         dataEmissao: date({ mode: 'string' }).notNull(),
         diasAfastamento: integer().default(0),
-        horasAfastamento: integer().default(0),
-        afastamentoTipo: varchar({ length: 20 }).default("dia"),
+        horasAfastamento: integer("horas_afastamento").default(0),
+        afastamentoTipo: varchar("afastamento_tipo", { length: 20 }).default("dia"),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         dataRetorno: date({ mode: 'string' }),
         cid: varchar({ length: 20 }),
