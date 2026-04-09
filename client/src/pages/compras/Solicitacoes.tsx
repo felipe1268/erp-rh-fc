@@ -3458,7 +3458,7 @@ export default function Solicitacoes() {
 
       {/* ── Dialog Detalhe SC ─────────────────────────────────────── */}
       <Dialog open={showDetalhe !== null} onOpenChange={v => { if (!v) { setShowDetalhe(null); setRecebQtd({}); setEditMode(false); setEditForm(null); setEditItens([]); setAbaScDetalhe("detalhes"); } }}>
-        <DialogContent className="border-gray-200 w-[96vw] max-w-[96vw] h-[94vh] max-h-[94vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
+        <DialogContent className="border-gray-200 w-[96vw] max-w-[96vw] h-[94vh] max-h-[94vh] flex flex-col overflow-hidden" style={{ background: '#ffffff', color: '#111827' }}>
           {detalheQ.isLoading ? (
             <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
           ) : detalheQ.isError ? (
@@ -3572,6 +3572,7 @@ export default function Solicitacoes() {
                 )}
               </DialogHeader>
 
+              <div className="flex-1 overflow-y-auto min-h-0 space-y-3">
               {/* Abas: Detalhes / Cotação / OC */}
               {(scCotacaoId || scOcId) && (
               <div className="flex items-center gap-0 bg-gray-100 rounded-xl p-1 mt-1">
@@ -4207,6 +4208,7 @@ export default function Solicitacoes() {
                   })()}
                 </div>
               )}
+              </div>
             </>
           ) : (
             <div className="py-10 text-center space-y-2">
