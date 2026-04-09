@@ -1359,12 +1359,14 @@ export default function Solicitacoes() {
     if (eapExpanded === it.id) { setEapExpanded(null); return; }
     setEapExpanded(it.id);
 
-    if (form.tipo === "servico") return;
+    const isComposto = it.isComposto || it.tipo === "Composto" || it.servicoCodigo === "composto";
+    if (form.tipo === "servico" && !isComposto) return;
 
-    if (!eapInsumos[it.id] && it.servicoCodigo) {
+    const codigoParaBusca = it.servicoCodigoOriginal || it.servicoCodigo;
+    if (!eapInsumos[it.id] && codigoParaBusca && codigoParaBusca !== "composto") {
       setLoadingInsumos(it.id);
       try {
-        const insumos = await trpcCtx.compras.getInsumosComposicao.fetch({ companyId, servicoCodigo: it.servicoCodigo, tipoSC: form.tipo, incluirEquip: form.incluirEquipamentos });
+        const insumos = await trpcCtx.compras.getInsumosComposicao.fetch({ companyId, servicoCodigo: codigoParaBusca, tipoSC: form.tipo, incluirEquip: form.incluirEquipamentos });
         setEapInsumos(prev => ({ ...prev, [it.id]: insumos }));
       } catch { setEapInsumos(prev => ({ ...prev, [it.id]: [] })); }
       setLoadingInsumos(null);
@@ -2372,6 +2374,7 @@ export default function Solicitacoes() {
                             const visibleItems = (eapQ.data?.items ?? [])
                               .filter((it: any) => it.nivel >= 2 && it.tipo !== "grupo")
                               .filter((it: any) => {
+                                if (it.isComposto || it.tipo === "Composto" || it.servicoCodigo === "composto") return true;
                                 if (form.tipo === "servico") return !!it.servicoCodigo && it.temMdo;
                                 if (form.tipo === "equipamento") return !!it.servicoCodigo && it.temEquip;
                                 if (!it.servicoCodigo) return true;
@@ -2422,7 +2425,7 @@ export default function Solicitacoes() {
                           {(() => {
                             const allItems = eapQ.data.items;
                             const isLeaf = (it: any) => {
-                              if (it.isComposto || it.tipo === "Composto" || it.servicoCodigo === "composto") return false;
+                              if (it.isComposto || it.tipo === "Composto" || it.servicoCodigo === "composto") return true;
                               if (form.tipo === "servico") return !!it.servicoCodigo && it.servicoCodigo !== "composto" && (it as any).temMdo;
                               if (form.tipo === "equipamento") return !!it.servicoCodigo && it.servicoCodigo !== "composto" && (it as any).temEquip;
                               if (it.tipo === "grupo" || it.tipo === "Etapa/Subetapa") return false;
@@ -2565,6 +2568,9 @@ export default function Solicitacoes() {
                                       <div className="text-xs text-gray-900 truncate">
                                         <span className="font-semibold text-amber-700 mr-1.5">{it.eapCodigo}</span>
                                         {it.descricao}
+                                        {(it.isComposto || it.tipo === "Composto") && (
+                                          <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 shrink-0">COMPOSTO</span>
+                                        )}
                                         {editingSc && editingOriginalEapIds.has(it.id) && (
                                           <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-100 text-blue-700 border border-blue-200">
                                             Já na SC
@@ -2671,6 +2677,36 @@ export default function Solicitacoes() {
                                               </button>
                                             )}
                                           </div>
+                                          {(it.isComposto || it.tipo === "Composto") && (
+                                            <>
+                                              {loadingInsumos === it.id ? (
+                                                <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                                                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando insumos da composição...
+                                                </div>
+                                              ) : insLista && insLista.length > 0 ? (
+                                                <div className="space-y-1">
+                                                  <div className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide flex items-center gap-1">
+                                                    <Package className="h-3 w-3" /> Insumos da composição ({insLista.length})
+                                                  </div>
+                                                  <div className="bg-white rounded border border-gray-200 divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                                                    {insLista.map((ins: any, idx: number) => (
+                                                      <div key={idx} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+                                                        <div className="flex-1 min-w-0">
+                                                          <div className="text-gray-900 truncate">{ins.descricao}</div>
+                                                          <div className="text-[10px] text-gray-400">Coef: {ins.coeficiente} | {ins.unidade}</div>
+                                                        </div>
+                                                        <div className="text-right shrink-0 text-gray-600 font-medium">
+                                                          {(qtdVal > 0 ? Math.ceil((qtdVal * ins.coeficiente) * 1000) / 1000 : 0).toLocaleString("pt-BR")} {ins.unidade}
+                                                        </div>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              ) : insLista && insLista.length === 0 ? (
+                                                <div className="text-xs text-gray-400 py-1">Nenhum insumo cadastrado para esta composição.</div>
+                                              ) : null}
+                                            </>
+                                          )}
                                         </>
                                       ) : (
                                         <>

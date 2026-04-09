@@ -6648,22 +6648,26 @@ Retorne APENAS um JSON válido neste formato:
 
       const items = orcItems.map(it => {
         const isComposto = it.tipo === 'Composto' || it.servicoCodigo === 'composto';
+        const originalServicoCodigo = it.servicoCodigo;
         const realServicoCodigo = isComposto ? null : it.servicoCodigo;
         const decomp = realServicoCodigo ? mdoDecompMap[realServicoCodigo] : undefined;
+        const compostoDecomp = (isComposto && originalServicoCodigo && originalServicoCodigo !== 'composto') ? mdoDecompMap[originalServicoCodigo] : undefined;
+        const compostoMdoMat = (isComposto && originalServicoCodigo && originalServicoCodigo !== 'composto') ? mdoMatMap[originalServicoCodigo] : undefined;
         return {
           ...it,
           servicoCodigo: realServicoCodigo || it.servicoCodigo,
+          servicoCodigoOriginal: isComposto ? originalServicoCodigo : undefined,
           isComposto,
           prazoFim: atividadesMap[it.eapCodigo]?.dataFim ?? null,
           duracaoDias: atividadesMap[it.eapCodigo]?.duracaoDias ?? null,
-          temMat: realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temMat ?? false) : true,
-          temMdo: realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temMdo ?? false) : false,
-          temEquip: realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temEquip ?? false) : false,
+          temMat: isComposto ? (compostoMdoMat?.temMat ?? true) : (realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temMat ?? false) : true),
+          temMdo: isComposto ? (compostoMdoMat?.temMdo ?? true) : (realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temMdo ?? false) : false),
+          temEquip: isComposto ? (compostoMdoMat?.temEquip ?? false) : (realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temEquip ?? false) : false),
           mdoContratado: mdoContratadoMap[it.id] || 0,
           mdoSaldo: n(it.quantidade) - (mdoContratadoMap[it.id] || 0),
-          mdoProfissional: decomp?.profissional ?? 0,
-          mdoAjudante: decomp?.ajudante ?? 0,
-          temAjudante: decomp?.temAjudante ?? false,
+          mdoProfissional: isComposto ? (compostoDecomp?.profissional ?? 0) : (decomp?.profissional ?? 0),
+          mdoAjudante: isComposto ? (compostoDecomp?.ajudante ?? 0) : (decomp?.ajudante ?? 0),
+          temAjudante: isComposto ? (compostoDecomp?.temAjudante ?? false) : (decomp?.temAjudante ?? false),
         };
       });
 
