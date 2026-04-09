@@ -2266,7 +2266,7 @@ export default function Solicitacoes() {
                   >
                     <FileText className="h-3 w-3" /> Manual / Avulso
                   </button>
-                  {form.tipo === "servico" && orcIdParaDisciplina && (
+                  {orcIdParaDisciplina && (
                     <button
                       type="button"
                       onClick={() => setShowDisciplinas(true)}
