@@ -208,6 +208,27 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
     onError: (err) => toast.error(err.message),
   });
 
+  const verifyPasswordMut = trpc.auth.verifyPassword.useMutation();
+
+  const handleReplaceAllConfirm = async () => {
+    if (!replaceAllPassword.trim()) {
+      setReplaceAllPasswordError("Digite sua senha");
+      return;
+    }
+    setVerifyingPassword(true);
+    setReplaceAllPasswordError("");
+    try {
+      await verifyPasswordMut.mutateAsync({ password: replaceAllPassword });
+      setShowReplaceAllConfirm(false);
+      setReplaceAllPassword("");
+      handleUploadSelective("replace_all");
+    } catch (e: any) {
+      setReplaceAllPasswordError(e?.message === "Senha incorreta" ? "Senha incorreta. Tente novamente." : (e?.message || "Erro ao verificar senha"));
+    } finally {
+      setVerifyingPassword(false);
+    }
+  };
+
   function handleCalcular() {
     if (!confirm("Deseja calcular/recalcular os descontos CLT do mês? Os cálculos anteriores serão substituídos.")) return;
     calcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
@@ -555,6 +576,10 @@ export default function FechamentoPonto() {
   const [previewData, setPreviewData] = useState<any>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<number>>(new Set());
+  const [showReplaceAllConfirm, setShowReplaceAllConfirm] = useState(false);
+  const [replaceAllPassword, setReplaceAllPassword] = useState("");
+  const [replaceAllPasswordError, setReplaceAllPasswordError] = useState("");
+  const [verifyingPassword, setVerifyingPassword] = useState(false);
   const [selectiveSearch, setSelectiveSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterObra, setFilterObra] = useState<string>("all");
@@ -3716,7 +3741,7 @@ export default function FechamentoPonto() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => handleUploadSelective("replace_all")}
+                  <button onClick={() => { setShowReplaceAllConfirm(true); setReplaceAllPassword(""); setReplaceAllPasswordError(""); }}
                     className="border-2 border-red-200 bg-white rounded-xl p-4 hover:bg-red-50 hover:border-red-400 transition-all text-left group">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="h-10 w-10 rounded-lg bg-red-100 group-hover:bg-red-200 flex items-center justify-center transition-colors">
@@ -3827,6 +3852,70 @@ export default function FechamentoPonto() {
             )}
           </div>
         </FullScreenDialog>
+
+        {showReplaceAllConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center" style={{ zIndex: 99999 }}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+              <div className="bg-gradient-to-r from-red-700 to-red-500 px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
+                    <AlertTriangle className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-bold text-lg">Confirmação de Segurança</h3>
+                    <p className="text-red-100 text-xs">Ação destrutiva — requer autenticação</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 space-y-2">
+                  <p className="text-sm font-bold text-red-800 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" /> ATENÇÃO: Você irá PERDER TODOS os ajustes realizados
+                  </p>
+                  <ul className="text-xs text-red-700 space-y-1 ml-6 list-disc">
+                    <li>Todos os registros DIXI existentes serão <strong>apagados permanentemente</strong></li>
+                    <li>Ajustes manuais de horários DIXI serão <strong>perdidos</strong></li>
+                    <li>Abonos realizados em registros DIXI serão <strong>removidos</strong></li>
+                    <li>Registros de fonte <strong>manual</strong> serão preservados</li>
+                  </ul>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Digite sua senha para confirmar:</label>
+                  <input
+                    type="password"
+                    autoFocus
+                    className={`mt-1.5 w-full px-3 py-2.5 border-2 rounded-lg text-sm outline-none transition-colors ${
+                      replaceAllPasswordError ? "border-red-400 bg-red-50" : "border-gray-300 focus:border-blue-500"
+                    }`}
+                    placeholder="Sua senha de login"
+                    value={replaceAllPassword}
+                    onChange={e => { setReplaceAllPassword(e.target.value); setReplaceAllPasswordError(""); }}
+                    onKeyDown={e => { if (e.key === "Enter") handleReplaceAllConfirm(); if (e.key === "Escape") { setShowReplaceAllConfirm(false); setReplaceAllPassword(""); } }}
+                  />
+                  {replaceAllPasswordError && (
+                    <p className="text-xs text-red-600 mt-1 font-medium">{replaceAllPasswordError}</p>
+                  )}
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button variant="outline" onClick={() => { setShowReplaceAllConfirm(false); setReplaceAllPassword(""); }}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleReplaceAllConfirm}
+                    disabled={verifyingPassword || !replaceAllPassword.trim()}
+                    className="bg-red-600 hover:bg-red-700 text-white shadow-md"
+                  >
+                    {verifyingPassword ? (
+                      <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" /> Verificando...</>
+                    ) : (
+                      <><ArrowRightLeft className="h-4 w-4 mr-2" /> Confirmar Substituição</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ===== MANUAL ENTRY DIALOG (FULL SCREEN) ===== */}
         <FullScreenDialog open={showManualDialog} onClose={() => setShowManualDialog(false)} title="Lançamento Manual" subtitle={`Competência: ${formatMesAno(mesAno)}`} icon={<PenLine className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-purple-800 to-purple-600">
