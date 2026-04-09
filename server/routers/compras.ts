@@ -9303,13 +9303,7 @@ Retorne APENAS um JSON válido neste formato:
       uniq.forEach((disc, desc) => { correcoesCtx += `- "${desc}" → ${disc}\n`; });
     }
 
-    const listaSvc = servicos.map(s => `${s.eapCodigo}: ${s.descricao}`).join("\n");
-
-    const result = await invokeLLM({
-      messages: [
-        {
-          role: "system",
-          content: `Você é um engenheiro civil sênior especialista em orçamentos de construção civil no Brasil. Sua tarefa é classificar serviços/composições de um orçamento de obra em DISCIPLINAS construtivas.
+    const systemPrompt = `Você é um engenheiro civil sênior especialista em orçamentos de construção civil no Brasil. Sua tarefa é classificar serviços/composições de um orçamento de obra em DISCIPLINAS construtivas.
 
 DISCIPLINAS TÍPICAS (use estas preferencialmente, pode criar outras se necessário):
 - Serviços Preliminares (canteiro, mobilização, placa, tapume, barracão)
@@ -9350,42 +9344,72 @@ REGRAS IMPORTANTES:
 6. Priorize as correções do usuário quando houver${correcoesCtx}
 
 Responda APENAS com JSON válido, sem markdown, no formato:
-[{"eap":"XX.XX.XX.XX","disc":"Nome da Disciplina"},...]`,
-        },
-        {
-          role: "user",
-          content: `Classifique estes ${servicos.length} serviços por disciplina:\n\n${listaSvc}`,
-        },
-      ],
-      maxTokens: 16000,
-    });
+[{"eap":"XX.XX.XX.XX","disc":"Nome da Disciplina"},...]`;
 
-    const raw = typeof result.choices?.[0]?.message?.content === "string"
-      ? result.choices[0].message.content
-      : "";
+    const CHUNK_SIZE = 150;
+    const chunks: typeof servicos[] = [];
+    for (let i = 0; i < servicos.length; i += CHUNK_SIZE) {
+      chunks.push(servicos.slice(i, i + CHUNK_SIZE));
+    }
+    console.log(`[ClassificarDisciplinas] ${servicos.length} itens em ${chunks.length} lote(s) de até ${CHUNK_SIZE}`);
 
-    if (!raw || raw.trim().length === 0) {
-      console.error("[ClassificarDisciplinas] IA retornou resposta vazia. Result:", JSON.stringify(result).substring(0, 300));
-      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA retornou resposta vazia. Tente novamente." });
+    function parseChunkJson(raw: string): Array<{ eap: string; disc: string }> {
+      if (!raw || raw.trim().length === 0) return [];
+      let jsonStr = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const bracketStart = jsonStr.indexOf("[");
+      if (bracketStart < 0) return [];
+      jsonStr = jsonStr.substring(bracketStart);
+      const bracketEnd = jsonStr.lastIndexOf("]");
+      if (bracketEnd > 0) {
+        jsonStr = jsonStr.substring(0, bracketEnd + 1);
+      } else {
+        const lastComplete = jsonStr.lastIndexOf("}");
+        if (lastComplete > 0) {
+          jsonStr = jsonStr.substring(0, lastComplete + 1) + "]";
+        }
+      }
+      jsonStr = jsonStr.replace(/,\s*]/g, "]").replace(/,\s*}/g, "}");
+      return JSON.parse(jsonStr);
     }
 
     let classificacoes: Array<{ eap: string; disc: string }> = [];
-    try {
-      let jsonStr = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-      const bracketStart = jsonStr.indexOf("[");
-      const bracketEnd = jsonStr.lastIndexOf("]");
-      if (bracketStart >= 0 && bracketEnd > bracketStart) {
-        jsonStr = jsonStr.substring(bracketStart, bracketEnd + 1);
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      const listaSvc = chunk.map(s => `${s.eapCodigo}: ${s.descricao}`).join("\n");
+      console.log(`[ClassificarDisciplinas] Processando lote ${ci + 1}/${chunks.length} (${chunk.length} itens)...`);
+
+      const result = await invokeLLM({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Classifique estes ${chunk.length} serviços por disciplina:\n\n${listaSvc}` },
+        ],
+        maxTokens: 16000,
+      });
+
+      const raw = typeof result.choices?.[0]?.message?.content === "string"
+        ? result.choices[0].message.content
+        : "";
+
+      if (!raw || raw.trim().length === 0) {
+        console.error(`[ClassificarDisciplinas] Lote ${ci + 1}: IA retornou resposta vazia`);
+        continue;
       }
-      jsonStr = jsonStr.replace(/,\s*]/g, "]").replace(/,\s*}/g, "}");
-      classificacoes = JSON.parse(jsonStr);
-    } catch (parseErr: any) {
-      console.error("[ClassificarDisciplinas] Parse error:", parseErr?.message, "Raw (first 500):", raw.substring(0, 500));
-      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA retornou formato inválido. Tente novamente." });
+
+      try {
+        const parsed = parseChunkJson(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          classificacoes.push(...parsed);
+          console.log(`[ClassificarDisciplinas] Lote ${ci + 1}: ${parsed.length} classificações obtidas`);
+        } else {
+          console.error(`[ClassificarDisciplinas] Lote ${ci + 1}: parse retornou vazio`);
+        }
+      } catch (parseErr: any) {
+        console.error(`[ClassificarDisciplinas] Lote ${ci + 1} parse error:`, parseErr?.message, "Raw (first 500):", raw.substring(0, 500));
+      }
     }
 
-    if (!Array.isArray(classificacoes) || classificacoes.length === 0)
-      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA não retornou classificações." });
+    if (classificacoes.length === 0)
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA não retornou classificações. Tente novamente." });
 
     const svcMap = new Map(servicos.map(s => [s.eapCodigo, s]));
     const seen = new Set<string>();
