@@ -2283,128 +2283,166 @@ export default function ControleDocumentos() {
 
       {/* ===================== DIALOG: ATESTADO (Criar/Editar) ===================== */}
       <FullScreenDialog open={showAtestDialog} onClose={() => { setShowAtestDialog(false); setEditingAtestId(null); }} title={editingAtestId ? "Editar Atestado" : "Novo Atestado"} icon={<FileText className="h-5 w-5 text-white" />}>
-        <div className="w-full">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
-              <EmployeeSelect value={atestForm.employeeId} onChange={id => setAtestForm({ ...atestForm, employeeId: id })} />
+        <div className="w-full max-w-3xl mx-auto space-y-5">
+
+          <div className="rounded-xl border bg-gradient-to-r from-blue-50 to-indigo-50 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-blue-600 flex items-center justify-center"><Search className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-blue-900">Colaborador</h3>
             </div>
-            <div>
-              <label className="text-sm font-medium">Tipo *</label>
-              <Select value={atestForm.tipo || ""} onValueChange={v => setAtestForm({ ...atestForm, tipo: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Atestado Médico">Atestado Médico</SelectItem>
-                  <SelectItem value="Atestado Odontológico">Atestado Odontológico</SelectItem>
-                  <SelectItem value="Declaração de Comparecimento">Declaração de Comparecimento</SelectItem>
-                  <SelectItem value="Atestado de Acompanhamento">Atestado de Acompanhamento</SelectItem>
-                  <SelectItem value="Licença Maternidade">Licença Maternidade</SelectItem>
-                  <SelectItem value="Licença Paternidade">Licença Paternidade</SelectItem>
-                  <SelectItem value="Outros">Outros</SelectItem>
-                </SelectContent>
-              </Select>
+            <EmployeeSelect value={atestForm.employeeId} onChange={id => setAtestForm({ ...atestForm, employeeId: id })} />
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-violet-600 flex items-center justify-center"><Stethoscope className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Dados do Atestado</h3>
             </div>
-            <div>
-              <label className="text-sm font-medium">Data Emissão *</label>
-              <Input type="date" value={atestForm.dataEmissao || ""} onChange={e => setAtestForm({ ...atestForm, dataEmissao: e.target.value })} />
-            </div>
-            <div className="col-span-2">
-              <label className="text-sm font-medium mb-2 block">Tipo de Afastamento</label>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setAtestForm({ ...atestForm, afastamentoTipo: "dia", horasAfastamento: 0 })}
-                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all ${(!atestForm.afastamentoTipo || atestForm.afastamentoTipo === "dia") ? "bg-blue-50 text-blue-700 border-blue-300 ring-2 ring-blue-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                  Dia(s) inteiro(s)
-                </button>
-                <button type="button" onClick={() => setAtestForm({ ...atestForm, afastamentoTipo: "horas", diasAfastamento: 0 })}
-                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all ${atestForm.afastamentoTipo === "horas" ? "bg-amber-50 text-amber-700 border-amber-300 ring-2 ring-amber-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                  Horas (parcial)
-                </button>
-              </div>
-            </div>
-            {(!atestForm.afastamentoTipo || atestForm.afastamentoTipo === "dia") ? (
-              <>
-                <div>
-                  <label className="text-sm font-medium">Dias de Afastamento</label>
-                  <Input type="number" min={0} value={atestForm.diasAfastamento || 0} onChange={e => setAtestForm({ ...atestForm, diasAfastamento: parseInt(e.target.value) || 0 })} />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Data Retorno</label>
-                  <Input type="date" value={atestForm.dataRetorno || ""} onChange={e => setAtestForm({ ...atestForm, dataRetorno: e.target.value })} />
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <label className="text-sm font-medium">Horas de Afastamento</label>
-                  <Input type="number" min={1} max={12} value={atestForm.horasAfastamento || ""} onChange={e => setAtestForm({ ...atestForm, horasAfastamento: parseInt(e.target.value) || 0 })} placeholder="Ex: 2, 4, 6" />
-                  <p className="text-[10px] text-gray-400 mt-0.5">Horas que o funcionário ficou fora do expediente</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Data Retorno</label>
-                  <Input type="date" value={atestForm.dataRetorno || ""} onChange={e => setAtestForm({ ...atestForm, dataRetorno: e.target.value })} />
-                </div>
-              </>
-            )}
-            <div>
-              <label className="text-sm font-medium">CID</label>
-              <Input value={atestForm.cid || ""} onChange={e => setAtestForm({ ...atestForm, cid: e.target.value })} placeholder="Ex: J11, M54.5" />
-            </div>
-            <div className="col-span-2">
-              <MedicoAutocomplete
-                medicoValue={atestForm.medico || ""}
-                crmValue={atestForm.crm || ""}
-                onSelect={(nome, crm) => setAtestForm((prev: any) => ({ ...prev, medico: nome, crm }))}
-                onChangeMedico={v => setAtestForm((prev: any) => ({ ...prev, medico: v }))}
-                onChangeCrm={v => setAtestForm((prev: any) => ({ ...prev, crm: v }))}
-                companyId={companyId}
-                companyIds={companyIds}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Motivo do Atestado *</label>
-              <Select value={atestForm.motivo || ""} onValueChange={v => setAtestForm({ ...atestForm, motivo: v, motivoOutro: v !== "Outros" ? "" : atestForm.motivoOutro })}>
-                <SelectTrigger><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Consulta Médica">Consulta Médica</SelectItem>
-                  <SelectItem value="Doença">Doença</SelectItem>
-                  <SelectItem value="Acidente">Acidente</SelectItem>
-                  <SelectItem value="Cirurgia">Cirurgia</SelectItem>
-                  <SelectItem value="Acompanhamento Familiar">Acompanhamento Familiar</SelectItem>
-                  <SelectItem value="Exame">Exame</SelectItem>
-                  <SelectItem value="Tratamento">Tratamento</SelectItem>
-                  <SelectItem value="Saúde Mental">Saúde Mental</SelectItem>
-                  <SelectItem value="Outros">Outros</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {atestForm.motivo === "Outros" && (
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium">Especifique o Motivo *</label>
-                <Input value={atestForm.motivoOutro || ""} onChange={e => setAtestForm({ ...atestForm, motivoOutro: e.target.value })} placeholder="Descreva o motivo" />
+                <label className="text-xs font-medium text-gray-600">Tipo *</label>
+                <Select value={atestForm.tipo || ""} onValueChange={v => setAtestForm({ ...atestForm, tipo: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Atestado Médico">Atestado Médico</SelectItem>
+                    <SelectItem value="Atestado Odontológico">Atestado Odontológico</SelectItem>
+                    <SelectItem value="Declaração de Comparecimento">Declaração de Comparecimento</SelectItem>
+                    <SelectItem value="Atestado de Acompanhamento">Atestado de Acompanhamento</SelectItem>
+                    <SelectItem value="Licença Maternidade">Licença Maternidade</SelectItem>
+                    <SelectItem value="Licença Paternidade">Licença Paternidade</SelectItem>
+                    <SelectItem value="Outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Descrição</label>
-              <Textarea value={atestForm.descricao || ""} onChange={e => setAtestForm({ ...atestForm, descricao: e.target.value })} rows={2} />
+              <div>
+                <label className="text-xs font-medium text-gray-600">Data Emissão *</label>
+                <Input type="date" className="mt-1" value={atestForm.dataEmissao || ""} onChange={e => setAtestForm({ ...atestForm, dataEmissao: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">CID</label>
+                <Input className="mt-1" value={atestForm.cid || ""} onChange={e => setAtestForm({ ...atestForm, cid: e.target.value })} placeholder="Ex: J11, M54.5" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Motivo *</label>
+                <Select value={atestForm.motivo || ""} onValueChange={v => setAtestForm({ ...atestForm, motivo: v, motivoOutro: v !== "Outros" ? "" : atestForm.motivoOutro })}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Consulta Médica">Consulta Médica</SelectItem>
+                    <SelectItem value="Doença">Doença</SelectItem>
+                    <SelectItem value="Acidente">Acidente</SelectItem>
+                    <SelectItem value="Cirurgia">Cirurgia</SelectItem>
+                    <SelectItem value="Acompanhamento Familiar">Acompanhamento Familiar</SelectItem>
+                    <SelectItem value="Exame">Exame</SelectItem>
+                    <SelectItem value="Tratamento">Tratamento</SelectItem>
+                    <SelectItem value="Saúde Mental">Saúde Mental</SelectItem>
+                    <SelectItem value="Outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {atestForm.motivo === "Outros" && (
+                <div className="col-span-2">
+                  <label className="text-xs font-medium text-gray-600">Especifique o Motivo *</label>
+                  <Input className="mt-1" value={atestForm.motivoOutro || ""} onChange={e => setAtestForm({ ...atestForm, motivoOutro: e.target.value })} placeholder="Descreva o motivo" />
+                </div>
+              )}
             </div>
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Anexar Documento (PDF/Imagem)</label>
-              <div className="mt-1">
-                <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
-                    setAtestForm({ ...atestForm, _file: file });
-                  }
-                }} />
-                {atestForm._file && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Paperclip className="h-3 w-3" /> {atestForm._file.name}</p>}
-                {editingAtestId && (() => { const at = atestList.find((a: any) => a.id === editingAtestId); return at?.documentoUrl ? <a href={at.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Ver documento atual</a> : null; })()}
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-orange-500 flex items-center justify-center"><Calendar className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Tipo de Afastamento</h3>
+            </div>
+            <div className="flex gap-3 mb-4">
+              <button type="button" onClick={() => setAtestForm({ ...atestForm, afastamentoTipo: "dia", horasAfastamento: 0 })}
+                className={`flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-sm font-semibold border-2 transition-all duration-200 ${(!atestForm.afastamentoTipo || atestForm.afastamentoTipo === "dia")
+                  ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white border-blue-600 shadow-lg shadow-blue-200 scale-[1.02]"
+                  : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:border-gray-300"}`}>
+                <Calendar className="h-4.5 w-4.5" />
+                Dia(s) inteiro(s)
+              </button>
+              <button type="button" onClick={() => setAtestForm({ ...atestForm, afastamentoTipo: "horas", diasAfastamento: 0 })}
+                className={`flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-sm font-semibold border-2 transition-all duration-200 ${atestForm.afastamentoTipo === "horas"
+                  ? "bg-gradient-to-br from-amber-500 to-orange-500 text-white border-orange-500 shadow-lg shadow-orange-200 scale-[1.02]"
+                  : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:border-gray-300"}`}>
+                <Clock className="h-4.5 w-4.5" />
+                Horas (parcial)
+              </button>
+            </div>
+            <div className={`rounded-lg p-4 ${(!atestForm.afastamentoTipo || atestForm.afastamentoTipo === "dia") ? "bg-blue-50/60 border border-blue-100" : "bg-amber-50/60 border border-amber-100"}`}>
+              {(!atestForm.afastamentoTipo || atestForm.afastamentoTipo === "dia") ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-blue-700">Dias de Afastamento</label>
+                    <Input type="number" min={0} className="mt-1 border-blue-200 focus:border-blue-400" value={atestForm.diasAfastamento || 0} onChange={e => setAtestForm({ ...atestForm, diasAfastamento: parseInt(e.target.value) || 0 })} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-blue-700">Data Retorno</label>
+                    <Input type="date" className="mt-1 border-blue-200 focus:border-blue-400" value={atestForm.dataRetorno || ""} onChange={e => setAtestForm({ ...atestForm, dataRetorno: e.target.value })} />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-amber-700">Horas de Afastamento</label>
+                    <Input type="number" min={1} max={12} className="mt-1 border-amber-200 focus:border-amber-400" value={atestForm.horasAfastamento || ""} onChange={e => setAtestForm({ ...atestForm, horasAfastamento: parseInt(e.target.value) || 0 })} placeholder="Ex: 2, 4, 6" />
+                    <p className="text-[10px] text-amber-600 mt-1">Horas fora do expediente naquele dia</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-amber-700">Data Retorno</label>
+                    <Input type="date" className="mt-1 border-amber-200 focus:border-amber-400" value={atestForm.dataRetorno || ""} onChange={e => setAtestForm({ ...atestForm, dataRetorno: e.target.value })} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-teal-600 flex items-center justify-center"><Stethoscope className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Profissional de Saúde</h3>
+            </div>
+            <MedicoAutocomplete
+              medicoValue={atestForm.medico || ""}
+              crmValue={atestForm.crm || ""}
+              onSelect={(nome, crm) => setAtestForm((prev: any) => ({ ...prev, medico: nome, crm }))}
+              onChangeMedico={v => setAtestForm((prev: any) => ({ ...prev, medico: v }))}
+              onChangeCrm={v => setAtestForm((prev: any) => ({ ...prev, crm: v }))}
+              companyId={companyId}
+              companyIds={companyIds}
+            />
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-gray-600 flex items-center justify-center"><FileText className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Observações e Anexo</h3>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600">Descrição</label>
+                <Textarea className="mt-1" value={atestForm.descricao || ""} onChange={e => setAtestForm({ ...atestForm, descricao: e.target.value })} rows={2} placeholder="Observações adicionais..." />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Anexar Documento (PDF/Imagem)</label>
+                <div className="mt-1.5 border-2 border-dashed border-gray-200 rounded-lg p-3 hover:border-blue-300 hover:bg-blue-50/30 transition-colors">
+                  <Input type="file" accept=".pdf,.jpg,.jpeg,.png" className="border-0 shadow-none p-0" onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                      setAtestForm({ ...atestForm, _file: file });
+                    }
+                  }} />
+                </div>
+                {atestForm._file && <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1"><Paperclip className="h-3 w-3" /> {atestForm._file.name}</p>}
+                {editingAtestId && (() => { const at = atestList.find((a: any) => a.id === editingAtestId); return at?.documentoUrl ? <a href={at.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1.5 flex items-center gap-1"><FileText className="h-3 w-3" /> Ver documento atual</a> : null; })()}
               </div>
             </div>
           </div>
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-            <Button variant="outline" onClick={() => { setShowAtestDialog(false); setEditingAtestId(null); }}>Cancelar</Button>
-            <Button onClick={handleSubmitAtest} disabled={createAtest.isPending || updateAtest.isPending}>
+
+          <div className="flex justify-end gap-3 pt-2 pb-4">
+            <Button variant="outline" size="lg" onClick={() => { setShowAtestDialog(false); setEditingAtestId(null); }}>Cancelar</Button>
+            <Button size="lg" className="px-8 shadow-md" onClick={handleSubmitAtest} disabled={createAtest.isPending || updateAtest.isPending}>
               {(createAtest.isPending || updateAtest.isPending) ? "Salvando..." : editingAtestId ? "Atualizar" : "Salvar"}
             </Button>
           </div>
