@@ -3471,26 +3471,26 @@ export default function Solicitacoes() {
           ) : detalhe ? (
             <>
               <DialogHeader>
-                <div className="mr-10">
+                <div className="mr-10 space-y-1.5">
                   <div className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">
                     {(detalhe as any).tipo === "servico" ? "Solicitação de Serviço" : (detalhe as any).tipo === "pacote" ? "Solicitação de Pacote" : (detalhe as any).tipo === "pecas_veiculo" ? "Manutenção de Veículos" : "Solicitação de Compra"}
                   </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <DialogTitle className="text-gray-900 text-lg">
-                      {detalhe.numeroSc}
-                      {detalhe.titulo && <span className="ml-2 text-gray-500 font-normal">— {detalhe.titulo}</span>}
-                      {(detalhe as any).tipo && (detalhe as any).tipo !== "material" && (
-                        <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${
-                          (detalhe as any).tipo === "servico" ? "bg-purple-100 text-purple-700"
-                          : (detalhe as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700"
-                          : (detalhe as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700"
-                          : (detalhe as any).tipo === "pecas_veiculo" ? "bg-teal-100 text-teal-700"
-                          : "bg-blue-100 text-blue-700"
-                        }`}>
-                          {(detalhe as any).tipo === "servico" ? "MDO" : (detalhe as any).tipo === "pacote" ? "MAT+MDO" : (detalhe as any).tipo === "equipamento" ? "EQUIP" : (detalhe as any).tipo === "pecas_veiculo" ? "VEÍC" : (detalhe as any).tipo?.toUpperCase()}
-                        </span>
-                      )}
-                    </DialogTitle>
+                  <DialogTitle className="text-gray-900 text-lg">
+                    {detalhe.numeroSc}
+                    {detalhe.titulo && <span className="ml-2 text-gray-500 font-normal">— {detalhe.titulo}</span>}
+                    {(detalhe as any).tipo && (detalhe as any).tipo !== "material" && (
+                      <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${
+                        (detalhe as any).tipo === "servico" ? "bg-purple-100 text-purple-700"
+                        : (detalhe as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700"
+                        : (detalhe as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700"
+                        : (detalhe as any).tipo === "pecas_veiculo" ? "bg-teal-100 text-teal-700"
+                        : "bg-blue-100 text-blue-700"
+                      }`}>
+                        {(detalhe as any).tipo === "servico" ? "MDO" : (detalhe as any).tipo === "pacote" ? "MAT+MDO" : (detalhe as any).tipo === "equipamento" ? "EQUIP" : (detalhe as any).tipo === "pecas_veiculo" ? "VEÍC" : (detalhe as any).tipo?.toUpperCase()}
+                      </span>
+                    )}
+                  </DialogTitle>
+                  <div className="flex items-center gap-2">
                     {!["cancelado"].includes(detalhe.status) && (
                       <Button size="sm" variant="outline"
                         onClick={() => {
