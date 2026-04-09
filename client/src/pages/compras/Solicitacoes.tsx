@@ -1524,9 +1524,16 @@ export default function Solicitacoes() {
     } else {
       childItems.forEach((it: any) => {
         if (!selectedEapIds.has(it.id) && !(parseFloat(eapQtdServico[it.id] || "") > 0)) {
-          if (form.tipo === "servico") {
+          if (form.tipo === "servico" || form.tipo === "pacote") {
             const mdoSaldo = (it as any).mdoSaldo;
-            handleEapQtdChange(it.id, mdoSaldo != null && mdoSaldo > 0 ? String(mdoSaldo) : "1", it);
+            if (mdoSaldo != null && mdoSaldo > 0) {
+              handleEapQtdChange(it.id, String(mdoSaldo), it);
+            } else {
+              const orcQtd = parseFloat(it.quantidade || "0");
+              const contratado = (it as any).mdoContratado || 0;
+              const saldoCalc = orcQtd - contratado;
+              handleEapQtdChange(it.id, saldoCalc > 0 ? String(saldoCalc) : "1", it);
+            }
           } else {
             toggleEapItem(it);
           }
@@ -2378,9 +2385,16 @@ export default function Solicitacoes() {
                                   } else {
                                     visibleItems.forEach((it: any) => {
                                       if (!selectedEapIds.has(it.id) && !(parseFloat(eapQtdServico[it.id] || "") > 0)) {
-                                        if (form.tipo === "servico") {
+                                        if (form.tipo === "servico" || form.tipo === "pacote") {
                                           const mdoSaldo = it.mdoSaldo;
-                                          handleEapQtdChange(it.id, mdoSaldo != null && mdoSaldo > 0 ? String(mdoSaldo) : "1", it);
+                                          if (mdoSaldo != null && mdoSaldo > 0) {
+                                            handleEapQtdChange(it.id, String(mdoSaldo), it);
+                                          } else {
+                                            const orcQtd = parseFloat(it.quantidade || "0");
+                                            const contratado = (it as any).mdoContratado || 0;
+                                            const saldoCalc = orcQtd - contratado;
+                                            handleEapQtdChange(it.id, saldoCalc > 0 ? String(saldoCalc) : "1", it);
+                                          }
                                         } else {
                                           toggleEapItem(it);
                                         }
@@ -2508,12 +2522,15 @@ export default function Solicitacoes() {
                                           setSelectedEapIds(prev => { const n = new Set(prev); n.delete(it.id); return n; });
                                           setEapQtdServico(prev => { const n = { ...prev }; delete n[it.id]; return n; });
                                         } else {
-                                          if (form.tipo === "servico") {
+                                          if (form.tipo === "servico" || form.tipo === "pacote") {
                                             const mdoSaldo = (it as any).mdoSaldo;
                                             if (mdoSaldo != null && mdoSaldo > 0) {
                                               handleEapQtdChange(it.id, String(mdoSaldo), it);
                                             } else {
-                                              handleEapQtdChange(it.id, "1", it);
+                                              const orcQtd = parseFloat(it.quantidade || "0");
+                                              const contratado = (it as any).mdoContratado || 0;
+                                              const saldoCalc = orcQtd - contratado;
+                                              handleEapQtdChange(it.id, saldoCalc > 0 ? String(saldoCalc) : "1", it);
                                             }
                                           } else {
                                             if (eapExpanded !== it.id) {
