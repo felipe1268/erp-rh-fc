@@ -551,6 +551,11 @@ export default function FechamentoPonto() {
   const [uploadResult, setUploadResult] = useState<any>(null);
   const [validationResult, setValidationResult] = useState<any>(null);
   const [validating, setValidating] = useState(false);
+  const [showSelectiveDialog, setShowSelectiveDialog] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<number>>(new Set());
+  const [selectiveSearch, setSelectiveSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterObra, setFilterObra] = useState<string>("all");
   const [cardFilter, setCardFilter] = useState<CardFilter>(null);
@@ -639,9 +644,12 @@ export default function FechamentoPonto() {
   const isConsolidado = consolidacaoStatus.data?.consolidado === true;
 
   // ===== MUTATIONS =====
+  const previewMut = trpc.fechamentoPonto.previewDixi.useMutation();
   const uploadMut = trpc.fechamentoPonto.uploadDixi.useMutation({
     onSuccess: (data) => {
       setUploadResult(data);
+      setShowSelectiveDialog(false);
+      setPreviewData(null);
       stats.refetch(); summary.refetch(); inconsistencies.refetch(); monthStatuses.refetch(); conflitos.refetch(); unmatchedData.refetch();
       toast.success(`${data.totalImported} registros importados com sucesso!`);
     },
@@ -940,22 +948,53 @@ export default function FechamentoPonto() {
     }
   };
 
+  const getFilesBase64 = async () => {
+    return Promise.all(
+      uploadFiles.map(async (f) => {
+        const buffer = await f.arrayBuffer();
+        const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ""));
+        return { fileName: f.name, fileBase64: base64 };
+      })
+    );
+  };
+
   const handleUpload = async () => {
     if (uploadFiles.length === 0) return toast.error("Selecione pelo menos um arquivo DIXI");
     if (validationResult && !validationResult.allValid) {
       return toast.error("Corrija os problemas de SN antes de importar.");
     }
+    setPreviewLoading(true);
+    try {
+      const filesData = await getFilesBase64();
+      const preview = await previewMut.mutateAsync({ companyId, companyIds, files: filesData });
+      if (preview.hasExistingData) {
+        setPreviewData(preview);
+        setSelectedEmployeeIds(new Set(preview.employees.map((e: any) => e.employeeId)));
+        setSelectiveSearch("");
+        setShowSelectiveDialog(true);
+      } else {
+        setUploading(true);
+        setUploadResult(null);
+        await uploadMut.mutateAsync({ companyId, companyIds, files: filesData });
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao processar arquivo");
+    } finally {
+      setPreviewLoading(false);
+      setUploading(false);
+    }
+  };
+
+  const handleUploadSelective = async (mode: "replace_all" | "selective") => {
     setUploading(true);
     setUploadResult(null);
     try {
-      const filesData = await Promise.all(
-        uploadFiles.map(async (f) => {
-          const buffer = await f.arrayBuffer();
-          const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ""));
-          return { fileName: f.name, fileBase64: base64 };
-        })
-      );
-      await uploadMut.mutateAsync({ companyId, companyIds, files: filesData });
+      const filesData = await getFilesBase64();
+      await uploadMut.mutateAsync({
+        companyId, companyIds, files: filesData,
+        mode,
+        selectedEmployeeIds: mode === "selective" ? Array.from(selectedEmployeeIds) : undefined,
+      });
     } catch (e) { /* handled */ } finally {
       setUploading(false);
     }
@@ -3641,11 +3680,142 @@ export default function FechamentoPonto() {
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowUploadDialog(false)}>Fechar</Button>
               {!uploadResult && (
-                <Button onClick={handleUpload} disabled={uploading || uploadFiles.length === 0 || validating || (validationResult && !validationResult.allValid)} className="bg-[#1B2A4A] hover:bg-[#243660]">
-                  {uploading ? "Processando..." : "Importar"}
+                <Button onClick={handleUpload} disabled={uploading || previewLoading || uploadFiles.length === 0 || validating || (validationResult && !validationResult.allValid)} className="bg-[#1B2A4A] hover:bg-[#243660]">
+                  {uploading ? "Processando..." : previewLoading ? "Analisando arquivo..." : "Importar"}
                 </Button>
               )}
             </div>
+          </div>
+        </FullScreenDialog>
+
+        {/* ===== SELECTIVE UPLOAD DIALOG ===== */}
+        <FullScreenDialog open={showSelectiveDialog} onClose={() => setShowSelectiveDialog(false)} title="Dados já Existentes" subtitle={previewData ? `${previewData.obraNome} — SN: ${previewData.deviceSerial}` : ""} icon={<ListChecks className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-amber-700 to-amber-500">
+          <div className="w-full max-w-4xl mx-auto">
+            {previewData && !uploading && !uploadResult && (
+              <div className="space-y-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-semibold text-amber-900">Já existem registros DIXI importados para esta obra/período</p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        Competência: <strong>{previewData.meses.map((m: string) => formatMesAno(m)).join(", ")}</strong> —
+                        {" "}{previewData.employees.filter((e: any) => e.jaImportado).length} de {previewData.employees.length} funcionários já possuem dados.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => handleUploadSelective("replace_all")}
+                    className="border-2 border-red-200 bg-white rounded-xl p-4 hover:bg-red-50 hover:border-red-400 transition-all text-left group">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="h-10 w-10 rounded-lg bg-red-100 group-hover:bg-red-200 flex items-center justify-center transition-colors">
+                        <ArrowRightLeft className="h-5 w-5 text-red-600" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-red-800">Substituir Tudo</p>
+                        <p className="text-xs text-red-600">Apaga todos os dados DIXI e reimporta</p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-gray-500 ml-[52px]">Registros manuais são preservados. Apenas dados DIXI são substituídos.</p>
+                  </button>
+
+                  <div className="border-2 border-blue-300 bg-blue-50/50 rounded-xl p-4 text-left ring-2 ring-blue-200">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                        <ListChecks className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-blue-800">Selecionar Funcionários</p>
+                        <p className="text-xs text-blue-600">Escolha quais funcionários atualizar</p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-gray-500 ml-[52px]">Apenas os selecionados abaixo terão seus dados substituídos.</p>
+                  </div>
+                </div>
+
+                <div className="border rounded-xl bg-white overflow-hidden">
+                  <div className="bg-gray-50 border-b px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox"
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                          checked={selectedEmployeeIds.size === previewData.employees.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedEmployeeIds(new Set(previewData.employees.map((emp: any) => emp.employeeId)));
+                            } else {
+                              setSelectedEmployeeIds(new Set());
+                            }
+                          }}
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          {selectedEmployeeIds.size === previewData.employees.length ? "Desmarcar todos" : "Selecionar todos"}
+                        </span>
+                      </label>
+                      <Badge className="bg-blue-100 text-blue-800 text-xs">{selectedEmployeeIds.size} de {previewData.employees.length}</Badge>
+                    </div>
+                    <div className="relative w-64">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                      <Input placeholder="Buscar funcionário..." className="pl-8 h-8 text-sm"
+                        value={selectiveSearch} onChange={e => setSelectiveSearch(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="max-h-[400px] overflow-y-auto divide-y">
+                    {previewData.employees
+                      .filter((emp: any) => {
+                        if (!selectiveSearch) return true;
+                        const term = selectiveSearch.toLowerCase();
+                        return emp.nomeCompleto.toLowerCase().includes(term) || (emp.cpf || "").includes(term) || (emp.funcao || "").toLowerCase().includes(term);
+                      })
+                      .map((emp: any) => (
+                      <label key={emp.employeeId}
+                        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-blue-50/50 transition-colors ${selectedEmployeeIds.has(emp.employeeId) ? "bg-blue-50/30" : ""}`}>
+                        <input type="checkbox"
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4 shrink-0"
+                          checked={selectedEmployeeIds.has(emp.employeeId)}
+                          onChange={(e) => {
+                            const newSet = new Set(selectedEmployeeIds);
+                            if (e.target.checked) newSet.add(emp.employeeId);
+                            else newSet.delete(emp.employeeId);
+                            setSelectedEmployeeIds(newSet);
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{emp.nomeCompleto}</p>
+                          <p className="text-[11px] text-gray-500">{emp.funcao || "—"} {emp.cpf ? `· ${formatCPF(emp.cpf)}` : ""}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs text-gray-500">{emp.totalRegistros} reg.</span>
+                          {emp.jaImportado ? (
+                            <Badge className="bg-amber-100 text-amber-700 text-[10px] px-1.5">Já importado</Badge>
+                          ) : (
+                            <Badge className="bg-green-100 text-green-700 text-[10px] px-1.5">Novo</Badge>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button variant="outline" onClick={() => setShowSelectiveDialog(false)}>Cancelar</Button>
+                  <Button onClick={() => handleUploadSelective("selective")}
+                    disabled={selectedEmployeeIds.size === 0}
+                    className="bg-blue-600 hover:bg-blue-700 shadow-md">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Importar {selectedEmployeeIds.size} funcionário(s)
+                  </Button>
+                </div>
+              </div>
+            )}
+            {uploading && (
+              <div className="flex flex-col items-center justify-center py-16 gap-4">
+                <div className="h-10 w-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-gray-600 font-medium">Processando importação...</p>
+              </div>
+            )}
           </div>
         </FullScreenDialog>
 

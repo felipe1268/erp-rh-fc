@@ -652,13 +652,137 @@ function processRecords(
 export const fechamentoPontoRouter = router({
 
   // ===================== UPLOAD DIXI (INTELIGENTE) =====================
-  // Upload auto-detecta mês dos registros do arquivo. Não depende do filtro de mês.
-  // Valida SN obrigatoriamente - bloqueia se SN não estiver vinculado a obra.
+  previewDixi: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      files: z.array(z.object({ fileName: z.string(), fileBase64: z.string() })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const empList = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+        jornadaTrabalho: employees.jornadaTrabalho,
+        matricula: employees.matricula,
+        codigoInterno: employees.codigoInterno,
+        cpf: employees.cpf,
+        funcao: employees.funcao,
+        status: employees.status,
+      }).from(employees).where(and(
+        companyFilter(employees.companyId, input),
+        sql`${employees.deletedAt} IS NULL`,
+        sql`${employees.status} NOT IN ('Desligado', 'Afastado', 'Recluso', 'Lista_Negra')`,
+      ));
+
+      const activeSns = await db.select({
+        sn: obraSns.sn, obraId: obraSns.obraId, obraNome: obras.nome,
+      }).from(obraSns).leftJoin(obras, eq(obraSns.obraId, obras.id))
+        .where(and(companyFilter(obraSns.companyId, input), eq(obraSns.status, "ativo")));
+      const devices = await db.select().from(dixiDevices).where(companyFilter(dixiDevices.companyId, input));
+      const obrasList = await db.select({ id: obras.id, nome: obras.nome, snRelogioPonto: obras.snRelogioPonto })
+        .from(obras).where(and(companyFilter(obras.companyId, input), sql`${obras.deletedAt} IS NULL`));
+      const memMappings = await db.select({ dixiName: dixiNameMappings.dixiName, employeeId: dixiNameMappings.employeeId })
+        .from(dixiNameMappings).where(companyFilter(dixiNameMappings.companyId, input));
+
+      const previewEmployees: Array<{
+        employeeId: number; nomeCompleto: string; cpf: string; funcao: string;
+        dixiName: string; totalRegistros: number; meses: string[];
+      }> = [];
+      const mesesDetectados = new Set<string>();
+      let obraId: number | null = null;
+      let obraNome = "";
+      let deviceSerial = "";
+
+      for (const file of input.files) {
+        const buffer = Buffer.from(file.fileBase64, "base64");
+        const { records, deviceSerial: sn } = parseDixiXLS(buffer);
+        deviceSerial = sn;
+
+        const snMatch = activeSns.find(s => s.sn === sn);
+        if (snMatch) { obraId = snMatch.obraId; obraNome = snMatch.obraNome || ""; }
+        if (!obraId) {
+          const device = devices.find(d => d.serialNumber === sn);
+          if (device?.obraId) { obraId = device.obraId; const o = obrasList.find(x => x.id === device.obraId); if (o) obraNome = o.nome; }
+        }
+        if (!obraId) {
+          const o = obrasList.find(x => x.snRelogioPonto === sn);
+          if (o) { obraId = o.id; obraNome = o.nome; }
+        }
+
+        const byPerson: Record<string, { dixiName: string; dixiId: string; records: any[] }> = {};
+        for (const rec of records) {
+          const key = rec.nome;
+          if (!byPerson[key]) byPerson[key] = { dixiName: rec.nome, dixiId: rec.dixiId, records: [] };
+          byPerson[key].records.push(rec);
+          const mesRef = rec.data.substring(0, 7);
+          mesesDetectados.add(mesRef);
+        }
+
+        for (const [, group] of Object.entries(byPerson)) {
+          const emp = matchEmployee(group.dixiName, empList as any, group.dixiId, memMappings as any);
+          if (emp) {
+            const existing = previewEmployees.find(p => p.employeeId === emp.id);
+            const meses = Array.from(new Set(group.records.map((r: any) => r.data.substring(0, 7))));
+            if (existing) {
+              existing.totalRegistros += group.records.length;
+              existing.meses = Array.from(new Set([...existing.meses, ...meses]));
+            } else {
+              const empData = empList.find((e: any) => e.id === emp.id) as any;
+              previewEmployees.push({
+                employeeId: emp.id,
+                nomeCompleto: emp.nomeCompleto,
+                cpf: empData?.cpf || "",
+                funcao: empData?.funcao || "",
+                dixiName: group.dixiName,
+                totalRegistros: group.records.length,
+                meses,
+              });
+            }
+          }
+        }
+      }
+
+      const mesesArr = Array.from(mesesDetectados).sort();
+      let existingByEmployee: Record<number, number> = {};
+      if (mesesArr.length > 0 && obraId) {
+        for (const mesRef of mesesArr) {
+          const existingRecs = await db.select({ employeeId: timeRecords.employeeId })
+            .from(timeRecords)
+            .where(and(
+              companyFilter(timeRecords.companyId, input),
+              eq(timeRecords.mesReferencia, mesRef),
+              eq(timeRecords.obraId, obraId),
+              eq(timeRecords.fonte, "dixi"),
+            ));
+          for (const r of existingRecs) {
+            existingByEmployee[r.employeeId] = (existingByEmployee[r.employeeId] || 0) + 1;
+          }
+        }
+      }
+
+      const hasExistingData = Object.keys(existingByEmployee).length > 0;
+
+      return {
+        hasExistingData,
+        obraId, obraNome, deviceSerial,
+        meses: mesesArr,
+        employees: previewEmployees.map(e => ({
+          ...e,
+          jaImportado: !!existingByEmployee[e.employeeId],
+          registrosExistentes: existingByEmployee[e.employeeId] || 0,
+        })).sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto)),
+        totalRegistros: previewEmployees.reduce((sum, e) => sum + e.totalRegistros, 0),
+      };
+    }),
+
   uploadDixi: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), files: z.array(z.object({
         fileName: z.string(),
         fileBase64: z.string(),
       })),
+      mode: z.enum(["replace_all", "selective"]).optional(),
+      selectedEmployeeIds: z.array(z.number()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
@@ -703,6 +827,7 @@ export const fechamentoPontoRouter = router({
       for (const file of input.files) {
         const buffer = Buffer.from(file.fileBase64, "base64");
         const { records, deviceSerial } = parseDixiXLS(buffer);
+        let fileActualInserted = 0;
 
         // ===== VALIDAÇÃO DE SN OBRIGATÓRIA =====
         if (!deviceSerial) {
@@ -830,26 +955,56 @@ export const fechamentoPontoRouter = router({
           inconsByMes[inc.mesReferencia].push(inc);
         }
 
-        // Process each month separately
-        for (const [mesRef, recs] of Object.entries(recordsByMes)) {
+        if (input.mode === "selective" && (!input.selectedEmployeeIds || input.selectedEmployeeIds.length === 0)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Modo seletivo requer pelo menos um funcionário selecionado." });
+        }
+        const isSelective = input.mode === "selective" && input.selectedEmployeeIds && input.selectedEmployeeIds.length > 0;
+        const selectedSet = isSelective ? new Set(input.selectedEmployeeIds) : null;
+
+        for (const [mesRef, allRecs] of Object.entries(recordsByMes)) {
+          const recs = selectedSet ? allRecs.filter((r: any) => selectedSet.has(r.employeeId)) : allRecs;
+          if (recs.length === 0) continue;
           mesesAfetados.add(mesRef);
 
-          // Delete existing DIXI records for this company/mesRef/obra
-          await db.delete(timeRecords).where(
-            and(
-              companyFilter(timeRecords.companyId, input),
-              eq(timeRecords.mesReferencia, mesRef),
-              eq(timeRecords.obraId, obraId!),
-              eq(timeRecords.fonte, "dixi"),
-            )
-          );
-          await db.delete(timeInconsistencies).where(
-            and(
-              companyFilter(timeInconsistencies.companyId, input),
-              eq(timeInconsistencies.mesReferencia, mesRef),
-              eq(timeInconsistencies.obraId, obraId!),
-            )
-          );
+          if (isSelective && selectedSet) {
+            const selIds = input.selectedEmployeeIds!;
+            for (let i = 0; i < selIds.length; i += 50) {
+              const batch = selIds.slice(i, i + 50);
+              await db.delete(timeRecords).where(
+                and(
+                  companyFilter(timeRecords.companyId, input),
+                  eq(timeRecords.mesReferencia, mesRef),
+                  eq(timeRecords.obraId, obraId!),
+                  eq(timeRecords.fonte, "dixi"),
+                  inArray(timeRecords.employeeId, batch),
+                )
+              );
+              await db.delete(timeInconsistencies).where(
+                and(
+                  companyFilter(timeInconsistencies.companyId, input),
+                  eq(timeInconsistencies.mesReferencia, mesRef),
+                  eq(timeInconsistencies.obraId, obraId!),
+                  inArray(timeInconsistencies.employeeId, batch),
+                )
+              );
+            }
+          } else {
+            await db.delete(timeRecords).where(
+              and(
+                companyFilter(timeRecords.companyId, input),
+                eq(timeRecords.mesReferencia, mesRef),
+                eq(timeRecords.obraId, obraId!),
+                eq(timeRecords.fonte, "dixi"),
+              )
+            );
+            await db.delete(timeInconsistencies).where(
+              and(
+                companyFilter(timeInconsistencies.companyId, input),
+                eq(timeInconsistencies.mesReferencia, mesRef),
+                eq(timeInconsistencies.obraId, obraId!),
+              )
+            );
+          }
 
           // Filtrar registros DIXI onde já existe lançamento manual para o mesmo funcionário/dia
           let recsParaInserir = recs;
@@ -872,10 +1027,11 @@ export const fechamentoPontoRouter = router({
               const batch = recsParaInserir.slice(i, i + batchSize);
               await db.insert(timeRecords).values(batch);
             }
+            fileActualInserted += recsParaInserir.length;
           }
 
-          // Insert inconsistencies for this month
-          const monthIncons = inconsByMes[mesRef] || [];
+          const allMonthIncons = inconsByMes[mesRef] || [];
+          const monthIncons = selectedSet ? allMonthIncons.filter((i: any) => selectedSet.has(i.employeeId)) : allMonthIncons;
           if (monthIncons.length > 0) {
             const batchSize = 50;
             for (let i = 0; i < monthIncons.length; i += batchSize) {
@@ -884,16 +1040,31 @@ export const fechamentoPontoRouter = router({
             }
           }
 
-          // ===== RATEIO AUTOMÁTICO POR OBRA (por mês) =====
-          await db.delete(obraHorasRateio).where(
-            and(
-              companyFilter(obraHorasRateio.companyId, input),
-              eq(obraHorasRateio.mesAno, mesRef),
-              eq(obraHorasRateio.obraId, obraId!),
-            )
-          );
+          if (isSelective && selectedSet) {
+            const selIds = input.selectedEmployeeIds!;
+            for (let i = 0; i < selIds.length; i += 50) {
+              const batch = selIds.slice(i, i + 50);
+              await db.delete(obraHorasRateio).where(
+                and(
+                  companyFilter(obraHorasRateio.companyId, input),
+                  eq(obraHorasRateio.mesAno, mesRef),
+                  eq(obraHorasRateio.obraId, obraId!),
+                  inArray(obraHorasRateio.employeeId, batch),
+                )
+              );
+            }
+          } else {
+            await db.delete(obraHorasRateio).where(
+              and(
+                companyFilter(obraHorasRateio.companyId, input),
+                eq(obraHorasRateio.mesAno, mesRef),
+                eq(obraHorasRateio.obraId, obraId!),
+              )
+            );
+          }
 
-          const empIds = Array.from(new Set(recs.map((r: any) => r.employeeId)));
+          const empIds = Array.from(new Set(recsParaInserir.map((r: any) => r.employeeId)));
+          if (empIds.length === 0) continue;
           const empValores = await db.select({
             id: employees.id,
             valorHora: employees.valorHora,
@@ -904,7 +1075,7 @@ export const fechamentoPontoRouter = router({
           }
 
           const rateioByEmp: Record<number, { horasNormais: number; horasExtras: number; totalHoras: number; dias: number }> = {};
-          for (const rec of recs) {
+          for (const rec of recsParaInserir) {
             if (!rateioByEmp[rec.employeeId]) {
               rateioByEmp[rec.employeeId] = { horasNormais: 0, horasExtras: 0, totalHoras: 0, dias: 0 };
             }
@@ -942,7 +1113,7 @@ export const fechamentoPontoRouter = router({
           }
         }
 
-        totalImported += timeRecordsToInsert.length;
+        totalImported += fileActualInserted;
         totalInconsistencies += inconsistencies.length;
         totalUnmatched = [...totalUnmatched, ...unmatchedNames];
 
@@ -956,10 +1127,10 @@ export const fechamentoPontoRouter = router({
           obraId,
           mesesDetectados: mesesNoArquivo,
           totalRegistrosBrutos: records.length,
-          totalDiasProcessados: timeRecordsToInsert.length,
+          totalDiasProcessados: fileActualInserted,
           totalInconsistencias: inconsistencies.length,
           funcionariosNaoEncontrados: unmatchedNames,
-          funcionariosProcessados: new Set(timeRecordsToInsert.map(r => r.employeeId)).size,
+          funcionariosProcessados: new Set(timeRecordsToInsert.filter((r: any) => !selectedSet || selectedSet.has(r.employeeId)).map(r => r.employeeId)).size,
         });
       }
 
