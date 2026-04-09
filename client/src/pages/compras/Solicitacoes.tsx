@@ -985,6 +985,7 @@ export default function Solicitacoes() {
   const [insumoQtds, setInsumoQtds] = useState<Record<string, string>>({});
   const [insumoExpanded, setInsumoExpanded] = useState<string | null>(null);
   const [eapExpanded, setEapExpanded] = useState<number | null>(null);
+  const [eapTreeCollapsed, setEapTreeCollapsed] = useState<Set<string>>(new Set());
   const [eapQtdServico, setEapQtdServico] = useState<Record<number, string>>({});
   const [eapInsumos, setEapInsumos] = useState<Record<number, any[]>>({});
   const [eapExtraDesbloqueado, setEapExtraDesbloqueado] = useState<Record<string, boolean>>({});
@@ -2395,18 +2396,82 @@ export default function Solicitacoes() {
                           })()}
                         </div>
                         <div className="max-h-[50vh] overflow-y-auto divide-y divide-gray-100">
-                          {eapQ.data.items
-                            .filter(it => it.nivel >= 2 && it.tipo !== "grupo")
-                            .filter(it => {
+                          {(() => {
+                            const allItems = eapQ.data.items;
+                            const isLeaf = (it: any) => {
                               if (form.tipo === "servico") return !!it.servicoCodigo && (it as any).temMdo;
                               if (form.tipo === "equipamento") return !!it.servicoCodigo && (it as any).temEquip;
-                              if (!it.servicoCodigo) return true;
+                              if (it.tipo === "grupo" || it.tipo === "Etapa/Subetapa") return false;
+                              if (!it.servicoCodigo && allItems.some((c: any) => c.eapCodigo !== it.eapCodigo && c.eapCodigo?.startsWith(it.eapCodigo + "."))) return false;
                               if (form.tipo === "material") return (it as any).temMat !== false;
                               return true;
-                            })
-                            .filter(it => !eapSearch || stripAccents(`${it.eapCodigo} ${it.descricao}`.toLowerCase()).includes(stripAccents(eapSearch.toLowerCase())))
-                            .filter(it => !eapLegendFilter || getEapLegendKey(it) === eapLegendFilter)
-                            .map(it => {
+                            };
+                            const isGroup = (it: any) => !isLeaf(it);
+                            const leafItems = allItems.filter((it: any) => isLeaf(it));
+                            const searchMatch = (it: any) => !eapSearch || stripAccents(`${it.eapCodigo} ${it.descricao}`.toLowerCase()).includes(stripAccents(eapSearch.toLowerCase()));
+                            const legendMatch = (it: any) => !eapLegendFilter || getEapLegendKey(it) === eapLegendFilter;
+                            const filteredLeaves = new Set(leafItems.filter(searchMatch).filter(legendMatch).map((it: any) => it.id));
+                            const hasVisibleChild = (groupCode: string) => {
+                              return leafItems.some((it: any) => filteredLeaves.has(it.id) && it.eapCodigo?.startsWith(groupCode + "."));
+                            };
+                            const isSearching = !!eapSearch || !!eapLegendFilter;
+                            const isCollapsed = (code: string) => !isSearching && eapTreeCollapsed.has(code);
+                            const isHiddenByParent = (code: string) => {
+                              const parts = code.split(".");
+                              for (let i = 1; i < parts.length; i++) {
+                                const parentCode = parts.slice(0, i).join(".");
+                                if (isCollapsed(parentCode)) return true;
+                              }
+                              return false;
+                            };
+                            const toggleGroup = (code: string) => {
+                              setEapTreeCollapsed(prev => {
+                                const next = new Set(prev);
+                                if (next.has(code)) next.delete(code);
+                                else next.add(code);
+                                return next;
+                              });
+                            };
+                            const seenGroupCodes = new Set<string>();
+                            const visibleItems = allItems.filter((it: any) => {
+                              if (isHiddenByParent(it.eapCodigo)) return false;
+                              if (isGroup(it)) {
+                                if (seenGroupCodes.has(it.eapCodigo)) return false;
+                                if (!hasVisibleChild(it.eapCodigo)) return false;
+                                seenGroupCodes.add(it.eapCodigo);
+                                return true;
+                              }
+                              return filteredLeaves.has(it.id);
+                            });
+                            return visibleItems.map((it: any) => {
+                              if (isGroup(it)) {
+                                const collapsed = isCollapsed(it.eapCodigo);
+                                const childLeaves = leafItems.filter((c: any) => filteredLeaves.has(c.id) && c.eapCodigo?.startsWith(it.eapCodigo + "."));
+                                const allChildSelected = childLeaves.length > 0 && childLeaves.every((c: any) => selectedEapIds.has(c.id) || (parseFloat(eapQtdServico[c.id] || "") > 0) || itens.some(x => x.eapCodigo && x.eapCodigo === c.eapCodigo));
+                                const someChildSelected = childLeaves.some((c: any) => selectedEapIds.has(c.id) || (parseFloat(eapQtdServico[c.id] || "") > 0) || itens.some(x => x.eapCodigo && x.eapCodigo === c.eapCodigo));
+                                const indent = Math.max(0, (it.nivel || 1) - 1);
+                                return (
+                                  <div key={`grp-${it.eapCodigo}-${it.id}`}
+                                    className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors hover:bg-gray-50 ${indent === 0 ? "bg-gray-100 border-l-3 border-l-gray-400" : "bg-gray-50/60"}`}
+                                    style={{ paddingLeft: `${12 + indent * 20}px` }}
+                                    onClick={() => toggleGroup(it.eapCodigo)}
+                                  >
+                                    {collapsed ? <ChevronRight className="h-4 w-4 text-gray-500 shrink-0" /> : <ChevronDown className="h-4 w-4 text-gray-500 shrink-0" />}
+                                    <span className={`font-bold text-xs ${indent === 0 ? "text-gray-800" : "text-gray-700"}`}>
+                                      <span className="text-amber-700 mr-1.5">{it.eapCodigo}</span>
+                                      {it.descricao?.toUpperCase()}
+                                    </span>
+                                    <span className="ml-auto text-[10px] text-gray-400 shrink-0">{childLeaves.length} item(ns)</span>
+                                    {someChildSelected && (
+                                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${allChildSelected ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                        {childLeaves.filter((c: any) => selectedEapIds.has(c.id) || (parseFloat(eapQtdServico[c.id] || "") > 0) || itens.some(x => x.eapCodigo && x.eapCodigo === c.eapCodigo)).length}/{childLeaves.length}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              const indent = Math.max(0, (it.nivel || 1) - 1);
+                              return ((() => {
                               const expanded = eapExpanded === it.id;
                               const insLista = eapInsumos[it.id];
                               const saldo = saldoData[it.id];
@@ -2423,7 +2488,8 @@ export default function Solicitacoes() {
                                   <div
                                     onClick={() => handleEapExpand(it)}
                                     onDoubleClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEapDoubleClick(it); }}
-                                    className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${expanded ? "bg-amber-50 border-l-2 border-l-amber-500" : isOriginalItem ? "bg-blue-50/50 border-l-2 border-l-blue-400 hover:bg-blue-50" : "hover:bg-gray-50"}`}
+                                    className={`flex items-center gap-2.5 py-2 cursor-pointer transition-colors ${expanded ? "bg-amber-50 border-l-2 border-l-amber-500" : isOriginalItem ? "bg-blue-50/50 border-l-2 border-l-blue-400 hover:bg-blue-50" : "hover:bg-gray-50"}`}
+                                    style={{ paddingLeft: `${12 + indent * 20}px`, paddingRight: '12px' }}
                                   >
                                     <span className={`inline-block w-4 h-4 rounded-full shrink-0 ${form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "bg-purple-500" : ((it as any).mdoSaldo ?? 0) <= 0 ? "bg-red-500" : "bg-emerald-500") : cob && cob.totalInsumos > 0 ? (cob.insumosCobertos >= cob.totalInsumos ? "bg-blue-500" : cob.insumosCobertos > 0 ? "bg-orange-500" : "bg-emerald-500") : "bg-gray-300"} ring-1 ring-white shadow-sm`} title={form.tipo === "servico" ? (((it as any).mdoSaldo ?? 0) <= 0 && ((it as any).mdoContratado ?? 0) > 0 ? "100% contratado" : ((it as any).mdoSaldo ?? 0) <= 0 ? "Sem saldo" : "Disponível") : cob && cob.totalInsumos > 0 ? (cob.insumosCobertos >= cob.totalInsumos ? `Todos ${cob.totalInsumos} insumos solicitados` : cob.insumosCobertos > 0 ? `Parcial: ${cob.insumosCobertos}/${cob.totalInsumos} insumos` : "Disponível") : "Sem info"} />
                                     <input
@@ -2701,9 +2767,10 @@ export default function Solicitacoes() {
                                   )}
                                 </div>
                               );
-                            })
-                          }
-                          {eapQ.data.items.filter(it => it.nivel >= 2 && it.tipo !== "grupo").length === 0 && (
+                            })()});
+                            });
+                          })()}
+                          {eapQ.data.items.length === 0 && (
                             <div className="px-3 py-4 text-xs text-center text-gray-400">Nenhum serviço encontrado na EAP</div>
                           )}
                         </div>
