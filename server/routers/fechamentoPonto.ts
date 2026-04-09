@@ -13,6 +13,12 @@ import { parseBRL } from "../utils/parseBRL";
 // ============================================================
 // HELPERS
 // ============================================================
+function lastDayOfMonth(mesRef: string): string {
+  const [y, m] = mesRef.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return `${mesRef}-${String(lastDay).padStart(2, "0")}`;
+}
+
 function diffMinutes(start: string, end: string): number {
   const [h1, m1] = start.split(":").map(Number);
   const [h2, m2] = end.split(":").map(Number);
@@ -1015,7 +1021,7 @@ export const fechamentoPontoRouter = router({
               WHERE "companyId" = ${input.companyId}
                 AND fonte = 'manual'
                 AND "employeeId" IN (${sql.join(empIds.map((id: number) => sql`${id}`), sql`, `)})
-                AND data BETWEEN ${`${mesRef}-01`} AND ${`${mesRef}-31`}
+                AND data BETWEEN ${`${mesRef}-01`} AND ${lastDayOfMonth(mesRef)}
             `);
             const manualSet = new Set((manuaisExistentes.rows as any[]).map((r: any) => `${r.employeeId}|${r.data}`));
             recsParaInserir = recs.filter((r: any) => !manualSet.has(`${r.employeeId}|${r.data}`));
@@ -2711,7 +2717,7 @@ export const fechamentoPontoRouter = router({
 
       // Buscar todos os registros do mês com conflitos (funcionários com 2+ obras no mesmo dia)
       const mesStart = `${input.mesReferencia}-01`;
-      const mesEnd = `${input.mesReferencia}-31`;
+      const mesEnd = lastDayOfMonth(input.mesReferencia);
       const allRecs = await db.select({
         employeeId: timeRecords.employeeId,
         data: timeRecords.data,
@@ -2831,7 +2837,7 @@ export const fechamentoPontoRouter = router({
       }
 
       const mesStart = `${input.mesReferencia}-01`;
-      const mesEnd = `${input.mesReferencia}-31`;
+      const mesEnd = lastDayOfMonth(input.mesReferencia);
 
       // Buscar todos os registros do mês com campos necessários
       const allRecs = await db.execute(sql`
@@ -2929,7 +2935,7 @@ export const fechamentoPontoRouter = router({
       let dateFilter = sql``;
       if (input.mesReferencia) {
         const mesStart = `${input.mesReferencia}-01`;
-        const mesEnd = `${input.mesReferencia}-31`;
+        const mesEnd = lastDayOfMonth(input.mesReferencia);
         dateFilter = sql` AND tr.data BETWEEN ${mesStart} AND ${mesEnd}`;
       }
 

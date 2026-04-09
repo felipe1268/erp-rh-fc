@@ -298,7 +298,8 @@ export const pontoDescontosRouter = router({
 
     const empIds = emps.map(e => e.id);
     const mesStart = `${input.mesReferencia}-01`;
-    const mesEnd = `${input.mesReferencia}-31`;
+    const [yy, mm] = input.mesReferencia.split("-").map(Number);
+    const mesEnd = `${input.mesReferencia}-${String(new Date(yy, mm, 0).getDate()).padStart(2, "0")}`;
 
     // 2. Buscar registros de ponto do mês
     const records = await db.select().from(timeRecords)
