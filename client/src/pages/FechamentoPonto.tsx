@@ -208,8 +208,6 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
     onError: (err) => toast.error(err.message),
   });
 
-  const verifyPasswordMut = trpc.auth.verifyPassword.useMutation();
-
   function handleCalcular() {
     if (!confirm("Deseja calcular/recalcular os descontos CLT do mês? Os cálculos anteriores serão substituídos.")) return;
     calcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
@@ -561,6 +559,7 @@ export default function FechamentoPonto() {
   const [replaceAllPassword, setReplaceAllPassword] = useState("");
   const [replaceAllPasswordError, setReplaceAllPasswordError] = useState("");
   const [verifyingPassword, setVerifyingPassword] = useState(false);
+  const verifyPasswordMut = trpc.auth.verifyPassword.useMutation();
   const [selectiveSearch, setSelectiveSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterObra, setFilterObra] = useState<string>("all");
