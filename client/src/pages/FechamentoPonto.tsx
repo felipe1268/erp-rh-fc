@@ -3884,6 +3884,8 @@ export default function FechamentoPonto() {
                   <input
                     type="password"
                     autoFocus
+                    autoComplete="new-password"
+                    name="dixi-confirm-pwd"
                     className={`mt-1.5 w-full px-3 py-2.5 border-2 rounded-lg text-sm outline-none transition-colors ${
                       replaceAllPasswordError ? "border-red-400 bg-red-50" : "border-gray-300 focus:border-blue-500"
                     }`}
