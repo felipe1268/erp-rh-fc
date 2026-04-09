@@ -3454,11 +3454,11 @@ export default function Solicitacoes() {
           ) : detalhe ? (
             <>
               <DialogHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">
-                      {(detalhe as any).tipo === "servico" ? "Solicitação de Serviço" : (detalhe as any).tipo === "pacote" ? "Solicitação de Pacote" : (detalhe as any).tipo === "pecas_veiculo" ? "Manutenção de Veículos" : "Solicitação de Compra"}
-                    </div>
+                <div className="mr-10">
+                  <div className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">
+                    {(detalhe as any).tipo === "servico" ? "Solicitação de Serviço" : (detalhe as any).tipo === "pacote" ? "Solicitação de Pacote" : (detalhe as any).tipo === "pecas_veiculo" ? "Manutenção de Veículos" : "Solicitação de Compra"}
+                  </div>
+                  <div className="flex items-center gap-3 flex-wrap">
                     <DialogTitle className="text-gray-900 text-lg">
                       {detalhe.numeroSc}
                       {detalhe.titulo && <span className="ml-2 text-gray-500 font-normal">— {detalhe.titulo}</span>}
@@ -3474,8 +3474,6 @@ export default function Solicitacoes() {
                         </span>
                       )}
                     </DialogTitle>
-                  </div>
-                  <div className="flex items-center gap-2 mr-12">
                     {!["cancelado"].includes(detalhe.status) && (
                       <Button size="sm" variant="outline"
                         onClick={() => {
