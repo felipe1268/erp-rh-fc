@@ -55,7 +55,10 @@ const REDUCAO_LABELS: Record<string, string> = {
   nenhuma: "Nenhuma",
 };
 
-export default function AvisoPrevio() {
+export type AvisoPrevioMode = "aviso_previo" | "pedido_demissao";
+
+export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPrevioMode }) {
+  const isPedidoDemissao = mode === "pedido_demissao";
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
@@ -96,6 +99,13 @@ export default function AvisoPrevio() {
     { companyId, companyIds },
     { enabled: !!companyId || (companyIds && companyIds.length > 0) }
   );
+  const modeFilter = useMemo(() => (list: any[]) => {
+    if (!isPedidoDemissao) return list.filter((a: any) => !a.tipo?.startsWith('empregado_'));
+    return list.filter((a: any) => a.tipo?.startsWith('empregado_'));
+  }, [isPedidoDemissao]);
+  const filteredAvisos = useMemo(() => modeFilter(avisosList as any[]), [avisosList, modeFilter]);
+  const filteredAllForStats = useMemo(() => modeFilter(allAvisosForStats as any[]), [allAvisosForStats, modeFilter]);
+
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
@@ -280,14 +290,14 @@ export default function AvisoPrevio() {
 
   // Filtered list
   const filtered = useMemo(() => {
-    return (avisosList as any[]).filter((a: any) => {
+    return (filteredAvisos as any[]).filter((a: any) => {
       if (search) {
         const s = removeAccents(search);
         if (!(a.employeeName || "").toLowerCase().includes(s) && !(a.employeeCpf || "").includes(s)) return false;
       }
       return true;
     });
-  }, [avisosList, search]);
+  }, [filteredAvisos, search]);
 
   // Recalcular mutation
   const recalcularTodos = trpc.avisoPrevio.avisoPrevio.recalcularTodos.useMutation({
@@ -301,7 +311,7 @@ export default function AvisoPrevio() {
 
   // Stats - usa allAvisosForStats (sem filtro) para totais globais
   const stats = useMemo(() => {
-    const list = allAvisosForStats as any[];
+    const list = filteredAllForStats as any[];
     const emAndamentoList = list.filter(a => a.status === "em_andamento");
     const aguardandoList  = list.filter(a => a.status === "aguardando_pagamento");
     const concluidosList  = list.filter(a => a.status === "concluido");
@@ -317,7 +327,7 @@ export default function AvisoPrevio() {
       valorAguardando: aguardandoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
       valorConcluidos: concluidosList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
     };
-  }, [allAvisosForStats]);
+  }, [filteredAllForStats]);
 
   // Employee search for form (Popover + Command)
   const [empPopoverOpen, setEmpPopoverOpen] = useState(false);
@@ -436,15 +446,15 @@ export default function AvisoPrevio() {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <AlertTriangle className="h-6 w-6 text-amber-600" />
-              Aviso Prévio
+              {isPedidoDemissao ? "Pedido de Demissão" : "Aviso Prévio"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Gestão de avisos prévios conforme CLT Art. 487-491 e Lei 12.506/2011
+              {isPedidoDemissao ? "Gestão de pedidos de demissão voluntária pelo empregado" : "Gestão de avisos prévios conforme CLT Art. 487-491 e Lei 12.506/2011"}
             </p>
           </div>
           <DraggableCommandBar barId="aviso-previo" items={[
             { id: "recalcular", node: <Button variant="outline" onClick={() => recalcularTodos.mutate({ companyId })} disabled={recalcularTodos.isPending || stats.emAndamento === 0}><RefreshCw className={`h-4 w-4 mr-2 ${recalcularTodos.isPending ? 'animate-spin' : ''}`} />{recalcularTodos.isPending ? 'Recalculando...' : 'Recalcular Todos'}</Button> },
-            { id: "novo", node: <Button onClick={() => { setForm({}); setCalculoPreview(null); setEditingItem(null); setShowDialog(true); }}><Plus className="h-4 w-4 mr-2" /> Novo Aviso Prévio</Button> },
+            { id: "novo", node: <Button onClick={() => { setForm(isPedidoDemissao ? { tipo: 'empregado_trabalhado' } : {}); setCalculoPreview(null); setEditingItem(null); setShowDialog(true); }}><Plus className="h-4 w-4 mr-2" /> {isPedidoDemissao ? "Novo Pedido" : "Novo Aviso Prévio"}</Button> },
           ]} />
         </div>
 
@@ -517,15 +527,31 @@ export default function AvisoPrevio() {
             <AlertTriangle className="h-4 w-4" /> Legislação Aplicável
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2 text-xs text-amber-700">
-            <div>
-              <strong>Art. 487 CLT:</strong> Aviso prévio de 30 dias (mínimo) + 3 dias por ano de serviço (máx. 90 dias).
-            </div>
-            <div>
-              <strong>Art. 488 CLT:</strong> Redução de 2h/dia OU 7 dias corridos no final do aviso (escolha do empregado).
-            </div>
-            <div>
-              <strong>Lei 12.506/2011:</strong> Aviso prévio proporcional ao tempo de serviço.
-            </div>
+            {isPedidoDemissao ? (
+              <>
+                <div>
+                  <strong>Art. 487 §1º CLT:</strong> Empregado que pede demissão deve cumprir aviso prévio de 30 dias ao empregador.
+                </div>
+                <div>
+                  <strong>Art. 487 §2º CLT:</strong> Se não cumprir aviso, o empregador pode descontar os salários do período.
+                </div>
+                <div>
+                  <strong>Súmula 276 TST:</strong> Direito ao aviso prévio é irrenunciável pelo empregado.
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <strong>Art. 487 CLT:</strong> Aviso prévio de 30 dias (mínimo) + 3 dias por ano de serviço (máx. 90 dias).
+                </div>
+                <div>
+                  <strong>Art. 488 CLT:</strong> Redução de 2h/dia OU 7 dias corridos no final do aviso (escolha do empregado).
+                </div>
+                <div>
+                  <strong>Lei 12.506/2011:</strong> Aviso prévio proporcional ao tempo de serviço.
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -1283,7 +1309,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
         )}
 
         {/* Create Dialog */}
-        <FullScreenDialog open={showDialog} onClose={() => { setShowDialog(false); setForm({}); setCalculoPreview(null); setEditingItem(null); }} title={editingItem ? "Editar Aviso Prévio" : "Novo Aviso Prévio"} icon={<AlertTriangle className="h-5 w-5 text-white" />}>
+        <FullScreenDialog open={showDialog} onClose={() => { setShowDialog(false); setForm({}); setCalculoPreview(null); setEditingItem(null); }} title={editingItem ? (isPedidoDemissao ? "Editar Pedido de Demissão" : "Editar Aviso Prévio") : (isPedidoDemissao ? "Novo Pedido de Demissão" : "Novo Aviso Prévio")} icon={<AlertTriangle className="h-5 w-5 text-white" />}>
           <div className="w-full max-w-4xl mx-auto px-2">
             {/* Card principal do formulário */}
             <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
@@ -1356,7 +1382,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                                 key={e.id}
                                 value={`${e.nomeCompleto || ''} ${e.cpf || ''} ${e.funcao || ''} ${e.setor || ''}`}
                                 onSelect={() => {
-                                  const avisoAtivo = (avisosList as any[]).find((a: any) => a.employeeId === e.id && a.status === 'em_andamento');
+                                  const avisoAtivo = (filteredAvisos as any[]).find((a: any) => a.employeeId === e.id && a.status === 'em_andamento');
                                   if (avisoAtivo && !editingItem) {
                                     toast.error(`${e.nomeCompleto} já possui aviso prévio em andamento (término: ${formatDate(avisoAtivo.dataFim)}). Conclua ou cancele o aviso existente antes de criar um novo.`);
                                     return;
@@ -1378,7 +1404,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <span className="text-xs text-gray-400 font-mono">{formatCPF(e.cpf)}</span>
-                                  {(avisosList as any[]).some((a: any) => a.employeeId === e.id && a.status === 'em_andamento') && !editingItem && (
+                                  {(filteredAvisos as any[]).some((a: any) => a.employeeId === e.id && a.status === 'em_andamento') && !editingItem && (
                                     <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-600 bg-orange-50">Aviso ativo</Badge>
                                   )}
                                   {form.employeeId === e.id && <Check className="h-4 w-4 text-amber-600" />}
@@ -1446,13 +1472,13 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
                       <FileText className="h-4 w-4 text-amber-600" />
-                      Tipo de Aviso Prévio <span className="text-red-500">*</span>
+                      {isPedidoDemissao ? "Tipo de Pedido" : "Tipo de Aviso Prévio"} <span className="text-red-500">*</span>
                     </label>
                     <Select value={form.tipo || ""} onValueChange={v => { setForm({ ...form, tipo: v }); setCalculoPreview(null); }}>
                       <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"><SelectValue placeholder="Selecione o tipo..." /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="empregador_trabalhado">Empregador (Trabalhado)</SelectItem>
-                        <SelectItem value="empregador_indenizado">Empregador (Indenizado)</SelectItem>
+                        {!isPedidoDemissao && <SelectItem value="empregador_trabalhado">Empregador (Trabalhado)</SelectItem>}
+                        {!isPedidoDemissao && <SelectItem value="empregador_indenizado">Empregador (Indenizado)</SelectItem>}
                         <SelectItem value="empregado_trabalhado">Empregado (Trabalhado)</SelectItem>
                         <SelectItem value="empregado_indenizado">Empregado (Indenizado)</SelectItem>
                       </SelectContent>

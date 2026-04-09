@@ -60,6 +60,7 @@ const ProcessosTrabalhistas = lazy(() => import("./pages/ProcessosTrabalhistas")
 const Epis = lazy(() => import("./pages/Epis"));
 const Lixeira = lazy(() => import("./pages/Lixeira"));
 const AvisoPrevio = lazy(() => import("./pages/AvisoPrevio"));
+const PedidoDemissao = lazy(() => import("./pages/PedidoDemissao"));
 const Ferias = lazy(() => import("./pages/Ferias"));
 const CipaCompleta = lazy(() => import("./pages/CipaCompleta"));
 const ModuloPJ = lazy(() => import("./pages/ModuloPJ"));
@@ -306,6 +307,7 @@ function Router() {
         <Route path={"/migracao"} component={Migration} />
         <Route path={"/lixeira"} component={() => <MasterOnlyGuard component={Lixeira} />} />
         <Route path={"/aviso-previo"} component={AvisoPrevio} />
+        <Route path={"/pedido-demissao"} component={PedidoDemissao} />
         <Route path={"/ferias"} component={Ferias} />
         <Route path={"/cipa"} component={CipaCompleta} />
         <Route path={"/modulo-pj"} component={ModuloPJ} />

@@ -38,6 +38,7 @@ import {
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
   Camera, Blocks, CheckSquare, Repeat, FileCheck2, Milestone,
+  UserMinus,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -62,6 +63,7 @@ type MenuItem = {
   path: string;
   soon?: boolean;
   adminMasterOnly?: boolean;
+  children?: MenuItem[];
 };
 
 type MenuSection = {
@@ -97,7 +99,10 @@ const menuSectionsRHDP: MenuSection[] = [
   {
     title: "Gestão de Pessoas",
     items: [
-      { icon: AlertTriangle, label: "Aviso Prévio", path: "/aviso-previo" },
+      { icon: UserMinus, label: "Demissão", path: "/demissao", children: [
+        { icon: AlertTriangle, label: "Aviso Prévio", path: "/aviso-previo" },
+        { icon: FileText, label: "Pedido de Demissão", path: "/pedido-demissao" },
+      ]},
       { icon: Palmtree, label: "Férias", path: "/ferias" },
       { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
       { icon: FileSpreadsheet, label: "PJ Medições", path: "/pj-medicoes" },
@@ -650,6 +655,8 @@ const ICON_MAP: Record<string, any> = {
   "Lixeira": Trash2,
   "Avaliação de Desempenho": Star,
   "Aviso Prévio": AlertTriangle,
+  "Demissão": UserMinus,
+  "Pedido de Demissão": FileText,
   "Férias": Palmtree,
   "CIPA": Shield,
   "Contratos PJ": FileSignature,
@@ -895,7 +902,17 @@ function DashboardLayoutContent({
   const [dragTargetItem, setDragTargetItem] = useState<string | null>(null);
 
   function getSidebarOrderedItems(section: MenuSection): MenuItem[] {
-    const enabledItems = section.items.filter(item => isPageEnabled(item.path));
+    const enabledItems = section.items.filter(item => {
+      if (item.children && item.children.length > 0) {
+        return item.children.some(c => isPageEnabled(c.path));
+      }
+      return isPageEnabled(item.path);
+    }).map(item => {
+      if (item.children) {
+        return { ...item, children: item.children.filter(c => isPageEnabled(c.path)) };
+      }
+      return item;
+    });
     const order = itemOrder[section.title];
     if (!order || order.length === 0) return enabledItems;
     return [...enabledItems].sort((a, b) => {
@@ -955,6 +972,9 @@ function DashboardLayoutContent({
     setDragTargetItem(null);
     setTimeout(() => { itemDidDrag.current = false; }, 0);
   }
+  const [expandedMenuItems, setExpandedMenuItems] = useState<Record<string, boolean>>({});
+  const toggleMenuItem = (path: string) => setExpandedMenuItems(prev => ({ ...prev, [path]: !prev[path] }));
+
   const [sidebarActiveParam, setSidebarActiveParam] = useState<string>(() => {
     const s = window.location.search;
     return s.startsWith('?') ? s.slice(1) : '';
@@ -1113,53 +1133,41 @@ function DashboardLayoutContent({
     // Se NÃO pertence a grupo: usar permissões individuais (canAccessFeature)
     // Admin master: sem filtro
     if (!permIsAdminMaster) {
+      const filterWithChildren = (items: MenuItem[], checkFn: (item: MenuItem) => boolean): MenuItem[] => {
+        return items.map(item => {
+          if (item.children && item.children.length > 0) {
+            const filteredChildren = item.children.filter(checkFn);
+            if (filteredChildren.length === 0) return null;
+            return { ...item, children: filteredChildren };
+          }
+          return checkFn(item) ? item : null;
+        }).filter(Boolean) as MenuItem[];
+      };
       if (hasGroup) {
-        // GRUPO: filtrar exclusivamente pelas rotas configuradas no grupo
-        sections = sections.map(s => ({
-          ...s,
-          items: s.items.filter(item => {
-            // Admin paths são controlados pelo role, não pelo grupo
-            if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
-            // Ajuda/Biblioteca sempre visível
-            if (item.path === '/ajuda') return true;
-            // Verificar se o grupo permite acesso a esta rota
-            return groupCanAccessRoute(item.path);
-          }),
-        }));
+        const groupCheck = (item: MenuItem) => {
+          if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
+          if (item.path === '/ajuda') return true;
+          return groupCanAccessRoute(item.path);
+        };
+        sections = sections.map(s => ({ ...s, items: filterWithChildren(s.items, groupCheck) }));
       } else {
-        // SEM GRUPO: filtrar por permissões individuais granulares
-        sections = sections.map(s => ({
-          ...s,
-          items: s.items.filter(item => {
-            // Admin paths são controlados pelo role, não pelas permissões granulares
-            if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
-            // Painel sempre visível
-            if (item.path === '/painel' || item.path.startsWith('/painel/')) return true;
-            // Ajuda/Biblioteca sempre visível
-            if (item.path === '/ajuda') return true;
-            // Shared features (empresas, obras, setores, funcoes) - visíveis se tem acesso ao módulo
-            const sharedPaths = ['/empresas', '/obras', '/obras/efetivo', '/setores', '/funcoes', '/clientes'];
-            if (sharedPaths.includes(item.path)) return accessibleModules.length > 0;
-            // "Todos os Dashboards" - visível se tem acesso a pelo menos um módulo
-            if (item.path === '/dashboards') return accessibleModules.length > 0;
-            // Verificar permissão granular pela rota (inclui dashboards individuais)
-            const itemBasePath = item.path.split('?')[0];
-            const featureInfo = routeToFeatureKey.get(itemBasePath);
-            if (featureInfo) {
-              return canAccessFeature(featureInfo.moduleId, featureInfo.featureKey);
-            }
-            // Para rotas com query params (ex: /controle-documentos?tab=advertencias),
-            // verificar se a rota base tem permissão (o controle fino é feito pelo grupo)
-            if (item.path.includes('?')) {
-              const baseFeatureInfo = routeToFeatureKey.get(itemBasePath);
-              if (baseFeatureInfo) {
-                return canAccessFeature(baseFeatureInfo.moduleId, baseFeatureInfo.featureKey);
-              }
-            }
-            // Default: NEGAR acesso (segurança por padrão)
-            return false;
-          }),
-        }));
+        const individualCheck = (item: MenuItem) => {
+          if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
+          if (item.path === '/painel' || item.path.startsWith('/painel/')) return true;
+          if (item.path === '/ajuda') return true;
+          const sharedPaths = ['/empresas', '/obras', '/obras/efetivo', '/setores', '/funcoes', '/clientes'];
+          if (sharedPaths.includes(item.path)) return accessibleModules.length > 0;
+          if (item.path === '/dashboards') return accessibleModules.length > 0;
+          const itemBasePath = item.path.split('?')[0];
+          const featureInfo = routeToFeatureKey.get(itemBasePath);
+          if (featureInfo) return canAccessFeature(featureInfo.moduleId, featureInfo.featureKey);
+          if (item.path.includes('?')) {
+            const baseFeatureInfo = routeToFeatureKey.get(itemBasePath);
+            if (baseFeatureInfo) return canAccessFeature(baseFeatureInfo.moduleId, baseFeatureInfo.featureKey);
+          }
+          return false;
+        };
+        sections = sections.map(s => ({ ...s, items: filterWithChildren(s.items, individualCheck) }));
       }
     }
     // Inject dynamic tab sections when inside a Planejamento project page
@@ -1233,8 +1241,9 @@ function DashboardLayoutContent({
     return [...sorted, ...pinned];
   }, [effectiveSections, sectionOrder]);
 
-  const allEffectiveItems = effectiveSections.flatMap(s => s.items);
-  const allModuleItems = Object.values(MODULE_SECTIONS).flatMap(sections => sections.flatMap(s => s.items));
+  const flattenItems = (items: MenuItem[]): MenuItem[] => items.flatMap(i => i.children ? [i, ...i.children] : [i]);
+  const allEffectiveItems = effectiveSections.flatMap(s => flattenItems(s.items));
+  const allModuleItems = Object.values(MODULE_SECTIONS).flatMap(sections => sections.flatMap(s => flattenItems(s.items)));
   const activeMenuItem = allEffectiveItems.find(item => item.path === location)
     || allModuleItems.find(item => item.path === location);
 
@@ -1455,11 +1464,74 @@ function DashboardLayoutContent({
                 {(isCollapsed || expandedSections[section.title]) ? (
                   <SidebarMenu className="px-2 py-0.5">
                     {getSidebarOrderedItems(section).map((item: any) => {
+                      const hasChildren = item.children && item.children.length > 0;
+                      const childActive = hasChildren && item.children.some((c: MenuItem) => location === c.path);
+                      const isParentExpanded = expandedMenuItems[item.path] || childActive;
                       const isActive = item.path.includes('?')
                         ? location === item.path.split('?')[0] && item.path.split('?')[1] === sidebarActiveParam
-                        : location === item.path;
+                        : !hasChildren && location === item.path;
                       const isDragging = dragActiveItem === item.path;
                       const isDropTarget = dragTargetItem === item.path;
+
+                      const handleItemClick = (menuItem: MenuItem) => {
+                        if (menuItem.soon) {
+                          toast("Em breve", { description: `O módulo ${menuItem.label} está em desenvolvimento.` });
+                          return;
+                        }
+                        if (menuItem.path.includes('?')) {
+                          const [basePath, queryString] = menuItem.path.split('?');
+                          sessionStorage.setItem('_navParams', queryString);
+                          setSidebarActiveParam(queryString);
+                          if (location === basePath) {
+                            window.dispatchEvent(new Event('navParamsUpdated'));
+                          } else {
+                            setLocation(basePath);
+                            setTimeout(() => { window.dispatchEvent(new Event('navParamsUpdated')); }, 100);
+                          }
+                        } else {
+                          setLocation(menuItem.path);
+                        }
+                      };
+
+                      if (hasChildren) {
+                        return (
+                          <div key={item.path}>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton
+                                isActive={childActive}
+                                onClick={() => toggleMenuItem(item.path)}
+                                tooltip={item.label}
+                                className="h-9 transition-all font-normal"
+                              >
+                                <item.icon className={`h-4 w-4 ${childActive ? "text-[#D4A843]" : ""}`} />
+                                <span>{item.label}</span>
+                                {!isCollapsed && (
+                                  isParentExpanded
+                                    ? <ChevronDown className="ml-auto h-3.5 w-3.5 text-sidebar-foreground/50" />
+                                    : <ChevronRight className="ml-auto h-3.5 w-3.5 text-sidebar-foreground/50" />
+                                )}
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            {isParentExpanded && !isCollapsed && item.children.map((child: MenuItem) => {
+                              const childIsActive = location === child.path;
+                              return (
+                                <SidebarMenuItem key={child.path} className="pl-4">
+                                  <SidebarMenuButton
+                                    isActive={childIsActive}
+                                    onClick={() => handleItemClick(child)}
+                                    tooltip={child.label}
+                                    className="h-8 transition-all font-normal text-[13px]"
+                                  >
+                                    <child.icon className={`h-3.5 w-3.5 ${childIsActive ? "text-[#D4A843]" : ""}`} />
+                                    <span>{child.label}</span>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+
                       return (
                         <SidebarMenuItem
                           key={item.path}
@@ -1474,30 +1546,7 @@ function DashboardLayoutContent({
                         >
                           <SidebarMenuButton
                             isActive={isActive}
-                            onClick={() => {
-                              if (item.soon) {
-                                toast("Em breve", { description: `O módulo ${item.label} está em desenvolvimento.` });
-                                return;
-                              }
-                              if (item.path.includes('?')) {
-                                // wouter doesn't support query params - store params in sessionStorage and navigate with setLocation
-                                const [basePath, queryString] = item.path.split('?');
-                                sessionStorage.setItem('_navParams', queryString);
-                                setSidebarActiveParam(queryString);
-                                if (location === basePath) {
-                                  // Already on the same page - dispatch event to force re-read
-                                  window.dispatchEvent(new Event('navParamsUpdated'));
-                                } else {
-                                  // Navigate to the page, then dispatch event after a short delay to ensure component is mounted
-                                  setLocation(basePath);
-                                  setTimeout(() => {
-                                    window.dispatchEvent(new Event('navParamsUpdated'));
-                                  }, 100);
-                                }
-                              } else {
-                                setLocation(item.path);
-                              }
-                            }}
+                            onClick={() => handleItemClick(item)}
                             tooltip={item.label}
                             className={`h-9 transition-all font-normal ${item.soon ? "opacity-50" : ""}`}
                           >
@@ -1634,7 +1683,7 @@ const ROUTE_TO_MODULO: [RegExp, IAModulo][] = [
   [/^\/planejamento/, "planejamento"],
   [/^\/orcamento/, "orcamento"],
   [/^\/(compras|almoxarifado)/, "compras"],
-  [/^\/(painel\/rh|funcionarios|colaboradores|folha-pagamento|folha|ferias|ponto|fechamento-ponto|espelho-ponto|rescisao|admissao|banco-horas|aviso-previo|hora-extra|solicitacao-he|gestao-competencias|controle-documentos|vale-alimentacao|dissidio|feriados|modulo-pj|contrato-pj|apontamentos-campo)/, "rh"],
+  [/^\/(painel\/rh|funcionarios|colaboradores|folha-pagamento|folha|ferias|ponto|fechamento-ponto|espelho-ponto|rescisao|admissao|banco-horas|aviso-previo|pedido-demissao|hora-extra|solicitacao-he|gestao-competencias|controle-documentos|vale-alimentacao|dissidio|feriados|modulo-pj|contrato-pj|apontamentos-campo)/, "rh"],
   [/^\/financeiro/, "financeiro"],
   [/^\/(painel\/sst|sst|epis?|aso|cipa|treinamento)/, "sst"],
   [/^\/medicao/, "medicao"],

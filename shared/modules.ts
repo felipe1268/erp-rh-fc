@@ -143,6 +143,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "advertencias", label: "Advertências", route: "/controle-documentos?tab=advertencias", icon: "ShieldAlert" },
       // === Gestão de Pessoas ===
       { key: "aviso-previo", label: "Aviso Prévio", route: "/aviso-previo", icon: "Bell" },
+      { key: "pedido-demissao", label: "Pedido de Demissão", route: "/pedido-demissao", icon: "FileText" },
       { key: "ferias", label: "Férias", route: "/ferias", icon: "Palmtree" },
       { key: "modulo-pj", label: "Módulo PJ", route: "/modulo-pj", icon: "Briefcase" },
       { key: "pj-medicoes", label: "PJ Medições", route: "/pj-medicoes", icon: "FileSpreadsheet" },
