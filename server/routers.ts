@@ -190,6 +190,18 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+    verifyPassword: protectedProcedure.input(z.object({
+      password: z.string(),
+    })).mutation(async ({ input, ctx }) => {
+      const bcrypt = await import("bcryptjs");
+      const { users } = await import("../drizzle/schema");
+      const db = (await getDb())!;
+      const [user] = await db.select().from(users).where(eq(users.id, ctx.user.id));
+      if (!user || !user.password) throw new TRPCError({ code: "BAD_REQUEST", message: "Usuário não possui login local" });
+      const valid = bcrypt.compareSync(input.password, user.password);
+      if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
+      return { success: true };
+    }),
   }),
 
   // ============================================================
@@ -1623,21 +1635,6 @@ export const appRouter = router({
       ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
       await db.update(users).set({ lastSignedIn: new Date().toISOString() }).where(eq(users.id, user.id));
       return { success: true, mustChangePassword: !!user.mustChangePassword, user: { id: user.id, name: user.name, role: user.role } };
-    }),
-    verifyPassword: protectedProcedure.input(z.object({
-      password: z.string(),
-    })).mutation(async ({ input, ctx }) => {
-      const bcrypt = await import("bcryptjs");
-      const { getDb } = await import("./db");
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const { users } = await import("../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
-      const [user] = await db.select().from(users).where(eq(users.id, ctx.user.id));
-      if (!user || !user.password) throw new TRPCError({ code: "BAD_REQUEST", message: "Usuário não possui login local" });
-      const valid = bcrypt.compareSync(input.password, user.password);
-      if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
-      return { success: true };
     }),
     changePassword: protectedProcedure.input(z.object({
       currentPassword: z.string(), newPassword: z.string().min(4),
