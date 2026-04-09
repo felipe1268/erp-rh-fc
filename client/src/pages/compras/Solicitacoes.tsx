@@ -145,14 +145,13 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
   useEffect(() => {
     if (!classificarMut.isPending) { setProgresso(0); return; }
     setProgresso(2);
-    const steps = [
-      { t: 500, v: 8 }, { t: 1500, v: 15 }, { t: 3000, v: 25 },
-      { t: 5000, v: 35 }, { t: 8000, v: 48 }, { t: 12000, v: 58 },
-      { t: 16000, v: 68 }, { t: 20000, v: 75 }, { t: 25000, v: 82 },
-      { t: 30000, v: 88 }, { t: 40000, v: 92 }, { t: 50000, v: 95 },
-    ];
-    const timers = steps.map(s => setTimeout(() => setProgresso(s.v), s.t));
-    return () => timers.forEach(clearTimeout);
+    let current = 2;
+    const interval = setInterval(() => {
+      current += current < 30 ? 3 : current < 60 ? 2 : current < 80 ? 1 : current < 90 ? 0.5 : current < 97 ? 0.15 : 0;
+      if (current > 97) current = 97;
+      setProgresso(Math.round(current));
+    }, 1500);
+    return () => clearInterval(interval);
   }, [classificarMut.isPending]);
 
   useEffect(() => {
@@ -242,7 +241,7 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                   <div className="h-full bg-gradient-to-r from-violet-500 to-violet-600 rounded-full transition-all duration-700 ease-out" style={{ width: `${progresso}%` }} />
                 </div>
                 <p className="text-[10px] text-gray-400 mt-1.5 text-center">
-                  {progresso < 20 ? "Lendo serviços do orçamento..." : progresso < 45 ? "Analisando composições e descrições..." : progresso < 70 ? "Classificando por disciplina construtiva..." : progresso < 90 ? "Organizando e agrupando resultados..." : "Finalizando classificação..."}
+                  {progresso < 15 ? "Lendo serviços do orçamento..." : progresso < 35 ? "Analisando composições e descrições..." : progresso < 55 ? "Classificando por disciplina construtiva..." : progresso < 75 ? "Processando lotes de serviços..." : progresso < 90 ? "Organizando e agrupando resultados..." : "Finalizando classificação — quase lá..."}
                 </p>
               </div>
             )}
