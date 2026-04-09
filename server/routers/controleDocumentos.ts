@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
+import { logStatusChange } from "../lib/employeeStatusHelper";
+
+const LIMITE_DIAS_INSS = 15;
 
 // Modelos de advertência padrão CLT
 const MODELOS_ADVERTENCIA = {
@@ -244,6 +247,112 @@ async function abonarPontoPorAtestado(
     console.log(`[AbonoAtestado] Funcionário ${employeeId}: ${descontos.length} desconto(s) abonado(s) automaticamente`);
   } catch (err: any) {
     console.error(`[AbonoAtestado] Erro ao abonar ponto:`, err?.message);
+  }
+}
+
+async function handleAfastamentoStatus(
+  db: any,
+  employeeId: number,
+  companyId: number,
+  diasAfastamento: number,
+  afastamentoTipo: string,
+  dataRetorno: string | null | undefined,
+  atestadoId: number,
+) {
+  try {
+    if (afastamentoTipo === "horas" || diasAfastamento <= 0 || !dataRetorno) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (dataRetorno <= today) {
+      await db.update(atestados).set({
+        afastamentoINSS: diasAfastamento > LIMITE_DIAS_INSS ? 1 : 0,
+        statusAlterado: 0,
+        statusAnterior: null,
+      }).where(eq(atestados.id, atestadoId));
+      console.log(`[AtestadoStatus] Atestado #${atestadoId}: dataRetorno ${dataRetorno} já expirou — sem mudança de status`);
+      return;
+    }
+
+    const [emp] = await db.select({
+      id: employees.id,
+      nomeCompleto: employees.nomeCompleto,
+      status: employees.status,
+    }).from(employees).where(eq(employees.id, employeeId));
+
+    if (!emp || emp.status === "Desligado" || emp.status === "Lista_Negra") return;
+
+    const isINSS = diasAfastamento > LIMITE_DIAS_INSS ? 1 : 0;
+    const tipoAfastamento = isINSS
+      ? `Afastamento INSS (${diasAfastamento} dias — Lei 8.213/91, Art. 59)`
+      : `Atestado médico (${diasAfastamento} dia${diasAfastamento > 1 ? "s" : ""})`;
+
+    await db.update(atestados).set({
+      afastamentoINSS: isINSS,
+      statusAlterado: 1,
+      statusAnterior: emp.status,
+    }).where(eq(atestados.id, atestadoId));
+
+    if (emp.status !== "Afastado") {
+      await db.update(employees)
+        .set({ status: "Afastado" as any })
+        .where(eq(employees.id, employeeId));
+
+      await logStatusChange({
+        db, companyId, employeeId, nomeCompleto: emp.nomeCompleto,
+        statusAnterior: emp.status || "Ativo", statusNovo: "Afastado",
+        alteradoPor: "Sistema (Atestado)", motivo: tipoAfastamento,
+        origemModulo: "controleDocumentos",
+      });
+
+      console.log(`[AtestadoStatus] ${emp.nomeCompleto}: ${emp.status} → Afastado (${tipoAfastamento})`);
+    }
+
+    const recipients = await db.select({
+      id: notificationRecipients.id,
+      nome: notificationRecipients.nome,
+      email: notificationRecipients.email,
+    }).from(notificationRecipients).where(and(
+      eq(notificationRecipients.companyId, companyId),
+      eq(notificationRecipients.ativo, 1),
+      eq(notificationRecipients.notificarAfastamento, 1),
+    ));
+
+    if (recipients.length > 0) {
+      const titulo = isINSS
+        ? `INSS — ${emp.nomeCompleto} afastado(a) por ${diasAfastamento} dias (retorno: ${dataRetorno})`
+        : `Atestado — ${emp.nomeCompleto} afastado(a) por ${diasAfastamento} dia(s) (retorno: ${dataRetorno})`;
+
+      const corpo = [
+        `Funcionário: ${emp.nomeCompleto}`,
+        `Tipo: ${tipoAfastamento}`,
+        `Dias de afastamento: ${diasAfastamento}`,
+        `Data de retorno prevista: ${dataRetorno}`,
+        isINSS ? `\nATENÇÃO: Afastamento superior a 15 dias — a partir do 16º dia, o pagamento é responsabilidade do INSS (Lei 8.213/91, Art. 59 e Art. 60).` : "",
+        isINSS ? `O RH deve providenciar o encaminhamento ao INSS para perícia médica.` : "",
+      ].filter(Boolean).join("\n");
+
+      for (const r of recipients) {
+        await db.insert(notificationLogs).values({
+          companyId,
+          employeeId,
+          employeeName: emp.nomeCompleto,
+          tipoMovimentacao: isINSS ? "afastamento_inss" : "afastamento_atestado",
+          statusAnterior: emp.status,
+          statusNovo: "Afastado",
+          recipientId: r.id,
+          recipientName: r.nome,
+          recipientEmail: r.email,
+          titulo,
+          corpo,
+          statusEnvio: "pendente",
+          disparadoPor: "Sistema (Atestado)",
+        });
+      }
+
+      console.log(`[AtestadoStatus] ${recipients.length} alerta(s) RH gerado(s) para afastamento de ${emp.nomeCompleto}`);
+    }
+  } catch (err: any) {
+    console.error(`[AtestadoStatus] Erro ao atualizar status:`, err?.message);
   }
 }
 
@@ -583,7 +692,11 @@ export const controleDocumentosRouter = router({
 
         await abonarPontoPorAtestado(db, input.employeeId, input.companyId, input.dataEmissao, input.diasAfastamento, input.afastamentoTipo, input.horasAfastamento);
 
-        return { success: true, id: result?.id };
+        if (input.afastamentoTipo === "dia" && input.diasAfastamento > 0 && input.dataRetorno) {
+          await handleAfastamentoStatus(db, input.employeeId, input.companyId, input.diasAfastamento, input.afastamentoTipo, input.dataRetorno, result?.id);
+        }
+
+        return { success: true, id: result?.id, afastamentoINSS: input.diasAfastamento > LIMITE_DIAS_INSS };
       }),
 
     update: protectedProcedure
@@ -615,9 +728,22 @@ export const controleDocumentosRouter = router({
         const [at] = await db.select().from(atestados).where(eq(atestados.id, id)).limit(1);
         if (at) {
           await abonarPontoPorAtestado(db, at.employeeId, at.companyId, at.dataEmissao, at.diasAfastamento || 0, (at as any).afastamentoTipo || "dia", (at as any).horasAfastamento || 0);
+
+          const afTipo = (at as any).afastamentoTipo || "dia";
+          const dias = at.diasAfastamento || 0;
+          const retorno = at.dataRetorno;
+          if (afTipo === "dia" && dias > 0 && retorno) {
+            await handleAfastamentoStatus(db, at.employeeId, at.companyId, dias, afTipo, retorno, at.id);
+          } else if ((at as any).statusAlterado === 1) {
+            await db.update(atestados).set({
+              statusAlterado: 0,
+              statusAnterior: null,
+              afastamentoINSS: 0,
+            }).where(eq(atestados.id, at.id));
+          }
         }
 
-        return { success: true };
+        return { success: true, afastamentoINSS: (at?.diasAfastamento || 0) > LIMITE_DIAS_INSS };
       }),
 
     delete: protectedProcedure

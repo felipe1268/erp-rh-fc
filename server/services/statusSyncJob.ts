@@ -13,7 +13,7 @@
  * Roda a cada 1 hora e na inicialização do servidor (com delay de 30s).
  */
 import { getDb } from "../db";
-import { employees, vacationPeriods, atestados } from "../../drizzle/schema";
+import { employees, vacationPeriods, atestados, notificationLogs, notificationRecipients } from "../../drizzle/schema";
 import { eq, and, sql, isNull, inArray } from "drizzle-orm";
 import { logStatusChange } from "../lib/employeeStatusHelper";
 
@@ -91,20 +91,65 @@ export async function syncEmployeeStatus(): Promise<{
 
     const empIdsEmFerias = new Set(feriasAtivas.map(f => f.employeeId));
 
-    // 3. Buscar atestados com afastamento ativo (dataRetorno >= hoje)
     const atestadosAtivos = await db.select({
       employeeId: atestados.employeeId,
       dataRetorno: atestados.dataRetorno,
       tipo: atestados.tipo,
+      diasAfastamento: atestados.diasAfastamento,
+      afastamentoINSS: atestados.afastamentoINSS,
     }).from(atestados)
       .where(and(
         inArray(atestados.employeeId, empIds),
         isNull(atestados.deletedAt),
-        sql`${atestados.dataRetorno} >= ${today}`,
+        sql`${atestados.dataRetorno} > ${today}`,
         sql`${atestados.diasAfastamento} > 0`,
       ));
 
     const empIdsAfastados = new Set(atestadosAtivos.map(a => a.employeeId));
+
+    const atestadosProximosRetorno = await db.select({
+      id: atestados.id,
+      employeeId: atestados.employeeId,
+      dataRetorno: atestados.dataRetorno,
+      diasAfastamento: atestados.diasAfastamento,
+      companyId: atestados.companyId,
+    }).from(atestados)
+      .where(and(
+        inArray(atestados.employeeId, empIds),
+        isNull(atestados.deletedAt),
+        sql`${atestados.diasAfastamento} > 0`,
+        sql`${atestados.dataRetorno} IS NOT NULL`,
+        sql`${atestados.dataRetorno} >= ${today}`,
+        sql`${atestados.dataRetorno} <= (CURRENT_DATE + INTERVAL '3 days')`,
+      ));
+
+    const atestadosExpirados = await db.select({
+      id: atestados.id,
+      employeeId: atestados.employeeId,
+      statusAlterado: atestados.statusAlterado,
+      statusAnterior: atestados.statusAnterior,
+      companyId: atestados.companyId,
+    }).from(atestados)
+      .where(and(
+        inArray(atestados.employeeId, empIds),
+        isNull(atestados.deletedAt),
+        sql`${atestados.statusAlterado} = 1`,
+        sql`${atestados.diasAfastamento} > 0`,
+        sql`${atestados.dataRetorno} IS NOT NULL`,
+        sql`${atestados.dataRetorno} <= ${today}`,
+      ));
+
+    const empIdsAtestadoExpirado = new Map<number, { statusAnterior: string | null; atestadoId: number; companyId: number }>();
+    for (const at of atestadosExpirados) {
+      if (!empIdsAfastados.has(at.employeeId)) {
+        empIdsAtestadoExpirado.set(at.employeeId, {
+          statusAnterior: at.statusAnterior,
+          atestadoId: at.id,
+          companyId: at.companyId,
+        });
+      }
+      await db.update(atestados).set({ statusAlterado: 0 }).where(eq(atestados.id, at.id));
+    }
 
     // 4. Verificar licenças ativas (licencaMaternidade = 1 e data atual dentro do período)
     const empIdsEmLicenca = new Set<number>();
@@ -120,8 +165,6 @@ export async function syncEmployeeStatus(): Promise<{
       }
     }
 
-    // 5. Determinar o status correto para cada funcionário
-    // Prioridade: Licença > Férias > Afastado > status manual
     for (const emp of allEmps) {
       let newStatus: string | null = null;
       let reason = '';
@@ -137,9 +180,11 @@ export async function syncEmployeeStatus(): Promise<{
         newStatus = 'Afastado';
         const atestado = atestadosAtivos.find(a => a.employeeId === emp.id);
         reason = `Atestado ativo (retorno: ${atestado?.dataRetorno})`;
+      } else if (emp.status === 'Afastado' && empIdsAtestadoExpirado.has(emp.id)) {
+        const info = empIdsAtestadoExpirado.get(emp.id)!;
+        newStatus = info.statusAnterior || 'Ativo';
+        reason = `Atestado expirado — retorno automático para ${newStatus}`;
       } else if (AUTO_ONLY_STATUS.includes(emp.status as any)) {
-        // Status era automático (Ferias/Licenca) mas não tem mais justificativa → volta para Ativo
-        // Nota: Afastado NÃO é revertido aqui pois pode ter sido definido manualmente
         newStatus = 'Ativo';
         reason = 'Sem férias/licença ativa - retornando para Ativo';
       }
@@ -172,6 +217,58 @@ export async function syncEmployeeStatus(): Promise<{
         else if (newStatus === 'Afastado') result.toAfastado++;
         else if (newStatus === 'Licenca') result.toLicenca++;
         else if (newStatus === 'Ativo') result.toAtivo++;
+      }
+    }
+
+    if (atestadosProximosRetorno.length > 0) {
+      for (const at of atestadosProximosRetorno) {
+        const emp = allEmps.find(e => e.id === at.employeeId);
+        if (!emp) continue;
+
+        const alreadySent = await db.select({ id: notificationLogs.id }).from(notificationLogs).where(and(
+          eq(notificationLogs.companyId, at.companyId),
+          eq(notificationLogs.employeeId, at.employeeId),
+          eq(notificationLogs.tipoMovimentacao, "retorno_afastamento"),
+          sql`${notificationLogs.enviadoEm} >= (CURRENT_DATE - INTERVAL '3 days')`,
+        ));
+        if (alreadySent.length > 0) continue;
+
+        const recipients = await db.select({
+          id: notificationRecipients.id,
+          nome: notificationRecipients.nome,
+          email: notificationRecipients.email,
+        }).from(notificationRecipients).where(and(
+          eq(notificationRecipients.companyId, at.companyId),
+          eq(notificationRecipients.ativo, 1),
+          eq(notificationRecipients.notificarAfastamento, 1),
+        ));
+
+        const diasRestantes = Math.ceil((new Date(at.dataRetorno! + "T12:00:00").getTime() - new Date(today + "T12:00:00").getTime()) / 86400000);
+        const titulo = diasRestantes <= 0
+          ? `RETORNO HOJE — ${emp.nomeCompleto} retorna do afastamento`
+          : `RETORNO EM ${diasRestantes} DIA(S) — ${emp.nomeCompleto} retorna em ${at.dataRetorno}`;
+
+        for (const r of recipients) {
+          await db.insert(notificationLogs).values({
+            companyId: at.companyId,
+            employeeId: at.employeeId,
+            employeeName: emp.nomeCompleto,
+            tipoMovimentacao: "retorno_afastamento",
+            statusAnterior: "Afastado",
+            statusNovo: "Ativo",
+            recipientId: r.id,
+            recipientName: r.nome,
+            recipientEmail: r.email,
+            titulo,
+            corpo: `O funcionário ${emp.nomeCompleto} tem retorno previsto para ${at.dataRetorno} (${diasRestantes} dia(s)). O sistema mudará o status automaticamente para Ativo na data de retorno.`,
+            statusEnvio: "pendente",
+            disparadoPor: "Sistema (StatusSync)",
+          });
+        }
+
+        if (recipients.length > 0) {
+          console.log(`[StatusSync] Alerta retorno: ${emp.nomeCompleto} retorna em ${diasRestantes} dia(s) — ${recipients.length} alerta(s) gerado(s)`);
+        }
       }
     }
 
