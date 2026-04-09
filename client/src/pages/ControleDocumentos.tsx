@@ -2470,34 +2470,36 @@ export default function ControleDocumentos() {
             </div>
             <div className={`rounded-lg p-4 ${(!atestForm.afastamentoTipo || atestForm.afastamentoTipo === "dia") ? "bg-blue-50/60 border border-blue-100" : "bg-amber-50/60 border border-amber-100"}`}>
               {(!atestForm.afastamentoTipo || atestForm.afastamentoTipo === "dia") ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-medium text-blue-700">Dias de Afastamento</label>
-                    <Input type="number" min={0} className="mt-1 border-blue-200 focus:border-blue-400" value={atestForm.diasAfastamento || 0} onChange={e => setAtestForm({ ...atestForm, diasAfastamento: parseInt(e.target.value) || 0 })} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-blue-700">Data Retorno</label>
-                    <Input type="date" className="mt-1 border-blue-200 focus:border-blue-400" value={atestForm.dataRetorno || ""} onChange={e => setAtestForm({ ...atestForm, dataRetorno: e.target.value })} />
-                  </div>
-                </div>
-                {(atestForm.diasAfastamento || 0) > 15 && (
-                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded">INSS</span>
-                      <span className="text-xs font-semibold text-red-700">Afastamento superior a 15 dias</span>
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-blue-700">Dias de Afastamento</label>
+                      <Input type="number" min={0} className="mt-1 border-blue-200 focus:border-blue-400" value={atestForm.diasAfastamento || 0} onChange={e => setAtestForm({ ...atestForm, diasAfastamento: parseInt(e.target.value) || 0 })} />
                     </div>
-                    <p className="text-[10px] text-red-600 mt-1.5 leading-relaxed">
-                      Lei 8.213/91, Art. 59-60: A partir do 16º dia, o pagamento é responsabilidade do INSS.
-                      O RH deve providenciar o encaminhamento para perícia médica (auxílio-doença B31).
-                    </p>
+                    <div>
+                      <label className="text-xs font-medium text-blue-700">Data Retorno</label>
+                      <Input type="date" className="mt-1 border-blue-200 focus:border-blue-400" value={atestForm.dataRetorno || ""} onChange={e => setAtestForm({ ...atestForm, dataRetorno: e.target.value })} />
+                    </div>
                   </div>
-                )}
-                {(atestForm.diasAfastamento || 0) > 0 && (atestForm.diasAfastamento || 0) <= 15 && (
-                  <p className="text-[10px] text-blue-500 mt-2 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full inline-block" />
-                    O status do funcionário será alterado automaticamente para "Afastado"
-                  </p>
-                )}
+                  {(atestForm.diasAfastamento || 0) > 15 && (
+                    <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded">INSS</span>
+                        <span className="text-xs font-semibold text-red-700">Afastamento superior a 15 dias</span>
+                      </div>
+                      <p className="text-[10px] text-red-600 mt-1.5 leading-relaxed">
+                        Lei 8.213/91, Art. 59-60: A partir do 16º dia, o pagamento é responsabilidade do INSS.
+                        O RH deve providenciar o encaminhamento para perícia médica (auxílio-doença B31).
+                      </p>
+                    </div>
+                  )}
+                  {(atestForm.diasAfastamento || 0) > 0 && (atestForm.diasAfastamento || 0) <= 15 && (
+                    <p className="text-[10px] text-blue-500 mt-2 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full inline-block" />
+                      O status do funcionário será alterado automaticamente para "Afastado"
+                    </p>
+                  )}
+                </>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
