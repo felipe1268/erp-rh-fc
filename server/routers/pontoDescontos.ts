@@ -18,6 +18,118 @@ import { z } from "zod";
 // - Lei 605/49 Art. 6º: Perda do DSR por falta/atraso injustificado
 // - Art. 130 CLT: Reflexo de faltas nas férias
 // - Art. 59 CLT: Horas extras com autorização prévia
+
+const FERIADOS_NACIONAIS_FIXOS = [
+  "01-01", "04-21", "05-01", "09-07", "10-12", "11-02", "11-15", "12-25",
+];
+
+function calcularPascoaPonto(ano: number): string {
+  const a = ano % 19;
+  const b = Math.floor(ano / 100);
+  const c = ano % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31);
+  const dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
+
+function getFeriadosMoveisPonto(ano: number): string[] {
+  const pascoa = new Date(calcularPascoaPonto(ano) + 'T12:00:00Z');
+  const carnaval = new Date(pascoa);
+  carnaval.setUTCDate(carnaval.getUTCDate() - 47);
+  const sextaSanta = new Date(pascoa);
+  sextaSanta.setUTCDate(sextaSanta.getUTCDate() - 2);
+  const corpusChristi = new Date(pascoa);
+  corpusChristi.setUTCDate(corpusChristi.getUTCDate() + 60);
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+  return [fmt(carnaval), fmt(sextaSanta), fmt(corpusChristi)];
+}
+
+async function buildFeriadosSet(db: any, input: { companyId: number; companyIds?: number[] }, mesReferencia: string): Promise<Set<string>> {
+  const [anoStr, mesStr] = mesReferencia.split("-");
+  const ano = parseInt(anoStr);
+  const feriadosSet = new Set<string>();
+  for (const mmdd of FERIADOS_NACIONAIS_FIXOS) {
+    feriadosSet.add(`${ano}-${mmdd}`);
+  }
+  for (const f of getFeriadosMoveisPonto(ano)) {
+    feriadosSet.add(f);
+  }
+  const ids = input.companyIds?.length ? input.companyIds : [input.companyId];
+  const feriadosDb = ((await db.execute(
+    sql`SELECT data, tipo, recorrente, estado, cidade FROM feriados 
+        WHERE ("companyId" IN (${sql.raw(ids.join(','))}) OR "companyId" IS NULL) AND ativo = 1`
+  )) as any).rows || [];
+  for (const f of feriadosDb) {
+    let dataFull = f.data;
+    if (f.recorrente === 1 && f.data.length === 5) {
+      dataFull = `${ano}-${f.data}`;
+    }
+    if (dataFull.startsWith(anoStr + "-" + mesStr.padStart(2, '0'))) {
+      feriadosSet.add(dataFull);
+    }
+  }
+  return feriadosSet;
+}
+
+async function buildFeriasMap(db: any, input: { companyId: number; companyIds?: number[] }, mesReferencia: string): Promise<Set<string>> {
+  const [anoStr, mesStr] = mesReferencia.split("-");
+  const ano = parseInt(anoStr);
+  const mes = parseInt(mesStr);
+  const primeiroDiaMes = new Date(ano, mes - 1, 1);
+  const ultimoDiaMes = new Date(ano, mes, 0);
+  const ids = input.companyIds?.length ? input.companyIds : [input.companyId];
+  const feriasRows = ((await db.execute(
+    sql`SELECT "employeeId", "dataInicio", "dataFim", "periodo2Inicio", "periodo2Fim", "periodo3Inicio", "periodo3Fim"
+        FROM vacation_periods
+        WHERE "companyId" IN (${sql.raw(ids.join(','))}) 
+        AND status IN ('aprovada', 'em_gozo', 'concluida')
+        AND "deletedAt" IS NULL
+        AND (
+          ("dataInicio" <= ${ultimoDiaMes.toISOString().split('T')[0]} AND "dataFim" >= ${primeiroDiaMes.toISOString().split('T')[0]})
+          OR ("periodo2Inicio" <= ${ultimoDiaMes.toISOString().split('T')[0]} AND "periodo2Fim" >= ${primeiroDiaMes.toISOString().split('T')[0]})
+          OR ("periodo3Inicio" <= ${ultimoDiaMes.toISOString().split('T')[0]} AND "periodo3Fim" >= ${primeiroDiaMes.toISOString().split('T')[0]})
+        )`
+  )) as any).rows || [];
+  const feriasDateSet = new Set<string>();
+  for (const f of feriasRows) {
+    const periodos = [
+      { inicio: f.dataInicio, fim: f.dataFim },
+      { inicio: f.periodo2Inicio, fim: f.periodo2Fim },
+      { inicio: f.periodo3Inicio, fim: f.periodo3Fim },
+    ];
+    for (const p of periodos) {
+      if (!p.inicio || !p.fim) continue;
+      const ini = new Date(Math.max(new Date(p.inicio + 'T00:00:00').getTime(), primeiroDiaMes.getTime()));
+      const fim = new Date(Math.min(new Date(p.fim + 'T00:00:00').getTime(), ultimoDiaMes.getTime()));
+      if (ini > fim) continue;
+      const cur = new Date(ini);
+      while (cur <= fim) {
+        const key = `${f.employeeId}-${cur.toISOString().split('T')[0]}`;
+        feriasDateSet.add(key);
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+  }
+  return feriasDateSet;
+}
+
+async function buildLicencaSet(db: any, input: { companyId: number; companyIds?: number[] }): Promise<Set<number>> {
+  const ids = input.companyIds?.length ? input.companyIds : [input.companyId];
+  const licRows = ((await db.execute(
+    sql`SELECT id FROM employees 
+        WHERE "companyId" IN (${sql.raw(ids.join(','))}) AND status IN ('Afastado', 'Licenca') AND "deletedAt" IS NULL`
+  )) as any).rows || [];
+  return new Set(licRows.map((r: any) => r.id));
+}
 // ============================================================
 
 // Helpers
@@ -227,6 +339,15 @@ export const pontoDescontosRouter = router({
       heMap.set(`${he.employeeId}-${he.dataSolicitacao}`, true);
     }
 
+    // 4b. Buscar feriados do mês (nacionais + cadastrados)
+    const feriadosSet = await buildFeriadosSet(db, input, input.mesReferencia);
+
+    // 4c. Buscar férias de todos funcionários no mês (key = "empId-YYYY-MM-DD")
+    const feriasDateSet = await buildFeriasMap(db, input, input.mesReferencia);
+
+    // 4d. Buscar funcionários afastados/licença
+    const licencaSet = await buildLicencaSet(db, input);
+
     const atestadoMap = new Map<string, { tipo: string; horas: number }>();
     for (const at of atests) {
       if (at.employeeId && at.dataEmissao) {
@@ -267,6 +388,8 @@ export const pontoDescontosRouter = router({
     let totalDescontosGeral = 0;
 
     for (const emp of emps) {
+      if (licencaSet.has(emp.id)) continue;
+
       const empRecords = records.filter(r => r.employeeId === emp.id);
       const salarioBase = parseMoney(emp.salarioBase as any);
       const horasMes = parseFloat((emp as any).horasMensais || "220") || 220;
@@ -289,12 +412,16 @@ export const pontoDescontosRouter = router({
         if (!data) continue;
         const dow = getDayOfWeek(data);
         const isWeekend = dow === 0 || dow === 6;
+        if (isWeekend) continue;
+
+        if (feriadosSet.has(data)) continue;
+        if (feriasDateSet.has(`${emp.id}-${data}`)) continue;
+
         const atestadoInfo = atestadoMap.get(`${emp.id}-${data}`);
         const hasAtestadoDiaInteiro = atestadoInfo?.tipo === "dia";
         const hasAtestadoHoras = atestadoInfo?.tipo === "horas";
         const horasAtestado = atestadoInfo?.horas || 0;
 
-        if (isWeekend) continue;
         if (hasAtestadoDiaInteiro) continue;
 
         const entrada1 = parseTime(rec.entrada1 as string);
