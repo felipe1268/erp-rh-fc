@@ -1495,7 +1495,17 @@ function DashboardLayoutContent({
 
                       if (hasChildren) {
                         return (
-                          <div key={item.path}>
+                          <div
+                            key={item.path}
+                            draggable={!isCollapsed}
+                            onDragStart={() => handleSidebarDragStart(section.title, item.path)}
+                            onDragOver={(e: React.DragEvent) => handleSidebarDragOver(e, section.title, item.path)}
+                            onDrop={() => handleSidebarDrop(section.title)}
+                            onDragEnd={handleSidebarDragEnd}
+                            onClickCapture={(e: React.MouseEvent) => { if (itemDidDrag.current) { e.stopPropagation(); e.preventDefault(); } }}
+                            style={{ cursor: isCollapsed ? undefined : "grab", opacity: isDragging ? 0.4 : 1 }}
+                            className={`transition-all ${isDropTarget && !isDragging ? "ring-1 ring-[#D4A843]/60 rounded-lg bg-sidebar-accent/30" : ""}`}
+                          >
                             <SidebarMenuItem>
                               <SidebarMenuButton
                                 isActive={childActive}
