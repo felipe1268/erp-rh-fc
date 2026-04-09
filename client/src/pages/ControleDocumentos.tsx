@@ -17,7 +17,7 @@ import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
@@ -2053,45 +2053,63 @@ export default function ControleDocumentos() {
 
       {/* ===================== DIALOG: ASO (Criar/Editar) ===================== */}
       <FullScreenDialog open={showAsoDialog} onClose={() => { setShowAsoDialog(false); setEditingAsoId(null); }} title={editingAsoId ? "Editar ASO" : "Novo ASO"} icon={<Stethoscope className="h-5 w-5 text-white" />}>
-        <div className="w-full">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
-              <EmployeeSelect value={asoForm.employeeId} onChange={id => setAsoForm({ ...asoForm, employeeId: id })} />
+        <div className="w-full max-w-3xl mx-auto space-y-5">
+
+          <div className="rounded-xl border bg-gradient-to-r from-emerald-50 to-teal-50 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-emerald-600 flex items-center justify-center"><Search className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-emerald-900">Colaborador</h3>
             </div>
-            <div>
-              <label className="text-sm font-medium">Tipo de Exame *</label>
-              <Select value={asoForm.tipo || ""} onValueChange={v => setAsoForm({ ...asoForm, tipo: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Admissional">Admissional</SelectItem>
-                  <SelectItem value="Periodico">Periódico</SelectItem>
-                  <SelectItem value="Retorno">Retorno ao Trabalho</SelectItem>
-                  <SelectItem value="Mudanca_Funcao">Mudança de Função</SelectItem>
-                  <SelectItem value="Demissional">Demissional</SelectItem>
-                </SelectContent>
-              </Select>
+            <EmployeeSelect value={asoForm.employeeId} onChange={id => setAsoForm({ ...asoForm, employeeId: id })} />
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-teal-600 flex items-center justify-center"><ClipboardList className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Dados do Exame</h3>
             </div>
-            <div>
-              <label className="text-sm font-medium">Data do Exame *</label>
-              <Input type="date" value={asoForm.dataExame || ""} onChange={e => setAsoForm({ ...asoForm, dataExame: e.target.value })} />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600">Tipo de Exame *</label>
+                <Select value={asoForm.tipo || ""} onValueChange={v => setAsoForm({ ...asoForm, tipo: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Admissional">Admissional</SelectItem>
+                    <SelectItem value="Periodico">Periódico</SelectItem>
+                    <SelectItem value="Retorno">Retorno ao Trabalho</SelectItem>
+                    <SelectItem value="Mudanca_Funcao">Mudança de Função</SelectItem>
+                    <SelectItem value="Demissional">Demissional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Data do Exame *</label>
+                <Input type="date" className="mt-1" value={asoForm.dataExame || ""} onChange={e => setAsoForm({ ...asoForm, dataExame: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Validade (dias)</label>
+                <Input type="number" className="mt-1" value={asoForm.validadeDias || 365} onChange={e => setAsoForm({ ...asoForm, validadeDias: parseInt(e.target.value) || 365 })} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Resultado</label>
+                <Select value={asoForm.resultado || "Apto"} onValueChange={v => setAsoForm({ ...asoForm, resultado: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Apto">Apto</SelectItem>
+                    <SelectItem value="Inapto">Inapto</SelectItem>
+                    <SelectItem value="Apto_Restricao">Apto com Restrição</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium">Validade (dias)</label>
-              <Input type="number" value={asoForm.validadeDias || 365} onChange={e => setAsoForm({ ...asoForm, validadeDias: parseInt(e.target.value) || 365 })} />
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-cyan-600 flex items-center justify-center"><Stethoscope className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Profissional e Clínica</h3>
             </div>
-            <div>
-              <label className="text-sm font-medium">Resultado</label>
-              <Select value={asoForm.resultado || "Apto"} onValueChange={v => setAsoForm({ ...asoForm, resultado: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Apto">Apto</SelectItem>
-                  <SelectItem value="Inapto">Inapto</SelectItem>
-                  <SelectItem value="Apto_Restricao">Apto com Restrição</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2">
+            <div className="space-y-3">
               <MedicoAutocomplete
                 medicoValue={asoForm.medico || ""}
                 crmValue={asoForm.crm || ""}
@@ -2101,8 +2119,6 @@ export default function ControleDocumentos() {
                 companyId={companyId}
                 companyIds={companyIds}
               />
-            </div>
-            <div className="col-span-2">
               <ClinicaAutocomplete
                 value={asoForm.clinica || ""}
                 onChange={v => setAsoForm({ ...asoForm, clinica: v })}
@@ -2110,32 +2126,46 @@ export default function ControleDocumentos() {
                 companyIds={companyIds}
               />
             </div>
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Exames Realizados</label>
-              <ExamesRealizadosField value={asoForm.examesRealizados || ""} onChange={v => setAsoForm({ ...asoForm, examesRealizados: v })} companyId={companyId} companyIds={companyIds} />
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-indigo-600 flex items-center justify-center"><BookOpen className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Exames Realizados</h3>
             </div>
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Observações</label>
-              <Textarea value={asoForm.observacoes || ""} onChange={e => setAsoForm({ ...asoForm, observacoes: e.target.value })} rows={2} />
+            <ExamesRealizadosField value={asoForm.examesRealizados || ""} onChange={v => setAsoForm({ ...asoForm, examesRealizados: v })} companyId={companyId} companyIds={companyIds} />
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-gray-600 flex items-center justify-center"><FileText className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Observações e Anexo</h3>
             </div>
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Anexar Documento ASO (PDF/Imagem)</label>
-              <div className="mt-1">
-                <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
-                    setAsoForm({ ...asoForm, _file: file });
-                  }
-                }} />
-                {asoForm._file && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Paperclip className="h-3 w-3" /> {asoForm._file.name}</p>}
-                {editingAsoId && (() => { const aso = asoList.find((a: any) => a.id === editingAsoId); return aso?.documentoUrl ? <a href={aso.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Ver documento atual</a> : null; })()}
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600">Observações</label>
+                <Textarea className="mt-1" value={asoForm.observacoes || ""} onChange={e => setAsoForm({ ...asoForm, observacoes: e.target.value })} rows={2} placeholder="Observações adicionais..." />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Anexar Documento ASO (PDF/Imagem)</label>
+                <div className="mt-1.5 border-2 border-dashed border-gray-200 rounded-lg p-3 hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                  <Input type="file" accept=".pdf,.jpg,.jpeg,.png" className="border-0 shadow-none p-0" onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                      setAsoForm({ ...asoForm, _file: file });
+                    }
+                  }} />
+                </div>
+                {asoForm._file && <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1"><Paperclip className="h-3 w-3" /> {asoForm._file.name}</p>}
+                {editingAsoId && (() => { const aso = asoList.find((a: any) => a.id === editingAsoId); return aso?.documentoUrl ? <a href={aso.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1.5 flex items-center gap-1"><FileText className="h-3 w-3" /> Ver documento atual</a> : null; })()}
               </div>
             </div>
           </div>
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-            <Button variant="outline" onClick={() => { setShowAsoDialog(false); setEditingAsoId(null); }}>Cancelar</Button>
-            <Button onClick={handleSubmitAso} disabled={createAso.isPending || updateAso.isPending}>
+
+          <div className="flex justify-end gap-3 pt-2 pb-4">
+            <Button variant="outline" size="lg" onClick={() => { setShowAsoDialog(false); setEditingAsoId(null); }}>Cancelar</Button>
+            <Button size="lg" className="px-8 shadow-md" onClick={handleSubmitAso} disabled={createAso.isPending || updateAso.isPending}>
               {(createAso.isPending || updateAso.isPending) ? "Salvando..." : editingAsoId ? "Atualizar" : "Salvar"}
             </Button>
           </div>
@@ -2144,137 +2174,163 @@ export default function ControleDocumentos() {
 
       {/* ===================== DIALOG: TREINAMENTO (Criar/Editar) ===================== */}
       <FullScreenDialog open={showTreinDialog} onClose={() => { setShowTreinDialog(false); setEditingTreinId(null); }} title={editingTreinId ? "Editar Treinamento" : "Novo Treinamento"} icon={<GraduationCap className="h-5 w-5 text-white" />}>
-        <div className="w-full">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
-              <EmployeeSelect value={treinForm.employeeId} onChange={id => setTreinForm({ ...treinForm, employeeId: id })} />
-            </div>
+        <div className="w-full max-w-3xl mx-auto space-y-5">
 
-            {/* ===== SELEÇÃO RÁPIDA POR NR ===== */}
-            <div className="col-span-2">
-              <label className="text-sm font-medium flex items-center gap-1.5">
-                <Zap className="h-3.5 w-3.5 text-amber-500" />
-                Preenchimento Rápido por NR
-                <span className="text-xs text-muted-foreground font-normal">(selecione para preencher automaticamente)</span>
-              </label>
-              <Select
-                value={treinForm._selectedRule || ""}
-                onValueChange={(val) => {
-                  if (val === "_custom") {
-                    setTreinForm({ ...treinForm, _selectedRule: "", nome: "", norma: "", cargaHoraria: "", _autoValidade: false });
-                    return;
-                  }
-                  const idx = parseInt(val);
-                  const rule = TRAINING_RULES[idx];
-                  if (!rule) return;
-                  const updates: any = {
-                    ...treinForm,
-                    _selectedRule: val,
-                    nome: rule.nome,
-                    norma: rule.norma,
-                    cargaHoraria: rule.cargaHorariaInicial,
-                    _autoValidade: !!rule.validadeMeses,
-                    _validadeMeses: rule.validadeMeses,
-                  };
-                  // Se já tem data de realização, calcula validade automaticamente
-                  if (treinForm.dataRealizacao && rule.validadeMeses) {
-                    updates.dataValidade = calcularDataValidade(treinForm.dataRealizacao, rule.validadeMeses);
-                  }
-                  setTreinForm(updates);
-                  toast.success(`Preenchido: ${rule.nome} (${rule.norma || "Sem NR"})${rule.validadeMeses ? ` — Validade: ${rule.validadeMeses} meses` : ""}`);
-                }}
-              >
-                <SelectTrigger className="bg-amber-50/50 border-amber-200">
-                  <SelectValue placeholder="Selecione um treinamento padrão ou preencha manualmente abaixo..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_custom">✏️ Preencher manualmente</SelectItem>
-                  {Object.entries(TRAINING_CATEGORIES).map(([key, label]) => {
-                    const rules = TRAINING_RULES.filter(r => r.categoria === key);
-                    if (rules.length === 0) return null;
-                    return [
-                      <div key={`cat-${key}`} className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1">{label}</div>,
-                      ...rules.map((rule) => {
-                        const globalIdx = TRAINING_RULES.indexOf(rule);
-                        return (
-                          <SelectItem key={globalIdx} value={String(globalIdx)}>
-                            <span className="flex items-center gap-2">
-                              <span className="font-medium">{rule.nome}</span>
-                              {rule.norma && <span className="text-xs text-muted-foreground">({rule.norma})</span>}
-                              {rule.validadeMeses && <span className="text-xs text-amber-600">• {rule.validadeMeses}m</span>}
-                            </span>
-                          </SelectItem>
-                        );
-                      })
-                    ];
-                  })}
-                </SelectContent>
-              </Select>
+          <div className="rounded-xl border bg-gradient-to-r from-purple-50 to-fuchsia-50 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-purple-600 flex items-center justify-center"><Search className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-purple-900">Colaborador</h3>
             </div>
+            <EmployeeSelect value={treinForm.employeeId} onChange={id => setTreinForm({ ...treinForm, employeeId: id })} />
+          </div>
 
-            <div>
-              <label className="text-sm font-medium">Nome do Treinamento *</label>
-              <Input value={treinForm.nome || ""} onChange={e => setTreinForm({ ...treinForm, nome: e.target.value })} />
+          <div className="rounded-xl border bg-gradient-to-r from-amber-50 to-yellow-50 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-amber-500 flex items-center justify-center"><Zap className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-amber-900">Preenchimento Rápido por NR</h3>
+              <span className="text-xs text-amber-600 font-normal">(selecione para preencher automaticamente)</span>
             </div>
-            <div>
-              <label className="text-sm font-medium">Norma Regulamentadora</label>
-              <Input value={treinForm.norma || ""} onChange={e => setTreinForm({ ...treinForm, norma: e.target.value })} placeholder="Ex: NR-35, NR-10" />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Carga Horária</label>
-              <Input value={treinForm.cargaHoraria || ""} onChange={e => setTreinForm({ ...treinForm, cargaHoraria: e.target.value })} placeholder="Ex: 8h, 40h" />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Data Realização *</label>
-              <Input type="date" value={treinForm.dataRealizacao || ""} onChange={e => {
-                const newDate = e.target.value;
-                const updates: any = { ...treinForm, dataRealizacao: newDate };
-                // Auto-calcular validade se tem regra selecionada
-                if (treinForm._autoValidade && treinForm._validadeMeses && newDate) {
-                  updates.dataValidade = calcularDataValidade(newDate, treinForm._validadeMeses);
+            <Select
+              value={treinForm._selectedRule || ""}
+              onValueChange={(val) => {
+                if (val === "_custom") {
+                  setTreinForm({ ...treinForm, _selectedRule: "", nome: "", norma: "", cargaHoraria: "", _autoValidade: false });
+                  return;
+                }
+                const idx = parseInt(val);
+                const rule = TRAINING_RULES[idx];
+                if (!rule) return;
+                const updates: any = {
+                  ...treinForm,
+                  _selectedRule: val,
+                  nome: rule.nome,
+                  norma: rule.norma,
+                  cargaHoraria: rule.cargaHorariaInicial,
+                  _autoValidade: !!rule.validadeMeses,
+                  _validadeMeses: rule.validadeMeses,
+                };
+                if (treinForm.dataRealizacao && rule.validadeMeses) {
+                  updates.dataValidade = calcularDataValidade(treinForm.dataRealizacao, rule.validadeMeses);
                 }
                 setTreinForm(updates);
-              }} />
+                toast.success(`Preenchido: ${rule.nome} (${rule.norma || "Sem NR"})${rule.validadeMeses ? ` — Validade: ${rule.validadeMeses} meses` : ""}`);
+              }}
+            >
+              <SelectTrigger className="bg-white border-amber-200">
+                <SelectValue placeholder="Selecione um treinamento padrão ou preencha manualmente abaixo..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_custom">✏️ Preencher manualmente</SelectItem>
+                {Object.entries(TRAINING_CATEGORIES).map(([key, label]) => {
+                  const rules = TRAINING_RULES.filter(r => r.categoria === key);
+                  if (rules.length === 0) return null;
+                  return [
+                    <div key={`cat-${key}`} className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1">{label}</div>,
+                    ...rules.map((rule) => {
+                      const globalIdx = TRAINING_RULES.indexOf(rule);
+                      return (
+                        <SelectItem key={globalIdx} value={String(globalIdx)}>
+                          <span className="flex items-center gap-2">
+                            <span className="font-medium">{rule.nome}</span>
+                            {rule.norma && <span className="text-xs text-muted-foreground">({rule.norma})</span>}
+                            {rule.validadeMeses && <span className="text-xs text-amber-600">• {rule.validadeMeses}m</span>}
+                          </span>
+                        </SelectItem>
+                      );
+                    })
+                  ];
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-violet-600 flex items-center justify-center"><GraduationCap className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Dados do Treinamento</h3>
             </div>
-            <div>
-              <label className="text-sm font-medium flex items-center gap-1.5">
-                Data Validade
-                {treinForm._autoValidade && <span className="text-xs text-amber-600 flex items-center gap-0.5"><Zap className="h-3 w-3" /> Auto ({treinForm._validadeMeses}m)</span>}
-              </label>
-              <Input type="date" value={treinForm.dataValidade || ""} onChange={e => setTreinForm({ ...treinForm, dataValidade: e.target.value, _autoValidade: false })} />
-              {treinForm._autoValidade && <p className="text-xs text-amber-600 mt-0.5">Calculada automaticamente pela norma. Você pode alterar se necessário.</p>}
-            </div>
-            <div>
-              <label className="text-sm font-medium">Instrutor</label>
-              <Input value={treinForm.instrutor || ""} onChange={e => setTreinForm({ ...treinForm, instrutor: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Entidade/Empresa</label>
-              <Input value={treinForm.entidade || ""} onChange={e => setTreinForm({ ...treinForm, entidade: e.target.value })} />
-            </div>
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Observações</label>
-              <Textarea value={treinForm.observacoes || ""} onChange={e => setTreinForm({ ...treinForm, observacoes: e.target.value })} rows={2} />
-            </div>
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Anexar Certificado (PDF/Imagem)</label>
-              <div className="mt-1">
-                <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
-                    setTreinForm({ ...treinForm, _file: file });
-                  }
-                }} />
-                {treinForm._file && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Paperclip className="h-3 w-3" /> {treinForm._file.name}</p>}
-                {editingTreinId && (() => { const trein = treinList.find((t: any) => t.id === editingTreinId); return trein?.certificadoUrl ? <a href={trein.certificadoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Ver certificado atual</a> : null; })()}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600">Nome do Treinamento *</label>
+                <Input className="mt-1" value={treinForm.nome || ""} onChange={e => setTreinForm({ ...treinForm, nome: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Norma Regulamentadora</label>
+                <Input className="mt-1" value={treinForm.norma || ""} onChange={e => setTreinForm({ ...treinForm, norma: e.target.value })} placeholder="Ex: NR-35, NR-10" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Carga Horária</label>
+                <Input className="mt-1" value={treinForm.cargaHoraria || ""} onChange={e => setTreinForm({ ...treinForm, cargaHoraria: e.target.value })} placeholder="Ex: 8h, 40h" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Instrutor</label>
+                <Input className="mt-1" value={treinForm.instrutor || ""} onChange={e => setTreinForm({ ...treinForm, instrutor: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs font-medium text-gray-600">Entidade/Empresa</label>
+                <Input className="mt-1" value={treinForm.entidade || ""} onChange={e => setTreinForm({ ...treinForm, entidade: e.target.value })} />
               </div>
             </div>
           </div>
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-            <Button variant="outline" onClick={() => { setShowTreinDialog(false); setEditingTreinId(null); }}>Cancelar</Button>
-            <Button onClick={handleSubmitTrein} disabled={createTrein.isPending || updateTrein.isPending}>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-orange-500 flex items-center justify-center"><Calendar className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Datas e Validade</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600">Data Realização *</label>
+                <Input type="date" className="mt-1" value={treinForm.dataRealizacao || ""} onChange={e => {
+                  const newDate = e.target.value;
+                  const updates: any = { ...treinForm, dataRealizacao: newDate };
+                  if (treinForm._autoValidade && treinForm._validadeMeses && newDate) {
+                    updates.dataValidade = calcularDataValidade(newDate, treinForm._validadeMeses);
+                  }
+                  setTreinForm(updates);
+                }} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
+                  Data Validade
+                  {treinForm._autoValidade && <span className="text-xs text-amber-600 flex items-center gap-0.5"><Zap className="h-3 w-3" /> Auto ({treinForm._validadeMeses}m)</span>}
+                </label>
+                <Input type="date" className="mt-1" value={treinForm.dataValidade || ""} onChange={e => setTreinForm({ ...treinForm, dataValidade: e.target.value, _autoValidade: false })} />
+                {treinForm._autoValidade && <p className="text-[10px] text-amber-600 mt-1">Calculada automaticamente pela norma. Você pode alterar.</p>}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-gray-600 flex items-center justify-center"><FileText className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Observações e Certificado</h3>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600">Observações</label>
+                <Textarea className="mt-1" value={treinForm.observacoes || ""} onChange={e => setTreinForm({ ...treinForm, observacoes: e.target.value })} rows={2} placeholder="Observações adicionais..." />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Anexar Certificado (PDF/Imagem)</label>
+                <div className="mt-1.5 border-2 border-dashed border-gray-200 rounded-lg p-3 hover:border-purple-300 hover:bg-purple-50/30 transition-colors">
+                  <Input type="file" accept=".pdf,.jpg,.jpeg,.png" className="border-0 shadow-none p-0" onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                      setTreinForm({ ...treinForm, _file: file });
+                    }
+                  }} />
+                </div>
+                {treinForm._file && <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1"><Paperclip className="h-3 w-3" /> {treinForm._file.name}</p>}
+                {editingTreinId && (() => { const trein = treinList.find((t: any) => t.id === editingTreinId); return trein?.certificadoUrl ? <a href={trein.certificadoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1.5 flex items-center gap-1"><FileText className="h-3 w-3" /> Ver certificado atual</a> : null; })()}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2 pb-4">
+            <Button variant="outline" size="lg" onClick={() => { setShowTreinDialog(false); setEditingTreinId(null); }}>Cancelar</Button>
+            <Button size="lg" className="px-8 shadow-md" onClick={handleSubmitTrein} disabled={createTrein.isPending || updateTrein.isPending}>
               {(createTrein.isPending || updateTrein.isPending) ? "Salvando..." : editingTreinId ? "Atualizar" : "Salvar"}
             </Button>
           </div>
@@ -2451,109 +2507,138 @@ export default function ControleDocumentos() {
 
       {/* ===================== DIALOG: ADVERTÊNCIA (Criar/Editar) ===================== */}
       <FullScreenDialog open={showAdvDialog} onClose={() => { setShowAdvDialog(false); setEditingAdvId(null); setAdvEmployeeCount(null); }} title={editingAdvId ? "Editar Advertência" : "Nova Advertência"} icon={<ShieldAlert className="h-5 w-5 text-white" />}>
-        <div className="w-full">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
-              <EmployeeSelect value={advForm.employeeId} onChange={id => setAdvForm({ ...advForm, employeeId: id })} />
-            </div>
+        <div className="w-full max-w-3xl mx-auto space-y-5">
 
-            {/* ALERTA DE CONTAGEM DE ADVERTÊNCIAS */}
-            {advCountData && !editingAdvId && advForm.employeeId && (
-              <div className={`col-span-2 rounded-lg p-3 border-2 ${
-                advCountData.total >= 3 ? "bg-red-50 border-red-300" : advCountData.total >= 2 ? "bg-amber-50 border-amber-300" : "bg-blue-50 border-blue-200"
-              }`}>
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className={`h-5 w-5 ${advCountData.total >= 3 ? "text-red-600" : advCountData.total >= 2 ? "text-amber-600" : "text-blue-600"}`} />
-                  <div>
-                    <p className={`text-sm font-bold ${advCountData.total >= 3 ? "text-red-800" : advCountData.total >= 2 ? "text-amber-800" : "text-blue-800"}`}>
-                      Este colaborador já possui {advCountData.total} advertência(s)
-                    </p>
-                    <p className={`text-xs ${advCountData.total >= 3 ? "text-red-700" : advCountData.total >= 2 ? "text-amber-700" : "text-blue-700"}`}>
-                      {advCountData.proximaAcao}
-                    </p>
-                    <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
-                      <span>Verbais: {advCountData.verbais}</span>
-                      <span>Escritas: {advCountData.escritas}</span>
-                      <span>Suspensões: {advCountData.suspensoes}</span>
-                    </div>
-                  </div>
+          <div className="rounded-xl border bg-gradient-to-r from-red-50 to-rose-50 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-red-600 flex items-center justify-center"><Search className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-red-900">Colaborador</h3>
+            </div>
+            <EmployeeSelect value={advForm.employeeId} onChange={id => setAdvForm({ ...advForm, employeeId: id })} />
+          </div>
+
+          {advCountData && !editingAdvId && advForm.employeeId && (
+            <div className={`rounded-xl border-2 p-4 ${
+              advCountData.total >= 3 ? "bg-red-50 border-red-300" : advCountData.total >= 2 ? "bg-amber-50 border-amber-300" : "bg-blue-50 border-blue-200"
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${advCountData.total >= 3 ? "bg-red-200" : advCountData.total >= 2 ? "bg-amber-200" : "bg-blue-200"}`}>
+                  <ShieldAlert className={`h-5 w-5 ${advCountData.total >= 3 ? "text-red-700" : advCountData.total >= 2 ? "text-amber-700" : "text-blue-700"}`} />
                 </div>
-                {advCountData.total >= 3 && (
-                  <p className="text-xs font-bold text-red-700 mt-2 flex items-center gap-1">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    APÓS A 3ª ADVERTÊNCIA O COLABORADOR ESTÁ APTO A RECEBER SUSPENSÃO (Art. 474 CLT)
+                <div>
+                  <p className={`text-sm font-bold ${advCountData.total >= 3 ? "text-red-800" : advCountData.total >= 2 ? "text-amber-800" : "text-blue-800"}`}>
+                    Este colaborador já possui {advCountData.total} advertência(s)
                   </p>
-                )}
-              </div>
-            )}
-
-            <div>
-              <label className="text-sm font-medium">Tipo *</label>
-              <Select value={advForm.tipoAdvertencia || ""} onValueChange={v => setAdvForm({ ...advForm, tipoAdvertencia: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Verbal">Verbal</SelectItem>
-                  <SelectItem value="Escrita">Escrita</SelectItem>
-                  <SelectItem value="Suspensao">Suspensão</SelectItem>
-                  <SelectItem value="JustaCausa">Justa Causa</SelectItem>
-                  <SelectItem value="OSS">OSS</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Data da Ocorrência *</label>
-              <Input type="date" value={advForm.dataOcorrencia || ""} onChange={e => setAdvForm({ ...advForm, dataOcorrencia: e.target.value })} />
-            </div>
-            {advForm.tipoAdvertencia === "Suspensao" && (
-              <div>
-                <label className="text-sm font-medium">Dias de Suspensão *</label>
-                <Input type="number" min={1} max={30} value={advForm.diasSuspensao || ""} onChange={e => setAdvForm({ ...advForm, diasSuspensao: parseInt(e.target.value) || 0 })} placeholder="1 a 30 dias (Art. 474 CLT)" />
-              </div>
-            )}
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Motivo *</label>
-              <Textarea value={advForm.motivo || ""} onChange={e => setAdvForm({ ...advForm, motivo: e.target.value })} rows={2} placeholder="Descreva o motivo da advertência..." />
-            </div>
-            <div className="col-span-2">
-              <label className="text-sm font-medium">Descrição Detalhada</label>
-              <Textarea value={advForm.descricao || ""} onChange={e => setAdvForm({ ...advForm, descricao: e.target.value })} rows={3} />
-            </div>
-            {advForm.tipoAdvertencia !== "Verbal" && (
-            <div className="col-span-2 space-y-3">
-              <label className="text-sm font-bold text-gray-700">Testemunhas</label>
-              {[1, 2, 3].map(n => (
-                <div key={n} className="grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded-lg border">
-                  <div>
-                    <label className="text-xs text-muted-foreground">Nome Testemunha {n}</label>
-                    <Input
-                      value={advForm[`testemunha${n}Nome`] || ""}
-                      onChange={e => setAdvForm({ ...advForm, [`testemunha${n}Nome`]: e.target.value })}
-                      placeholder={`Nome completo da testemunha ${n}`}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">CPF ou RG</label>
-                    <Input
-                      value={advForm[`testemunha${n}Doc`] || ""}
-                      onChange={e => setAdvForm({ ...advForm, [`testemunha${n}Doc`]: e.target.value })}
-                      placeholder="CPF ou RG"
-                    />
+                  <p className={`text-xs ${advCountData.total >= 3 ? "text-red-700" : advCountData.total >= 2 ? "text-amber-700" : "text-blue-700"}`}>
+                    {advCountData.proximaAcao}
+                  </p>
+                  <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                    <span>Verbais: {advCountData.verbais}</span>
+                    <span>Escritas: {advCountData.escritas}</span>
+                    <span>Suspensões: {advCountData.suspensoes}</span>
                   </div>
                 </div>
-              ))}
+              </div>
+              {advCountData.total >= 3 && (
+                <p className="text-xs font-bold text-red-700 mt-2 flex items-center gap-1 ml-[52px]">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  APÓS A 3ª ADVERTÊNCIA O COLABORADOR ESTÁ APTO A RECEBER SUSPENSÃO (Art. 474 CLT)
+                </p>
+              )}
             </div>
-            )}
+          )}
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-rose-600 flex items-center justify-center"><ShieldAlert className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Dados da Ocorrência</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600">Tipo *</label>
+                <Select value={advForm.tipoAdvertencia || ""} onValueChange={v => setAdvForm({ ...advForm, tipoAdvertencia: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Verbal">Verbal</SelectItem>
+                    <SelectItem value="Escrita">Escrita</SelectItem>
+                    <SelectItem value="Suspensao">Suspensão</SelectItem>
+                    <SelectItem value="JustaCausa">Justa Causa</SelectItem>
+                    <SelectItem value="OSS">OSS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Data da Ocorrência *</label>
+                <Input type="date" className="mt-1" value={advForm.dataOcorrencia || ""} onChange={e => setAdvForm({ ...advForm, dataOcorrencia: e.target.value })} />
+              </div>
+              {advForm.tipoAdvertencia === "Suspensao" && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Dias de Suspensão *</label>
+                  <Input type="number" min={1} max={30} className="mt-1" value={advForm.diasSuspensao || ""} onChange={e => setAdvForm({ ...advForm, diasSuspensao: parseInt(e.target.value) || 0 })} placeholder="1 a 30 dias (Art. 474 CLT)" />
+                </div>
+              )}
+            </div>
             {advForm.tipoAdvertencia === "Verbal" && (
-              <div className="col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800 mt-4">
                 <p className="font-medium">Advertência Verbal — Apenas Registro</p>
-                <p className="text-xs mt-1">A advertência verbal será registrada no sistema para controle, sem necessidade de documento formal ou testemunhas.</p>
+                <p className="text-xs mt-1">Registrada no sistema para controle, sem documento formal ou testemunhas.</p>
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-            <Button variant="outline" onClick={() => { setShowAdvDialog(false); setEditingAdvId(null); setAdvEmployeeCount(null); }}>Cancelar</Button>
-            <Button onClick={handleSubmitAdv} disabled={createAdv.isPending || updateAdv.isPending}>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-orange-500 flex items-center justify-center"><MessageSquare className="h-3.5 w-3.5 text-white" /></div>
+              <h3 className="text-sm font-semibold text-gray-800">Motivo e Descrição</h3>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600">Motivo *</label>
+                <Textarea className="mt-1" value={advForm.motivo || ""} onChange={e => setAdvForm({ ...advForm, motivo: e.target.value })} rows={2} placeholder="Descreva o motivo da advertência..." />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Descrição Detalhada</label>
+                <Textarea className="mt-1" value={advForm.descricao || ""} onChange={e => setAdvForm({ ...advForm, descricao: e.target.value })} rows={3} />
+              </div>
+            </div>
+          </div>
+
+          {advForm.tipoAdvertencia !== "Verbal" && (
+            <div className="rounded-xl border bg-white p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-7 w-7 rounded-lg bg-slate-600 flex items-center justify-center"><Users className="h-3.5 w-3.5 text-white" /></div>
+                <h3 className="text-sm font-semibold text-gray-800">Testemunhas</h3>
+              </div>
+              <div className="space-y-3">
+                {[1, 2, 3].map(n => (
+                  <div key={n} className="grid grid-cols-2 gap-3 p-3 bg-gray-50/80 rounded-lg border border-gray-100">
+                    <div>
+                      <label className="text-xs font-medium text-gray-500">Nome Testemunha {n}</label>
+                      <Input
+                        className="mt-1"
+                        value={advForm[`testemunha${n}Nome`] || ""}
+                        onChange={e => setAdvForm({ ...advForm, [`testemunha${n}Nome`]: e.target.value })}
+                        placeholder={`Nome completo da testemunha ${n}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500">CPF ou RG</label>
+                      <Input
+                        className="mt-1"
+                        value={advForm[`testemunha${n}Doc`] || ""}
+                        onChange={e => setAdvForm({ ...advForm, [`testemunha${n}Doc`]: e.target.value })}
+                        placeholder="CPF ou RG"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2 pb-4">
+            <Button variant="outline" size="lg" onClick={() => { setShowAdvDialog(false); setEditingAdvId(null); setAdvEmployeeCount(null); }}>Cancelar</Button>
+            <Button size="lg" className="px-8 shadow-md" onClick={handleSubmitAdv} disabled={createAdv.isPending || updateAdv.isPending}>
               {(createAdv.isPending || updateAdv.isPending) ? "Salvando..." : editingAdvId ? "Atualizar" : "Salvar"}
             </Button>
           </div>
