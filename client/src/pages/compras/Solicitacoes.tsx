@@ -3471,7 +3471,7 @@ export default function Solicitacoes() {
                       )}
                     </DialogTitle>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 mr-6">
                     {!["cancelado"].includes(detalhe.status) && (
                       <Button size="sm" variant="outline"
                         onClick={() => {
