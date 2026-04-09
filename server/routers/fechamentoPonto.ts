@@ -2381,10 +2381,14 @@ export const fechamentoPontoRouter = router({
           if (obra) { obraId = obra.id; obraNome = obra.nome; }
         }
 
-        // Detect months in file
         const meses = new Set<string>();
+        const contagemPorMes: Record<string, number> = {};
         for (const r of records) {
-          if (r.data) meses.add(dateToMesRef(r.data));
+          if (r.data) {
+            const mes = dateToMesRef(r.data);
+            meses.add(mes);
+            contagemPorMes[mes] = (contagemPorMes[mes] || 0) + 1;
+          }
         }
 
         results.push({
@@ -2395,6 +2399,7 @@ export const fechamentoPontoRouter = router({
           valid: obraId !== null,
           totalRecords: records.length,
           mesesDetectados: Array.from(meses).sort(),
+          registrosPorMes: contagemPorMes,
           error: obraId ? undefined : `SN "${deviceSerial}" não está vinculado a nenhuma obra. Cadastre o SN na aba de Obras antes de fazer o upload.`,
         });
       }

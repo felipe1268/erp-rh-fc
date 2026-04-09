@@ -3642,10 +3642,19 @@ export default function FechamentoPonto() {
                         {r.mesesDetectados.length > 0 && (
                           <p className="text-xs"><strong>Competência(s):</strong> {r.mesesDetectados.map((m: string) => formatMesAno(m)).join(", ")}</p>
                         )}
-                        {r.mesesDetectados.length > 1 && (
-                          <p className="text-xs text-amber-700 flex items-center gap-1 mt-1">
-                            <AlertTriangle className="h-3 w-3" /> Arquivo contém <strong>{r.mesesDetectados.length} meses</strong>. Distribuição automática.
-                          </p>
+                        {r.mesesDetectados.length > 1 && r.registrosPorMes && (
+                          <div className="mt-1.5 space-y-1">
+                            <p className="text-xs text-amber-700 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" /> Arquivo contém <strong>{r.mesesDetectados.length} meses</strong>. Distribuição automática.
+                            </p>
+                            <div className="flex flex-wrap gap-1.5 ml-0.5">
+                              {r.mesesDetectados.map((m: string) => (
+                                <span key={m} className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 border border-amber-200 rounded text-[11px] text-amber-800 font-medium">
+                                  {formatMesAno(m)}: <strong>{r.registrosPorMes[m] || 0}</strong> reg.
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                         )}
                         {r.error && <p className="text-xs text-red-700 font-medium mt-1">{r.error}</p>}
                       </div>
