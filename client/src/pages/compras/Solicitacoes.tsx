@@ -3489,25 +3489,96 @@ export default function Solicitacoes() {
                 )}
               </DialogHeader>
 
-              {/* Abas: Detalhes / Cotação / OC */}
-              {(scCotacaoId || scOcId) && (
-              <div className="flex items-center gap-0 bg-gray-100 rounded-xl p-1 mt-1">
-                {([
-                  { key: "detalhes" as const, label: "Detalhes", icon: <ClipboardList className="h-4 w-4" /> },
-                  ...(scCotacaoId ? [{ key: "cotacao" as const, label: `Cotação ${(detalhe.rastreio?.cotacoes as any[])?.[0]?.numeroCotacao ?? ""}`, icon: <FileSearch className="h-4 w-4" /> }] : []),
-                  ...(scOcId ? [{ key: "oc" as const, label: `OC ${(detalhe.rastreio?.ordens as any[])?.[0]?.numeroOc ?? ""}`, icon: <ShoppingCart className="h-4 w-4" /> }] : []),
-                ] as { key: "detalhes" | "cotacao" | "oc"; label: string; icon: React.ReactNode }[]).map(tab => (
-                  <button key={tab.key} type="button" onClick={() => setAbaScDetalhe(tab.key)}
-                    className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition-all flex-1 justify-center ${
-                      abaScDetalhe === tab.key
-                        ? "bg-white text-blue-700 shadow-sm ring-1 ring-gray-200"
-                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                    }`}>
-                    {tab.icon} {tab.label}
-                  </button>
-                ))}
+              {/* Abas: Detalhes / Cotação / OC + Editar */}
+              <div className="flex items-center gap-2 mt-1">
+                {(scCotacaoId || scOcId) && (
+                <div className="flex items-center gap-0 bg-gray-100 rounded-xl p-1 flex-1">
+                  {([
+                    { key: "detalhes" as const, label: "Detalhes", icon: <ClipboardList className="h-4 w-4" /> },
+                    ...(scCotacaoId ? [{ key: "cotacao" as const, label: `Cotação ${(detalhe.rastreio?.cotacoes as any[])?.[0]?.numeroCotacao ?? ""}`, icon: <FileSearch className="h-4 w-4" /> }] : []),
+                    ...(scOcId ? [{ key: "oc" as const, label: `OC ${(detalhe.rastreio?.ordens as any[])?.[0]?.numeroOc ?? ""}`, icon: <ShoppingCart className="h-4 w-4" /> }] : []),
+                  ] as { key: "detalhes" | "cotacao" | "oc"; label: string; icon: React.ReactNode }[]).map(tab => (
+                    <button key={tab.key} type="button" onClick={() => setAbaScDetalhe(tab.key)}
+                      className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition-all flex-1 justify-center ${
+                        abaScDetalhe === tab.key
+                          ? "bg-white text-blue-700 shadow-sm ring-1 ring-gray-200"
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}>
+                      {tab.icon} {tab.label}
+                    </button>
+                  ))}
+                </div>
+                )}
+                {!scCotacaoId && !scOcId && <div className="flex-1" />}
+                {!["cancelado"].includes(detalhe.status) && (
+                  <Button size="sm" variant="outline"
+                    onClick={() => {
+                      const scTipo = (detalhe as any).tipo || "material";
+                      setForm({
+                        titulo: detalhe.titulo || "",
+                        obraId: detalhe.obraId ? String(detalhe.obraId) : "",
+                        dataNecessidade: detalhe.dataNecessidade || "",
+                        prioridade: detalhe.prioridade || "normal",
+                        observacoes: detalhe.observacoes || "",
+                        tipo: scTipo,
+                        incluirEquipamentos: (detalhe as any).incluirEquipamentos || false,
+                        vehicleId: (detalhe as any).vehicleId ? String((detalhe as any).vehicleId) : "",
+                      });
+                      if (detalhe.obraId) {
+                        const obra = obrasQ.data?.find((o: any) => o.id === detalhe.obraId);
+                        if (obra) setObraSearch(obra.nome || "");
+                      }
+                      setVeiculoSearch(""); setVeiculoOpen(false);
+                      const scItens = (detalhe.itens as any[]).map((it: any): ItemForm => ({
+                        descricao: it.descricao || "",
+                        unidade: it.unidade || "un",
+                        quantidade: String(parseFloat(it.quantidade) || 1),
+                        observacoes: it.observacoes || "",
+                        orcamentoItemId: it.orcamentoItemId ?? undefined,
+                        eapCodigo: it.eapCodigo ?? undefined,
+                        insumoCodigo: it.insumoCodigo ?? undefined,
+                        composicaoCodigo: it.composicaoCodigo ?? undefined,
+                        precoMeta: it.precoMeta ? parseFloat(it.precoMeta) : undefined,
+                        quantidadeServico: it.quantidadeServico ? parseFloat(it.quantidadeServico) : undefined,
+                        coeficiente: it.coeficiente ? parseFloat(it.coeficiente) : undefined,
+                        origemEap: it.origemEap ?? undefined,
+                        incluirAjudante: it.incluirAjudante ?? true,
+                        metaMdoProfissional: it.metaMdoProfissional ? parseFloat(it.metaMdoProfissional) : undefined,
+                        metaMdoAjudante: it.metaMdoAjudante ? parseFloat(it.metaMdoAjudante) : undefined,
+                      }));
+                      setItens(scItens.length > 0 ? scItens : [newItem()]);
+                      const eapIds = new Set<number>();
+                      const eapQtd: Record<number, string> = {};
+                      const ajudOverrides: Record<number, boolean> = {};
+                      for (const it of (detalhe.itens as any[])) {
+                        if (it.orcamentoItemId) {
+                          const orcId = typeof it.orcamentoItemId === "string" ? parseInt(it.orcamentoItemId) : it.orcamentoItemId;
+                          eapIds.add(orcId);
+                          if (it.quantidadeServico) {
+                            eapQtd[orcId] = String(parseFloat(it.quantidadeServico) || "");
+                          }
+                          if (it.incluirAjudante != null) {
+                            ajudOverrides[orcId] = !!it.incluirAjudante;
+                          }
+                        }
+                      }
+                      setSelectedEapIds(eapIds);
+                      setEapQtdServico(eapQtd);
+                      setEditingOriginalEapIds(new Set(eapIds));
+                      setIncluirAjudanteOverride(ajudOverrides);
+                      const allAjud = Object.values(ajudOverrides);
+                      if (allAjud.length > 0) setIncluirAjudanteGlobal(allAjud.every(v => v));
+                      const hasEapItems = (detalhe.itens as any[]).some((it: any) => it.origemEap || it.orcamentoItemId);
+                      setModoSC(hasEapItems ? "eap" : "manual");
+                      setEditingSc({ id: detalhe.id, companyId: detalhe.companyId ?? companyId });
+                      setShowDetalhe(null);
+                      setShowNova(true);
+                    }}
+                    className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs gap-1 shrink-0">
+                    <Pencil className="h-3 w-3" /> Editar
+                  </Button>
+                )}
               </div>
-              )}
 
               {abaScDetalhe === "detalhes" && (<>
               {/* Info grid */}
@@ -3560,74 +3631,6 @@ export default function Solicitacoes() {
                   </div>
                 ) : (
                 <div className="flex gap-2">
-                  {!["cancelado"].includes(detalhe.status) && (
-                    <Button size="sm" variant="outline"
-                      onClick={() => {
-                        const scTipo = (detalhe as any).tipo || "material";
-                        setForm({
-                          titulo: detalhe.titulo || "",
-                          obraId: detalhe.obraId ? String(detalhe.obraId) : "",
-                          dataNecessidade: detalhe.dataNecessidade || "",
-                          prioridade: detalhe.prioridade || "normal",
-                          observacoes: detalhe.observacoes || "",
-                          tipo: scTipo,
-                          incluirEquipamentos: (detalhe as any).incluirEquipamentos || false,
-                          vehicleId: (detalhe as any).vehicleId ? String((detalhe as any).vehicleId) : "",
-                        });
-                        if (detalhe.obraId) {
-                          const obra = obrasQ.data?.find((o: any) => o.id === detalhe.obraId);
-                          if (obra) setObraSearch(obra.nome || "");
-                        }
-                        setVeiculoSearch(""); setVeiculoOpen(false);
-                        const scItens = (detalhe.itens as any[]).map((it: any): ItemForm => ({
-                          descricao: it.descricao || "",
-                          unidade: it.unidade || "un",
-                          quantidade: String(parseFloat(it.quantidade) || 1),
-                          observacoes: it.observacoes || "",
-                          orcamentoItemId: it.orcamentoItemId ?? undefined,
-                          eapCodigo: it.eapCodigo ?? undefined,
-                          insumoCodigo: it.insumoCodigo ?? undefined,
-                          composicaoCodigo: it.composicaoCodigo ?? undefined,
-                          precoMeta: it.precoMeta ? parseFloat(it.precoMeta) : undefined,
-                          quantidadeServico: it.quantidadeServico ? parseFloat(it.quantidadeServico) : undefined,
-                          coeficiente: it.coeficiente ? parseFloat(it.coeficiente) : undefined,
-                          origemEap: it.origemEap ?? undefined,
-                          incluirAjudante: it.incluirAjudante ?? true,
-                          metaMdoProfissional: it.metaMdoProfissional ? parseFloat(it.metaMdoProfissional) : undefined,
-                          metaMdoAjudante: it.metaMdoAjudante ? parseFloat(it.metaMdoAjudante) : undefined,
-                        }));
-                        setItens(scItens.length > 0 ? scItens : [newItem()]);
-                        const eapIds = new Set<number>();
-                        const eapQtd: Record<number, string> = {};
-                        const ajudOverrides: Record<number, boolean> = {};
-                        for (const it of (detalhe.itens as any[])) {
-                          if (it.orcamentoItemId) {
-                            const orcId = typeof it.orcamentoItemId === "string" ? parseInt(it.orcamentoItemId) : it.orcamentoItemId;
-                            eapIds.add(orcId);
-                            if (it.quantidadeServico) {
-                              eapQtd[orcId] = String(parseFloat(it.quantidadeServico) || "");
-                            }
-                            if (it.incluirAjudante != null) {
-                              ajudOverrides[orcId] = !!it.incluirAjudante;
-                            }
-                          }
-                        }
-                        setSelectedEapIds(eapIds);
-                        setEapQtdServico(eapQtd);
-                        setEditingOriginalEapIds(new Set(eapIds));
-                        setIncluirAjudanteOverride(ajudOverrides);
-                        const allAjud = Object.values(ajudOverrides);
-                        if (allAjud.length > 0) setIncluirAjudanteGlobal(allAjud.every(v => v));
-                        const hasEapItems = (detalhe.itens as any[]).some((it: any) => it.origemEap || it.orcamentoItemId);
-                        setModoSC(hasEapItems ? "eap" : "manual");
-                        setEditingSc({ id: detalhe.id, companyId: detalhe.companyId ?? companyId });
-                        setShowDetalhe(null);
-                        setShowNova(true);
-                      }}
-                      className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs gap-1">
-                      <Pencil className="h-3 w-3" /> Editar
-                    </Button>
-                  )}
                   {[
                     ...(detalhe.aprovacaoStatus !== "aguardando" ? [{ key: "aguardando", label: "Voltar p/ Aguardando", cls: "border-amber-300 text-amber-700 hover:bg-amber-50" }] : []),
                     ...(detalhe.aprovacaoStatus !== "aprovada" ? [{ key: "aprovada", label: "Aprovar", cls: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" }] : []),
