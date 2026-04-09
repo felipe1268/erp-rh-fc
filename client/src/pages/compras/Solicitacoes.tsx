@@ -2767,7 +2767,7 @@ export default function Solicitacoes() {
                                   )}
                                 </div>
                               );
-                            })()});
+                            })());
                             });
                           })()}
                           {eapQ.data.items.length === 0 && (

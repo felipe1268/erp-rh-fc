@@ -91,6 +91,8 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
   const [versao, setVersao]         = useState<Versao>("custo");
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState("");
+  const [searchInsumos, setSearchInsumos] = useState("");
+  const [searchComposicoes, setSearchComposicoes] = useState("");
   const [showCompCol, setShowCompCol] = useState(false);
   const [localMetaPerc, setLocalMetaPerc] = useState(20);
   const [metaInput, setMetaInput]   = useState("20");
@@ -1232,8 +1234,36 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                 <p className="text-sm">Nenhum insumo extraído.</p>
                 <p className="text-xs mt-1">Adicione a aba "Insumos" à planilha para gerar a curva ABC.</p>
               </div>
-            ) : (
+            ) : (() => {
+              const searchInsLower = searchInsumos.trim().toLowerCase();
+              const filteredInsumos = searchInsLower
+                ? insumos.filter((ins: any) =>
+                    (ins.codigo || "").toLowerCase().includes(searchInsLower) ||
+                    (ins.descricao || "").toLowerCase().includes(searchInsLower) ||
+                    (ins.tipo || "").toLowerCase().includes(searchInsLower)
+                  )
+                : insumos;
+              return (
               <Card>
+                <div className="px-4 py-2 border-b flex items-center gap-2">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                    <Input
+                      placeholder="Buscar por código, descrição ou tipo..."
+                      value={searchInsumos}
+                      onChange={e => setSearchInsumos(e.target.value)}
+                      className="pl-8 h-8 text-xs"
+                    />
+                  </div>
+                  {searchInsumos && (
+                    <span className="text-[10px] text-muted-foreground">{filteredInsumos.length} de {insumos.length}</span>
+                  )}
+                  {searchInsumos && (
+                    <button onClick={() => setSearchInsumos("")} className="text-gray-400 hover:text-gray-600">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
                 <CardContent className="py-3 px-0 overflow-x-auto">
                   <table className="w-full text-xs min-w-[600px]">
                     <thead>
@@ -1248,7 +1278,9 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {insumos.map((ins: any) => (
+                      {filteredInsumos.length === 0 ? (
+                        <tr><td colSpan={7} className="text-center py-6 text-muted-foreground text-xs">Nenhum insumo encontrado para "{searchInsumos}"</td></tr>
+                      ) : filteredInsumos.map((ins: any) => (
                         <tr key={ins.id} className="border-b hover:bg-muted/30">
                           <td className="pl-4 py-1.5">
                             <span className={`inline-block w-5 h-5 rounded text-center font-bold leading-5 text-white text-xs
@@ -1274,7 +1306,8 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                   </table>
                 </CardContent>
               </Card>
-            )}
+              );
+            })()}
           </TabsContent>
 
           {/* ═══ ABA COMPOSIÇÕES (espelho da aba CPUs da planilha) ════════ */}
@@ -1322,6 +1355,17 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
               const uniqueComps = [...compMap.values()].sort((a, b) =>
                 a.codigo.localeCompare(b.codigo, undefined, { numeric: true })
               );
+              const searchCompLower = searchComposicoes.trim().toLowerCase();
+              const filteredComps = searchCompLower
+                ? uniqueComps.filter((c: any) =>
+                    (c.codigo || "").toLowerCase().includes(searchCompLower) ||
+                    (c.descricao || "").toLowerCase().includes(searchCompLower) ||
+                    (c.insumos || []).some((ins: any) =>
+                      (ins.insumoCodigo || "").toLowerCase().includes(searchCompLower) ||
+                      (ins.descricao || "").toLowerCase().includes(searchCompLower)
+                    )
+                  )
+                : uniqueComps;
               const totalComps = uniqueComps.length;
               const totalIns = uniqueComps.reduce((acc, c) => acc + (c.insumos?.length ?? 0), 0);
               return (
@@ -1330,6 +1374,25 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                     <span className="text-xs font-bold text-white uppercase tracking-wider">
                       TABELA GERAL DE SERVIÇOS — {totalComps} composições, {totalIns} insumos
                     </span>
+                  </div>
+                  <div className="px-4 py-2 border-b flex items-center gap-2 bg-slate-50">
+                    <div className="relative flex-1 max-w-sm">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                      <Input
+                        placeholder="Buscar por código, descrição ou insumo..."
+                        value={searchComposicoes}
+                        onChange={e => setSearchComposicoes(e.target.value)}
+                        className="pl-8 h-8 text-xs"
+                      />
+                    </div>
+                    {searchComposicoes && (
+                      <span className="text-[10px] text-muted-foreground">{filteredComps.length} de {totalComps}</span>
+                    )}
+                    {searchComposicoes && (
+                      <button onClick={() => setSearchComposicoes("")} className="text-gray-400 hover:text-gray-600">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                   <CardContent className="py-0 px-0 overflow-x-auto max-h-[70vh] overflow-y-auto">
                     <table className="w-full text-xs min-w-[1100px]">
@@ -1347,7 +1410,10 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {uniqueComps.map((comp, compIdx) => {
+                        {filteredComps.length === 0 && searchComposicoes ? (
+                          <tr><td colSpan={9} className="text-center py-6 text-muted-foreground text-xs">Nenhuma composição encontrada para "{searchComposicoes}"</td></tr>
+                        ) : null}
+                        {filteredComps.map((comp, compIdx) => {
                           const isExpanded = expandedComps.has(comp.codigo);
                           const hasInsumos = (comp.insumos ?? []).length > 0;
                           return (
