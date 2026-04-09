@@ -210,25 +210,6 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
 
   const verifyPasswordMut = trpc.auth.verifyPassword.useMutation();
 
-  const handleReplaceAllConfirm = async () => {
-    if (!replaceAllPassword.trim()) {
-      setReplaceAllPasswordError("Digite sua senha");
-      return;
-    }
-    setVerifyingPassword(true);
-    setReplaceAllPasswordError("");
-    try {
-      await verifyPasswordMut.mutateAsync({ password: replaceAllPassword });
-      setShowReplaceAllConfirm(false);
-      setReplaceAllPassword("");
-      handleUploadSelective("replace_all");
-    } catch (e: any) {
-      setReplaceAllPasswordError(e?.message === "Senha incorreta" ? "Senha incorreta. Tente novamente." : (e?.message || "Erro ao verificar senha"));
-    } finally {
-      setVerifyingPassword(false);
-    }
-  };
-
   function handleCalcular() {
     if (!confirm("Deseja calcular/recalcular os descontos CLT do mês? Os cálculos anteriores serão substituídos.")) return;
     calcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
@@ -1022,6 +1003,25 @@ export default function FechamentoPonto() {
       });
     } catch (e) { /* handled */ } finally {
       setUploading(false);
+    }
+  };
+
+  const handleReplaceAllConfirm = async () => {
+    if (!replaceAllPassword.trim()) {
+      setReplaceAllPasswordError("Digite sua senha");
+      return;
+    }
+    setVerifyingPassword(true);
+    setReplaceAllPasswordError("");
+    try {
+      await verifyPasswordMut.mutateAsync({ password: replaceAllPassword });
+      setShowReplaceAllConfirm(false);
+      setReplaceAllPassword("");
+      handleUploadSelective("replace_all");
+    } catch (e: any) {
+      setReplaceAllPasswordError(e?.message === "Senha incorreta" ? "Senha incorreta. Tente novamente." : (e?.message || "Erro ao verificar senha"));
+    } finally {
+      setVerifyingPassword(false);
     }
   };
 
