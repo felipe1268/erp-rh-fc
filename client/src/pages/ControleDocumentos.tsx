@@ -1118,7 +1118,7 @@ export default function ControleDocumentos() {
   const openNewAtest = () => { setEditingAtestId(null); setAtestForm({}); setShowAtestDialog(true); };
   const openEditAtest = (a: any) => {
     setEditingAtestId(a.id);
-    setAtestForm({ employeeId: a.employeeId, tipo: a.tipo || "", dataEmissao: a.dataEmissao || "", diasAfastamento: a.diasAfastamento || 0, dataRetorno: a.dataRetorno || "", cid: a.cid || "", medico: a.medico || "", crm: a.crm || "", descricao: a.descricao || "", motivo: a.motivo || "", motivoOutro: a.motivoOutro || "" });
+    setAtestForm({ employeeId: a.employeeId, tipo: a.tipo || "", dataEmissao: a.dataEmissao || "", diasAfastamento: a.diasAfastamento || 0, horasAfastamento: a.horasAfastamento || 0, afastamentoTipo: a.afastamentoTipo || "dia", dataRetorno: a.dataRetorno || "", cid: a.cid || "", medico: a.medico || "", crm: a.crm || "", descricao: a.descricao || "", motivo: a.motivo || "", motivoOutro: a.motivoOutro || "" });
     setShowAtestDialog(true);
   };
 
@@ -1192,9 +1192,9 @@ export default function ControleDocumentos() {
     try {
       let atestId = editingAtestId;
       if (editingAtestId) {
-        await updateAtest.mutateAsync({ id: editingAtestId, ...formData, diasAfastamento: formData.diasAfastamento || 0 });
+        await updateAtest.mutateAsync({ id: editingAtestId, ...formData, diasAfastamento: formData.diasAfastamento || 0, horasAfastamento: formData.horasAfastamento || 0, afastamentoTipo: formData.afastamentoTipo || "dia" });
       } else {
-        const result = await createAtest.mutateAsync({ companyId, companyIds, ...formData, diasAfastamento: formData.diasAfastamento || 0 });
+        const result = await createAtest.mutateAsync({ companyId, companyIds, ...formData, diasAfastamento: formData.diasAfastamento || 0, horasAfastamento: formData.horasAfastamento || 0, afastamentoTipo: formData.afastamentoTipo || "dia" });
         atestId = (result as any)?.id || null;
       }
       if (_file && atestId) {
@@ -1757,7 +1757,7 @@ export default function ControleDocumentos() {
                         <th className="pb-2 font-medium">CPF</th>
                         <th className="pb-2 font-medium">Tipo</th>
                         <th className="pb-2 font-medium">Data Emissão</th>
-                        <th className="pb-2 font-medium">Dias Afastamento</th>
+                        <th className="pb-2 font-medium">Afastamento</th>
                         <th className="pb-2 font-medium">Data Retorno</th>
                         <th className="pb-2 font-medium">CID</th>
                         <th className="pb-2 font-medium">Médico</th>
@@ -1780,7 +1780,12 @@ export default function ControleDocumentos() {
                           <td className="py-2">{formatCPF(a.cpf)}</td>
                           <td className="py-2">{a.tipo}</td>
                           <td className="py-2">{formatDate(a.dataEmissao)}</td>
-                          <td className="py-2 text-center">{a.diasAfastamento || 0}</td>
+                          <td className="py-2 text-center">
+                            {a.afastamentoTipo === "horas"
+                              ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-xs font-medium">{a.horasAfastamento || 0}h</span>
+                              : <span>{a.diasAfastamento || 0} dia{(a.diasAfastamento || 0) !== 1 ? "s" : ""}</span>
+                            }
+                          </td>
                           <td className="py-2">{formatDate(a.dataRetorno)}</td>
                           <td className="py-2">{a.cid || "-"}</td>
                           <td className="py-2">
@@ -2303,14 +2308,43 @@ export default function ControleDocumentos() {
               <label className="text-sm font-medium">Data Emissão *</label>
               <Input type="date" value={atestForm.dataEmissao || ""} onChange={e => setAtestForm({ ...atestForm, dataEmissao: e.target.value })} />
             </div>
-            <div>
-              <label className="text-sm font-medium">Dias de Afastamento</label>
-              <Input type="number" value={atestForm.diasAfastamento || 0} onChange={e => setAtestForm({ ...atestForm, diasAfastamento: parseInt(e.target.value) || 0 })} />
+            <div className="col-span-2">
+              <label className="text-sm font-medium mb-2 block">Tipo de Afastamento</label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setAtestForm({ ...atestForm, afastamentoTipo: "dia", horasAfastamento: 0 })}
+                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all ${(!atestForm.afastamentoTipo || atestForm.afastamentoTipo === "dia") ? "bg-blue-50 text-blue-700 border-blue-300 ring-2 ring-blue-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                  Dia(s) inteiro(s)
+                </button>
+                <button type="button" onClick={() => setAtestForm({ ...atestForm, afastamentoTipo: "horas", diasAfastamento: 0 })}
+                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all ${atestForm.afastamentoTipo === "horas" ? "bg-amber-50 text-amber-700 border-amber-300 ring-2 ring-amber-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                  Horas (parcial)
+                </button>
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium">Data Retorno</label>
-              <Input type="date" value={atestForm.dataRetorno || ""} onChange={e => setAtestForm({ ...atestForm, dataRetorno: e.target.value })} />
-            </div>
+            {(!atestForm.afastamentoTipo || atestForm.afastamentoTipo === "dia") ? (
+              <>
+                <div>
+                  <label className="text-sm font-medium">Dias de Afastamento</label>
+                  <Input type="number" min={0} value={atestForm.diasAfastamento || 0} onChange={e => setAtestForm({ ...atestForm, diasAfastamento: parseInt(e.target.value) || 0 })} />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Data Retorno</label>
+                  <Input type="date" value={atestForm.dataRetorno || ""} onChange={e => setAtestForm({ ...atestForm, dataRetorno: e.target.value })} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="text-sm font-medium">Horas de Afastamento</label>
+                  <Input type="number" min={1} max={12} value={atestForm.horasAfastamento || ""} onChange={e => setAtestForm({ ...atestForm, horasAfastamento: parseInt(e.target.value) || 0 })} placeholder="Ex: 2, 4, 6" />
+                  <p className="text-[10px] text-gray-400 mt-0.5">Horas que o funcionário ficou fora do expediente</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Data Retorno</label>
+                  <Input type="date" value={atestForm.dataRetorno || ""} onChange={e => setAtestForm({ ...atestForm, dataRetorno: e.target.value })} />
+                </div>
+              </>
+            )}
             <div>
               <label className="text-sm font-medium">CID</label>
               <Input value={atestForm.cid || ""} onChange={e => setAtestForm({ ...atestForm, cid: e.target.value })} placeholder="Ex: J11, M54.5" />

@@ -227,18 +227,26 @@ export const pontoDescontosRouter = router({
       heMap.set(`${he.employeeId}-${he.dataSolicitacao}`, true);
     }
 
-    // Indexar atestados por employeeId-data
-    const atestadoMap = new Map<string, boolean>();
+    const atestadoMap = new Map<string, { tipo: string; horas: number }>();
     for (const at of atests) {
       if (at.employeeId && at.dataEmissao) {
-        // Cobrir dias de afastamento
-        const dias = at.diasAfastamento || 1;
-        const startDate = new Date(at.dataEmissao + "T12:00:00Z");
-        for (let d = 0; d < dias; d++) {
-          const dt = new Date(startDate);
-          dt.setUTCDate(startDate.getUTCDate() + d);
-          const key = `${at.employeeId}-${dt.toISOString().substring(0, 10)}`;
-          atestadoMap.set(key, true);
+        const afTipo = (at as any).afastamentoTipo || "dia";
+        const horas = (at as any).horasAfastamento || 0;
+        if (afTipo === "horas") {
+          const key = `${at.employeeId}-${at.dataEmissao}`;
+          const existing = atestadoMap.get(key);
+          if (!existing || existing.tipo !== "dia") {
+            atestadoMap.set(key, { tipo: "horas", horas: (existing?.horas || 0) + horas });
+          }
+        } else {
+          const dias = at.diasAfastamento || 1;
+          const startDate = new Date(at.dataEmissao + "T12:00:00Z");
+          for (let d = 0; d < dias; d++) {
+            const dt = new Date(startDate);
+            dt.setUTCDate(startDate.getUTCDate() + d);
+            const key = `${at.employeeId}-${dt.toISOString().substring(0, 10)}`;
+            atestadoMap.set(key, { tipo: "dia", horas: 0 });
+          }
         }
       }
     }
@@ -281,11 +289,13 @@ export const pontoDescontosRouter = router({
         if (!data) continue;
         const dow = getDayOfWeek(data);
         const isWeekend = dow === 0 || dow === 6;
-        const hasAtestado = atestadoMap.has(`${emp.id}-${data}`);
+        const atestadoInfo = atestadoMap.get(`${emp.id}-${data}`);
+        const hasAtestadoDiaInteiro = atestadoInfo?.tipo === "dia";
+        const hasAtestadoHoras = atestadoInfo?.tipo === "horas";
+        const horasAtestado = atestadoInfo?.horas || 0;
 
-        // Pular fins de semana e dias com atestado
         if (isWeekend) continue;
-        if (hasAtestado) continue;
+        if (hasAtestadoDiaInteiro) continue;
 
         const entrada1 = parseTime(rec.entrada1 as string);
         const saida1 = parseTime(rec.saida1 as string);
@@ -293,29 +303,38 @@ export const pontoDescontosRouter = router({
         const saida2 = parseTime(rec.saida2 as string);
 
         // --- FALTA INJUSTIFICADA ---
-        // Se não tem nenhuma batida no dia
         if (entrada1 === null && saida1 === null && entrada2 === null && saida2 === null) {
+          if (hasAtestadoHoras) {
+            const minutosAtestado = horasAtestado * 60;
+            const jornada = jornadaSaida - jornadaEntrada - 60;
+            const minutosNaoCobertos = Math.max(0, jornada - minutosAtestado);
+            if (minutosNaoCobertos > 0) {
+              const valorParcial = valorHora * (minutosNaoCobertos / 60);
+              totalFaltasInjust++;
+              totalDescontosEmp += valorParcial;
+              semanasComAtrasoOuFalta.add(getSundayOfWeek(data));
+              descontosToInsert.push({
+                companyId: input.companyId, employeeId: emp.id, mesReferencia: input.mesReferencia, data,
+                tipo: "falta_parcial_atestado_horas",
+                minutosAtraso: minutosNaoCobertos, minutosHe: 0,
+                valorDesconto: formatMoney(valorParcial), valorDsr: "0", valorTotal: formatMoney(valorParcial),
+                baseCalculo: JSON.stringify({ salarioBase, horasMes, valorHora, horasAtestado, minutosNaoCobertos, formula: "valorHora × (jornada - horasAtestado)", artigo: "Art. 462 CLT + Art. 473 CLT" }),
+                status: "calculado",
+                fundamentacaoLegal: "Art. 462 CLT - Desconto parcial (horas não cobertas por atestado)",
+              });
+            }
+            continue;
+          }
           const valorFalta = calcDescontoFalta(salarioBase);
           totalFaltasInjust++;
           totalDescontosEmp += valorFalta;
           semanasComAtrasoOuFalta.add(getSundayOfWeek(data));
-
           descontosToInsert.push({
-            companyId: input.companyId,
-            employeeId: emp.id,
-            mesReferencia: input.mesReferencia,
-            data,
+            companyId: input.companyId, employeeId: emp.id, mesReferencia: input.mesReferencia, data,
             tipo: "falta_injustificada",
-            minutosAtraso: 0,
-            minutosHe: 0,
-            valorDesconto: formatMoney(valorFalta),
-            valorDsr: "0",
-            valorTotal: formatMoney(valorFalta),
-            baseCalculo: JSON.stringify({
-              salarioBase, horasMes, valorHora,
-              formula: "salário / 30",
-              artigo: "Art. 462 CLT",
-            }),
+            minutosAtraso: 0, minutosHe: 0,
+            valorDesconto: formatMoney(valorFalta), valorDsr: "0", valorTotal: formatMoney(valorFalta),
+            baseCalculo: JSON.stringify({ salarioBase, horasMes, valorHora, formula: "salário / 30", artigo: "Art. 462 CLT" }),
             status: "calculado",
             fundamentacaoLegal: "Art. 462 CLT - Desconto por falta injustificada",
           });
@@ -324,7 +343,10 @@ export const pontoDescontosRouter = router({
 
         // --- ATRASO NA ENTRADA ---
         if (entrada1 !== null) {
-          const atrasoMinutos = entrada1 - jornadaEntrada;
+          let atrasoMinutos = entrada1 - jornadaEntrada;
+          if (hasAtestadoHoras && atrasoMinutos > 0) {
+            atrasoMinutos = Math.max(0, atrasoMinutos - (horasAtestado * 60));
+          }
           if (atrasoMinutos > toleranciaTotal) {
             // Desconto proporcional (Art. 58 §1º: tolerância de 10 min)
             const minutosDesconto = atrasoMinutos; // desconta tudo, pois ultrapassou tolerância

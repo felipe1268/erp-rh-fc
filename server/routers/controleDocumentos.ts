@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes } from "../../drizzle/schema";
-import { eq, and, desc, sql, ne, isNull, inArray } from "drizzle-orm";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos } from "../../drizzle/schema";
+import { eq, and, desc, sql, ne, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
@@ -185,6 +185,66 @@ function calcularStatusASO(dataValidade: string): { status: string; diasRestante
   if (diasRestantes <= 7) return { status: `${diasRestantes} DIAS PARA VENCER`, diasRestantes };
   if (diasRestantes <= 30) return { status: `${diasRestantes} DIAS PARA VENCER`, diasRestantes };
   return { status: "VÁLIDO", diasRestantes };
+}
+
+async function abonarPontoPorAtestado(
+  db: any,
+  employeeId: number,
+  companyId: number,
+  dataEmissao: string,
+  diasAfastamento: number,
+  afastamentoTipo: string,
+  horasAfastamento: number,
+) {
+  try {
+    const datasCobertas: string[] = [];
+    if (afastamentoTipo === "horas") {
+      datasCobertas.push(dataEmissao);
+    } else {
+      const dias = diasAfastamento || 1;
+      const startDate = new Date(dataEmissao + "T12:00:00Z");
+      for (let d = 0; d < dias; d++) {
+        const dt = new Date(startDate);
+        dt.setUTCDate(startDate.getUTCDate() + d);
+        datasCobertas.push(dt.toISOString().substring(0, 10));
+      }
+    }
+
+    if (datasCobertas.length === 0) return;
+
+    const descontos = await db.select({ id: pontoDescontos.id, data: pontoDescontos.data, tipo: pontoDescontos.tipo, status: pontoDescontos.status })
+      .from(pontoDescontos)
+      .where(and(
+        eq(pontoDescontos.employeeId, employeeId),
+        eq(pontoDescontos.companyId, companyId),
+        inArray(pontoDescontos.data, datasCobertas),
+        ne(pontoDescontos.status, "abonado"),
+      ));
+
+    if (descontos.length === 0) return;
+
+    const motivoBase = afastamentoTipo === "horas"
+      ? `Abono automático — Atestado médico (${horasAfastamento}h)`
+      : `Abono automático — Atestado médico (${diasAfastamento} dia${diasAfastamento > 1 ? "s" : ""})`;
+
+    for (const desc of descontos) {
+      if (afastamentoTipo === "horas" && desc.tipo !== "falta_injustificada") {
+        continue;
+      }
+
+      await db.update(pontoDescontos).set({
+        status: "abonado",
+        abonadoPor: "Sistema (Atestado)",
+        abonadoEm: new Date().toISOString().replace("T", " ").substring(0, 19),
+        motivoAbono: motivoBase,
+        valorTotal: "0",
+      }).where(eq(pontoDescontos.id, desc.id));
+    }
+
+    console.log(`[AbonoAtestado] Funcionário ${employeeId}: ${descontos.length} desconto(s) abonado(s) automaticamente`);
+  } catch (err: any) {
+    console.error(`[AbonoAtestado] Erro ao abonar ponto:`, err?.message);
+  }
 }
 
 export const controleDocumentosRouter = router({
@@ -466,6 +526,8 @@ export const controleDocumentosRouter = router({
             tipo: atestados.tipo,
             dataEmissao: atestados.dataEmissao,
             diasAfastamento: atestados.diasAfastamento,
+            horasAfastamento: atestados.horasAfastamento,
+            afastamentoTipo: atestados.afastamentoTipo,
             dataRetorno: atestados.dataRetorno,
             cid: atestados.cid,
             medico: atestados.medico,
@@ -489,6 +551,8 @@ export const controleDocumentosRouter = router({
           tipo: z.string(),
           dataEmissao: z.string(),
           diasAfastamento: z.number().default(0),
+          horasAfastamento: z.number().default(0),
+          afastamentoTipo: z.enum(["dia", "horas"]).default("dia"),
           dataRetorno: z.string().optional(),
           cid: z.string().optional(),
           medico: z.string().optional(),
@@ -506,6 +570,8 @@ export const controleDocumentosRouter = router({
           tipo: input.tipo,
           dataEmissao: input.dataEmissao,
           diasAfastamento: input.diasAfastamento,
+          horasAfastamento: input.horasAfastamento || 0,
+          afastamentoTipo: input.afastamentoTipo || "dia",
           dataRetorno: input.dataRetorno || null,
           cid: input.cid || null,
           medico: input.medico || null,
@@ -514,6 +580,9 @@ export const controleDocumentosRouter = router({
           motivo: input.motivo || null,
           motivoOutro: input.motivoOutro || null,
         }).returning({ id: atestados.id });
+
+        await abonarPontoPorAtestado(db, input.employeeId, input.companyId, input.dataEmissao, input.diasAfastamento, input.afastamentoTipo, input.horasAfastamento);
+
         return { success: true, id: result?.id };
       }),
 
@@ -525,6 +594,8 @@ export const controleDocumentosRouter = router({
           tipo: z.string().optional(),
           dataEmissao: z.string().optional(),
           diasAfastamento: z.number().optional(),
+          horasAfastamento: z.number().optional(),
+          afastamentoTipo: z.enum(["dia", "horas"]).optional(),
           dataRetorno: z.string().optional(),
           cid: z.string().optional(),
           medico: z.string().optional(),
@@ -540,6 +611,12 @@ export const controleDocumentosRouter = router({
         const updateData: any = {};
         Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
         await db.update(atestados).set(updateData).where(eq(atestados.id, id));
+
+        const [at] = await db.select().from(atestados).where(eq(atestados.id, id)).limit(1);
+        if (at) {
+          await abonarPontoPorAtestado(db, at.employeeId, at.companyId, at.dataEmissao, at.diasAfastamento || 0, (at as any).afastamentoTipo || "dia", (at as any).horasAfastamento || 0);
+        }
+
         return { success: true };
       }),
 
