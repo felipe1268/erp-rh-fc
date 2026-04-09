@@ -3475,7 +3475,7 @@ export default function Solicitacoes() {
                       )}
                     </DialogTitle>
                   </div>
-                  <div className="flex items-center gap-2 mr-6">
+                  <div className="flex items-center gap-2 mr-10">
                     <StatusBadge status={detalhe.status} />
                   </div>
                 </div>
@@ -3489,27 +3489,8 @@ export default function Solicitacoes() {
                 )}
               </DialogHeader>
 
-              {/* Abas: Detalhes / Cotação / OC + Editar */}
-              <div className="flex items-center gap-2 mt-1">
-                {(scCotacaoId || scOcId) && (
-                <div className="flex items-center gap-0 bg-gray-100 rounded-xl p-1 flex-1">
-                  {([
-                    { key: "detalhes" as const, label: "Detalhes", icon: <ClipboardList className="h-4 w-4" /> },
-                    ...(scCotacaoId ? [{ key: "cotacao" as const, label: `Cotação ${(detalhe.rastreio?.cotacoes as any[])?.[0]?.numeroCotacao ?? ""}`, icon: <FileSearch className="h-4 w-4" /> }] : []),
-                    ...(scOcId ? [{ key: "oc" as const, label: `OC ${(detalhe.rastreio?.ordens as any[])?.[0]?.numeroOc ?? ""}`, icon: <ShoppingCart className="h-4 w-4" /> }] : []),
-                  ] as { key: "detalhes" | "cotacao" | "oc"; label: string; icon: React.ReactNode }[]).map(tab => (
-                    <button key={tab.key} type="button" onClick={() => setAbaScDetalhe(tab.key)}
-                      className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition-all flex-1 justify-center ${
-                        abaScDetalhe === tab.key
-                          ? "bg-white text-blue-700 shadow-sm ring-1 ring-gray-200"
-                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                      }`}>
-                      {tab.icon} {tab.label}
-                    </button>
-                  ))}
-                </div>
-                )}
-                {!scCotacaoId && !scOcId && <div className="flex-1" />}
+              {/* Abas + Editar */}
+              <div className="flex items-center gap-2 mt-1 pr-8">
                 {!["cancelado"].includes(detalhe.status) && (
                   <Button size="sm" variant="outline"
                     onClick={() => {
@@ -3577,6 +3558,24 @@ export default function Solicitacoes() {
                     className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs gap-1 shrink-0">
                     <Pencil className="h-3 w-3" /> Editar
                   </Button>
+                )}
+                {(scCotacaoId || scOcId) && (
+                <div className="flex items-center gap-0 bg-gray-100 rounded-xl p-1 flex-1 min-w-0">
+                  {([
+                    { key: "detalhes" as const, label: "Detalhes", icon: <ClipboardList className="h-4 w-4" /> },
+                    ...(scCotacaoId ? [{ key: "cotacao" as const, label: `Cotação ${(detalhe.rastreio?.cotacoes as any[])?.[0]?.numeroCotacao ?? ""}`, icon: <FileSearch className="h-4 w-4" /> }] : []),
+                    ...(scOcId ? [{ key: "oc" as const, label: `OC ${(detalhe.rastreio?.ordens as any[])?.[0]?.numeroOc ?? ""}`, icon: <ShoppingCart className="h-4 w-4" /> }] : []),
+                  ] as { key: "detalhes" | "cotacao" | "oc"; label: string; icon: React.ReactNode }[]).map(tab => (
+                    <button key={tab.key} type="button" onClick={() => setAbaScDetalhe(tab.key)}
+                      className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition-all flex-1 justify-center ${
+                        abaScDetalhe === tab.key
+                          ? "bg-white text-blue-700 shadow-sm ring-1 ring-gray-200"
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}>
+                      {tab.icon} {tab.label}
+                    </button>
+                  ))}
+                </div>
                 )}
               </div>
 
