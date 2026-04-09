@@ -64,6 +64,7 @@ export function calcularDiasAvisoTotal(anosServico: number): number {
 /** Calcula dias de aviso prévio conforme o tipo */
 export function calcularDiasAviso(anosServico: number, tipo?: string): number {
   if (tipo && tipo.includes('trabalhado')) return 30;
+  if (tipo && tipo.startsWith('empregado_')) return 30;
   return calcularDiasAvisoTotal(anosServico);
 }
 

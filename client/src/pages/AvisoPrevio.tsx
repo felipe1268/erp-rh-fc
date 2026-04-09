@@ -355,7 +355,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
         tipo: form.tipo,
         dataInicio: form.dataDesligamento,
         dataDesligamento: form.dataDesligamento,
-        reducaoJornada: form.reducaoJornada || "nenhuma",
+        reducaoJornada: isPedidoDemissao ? "nenhuma" : (form.reducaoJornada || "nenhuma"),
         observacoes: form.observacoes,
         diasTrabalhados: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
       });
@@ -368,7 +368,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
         tipo: form.tipo,
         dataInicio: form.dataDesligamento,
         dataDesligamento: form.dataDesligamento,
-        reducaoJornada: form.reducaoJornada || "nenhuma",
+        reducaoJornada: isPedidoDemissao ? "nenhuma" : (form.reducaoJornada || "nenhuma"),
         observacoes: form.observacoes,
         diasTrabalhados: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
       });
@@ -636,7 +636,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                     <th className="p-3 text-left font-medium">Colaborador</th>
                     <th className="p-3 text-left font-medium">CPF</th>
                     <th className="p-3 text-center font-medium">Data Aviso</th>
-                    <th className="p-3 text-center font-medium">Redução</th>
+                    {!isPedidoDemissao && <th className="p-3 text-center font-medium">Redução</th>}
                     <th className="p-3 text-center font-medium">Dia Trabalhado</th>
                     <th className="p-3 text-center font-medium">Último Dia</th>
                     <th className="p-3 text-center font-medium">Data Pagamento</th>
@@ -648,14 +648,14 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                 </thead>
                 <tbody>
                   {isLoadingAvisos || (isFetchingAvisos && filtered.length === 0) ? (
-                    <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">
+                    <tr><td colSpan={isPedidoDemissao ? 10 : 11} className="py-12 text-center text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                        <span>Carregando avisos...</span>
+                        <span>Carregando {isPedidoDemissao ? 'pedidos' : 'avisos'}...</span>
                       </div>
                     </td></tr>
                   ) : filtered.length === 0 ? (
-                    <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Nenhum aviso prévio encontrado</td></tr>
+                    <tr><td colSpan={isPedidoDemissao ? 10 : 11} className="py-12 text-center text-muted-foreground">{isPedidoDemissao ? 'Nenhum pedido de demissão encontrado' : 'Nenhum aviso prévio encontrado'}</td></tr>
                   ) : filtered.map((a: any) => {
                     const st = STATUS_LABELS[a.status] || STATUS_LABELS.em_andamento;
                     const reducaoShort = a.reducaoJornada === '2h_dia' ? '2 HORAS' : a.reducaoJornada === '7_dias_corridos' ? '7 DIAS' : '-';
@@ -670,17 +670,16 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                         }}>
                           {a.employeeName}
                           <div className="flex gap-1 mt-0.5 flex-wrap">
-                            {(a as any).novoEmpregoAtivo ? <span className="text-[9px] bg-orange-600 text-white px-1.5 py-0.5 rounded-full font-semibold">Novo Emprego · Súmula 276</span> : null}
+                            {!isPedidoDemissao && (a as any).novoEmpregoAtivo ? <span className="text-[9px] bg-orange-600 text-white px-1.5 py-0.5 rounded-full font-semibold">Novo Emprego · Súmula 276</span> : null}
                             {(a as any).fgtsEditadoManualmente ? <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-semibold">FGTS Real</span> : null}
                           </div>
                         </td>
                         <td className="p-3 text-xs">{formatCPF(a.employeeCpf)}</td>
                         <td className="p-3 text-center">{formatDate(a.dataDiaTrabalhado)}</td>
-                        <td className="p-3 text-center font-medium">{reducaoShort}</td>
+                        {!isPedidoDemissao && <td className="p-3 text-center font-medium">{reducaoShort}</td>}
                         <td className="p-3 text-center">{formatDate(a.dataInicio)}</td>
                         <td className="p-3 text-center">{(() => {
-                          // Se redução é 7 dias corridos, último dia trabalhado = dataFim - 7 dias
-                          if (a.reducaoJornada === '7_dias_corridos' && a.dataFim) {
+                          if (!isPedidoDemissao && a.reducaoJornada === '7_dias_corridos' && a.dataFim) {
                             const dt = new Date(a.dataFim + 'T00:00:00');
                             dt.setDate(dt.getDate() - 7);
                             return formatDate(dt.toISOString().split('T')[0]);
@@ -690,7 +689,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                         <td className="p-3 text-center font-semibold text-red-600">{formatDate(a.dataLimitePagamento)}</td>
                         <td className="p-3 text-center">{(() => {
                           if (a.status !== 'em_andamento') return <span className="text-xs text-muted-foreground">-</span>;
-                          const ultimoDia = a.reducaoJornada === '7_dias_corridos' && a.dataFim
+                          const ultimoDia = (!isPedidoDemissao && a.reducaoJornada === '7_dias_corridos' && a.dataFim)
                             ? (() => { const dt = new Date(a.dataFim + 'T00:00:00'); dt.setDate(dt.getDate() - 7); return dt; })()
                             : a.dataFim ? new Date(a.dataFim + 'T00:00:00') : null;
                           if (!ultimoDia) return '-';
@@ -785,7 +784,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
 
         {/* Detail Dialog */}
         {selectedItem && (
-          <FullScreenDialog open={showDetailDialog} onClose={() => { setShowDetailDialog(false); setSelectedItem(null); }} title="Detalhes do Aviso Prévio" icon={<AlertTriangle className="h-5 w-5 text-white" />}>
+          <FullScreenDialog open={showDetailDialog} onClose={() => { setShowDetailDialog(false); setSelectedItem(null); }} title={isPedidoDemissao ? "Detalhes do Pedido de Demissão" : "Detalhes do Aviso Prévio"} icon={<AlertTriangle className="h-5 w-5 text-white" />}>
             <div className="w-full max-w-3xl mx-auto space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-muted/30 rounded-lg p-4">
@@ -858,7 +857,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                     parts.push(`${dias} ${dias === 1 ? 'dia' : 'dias'}`);
                     return parts.join(', ') + ' de serviço';
                   })()}</p>
-                  {selectedItem.anosServico > 0 && selectedItem.tipo?.includes('trabalhado') && (
+                  {!isPedidoDemissao && selectedItem.anosServico > 0 && selectedItem.tipo?.includes('trabalhado') && (
                     <p className="text-[10px] text-amber-600 mt-1">+ {Math.min(selectedItem.anosServico * 3, 60)} dias indenizados</p>
                   )}
                 </div>
@@ -868,13 +867,36 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                   <p className="font-bold text-lg">{formatDate(selectedItem.dataFim)}</p>
                 </div>
               </div>
-              <div className="bg-blue-50 rounded-lg p-4">
-                <p className="text-xs text-blue-600 uppercase font-semibold mb-2">Redução de Jornada (Art. 488 CLT)</p>
-                <p className="font-medium">{REDUCAO_LABELS[selectedItem.reducaoJornada] || "Nenhuma"}</p>
-              </div>
+              {!isPedidoDemissao && (
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <p className="text-xs text-blue-600 uppercase font-semibold mb-2">Redução de Jornada (Art. 488 CLT)</p>
+                  <p className="font-medium">{REDUCAO_LABELS[selectedItem.reducaoJornada] || "Nenhuma"}</p>
+                </div>
+              )}
+
+              {isPedidoDemissao && (
+                <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                  <p className="text-xs text-slate-500 uppercase font-semibold mb-2">Informações do Pedido de Demissão</p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="text-xs text-slate-400">Redução de Jornada</span>
+                      <p className="font-medium text-slate-600">Não se aplica (Art. 488 é exclusivo do empregador)</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-slate-400">Dias de Aviso</span>
+                      <p className="font-medium text-slate-600">30 dias fixos (Lei 12.506 não se aplica ao empregado)</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-slate-200 grid grid-cols-3 gap-2 text-[10px]">
+                    <div className="text-red-500"><strong>Sem multa 40% FGTS</strong> — não se aplica</div>
+                    <div className="text-red-500"><strong>Sem saque FGTS</strong> — saldo fica retido</div>
+                    <div className="text-red-500"><strong>Sem seguro-desemprego</strong> — não tem direito</div>
+                  </div>
+                </div>
+              )}
 
               {/* ===== NOVO EMPREGO — Súmula 276 TST ===== */}
-              {selectedItem.tipo?.includes('trabalhado') && (
+              {!isPedidoDemissao && selectedItem.tipo?.includes('trabalhado') && (
                 <div className={`rounded-lg border p-4 ${novoEmpregoForm.ativo ? 'bg-orange-50 border-orange-300' : 'bg-gray-50 border-gray-200'}`}>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -1000,44 +1022,68 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                         </span>
                         <span className="font-semibold">{formatMoeda(prev.decimoTerceiroProporcional)}</span>
                       </div>
-                      <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Aviso Prévio Indenizado ({prev.diasExtrasAviso} dias extras):</span><span className="font-semibold">{formatMoeda(prev.avisoPrevioIndenizado)}</span></div>
-                      {/* Aviso prévio indenizado zerado por Súmula 276 */}
-                      {prev.novoEmpregoAplicado && (
+                      {!isPedidoDemissao && (
+                        <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Aviso Prévio Indenizado ({prev.diasExtrasAviso} dias extras):</span><span className="font-semibold">{formatMoeda(prev.avisoPrevioIndenizado)}</span></div>
+                      )}
+                      {!isPedidoDemissao && prev.novoEmpregoAplicado && (
                         <div className="flex items-center gap-2 py-1 px-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-700 mt-1">
                           <Briefcase className="h-3 w-3" />
                           <span><strong>Súmula 276 TST aplicada:</strong> Aviso prévio indenizado zerado. Saldo de salário e prazo calculados até a comunicação do novo emprego.</span>
                         </div>
                       )}
 
-                      {/* FGTS com edição manual */}
-                      <div className="mt-2 pt-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="text-[10px] text-gray-400 uppercase font-bold">FGTS (informativo)</p>
-                          {selectedItem.tipo?.includes('empregador') && (
-                            <Button size="sm" variant="ghost" className="h-6 text-[10px] text-amber-600 hover:text-amber-700 px-2 gap-1" onClick={() => setFgtsEditDialog({ open: true, valor: selectedItem.fgtsReal || '' })}>
-                              <Edit2 className="h-3 w-3" />
-                              {selectedItem.fgtsEditadoManualmente ? 'Editar saldo real' : 'Informar saldo real'}
-                            </Button>
-                          )}
-                        </div>
-                        <div className="flex justify-between py-0.5">
-                          <span className="text-xs text-gray-400">FGTS Estimado (sistema):</span>
-                          <span className="text-xs text-gray-500">{formatMoeda(prev.fgtsEstimado)}</span>
-                        </div>
-                        {selectedItem.fgtsEditadoManualmente ? (
-                          <div className="flex justify-between py-0.5 bg-amber-50 px-1 rounded">
-                            <span className="text-xs text-amber-600 flex items-center gap-1">
-                              Saldo Real (editado manualmente)
-                              <span className="text-[9px] text-amber-400">por {selectedItem.fgtsEditadoPor}</span>
-                            </span>
-                            <span className="text-xs font-semibold text-amber-700">{formatMoeda(selectedItem.fgtsReal)}</span>
+                      {isPedidoDemissao ? (
+                        <div className="mt-2 pt-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] text-gray-400 uppercase font-bold">FGTS (informativo)</p>
                           </div>
-                        ) : null}
-                        <div className="flex justify-between py-0.5">
-                          <span className="text-xs text-gray-400">Multa 40%{selectedItem.fgtsEditadoManualmente ? ' (sobre saldo real)' : ' (sobre estimado)'}:</span>
-                          <span className="text-xs font-medium text-gray-600">{formatMoeda(prev.multaFGTS)}</span>
+                          <div className="flex justify-between py-0.5">
+                            <span className="text-xs text-gray-400">FGTS Estimado (sistema):</span>
+                            <span className="text-xs text-gray-500">{formatMoeda(prev.fgtsEstimado)}</span>
+                          </div>
+                          <div className="flex justify-between py-0.5 bg-red-50 px-1 rounded">
+                            <span className="text-xs text-red-500">Multa 40% FGTS:</span>
+                            <span className="text-xs font-medium text-red-500">Não se aplica (pedido de demissão)</span>
+                          </div>
+                          <div className="flex justify-between py-0.5 bg-red-50 px-1 rounded mt-0.5">
+                            <span className="text-xs text-red-500">Saque FGTS:</span>
+                            <span className="text-xs font-medium text-red-500">Sem direito — saldo fica retido</span>
+                          </div>
+                          <div className="flex justify-between py-0.5 bg-red-50 px-1 rounded mt-0.5">
+                            <span className="text-xs text-red-500">Seguro-Desemprego:</span>
+                            <span className="text-xs font-medium text-red-500">Sem direito</span>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="mt-2 pt-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] text-gray-400 uppercase font-bold">FGTS (informativo)</p>
+                            {selectedItem.tipo?.includes('empregador') && (
+                              <Button size="sm" variant="ghost" className="h-6 text-[10px] text-amber-600 hover:text-amber-700 px-2 gap-1" onClick={() => setFgtsEditDialog({ open: true, valor: selectedItem.fgtsReal || '' })}>
+                                <Edit2 className="h-3 w-3" />
+                                {selectedItem.fgtsEditadoManualmente ? 'Editar saldo real' : 'Informar saldo real'}
+                              </Button>
+                            )}
+                          </div>
+                          <div className="flex justify-between py-0.5">
+                            <span className="text-xs text-gray-400">FGTS Estimado (sistema):</span>
+                            <span className="text-xs text-gray-500">{formatMoeda(prev.fgtsEstimado)}</span>
+                          </div>
+                          {selectedItem.fgtsEditadoManualmente ? (
+                            <div className="flex justify-between py-0.5 bg-amber-50 px-1 rounded">
+                              <span className="text-xs text-amber-600 flex items-center gap-1">
+                                Saldo Real (editado manualmente)
+                                <span className="text-[9px] text-amber-400">por {selectedItem.fgtsEditadoPor}</span>
+                              </span>
+                              <span className="text-xs font-semibold text-amber-700">{formatMoeda(selectedItem.fgtsReal)}</span>
+                            </div>
+                          ) : null}
+                          <div className="flex justify-between py-0.5">
+                            <span className="text-xs text-gray-400">Multa 40%{selectedItem.fgtsEditadoManualmente ? ' (sobre saldo real)' : ' (sobre estimado)'}:</span>
+                            <span className="text-xs font-medium text-gray-600">{formatMoeda(prev.multaFGTS)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="border-t-2 border-green-300 mt-3 pt-3 flex justify-between text-lg font-bold text-green-700">
                       <span>TOTAL RESCISÃO:</span>
@@ -1196,7 +1242,8 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                   onClick={async () => {
                     try {
                       toast.info('Gerando TRCT...');
-                      const pdfData = await utils.avisoPrevio.avisoPrevio.gerarPdf.fetch({ id: selectedItem.id });
+                      const pdfDataRaw = await utils.avisoPrevio.avisoPrevio.gerarPdf.fetch({ id: selectedItem.id });
+                      const pdfData = { ...pdfDataRaw, aviso: { ...pdfDataRaw.aviso, isPedidoDemissao } };
                       const w = window.open('', '_blank', 'width=800,height=1100');
                       if (!w) { toast.error('Popup bloqueado. Permita popups para gerar o PDF.'); return; }
                       w.document.write(`<!DOCTYPE html><html><head><title>TRCT - ${pdfData.funcionario.nome}</title>
@@ -1225,8 +1272,8 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   @media print { .no-print { display: none; } }
 </style></head><body>
 <div class="no-print"><button onclick="window.print()" style="padding:8px 24px;font-size:14px;cursor:pointer;background:#2d5016;color:white;border:none;border-radius:4px;">Imprimir / Salvar PDF</button></div>
-<h1>Termo de Rescisão do Contrato de Trabalho</h1>
-<h2>TRCT - Conforme Art. 477 da CLT</h2>
+<h1>${pdfData.aviso.isPedidoDemissao ? 'Pedido de Demissão — Termo de Rescisão' : 'Termo de Rescisão do Contrato de Trabalho'}</h1>
+<h2>${pdfData.aviso.isPedidoDemissao ? 'Rescisão por iniciativa do empregado — Art. 487 CLT' : 'TRCT - Conforme Art. 477 da CLT'}</h2>
 <div class="section">
   <div class="section-title">Identificação do Empregador</div>
   <div class="section-body">
@@ -1247,7 +1294,10 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   <div class="section-body">
     <div class="row"><div class="field"><div class="field-label">Tipo</div><div class="field-value">${pdfData.aviso.tipoLabel}</div></div><div class="field"><div class="field-label">Salário Base</div><div class="field-value">R$ ${pdfData.aviso.salarioBase}</div></div></div>
     <div class="row"><div class="field"><div class="field-label">Data Início</div><div class="field-value">${pdfData.aviso.dataInicio ? pdfData.aviso.dataInicio.split('-').reverse().join('/') : '-'}</div></div><div class="field"><div class="field-label">Data Término</div><div class="field-value">${pdfData.aviso.dataFim ? pdfData.aviso.dataFim.split('-').reverse().join('/') : '-'}</div></div><div class="field"><div class="field-label">Dias de Aviso</div><div class="field-value">${pdfData.aviso.diasAviso} dias</div></div></div>
-    <div class="row"><div class="field"><div class="field-label">Redução de Jornada</div><div class="field-value">${pdfData.aviso.reducaoLabel}</div></div><div class="field"><div class="field-label">Anos de Serviço</div><div class="field-value">${pdfData.aviso.anosServico}</div></div></div>
+    ${pdfData.aviso.isPedidoDemissao
+      ? `<div class="row"><div class="field"><div class="field-label">Redução de Jornada</div><div class="field-value">Não se aplica (Art. 488 exclusivo do empregador)</div></div><div class="field"><div class="field-label">Anos de Serviço</div><div class="field-value">${pdfData.aviso.anosServico}</div></div></div>`
+      : `<div class="row"><div class="field"><div class="field-label">Redução de Jornada</div><div class="field-value">${pdfData.aviso.reducaoLabel}</div></div><div class="field"><div class="field-label">Anos de Serviço</div><div class="field-value">${pdfData.aviso.anosServico}</div></div></div>`
+    }
   </div>
 </div>
 <div class="section">
@@ -1261,10 +1311,13 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
         ${parseFloat(pdfData.previsaoRescisao.feriasVencidas || '0') > 0 ? '<tr style="background:#fff3f3"><td>Férias Vencidas (em dobro)</td><td>' + (pdfData.previsaoRescisao.periodosVencidos || '-') + ' períodos</td><td style="text-align:right">' + pdfData.previsaoRescisao.feriasVencidas + '</td></tr>' : ''}
         <tr><td>VR Proporcional</td><td>R$ ${pdfData.previsaoRescisao.vrDiario || '0'}/dia × ${pdfData.previsaoRescisao.diasTrabalhadosMes || '-'} dias</td><td style="text-align:right">${pdfData.previsaoRescisao.vrProporcional || '0,00'}</td></tr>
         <tr><td>13º Salário Proporcional</td><td>${pdfData.previsaoRescisao.meses13o || '-'}/12</td><td style="text-align:right">${pdfData.previsaoRescisao.decimoTerceiroProporcional || '0,00'}</td></tr>
-        <tr><td>Aviso Prévio Indenizado</td><td>${pdfData.previsaoRescisao.diasExtrasAviso || '0'} dias extras</td><td style="text-align:right">${pdfData.previsaoRescisao.avisoPrevioIndenizado || '0,00'}</td></tr>
+        ${pdfData.aviso.isPedidoDemissao ? '' : `<tr><td>Aviso Prévio Indenizado</td><td>${pdfData.previsaoRescisao.diasExtrasAviso || '0'} dias extras</td><td style="text-align:right">${pdfData.previsaoRescisao.avisoPrevioIndenizado || '0,00'}</td></tr>`}
         <tr><td colspan="3" style="background:#f5f5f5;font-size:9px;font-weight:bold;text-transform:uppercase">FGTS (Informativo)</td></tr>
         <tr style="color:#888"><td>FGTS Estimado</td><td>-</td><td style="text-align:right">${pdfData.previsaoRescisao.fgtsEstimado || '0,00'}</td></tr>
-        <tr style="color:#888"><td>Multa 40% FGTS</td><td>-</td><td style="text-align:right">${pdfData.previsaoRescisao.multaFGTS || '0,00'}</td></tr>
+        ${pdfData.aviso.isPedidoDemissao
+          ? '<tr style="color:#c00"><td>Multa 40% FGTS</td><td>-</td><td style="text-align:right">Não se aplica</td></tr><tr style="color:#c00"><td>Saque FGTS</td><td>-</td><td style="text-align:right">Sem direito</td></tr><tr style="color:#c00"><td>Seguro-Desemprego</td><td>-</td><td style="text-align:right">Sem direito</td></tr>'
+          : `<tr style="color:#888"><td>Multa 40% FGTS</td><td>-</td><td style="text-align:right">${pdfData.previsaoRescisao.multaFGTS || '0,00'}</td></tr>`
+        }
         <tr class="total-row"><td colspan="2"><strong>TOTAL RESCISÃO</strong></td><td style="text-align:right"><strong>${pdfData.previsaoRescisao.total || pdfData.valorEstimadoTotal || '0,00'}</strong></td></tr>
       </tbody>
     </table>
@@ -1495,21 +1548,23 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                 </div>
 
                 {/* Seção 3: Redução e Dias Trabalhados */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-amber-600" />
-                      Redução de Jornada (Art. 488 CLT)
-                    </label>
-                    <Select value={form.reducaoJornada || "nenhuma"} onValueChange={v => setForm({ ...form, reducaoJornada: v })}>
-                      <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nenhuma">Nenhuma</SelectItem>
-                        <SelectItem value="2h_dia">2 horas por dia</SelectItem>
-                        <SelectItem value="7_dias_corridos">7 dias corridos no final</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className={`grid grid-cols-1 ${isPedidoDemissao ? '' : 'md:grid-cols-2'} gap-5`}>
+                  {!isPedidoDemissao && (
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-amber-600" />
+                        Redução de Jornada (Art. 488 CLT)
+                      </label>
+                      <Select value={form.reducaoJornada || "nenhuma"} onValueChange={v => setForm({ ...form, reducaoJornada: v })}>
+                        <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="nenhuma">Nenhuma</SelectItem>
+                          <SelectItem value="2h_dia">2 horas por dia</SelectItem>
+                          <SelectItem value="7_dias_corridos">7 dias corridos no final</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
@@ -1550,9 +1605,10 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     anosServico = Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000));
                   }
                   
-                  // Dias de aviso: trabalhado = 30 fixo, indenizado = 30 + 3/ano (max 90)
+                  // Pedido de demissão: SEMPRE 30 dias (Lei 12.506 não se aplica ao empregado)
+                  // Aviso prévio: trabalhado = 30 fixo, indenizado = 30 + 3/ano (max 90)
                   const isTrabalhado = form.tipo?.includes('trabalhado');
-                  const diasAviso = isTrabalhado ? 30 : Math.min(30 + (anosServico * 3), 90);
+                  const diasAviso = isPedidoDemissao ? 30 : (isTrabalhado ? 30 : Math.min(30 + (anosServico * 3), 90));
                   
                   // Data início do aviso = dia seguinte à data do aviso
                   const dtInicio = new Date(dataAviso + 'T00:00:00');
@@ -1563,9 +1619,10 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                   dtFim.setDate(dtFim.getDate() + diasAviso - 1);
                   
                   // Redução: se 7 dias corridos, último dia trabalhado = 7 dias antes do fim
-                  const reducao = form.reducaoJornada || 'nenhuma';
+                  // Pedido de demissão: sem redução (Art. 488 é exclusivo do empregador)
+                  const reducao = isPedidoDemissao ? 'nenhuma' : (form.reducaoJornada || 'nenhuma');
                   let dtUltimoDiaTrab = new Date(dtFim);
-                  if (reducao === '7_dias_corridos') {
+                  if (!isPedidoDemissao && reducao === '7_dias_corridos') {
                     dtUltimoDiaTrab = new Date(dtFim);
                     dtUltimoDiaTrab.setDate(dtUltimoDiaTrab.getDate() - 7);
                   }
@@ -1594,10 +1651,10 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                         </div>
                         <p className="text-2xl font-bold text-blue-800">{fmtDt(dtUltimoDiaTrab)}</p>
                         <p className="text-xs text-blue-500 mt-1">{diasSemana[dtUltimoDiaTrab.getDay()]}</p>
-                        {reducao === '7_dias_corridos' && (
+                        {!isPedidoDemissao && reducao === '7_dias_corridos' && (
                           <p className="text-[10px] text-amber-600 mt-1">7 dias de folga no final do aviso</p>
                         )}
-                        {reducao === '2h_dia' && (
+                        {!isPedidoDemissao && reducao === '2h_dia' && (
                           <p className="text-[10px] text-amber-600 mt-1">Sai 2h mais cedo todos os dias</p>
                         )}
                       </div>
@@ -1630,7 +1687,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     onChange={e => setForm({ ...form, observacoes: e.target.value })}
                     rows={3}
                     className="border-2 border-gray-200 hover:border-amber-400 transition-colors resize-none"
-                    placeholder="Observações adicionais sobre o aviso prévio..."
+                    placeholder={isPedidoDemissao ? "Observações adicionais sobre o pedido de demissão..." : "Observações adicionais sobre o aviso prévio..."}
                   />
                 </div>
               </div>
@@ -1657,7 +1714,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     <div className="text-center bg-white rounded-lg p-3 border border-green-100">
                       <p className="text-[10px] text-green-600 font-medium mb-1">Dias Aviso</p>
                       <p className="text-xl font-bold text-green-800">{calculoPreview.diasAviso} dias</p>
-                      {(calculoPreview.diasExtras || 0) > 0 && (
+                      {!isPedidoDemissao && (calculoPreview.diasExtras || 0) > 0 && (
                         <p className="text-[9px] text-amber-600">+ {calculoPreview.diasExtras} dias indenizados</p>
                       )}
                     </div>
@@ -1731,14 +1788,16 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.decimoTerceiroProporcional)}</span>
                         </div>
 
-                        {/* Aviso Prévio Indenizado */}
-                        <div className="flex justify-between py-2 border-b border-gray-100">
-                          <div>
-                            <span className="text-sm text-gray-700">Aviso Prévio Indenizado</span>
-                            <span className="text-[10px] text-gray-400 ml-2">(Lei 12.506/2011: {calculoPreview.previsaoRescisao.diasExtrasAviso} dias extras)</span>
+                        {/* Aviso Prévio Indenizado — só aviso prévio do empregador */}
+                        {!isPedidoDemissao && (
+                          <div className="flex justify-between py-2 border-b border-gray-100">
+                            <div>
+                              <span className="text-sm text-gray-700">Aviso Prévio Indenizado</span>
+                              <span className="text-[10px] text-gray-400 ml-2">(Lei 12.506/2011: {calculoPreview.previsaoRescisao.diasExtrasAviso} dias extras)</span>
+                            </div>
+                            <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.avisoPrevioIndenizado)}</span>
                           </div>
-                          <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.avisoPrevioIndenizado)}</span>
-                        </div>
+                        )}
 
                         {/* FGTS */}
                         <div className="pt-3 mt-2">
@@ -1748,17 +1807,34 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           <span className="text-xs text-gray-500">FGTS Estimado no período (8% × {calculoPreview.previsaoRescisao.mesesTotais || 0} meses)</span>
                           <span className="text-xs font-medium text-gray-500">{formatMoeda(calculoPreview.previsaoRescisao.fgtsEstimado)}</span>
                         </div>
-                        <div className="flex justify-between py-2 border-b border-gray-100">
-                          <span className="text-sm text-gray-700">Multa 40% FGTS</span>
-                          <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.multaFGTS)}</span>
-                        </div>
+                        {isPedidoDemissao ? (
+                          <>
+                            <div className="flex justify-between py-2 border-b border-gray-100 bg-red-50 px-2 rounded">
+                              <span className="text-sm text-red-500">Multa 40% FGTS</span>
+                              <span className="font-semibold text-sm text-red-500">Não se aplica</span>
+                            </div>
+                            <div className="flex justify-between py-1.5 bg-red-50 px-2 rounded mt-1">
+                              <span className="text-xs text-red-500">Saque FGTS</span>
+                              <span className="text-xs font-medium text-red-500">Sem direito — saldo fica retido</span>
+                            </div>
+                            <div className="flex justify-between py-1.5 bg-red-50 px-2 rounded mt-1">
+                              <span className="text-xs text-red-500">Seguro-Desemprego</span>
+                              <span className="text-xs font-medium text-red-500">Sem direito</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex justify-between py-2 border-b border-gray-100">
+                            <span className="text-sm text-gray-700">Multa 40% FGTS</span>
+                            <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.multaFGTS)}</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Total Verbas */}
                       <div className="mt-4 pt-3 border-t-2 border-green-300 flex justify-between items-center">
                         <div>
                           <span className="text-lg font-bold text-green-800">TOTAL ESTIMADO DA RESCISÃO</span>
-                          <p className="text-[10px] text-green-600">Saldo + Férias + VR + 13º + Aviso Prévio + Multa FGTS</p>
+                          <p className="text-[10px] text-green-600">{isPedidoDemissao ? 'Saldo + Férias + VR + 13º (sem multa FGTS)' : 'Saldo + Férias + VR + 13º + Aviso Prévio + Multa FGTS'}</p>
                         </div>
                         <span className="text-2xl font-bold text-green-700">{formatMoeda(calculoPreview.previsaoRescisao.total)}</span>
                       </div>
@@ -1804,7 +1880,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
             <div className="flex justify-end gap-3 mt-6 pt-4">
               <Button variant="outline" className="h-11 px-6" onClick={() => { setShowDialog(false); setForm({}); setCalculoPreview(null); }}>Cancelar</Button>
               <Button className="h-11 px-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold" onClick={handleSubmit} disabled={createAviso.isPending}>
-                {createAviso.isPending ? "Salvando..." : "Criar Aviso Prévio"}
+                {createAviso.isPending ? "Salvando..." : (isPedidoDemissao ? "Registrar Pedido de Demissão" : "Criar Aviso Prévio")}
               </Button>
             </div>
           </div>
