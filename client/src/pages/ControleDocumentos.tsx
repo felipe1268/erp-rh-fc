@@ -888,9 +888,8 @@ export default function ControleDocumentos() {
   const { data: treinList = [], refetch: refetchTrein } = trpc.docs.treinamentos.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
   const { data: atestList = [], refetch: refetchAtest } = trpc.docs.atestados.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
   const { data: advList = [], refetch: refetchAdv } = trpc.docs.advertencias.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
-  const { data: allEmployees = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
+  const { data: allEmployees = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
 
-  // Filtrar APENAS funcionários ativos para os selects
   const activeEmployees = useMemo(() => {
     return (allEmployees as any[]).filter((e: any) => e.status === "Ativo");
   }, [allEmployees]);
@@ -1305,16 +1304,17 @@ export default function ControleDocumentos() {
     setShowImportAso(false); setImportFile(null);
   };
 
-  // ============ EMPLOYEE SELECT COMPONENT (com busca por nome/CPF) ============
   const EmployeeSelect = ({ value, onChange }: { value: number | undefined; onChange: (id: number) => void }) => {
     const [empSearch, setEmpSearch] = useState("");
     const [empFocused, setEmpFocused] = useState(false);
+    const [incluirInativos, setIncluirInativos] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    const selectedEmp = activeEmployees.find((e: any) => e.id === value);
+    const baseList = incluirInativos ? (allEmployees as any[]) : activeEmployees;
+    const selectedEmp = (allEmployees as any[]).find((e: any) => e.id === value);
     
     const filteredEmps = useMemo(() => {
-      return activeEmployees.filter((e: any) => {
+      return baseList.filter((e: any) => {
         if (!empSearch) return true;
         const s = empSearch.toLowerCase().trim();
         if (!s) return true;
@@ -1324,7 +1324,7 @@ export default function ControleDocumentos() {
         const searchClean = s.replace(/\D/g, "");
         return nome.includes(s) || (searchClean && cpf.includes(searchClean)) || codigo.includes(s);
       }).slice(0, 50);
-    }, [activeEmployees, empSearch]);
+    }, [baseList, empSearch]);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -1377,28 +1377,55 @@ export default function ControleDocumentos() {
         
         {/* Selected employee badge */}
         {selectedEmp && !empFocused && !empSearch && (
-          <div className="mt-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded inline-flex items-center gap-1">
+          <div className={`mt-1 text-xs px-2 py-1 rounded inline-flex items-center gap-1 ${
+            selectedEmp.status === "Desligado" ? "text-red-700 bg-red-50" :
+            selectedEmp.status === "Afastado" ? "text-amber-700 bg-amber-50" :
+            selectedEmp.status !== "Ativo" ? "text-gray-700 bg-gray-50" :
+            "text-blue-600 bg-blue-50"
+          }`}>
             <CheckCircle2 className="h-3 w-3" />
             {selectedEmp.nomeCompleto} - {formatCPF(selectedEmp.cpf)}
+            {selectedEmp.status && selectedEmp.status !== "Ativo" && (
+              <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                selectedEmp.status === "Desligado" ? "bg-red-100 text-red-700" :
+                selectedEmp.status === "Afastado" ? "bg-amber-100 text-amber-700" :
+                "bg-gray-100 text-gray-600"
+              }`}>
+                {selectedEmp.status === "Desligado" ? "Desligado" :
+                 selectedEmp.status === "Lista_Negra" ? "Lista Negra" :
+                 selectedEmp.status === "Ferias" ? "Férias" :
+                 selectedEmp.status}
+              </span>
+            )}
           </div>
         )}
 
-        {/* Dropdown results - only when focused */}
         {empFocused && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 border rounded-lg shadow-xl max-h-64 overflow-y-auto" style={{ zIndex: 9999 }}>
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 border rounded-lg shadow-xl max-h-72 overflow-y-auto" style={{ zIndex: 9999 }}>
+            <div className="px-3 py-1.5 border-b bg-gray-50 dark:bg-gray-800 sticky top-0 flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">
+                {empSearch ? `${filteredEmps.length} resultado(s)` : `${filteredEmps.length} colaborador(es)${!incluirInativos ? " ativo(s)" : ""}`}
+              </span>
+              <label className="flex items-center gap-1.5 cursor-pointer select-none" onMouseDown={e => e.preventDefault()}>
+                <input
+                  type="checkbox"
+                  checked={incluirInativos}
+                  onChange={() => setIncluirInativos(!incluirInativos)}
+                  className="h-3 w-3 rounded border-gray-300 accent-blue-600"
+                />
+                <span className="text-[11px] text-muted-foreground whitespace-nowrap">Incluir desligados/inativos</span>
+              </label>
+            </div>
             {filteredEmps.length === 0 ? (
               <div className="p-3 text-sm text-muted-foreground text-center">
-                {activeEmployees.length === 0 
-                  ? "Nenhum colaborador ativo cadastrado nesta empresa" 
+                {baseList.length === 0 
+                  ? "Nenhum colaborador cadastrado nesta empresa" 
                   : empSearch 
-                    ? `Nenhum resultado para "${empSearch}" (${activeEmployees.length} ativos)`
+                    ? `Nenhum resultado para "${empSearch}"`
                     : "Nenhum colaborador encontrado"}
               </div>
             ) : (
               <>
-                <div className="px-3 py-1.5 text-xs text-muted-foreground border-b bg-gray-50 dark:bg-gray-800 sticky top-0">
-                  {empSearch ? `${filteredEmps.length} resultado(s)` : `${filteredEmps.length} colaborador(es) ativo(s) — digite para filtrar`}
-                </div>
                 {filteredEmps.map((e: any) => (
                   <div
                     key={e.id}
@@ -1406,7 +1433,23 @@ export default function ControleDocumentos() {
                     onMouseDown={e2 => { e2.preventDefault(); }}
                     onClick={() => { onChange(e.id); setEmpFocused(false); setEmpSearch(""); inputRef.current?.blur(); }}
                   >
-                    <span className="text-gray-900 dark:text-gray-100">{e.nomeCompleto}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-gray-900 dark:text-gray-100 truncate">{e.nomeCompleto}</span>
+                      {e.status && e.status !== "Ativo" && (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${
+                          e.status === "Desligado" ? "bg-red-100 text-red-700" :
+                          e.status === "Afastado" ? "bg-amber-100 text-amber-700" :
+                          e.status === "Ferias" ? "bg-blue-100 text-blue-700" :
+                          e.status === "Lista_Negra" ? "bg-gray-800 text-white" :
+                          "bg-gray-100 text-gray-600"
+                        }`}>
+                          {e.status === "Desligado" ? "Desligado" :
+                           e.status === "Lista_Negra" ? "Lista Negra" :
+                           e.status === "Ferias" ? "Férias" :
+                           e.status}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-xs text-muted-foreground ml-2 shrink-0">
                       {e.codigoInterno && <span className="text-blue-600 font-medium mr-2">{e.codigoInterno}</span>}
                       {formatCPF(e.cpf)}
