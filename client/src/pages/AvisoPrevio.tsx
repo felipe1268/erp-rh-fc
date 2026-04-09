@@ -42,6 +42,11 @@ const TIPO_LABELS: Record<string, { label: string; color: string; bg: string }> 
   empregado_indenizado: { label: "Empregado (Indenizado)", color: "text-orange-700", bg: "bg-orange-100" },
 };
 
+const TIPO_LABELS_PEDIDO: Record<string, { label: string; color: string; bg: string }> = {
+  empregado_trabalhado: { label: "Cumprindo Aviso", color: "text-blue-700", bg: "bg-blue-100" },
+  empregado_indenizado: { label: "Não Cumpriu Aviso", color: "text-red-700", bg: "bg-red-100" },
+};
+
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string; icon: any }> = {
   em_andamento:         { label: "Em Andamento",         color: "text-blue-700",   bg: "bg-blue-100",   icon: Timer },
   aguardando_pagamento: { label: "Aguardando Baixa",      color: "text-amber-700",  bg: "bg-amber-100",  icon: Timer },
@@ -454,7 +459,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
           </div>
           <DraggableCommandBar barId="aviso-previo" items={[
             { id: "recalcular", node: <Button variant="outline" onClick={() => recalcularTodos.mutate({ companyId })} disabled={recalcularTodos.isPending || stats.emAndamento === 0}><RefreshCw className={`h-4 w-4 mr-2 ${recalcularTodos.isPending ? 'animate-spin' : ''}`} />{recalcularTodos.isPending ? 'Recalculando...' : 'Recalcular Todos'}</Button> },
-            { id: "novo", node: <Button onClick={() => { setForm(isPedidoDemissao ? { tipo: 'empregado_trabalhado' } : {}); setCalculoPreview(null); setEditingItem(null); setShowDialog(true); }}><Plus className="h-4 w-4 mr-2" /> {isPedidoDemissao ? "Novo Pedido" : "Novo Aviso Prévio"}</Button> },
+            { id: "novo", node: <Button onClick={() => { setForm({}); setCalculoPreview(null); setEditingItem(null); setShowDialog(true); }}><Plus className="h-4 w-4 mr-2" /> {isPedidoDemissao ? "Novo Pedido" : "Novo Aviso Prévio"}</Button> },
           ]} />
         </div>
 
@@ -670,6 +675,10 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                         }}>
                           {a.employeeName}
                           <div className="flex gap-1 mt-0.5 flex-wrap">
+                            {isPedidoDemissao && (() => {
+                              const tp = TIPO_LABELS_PEDIDO[a.tipo];
+                              return tp ? <span className={`text-[9px] ${a.tipo === 'empregado_indenizado' ? 'bg-red-600' : 'bg-blue-600'} text-white px-1.5 py-0.5 rounded-full font-semibold`}>{tp.label}</span> : null;
+                            })()}
                             {!isPedidoDemissao && (a as any).novoEmpregoAtivo ? <span className="text-[9px] bg-orange-600 text-white px-1.5 py-0.5 rounded-full font-semibold">Novo Emprego · Súmula 276</span> : null}
                             {(a as any).fgtsEditadoManualmente ? <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-semibold">FGTS Real</span> : null}
                           </div>
@@ -795,7 +804,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                 <div className="bg-muted/30 rounded-lg p-4">
                   <p className="text-xs text-muted-foreground uppercase">Status</p>
                   <p className="font-semibold text-lg">{STATUS_LABELS[selectedItem.status]?.label}</p>
-                  <p className="text-sm text-muted-foreground">{TIPO_LABELS[selectedItem.tipo]?.label}</p>
+                  <p className="text-sm text-muted-foreground">{(isPedidoDemissao ? TIPO_LABELS_PEDIDO : TIPO_LABELS)[selectedItem.tipo]?.label || TIPO_LABELS[selectedItem.tipo]?.label}</p>
                 </div>
               </div>
 
@@ -877,14 +886,22 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
               {isPedidoDemissao && (
                 <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
                   <p className="text-xs text-slate-500 uppercase font-semibold mb-2">Informações do Pedido de Demissão</p>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <span className="text-xs text-slate-400">Cumprimento do Aviso</span>
+                      {selectedItem.tipo === 'empregado_trabalhado' ? (
+                        <p className="font-medium text-blue-600">Cumprindo os 30 dias</p>
+                      ) : (
+                        <p className="font-medium text-red-600">Não cumpriu — desconto aplicável (Art. 487 §2º)</p>
+                      )}
+                    </div>
                     <div>
                       <span className="text-xs text-slate-400">Redução de Jornada</span>
-                      <p className="font-medium text-slate-600">Não se aplica (Art. 488 é exclusivo do empregador)</p>
+                      <p className="font-medium text-slate-600">Não se aplica (Art. 488 exclusivo do empregador)</p>
                     </div>
                     <div>
                       <span className="text-xs text-slate-400">Dias de Aviso</span>
-                      <p className="font-medium text-slate-600">30 dias fixos (Lei 12.506 não se aplica ao empregado)</p>
+                      <p className="font-medium text-slate-600">30 dias fixos</p>
                     </div>
                   </div>
                   <div className="mt-3 pt-2 border-t border-slate-200 grid grid-cols-3 gap-2 text-[10px]">
@@ -1525,23 +1542,53 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
                       <FileText className="h-4 w-4 text-amber-600" />
-                      {isPedidoDemissao ? "Tipo de Pedido" : "Tipo de Aviso Prévio"} <span className="text-red-500">*</span>
+                      {isPedidoDemissao ? "Cumprimento do Aviso" : "Tipo de Aviso Prévio"} <span className="text-red-500">*</span>
                     </label>
-                    <Select value={form.tipo || ""} onValueChange={v => { setForm({ ...form, tipo: v }); setCalculoPreview(null); }}>
-                      <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"><SelectValue placeholder="Selecione o tipo..." /></SelectTrigger>
-                      <SelectContent>
-                        {!isPedidoDemissao && <SelectItem value="empregador_trabalhado">Empregador (Trabalhado)</SelectItem>}
-                        {!isPedidoDemissao && <SelectItem value="empregador_indenizado">Empregador (Indenizado)</SelectItem>}
-                        <SelectItem value="empregado_trabalhado">Empregado (Trabalhado)</SelectItem>
-                        <SelectItem value="empregado_indenizado">Empregado (Indenizado)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {isPedidoDemissao ? (
+                      <Select value={form.tipo || ""} onValueChange={v => { setForm({ ...form, tipo: v }); setCalculoPreview(null); }}>
+                        <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"><SelectValue placeholder="O empregado vai cumprir o aviso?" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="empregado_trabalhado">
+                            <div className="flex flex-col">
+                              <span className="font-medium">Vai cumprir o aviso (Trabalhado)</span>
+                              <span className="text-[10px] text-muted-foreground">Empregado trabalha os 30 dias normalmente</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="empregado_indenizado">
+                            <div className="flex flex-col">
+                              <span className="font-medium">Não vai cumprir (Indenizado)</span>
+                              <span className="text-[10px] text-muted-foreground">Empregador pode descontar 30 dias do acerto — Art. 487 §2º CLT</span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Select value={form.tipo || ""} onValueChange={v => { setForm({ ...form, tipo: v }); setCalculoPreview(null); }}>
+                        <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"><SelectValue placeholder="Selecione o tipo..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="empregador_trabalhado">Empregador (Trabalhado)</SelectItem>
+                          <SelectItem value="empregador_indenizado">Empregador (Indenizado)</SelectItem>
+                          <SelectItem value="empregado_trabalhado">Empregado (Trabalhado)</SelectItem>
+                          <SelectItem value="empregado_indenizado">Empregado (Indenizado)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {isPedidoDemissao && form.tipo === 'empregado_indenizado' && (
+                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+                        <strong>Art. 487 §2º CLT:</strong> Se o empregado não cumprir o aviso prévio, o empregador tem o direito de descontar os salários correspondentes ao prazo de 30 dias do acerto rescisório.
+                      </div>
+                    )}
+                    {isPedidoDemissao && form.tipo === 'empregado_trabalhado' && (
+                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+                        <strong>Art. 487 §1º CLT:</strong> O empregado cumprirá os 30 dias de aviso prévio trabalhando normalmente, sem redução de jornada (Art. 488 é exclusivo da dispensa pelo empregador).
+                      </div>
+                    )}
                   </div>
 
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-amber-600" />
-                      Data do Aviso <span className="text-red-500">*</span>
+                      {isPedidoDemissao ? "Data do Pedido" : "Data do Aviso"} <span className="text-red-500">*</span>
                     </label>
                     <Input type="date" className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors" value={form.dataDesligamento || ""} onChange={e => setForm({ ...form, dataDesligamento: e.target.value })} />
                   </div>
