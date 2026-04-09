@@ -6580,7 +6580,7 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
-      const servicoCodigosEap = [...new Set(orcItems.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
+      const servicoCodigosEap = [...new Set(orcItems.filter(it => it.servicoCodigo && it.servicoCodigo !== 'composto').map(it => it.servicoCodigo!))];
       const mdoMatMap: Record<string, { temMat: boolean; temMdo: boolean; temEquip: boolean }> = {};
       const mdoDecompMap: Record<string, { profissional: number; ajudante: number; temAjudante: boolean }> = {};
       if (servicoCodigosEap.length > 0) {
@@ -6644,14 +6644,18 @@ Retorne APENAS um JSON válido neste formato:
       }
 
       const items = orcItems.map(it => {
-        const decomp = it.servicoCodigo ? mdoDecompMap[it.servicoCodigo] : undefined;
+        const isComposto = it.tipo === 'Composto' || it.servicoCodigo === 'composto';
+        const realServicoCodigo = isComposto ? null : it.servicoCodigo;
+        const decomp = realServicoCodigo ? mdoDecompMap[realServicoCodigo] : undefined;
         return {
           ...it,
+          servicoCodigo: realServicoCodigo || it.servicoCodigo,
+          isComposto,
           prazoFim: atividadesMap[it.eapCodigo]?.dataFim ?? null,
           duracaoDias: atividadesMap[it.eapCodigo]?.duracaoDias ?? null,
-          temMat: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMat ?? false) : true,
-          temMdo: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temMdo ?? false) : false,
-          temEquip: it.servicoCodigo ? (mdoMatMap[it.servicoCodigo]?.temEquip ?? false) : false,
+          temMat: realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temMat ?? false) : true,
+          temMdo: realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temMdo ?? false) : false,
+          temEquip: realServicoCodigo ? (mdoMatMap[realServicoCodigo]?.temEquip ?? false) : false,
           mdoContratado: mdoContratadoMap[it.id] || 0,
           mdoSaldo: n(it.quantidade) - (mdoContratadoMap[it.id] || 0),
           mdoProfissional: decomp?.profissional ?? 0,

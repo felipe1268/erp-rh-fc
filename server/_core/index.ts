@@ -636,6 +636,48 @@ async function startServer() {
       } catch (e: any) { console.warn("[ColFix] meta MAT/MDO Rev.888:", e?.message ?? e); }
 
       try {
+        const dbComp = await getDb();
+        if (dbComp) {
+          const { sql: sqlComp } = await import("drizzle-orm");
+          const compostoResult = await dbComp.execute(sqlComp`
+            WITH candidates AS (
+              SELECT p.id, p."orcamentoId", p."eapCodigo", p.tipo, p."composicaoTipo", p."servicoCodigo",
+                     p.unidade, p.quantidade
+              FROM orcamento_itens p
+              WHERE p.tipo != 'Composto'
+                AND (p."composicaoTipo" IS NULL OR p."composicaoTipo" != 'COM')
+                AND (p."servicoCodigo" IS NULL OR p."servicoCodigo" = '')
+                AND p.unidade IS NOT NULL AND p.unidade != ''
+                AND p.quantidade IS NOT NULL AND CAST(p.quantidade AS numeric) > 0
+                AND EXISTS (
+                  SELECT 1 FROM orcamento_itens c
+                  WHERE c."orcamentoId" = p."orcamentoId"
+                  AND c."eapCodigo" LIKE p."eapCodigo" || '.%'
+                  AND LENGTH(c."eapCodigo") - LENGTH(REPLACE(c."eapCodigo", '.', ''))
+                    = LENGTH(p."eapCodigo") - LENGTH(REPLACE(p."eapCodigo", '.', '')) + 1
+                  AND c.unidade IS NOT NULL AND c.unidade != ''
+                  AND c.quantidade IS NOT NULL AND CAST(c.quantidade AS numeric) > 0
+                )
+                AND NOT EXISTS (
+                  SELECT 1 FROM orcamento_itens c2
+                  WHERE c2."orcamentoId" = p."orcamentoId"
+                  AND c2."eapCodigo" LIKE p."eapCodigo" || '.%'
+                  AND c2."servicoCodigo" IS NOT NULL AND c2."servicoCodigo" != '' AND c2."servicoCodigo" != 'composto'
+                )
+            )
+            UPDATE orcamento_itens SET tipo = 'Composto', "composicaoTipo" = 'COM', "servicoCodigo" = 'composto'
+            WHERE id IN (SELECT id FROM candidates)
+          `);
+          const cCnt = (compostoResult as any).rowCount ?? 0;
+          if (cCnt > 0) {
+            console.log(`[ColFix] orcamento_itens compostos auto-detectados: ${cCnt} itens Rev.1128`);
+          } else {
+            console.log("[ColFix] orcamento_itens compostos já OK Rev.1128");
+          }
+        }
+      } catch (e: any) { console.warn("[ColFix] compostos Rev.1128:", e?.message ?? e); }
+
+      try {
         const db2 = await getDb();
         if (!db2) return;
         const { sql: sql2 } = await import("drizzle-orm");

@@ -2399,8 +2399,9 @@ export default function Solicitacoes() {
                           {(() => {
                             const allItems = eapQ.data.items;
                             const isLeaf = (it: any) => {
-                              if (form.tipo === "servico") return !!it.servicoCodigo && (it as any).temMdo;
-                              if (form.tipo === "equipamento") return !!it.servicoCodigo && (it as any).temEquip;
+                              if (it.isComposto || it.tipo === "Composto" || it.servicoCodigo === "composto") return false;
+                              if (form.tipo === "servico") return !!it.servicoCodigo && it.servicoCodigo !== "composto" && (it as any).temMdo;
+                              if (form.tipo === "equipamento") return !!it.servicoCodigo && it.servicoCodigo !== "composto" && (it as any).temEquip;
                               if (it.tipo === "grupo" || it.tipo === "Etapa/Subetapa") return false;
                               if (!it.servicoCodigo && allItems.some((c: any) => c.eapCodigo !== it.eapCodigo && c.eapCodigo?.startsWith(it.eapCodigo + "."))) return false;
                               if (form.tipo === "material") return (it as any).temMat !== false;
@@ -2461,6 +2462,9 @@ export default function Solicitacoes() {
                                       <span className="text-amber-700 mr-1.5">{it.eapCodigo}</span>
                                       {it.descricao?.toUpperCase()}
                                     </span>
+                                    {(it.isComposto || it.tipo === "Composto") && (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 shrink-0">COMPOSTO</span>
+                                    )}
                                     <span className="ml-auto text-[10px] text-gray-400 shrink-0">{childLeaves.length} item(ns)</span>
                                     {someChildSelected && (
                                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${allChildSelected ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>

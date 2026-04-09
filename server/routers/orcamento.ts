@@ -738,6 +738,41 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     });
   }
 
+  // ── Post-processing: Auto-detectar itens COMPOSTOS ──────────────────────
+  // Um item é "composto" quando:
+  //   1. Já veio marcado como COM/composto na planilha, OU
+  //   2. Tem quantidade > 0, unidade definida, NÃO tem servicoCodigo real,
+  //      e possui filhos diretos com quantidade e unidade (sub-itens que compõem seu custo)
+  const eapSet = new Set(itens.map(i => i.eapCodigo));
+  for (const item of itens) {
+    if (item.composicaoTipo === 'COM' || item.tipo === 'Composto' || item.servicoCodigo === 'composto') {
+      item.tipo = 'Composto';
+      item.composicaoTipo = 'COM';
+      if (!item.servicoCodigo) item.servicoCodigo = 'composto';
+      continue;
+    }
+    if (item.servicoCodigo && item.servicoCodigo !== '' && item.servicoCodigo !== 'composto') continue;
+    if (!item.unidade || item.quantidade <= 0) continue;
+    const prefix = item.eapCodigo + '.';
+    const hasChildrenWithQty = itens.some(c =>
+      c.eapCodigo.startsWith(prefix) &&
+      c.eapCodigo.split('.').length === item.eapCodigo.split('.').length + 1 &&
+      c.unidade && c.quantidade > 0
+    );
+    if (hasChildrenWithQty) {
+      const hasChildrenWithCPU = itens.some(c =>
+        c.eapCodigo.startsWith(prefix) && c.servicoCodigo && c.servicoCodigo !== '' && c.servicoCodigo !== 'composto'
+      );
+      const isNotEtapa = item.tipo !== 'Etapa/Subetapa' || item.unidade !== '';
+      if (isNotEtapa && !hasChildrenWithCPU) {
+        item.tipo = 'Composto';
+        item.composicaoTipo = 'COM';
+        item.servicoCodigo = 'composto';
+        console.log(`[Orcamento] Auto-detectado COMPOSTO: ${item.eapCodigo} — ${item.descricao.substring(0, 50)}`);
+      }
+    }
+  }
+
   return { itens, colMap };
 }
 

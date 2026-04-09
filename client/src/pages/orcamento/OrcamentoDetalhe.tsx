@@ -1168,6 +1168,9 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                             <span className={item.nivel <= 2 ? "uppercase tracking-wide text-[11px] font-semibold" : "text-[11px]"}>
                               {item.descricao}
                             </span>
+                            {((item as any).composicaoTipo === 'COM' || (item as any).tipo === 'Composto') && (
+                              <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 align-middle">COMPOSTO</span>
+                            )}
                           </td>
 
                           {showCompCol && (
