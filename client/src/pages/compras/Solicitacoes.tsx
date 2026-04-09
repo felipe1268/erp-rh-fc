@@ -3404,7 +3404,77 @@ export default function Solicitacoes() {
                       )}
                     </DialogTitle>
                   </div>
-                  <StatusBadge status={detalhe.status} />
+                  <div className="flex items-center gap-2">
+                    {!["cancelado"].includes(detalhe.status) && (
+                      <Button size="sm" variant="outline"
+                        onClick={() => {
+                          const scTipo = (detalhe as any).tipo || "material";
+                          setForm({
+                            titulo: detalhe.titulo || "",
+                            obraId: detalhe.obraId ? String(detalhe.obraId) : "",
+                            dataNecessidade: detalhe.dataNecessidade || "",
+                            prioridade: detalhe.prioridade || "normal",
+                            observacoes: detalhe.observacoes || "",
+                            tipo: scTipo,
+                            incluirEquipamentos: (detalhe as any).incluirEquipamentos || false,
+                            vehicleId: (detalhe as any).vehicleId ? String((detalhe as any).vehicleId) : "",
+                          });
+                          if (detalhe.obraId) {
+                            const obra = obrasQ.data?.find((o: any) => o.id === detalhe.obraId);
+                            if (obra) setObraSearch(obra.nome || "");
+                          }
+                          setVeiculoSearch(""); setVeiculoOpen(false);
+                          const scItens = (detalhe.itens as any[]).map((it: any): ItemForm => ({
+                            descricao: it.descricao || "",
+                            unidade: it.unidade || "un",
+                            quantidade: String(parseFloat(it.quantidade) || 1),
+                            observacoes: it.observacoes || "",
+                            orcamentoItemId: it.orcamentoItemId ?? undefined,
+                            eapCodigo: it.eapCodigo ?? undefined,
+                            insumoCodigo: it.insumoCodigo ?? undefined,
+                            composicaoCodigo: it.composicaoCodigo ?? undefined,
+                            precoMeta: it.precoMeta ? parseFloat(it.precoMeta) : undefined,
+                            quantidadeServico: it.quantidadeServico ? parseFloat(it.quantidadeServico) : undefined,
+                            coeficiente: it.coeficiente ? parseFloat(it.coeficiente) : undefined,
+                            origemEap: it.origemEap ?? undefined,
+                            incluirAjudante: it.incluirAjudante ?? true,
+                            metaMdoProfissional: it.metaMdoProfissional ? parseFloat(it.metaMdoProfissional) : undefined,
+                            metaMdoAjudante: it.metaMdoAjudante ? parseFloat(it.metaMdoAjudante) : undefined,
+                          }));
+                          setItens(scItens.length > 0 ? scItens : [newItem()]);
+                          const eapIds = new Set<number>();
+                          const eapQtd: Record<number, string> = {};
+                          const ajudOverrides: Record<number, boolean> = {};
+                          for (const it of (detalhe.itens as any[])) {
+                            if (it.orcamentoItemId) {
+                              const orcId = typeof it.orcamentoItemId === "string" ? parseInt(it.orcamentoItemId) : it.orcamentoItemId;
+                              eapIds.add(orcId);
+                              if (it.quantidadeServico) {
+                                eapQtd[orcId] = String(parseFloat(it.quantidadeServico) || "");
+                              }
+                              if (it.incluirAjudante != null) {
+                                ajudOverrides[orcId] = !!it.incluirAjudante;
+                              }
+                            }
+                          }
+                          setSelectedEapIds(eapIds);
+                          setEapQtdServico(eapQtd);
+                          setEditingOriginalEapIds(new Set(eapIds));
+                          setIncluirAjudanteOverride(ajudOverrides);
+                          const allAjud = Object.values(ajudOverrides);
+                          if (allAjud.length > 0) setIncluirAjudanteGlobal(allAjud.every(v => v));
+                          const hasEapItems = (detalhe.itens as any[]).some((it: any) => it.origemEap || it.orcamentoItemId);
+                          setModoSC(hasEapItems ? "eap" : "manual");
+                          setEditingSc({ id: detalhe.id, companyId: detalhe.companyId ?? companyId });
+                          setShowDetalhe(null);
+                          setShowNova(true);
+                        }}
+                        className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs gap-1">
+                        <Pencil className="h-3 w-3" /> Editar
+                      </Button>
+                    )}
+                    <StatusBadge status={detalhe.status} />
+                  </div>
                 </div>
                 {(detalhe.itens as any[])?.some((it: any) => it.semVerba) && (
                   <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-red-50 border-2 border-red-300 rounded-lg print:border-red-500">
@@ -3768,74 +3838,6 @@ export default function Solicitacoes() {
                     </Button>
                   );
                 })()}
-                {!["cancelado"].includes(detalhe.status) && (
-                  <Button size="sm" variant="outline"
-                    onClick={() => {
-                      const scTipo = (detalhe as any).tipo || "material";
-                      setForm({
-                        titulo: detalhe.titulo || "",
-                        obraId: detalhe.obraId ? String(detalhe.obraId) : "",
-                        dataNecessidade: detalhe.dataNecessidade || "",
-                        prioridade: detalhe.prioridade || "normal",
-                        observacoes: detalhe.observacoes || "",
-                        tipo: scTipo,
-                        incluirEquipamentos: (detalhe as any).incluirEquipamentos || false,
-                        vehicleId: (detalhe as any).vehicleId ? String((detalhe as any).vehicleId) : "",
-                      });
-                      if (detalhe.obraId) {
-                        const obra = obrasQ.data?.find((o: any) => o.id === detalhe.obraId);
-                        if (obra) setObraSearch(obra.nome || "");
-                      }
-                      setVeiculoSearch(""); setVeiculoOpen(false);
-                      const scItens = (detalhe.itens as any[]).map((it: any): ItemForm => ({
-                        descricao: it.descricao || "",
-                        unidade: it.unidade || "un",
-                        quantidade: String(parseFloat(it.quantidade) || 1),
-                        observacoes: it.observacoes || "",
-                        orcamentoItemId: it.orcamentoItemId ?? undefined,
-                        eapCodigo: it.eapCodigo ?? undefined,
-                        insumoCodigo: it.insumoCodigo ?? undefined,
-                        composicaoCodigo: it.composicaoCodigo ?? undefined,
-                        precoMeta: it.precoMeta ? parseFloat(it.precoMeta) : undefined,
-                        quantidadeServico: it.quantidadeServico ? parseFloat(it.quantidadeServico) : undefined,
-                        coeficiente: it.coeficiente ? parseFloat(it.coeficiente) : undefined,
-                        origemEap: it.origemEap ?? undefined,
-                        incluirAjudante: it.incluirAjudante ?? true,
-                        metaMdoProfissional: it.metaMdoProfissional ? parseFloat(it.metaMdoProfissional) : undefined,
-                        metaMdoAjudante: it.metaMdoAjudante ? parseFloat(it.metaMdoAjudante) : undefined,
-                      }));
-                      setItens(scItens.length > 0 ? scItens : [newItem()]);
-                      const eapIds = new Set<number>();
-                      const eapQtd: Record<number, string> = {};
-                      const ajudOverrides: Record<number, boolean> = {};
-                      for (const it of (detalhe.itens as any[])) {
-                        if (it.orcamentoItemId) {
-                          const orcId = typeof it.orcamentoItemId === "string" ? parseInt(it.orcamentoItemId) : it.orcamentoItemId;
-                          eapIds.add(orcId);
-                          if (it.quantidadeServico) {
-                            eapQtd[orcId] = String(parseFloat(it.quantidadeServico) || "");
-                          }
-                          if (it.incluirAjudante != null) {
-                            ajudOverrides[orcId] = !!it.incluirAjudante;
-                          }
-                        }
-                      }
-                      setSelectedEapIds(eapIds);
-                      setEapQtdServico(eapQtd);
-                      setEditingOriginalEapIds(new Set(eapIds));
-                      setIncluirAjudanteOverride(ajudOverrides);
-                      const allAjud = Object.values(ajudOverrides);
-                      if (allAjud.length > 0) setIncluirAjudanteGlobal(allAjud.every(v => v));
-                      const hasEapItems = (detalhe.itens as any[]).some((it: any) => it.origemEap || it.orcamentoItemId);
-                      setModoSC(hasEapItems ? "eap" : "manual");
-                      setEditingSc({ id: detalhe.id, companyId: detalhe.companyId ?? companyId });
-                      setShowDetalhe(null);
-                      setShowNova(true);
-                    }}
-                    className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs gap-1">
-                    <Pencil className="h-3 w-3" /> Editar
-                  </Button>
-                )}
                 <Button size="sm" variant="outline"
                   onClick={() => duplicar.mutate({ id: detalhe.id, companyId })}
                   disabled={duplicar.isPending}
