@@ -44,6 +44,7 @@ function calcularPeriodosFerias(dataAdmissao: string) {
   const admissao = new Date(dataAdmissao + 'T00:00:00');
   const hoje = new Date();
   const periodos = [];
+  const limiteAntigoStr = `${hoje.getFullYear() - 2}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
   
   let inicioAquisitivo = new Date(admissao);
   while (inicioAquisitivo < hoje) {
@@ -55,12 +56,15 @@ function calcularPeriodosFerias(dataAdmissao: string) {
     fimConcessivo.setFullYear(fimConcessivo.getFullYear() + 1);
     
     const vencida = hoje > fimConcessivo;
+    const fimConcessivoStr = fimConcessivo.toISOString().split("T")[0];
+    const antigoPreSistema = fimConcessivoStr < limiteAntigoStr;
     
     periodos.push({
       inicio: inicioAquisitivo.toISOString().split("T")[0],
       fim: fimAquisitivo.toISOString().split("T")[0],
       fimConcessivo: fimConcessivo.toISOString().split("T")[0],
       vencida,
+      antigoPreSistema,
       adquirido: fimAquisitivo <= hoje,
     });
     
@@ -1792,15 +1796,17 @@ export const avisoPrevioFeriasRouter = router({
         
         for (const p of periodos) {
           if (p.adquirido && !existentesSet.has(p.inicio)) {
+            const statusPeriodo = p.antigoPreSistema ? 'concluida' : (p.vencida ? 'vencida' : 'pendente');
             await db.insert(vacationPeriods).values({
               companyId: input.companyId,
               employeeId: input.employeeId,
               periodoAquisitivoInicio: p.inicio,
               periodoAquisitivoFim: p.fim,
               periodoConcessivoFim: p.fimConcessivo,
-              status: p.vencida ? 'vencida' : 'pendente',
+              status: statusPeriodo,
               vencida: p.vencida ? 1 : 0,
               pagamentoEmDobro: 0,
+              observacoes: p.antigoPreSistema ? 'Período anterior ao sistema — considerado como pago' : undefined,
             });
             criados++;
           }
@@ -2211,25 +2217,26 @@ export const avisoPrevioFeriasRouter = router({
           for (const p of periodos) {
             if (p.adquirido && !existentesSet.has(p.inicio)) {
               numPeriodo++;
-              // Calcular data sugerida: 30 dias antes do fim do concessivo
               const fimConcessivo = new Date(p.fimConcessivo + 'T00:00:00');
               const sugeridaInicio = new Date(fimConcessivo);
               sugeridaInicio.setDate(sugeridaInicio.getDate() - 30);
               const sugeridaFim = new Date(fimConcessivo);
               sugeridaFim.setDate(sugeridaFim.getDate() - 1);
 
+              const statusPeriodo = p.antigoPreSistema ? 'concluida' : (p.vencida ? 'vencida' : 'pendente');
               await db.insert(vacationPeriods).values({
                 companyId: input.companyId,
                 employeeId: emp.id,
                 periodoAquisitivoInicio: p.inicio,
                 periodoAquisitivoFim: p.fim,
                 periodoConcessivoFim: p.fimConcessivo,
-                status: p.vencida ? 'vencida' : 'pendente',
+                status: statusPeriodo,
                 vencida: p.vencida ? 1 : 0,
                 pagamentoEmDobro: 0,
                 numeroPeriodo: numPeriodo,
                 dataSugeridaInicio: sugeridaInicio.toISOString().split('T')[0],
                 dataSugeridaFim: sugeridaFim.toISOString().split('T')[0],
+                observacoes: p.antigoPreSistema ? 'Período anterior ao sistema — considerado como pago' : undefined,
               });
               totalCriados++;
             }
@@ -2302,7 +2309,7 @@ export const avisoPrevioFeriasRouter = router({
           .where(and(
             companyFilter(vacationPeriods.companyId, input),
             eq(vacationPeriods.employeeId, input.employeeId),
-            eq(vacationPeriods.status, 'vencida'),
+            sql`(${vacationPeriods.status} = 'vencida' OR (${vacationPeriods.status} = 'pendente' AND ${vacationPeriods.periodoConcessivoFim} < CURRENT_DATE))`,
             isNull(vacationPeriods.deletedAt),
           ));
         let confirmados = 0;
@@ -2519,7 +2526,7 @@ export const avisoPrevioFeriasRouter = router({
         .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
         .where(and(
           companyFilter(vacationPeriods.companyId, input),
-          eq(vacationPeriods.status, 'vencida'),
+          sql`(${vacationPeriods.status} = 'vencida' OR (${vacationPeriods.status} = 'pendente' AND ${vacationPeriods.periodoConcessivoFim} < CURRENT_DATE))`,
           isNull(vacationPeriods.deletedAt),
           sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
           isNull(employees.deletedAt),
