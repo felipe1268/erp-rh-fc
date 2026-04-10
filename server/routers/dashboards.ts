@@ -2568,7 +2568,7 @@ async function getDashDocumentos(companyId: number, companyIds?: number[]) {
   ] = await Promise.all([
     // ASOs
     db.select({ count: sql<number>`count(*)` }).from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt))),
-    db.select({ count: sql<number>`count(*)` }).from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${today}`)),
+    db.select({ count: sql<number>`count(*)` }).from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${today} AND NOT EXISTS (SELECT 1 FROM asos a2 WHERE a2."employeeId" = ${asos.employeeId} AND a2."deletedAt" IS NULL AND a2."dataExame" > ${asos.dataExame} AND a2."dataValidade" >= ${today})`)),
     db.select({ count: sql<number>`count(*)` }).from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d30}`)),
     db.select({ count: sql<number>`count(*)` }).from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d60}`)),
     db.select({ count: sql<number>`count(*)` }).from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d90}`)),
@@ -2576,7 +2576,7 @@ async function getDashDocumentos(companyId: number, companyIds?: number[]) {
     db.select({ resultado: asos.resultado, count: sql<number>`count(*)` }).from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt))).groupBy(asos.resultado),
     db.select({ id: asos.id, employeeId: asos.employeeId, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, tipo: asos.tipo, dataExame: asos.dataExame, dataValidade: asos.dataValidade, resultado: asos.resultado, medico: asos.medico })
       .from(asos).innerJoin(employees, eq(asos.employeeId, employees.id))
-      .where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${today}`, isNull(employees.deletedAt), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`))
+      .where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${today} AND NOT EXISTS (SELECT 1 FROM asos a2 WHERE a2."employeeId" = ${asos.employeeId} AND a2."deletedAt" IS NULL AND a2."dataExame" > ${asos.dataExame} AND a2."dataValidade" >= ${today})`, isNull(employees.deletedAt), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`))
       .orderBy(asc(asos.dataValidade)).limit(50),
     db.select({ id: asos.id, employeeId: asos.employeeId, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, tipo: asos.tipo, dataExame: asos.dataExame, dataValidade: asos.dataValidade, resultado: asos.resultado, medico: asos.medico })
       .from(asos).innerJoin(employees, eq(asos.employeeId, employees.id))
@@ -2672,11 +2672,12 @@ async function getDashControleDocumentos(companyId: number, companyIds?: number[
   }
 
   const asoTotal = allAsos.length;
-  const asoVencidos = allAsos.filter(a => a.dataValidade && a.dataValidade < today).length;
-  const asoAVencer30 = allAsos.filter(a => a.dataValidade && a.dataValidade >= today && a.dataValidade <= d30).length;
-  const asoAVencer60 = allAsos.filter(a => a.dataValidade && a.dataValidade >= today && a.dataValidade <= d60).length;
-  const asoAVencer90 = allAsos.filter(a => a.dataValidade && a.dataValidade >= today && a.dataValidade <= d90).length;
-  const asoEmDia = allAsos.filter(a => a.dataValidade && a.dataValidade > d90).length;
+  const latestAsoPerEmp = Array.from(lastAsoMap.values());
+  const asoVencidos = latestAsoPerEmp.filter(a => a.dataValidade && a.dataValidade < today).length;
+  const asoAVencer30 = latestAsoPerEmp.filter(a => a.dataValidade && a.dataValidade >= today && a.dataValidade <= d30).length;
+  const asoAVencer60 = latestAsoPerEmp.filter(a => a.dataValidade && a.dataValidade >= today && a.dataValidade <= d60).length;
+  const asoAVencer90 = latestAsoPerEmp.filter(a => a.dataValidade && a.dataValidade >= today && a.dataValidade <= d90).length;
+  const asoEmDia = latestAsoPerEmp.filter(a => a.dataValidade && a.dataValidade > d90).length;
 
   // Funcionários ativos sem ASO válido
   const funcSemAso: number[] = [];

@@ -391,27 +391,38 @@ export const controleDocumentosRouter = router({
           .orderBy(employees.nomeCompleto);
 
         const byEmployeeTipo = new Map<string, any[]>();
+        const byEmployee = new Map<number, any[]>();
         for (const r of rows) {
           const key = `${r.employeeId}_${r.tipo}`;
           if (!byEmployeeTipo.has(key)) byEmployeeTipo.set(key, []);
           byEmployeeTipo.get(key)!.push(r);
+          if (!byEmployee.has(r.employeeId)) byEmployee.set(r.employeeId, []);
+          byEmployee.get(r.employeeId)!.push(r);
         }
 
-        const latestByEmployee = new Map<string, string>();
+        const latestByEmployeeTipo = new Map<string, string>();
         for (const [key, group] of byEmployeeTipo) {
           group.sort((a: any, b: any) => (b.dataExame || "").localeCompare(a.dataExame || "") || b.id - a.id);
-          latestByEmployee.set(key, group[0].id.toString());
+          latestByEmployeeTipo.set(key, group[0].id.toString());
         }
 
         return rows.map((r: any) => {
           const key = `${r.employeeId}_${r.tipo}`;
-          const isLatest = latestByEmployee.get(key) === r.id.toString();
+          const isLatestOfType = latestByEmployeeTipo.get(key) === r.id.toString();
           const statusCalc = calcularStatusASO(r.dataValidade);
 
-          if (!isLatest && statusCalc.status === "VENCIDO") {
-            return { ...r, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
+          if (statusCalc.status === "VENCIDO") {
+            const empGroup = byEmployee.get(r.employeeId) || [];
+            const hasNewerValidAso = empGroup.some((a: any) =>
+              a.id !== r.id &&
+              (a.dataExame || "").localeCompare(r.dataExame || "") > 0 &&
+              calcularStatusASO(a.dataValidade).status !== "VENCIDO"
+            );
+            if (hasNewerValidAso || !isLatestOfType) {
+              return { ...r, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
+            }
           }
-          return { ...r, ...statusCalc, isHistorico: !isLatest };
+          return { ...r, ...statusCalc, isHistorico: !isLatestOfType };
         });
       }),
 
@@ -1102,13 +1113,25 @@ export const controleDocumentosRouter = router({
         .innerJoin(employees, eq(warnings.employeeId, employees.id))
         .where(and(companyFilter(warnings.companyId, input), isNull(employees.deletedAt), isNull(warnings.deletedAt)));
 
-      // ASOs vencidos
       const hoje = new Date().toISOString().split("T")[0];
-      const [asosVencidos] = await db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(asos)
-        .innerJoin(employees, eq(asos.employeeId, employees.id))
-        .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${hoje}`));
+      const companyIds = resolveCompanyIds(input);
+      const companyIdsSql = sql.join(companyIds.map(id => sql`${id}`), sql`,`);
+      const asosVencidosRows = ((await db.execute(sql`
+        SELECT COUNT(*) as count FROM asos a
+        INNER JOIN employees e ON a."employeeId" = e.id
+        WHERE a."companyId" IN (${companyIdsSql})
+          AND e."deletedAt" IS NULL
+          AND a."deletedAt" IS NULL
+          AND a."dataValidade" < ${hoje}
+          AND NOT EXISTS (
+            SELECT 1 FROM asos a2
+            WHERE a2."employeeId" = a."employeeId"
+              AND a2."deletedAt" IS NULL
+              AND a2."dataExame" > a."dataExame"
+              AND a2."dataValidade" >= ${hoje}
+          )
+      `)) as any).rows || [];
+      const asosVencidos = { count: Number(asosVencidosRows[0]?.count || 0) };
 
       // ASOs a vencer em 30 dias
       const em30dias = new Date();
@@ -1219,9 +1242,29 @@ export const controleDocumentosRouter = router({
         if (jf) funcaoDetalhes = { nome: jf.nome, cbo: jf.cbo, descricao: jf.descricao, ordemServico: jf.ordemServico };
       }
 
-      // ASOs
       const empAsos = await db.select().from(asos).where(and(eq(asos.employeeId, input.employeeId), isNull(asos.deletedAt))).orderBy(desc(asos.dataExame));
-      const asosComStatus = empAsos.map(a => ({ ...a, ...calcularStatusASO(a.dataValidade || "") }));
+
+      const asoByTipo = new Map<string, any>();
+      for (const a of empAsos) {
+        if (!asoByTipo.has(a.tipo || "")) asoByTipo.set(a.tipo || "", a);
+      }
+
+      const asosComStatus = empAsos.map(a => {
+        const statusCalc = calcularStatusASO(a.dataValidade || "");
+        const isLatestOfType = asoByTipo.get(a.tipo || "")?.id === a.id;
+
+        if (statusCalc.status === "VENCIDO") {
+          const hasNewerValidAso = empAsos.some(other =>
+            other.id !== a.id &&
+            (other.dataExame || "").localeCompare(a.dataExame || "") > 0 &&
+            calcularStatusASO(other.dataValidade || "").status !== "VENCIDO"
+          );
+          if (hasNewerValidAso || !isLatestOfType) {
+            return { ...a, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
+          }
+        }
+        return { ...a, ...statusCalc, isHistorico: !isLatestOfType };
+      });
       // Treinamentos
       const empTreinamentos = await db.select().from(trainings).where(and(eq(trainings.employeeId, input.employeeId), isNull(trainings.deletedAt))).orderBy(desc(trainings.dataRealizacao));
       // Atestados
@@ -1755,10 +1798,13 @@ export const controleDocumentosRouter = router({
         .orderBy(trainings.dataValidade);
 
       const asoByEmpTipo = new Map<string, any[]>();
+      const asoByEmp = new Map<number, any[]>();
       for (const r of asoRows) {
         const key = `${r.employeeId}_${r.tipo}`;
         if (!asoByEmpTipo.has(key)) asoByEmpTipo.set(key, []);
         asoByEmpTipo.get(key)!.push(r);
+        if (!asoByEmp.has(r.employeeId)) asoByEmp.set(r.employeeId, []);
+        asoByEmp.get(r.employeeId)!.push(r);
       }
       const latestAsoIds = new Set<number>();
       for (const [, group] of asoByEmpTipo) {
@@ -1770,8 +1816,18 @@ export const controleDocumentosRouter = router({
         .filter((r: any) => latestAsoIds.has(r.id))
         .map((r: any) => {
           const { status, diasRestantes } = calcularStatusASO(r.dataValidade);
+          if (status === "VENCIDO") {
+            const empGroup = asoByEmp.get(r.employeeId) || [];
+            const hasNewerValidAso = empGroup.some((a: any) =>
+              a.id !== r.id &&
+              (a.dataExame || "").localeCompare(r.dataExame || "") > 0 &&
+              calcularStatusASO(a.dataValidade).status !== "VENCIDO"
+            );
+            if (hasNewerValidAso) return null;
+          }
           return { ...r, tipoDoc: "ASO" as const, descricao: r.tipo, status, diasRestantes };
-        });
+        })
+        .filter(Boolean) as any[];
 
       const treinsComStatus = treinRows.map((r: any) => {
         const { status, diasRestantes } = calcularStatusASO(r.dataValidade!);

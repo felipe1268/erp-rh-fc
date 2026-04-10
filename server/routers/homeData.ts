@@ -120,15 +120,18 @@ export const homeDataRouter = router({
       // 3. ASOs VENCENDO (próximos 60 dias) ou VENCIDOS
       // ============================================================
       const allAsos = await db.select().from(asos)
-        .where(companyFilter(asos.companyId, input));
+        .where(and(companyFilter(asos.companyId, input), isNull(asos.deletedAt)));
 
-      // Pegar o ASO mais recente de cada funcionário ativo
-      const asoMap = new Map<number, typeof allAsos[0]>();
+      const asosByEmp = new Map<number, typeof allAsos>();
       for (const aso of allAsos) {
-        const existing = asoMap.get(aso.employeeId);
-        if (!existing || toDateStr(aso.dataValidade) > toDateStr(existing.dataValidade)) {
-          asoMap.set(aso.employeeId, aso);
-        }
+        if (!asosByEmp.has(aso.employeeId)) asosByEmp.set(aso.employeeId, []);
+        asosByEmp.get(aso.employeeId)!.push(aso);
+      }
+
+      const asoMap = new Map<number, typeof allAsos[0]>();
+      for (const [empId, group] of asosByEmp) {
+        group.sort((a, b) => (toDateStr(b.dataExame) || "").localeCompare(toDateStr(a.dataExame) || ""));
+        asoMap.set(empId, group[0]);
       }
 
       const ativosIds = new Set(ativos.map(e => e.id));
@@ -155,7 +158,14 @@ export const homeDataRouter = router({
         const emp = empMap.get(empId);
         if (!emp) continue;
 
-        const validadeStr = toDateStr(aso.dataValidade!);
+        const empAsos = asosByEmp.get(empId) || [];
+        const bestValidAso = empAsos.find(a => {
+          const v = new Date(toDateStr(a.dataValidade!) + "T00:00:00");
+          return v.getTime() >= hoje.getTime();
+        });
+        const referenceAso = bestValidAso || aso;
+
+        const validadeStr = toDateStr(referenceAso.dataValidade!);
         const validade = new Date(validadeStr + "T00:00:00");
         const diffMs = validade.getTime() - hoje.getTime();
         const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
