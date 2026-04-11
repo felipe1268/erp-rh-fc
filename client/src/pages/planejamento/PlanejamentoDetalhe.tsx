@@ -8307,6 +8307,8 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
   const fileRefRev = useRef<HTMLInputElement>(null);
   const [confirmExcluirId, setConfirmExcluirId] = useState<number | null>(null);
   const [diffExpandido, setDiffExpandido] = useState<number | null>(null);
+  const [editModalRev, setEditModalRev] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ motivo: "", responsavel: "", dataRevisao: "", observacao: "", descricao: "" });
 
   // ID da revisão mais recente que não é Baseline (pode ser excluída)
   const idMaisRecente = useMemo(() => {
@@ -8333,6 +8335,26 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
     onSuccess: () => { utils.planejamento.getProjetoById.invalidate({ id: projetoId }); setConfirmExcluirId(null); },
     onError: (e) => { alert(e.message); setConfirmExcluirId(null); },
   });
+
+  const editarMutation = trpc.planejamento.editarRevisao.useMutation({
+    onSuccess: () => {
+      utils.planejamento.getProjetoById.invalidate({ id: projetoId });
+      setEditModalRev(null);
+      toast.success("Revisão atualizada com sucesso.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function abrirEdicao(rev: any) {
+    setEditForm({
+      motivo: rev.motivo || "",
+      responsavel: rev.responsavel || "",
+      dataRevisao: rev.dataRevisao || "",
+      observacao: rev.observacao || "",
+      descricao: rev.descricao || "",
+    });
+    setEditModalRev(rev);
+  }
 
   const aprovarMutation = trpc.planejamento.aprovarRevisao.useMutation({
     onSuccess: () => {
@@ -8465,6 +8487,15 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
                 }`}>
                   {r.status}
                 </span>
+                {isAdminMaster && !r.isBaseline && (
+                  <Button
+                    size="sm" variant="ghost"
+                    className="text-xs h-6 px-2 gap-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    onClick={() => abrirEdicao(r)}
+                  >
+                    <Pencil className="h-3 w-3" /> Editar
+                  </Button>
+                )}
                 {isAdminMaster && !r.isBaseline && r.status !== "cancelada" && (
                   <Button
                     size="sm" variant="ghost"
@@ -8616,6 +8647,67 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
         <p>• Todos os outros módulos (Gantt, Avanço, REFIS, Caminho Crítico etc.) usam sempre a revisão ativa.</p>
         <p>• Cancelar e excluir revisões: disponível apenas para administradores. A exclusão segue ordem decrescente (somente a mais recente pode ser excluída).</p>
       </div>
+
+      <Dialog open={!!editModalRev} onOpenChange={v => { if (!v) setEditModalRev(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Revisão {editModalRev ? `Rev. ${String(editModalRev.numero).padStart(2, "0")}` : ""}</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 mt-1">
+              Altere os dados da revisão. As atividades do cronograma não são alteradas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-1">
+            <div>
+              <Label className="text-xs">Descrição</Label>
+              <Input value={editForm.descricao}
+                onChange={e => setEditForm(f => ({ ...f, descricao: e.target.value }))}
+                placeholder={`Rev. ${editModalRev ? String(editModalRev.numero).padStart(2, "0") : ""}`} className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">Motivo do Replanejamento</Label>
+              <textarea
+                value={editForm.motivo}
+                onChange={e => setEditForm(f => ({ ...f, motivo: e.target.value }))}
+                placeholder="Motivo..."
+                className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background resize-none"
+                rows={2}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Data da Revisão</Label>
+                <Input type="date" value={editForm.dataRevisao}
+                  onChange={e => setEditForm(f => ({ ...f, dataRevisao: e.target.value }))} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs">Responsável</Label>
+                <Input value={editForm.responsavel}
+                  onChange={e => setEditForm(f => ({ ...f, responsavel: e.target.value }))}
+                  placeholder="Engenheiro" className="mt-1" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Observação</Label>
+              <Input value={editForm.observacao}
+                onChange={e => setEditForm(f => ({ ...f, observacao: e.target.value }))}
+                placeholder="Notas adicionais..." className="mt-1" />
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" onClick={() => setEditModalRev(null)} disabled={editarMutation.isPending}>Cancelar</Button>
+              <Button
+                disabled={editarMutation.isPending}
+                onClick={() => editarMutation.mutate({ id: editModalRev.id, ...editForm })}
+                className="bg-blue-600 hover:bg-blue-700 gap-1.5"
+              >
+                {editarMutation.isPending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
+                  : <><Save className="h-4 w-4" /> Salvar Alterações</>
+                }
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={modalAberto} onOpenChange={v => { if (!v) fecharModal(); else setModalAberto(true); }}>
         <DialogContent className="max-w-md">

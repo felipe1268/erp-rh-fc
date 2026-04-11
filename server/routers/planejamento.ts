@@ -389,6 +389,41 @@ export const planejamentoRouter = router({
       return { success: true };
     }),
 
+  editarRevisao: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      motivo: z.string().optional(),
+      responsavel: z.string().optional(),
+      dataRevisao: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida").optional(),
+      observacao: z.string().optional(),
+      descricao: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin) throw new Error("Apenas administradores podem editar revisões.");
+      const db = await getDb();
+      const [rev] = await db.select().from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.id, input.id));
+      if (!rev) throw new Error("Revisão não encontrada.");
+      if (rev.isBaseline) throw new Error("O Baseline não pode ser editado.");
+      if (rev.projetoId && ctx.user.role !== "admin_master") {
+        const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, rev.projetoId));
+        if (proj && String(proj.companyId) !== String(ctx.user.companyId))
+          throw new Error("Sem permissão para editar esta revisão.");
+      }
+      const updates: Record<string, any> = {};
+      if (input.motivo !== undefined) updates.motivo = input.motivo;
+      if (input.responsavel !== undefined) updates.responsavel = input.responsavel;
+      if (input.dataRevisao !== undefined) updates.dataRevisao = input.dataRevisao;
+      if (input.observacao !== undefined) updates.observacao = input.observacao;
+      if (input.descricao !== undefined) updates.descricao = input.descricao;
+      if (Object.keys(updates).length === 0) return { success: true };
+      await db.update(planejamentoRevisoes).set(updates)
+        .where(eq(planejamentoRevisoes.id, input.id));
+      return { success: true };
+    }),
+
   excluirRevisao: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
@@ -399,6 +434,12 @@ export const planejamentoRouter = router({
         .where(eq(planejamentoRevisoes.id, input.id));
       if (!rev) throw new Error("Revisão não encontrada.");
       if (rev.isBaseline) throw new Error("O Baseline não pode ser excluído.");
+      if (rev.projetoId && ctx.user.role !== "admin_master") {
+        const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, rev.projetoId));
+        if (proj && String(proj.companyId) !== String(ctx.user.companyId))
+          throw new Error("Sem permissão para excluir esta revisão.");
+      }
 
       // Garante que só a revisão de maior número pode ser excluída
       const todasNaoProjeto = await db.select().from(planejamentoRevisoes)
