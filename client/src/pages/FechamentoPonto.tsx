@@ -21,7 +21,7 @@ import {
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
   ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight, FileText, Copy,
-  ChevronsUpDown, Check, Plus, X
+  ChevronsUpDown, Check, Plus, X, ClipboardList
 } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -963,6 +963,8 @@ export default function FechamentoPonto() {
     );
   };
 
+  const [pendingDirectUpload, setPendingDirectUpload] = useState(false);
+
   const handleUpload = async () => {
     if (uploadFiles.length === 0) return toast.error("Selecione pelo menos um arquivo DIXI");
     if (validationResult && !validationResult.allValid) {
@@ -972,10 +974,11 @@ export default function FechamentoPonto() {
     try {
       const filesData = await getFilesBase64();
       const preview = await previewMut.mutateAsync({ companyId, companyIds, files: filesData });
-      if (preview.hasExistingData) {
+      if (preview.hasExistingData || (preview.apontamentosCampo && preview.apontamentosCampo.length > 0)) {
         setPreviewData(preview);
         setSelectedEmployeeIds(new Set(preview.employees.map((e: any) => e.employeeId)));
         setSelectiveSearch("");
+        setPendingDirectUpload(!preview.hasExistingData);
         setShowSelectiveDialog(true);
       } else {
         setUploading(true);
@@ -3726,6 +3729,7 @@ export default function FechamentoPonto() {
           <div className="w-full max-w-4xl mx-auto">
             {previewData && !uploading && !uploadResult && (
               <div className="space-y-4">
+                {previewData.hasExistingData && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                   <div className="flex items-start gap-3">
                     <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
@@ -3738,7 +3742,52 @@ export default function FechamentoPonto() {
                     </div>
                   </div>
                 </div>
+                )}
 
+                {previewData.apontamentosCampo && previewData.apontamentosCampo.length > 0 && (
+                  <div className="bg-blue-50 border border-blue-300 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <ClipboardList className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-blue-900">Apontamentos de Campo neste período</p>
+                        <p className="text-sm text-blue-700 mt-1">
+                          Existem <strong>{previewData.apontamentosCampo.length}</strong> apontamento(s) de campo registrados para funcionários deste arquivo.
+                          Os registros manuais serão <strong>preservados</strong> e o DIXI não sobrescreverá esses dias.
+                        </p>
+                        <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                          {previewData.apontamentosCampo.map((ap: any, idx: number) => (
+                            <div key={idx} className="flex items-center gap-2 text-xs bg-blue-100/60 rounded px-2 py-1">
+                              <span className="font-medium text-blue-900 min-w-[140px] truncate">{ap.nomeCompleto}</span>
+                              <span className="text-blue-600">{ap.data?.split('-').reverse().join('/')}</span>
+                              <span className="text-blue-800 truncate flex-1">{ap.tipoOcorrencia}: {ap.descricao}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${ap.status === 'resolvido' ? 'bg-green-200 text-green-800' : ap.status === 'em_analise' ? 'bg-yellow-200 text-yellow-800' : 'bg-gray-200 text-gray-700'}`}>
+                                {ap.status === 'resolvido' ? 'Resolvido' : ap.status === 'em_analise' ? 'Em Análise' : 'Pendente'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {pendingDirectUpload ? (
+                  <div className="flex justify-end gap-3">
+                    <Button variant="outline" onClick={() => { setShowSelectiveDialog(false); setPendingDirectUpload(false); }}>Cancelar</Button>
+                    <Button className="bg-[#1B2A4A] hover:bg-[#243660]" onClick={async () => {
+                      setShowSelectiveDialog(false);
+                      setPendingDirectUpload(false);
+                      setUploading(true);
+                      setUploadResult(null);
+                      try {
+                        const filesData = await getFilesBase64();
+                        await uploadMut.mutateAsync({ companyId, companyIds, files: filesData });
+                      } catch (e) {} finally { setUploading(false); }
+                    }}>
+                      Confirmar Importação
+                    </Button>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => { setShowReplaceAllConfirm(true); setReplaceAllPassword(""); setReplaceAllPasswordError(""); }}
                     className="border-2 border-red-200 bg-white rounded-xl p-4 hover:bg-red-50 hover:border-red-400 transition-all text-left group">
@@ -3841,6 +3890,7 @@ export default function FechamentoPonto() {
                     Importar {selectedEmployeeIds.size} funcionário(s)
                   </Button>
                 </div>
+                )}
               </div>
             )}
             {uploading && (

@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import {
-  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings, vacationPeriods
+  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings, vacationPeriods, fieldNotes
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -769,10 +769,45 @@ export const fechamentoPontoRouter = router({
 
       const hasExistingData = Object.keys(existingByEmployee).length > 0;
 
+      let apontamentosCampo: Array<{ employeeId: number; nomeCompleto: string; data: string; tipoOcorrencia: string; descricao: string; status: string }> = [];
+      if (mesesArr.length > 0) {
+        const empIds = previewEmployees.map(e => e.employeeId);
+        if (empIds.length > 0) {
+          const firstDay = `${mesesArr[0]}-01`;
+          const lastMes = mesesArr[mesesArr.length - 1];
+          const [ly, lm] = lastMes.split('-').map(Number);
+          const lastDay = `${lastMes}-${new Date(ly, lm, 0).getDate()}`;
+          const fnRows = await db.select({
+            employeeId: fieldNotes.employeeId,
+            data: fieldNotes.data,
+            tipoOcorrencia: fieldNotes.tipoOcorrencia,
+            descricao: fieldNotes.descricao,
+            status: fieldNotes.status,
+          }).from(fieldNotes).where(and(
+            companyFilter(fieldNotes.companyId, input),
+            sql`${fieldNotes.deletedAt} IS NULL`,
+            sql`${fieldNotes.data} BETWEEN ${firstDay} AND ${lastDay}`,
+            inArray(fieldNotes.employeeId, empIds),
+          ));
+          for (const fn of fnRows) {
+            const emp = empList.find((e: any) => e.id === fn.employeeId);
+            apontamentosCampo.push({
+              employeeId: fn.employeeId,
+              nomeCompleto: emp?.nomeCompleto || `ID ${fn.employeeId}`,
+              data: fn.data,
+              tipoOcorrencia: fn.tipoOcorrencia,
+              descricao: fn.descricao,
+              status: fn.status,
+            });
+          }
+        }
+      }
+
       return {
         hasExistingData,
         obraId, obraNome, deviceSerial,
         meses: mesesArr,
+        apontamentosCampo,
         employees: previewEmployees.map(e => ({
           ...e,
           jaImportado: !!existingByEmployee[e.employeeId],
