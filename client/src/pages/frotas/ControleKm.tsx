@@ -56,6 +56,8 @@ export default function ControleKm() {
   const [motPadraoBusca, setMotPadraoBusca] = useState("");
   const [motPadraoVal, setMotPadraoVal] = useState("");
   const [motPadraoInicio, setMotPadraoInicio] = useState("");
+  const [catalogadoFilterDate, setCatalogadoFilterDate] = useState("");
+  const [catalogadoFilterPlaca, setCatalogadoFilterPlaca] = useState("");
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
@@ -745,11 +747,43 @@ export default function ControleKm() {
 
               <TabsContent value="catalogado" className="mt-4">
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Route className="h-4 w-4" /> Km Catalogado por Dia (Histórico Persistente)
-                    </CardTitle>
-                    <p className="text-xs text-gray-500">Dados coletados automaticamente a cada 30 min e armazenados no banco de dados</p>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <div>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Route className="h-4 w-4" /> Km Catalogado por Dia (Histórico Persistente)
+                        </CardTitle>
+                        <p className="text-xs text-gray-500 mt-1">Dados coletados automaticamente a cada 30 min e armazenados no banco de dados</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                          <Input
+                            type="date"
+                            className="w-[150px] h-8 text-sm"
+                            value={catalogadoFilterDate}
+                            onChange={e => setCatalogadoFilterDate(e.target.value)}
+                            placeholder="Filtrar dia"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Car className="h-3.5 w-3.5 text-gray-400" />
+                          <Input
+                            type="text"
+                            className="w-[130px] h-8 text-sm"
+                            value={catalogadoFilterPlaca}
+                            onChange={e => setCatalogadoFilterPlaca(e.target.value.toUpperCase())}
+                            placeholder="Placa"
+                          />
+                        </div>
+                        {(catalogadoFilterDate || catalogadoFilterPlaca) && (
+                          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-gray-500"
+                            onClick={() => { setCatalogadoFilterDate(""); setCatalogadoFilterPlaca(""); }}>
+                            <X className="h-3 w-3 mr-1" /> Limpar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {dailyKmQ.isLoading ? (
@@ -770,11 +804,28 @@ export default function ControleKm() {
                         if (!byDate[d]) byDate[d] = [];
                         byDate[d].push(r);
                       });
-                      const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+                      const allDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+                      const dates = allDates.filter(d => {
+                        if (catalogadoFilterDate && d !== catalogadoFilterDate) return false;
+                        if (catalogadoFilterPlaca) {
+                          const hasMatch = byDate[d].some((r: any) => (r.placa || "").toUpperCase().includes(catalogadoFilterPlaca));
+                          if (!hasMatch) return false;
+                        }
+                        return true;
+                      });
                       return (
                         <div className="space-y-4">
+                          {dates.length === 0 && (
+                            <div className="text-center py-8 text-gray-400">
+                              <Navigation className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                              <p className="text-sm">Nenhum registro encontrado para os filtros selecionados</p>
+                            </div>
+                          )}
                           {dates.map(date => {
-                            const recs = byDate[date];
+                            let recs = byDate[date];
+                            if (catalogadoFilterPlaca) {
+                              recs = recs.filter((r: any) => (r.placa || "").toUpperCase().includes(catalogadoFilterPlaca));
+                            }
                             const totalKmDay = recs.reduce((s: number, r: any) => s + parseFloat(r.km_total || 0), 0);
                             const totalViagensDay = recs.reduce((s: number, r: any) => s + parseInt(r.viagens || 0), 0);
                             const veiculosAtivosDay = recs.filter((r: any) => parseFloat(r.km_total) > 0).length;
