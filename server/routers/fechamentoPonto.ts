@@ -574,8 +574,8 @@ function processRecords(
         }
         
         if (chegouCedo) {
-          // Chegou cedo: SEMPRE conta como hora extra (sem tolerância)
-          horasExtras = diffBruto;
+          // Chegou cedo: aplica mesma tolerância de 10min (CLT Art. 58 §1º + Súmula 366 TST)
+          horasExtras = diffBruto > tolSaida ? diffBruto : 0;
         } else {
           // Saiu tarde: aplica tolerância de saída
           horasExtras = diffBruto > tolSaida ? diffBruto : 0;

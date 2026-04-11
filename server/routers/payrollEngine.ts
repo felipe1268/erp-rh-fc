@@ -181,7 +181,7 @@ async function getPayrollCriteria(db: any, companyId: number) {
     diaCorte: parseInt(map["ponto_dia_corte"] || "15"),
     pontoToleranciaAtraso: parseInt(map["ponto_tolerancia_atraso"] || "10"),
     pontoToleranciaSaida: parseInt(map["ponto_tolerancia_saida"] || "10"),
-    pontoToleranciaLegal: 5, // CLT Art. 58 §1º — 5 min entrada + 5 min saída (máx 10 min/dia)
+    pontoToleranciaLegal: 10, // CLT Art. 58 §1º + Súmula 366 TST — 10 min/dia total
     pontoBatidaImparTolerancia: parseInt(map["ponto_batida_impar_tolerancia"] || "30"),
     pontoFaltaAposAtraso: parseInt(map["ponto_falta_apos_atraso"] || "120"),
     pontoHoraNoturnaReduzida: map["ponto_hora_noturna_reduzida"] || "52:30",
@@ -528,7 +528,7 @@ export const payrollEngineRouter = router({
               if (tipoDia === "util") { isFalta = 1; totalFaltas++; }
             }
             // Check for tardiness (CLT Art. 58 §1º + Súmula 366 TST)
-            // ≤ 5 min = OK (tolerância legal), > 5 min = desconta TOTALIDADE
+            // ≤ 10 min = OK (tolerância legal), > 10 min = desconta TOTALIDADE
             const entrada = parseTime(rec.entrada1);
             if (entrada !== null && tipoDia === "util") {
               const jornadaEntrada = getExpectedEntrada(emp.jornadaTrabalho, dateStr);
@@ -540,7 +540,7 @@ export const payrollEngineRouter = router({
               }
             }
             // Check for early departure (CLT Art. 58 §1º + Súmula 366 TST)
-            // ≤ 5 min = OK, > 5 min = desconta TOTALIDADE
+            // ≤ 10 min = OK, > 10 min = desconta TOTALIDADE
             const saida = parseTime(rec.saida2 || rec.saida1);
             if (saida !== null && tipoDia === "util") {
               const jornadaSaida = (getExpectedEntrada(emp.jornadaTrabalho, dateStr) / 60 + criteria.cargaHorariaDiaria + 1) * 60;
@@ -1183,7 +1183,7 @@ export const payrollEngineRouter = router({
               const jornadaEntrada = getExpectedEntrada(empJornada, escuro.data);
               const atraso = entrada - jornadaEntrada;
               // CLT Art. 58 §1º + Súmula 366 TST:
-              // ≤ 5 min = OK (tolerância legal), > 5 min = desconta TOTALIDADE
+              // ≤ 10 min = OK (tolerância legal), > 10 min = desconta TOTALIDADE
               if (atraso > criteria.pontoToleranciaLegal) {
                 resultado = "atraso";
                 obs = `Atraso de ${minutesToHHMM(atraso)} (ultrapassou tolerância legal de ${criteria.pontoToleranciaLegal} min — CLT Art. 58 §1º / Súmula 366 TST — desconto integral)`;
