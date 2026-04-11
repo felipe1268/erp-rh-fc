@@ -3788,6 +3788,7 @@ export default function FechamentoPonto() {
                     </Button>
                   </div>
                 ) : (
+                <>
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => { setShowReplaceAllConfirm(true); setReplaceAllPassword(""); setReplaceAllPasswordError(""); }}
                     className="border-2 border-red-200 bg-white rounded-xl p-4 hover:bg-red-50 hover:border-red-400 transition-all text-left group">
@@ -3890,6 +3891,7 @@ export default function FechamentoPonto() {
                     Importar {selectedEmployeeIds.size} funcionário(s)
                   </Button>
                 </div>
+                </>
                 )}
               </div>
             )}
