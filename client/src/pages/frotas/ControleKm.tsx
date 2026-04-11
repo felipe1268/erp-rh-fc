@@ -218,6 +218,8 @@ export default function ControleKm() {
       });
 
       map.fitBounds(L.latLngBounds(latlngs), { padding: [30, 30] });
+      setTimeout(() => { map.invalidateSize(); map.fitBounds(L.latLngBounds(latlngs), { padding: [30, 30] }); }, 300);
+      setTimeout(() => { map.invalidateSize(); }, 600);
     })();
     return () => { cancelled = true; };
   }, [showRoute, positionsQuery.data]);

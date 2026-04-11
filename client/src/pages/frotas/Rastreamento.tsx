@@ -309,7 +309,7 @@ export default function Rastreamento() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2 items-center relative" style={{ zIndex: 1000 }}>
+        <div className="flex flex-wrap gap-2 items-center relative" style={{ zIndex: 900 }}>
           {activeTab === 'live' ? (
             <Select value={filterVehicle} onValueChange={(v) => { setFilterVehicle(v); setSelectedVehicle(null); }}>
               <SelectTrigger className="w-[220px]"><SelectValue placeholder="Veículo" /></SelectTrigger>
