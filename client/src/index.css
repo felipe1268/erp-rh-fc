@@ -422,3 +422,14 @@
   pointer-events: none;
   height: 0;
 }
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 500 !important;
+}
+.leaflet-pane {
+  z-index: 400 !important;
+}
+.leaflet-control {
+  z-index: 500 !important;
+}
