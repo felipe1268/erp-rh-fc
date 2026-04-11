@@ -817,7 +817,30 @@ export default function ControleKm() {
                                           )}
                                         </td>
                                         <td className="py-2 px-3 text-gray-600">{r.nome_veiculo || "—"}</td>
-                                        <td className="py-2 px-3 text-right font-bold text-cyan-700">{formatNum(parseFloat(r.km_total), 1)} km</td>
+                                        <td className="py-2 px-3 text-right font-bold text-cyan-700">
+                                          {r.infleet_vehicle_id ? (
+                                            <button
+                                              type="button"
+                                              className="hover:underline hover:text-blue-600 cursor-pointer transition-colors inline-flex items-center gap-1"
+                                              title="Clique para ver o trajeto no mapa"
+                                              onClick={() => {
+                                                setSelectedVehicle({ placa: r.placa, infleetId: r.infleet_vehicle_id, nomeVeiculo: r.nome_veiculo });
+                                                setRouteDate(String(r.data).slice(0, 10));
+                                                setShowRoute(true);
+                                                setShowTrips(false);
+                                                setTimeout(() => {
+                                                  const routeCard = document.getElementById("route-map-card");
+                                                  if (routeCard) routeCard.scrollIntoView({ behavior: "smooth", block: "start" });
+                                                }, 200);
+                                              }}
+                                            >
+                                              <MapPin className="h-3 w-3" />
+                                              {formatNum(parseFloat(r.km_total), 1)} km
+                                            </button>
+                                          ) : (
+                                            <span>{formatNum(parseFloat(r.km_total), 1)} km</span>
+                                          )}
+                                        </td>
                                         <td className="py-2 px-3 text-right">{r.viagens}</td>
                                         <td className="py-2 px-3 text-right">{formatDuration(parseInt(r.tempo_rodando_min || 0))}</td>
                                         <td className="py-2 px-3 text-right">{formatNum(parseFloat(r.vel_media || 0))} km/h</td>
@@ -912,12 +935,12 @@ export default function ControleKm() {
             </Tabs>
 
             {showRoute && selectedVehicle && (
-              <Card className="mt-4">
+              <Card id="route-map-card" className="mt-4">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <Navigation className="h-4 w-4 text-blue-500" />
-                      Percurso: {selectedVehicle.placa} — {formatDate(routeDate)}
+                      Percurso: {selectedVehicle.placa} {selectedVehicle.nomeVeiculo ? `(${selectedVehicle.nomeVeiculo})` : ""} — {formatDate(routeDate)}
                     </span>
                     <Button variant="ghost" size="sm" onClick={() => { setShowRoute(false); setSelectedVehicle(null); }}>
                       Fechar
