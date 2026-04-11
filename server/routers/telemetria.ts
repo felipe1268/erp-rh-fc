@@ -421,6 +421,76 @@ export const telemetriaRouter = router({
       return (rows as any).rows ?? [];
     }),
 
+  detalheDia: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      dia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      userId: z.number().optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      requireAdminMaster(ctx);
+      const db = await getDb();
+      const cid = resolveCompanyId(ctx, input.companyId);
+
+      const userFilter = input.userId ? sql` AND user_id = ${input.userId}` : sql``;
+
+      const [porPagina, porUsuario, timeline, resumoHoras] = await Promise.all([
+        db.execute(sql`
+          SELECT pagina,
+                 COUNT(*) as total_visitas,
+                 COUNT(DISTINCT user_id) as usuarios_unicos,
+                 COALESCE(SUM(duracao_segundos) FILTER (WHERE duracao_segundos > 0), 0) as tempo_total,
+                 COALESCE(AVG(duracao_segundos) FILTER (WHERE duracao_segundos > 0), 0) as tempo_medio
+          FROM user_activity_log
+          WHERE company_id = ${cid}
+            AND tipo = 'page_visit'
+            AND DATE(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') = ${input.dia}::date
+            ${userFilter}
+          GROUP BY pagina ORDER BY tempo_total DESC
+        `),
+        db.execute(sql`
+          SELECT user_id, user_name,
+                 COUNT(*) FILTER (WHERE tipo = 'page_visit') as total_paginas,
+                 COUNT(*) FILTER (WHERE tipo = 'action') as total_acoes,
+                 COUNT(DISTINCT pagina) as paginas_distintas,
+                 COALESCE(SUM(duracao_segundos) FILTER (WHERE duracao_segundos > 0), 0) as tempo_total,
+                 to_char(MIN(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'HH24:MI') as primeiro_acesso,
+                 to_char(MAX(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'HH24:MI') as ultimo_acesso
+          FROM user_activity_log
+          WHERE company_id = ${cid}
+            AND DATE(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') = ${input.dia}::date
+            ${userFilter}
+          GROUP BY user_id, user_name ORDER BY tempo_total DESC
+        `),
+        db.execute(sql`
+          SELECT user_id, user_name, pagina, tipo, acao, duracao_segundos,
+                 to_char(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI:SS') as horario
+          FROM user_activity_log
+          WHERE company_id = ${cid}
+            AND DATE(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') = ${input.dia}::date
+            ${userFilter}
+          ORDER BY criado_em ASC
+        `),
+        db.execute(sql`
+          SELECT EXTRACT(HOUR FROM criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::int as hora,
+                 COUNT(*) as total
+          FROM user_activity_log
+          WHERE company_id = ${cid}
+            AND DATE(criado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') = ${input.dia}::date
+            ${userFilter}
+          GROUP BY hora ORDER BY hora
+        `),
+      ]);
+
+      return {
+        dia: input.dia,
+        porPagina: (porPagina as any).rows ?? [],
+        porUsuario: (porUsuario as any).rows ?? [],
+        timeline: (timeline as any).rows ?? [],
+        resumoHoras: (resumoHoras as any).rows ?? [],
+      };
+    }),
+
   getUsuariosPorHora: protectedProcedure
     .input(z.object({
       companyId: z.number().optional(),

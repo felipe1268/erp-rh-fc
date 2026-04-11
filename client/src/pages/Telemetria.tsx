@@ -93,20 +93,23 @@ function SimpleBarChart({ data, labelKey, valueKey, color = "bg-blue-500" }: {
   );
 }
 
-function DailyChart({ data }: { data: Array<{ dia: string; total: string | number }> }) {
+function DailyChart({ data, onDayClick, selectedDay }: { data: Array<{ dia: string; total: string | number }>; onDayClick?: (dia: string) => void; selectedDay?: string | null }) {
   if (!data?.length) return <p className="text-sm text-gray-400 py-4">Sem dados</p>;
   const max = Math.max(...data.map(d => Number(d.total)));
   return (
     <div className="flex items-end gap-1 h-40 overflow-x-auto pb-6 relative">
       {data.map((d, i) => {
         const h = max > 0 ? (Number(d.total) / max) * 100 : 0;
+        const isoDay = typeof d.dia === "string" && d.dia.length >= 10 ? d.dia.substring(0, 10) : d.dia;
+        const isSelected = selectedDay && isoDay === selectedDay;
         return (
-          <div key={i} className="flex flex-col items-center min-w-[20px] flex-1 group relative">
+          <div key={i} className={`flex flex-col items-center min-w-[20px] flex-1 group relative ${onDayClick ? "cursor-pointer" : ""}`}
+            onClick={() => onDayClick?.(String(isoDay))}>
             <div className="absolute -top-5 text-xs font-medium text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
               {Number(d.total)}
             </div>
-            <div className="w-full bg-blue-500 rounded-t transition-all hover:bg-blue-600" style={{ height: `${h}%`, minHeight: h > 0 ? 4 : 0 }} />
-            <span className="text-[9px] text-gray-400 mt-1 rotate-45 origin-left whitespace-nowrap absolute -bottom-5">
+            <div className={`w-full rounded-t transition-all ${isSelected ? "bg-blue-700 ring-2 ring-blue-400" : "bg-blue-500 hover:bg-blue-600"}`} style={{ height: `${h}%`, minHeight: h > 0 ? 4 : 0 }} />
+            <span className={`text-[9px] mt-1 rotate-45 origin-left whitespace-nowrap absolute -bottom-5 ${isSelected ? "text-blue-700 font-bold" : "text-gray-400"}`}>
               {formatDate(d.dia)}
             </span>
           </div>
@@ -202,6 +205,181 @@ function WeekdayChart({ data }: { data: Array<{ dia_semana: number; total: strin
   );
 }
 
+function DayDetailPanel({ companyId, dia, userId, onClose }: { companyId: number; dia: string; userId?: number; onClose: () => void }) {
+  const { data, isLoading, isError, refetch } = trpc.telemetria.detalheDia.useQuery(
+    { companyId, dia, userId },
+    { enabled: companyId > 0 }
+  );
+  const [activeSection, setActiveSection] = useState<"paginas" | "usuarios" | "timeline">("paginas");
+  const [filterUser, setFilterUser] = useState<number | null>(null);
+
+  const diaFmt = (() => {
+    const [y, m, d] = dia.split("-");
+    const dt = new Date(Number(y), Number(m) - 1, Number(d));
+    const dias = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+    return `${dias[dt.getDay()]}, ${d}/${m}/${y}`;
+  })();
+
+  const totalVisitas = data?.porPagina?.reduce((s: number, p: any) => s + Number(p.total_visitas), 0) ?? 0;
+  const totalTempo = data?.porPagina?.reduce((s: number, p: any) => s + Number(p.tempo_total), 0) ?? 0;
+  const totalUsuarios = data?.porUsuario?.length ?? 0;
+  const totalPaginas = data?.porPagina?.length ?? 0;
+
+  const filteredTimeline = filterUser
+    ? (data?.timeline ?? []).filter((t: any) => Number(t.user_id) === filterUser)
+    : (data?.timeline ?? []);
+
+  return (
+    <Card className="border-blue-300 ring-1 ring-blue-200">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-blue-600" />
+            Detalhes do dia — {diaFmt}
+          </CardTitle>
+          <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded hover:bg-gray-100">Fechar</button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-8"><div className="animate-spin h-6 w-6 border-3 border-blue-500 border-t-transparent rounded-full" /></div>
+        ) : isError ? (
+          <div className="text-center py-6">
+            <p className="text-sm text-red-500 mb-2">Erro ao carregar dados deste dia.</p>
+            <button onClick={() => refetch()} className="text-xs text-blue-600 hover:underline">Tentar novamente</button>
+          </div>
+        ) : !data || totalVisitas === 0 ? (
+          <p className="text-sm text-gray-400 py-4">Nenhum acesso registrado neste dia.</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-4 gap-3">
+              <div className="bg-blue-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-blue-700">{totalVisitas}</p>
+                <p className="text-[10px] text-blue-600 uppercase">Visitas</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-green-700">{totalUsuarios}</p>
+                <p className="text-[10px] text-green-600 uppercase">Usuários</p>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-purple-700">{totalPaginas}</p>
+                <p className="text-[10px] text-purple-600 uppercase">Telas</p>
+              </div>
+              <div className="bg-orange-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-orange-700">{formatDuracao(totalTempo)}</p>
+                <p className="text-[10px] text-orange-600 uppercase">Tempo Total</p>
+              </div>
+            </div>
+
+            <div className="flex gap-1 border-b">
+              {([
+                { key: "paginas", label: "Telas Visitadas", icon: Monitor },
+                { key: "usuarios", label: "Por Usuário", icon: Users },
+                { key: "timeline", label: "Timeline", icon: Clock },
+              ] as const).map(tab => (
+                <button key={tab.key}
+                  className={`px-3 py-2 text-xs font-medium flex items-center gap-1 border-b-2 transition-colors ${activeSection === tab.key ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+                  onClick={() => setActiveSection(tab.key)}>
+                  <tab.icon className="h-3 w-3" /> {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {activeSection === "paginas" && (
+              <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                <div className="grid grid-cols-[1fr_80px_80px_80px_80px] gap-2 text-[10px] text-gray-500 uppercase font-semibold px-2 py-1 border-b sticky top-0 bg-white">
+                  <span>Tela</span>
+                  <span className="text-center">Visitas</span>
+                  <span className="text-center">Usuários</span>
+                  <span className="text-center">T. Total</span>
+                  <span className="text-center">T. Médio</span>
+                </div>
+                {(data.porPagina ?? []).map((p: any, i: number) => {
+                  const maxTempo = Math.max(...(data.porPagina ?? []).map((x: any) => Number(x.tempo_total)));
+                  const pct = maxTempo > 0 ? (Number(p.tempo_total) / maxTempo) * 100 : 0;
+                  return (
+                    <div key={i} className="grid grid-cols-[1fr_80px_80px_80px_80px] gap-2 items-center px-2 py-2 rounded hover:bg-blue-50/50 text-sm relative group">
+                      <div className="absolute inset-y-0 left-0 bg-blue-100/40 rounded" style={{ width: `${pct}%` }} />
+                      <span className="relative font-medium text-gray-800 truncate" title={p.pagina}>{p.pagina}</span>
+                      <span className="relative text-center text-gray-600">{Number(p.total_visitas)}</span>
+                      <span className="relative text-center text-gray-600">{Number(p.usuarios_unicos)}</span>
+                      <span className="relative text-center font-medium text-blue-700">{formatDuracao(Number(p.tempo_total))}</span>
+                      <span className="relative text-center text-gray-500">{formatDuracao(Number(p.tempo_medio))}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {activeSection === "usuarios" && (
+              <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                <div className="grid grid-cols-[1fr_60px_60px_60px_80px_60px_60px] gap-2 text-[10px] text-gray-500 uppercase font-semibold px-2 py-1 border-b sticky top-0 bg-white">
+                  <span>Usuário</span>
+                  <span className="text-center">Visitas</span>
+                  <span className="text-center">Ações</span>
+                  <span className="text-center">Telas</span>
+                  <span className="text-center">Tempo</span>
+                  <span className="text-center">Entrou</span>
+                  <span className="text-center">Saiu</span>
+                </div>
+                {(data.porUsuario ?? []).map((u: any) => (
+                  <div key={u.user_id} className="grid grid-cols-[1fr_60px_60px_60px_80px_60px_60px] gap-2 items-center px-2 py-2 rounded hover:bg-green-50/50 text-sm cursor-pointer"
+                    onClick={() => { setFilterUser(Number(u.user_id)); setActiveSection("timeline"); }}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-700 shrink-0">
+                        {(u.user_name || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <span className="font-medium text-gray-800 truncate">{u.user_name}</span>
+                    </div>
+                    <span className="text-center text-gray-600">{Number(u.total_paginas)}</span>
+                    <span className="text-center text-gray-600">{Number(u.total_acoes)}</span>
+                    <span className="text-center text-gray-600">{Number(u.paginas_distintas)}</span>
+                    <span className="text-center font-medium text-blue-700">{formatDuracao(Number(u.tempo_total))}</span>
+                    <span className="text-center text-green-600 text-xs">{u.primeiro_acesso}</span>
+                    <span className="text-center text-red-500 text-xs">{u.ultimo_acesso}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeSection === "timeline" && (
+              <div className="space-y-2">
+                {filterUser && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-500">Filtrando por:</span>
+                    <Badge className="bg-blue-100 text-blue-700">{filteredTimeline[0]?.user_name || `#${filterUser}`}</Badge>
+                    <button onClick={() => setFilterUser(null)} className="text-gray-400 hover:text-gray-600 underline">Limpar filtro</button>
+                  </div>
+                )}
+                <div className="max-h-[400px] overflow-y-auto space-y-0.5">
+                  {filteredTimeline.map((t: any, i: number) => (
+                    <div key={i} className={`flex items-center gap-3 px-2 py-1.5 rounded text-xs ${t.tipo === "action" ? "bg-amber-50/50" : "hover:bg-gray-50"}`}>
+                      <span className="text-gray-400 font-mono w-16 shrink-0">{t.horario}</span>
+                      <div className={`h-2 w-2 rounded-full shrink-0 ${t.tipo === "action" ? "bg-amber-500" : "bg-blue-500"}`} />
+                      {!filterUser && (
+                        <span className="text-gray-500 font-medium w-28 truncate shrink-0 cursor-pointer hover:text-blue-600"
+                          onClick={() => setFilterUser(Number(t.user_id))}>
+                          {t.user_name}
+                        </span>
+                      )}
+                      <span className="text-gray-800 flex-1 truncate">
+                        {t.tipo === "action" ? <><span className="text-amber-700 font-medium">{t.acao}</span> <span className="text-gray-400">em</span> {t.pagina}</> : t.pagina}
+                      </span>
+                      {t.tipo === "page_visit" && Number(t.duracao_segundos) > 0 && (
+                        <span className="text-blue-600 font-medium shrink-0">{formatDuracao(Number(t.duracao_segundos))}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function KPICard({ icon: Icon, label, value, sub, color = "text-blue-600" }: {
   icon: any; label: string; value: string | number; sub?: string; color?: string;
 }) {
@@ -293,6 +471,7 @@ export default function Telemetria() {
   const [selectedUser, setSelectedUser] = useState<number | null>(null);
   const [searchFilter, setSearchFilter] = useState("");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const dashQuery = trpc.telemetria.dashboardGeral.useQuery(
     { companyId, periodo },
@@ -395,8 +574,16 @@ export default function Telemetria() {
 
                 <div className="grid md:grid-cols-3 gap-4">
                   <Card>
-                    <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1"><TrendingUp className="h-4 w-4" /> Evolução Diária</CardTitle></CardHeader>
-                    <CardContent><DailyChart data={dash.usoPorDia} /></CardContent>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-1">
+                        <TrendingUp className="h-4 w-4" /> Evolução Diária
+                        <span className="text-[10px] text-gray-400 font-normal ml-1">(clique em um dia para ver detalhes)</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <DailyChart data={dash.usoPorDia} selectedDay={selectedDay}
+                        onDayClick={(d) => setSelectedDay(prev => prev === d ? null : d)} />
+                    </CardContent>
                   </Card>
                   <Card>
                     <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1"><Clock className="h-4 w-4" /> Uso por Hora</CardTitle></CardHeader>
@@ -408,11 +595,33 @@ export default function Telemetria() {
                   </Card>
                 </div>
 
+                {selectedDay && (
+                  <DayDetailPanel companyId={companyId} dia={selectedDay} onClose={() => setSelectedDay(null)} />
+                )}
+
                 <div className="grid md:grid-cols-2 gap-4">
                   <Card>
                     <CardHeader className="pb-2"><CardTitle className="text-sm">Páginas Mais Acessadas (Top 15)</CardTitle></CardHeader>
                     <CardContent>
-                      <SimpleBarChart data={dash.paginasMaisAcessadas.slice(0, 15)} labelKey="pagina" valueKey="total" />
+                      <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                        <div className="grid grid-cols-[1fr_60px_80px] gap-2 text-[10px] text-gray-500 uppercase font-semibold px-1 pb-1 border-b">
+                          <span>Tela</span>
+                          <span className="text-center">Visitas</span>
+                          <span className="text-center">T. Médio</span>
+                        </div>
+                        {dash.paginasMaisAcessadas.slice(0, 15).map((p: any, i: number) => {
+                          const maxVal = Number(dash.paginasMaisAcessadas[0]?.total ?? 1);
+                          const pct = maxVal > 0 ? (Number(p.total) / maxVal) * 100 : 0;
+                          return (
+                            <div key={i} className="grid grid-cols-[1fr_60px_80px] gap-2 items-center py-1.5 px-1 rounded hover:bg-blue-50/50 text-sm relative">
+                              <div className="absolute inset-y-0 left-0 bg-blue-100/30 rounded" style={{ width: `${pct}%` }} />
+                              <span className="relative text-gray-700 truncate" title={p.pagina}>{p.pagina}</span>
+                              <span className="relative text-center text-gray-600 font-medium">{Number(p.total)}</span>
+                              <span className="relative text-center text-blue-600 text-xs">{Number(p.tempo_medio) > 0 ? formatDuracao(Number(p.tempo_medio)) : "—"}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </CardContent>
                   </Card>
                   <Card>
