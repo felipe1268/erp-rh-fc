@@ -6047,7 +6047,8 @@ Sempre retorne JSON válido, sem markdown.`;
                  ELSE false
                END as motorista_padrao_usado,
                COALESCE(dk.odometro_fim, dk.km_odometro_fim) as odometro_fim,
-               dk.infleet_vehicle_id, dk.updated_at, dk.alerta_gps
+               dk.infleet_vehicle_id, dk.updated_at, dk.alerta_gps,
+               dk.primeira_ligacao, dk.ultima_desligacao
         FROM fleet_daily_km dk
         LEFT JOIN vehicles v ON UPPER(REPLACE(REPLACE(v.placa, '-', ''), ' ', '')) = UPPER(REPLACE(REPLACE(dk.placa, '-', ''), ' ', '')) AND v."companyId" = dk.company_id
         WHERE dk.company_id = ${input.companyId}
@@ -6146,6 +6147,8 @@ export async function coletarKmDiarioJob(companyId: number, dataOverride?: strin
         if (!trips.length) continue;
 
         let kmTotal = 0, totalViagens = 0, tempoMin = 0, velMediaPond = 0, velMax = 0;
+        let primeiraLigacao: string | null = null;
+        let ultimaDesligacao: string | null = null;
         const motoristasSet = new Set<string>();
 
         trips.forEach((t: any) => {
@@ -6156,6 +6159,8 @@ export async function coletarKmDiarioJob(companyId: number, dataOverride?: strin
           velMediaPond += (t.averageSpeed || 0) * (t.distanceTraveled || 0);
           velMax = Math.max(velMax, t.maximumSpeed || 0);
           if (t.driver?.name) motoristasSet.add(t.driver.name);
+          if (!primeiraLigacao || t.startedAt < primeiraLigacao) primeiraLigacao = t.startedAt;
+          if (!ultimaDesligacao || t.finishedAt > ultimaDesligacao) ultimaDesligacao = t.finishedAt;
         });
 
         const velMedia = kmTotal > 0 ? velMediaPond / kmTotal : 0;
@@ -6170,7 +6175,7 @@ export async function coletarKmDiarioJob(companyId: number, dataOverride?: strin
         }
 
         await db.execute(sql`
-          INSERT INTO fleet_daily_km (company_id, vehicle_id, infleet_vehicle_id, placa, nome_veiculo, data, km_total, viagens, num_viagens, tempo_rodando_min, vel_media, vel_maxima, motoristas, motorista, odometro_fim, km_odometro_fim, alerta_gps, updated_at)
+          INSERT INTO fleet_daily_km (company_id, vehicle_id, infleet_vehicle_id, placa, nome_veiculo, data, km_total, viagens, num_viagens, tempo_rodando_min, vel_media, vel_maxima, motoristas, motorista, odometro_fim, km_odometro_fim, alerta_gps, primeira_ligacao, ultima_desligacao, updated_at)
           VALUES (${companyId}, ${localVehicleId}, ${v.id}, ${v.plate}, ${nomeVeiculo}, ${targetDate},
                   ${Math.round(kmTotal * 10) / 10}, ${totalViagens}, ${totalViagens}, ${Math.round(tempoMin)},
                   ${Math.round(velMedia * 10) / 10}, ${Math.round(velMax * 10) / 10},
@@ -6179,6 +6184,8 @@ export async function coletarKmDiarioJob(companyId: number, dataOverride?: strin
                   ${v.odometer ? Math.round(v.odometer * 100) / 100 : null},
                   ${v.odometer ? Math.round(v.odometer * 100) / 100 : null},
                   ${alertaGps},
+                  ${primeiraLigacao},
+                  ${ultimaDesligacao},
                   NOW())
           ON CONFLICT (company_id, placa, data) DO UPDATE SET
             km_total = EXCLUDED.km_total,
@@ -6194,6 +6201,8 @@ export async function coletarKmDiarioJob(companyId: number, dataOverride?: strin
             nome_veiculo = EXCLUDED.nome_veiculo,
             infleet_vehicle_id = EXCLUDED.infleet_vehicle_id,
             alerta_gps = EXCLUDED.alerta_gps,
+            primeira_ligacao = EXCLUDED.primeira_ligacao,
+            ultima_desligacao = EXCLUDED.ultima_desligacao,
             updated_at = NOW()
         `);
         coletados++;

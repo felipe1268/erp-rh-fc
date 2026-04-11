@@ -847,6 +847,8 @@ export default function ControleKm() {
                                     <tr className="border-b text-left">
                                       <th className="py-2 px-3 font-medium text-gray-500">Placa</th>
                                       <th className="py-2 px-3 font-medium text-gray-500">Veículo</th>
+                                      <th className="py-2 px-3 font-medium text-gray-500 text-center">Ligou</th>
+                                      <th className="py-2 px-3 font-medium text-gray-500 text-center">Desligou</th>
                                       <th className="py-2 px-3 font-medium text-gray-500 text-right">Km Total</th>
                                       <th className="py-2 px-3 font-medium text-gray-500 text-right">Viagens</th>
                                       <th className="py-2 px-3 font-medium text-gray-500 text-right">Tempo Rodando</th>
@@ -868,6 +870,22 @@ export default function ControleKm() {
                                           )}
                                         </td>
                                         <td className="py-2 px-3 text-gray-600">{r.nome_veiculo || "—"}</td>
+                                        <td className="py-2 px-3 text-center text-xs">
+                                          {r.primeira_ligacao ? (
+                                            <span className="inline-flex items-center gap-1 text-green-700 bg-green-50 px-1.5 py-0.5 rounded">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                              {new Date(r.primeira_ligacao).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+                                            </span>
+                                          ) : <span className="text-gray-300">—</span>}
+                                        </td>
+                                        <td className="py-2 px-3 text-center text-xs">
+                                          {r.ultima_desligacao ? (
+                                            <span className="inline-flex items-center gap-1 text-red-700 bg-red-50 px-1.5 py-0.5 rounded">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                              {new Date(r.ultima_desligacao).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+                                            </span>
+                                          ) : <span className="text-gray-300">—</span>}
+                                        </td>
                                         <td className="py-2 px-3 text-right font-bold text-cyan-700">
                                           {r.infleet_vehicle_id ? (
                                             <button
