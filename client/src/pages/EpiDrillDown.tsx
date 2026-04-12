@@ -35,8 +35,8 @@ export default function EpiDrillDown({ type, onClose }: EpiDrillDownProps) {
   const [search, setSearch] = useState("");
   const printRef = useRef<HTMLDivElement>(null);
 
-  const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds }, { enabled: !!queryCompanyId });
-  const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds }, { enabled: !!queryCompanyId });
+  const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds, limit: 200, offset: 0 }, { enabled: !!queryCompanyId });
+  const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds, limit: 200, offset: 0 }, { enabled: !!queryCompanyId });
 
   // Buscar dados da empresa para o logo
   const companyData = useMemo(() => {
@@ -47,8 +47,8 @@ export default function EpiDrillDown({ type, onClose }: EpiDrillDownProps) {
     return { nome: comp?.razaoSocial || comp?.nomeFantasia || "Empresa", logo: comp?.logoUrl || null };
   }, [companies, companyId, isConstrutoras]);
 
-  const episList = episQ.data ?? [];
-  const deliveriesList = deliveriesQ.data ?? [];
+  const episList = episQ.data?.items ?? [];
+  const deliveriesList = deliveriesQ.data?.items ?? [];
   const hoje = new Date().toISOString().split("T")[0];
   const ha30dias = useMemo(() => {
     const d = new Date();

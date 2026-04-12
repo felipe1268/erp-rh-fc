@@ -121,10 +121,11 @@ export default function DashEpis() {
   const [activeKpi, setActiveKpi] = useState<string | null>(null);
   const [expandedEpiId, setExpandedEpiId] = useState<number | null>(null);
   const [fichaModal, setFichaModal] = useState<{ employeeId: number; employeeName: string; epiNome: string } | null>(null);
-  const fichaDeliveries = trpc.epis.listDeliveries.useQuery(
-    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), employeeId: fichaModal?.employeeId },
+  const fichaDeliveriesRaw = trpc.epis.listDeliveries.useQuery(
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), employeeId: fichaModal?.employeeId, limit: 200, offset: 0 },
     { enabled: !!fichaModal }
   );
+  const fichaDeliveries = { ...fichaDeliveriesRaw, data: fichaDeliveriesRaw.data?.items };
 
   function handleKpiClick(kpi: string) {
     const newVal = activeKpi === kpi ? null : kpi;
@@ -134,10 +135,11 @@ export default function DashEpis() {
     }
   }
 
-  const empDeliveriesQuery = trpc.epis.listDeliveries.useQuery(
-    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), employeeId: selectedEmpId! },
+  const empDeliveriesRaw = trpc.epis.listDeliveries.useQuery(
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), employeeId: selectedEmpId!, limit: 200, offset: 0 },
     { enabled: !!selectedEmpId }
   );
+  const empDeliveriesQuery = { ...empDeliveriesRaw, data: empDeliveriesRaw.data?.items };
 
 
   const monthOptions = useMemo(() => getMonthOptions(), []);

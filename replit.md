@@ -5,7 +5,7 @@ A full-stack HR/ERP system built for FC Engenharia. It handles employees, payrol
 
 ## Active Modules (8)
 1. **RH & DP** — Payroll, time tracking, employees, benefits
-2. **SST** — Safety (EPIs, ASOs, CIPA, NRs)
+2. **SST** — Safety (EPIs, ASOs, CIPA, NRs). EPI page performance optimized: lazy loading per tab, SQL aggregation stats, server-side pagination (50/page) on catalog+deliveries, DB indexes on epi_deliveries(deletedAt, dataEntrega) and employees(deletedAt, status), on-demand employee loading
 3. **Jurídico** (Rev.1050) — 3 submódulos segregados: **Trabalhista** (dashboard rica com DataJud auto-check, KPIs financeiros, gráficos Chart.js, alertas, audiências, evolução mensal, fase/tipo ação, valor por risco), **Tributário** (dashboard rica com KPIs, tributos, esfera judicial/admin, evolução mensal, audiências, valor por risco), **Civil** (dashboard rica com KPIs, tipo ação, fase processual, audiências, valor por risco). Hub central `/painel/juridico` com resumo consolidado dos 3 submódulos. Cada submódulo tem seu próprio painel, lista de processos e dashboard analítico. Backend: `dashboards.juridico` (trabalhista), `dashboards.tributario`, `dashboards.civil`. Frontend: `PainelJuridico.tsx` (hub), `PainelTrabalhista.tsx`, `PainelTributario.tsx`, `PainelCivil.tsx`. Sidebar: links para painel+processos+dashboard em cada submódulo
 4. **Terceiros** — Third-party companies, contractors, medição with inline-edit %, reject flow, comparativo (físico×medido×pago), item history, divergence alerts, partial medição, retenções/descontos (ISS/INSS/IRRF/outras/descontos), PDF boletim de medição (PDFKit), qty/unit/value columns, hierarchical EAP matching with normName()
 5. **Parceiros** — Benefits partners (pharmacy, gas station, etc.)

@@ -184,34 +184,42 @@ export default function Epis() {
   // Queries
   // Quando Construtoras selecionado, companyId=0 mas companyIds tem os IDs do pool
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
-  const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
-  const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
+  const [episPage, setEpisPage] = useState(0);
+  const [deliveriesPage, setDeliveriesPage] = useState(0);
+  const PAGE_SIZE = 50;
+
+  useEffect(() => { setEpisPage(0); setDeliveriesPage(0); }, [queryCompanyId]);
+
+  const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: episPage * PAGE_SIZE }, { enabled: hasValidCompany });
+  const episAllQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: 200, offset: 0 }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "estoque_obra" || viewMode === "transferencias") });
+  const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: deliveriesPage * PAGE_SIZE }, { enabled: hasValidCompany && (viewMode === "entregas" || viewMode === "nova_entrega" || viewMode === "ficha_epi") });
   const statsQ = trpc.epis.stats.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
-  const employeesQ = trpc.employees.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, excludeTerminated: true }, { enabled: hasValidCompany });
-  const bdiQ = trpc.epis.getBdi.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany });
-  const formTextQ = trpc.epis.getFormText.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany });
-  const fornecedoresQ = trpc.epis.fornecedoresList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
+  const employeesQ = trpc.employees.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, excludeTerminated: true }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi") });
+  const bdiQ = trpc.epis.getBdi.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "config") });
+  const formTextQ = trpc.epis.getFormText.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany && (viewMode === "ficha_epi" || viewMode === "config") });
+  const fornecedoresQ = trpc.epis.fornecedoresList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && (viewMode === "novo_epi" || viewMode === "editar_epi" || viewMode === "config") });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
   const obrasList = obrasQ.data ?? [];
 
-  // Capacidade de contratação (para card no dashboard)
   const capacidadeQ = trpc.epiAvancado.capacidadeContratacao.useQuery(
     { companyId: queryCompanyId },
-    { enabled: hasValidCompany }
+    { enabled: hasValidCompany && viewMode === "capacidade" }
   );
 
-  // Estoque por obra queries
-  const estoqueObraQ = trpc.epis.estoqueObraList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
-  const estoqueObraResumoQ = trpc.epis.estoqueObraResumo.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
-  const transferenciasQ = trpc.epis.listarTransferencias.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
-  const estoqueCentralQ = trpc.epis.estoqueCentralResumo.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
+  const estoqueObraQ = trpc.epis.estoqueObraList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "estoque_obra" });
+  const estoqueObraResumoQ = trpc.epis.estoqueObraResumo.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "estoque_obra" });
+  const transferenciasQ = trpc.epis.listarTransferencias.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "transferencias" });
+  const estoqueCentralQ = trpc.epis.estoqueCentralResumo.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "estoque_obra" });
   const estoqueCentral = estoqueCentralQ.data ?? { totalItens: 0, totalUnidades: 0, valorTotal: 0 };
   const estoqueObraList2 = estoqueObraQ.data ?? [];
   const estoqueResumo = estoqueObraResumoQ.data ?? [];
   const transferenciasList = transferenciasQ.data ?? [];
 
-  const episList = episQ.data ?? [];
-  const deliveriesList = deliveriesQ.data ?? [];
+  const episList = episQ.data?.items ?? [];
+  const episTotal = episQ.data?.total ?? 0;
+  const episAllList = episAllQ.data?.items ?? episList;
+  const deliveriesList = deliveriesQ.data?.items ?? [];
+  const deliveriesTotal = deliveriesQ.data?.total ?? 0;
   const stats = statsQ.data;
   const employeesList = useMemo(() => (employeesQ.data ?? []).filter((e: any) => e.status !== 'Afastado').sort((a: any, b: any) => a.nomeCompleto.localeCompare(b.nomeCompleto)), [employeesQ.data]);
   const fornecedoresList = fornecedoresQ.data ?? [];
@@ -338,7 +346,7 @@ export default function Epis() {
         toast.success("Entrega registrada!");
       }
       // Abrir ficha de entrega automaticamente após registro
-      const epi = episList.find((e: any) => String(e.id) === entregaForm.epiId);
+      const epi = episAllList.find((e: any) => String(e.id) === entregaForm.epiId);
       const emp = employeesList.find((e: any) => String(e.id) === entregaForm.employeeId);
       const obraSel = obrasList.find((o: any) => String(o.id) === entregaForm.obraId);
       setFichaDelivery({
@@ -1388,7 +1396,7 @@ export default function Epis() {
                   </div>
                   <div className="divide-y">
                     {entregaItens.map((item) => {
-                      const epi = episList.find((e: any) => String(e.id) === item.epiId);
+                      const epi = episAllList.find((e: any) => String(e.id) === item.epiId);
                       if (!epi) return null;
                       const isCharge = item.motivoTroca && ['perda', 'mau_uso', 'furto'].includes(item.motivoTroca);
                       return (
@@ -1425,7 +1433,7 @@ export default function Epis() {
                   <div>
                     <Label className="text-xs">EPI</Label>
                     <SearchableSelect
-                      options={episList.filter((e: any) => !entregaItens.some(i => i.epiId === String(e.id))).map((e: any) => ({
+                      options={episAllList.filter((e: any) => !entregaItens.some(i => i.epiId === String(e.id))).map((e: any) => ({
                         value: String(e.id),
                         label: `${e.nome}${e.tamanho ? ` (${e.tamanho})` : ""} ${e.ca ? `CA: ${e.ca}` : ""}`,
                         subtitle: `Estoque: ${e.quantidadeEstoque ?? 0}`,
@@ -1479,7 +1487,7 @@ export default function Epis() {
   // ============================================================
   if (viewMode === "ficha_epi" && fichaDelivery) {
     const emp = employeesList.find((e: any) => e.id === fichaDelivery.employeeId);
-    const epi = episList.find((e: any) => e.id === fichaDelivery.epiId);
+    const epi = episAllList.find((e: any) => e.id === fichaDelivery.epiId);
     const textoFicha = formTextQ.data?.texto || '';
 
     return (
@@ -2162,8 +2170,13 @@ export default function Epis() {
                     </tbody>
                   </table>
                 </div>
-                <div className="border-t bg-muted/30 p-3 text-sm text-muted-foreground">
-                  {filteredEpis.length} EPI{filteredEpis.length !== 1 ? "s" : ""} encontrado{filteredEpis.length !== 1 ? "s" : ""}
+                <div className="border-t bg-muted/30 p-3 text-sm text-muted-foreground flex items-center justify-between">
+                  <span>{filteredEpis.length} EPI{filteredEpis.length !== 1 ? "s" : ""} nesta página (total: {episTotal})</span>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" disabled={episPage === 0} onClick={() => setEpisPage(p => p - 1)}>Anterior</Button>
+                    <span className="text-xs">Página {episPage + 1} de {Math.max(1, Math.ceil(episTotal / PAGE_SIZE))}</span>
+                    <Button variant="outline" size="sm" disabled={(episPage + 1) * PAGE_SIZE >= episTotal} onClick={() => setEpisPage(p => p + 1)}>Próxima</Button>
+                  </div>
                 </div>
 
                 {/* Batch Delete Dialog */}
@@ -2292,8 +2305,13 @@ export default function Epis() {
                     </tbody>
                   </table>
                 </div>
-                <div className="border-t bg-muted/30 p-3 text-sm text-muted-foreground">
-                  {filteredDeliveries.length} entrega{filteredDeliveries.length !== 1 ? "s" : ""} encontrada{filteredDeliveries.length !== 1 ? "s" : ""}
+                <div className="border-t bg-muted/30 p-3 text-sm text-muted-foreground flex items-center justify-between">
+                  <span>{filteredDeliveries.length} entrega{filteredDeliveries.length !== 1 ? "s" : ""} nesta página (total: {deliveriesTotal})</span>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" disabled={deliveriesPage === 0} onClick={() => setDeliveriesPage(p => p - 1)}>Anterior</Button>
+                    <span className="text-xs">Página {deliveriesPage + 1} de {Math.max(1, Math.ceil(deliveriesTotal / PAGE_SIZE))}</span>
+                    <Button variant="outline" size="sm" disabled={(deliveriesPage + 1) * PAGE_SIZE >= deliveriesTotal} onClick={() => setDeliveriesPage(p => p + 1)}>Próxima</Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -2440,7 +2458,7 @@ export default function Epis() {
                           .filter((e: any) => filterObraEstoque === "todas" || String(e.obraId) === filterObraEstoque)
                           .map((e: any) => (
                           <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => {
-                            const epi = episList.find((ep: any) => ep.id === e.epiId);
+                            const epi = episAllList.find((ep: any) => ep.id === e.epiId);
                             if (epi) { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode('editar_epi'); }
                           }}>
                             <td className="p-3">
@@ -2478,7 +2496,7 @@ export default function Epis() {
                             <td className="p-3 text-center" onClick={(ev) => ev.stopPropagation()}>
                               <div className="flex items-center justify-center gap-1">
                                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Editar EPI" onClick={() => {
-                                  const epi = episList.find((ep: any) => ep.id === e.epiId);
+                                  const epi = episAllList.find((ep: any) => ep.id === e.epiId);
                                   if (epi) { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode('editar_epi'); }
                                 }}>
                                   <Pencil className="h-3.5 w-3.5 text-blue-600" />
@@ -2700,7 +2718,7 @@ export default function Epis() {
                   </div>
                   <div className="divide-y">
                     {transItens.map((item) => {
-                      const epi = episList.find((e: any) => String(e.id) === item.epiId);
+                      const epi = episAllList.find((e: any) => String(e.id) === item.epiId);
                       if (!epi) return null;
                       return (
                         <div key={item.epiId} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50">
@@ -2734,7 +2752,7 @@ export default function Epis() {
                       <PopoverTrigger asChild>
                         <button type="button" className="w-full flex items-center gap-2 border rounded-md px-3 py-2 text-sm text-left hover:bg-muted/30 transition-colors">
                           {transForm.epiId ? (() => {
-                            const sel = episList.find((e: any) => String(e.id) === transForm.epiId);
+                            const sel = episAllList.find((e: any) => String(e.id) === transForm.epiId);
                             return sel ? <span className="truncate">{sel.nome}{sel.tamanho ? ` (${sel.tamanho})` : ''}</span> : <span className="text-muted-foreground">Selecione...</span>;
                           })() : <span className="text-muted-foreground flex-1">Selecione o EPI...</span>}
                           <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -2747,7 +2765,7 @@ export default function Epis() {
                           {epiPickerSearch && <button type="button" onClick={() => setEpiPickerSearch("")} className="text-muted-foreground hover:text-foreground"><XIcon className="h-3.5 w-3.5" /></button>}
                         </div>
                         <div className="max-h-[320px] overflow-y-auto p-1">
-                          {episList
+                          {episAllList
                             .filter((e: any) => !transItens.some(i => i.epiId === String(e.id)))
                             .filter((e: any) => {
                               if (!epiPickerSearch.trim()) return true;
@@ -2809,7 +2827,7 @@ export default function Epis() {
                 <Select value={entradaDiretaForm.epiId} onValueChange={v => setEntradaDiretaForm(f => ({ ...f, epiId: v }))}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Selecione o EPI..." /></SelectTrigger>
                   <SelectContent>
-                    {(episQ.data || []).map((e: any) => (
+                    {(episAllList || []).map((e: any) => (
                       <SelectItem key={e.id} value={String(e.id)}>{e.nome}{e.tamanho ? ` (Tam: ${e.tamanho})` : ''} {e.ca ? `(CA ${e.ca})` : ''}</SelectItem>
                     ))}
                   </SelectContent>

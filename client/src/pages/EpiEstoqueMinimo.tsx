@@ -25,7 +25,7 @@ export default function EpiEstoqueMinimo() {
   // Queries
   const alertasQ = trpc.epiAvancado.alertasEstoque.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
   const minimoListQ = trpc.epiAvancado.estoqueMinList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
-  const episQ = trpc.epis.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const episQ = trpc.epis.list.useQuery({ companyId, companyIds, limit: 200, offset: 0 }, { enabled: !!companyId || companyIds?.length > 0 });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
 
   // Mutations
@@ -36,7 +36,7 @@ export default function EpiEstoqueMinimo() {
 
   const alertas = alertasQ.data ?? [];
   const minimos = minimoListQ.data ?? [];
-  const episList = episQ.data ?? [];
+  const episList = episQ.data?.items ?? [];
   const obrasList = obrasQ.data ?? [];
 
   return (

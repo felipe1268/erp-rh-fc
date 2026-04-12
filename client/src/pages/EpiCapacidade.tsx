@@ -63,8 +63,8 @@ export default function EpiCapacidade({ companyId, companyIds }: EpiCapacidadePr
     { companyId },
     { enabled: companyId > 0 && showConfig }
   );
-  const episList = trpc.epis.list.useQuery(
-    { companyId },
+  const episListQ = trpc.epis.list.useQuery(
+    { companyId, limit: 200, offset: 0 },
     { enabled: companyId > 0 && showConfig }
   );
   const obrasQ = trpc.obras.list.useQuery(
@@ -723,7 +723,7 @@ export default function EpiCapacidade({ companyId, companyIds }: EpiCapacidadePr
                       className="w-16 bg-white text-center"
                     />
                   </div>
-                  {episList.data && Array.isArray(episList.data) && (
+                  {episListQ.data?.items && (
                     <Select
                       value={item.epiId?.toString() || "none"}
                       onValueChange={(v) => updateItem(idx, "epiId", v === "none" ? null : parseInt(v))}
@@ -733,7 +733,7 @@ export default function EpiCapacidade({ companyId, companyIds }: EpiCapacidadePr
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Sem vínculo</SelectItem>
-                        {episList.data.map((epi: any) => (
+                        {episListQ.data.items.map((epi: any) => (
                           <SelectItem key={epi.id} value={epi.id.toString()}>
                             {epi.nome} (est: {epi.quantidadeEstoque || 0})
                           </SelectItem>

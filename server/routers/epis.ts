@@ -14,11 +14,21 @@ export const episRouter = router({
   // CATÁLOGO DE EPIs
   // ============================================================
   list: protectedProcedure
-    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      limit: z.number().min(1).max(200).default(50),
+      offset: z.number().min(0).default(0),
+    }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
-      return db.select().from(epis).where(inArray(epis.companyId, ids)).orderBy(epis.nome);
+      const cond = inArray(epis.companyId, ids);
+      const [rows, countResult] = await Promise.all([
+        db.select().from(epis).where(cond).orderBy(epis.nome).limit(input.limit).offset(input.offset),
+        db.select({ total: sql<number>`COUNT(*)` }).from(epis).where(cond),
+      ]);
+      return { items: rows, total: Number(countResult[0]?.total ?? 0) };
     }),
 
   create: protectedProcedure
@@ -217,6 +227,8 @@ export const episRouter = router({
       companyIds: z.array(z.number()).optional(),
       employeeId: z.number().optional(),
       epiId: z.number().optional(),
+      limit: z.number().min(1).max(200).default(50),
+      offset: z.number().min(0).default(0),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -225,51 +237,62 @@ export const episRouter = router({
       if (input.employeeId) conds.push(eq(epiDeliveries.employeeId, input.employeeId));
       if (input.epiId) conds.push(eq(epiDeliveries.epiId, input.epiId));
 
-      const rows = await db.select({
-        id: epiDeliveries.id,
-        companyId: epiDeliveries.companyId,
-        epiId: epiDeliveries.epiId,
-        employeeId: epiDeliveries.employeeId,
-        quantidade: epiDeliveries.quantidade,
-        dataEntrega: epiDeliveries.dataEntrega,
-        dataDevolucao: epiDeliveries.dataDevolucao,
-        motivo: epiDeliveries.motivo,
-        observacoes: epiDeliveries.observacoes,
-        motivoTroca: epiDeliveries.motivoTroca,
-        valorCobrado: epiDeliveries.valorCobrado,
-        fichaUrl: epiDeliveries.fichaUrl,
-        fotoEstadoUrl: epiDeliveries.fotoEstadoUrl,
-        createdAt: epiDeliveries.createdAt,
-        nomeEpi: epis.nome,
-        caEpi: epis.ca,
-        valorProdutoEpi: epis.valorProduto,
-        tempoMinimoTrocaEpi: epis.tempoMinimoTroca,
-        nomeFunc: employees.nomeCompleto,
-        funcaoFunc: employees.funcao,
-      })
-        .from(epiDeliveries)
-        .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
-        .leftJoin(employees, eq(epiDeliveries.employeeId, employees.id))
-        .where(and(...conds))
-        .orderBy(desc(epiDeliveries.dataEntrega));
+      const whereClause = and(...conds);
 
-      // Enrich with obra name via obra_funcionarios
+      const [rows, countResult] = await Promise.all([
+        db.select({
+          id: epiDeliveries.id,
+          companyId: epiDeliveries.companyId,
+          epiId: epiDeliveries.epiId,
+          employeeId: epiDeliveries.employeeId,
+          quantidade: epiDeliveries.quantidade,
+          dataEntrega: epiDeliveries.dataEntrega,
+          dataDevolucao: epiDeliveries.dataDevolucao,
+          motivo: epiDeliveries.motivo,
+          observacoes: epiDeliveries.observacoes,
+          motivoTroca: epiDeliveries.motivoTroca,
+          valorCobrado: epiDeliveries.valorCobrado,
+          fichaUrl: epiDeliveries.fichaUrl,
+          fotoEstadoUrl: epiDeliveries.fotoEstadoUrl,
+          createdAt: epiDeliveries.createdAt,
+          nomeEpi: epis.nome,
+          caEpi: epis.ca,
+          valorProdutoEpi: epis.valorProduto,
+          tempoMinimoTrocaEpi: epis.tempoMinimoTroca,
+          nomeFunc: employees.nomeCompleto,
+          funcaoFunc: employees.funcao,
+        })
+          .from(epiDeliveries)
+          .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
+          .leftJoin(employees, eq(epiDeliveries.employeeId, employees.id))
+          .where(whereClause)
+          .orderBy(desc(epiDeliveries.dataEntrega))
+          .limit(input.limit)
+          .offset(input.offset),
+        db.select({ total: sql<number>`COUNT(*)` })
+          .from(epiDeliveries)
+          .where(whereClause),
+      ]);
+
       const empIds = [...new Set(rows.map(r => r.employeeId))];
-      const epiAlocs = empIds.length > 0
-        ? await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
-            .from(obraFuncionarios).where(and(inArray(obraFuncionarios.employeeId, empIds), eq(obraFuncionarios.isActive, 1)))
-        : [];
-      const epiEmpObraMap2 = new Map(epiAlocs.map(a => [a.employeeId, a.obraId]));
-      const obraIds = [...new Set(epiAlocs.map(a => a.obraId))];
-      let obraMap: Record<number, string> = {};
-      if (obraIds.length > 0) {
-        const obraList = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(sql`${obras.id} IN (${sql.join(obraIds.map(id => sql`${id}`), sql`,`)})`);
-        obraList.forEach(o => { obraMap[o.id] = o.nome; });
+      let obraMap = new Map<number, string>();
+      if (empIds.length > 0) {
+        const alocs = await db.execute(sql`
+          SELECT DISTINCT ON (of2."employeeId") of2."employeeId", o.nome AS "obraNome"
+          FROM obra_funcionarios of2
+          JOIN obras o ON o.id = of2."obraId"
+          WHERE of2."employeeId" IN (${sql.join(empIds.map(id => sql`${id}`), sql`,`)})
+            AND of2."isActive" = 1
+        `);
+        ((alocs?.rows ?? alocs ?? []) as any[]).forEach((a: any) => {
+          obraMap.set(a.employeeId, a.obraNome);
+        });
       }
-      return rows.map(r => {
-        const empObraId = epiEmpObraMap2.get(r.employeeId);
-        return { ...r, obraNome: empObraId ? (obraMap[empObraId] || null) : null };
-      });
+
+      return {
+        items: rows.map(r => ({ ...r, obraNome: obraMap.get(r.employeeId) || null })),
+        total: Number(countResult[0]?.total ?? 0),
+      };
     }),
 
   checkVidaUtil: protectedProcedure
@@ -711,141 +734,198 @@ export const episRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
-      const allEpis = await db.select().from(epis).where(inArray(epis.companyId, ids));
-      const allDeliveries = await db.select().from(epiDeliveries)
-        .where(and(inArray(epiDeliveries.companyId, ids), isNull(epiDeliveries.deletedAt)));
-
       const hoje = new Date().toISOString().split("T")[0];
-      const totalItens = allEpis.length;
-      const estoqueTotal = allEpis.reduce((sum, e) => sum + (e.quantidadeEstoque || 0), 0);
-      const estoqueBaixo = allEpis.filter(e => (e.quantidadeEstoque || 0) <= 5).length;
-      const caVencido = allEpis.filter(e => e.validadeCa && e.validadeCa < hoje).length;
-      const totalEntregas = allDeliveries.length;
-
-      // Valor total do inventário (central)
-      const valorTotalInventario = allEpis.reduce((sum, e) => {
-        const valor = e.valorProduto ? parseFloat(String(e.valorProduto)) : 0;
-        const qtd = e.quantidadeEstoque || 0;
-        return sum + (valor * qtd);
-      }, 0);
-
-      // Valor em obras
-      const obrasValorRows = await db.select({
-        valorObras: sql<number>`COALESCE(SUM(${epiEstoqueObra.quantidade} * COALESCE(${epis.valorProduto}, 0)), 0)`,
-      })
-        .from(epiEstoqueObra)
-        .leftJoin(epis, eq(epiEstoqueObra.epiId, epis.id))
-        .where(and(inArray(epiEstoqueObra.companyId, ids), sql`${epiEstoqueObra.quantidade} > 0`));
-      const valorObras = parseFloat(String(obrasValorRows[0]?.valorObras || 0));
-      const valorTotalGeral = valorTotalInventario + valorObras;
-
-      // Entregas últimos 30 dias
       const ha30dias = new Date();
       ha30dias.setDate(ha30dias.getDate() - 30);
       const ha30diasStr = ha30dias.toISOString().split("T")[0];
-      const entregasMes = allDeliveries.filter(d => d.dataEntrega >= ha30diasStr).length;
+      const em90dias = new Date();
+      em90dias.setDate(em90dias.getDate() + 90);
+      const em90diasStr = em90dias.toISOString().split("T")[0];
 
-      // Unidades entregues (soma de quantidades)
-      const unidadesEntregues = allDeliveries.reduce((sum, d) => sum + (d.quantidade || 1), 0);
+      const [episStats, deliveryStats, obrasValorRows, categoriaRows, entregasMesCount, alertasRows] = await Promise.all([
+        db.select({
+          totalItens: sql<number>`COUNT(*)`,
+          estoqueTotal: sql<number>`COALESCE(SUM(${epis.quantidadeEstoque}), 0)`,
+          estoqueBaixo: sql<number>`COUNT(CASE WHEN COALESCE(${epis.quantidadeEstoque}, 0) <= 5 THEN 1 END)`,
+          caVencido: sql<number>`COUNT(CASE WHEN ${epis.validadeCa} IS NOT NULL AND ${epis.validadeCa} < ${hoje} THEN 1 END)`,
+          valorTotalInventario: sql<number>`COALESCE(SUM(COALESCE(${epis.valorProduto}, 0) * COALESCE(${epis.quantidadeEstoque}, 0)), 0)`,
+        }).from(epis).where(inArray(epis.companyId, ids)),
 
-      // ---- ANALYTICS EXPANDIDOS ----
+        db.select({
+          totalEntregas: sql<number>`COUNT(*)`,
+          unidadesEntregues: sql<number>`COALESCE(SUM(COALESCE(${epiDeliveries.quantidade}, 1)), 0)`,
+          totalCusto: sql<number>`COALESCE(SUM(COALESCE(${epiDeliveries.valorCobrado}::numeric, 0)), 0)`,
+          funcUnicos: sql<number>`COUNT(DISTINCT ${epiDeliveries.employeeId})`,
+        }).from(epiDeliveries).where(and(inArray(epiDeliveries.companyId, ids), isNull(epiDeliveries.deletedAt))),
 
-      // 1. Distribuição por categoria (EPI, Uniforme, Calçado)
-      const porCategoria = allEpis.reduce((acc, e) => {
-        const cat = e.categoria || 'EPI';
-        if (!acc[cat]) acc[cat] = { qtdItens: 0, estoque: 0, valor: 0 };
-        acc[cat].qtdItens++;
-        acc[cat].estoque += (e.quantidadeEstoque || 0);
-        acc[cat].valor += (e.valorProduto ? parseFloat(String(e.valorProduto)) : 0) * (e.quantidadeEstoque || 0);
-        return acc;
-      }, {} as Record<string, { qtdItens: number; estoque: number; valor: number }>);
+        db.select({
+          valorObras: sql<number>`COALESCE(SUM(${epiEstoqueObra.quantidade} * COALESCE(${epis.valorProduto}, 0)), 0)`,
+        }).from(epiEstoqueObra)
+          .leftJoin(epis, eq(epiEstoqueObra.epiId, epis.id))
+          .where(and(inArray(epiEstoqueObra.companyId, ids), sql`${epiEstoqueObra.quantidade} > 0`)),
 
-      // 2. Consumo mensal (últimos 12 meses)
+        db.select({
+          categoria: sql<string>`COALESCE(${epis.categoria}, 'EPI')`,
+          qtdItens: sql<number>`COUNT(*)`,
+          estoque: sql<number>`COALESCE(SUM(${epis.quantidadeEstoque}), 0)`,
+          valor: sql<number>`COALESCE(SUM(COALESCE(${epis.valorProduto}, 0) * COALESCE(${epis.quantidadeEstoque}, 0)), 0)`,
+        }).from(epis).where(inArray(epis.companyId, ids)).groupBy(sql`COALESCE(${epis.categoria}, 'EPI')`),
+
+        db.select({
+          entregasMes: sql<number>`COUNT(*)`,
+        }).from(epiDeliveries).where(and(
+          inArray(epiDeliveries.companyId, ids),
+          isNull(epiDeliveries.deletedAt),
+          gte(epiDeliveries.dataEntrega, ha30diasStr),
+        )),
+
+        db.select({
+          total: sql<number>`COUNT(*)`,
+          valorTotal: sql<number>`COALESCE(SUM(COALESCE(${epiDiscountAlerts.valorTotal}::numeric, 0)), 0)`,
+        }).from(epiDiscountAlerts)
+          .where(and(eq(epiDiscountAlerts.companyId, input.companyId), eq(epiDiscountAlerts.status, 'pendente'))),
+      ]);
+
+      const eStats = episStats[0];
+      const dStats = deliveryStats[0];
+      const totalItens = Number(eStats?.totalItens ?? 0);
+      const estoqueTotal = Number(eStats?.estoqueTotal ?? 0);
+      const estoqueBaixo = Number(eStats?.estoqueBaixo ?? 0);
+      const caVencido = Number(eStats?.caVencido ?? 0);
+      const valorTotalInventario = parseFloat(String(eStats?.valorTotalInventario ?? 0));
+      const totalEntregas = Number(dStats?.totalEntregas ?? 0);
+      const unidadesEntregues = Number(dStats?.unidadesEntregues ?? 0);
+      const totalCusto = parseFloat(String(dStats?.totalCusto ?? 0));
+      const funcUnicos = Number(dStats?.funcUnicos ?? 0);
+      const valorObras = parseFloat(String(obrasValorRows[0]?.valorObras || 0));
+      const valorTotalGeral = valorTotalInventario + valorObras;
+      const entregasMes = Number(entregasMesCount[0]?.entregasMes ?? 0);
+      const custoMedioPorFunc = funcUnicos > 0 ? totalCusto / funcUnicos : 0;
+
+      const porCategoria: Record<string, { qtdItens: number; estoque: number; valor: number }> = {};
+      categoriaRows.forEach(r => {
+        porCategoria[String(r.categoria)] = {
+          qtdItens: Number(r.qtdItens),
+          estoque: Number(r.estoque),
+          valor: parseFloat(String(r.valor)),
+        };
+      });
+
       const consumoMensal: { mes: string; entregas: number; unidades: number; custo: number }[] = [];
+      const monthConditions: string[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        monthConditions.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+      const consumoRows = await db.execute(sql`
+        SELECT
+          to_char(${epiDeliveries.dataEntrega}::date, 'YYYY-MM') AS mes_key,
+          COUNT(*) AS entregas,
+          COALESCE(SUM(COALESCE(${epiDeliveries.quantidade}, 1)), 0) AS unidades,
+          COALESCE(SUM(COALESCE(${epiDeliveries.valorCobrado}::numeric, 0)), 0) AS custo
+        FROM ${epiDeliveries}
+        WHERE ${epiDeliveries.companyId} IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND ${epiDeliveries.deletedAt} IS NULL
+          AND to_char(${epiDeliveries.dataEntrega}::date, 'YYYY-MM') IN (${sql.join(monthConditions.map(m => sql`${m}`), sql`,`)})
+        GROUP BY to_char(${epiDeliveries.dataEntrega}::date, 'YYYY-MM')
+      `);
+      const consumoMap = new Map((consumoRows?.rows ?? consumoRows ?? []).map((r: any) => [r.mes_key, r]));
       for (let i = 11; i >= 0; i--) {
         const d = new Date();
         d.setMonth(d.getMonth() - i);
         const mesKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         const mesLabel = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-        const entregas = allDeliveries.filter(del => del.dataEntrega?.startsWith(mesKey));
-        const unidades = entregas.reduce((s, del) => s + (del.quantidade || 1), 0);
-        const custo = entregas.reduce((s, del) => s + parseFloat(String(del.valorCobrado || '0')), 0);
-        consumoMensal.push({ mes: mesLabel, entregas: entregas.length, unidades, custo });
+        const row = consumoMap.get(mesKey) as any;
+        consumoMensal.push({
+          mes: mesLabel,
+          entregas: row ? Number(row.entregas) : 0,
+          unidades: row ? Number(row.unidades) : 0,
+          custo: row ? parseFloat(String(row.custo)) : 0,
+        });
       }
 
-      // 3. Top 10 EPIs mais entregues
-      const epiEntregaCount: Record<number, { nome: string; ca: string; entregas: number; unidades: number }> = {};
-      allDeliveries.forEach(del => {
-        if (!epiEntregaCount[del.epiId]) {
-          const epiInfo = allEpis.find(e => e.id === del.epiId);
-          epiEntregaCount[del.epiId] = { nome: epiInfo?.nome || 'Desconhecido', ca: epiInfo?.ca || '-', entregas: 0, unidades: 0 };
-        }
-        epiEntregaCount[del.epiId].entregas++;
-        epiEntregaCount[del.epiId].unidades += (del.quantidade || 1);
-      });
-      const topEpis = Object.values(epiEntregaCount)
-        .sort((a, b) => b.unidades - a.unidades)
-        .slice(0, 10);
+      const topEpisRows = await db.select({
+        nome: epis.nome,
+        ca: epis.ca,
+        entregas: sql<number>`COUNT(*)`,
+        unidades: sql<number>`COALESCE(SUM(COALESCE(${epiDeliveries.quantidade}, 1)), 0)`,
+      }).from(epiDeliveries)
+        .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
+        .where(and(inArray(epiDeliveries.companyId, ids), isNull(epiDeliveries.deletedAt)))
+        .groupBy(epiDeliveries.epiId, epis.nome, epis.ca)
+        .orderBy(sql`COALESCE(SUM(COALESCE(${epiDeliveries.quantidade}, 1)), 0) DESC`)
+        .limit(10);
+      const topEpis = topEpisRows.map(r => ({
+        nome: r.nome || 'Desconhecido', ca: r.ca || '-',
+        entregas: Number(r.entregas), unidades: Number(r.unidades),
+      }));
 
-      // 4. Top 10 funcionários que mais recebem EPIs
-      const funcEntregaCount: Record<number, { nome: string; entregas: number; unidades: number }> = {};
-      const allEmployees = await db.select({ id: employees.id, nome: employees.nomeCompleto })
-        .from(employees).where(eq(employees.companyId, input.companyId));
-      const empMap = new Map(allEmployees.map(e => [e.id, e.nome]));
-      allDeliveries.forEach(del => {
-        if (!funcEntregaCount[del.employeeId]) {
-          funcEntregaCount[del.employeeId] = { nome: empMap.get(del.employeeId) || 'Desconhecido', entregas: 0, unidades: 0 };
-        }
-        funcEntregaCount[del.employeeId].entregas++;
-        funcEntregaCount[del.employeeId].unidades += (del.quantidade || 1);
-      });
-      const topFuncionarios = Object.values(funcEntregaCount)
-        .sort((a, b) => b.unidades - a.unidades)
-        .slice(0, 10);
+      const topFuncRows = await db.select({
+        nome: employees.nomeCompleto,
+        entregas: sql<number>`COUNT(*)`,
+        unidades: sql<number>`COALESCE(SUM(COALESCE(${epiDeliveries.quantidade}, 1)), 0)`,
+      }).from(epiDeliveries)
+        .leftJoin(employees, eq(epiDeliveries.employeeId, employees.id))
+        .where(and(inArray(epiDeliveries.companyId, ids), isNull(epiDeliveries.deletedAt)))
+        .groupBy(epiDeliveries.employeeId, employees.nomeCompleto)
+        .orderBy(sql`COALESCE(SUM(COALESCE(${epiDeliveries.quantidade}, 1)), 0) DESC`)
+        .limit(10);
+      const topFuncionarios = topFuncRows.map(r => ({
+        nome: r.nome || 'Desconhecido',
+        entregas: Number(r.entregas), unidades: Number(r.unidades),
+      }));
 
-      // 5. CAs vencendo nos próximos 90 dias
-      const em90dias = new Date();
-      em90dias.setDate(em90dias.getDate() + 90);
-      const em90diasStr = em90dias.toISOString().split("T")[0];
-      const casVencendo = allEpis
-        .filter(e => e.validadeCa && e.validadeCa >= hoje && e.validadeCa <= em90diasStr)
-        .map(e => ({ nome: e.nome, ca: e.ca, validadeCa: e.validadeCa, estoque: e.quantidadeEstoque || 0 }))
-        .sort((a, b) => (a.validadeCa || '').localeCompare(b.validadeCa || ''));
+      const casVencendo = await db.select({
+        nome: epis.nome,
+        ca: epis.ca,
+        validadeCa: epis.validadeCa,
+        estoque: sql<number>`COALESCE(${epis.quantidadeEstoque}, 0)`,
+      }).from(epis)
+        .where(and(
+          inArray(epis.companyId, ids),
+          sql`${epis.validadeCa} IS NOT NULL`,
+          gte(epis.validadeCa, hoje),
+          sql`${epis.validadeCa} <= ${em90diasStr}`,
+        ))
+        .orderBy(epis.validadeCa);
 
-      // 6. Custo médio por funcionário (baseado em valor cobrado nas entregas)
-      const totalCusto = allDeliveries.reduce((s, d) => s + parseFloat(String(d.valorCobrado || '0')), 0);
-      const funcUnicos = new Set(allDeliveries.map(d => d.employeeId)).size;
-      const custoMedioPorFunc = funcUnicos > 0 ? totalCusto / funcUnicos : 0;
-
-      // 7. Entregas por motivo de troca
+      const motivoRows = await db.execute(sql`
+        SELECT COALESCE(NULLIF(${epiDeliveries.motivoTroca}, ''), NULLIF(${epiDeliveries.motivo}, ''), 'Entrega regular') AS motivo,
+               COUNT(*) AS total
+        FROM ${epiDeliveries}
+        WHERE ${epiDeliveries.companyId} IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND ${epiDeliveries.deletedAt} IS NULL
+        GROUP BY COALESCE(NULLIF(${epiDeliveries.motivoTroca}, ''), NULLIF(${epiDeliveries.motivo}, ''), 'Entrega regular')
+      `);
       const porMotivo: Record<string, number> = {};
-      allDeliveries.forEach(del => {
-        const motivo = del.motivoTroca || del.motivo || 'Entrega regular';
-        porMotivo[motivo] = (porMotivo[motivo] || 0) + 1;
+      ((motivoRows?.rows ?? motivoRows ?? []) as any[]).forEach((r: any) => {
+        porMotivo[r.motivo] = Number(r.total);
       });
 
-      // 8. Custo por obra
-      const allObras = await db.select({ id: obras.id, nome: obras.nome })
-        .from(obras).where(eq(obras.companyId, input.companyId));
-      const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
-      const custoPorObra: Record<string, { nome: string; entregas: number; unidades: number; custo: number }> = {};
-      for (const del of allDeliveries) {
-        const emp = allEmployees.find(e => e.id === del.employeeId);
-        // Get employee's obra from the full employee record
-        const [empAloc] = await db.select({ obraId: obraFuncionarios.obraId }).from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, del.employeeId), eq(obraFuncionarios.isActive, 1)));
-        const obraId = empAloc?.obraId;
-        const obraNome = obraId ? (obraMap.get(obraId) || 'Sem obra') : 'Sem obra';
-        if (!custoPorObra[obraNome]) custoPorObra[obraNome] = { nome: obraNome, entregas: 0, unidades: 0, custo: 0 };
-        custoPorObra[obraNome].entregas++;
-        custoPorObra[obraNome].unidades += (del.quantidade || 1);
-        custoPorObra[obraNome].custo += parseFloat(String(del.valorCobrado || '0'));
-      }
-      const custoPorObraList = Object.values(custoPorObra).sort((a, b) => b.unidades - a.unidades);
-
-      // 9. Alertas de desconto pendentes
-      const alertasPendentes = await db.select().from(epiDiscountAlerts)
-        .where(and(eq(epiDiscountAlerts.companyId, input.companyId), eq(epiDiscountAlerts.status, 'pendente')));
-      const valorDescontosPendentes = alertasPendentes.reduce((s, a) => s + parseFloat(String(a.valorTotal || '0')), 0);
+      const custoPorObraRows = await db.execute(sql`
+        SELECT COALESCE(o.nome, 'Sem obra') AS obra_nome,
+               COUNT(*) AS entregas,
+               COALESCE(SUM(COALESCE(ed.quantidade, 1)), 0) AS unidades,
+               COALESCE(SUM(COALESCE(ed."valor_cobrado"::numeric, 0)), 0) AS custo
+        FROM epi_deliveries ed
+        LEFT JOIN LATERAL (
+          SELECT of2."obraId" FROM obra_funcionarios of2
+          WHERE of2."employeeId" = ed."employeeId" AND of2."isActive" = 1
+          LIMIT 1
+        ) aloc ON true
+        LEFT JOIN obras o ON o.id = aloc."obraId"
+        WHERE ed."companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND ed."deletedAt" IS NULL
+        GROUP BY COALESCE(o.nome, 'Sem obra')
+        ORDER BY unidades DESC
+      `);
+      const custoPorObraList = ((custoPorObraRows?.rows ?? custoPorObraRows ?? []) as any[]).map((r: any) => ({
+        nome: r.obra_nome,
+        entregas: Number(r.entregas),
+        unidades: Number(r.unidades),
+        custo: parseFloat(String(r.custo)),
+      }));
 
       return {
         totalItens,
@@ -858,7 +938,6 @@ export const episRouter = router({
         valorObras,
         valorTotalGeral,
         unidadesEntregues,
-        // Analytics expandidos
         porCategoria,
         consumoMensal,
         topEpis,
@@ -867,8 +946,8 @@ export const episRouter = router({
         custoMedioPorFunc,
         porMotivo,
         custoPorObraList,
-        alertasPendentes: alertasPendentes.length,
-        valorDescontosPendentes,
+        alertasPendentes: Number(alertasRows[0]?.total ?? 0),
+        valorDescontosPendentes: parseFloat(String(alertasRows[0]?.valorTotal ?? 0)),
         funcUnicos,
       };
     }),

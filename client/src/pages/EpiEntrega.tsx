@@ -70,10 +70,11 @@ export default function EpiEntrega() {
     { enabled: !!companyId }
   );
 
-  const { data: episList = [] } = trpc.epis.list.useQuery(
-    { companyId, companyIds },
+  const episRaw = trpc.epis.list.useQuery(
+    { companyId, companyIds, limit: 200, offset: 0 },
     { enabled: !!companyId }
   );
+  const episList = episRaw.data?.items ?? [];
 
   const { data: allEmployees = [] } = trpc.employees.list.useQuery(
     { companyId, companyIds, excludeTerminated: true },
