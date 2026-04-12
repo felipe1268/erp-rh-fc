@@ -1257,6 +1257,8 @@ export default function Epis() {
       deliveriesQ.refetch(); episQ.refetch(); statsQ.refetch();
       if (successCount > 0) {
         toast.success(`${successCount} EPI(s) entregue(s) com sucesso!`);
+        setFichaSignature(null);
+        setResponsavelSignature(null);
         const emp = employeesList.find((e: any) => String(e.id) === entregaForm.employeeId);
         const obraSel = obrasList.find((o: any) => String(o.id) === entregaForm.obraId);
         if (allItens.length === 1) {
@@ -2430,7 +2432,7 @@ export default function Epis() {
                                 <td className="p-3 text-center">
                                   <div className="flex items-center justify-center gap-1">
                                     <Button size="icon" variant="ghost" className="h-7 w-7" title="Ficha de Entrega"
-                                      onClick={() => { setFichaDelivery({ ...first, _grupoItems: items }); setViewMode("ficha_epi"); }}>
+                                      onClick={() => { setFichaSignature(null); setResponsavelSignature(null); setFichaDelivery({ ...first, _grupoItems: items }); setViewMode("ficha_epi"); }}>
                                       <FileText className="h-3.5 w-3.5 text-blue-600" />
                                     </Button>
                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Remover entrega" onClick={() => {
@@ -2498,7 +2500,7 @@ export default function Epis() {
                                   </Button>
                                 )}
                                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Ficha de Entrega"
-                                  onClick={() => { setFichaDelivery(d); setViewMode("ficha_epi"); }}>
+                                  onClick={() => { setFichaSignature(null); setResponsavelSignature(null); setFichaDelivery(d); setViewMode("ficha_epi"); }}>
                                   <FileText className="h-3.5 w-3.5 text-blue-600" />
                                 </Button>
                                 {d.fichaUrl && (
