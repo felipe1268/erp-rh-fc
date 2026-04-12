@@ -143,8 +143,11 @@ export default function Funcoes() {
   const iaTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>("todas");
 
+  const [iaGenerating, setIaGenerating] = useState(false);
+
   const startIaProgress = useCallback(() => {
     setIaProgress(0);
+    setIaGenerating(true);
     if (iaTimerRef.current) clearInterval(iaTimerRef.current);
     let p = 0;
     iaTimerRef.current = setInterval(() => {
@@ -157,7 +160,7 @@ export default function Funcoes() {
   const finishIaProgress = useCallback(() => {
     if (iaTimerRef.current) { clearInterval(iaTimerRef.current); iaTimerRef.current = null; }
     setIaProgress(100);
-    setTimeout(() => setIaProgress(0), 600);
+    setTimeout(() => { setIaProgress(0); setIaGenerating(false); }, 1200);
   }, []);
 
   useEffect(() => {
@@ -633,7 +636,7 @@ export default function Funcoes() {
               </div>
             </div>
 
-            {(generatingDesc || generatingOS) && iaProgress > 0 && (
+            {iaGenerating && iaProgress > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-purple-700 font-medium flex items-center gap-1.5">
