@@ -192,6 +192,15 @@ export async function generateEpiReceiptPdf(params: ReceiptParams) {
 // FICHA EPI COMPLETA — gerada a partir do fichaDelivery (Epis.tsx)
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface FichaEpiItem {
+  nomeEpi: string;
+  caEpi?: string;
+  quantidade: number;
+  vidaUtil?: string;
+  valorUnit?: string;
+  motivo?: string;
+}
+
 interface FichaEpiParams {
   nomeFunc: string;
   funcaoFunc?: string;
@@ -211,6 +220,7 @@ interface FichaEpiParams {
   textoDeclaracao?: string;
   assinaturaFuncUrl?: string | null;
   assinaturaResponsavelUrl?: string | null;
+  itensGrupo?: FichaEpiItem[];
 }
 
 async function urlToDataUrl(url: string): Promise<string | null> {
@@ -335,20 +345,28 @@ export async function generateFichaEpiPdf(params: FichaEpiParams): Promise<strin
   headers.forEach((h, i) => pdf.text(h, L + cols[i], y + 5));
   y += 7;
 
-  pdf.setFillColor(255, 255, 255);
-  pdf.rect(M, y, cW, 8, "F");
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
-  pdf.setTextColor(30, 30, 30);
-  pdf.text(nomeEpi.substring(0, 38), L + cols[0], y + 5.5);
-  pdf.text(caEpi || "—", L + cols[1], y + 5.5);
-  pdf.text(String(quantidade), L + cols[2], y + 5.5);
-  pdf.text(vidaUtil || "—", L + cols[3], y + 5.5);
-  pdf.text(valorUnit || "—", L + cols[4], y + 5.5);
-  pdf.text((motivo || "Entrega regular").substring(0, 18), L + cols[5], y + 5.5);
+  const itens: FichaEpiItem[] = params.itensGrupo && params.itensGrupo.length > 0
+    ? params.itensGrupo
+    : [{ nomeEpi, caEpi, quantidade, vidaUtil, valorUnit, motivo }];
+  const rowH = 8;
+  const tableStartY = y;
+  itens.forEach((item, idx) => {
+    pdf.setFillColor(idx % 2 === 0 ? 255 : 248, idx % 2 === 0 ? 255 : 250, idx % 2 === 0 ? 255 : 252);
+    pdf.rect(M, y, cW, rowH, "F");
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(30, 30, 30);
+    pdf.text((item.nomeEpi || "—").substring(0, 38), L + cols[0], y + 5.5);
+    pdf.text(item.caEpi || "—", L + cols[1], y + 5.5);
+    pdf.text(String(item.quantidade), L + cols[2], y + 5.5);
+    pdf.text(item.vidaUtil || "—", L + cols[3], y + 5.5);
+    pdf.text(item.valorUnit || "—", L + cols[4], y + 5.5);
+    pdf.text((item.motivo || "Entrega regular").substring(0, 18), L + cols[5], y + 5.5);
+    y += rowH;
+  });
   pdf.setDrawColor(200, 200, 200);
-  pdf.rect(M, y - 7, cW, 15);
-  y += 12;
+  pdf.rect(M, tableStartY - 7, cW, 7 + itens.length * rowH);
+  y += 4;
 
   // ── Policy box ──
   pdf.setDrawColor(27, 42, 74);

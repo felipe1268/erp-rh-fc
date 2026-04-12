@@ -1062,6 +1062,7 @@ export const epiDeliveries = pgTable("epi_deliveries", {
         biometriaFacialUrl: text("biometria_facial_url"),
         biometriaCapturadaEm: timestamp("biometria_capturada_em", { mode: 'string' }),
         modoIdentificacao: varchar("modo_identificacao", { length: 20 }).default('manual'),
+        grupoEntregaId: varchar("grupo_entrega_id", { length: 36 }),
 },
 (table) => [
         index("idx_ed_company").on(table.companyId),

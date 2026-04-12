@@ -1245,6 +1245,8 @@ export default function Epis() {
         fotoFileName = fotoEstado.file.name;
       }
 
+      const grupoEntregaId = allItens.length > 1 ? crypto.randomUUID() : undefined;
+
       setEntregaSaving(true);
       let successCount = 0;
       let lastError = "";
@@ -1265,6 +1267,7 @@ export default function Epis() {
             obraId: entregaForm.origemEntrega === 'obra'
               ? parseInt(entregaForm.origemObraId)
               : (entregaForm.obraId ? parseInt(entregaForm.obraId) : undefined),
+            grupoEntregaId,
           });
           successCount++;
         } catch (err: any) {
@@ -1515,6 +1518,22 @@ export default function Epis() {
                     const vidaUtil = epi?.tempoMinimoTroca
                       ? `${epi.tempoMinimoTroca} dias`
                       : undefined;
+                    const grupoItems = fichaDelivery._grupoItems as any[] | undefined;
+                    const itensGrupo = grupoItems ? grupoItems.map((item: any) => {
+                      const itemEpi = episAllList.find((e: any) => e.id === item.epiId);
+                      const itemValor = itemEpi?.valorProduto
+                        ? (parseFloat(String(itemEpi.valorProduto)) * (1 + (bdiQ.data?.bdiPercentual ?? 40) / 100))
+                            .toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                        : undefined;
+                      return {
+                        nomeEpi: item.nomeEpi || itemEpi?.nome || "",
+                        caEpi: item.caEpi || itemEpi?.ca,
+                        quantidade: item.quantidade,
+                        vidaUtil: itemEpi?.tempoMinimoTroca ? `${itemEpi.tempoMinimoTroca} dias` : undefined,
+                        valorUnit: itemValor,
+                        motivo: item.motivo || "Entrega regular",
+                      };
+                    }) : undefined;
                     const base64 = await generateFichaEpiPdf({
                       nomeFunc: fichaDelivery.nomeFunc || emp?.nomeCompleto || "",
                       funcaoFunc: fichaDelivery.funcaoFunc || emp?.funcao,
@@ -1534,6 +1553,7 @@ export default function Epis() {
                       textoDeclaracao: formTextQ.data?.texto,
                       assinaturaFuncUrl: fichaDelivery.assinaturaUrl || fichaSignature,
                       assinaturaResponsavelUrl: fichaDelivery.assinaturaResponsavelUrl || responsavelSignature,
+                      itensGrupo,
                     });
                     const nomeFunc = fichaDelivery.nomeFunc || emp?.nomeCompleto || "Funcionario";
                     const fileName = `Ficha_EPI_${nomeFunc.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`;
@@ -1625,22 +1645,27 @@ export default function Epis() {
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b">
-                  <td className="p-2">{fichaDelivery.nomeEpi || epi?.nome || "—"}</td>
-                  <td className="p-2 text-center">{fichaDelivery.caEpi || epi?.ca || "—"}</td>
-                  <td className="p-2 text-center">{fichaDelivery.quantidade}</td>
-                  <td className="p-2 text-center">
-                    {epi?.tempoMinimoTroca ? `${epi.tempoMinimoTroca} dias` : "—"}
-                  </td>
-                  <td className="p-2 text-center">
-                    {epi?.valorProduto ? (() => {
-                      const bdiPct = bdiQ.data?.bdiPercentual ?? 40;
-                      const valorComBdi = parseFloat(String(epi.valorProduto)) * (1 + bdiPct / 100);
-                      return valorComBdi.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                    })() : "—"}
-                  </td>
-                  <td className="p-2 text-center">{fichaDelivery.motivo || "Entrega regular"}</td>
-                </tr>
+                {(fichaDelivery._grupoItems || [fichaDelivery]).map((item: any) => {
+                  const itemEpi = episAllList.find((e: any) => e.id === item.epiId) || epi;
+                  return (
+                    <tr key={item.id} className="border-b">
+                      <td className="p-2">{item.nomeEpi || itemEpi?.nome || "—"}</td>
+                      <td className="p-2 text-center">{item.caEpi || itemEpi?.ca || "—"}</td>
+                      <td className="p-2 text-center">{item.quantidade}</td>
+                      <td className="p-2 text-center">
+                        {itemEpi?.tempoMinimoTroca ? `${itemEpi.tempoMinimoTroca} dias` : "—"}
+                      </td>
+                      <td className="p-2 text-center">
+                        {itemEpi?.valorProduto ? (() => {
+                          const bdiPct = bdiQ.data?.bdiPercentual ?? 40;
+                          const valorComBdi = parseFloat(String(itemEpi.valorProduto)) * (1 + bdiPct / 100);
+                          return valorComBdi.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                        })() : "—"}
+                      </td>
+                      <td className="p-2 text-center">{item.motivo || "Entrega regular"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
 
@@ -2236,14 +2261,91 @@ export default function Epis() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredDeliveries.map((d: any) => {
+                      {(() => {
                         const motivoLabel: Record<string, string> = {
                           perda: "Perda",
                           mau_uso: "Mau Uso",
                           desgaste_normal: "Desgaste",
                           furto: "Furto",
                         };
-                        return (
+                        const grouped: any[] = [];
+                        const grupoMap = new Map<string, any[]>();
+                        filteredDeliveries.forEach((d: any) => {
+                          if (d.grupoEntregaId) {
+                            if (!grupoMap.has(d.grupoEntregaId)) {
+                              grupoMap.set(d.grupoEntregaId, []);
+                              grouped.push({ type: 'group', grupoEntregaId: d.grupoEntregaId });
+                            }
+                            grupoMap.get(d.grupoEntregaId)!.push(d);
+                          } else {
+                            grouped.push({ type: 'single', delivery: d });
+                          }
+                        });
+                        return grouped.map((entry: any, idx: number) => {
+                          if (entry.type === 'group') {
+                            const items = grupoMap.get(entry.grupoEntregaId)!;
+                            const first = items[0];
+                            return (
+                              <tr key={`grp-${entry.grupoEntregaId}`} className="border-b last:border-0 hover:bg-muted/30">
+                                <td className="p-3 text-xs">
+                                  {first.dataEntrega ? new Date(first.dataEntrega + "T00:00:00").toLocaleDateString("pt-BR") : "—"}
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex items-center gap-2">
+                                    <User className="h-3.5 w-3.5 text-blue-600" />
+                                    <div>
+                                      <span className="font-medium text-xs">{first.nomeFunc || "—"}</span>
+                                      {first.funcaoFunc && <span className="text-[10px] text-muted-foreground ml-1">({first.funcaoFunc})</span>}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="p-3">
+                                  <div className="space-y-1">
+                                    {items.map((d: any) => (
+                                      <div key={d.id} className="flex items-center gap-2">
+                                        {getEpiIcon(d.nomeEpi || "", "h-3.5 w-3.5")}
+                                        <span className="text-xs">{d.nomeEpi || "—"}</span>
+                                        {d.caEpi && <Badge variant="outline" className="text-[10px]">CA: {d.caEpi}</Badge>}
+                                        <span className="text-[10px] text-muted-foreground">×{d.quantidade}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="p-3 text-center font-bold">{items.reduce((s: number, d: any) => s + (d.quantidade || 1), 0)}</td>
+                                <td className="p-3 text-xs">
+                                  {first.motivoTroca ? (
+                                    <Badge variant={['perda', 'mau_uso', 'furto'].includes(first.motivoTroca) ? "destructive" : "secondary"} className="text-[10px]">
+                                      {motivoLabel[first.motivoTroca] || first.motivoTroca}
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground">Entrega regular</span>
+                                  )}
+                                </td>
+                                <td className="p-3 text-center text-xs">
+                                  {items.some((d: any) => d.valorCobrado) ? (
+                                    <span className="text-red-600 font-semibold">R$ {items.reduce((s: number, d: any) => s + (d.valorCobrado ? parseFloat(String(d.valorCobrado)) * (d.quantidade || 1) : 0), 0).toFixed(2)}</span>
+                                  ) : "—"}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Button size="icon" variant="ghost" className="h-7 w-7" title="Ficha de Entrega"
+                                      onClick={() => { setFichaDelivery({ ...first, _grupoItems: items }); setViewMode("ficha_epi"); }}>
+                                      <FileText className="h-3.5 w-3.5 text-blue-600" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Remover entrega" onClick={() => {
+                                      if (confirm(`Remover ${items.length} EPIs desta entrega? O estoque será devolvido.`)) {
+                                        items.forEach((d: any) => deleteDeliveryMut.mutate({ id: d.id, epiId: d.epiId, quantidade: d.quantidade }));
+                                      }
+                                    }}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+                          const d = entry.delivery;
+                          return (
                           <tr key={d.id} className="border-b last:border-0 hover:bg-muted/30">
                             <td className="p-3 text-xs">
                               {d.dataEntrega ? new Date(d.dataEntrega + "T00:00:00").toLocaleDateString("pt-BR") : "—"}
@@ -2302,7 +2404,8 @@ export default function Epis() {
                             </td>
                           </tr>
                         );
-                      })}
+                        });
+                      })()}
                     </tbody>
                   </table>
                 </div>

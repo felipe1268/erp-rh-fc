@@ -261,6 +261,7 @@ export const episRouter = router({
           tempoMinimoTrocaEpi: epis.tempoMinimoTroca,
           nomeFunc: employees.nomeCompleto,
           funcaoFunc: employees.funcao,
+          grupoEntregaId: epiDeliveries.grupoEntregaId,
         })
           .from(epiDeliveries)
           .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
@@ -365,6 +366,7 @@ export const episRouter = router({
       fotoEstadoFileName: z.string().optional(),
       origemEntrega: z.enum(['central','obra']).default('central'),
       obraId: z.number().optional(),
+      grupoEntregaId: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -415,6 +417,7 @@ export const episRouter = router({
         fotoEstadoUrl,
         origemEntrega: input.origemEntrega,
         obraId: input.obraId || null,
+        grupoEntregaId: input.grupoEntregaId || null,
       } as any).returning();
 
       // Update stock based on origin
