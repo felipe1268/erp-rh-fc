@@ -17,6 +17,8 @@ export interface SearchableSelectOption {
   searchExtra?: string;
   /** Subtítulo exibido abaixo do label */
   subtitle?: string;
+  /** URL da imagem/foto do item */
+  imageUrl?: string;
 }
 
 interface SearchableSelectProps {
@@ -135,6 +137,14 @@ export function SearchableSelect({
                     value === opt.value ? "opacity-100" : "opacity-0"
                   )}
                 />
+                {opt.imageUrl && (
+                  <img
+                    src={opt.imageUrl}
+                    alt=""
+                    className="w-8 h-8 rounded object-cover mr-2 shrink-0 border border-gray-200"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                )}
                 <div className="flex flex-col items-start text-left min-w-0">
                   <span className="truncate w-full">{opt.label}</span>
                   {opt.subtitle && (

@@ -1438,6 +1438,7 @@ export default function Epis() {
                         label: `${e.nome}${e.tamanho ? ` (${e.tamanho})` : ""} ${e.ca ? `CA: ${e.ca}` : ""}`,
                         subtitle: `Estoque: ${e.quantidadeEstoque ?? 0}`,
                         searchExtra: `${e.ca || ""} ${e.nome || ""} ${e.tamanho || ""}`,
+                        imageUrl: e.fotoUrl || undefined,
                       }))}
                       value={entregaForm.epiId || undefined}
                       onValueChange={v => setEntregaForm(f => ({ ...f, epiId: v }))}
