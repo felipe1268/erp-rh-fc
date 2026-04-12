@@ -12,7 +12,7 @@ import { trpc } from "@/lib/trpc";
 import { nowBrasilia } from "@/lib/dateUtils";
 import { Plus, Search, Pencil, Trash2, Briefcase, Sparkles, FileText, Shield, ChevronDown, ChevronUp, Loader2, Users, AlertTriangle, Filter, Printer } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
@@ -139,7 +139,30 @@ export default function Funcoes() {
   const [viewingId, setViewingId] = useState<number | null>(null);
   const [generatingDesc, setGeneratingDesc] = useState(false);
   const [generatingOS, setGeneratingOS] = useState(false);
+  const [iaProgress, setIaProgress] = useState(0);
+  const iaTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>("todas");
+
+  const startIaProgress = useCallback(() => {
+    setIaProgress(0);
+    if (iaTimerRef.current) clearInterval(iaTimerRef.current);
+    let p = 0;
+    iaTimerRef.current = setInterval(() => {
+      p += Math.random() * 8 + 2;
+      if (p >= 92) p = 92;
+      setIaProgress(Math.round(p));
+    }, 400);
+  }, []);
+
+  const finishIaProgress = useCallback(() => {
+    if (iaTimerRef.current) { clearInterval(iaTimerRef.current); iaTimerRef.current = null; }
+    setIaProgress(100);
+    setTimeout(() => setIaProgress(0), 600);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (iaTimerRef.current) clearInterval(iaTimerRef.current); };
+  }, []);
 
   // Helper para verificar completude
   const isComplete = (fn: any) => {
@@ -205,13 +228,16 @@ export default function Funcoes() {
   const handleGenerateDescription = async () => {
     if (!form.nome.trim()) { toast.error("Preencha o nome da função primeiro"); return; }
     setGeneratingDesc(true);
+    startIaProgress();
     try {
       const result = await generateDescMut.mutateAsync({ companyId, companyIds, nomeFuncao: form.nome,
         cbo: form.cbo || undefined,
       });
+      finishIaProgress();
       setForm(f => ({ ...f, descricao: result.descricao, ordemServico: result.ordemServico }));
       toast.success("Descrição gerada pela IA! Revise e ajuste se necessário.");
     } catch (e: any) {
+      finishIaProgress();
       toast.error(e.message || "Erro ao gerar descrição");
     } finally {
       setGeneratingDesc(false);
@@ -221,13 +247,16 @@ export default function Funcoes() {
   const handleGenerateOS = async () => {
     if (!form.nome.trim()) { toast.error("Preencha o nome da função primeiro"); return; }
     setGeneratingOS(true);
+    startIaProgress();
     try {
       const result = await generateDescMut.mutateAsync({ companyId, companyIds, nomeFuncao: form.nome,
         cbo: form.cbo || undefined,
       });
+      finishIaProgress();
       setForm(f => ({ ...f, ordemServico: result.ordemServico, descricao: result.descricao }));
       toast.success("Ordem de Serviço gerada pela IA! Revise e ajuste se necessário.");
     } catch (e: any) {
+      finishIaProgress();
       toast.error(e.message || "Erro ao gerar Ordem de Serviço");
     } finally {
       setGeneratingOS(false);
@@ -603,6 +632,35 @@ export default function Funcoes() {
                 />
               </div>
             </div>
+
+            {(generatingDesc || generatingOS) && iaProgress > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-purple-700 font-medium flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                    {iaProgress < 100 ? "Gerando com IA..." : "Concluído!"}
+                  </span>
+                  <span className="text-purple-600 font-semibold tabular-nums">{iaProgress}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-300 ease-out"
+                    style={{
+                      width: `${iaProgress}%`,
+                      background: iaProgress < 100
+                        ? 'linear-gradient(90deg, #7c3aed, #a78bfa)'
+                        : 'linear-gradient(90deg, #16a34a, #4ade80)',
+                    }}
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  {iaProgress < 30 ? "Consultando Regras de Ouro e legislação..." :
+                   iaProgress < 60 ? "Analisando CBO e normas regulamentadoras..." :
+                   iaProgress < 90 ? "Redigindo descrição e ordem de serviço..." :
+                   iaProgress < 100 ? "Finalizando geração..." : "Texto gerado com sucesso!"}
+                </p>
+              </div>
+            )}
 
             {/* Info box */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">

@@ -144,7 +144,8 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const rawContent = response.choices?.[0]?.message?.content;
       if (!rawContent) throw new Error("Falha ao gerar descrição com IA");
       const content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
-      const parsed = JSON.parse(content);
+      const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+      const parsed = JSON.parse(cleaned);
       return {
         descricao: parsed.descricao,
         ordemServico: parsed.ordemServico,
@@ -235,7 +236,8 @@ Responda em JSON válido:`;
           const rawContent = response.choices?.[0]?.message?.content;
           if (!rawContent) throw new Error("Resposta vazia da IA");
           const content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
-          const parsed = JSON.parse(content);
+          const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+          const parsed = JSON.parse(cleaned);
 
           // Atualizar apenas campos vazios
           const updateData: any = {};
