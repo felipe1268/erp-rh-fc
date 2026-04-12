@@ -151,10 +151,16 @@ export default function Funcoes() {
     if (iaTimerRef.current) clearInterval(iaTimerRef.current);
     let p = 0;
     iaTimerRef.current = setInterval(() => {
-      p += Math.random() * 8 + 2;
-      if (p >= 92) p = 92;
+      if (p < 70) {
+        p += Math.random() * 6 + 3;
+      } else if (p < 90) {
+        p += Math.random() * 2 + 0.5;
+      } else {
+        p += Math.random() * 0.3 + 0.1;
+      }
+      if (p > 99) p = 99;
       setIaProgress(Math.round(p));
-    }, 400);
+    }, 500);
   }, []);
 
   const finishIaProgress = useCallback(() => {
@@ -657,10 +663,11 @@ export default function Funcoes() {
                   />
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  {iaProgress < 30 ? "Consultando Regras de Ouro e legislação..." :
-                   iaProgress < 60 ? "Analisando CBO e normas regulamentadoras..." :
-                   iaProgress < 90 ? "Redigindo descrição e ordem de serviço..." :
-                   iaProgress < 100 ? "Finalizando geração..." : "Texto gerado com sucesso!"}
+                  {iaProgress < 20 ? "Consultando Regras de Ouro e legislação..." :
+                   iaProgress < 45 ? "Analisando CBO e normas regulamentadoras..." :
+                   iaProgress < 70 ? "Redigindo descrição da função..." :
+                   iaProgress < 85 ? "Elaborando ordem de serviço NR-1..." :
+                   iaProgress < 100 ? "Finalizando e revisando texto..." : "Texto gerado com sucesso!"}
                 </p>
               </div>
             )}
