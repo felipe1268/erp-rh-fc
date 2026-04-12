@@ -1427,44 +1427,6 @@ export default function Epis() {
                 </div>
               </div>
 
-              {entregaItens.length > 0 && (
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="bg-[#1B2A4A] text-white px-4 py-2 text-sm font-semibold flex items-center gap-2">
-                    <Package className="h-4 w-4" /> EPIs para Entrega ({entregaItens.length})
-                  </div>
-                  <div className="divide-y">
-                    {entregaItens.map((item) => {
-                      const epi = episAllList.find((e: any) => String(e.id) === item.epiId);
-                      if (!epi) return null;
-                      const isCharge = item.motivoTroca && ['perda', 'mau_uso', 'furto'].includes(item.motivoTroca);
-                      return (
-                        <div key={item.epiId} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50">
-                          {epi.fotoUrl ? (
-                            <img src={epi.fotoUrl} alt={epi.nome} className="w-10 h-10 rounded object-cover border flex-shrink-0" />
-                          ) : (
-                            <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center border flex-shrink-0"><HardHat className="h-4 w-4 text-gray-400" /></div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{epi.nome}{epi.tamanho ? ` (${epi.tamanho})` : ""}</p>
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              {epi.ca && <span>CA: {epi.ca}</span>}
-                              {isCharge && <span className="text-red-600 font-medium">Desconto</span>}
-                              {item.motivoTroca && !isCharge && <span className="text-gray-400">{item.motivoTroca === 'desgaste_normal' ? 'Desgaste' : 'Sem troca'}</span>}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button type="button" onClick={() => updateEntregaItemQtd(item.epiId, item.quantidade - 1)} className="w-7 h-7 rounded border flex items-center justify-center hover:bg-gray-100"><Minus className="h-3 w-3" /></button>
-                            <Input type="number" min={1} value={item.quantidade} onChange={e => updateEntregaItemQtd(item.epiId, parseInt(e.target.value) || 1)} className="w-14 h-7 text-center text-sm px-1" />
-                            <button type="button" onClick={() => updateEntregaItemQtd(item.epiId, item.quantidade + 1)} className="w-7 h-7 rounded border flex items-center justify-center hover:bg-gray-100"><Plus className="h-3 w-3" /></button>
-                          </div>
-                          <button type="button" onClick={() => removeEntregaItem(item.epiId)} className="text-red-500 hover:text-red-700 p-1"><Trash2 className="h-4 w-4" /></button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 space-y-3">
                 <p className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Plus className="h-4 w-4" /> Adicionar EPI</p>
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_160px_auto] gap-2 items-end">
@@ -1507,6 +1469,44 @@ export default function Epis() {
                   </Button>
                 </div>
               </div>
+
+              {entregaItens.length > 0 && (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-[#1B2A4A] text-white px-4 py-2 text-sm font-semibold flex items-center gap-2">
+                    <Package className="h-4 w-4" /> EPIs para Entrega ({entregaItens.length})
+                  </div>
+                  <div className="divide-y">
+                    {entregaItens.map((item) => {
+                      const epi = episAllList.find((e: any) => String(e.id) === item.epiId);
+                      if (!epi) return null;
+                      const isCharge = item.motivoTroca && ['perda', 'mau_uso', 'furto'].includes(item.motivoTroca);
+                      return (
+                        <div key={item.epiId} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50">
+                          {epi.fotoUrl ? (
+                            <img src={epi.fotoUrl} alt={epi.nome} className="w-10 h-10 rounded object-cover border flex-shrink-0" />
+                          ) : (
+                            <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center border flex-shrink-0"><HardHat className="h-4 w-4 text-gray-400" /></div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{epi.nome}{epi.tamanho ? ` (${epi.tamanho})` : ""}</p>
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              {epi.ca && <span>CA: {epi.ca}</span>}
+                              {isCharge && <span className="text-red-600 font-medium">Desconto</span>}
+                              {item.motivoTroca && !isCharge && <span className="text-gray-400">{item.motivoTroca === 'desgaste_normal' ? 'Desgaste' : 'Sem troca'}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button type="button" onClick={() => updateEntregaItemQtd(item.epiId, item.quantidade - 1)} className="w-7 h-7 rounded border flex items-center justify-center hover:bg-gray-100"><Minus className="h-3 w-3" /></button>
+                            <Input type="number" min={1} value={item.quantidade} onChange={e => updateEntregaItemQtd(item.epiId, parseInt(e.target.value) || 1)} className="w-14 h-7 text-center text-sm px-1" />
+                            <button type="button" onClick={() => updateEntregaItemQtd(item.epiId, item.quantidade + 1)} className="w-7 h-7 rounded border flex items-center justify-center hover:bg-gray-100"><Plus className="h-3 w-3" /></button>
+                          </div>
+                          <button type="button" onClick={() => removeEntregaItem(item.epiId)} className="text-red-500 hover:text-red-700 p-1"><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-4">
                 <Button variant="outline" onClick={() => { setViewMode("entregas"); resetEntregaForm(); }}>Cancelar</Button>
