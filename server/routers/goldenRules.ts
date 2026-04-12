@@ -118,7 +118,8 @@ IMPORTANTE: Respeite rigorosamente todas as Regras de Ouro da empresa listadas a
 
 Responda EXATAMENTE no formato JSON abaixo:`;
 
-      const response = await invokeLLM({
+      console.log(`[GoldenRules] Gerando descrição para "${input.nomeFuncao}"...`);
+      const llmPromise = invokeLLM({
         messages: [
           { role: "system", content: "Você é um especialista em RH e SST brasileiro. Responda sempre em JSON válido." },
           { role: "user", content: prompt },
@@ -140,6 +141,13 @@ Responda EXATAMENTE no formato JSON abaixo:`;
           },
         },
       });
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout: a IA demorou mais de 90 segundos para responder. Tente novamente.")), 90000)
+      );
+
+      const response = await Promise.race([llmPromise, timeoutPromise]);
+      console.log(`[GoldenRules] Resposta recebida para "${input.nomeFuncao}".`);
 
       const rawContent = response.choices?.[0]?.message?.content;
       if (!rawContent) throw new Error("Falha ao gerar descrição com IA");

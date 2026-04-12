@@ -175,6 +175,13 @@ export default function Funcoes() {
     setTimeout(() => { setIaProgress(0); setIaGenerating(false); }, 1500);
   }, []);
 
+  const cancelIaProgress = useCallback(() => {
+    if (iaTimerRef.current) { clearInterval(iaTimerRef.current); iaTimerRef.current = null; }
+    setIaWaiting(false);
+    setIaProgress(0);
+    setIaGenerating(false);
+  }, []);
+
   useEffect(() => {
     return () => { if (iaTimerRef.current) clearInterval(iaTimerRef.current); };
   }, []);
@@ -252,7 +259,7 @@ export default function Funcoes() {
       setForm(f => ({ ...f, descricao: result.descricao, ordemServico: result.ordemServico }));
       toast.success("Descrição gerada pela IA! Revise e ajuste se necessário.");
     } catch (e: any) {
-      finishIaProgress();
+      cancelIaProgress();
       toast.error(e.message || "Erro ao gerar descrição");
     } finally {
       setGeneratingDesc(false);
@@ -271,7 +278,7 @@ export default function Funcoes() {
       setForm(f => ({ ...f, ordemServico: result.ordemServico, descricao: result.descricao }));
       toast.success("Ordem de Serviço gerada pela IA! Revise e ajuste se necessário.");
     } catch (e: any) {
-      finishIaProgress();
+      cancelIaProgress();
       toast.error(e.message || "Erro ao gerar Ordem de Serviço");
     } finally {
       setGeneratingOS(false);
