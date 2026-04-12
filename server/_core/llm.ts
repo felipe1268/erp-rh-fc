@@ -303,93 +303,103 @@ const assertApiKey = () => {
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
-  // Anthropic Claude tem prioridade — com fallback pro Gemini se 429
-  if (isAnthropicAvailable()) {
+  // Gemini tem prioridade (mais rápido), fallback para Claude
+  if (process.env.GOOGLE_API_KEY) {
     try {
-      return await invokeAnthropic(params);
+      return await invokeGemini(params);
     } catch (err: any) {
-      const isRateLimit = err?.message?.includes("Limite de requisições") || err?.message?.includes("429");
-      if (isRateLimit && process.env.GOOGLE_API_KEY) {
-        console.warn("[LLM] Claude esgotou tentativas (429). Tentando fallback para Gemini...");
+      const isRateLimit = err?.message?.includes("429") || err?.message?.includes("rate limit");
+      if (isRateLimit && isAnthropicAvailable()) {
+        console.warn("[LLM] Gemini esgotou tentativas (429). Tentando fallback para Claude...");
       } else {
         throw err;
       }
     }
   }
 
-  // Fallback: Google Gemini via OpenAI-compat endpoint
-  const googleKey = process.env.GOOGLE_API_KEY;
-  if (googleKey) {
-    const { messages, outputSchema, output_schema, responseFormat, response_format, maxTokens, max_tokens } = params;
-
-    const payload: Record<string, unknown> = {
-      model: "gemini-2.5-flash",
-      messages: messages.map((m) => ({
-        role: m.role,
-        content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
-      })),
-      max_tokens: maxTokens ?? max_tokens ?? 4096,
-    };
-
-    const schema = outputSchema ?? output_schema;
-    const fmt = responseFormat ?? response_format;
-    if (schema) {
-      payload.response_format = {
-        type: "json_schema",
-        json_schema: { name: schema.name, schema: schema.schema },
-      };
-    } else if (fmt) {
-      payload.response_format = fmt;
+  // Fallback: Claude
+  if (isAnthropicAvailable()) {
+    try {
+      return await invokeAnthropic(params);
+    } catch (err: any) {
+      throw err;
     }
-
-    const MAX_RETRIES = 4;
-    const bodyStr = JSON.stringify(payload);
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const res = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${googleKey}`,
-          },
-          body: bodyStr,
-        }
-      );
-
-      if (res.ok) {
-        return (await res.json()) as InvokeResult;
-      }
-
-      const errText = await res.text();
-
-      if (res.status === 429 && attempt < MAX_RETRIES) {
-        const retryAfterHeader = res.headers.get("retry-after");
-        let waitMs: number;
-        if (retryAfterHeader) {
-          const secs = parseInt(retryAfterHeader, 10);
-          waitMs = (isNaN(secs) ? 5 : secs) * 1000;
-        } else {
-          waitMs = 1000 * Math.pow(2, attempt) + Math.random() * 500;
-        }
-        waitMs = Math.min(waitMs, 60000);
-        console.warn(`[LLM] Gemini 429 rate limit (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
-        await new Promise(r => setTimeout(r, waitMs));
-        continue;
-      }
-
-      if (res.status === 429) {
-        throw new Error("Limite de requisições da IA atingido. Aguarde alguns minutos e tente novamente.");
-      }
-
-      throw new Error(`Gemini invoke failed: ${res.status} – ${errText}`);
-    }
-
-    throw new Error("Falha ao invocar Gemini após múltiplas tentativas.");
   }
 
   throw new Error("Nenhuma chave de IA disponível");
+}
+
+async function invokeGemini(params: InvokeParams): Promise<InvokeResult> {
+  const googleKey = process.env.GOOGLE_API_KEY;
+  if (!googleKey) throw new Error("Google API key não configurada");
+
+  const { messages, outputSchema, output_schema, responseFormat, response_format, maxTokens, max_tokens } = params;
+
+  const payload: Record<string, unknown> = {
+    model: "gemini-2.5-flash",
+    messages: messages.map((m) => ({
+      role: m.role,
+      content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+    })),
+    max_tokens: maxTokens ?? max_tokens ?? 4096,
+  };
+
+  const schema = outputSchema ?? output_schema;
+  const fmt = responseFormat ?? response_format;
+  if (schema) {
+    payload.response_format = {
+      type: "json_schema",
+      json_schema: { name: schema.name, schema: schema.schema },
+    };
+  } else if (fmt) {
+    payload.response_format = fmt;
+  }
+
+  const MAX_RETRIES = 4;
+  const bodyStr = JSON.stringify(payload);
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${googleKey}`,
+        },
+        body: bodyStr,
+      }
+    );
+
+    if (res.ok) {
+      return (await res.json()) as InvokeResult;
+    }
+
+    const errText = await res.text();
+
+    if (res.status === 429 && attempt < MAX_RETRIES) {
+      const retryAfterHeader = res.headers.get("retry-after");
+      let waitMs: number;
+      if (retryAfterHeader) {
+        const secs = parseInt(retryAfterHeader, 10);
+        waitMs = (isNaN(secs) ? 5 : secs) * 1000;
+      } else {
+        waitMs = 1000 * Math.pow(2, attempt) + Math.random() * 500;
+      }
+      waitMs = Math.min(waitMs, 60000);
+      console.warn(`[LLM] Gemini 429 rate limit (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
+      await new Promise(r => setTimeout(r, waitMs));
+      continue;
+    }
+
+    if (res.status === 429) {
+      throw new Error("Limite de requisições da IA atingido (429). Aguarde alguns minutos e tente novamente.");
+    }
+
+    throw new Error(`Gemini invoke failed: ${res.status} – ${errText}`);
+  }
+
+  throw new Error("Falha ao invocar Gemini após múltiplas tentativas.");
 }
 
 // ── Exported helper: invoke Anthropic with raw base64 image ─────────────────
