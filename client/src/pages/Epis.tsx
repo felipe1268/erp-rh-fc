@@ -13,7 +13,7 @@ import { trpc } from "@/lib/trpc";
 import { handleCurrencyInput, floatToCurrency, parseCurrencyToFloat } from "@/lib/currency";
 import { removeAccents } from "@/lib/searchUtils";
 import {
-  Plus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
+  Plus, Minus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
   DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText, FileDown, Save,
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
