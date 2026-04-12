@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, createAuditLog } from "../db";
-import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees } from "../../drizzle/schema";
+import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -37,6 +37,18 @@ function contarDomingos(ano: number, mes: number): number {
 /** Dias totais em um mês */
 function diasNoMes(ano: number, mes: number): number {
   return new Date(ano, mes, 0).getDate();
+}
+
+/**
+ * Art. 130 CLT — Redução de férias por faltas injustificadas no período aquisitivo
+ * Até 5 faltas: 30 dias | 6-14: 24 dias | 15-23: 18 dias | 24-32: 12 dias | >32: 0 (perde direito)
+ */
+function calcDiasFeriasPorFaltas(faltas: number): number {
+  if (faltas <= 5) return 30;
+  if (faltas <= 14) return 24;
+  if (faltas <= 23) return 18;
+  if (faltas <= 32) return 12;
+  return 0;
 }
 
 /** Calcula período aquisitivo de férias */
@@ -1636,6 +1648,10 @@ export const avisoPrevioFeriasRouter = router({
           vencida: vacationPeriods.vencida,
           pagamentoEmDobro: vacationPeriods.pagamentoEmDobro,
           observacoes: vacationPeriods.observacoes,
+          faltasInjustificadas: vacationPeriods.faltasInjustificadas,
+          diasDireitoOriginal: vacationPeriods.diasDireitoOriginal,
+          dataSugeridaInicio: vacationPeriods.dataSugeridaInicio,
+          dataSugeridaFim: vacationPeriods.dataSugeridaFim,
           createdAt: vacationPeriods.createdAt,
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
@@ -2400,7 +2416,51 @@ export const avisoPrevioFeriasRouter = router({
       }),
 
     // ============================================================
+    // CONSULTAR FALTAS INJUSTIFICADAS NO PERÍODO AQUISITIVO (Art. 130 CLT)
+    // Retorna total de faltas e dias de férias resultantes
+    // ============================================================
+    consultarFaltasPeriodoAquisitivo: protectedProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        periodoAquisitivoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        periodoAquisitivoFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const mesInicio = input.periodoAquisitivoInicio.substring(0, 7);
+        const mesFim = input.periodoAquisitivoFim.substring(0, 7);
+
+        const rows = await db.select({
+          totalFaltas: pontoDescontosResumo.totalFaltasInjustificadas,
+        })
+        .from(pontoDescontosResumo)
+        .where(and(
+          companyFilter(pontoDescontosResumo.companyId, input),
+          eq(pontoDescontosResumo.employeeId, input.employeeId),
+          sql`${pontoDescontosResumo.mesReferencia} >= ${mesInicio}`,
+          sql`${pontoDescontosResumo.mesReferencia} <= ${mesFim}`,
+        ));
+
+        const totalFaltas = rows.reduce((sum, r) => sum + (r.totalFaltas || 0), 0);
+        const diasDireito = calcDiasFeriasPorFaltas(totalFaltas);
+
+        return {
+          totalFaltasInjustificadas: totalFaltas,
+          diasDireito,
+          perdeuDireito: diasDireito === 0,
+          tabelaAplicada: totalFaltas <= 5 ? '0-5 faltas → 30 dias'
+            : totalFaltas <= 14 ? '6-14 faltas → 24 dias'
+            : totalFaltas <= 23 ? '15-23 faltas → 18 dias'
+            : totalFaltas <= 32 ? '24-32 faltas → 12 dias'
+            : 'Mais de 32 faltas → Perde o direito',
+        };
+      }),
+
+    // ============================================================
     // RH DEFINE/ALTERA DATA DE FÉRIAS (com tracking de alteração)
+    // Inclui: abono pecuniário (Art. 143 CLT) e redução por faltas (Art. 130 CLT)
     // ============================================================
     definirDataFerias: protectedProcedure
       .input(z.object({
@@ -2408,6 +2468,7 @@ export const avisoPrevioFeriasRouter = router({
         dataInicio: z.string(),
         dataFim: z.string(),
         diasGozo: z.number().default(30),
+        abonoPecuniario: z.number().default(0),
         observacoes: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
@@ -2415,39 +2476,83 @@ export const avisoPrevioFeriasRouter = router({
         const [periodo] = await db.select().from(vacationPeriods).where(eq(vacationPeriods.id, input.id));
         if (!periodo) throw new TRPCError({ code: 'NOT_FOUND', message: 'Período não encontrado' });
 
-        // Buscar salário do funcionário para calcular valores
         const [emp] = await db.select().from(employees).where(eq(employees.id, periodo.employeeId));
         const salario = emp ? parseBRL(emp.salarioBase) : 0;
-        const valorFerias = (salario / 30) * input.diasGozo;
-        const terco = valorFerias / 3;
-        const total = valorFerias + terco;
 
-        // Calcular data de pagamento (2 dias antes do início)
+        const mesInicio = periodo.periodoAquisitivoInicio.substring(0, 7);
+        const mesFim = periodo.periodoAquisitivoFim.substring(0, 7);
+        const faltasRows = await db.select({
+          totalFaltas: pontoDescontosResumo.totalFaltasInjustificadas,
+        })
+        .from(pontoDescontosResumo)
+        .where(and(
+          eq(pontoDescontosResumo.companyId, periodo.companyId),
+          eq(pontoDescontosResumo.employeeId, periodo.employeeId),
+          sql`${pontoDescontosResumo.mesReferencia} >= ${mesInicio}`,
+          sql`${pontoDescontosResumo.mesReferencia} <= ${mesFim}`,
+        ));
+        const totalFaltas = faltasRows.reduce((sum, r) => sum + (r.totalFaltas || 0), 0);
+        const diasDireito = calcDiasFeriasPorFaltas(totalFaltas);
+
+        if (diasDireito === 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Funcionário perdeu o direito a férias neste período aquisitivo (${totalFaltas} faltas injustificadas). Art. 130 §1° CLT.`,
+          });
+        }
+
+        let diasGozo = Math.min(input.diasGozo, diasDireito);
+        let diasAbono = 0;
+        let valorAbono = 0;
+
+        if (input.abonoPecuniario === 1) {
+          diasAbono = Math.floor(diasDireito / 3);
+          diasGozo = diasDireito - diasAbono;
+          valorAbono = (salario / 30) * diasAbono;
+        }
+
+        const valorFerias = (salario / 30) * diasGozo;
+        const terco = (valorFerias + valorAbono) / 3;
+        const total = valorFerias + terco + valorAbono;
+
+        const dtFim = new Date(input.dataInicio + 'T00:00:00');
+        dtFim.setDate(dtFim.getDate() + diasGozo - 1);
+
         const dtPag = new Date(input.dataInicio + 'T00:00:00');
         dtPag.setDate(dtPag.getDate() - 2);
 
-        // Verificar se a data foi alterada em relação à sugerida
         const foiAlterada = periodo.dataSugeridaInicio && periodo.dataSugeridaInicio !== input.dataInicio ? 1 : 0;
 
         await db.update(vacationPeriods).set({
           dataInicio: input.dataInicio,
-          dataFim: input.dataFim,
-          diasGozo: input.diasGozo,
+          dataFim: dtFim.toISOString().split('T')[0],
+          diasGozo: diasGozo,
+          abonoPecuniario: input.abonoPecuniario,
           valorFerias: valorFerias.toFixed(2),
           valorTercoConstitucional: terco.toFixed(2),
+          valorAbono: valorAbono > 0 ? valorAbono.toFixed(2) : null,
           valorTotal: total.toFixed(2),
           dataPagamento: dtPag.toISOString().split('T')[0],
           status: 'agendada',
           dataAlteradaPeloRh: foiAlterada,
+          faltasInjustificadas: totalFaltas,
+          diasDireitoOriginal: diasDireito,
           observacoes: input.observacoes || (foiAlterada ? `Data alterada pelo RH (${ctx.user.name}). Original: ${periodo.dataSugeridaInicio} a ${periodo.dataSugeridaFim}` : null),
           aprovadoPor: ctx.user.name ?? 'Sistema',
           aprovadoPorUserId: ctx.user.id,
         } as any).where(eq(vacationPeriods.id, input.id));
 
-        // Corrige ponto automaticamente com as novas datas de gozo
         corrigirPontoFuncionario(periodo.companyId, periodo.employeeId).catch(() => {});
 
-        return { success: true, foiAlterada: !!foiAlterada };
+        return {
+          success: true,
+          foiAlterada: !!foiAlterada,
+          totalFaltas,
+          diasDireito,
+          diasGozo,
+          diasAbono,
+          abonoPecuniario: input.abonoPecuniario === 1,
+        };
       }),
 
     // ============================================================

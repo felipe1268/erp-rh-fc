@@ -3048,6 +3048,8 @@ export const vacationPeriods = pgTable("vacation_periods", {
         dataSugeridaFim: date({ mode: 'string' }),
         dataAlteradaPeloRh: smallint().default(0),
         numeroPeriodo: integer().default(1),
+        faltasInjustificadas: integer("faltas_injustificadas"),
+        diasDireitoOriginal: integer("dias_direito_original"),
 },
 (table) => [
         index("vp_company").on(table.companyId),

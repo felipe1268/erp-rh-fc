@@ -43,6 +43,211 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
+const TABELA_FALTAS_ART130 = [
+  { faixa: "0 a 5", dias: 30 },
+  { faixa: "6 a 14", dias: 24 },
+  { faixa: "15 a 23", dias: 18 },
+  { faixa: "24 a 32", dias: 12 },
+  { faixa: "Mais de 32", dias: 0 },
+];
+
+function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId, onSubmit, isPending, onCancel }: {
+  definirItem: any; definirForm: any; setDefinirForm: (v: any) => void;
+  companyId: number; onSubmit: () => void; isPending: boolean; onCancel: () => void;
+}) {
+  const faltasQuery = trpc.avisoPrevio.ferias.consultarFaltasPeriodoAquisitivo.useQuery({
+    employeeId: definirItem.employeeId,
+    companyId,
+    periodoAquisitivoInicio: definirItem.periodoAquisitivoInicio,
+    periodoAquisitivoFim: definirItem.periodoAquisitivoFim,
+  }, { enabled: !!definirItem.employeeId });
+
+  const faltas = faltasQuery.data;
+  const diasDireito = faltas?.diasDireito ?? 30;
+  const diasAbono = definirForm.abonoPecuniario === 1 ? Math.floor(diasDireito / 3) : 0;
+  const diasGozo = diasDireito - diasAbono;
+
+  useEffect(() => {
+    if (faltas && !faltas.perdeuDireito) {
+      const novoDiasGozo = definirForm.abonoPecuniario === 1 ? diasDireito - Math.floor(diasDireito / 3) : diasDireito;
+      let fim = definirForm.dataFim || "";
+      if (definirForm.dataInicio) {
+        const d = new Date(definirForm.dataInicio + "T00:00:00");
+        d.setDate(d.getDate() + novoDiasGozo - 1);
+        fim = d.toISOString().slice(0, 10);
+      }
+      setDefinirForm({ ...definirForm, diasGozo: novoDiasGozo, dataFim: fim });
+    }
+  }, [faltas?.diasDireito, definirForm.abonoPecuniario]);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-muted/30 rounded-lg p-3">
+        <p className="font-semibold">{definirItem.employeeName || "Funcionário"}</p>
+        <p className="text-xs text-muted-foreground">
+          Período Aquisitivo: {formatDate(definirItem.periodoAquisitivoInicio)} a {formatDate(definirItem.periodoAquisitivoFim)}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Concessivo até: {formatDate(definirItem.periodoConcessivoFim)}
+        </p>
+      </div>
+
+      {faltasQuery.isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+          <Loader2 className="h-4 w-4 animate-spin" /> Consultando faltas no período aquisitivo...
+        </div>
+      ) : faltasQuery.isError ? (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+          <p className="text-xs text-red-600 flex items-center gap-1">
+            <AlertTriangle className="h-3.5 w-3.5" /> Erro ao consultar faltas. Os dias de férias serão mantidos como 30 dias (padrão).
+          </p>
+        </div>
+      ) : faltas && faltas.totalFaltasInjustificadas > 0 ? (
+        <div className={`rounded-lg p-3 border ${faltas.perdeuDireito ? 'bg-red-50 border-red-300' : faltas.diasDireito < 30 ? 'bg-amber-50 border-amber-300' : 'bg-green-50 border-green-200'}`}>
+          <p className={`text-xs font-semibold flex items-center gap-1 ${faltas.perdeuDireito ? 'text-red-700' : faltas.diasDireito < 30 ? 'text-amber-700' : 'text-green-700'}`}>
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {faltas.perdeuDireito
+              ? `Funcionário PERDEU o direito a férias (${faltas.totalFaltasInjustificadas} faltas)`
+              : faltas.diasDireito < 30
+                ? `Férias reduzidas: ${faltas.totalFaltasInjustificadas} faltas injustificadas → ${faltas.diasDireito} dias`
+                : `${faltas.totalFaltasInjustificadas} faltas (dentro da tolerância) → 30 dias mantidos`
+            }
+          </p>
+          <div className="mt-2 bg-white/70 rounded p-2">
+            <p className="text-[10px] font-semibold text-gray-600 mb-1">Tabela Art. 130 CLT — Férias x Faltas Injustificadas:</p>
+            <div className="grid grid-cols-5 gap-1">
+              {TABELA_FALTAS_ART130.map(t => (
+                <div key={t.faixa} className={`text-center p-1 rounded text-[9px] ${
+                  (t.dias === faltas.diasDireito) ? 'bg-blue-100 border border-blue-400 font-bold text-blue-800' : 'bg-gray-50 text-gray-500'
+                }`}>
+                  <p>{t.faixa}</p>
+                  <p className="font-semibold">{t.dias === 0 ? 'Perde' : `${t.dias}d`}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <p className="text-[9px] text-gray-500 mt-1 italic">
+            Art. 130, CLT — "Após cada período de 12 meses de vigência do contrato de trabalho, o empregado terá direito a férias, na seguinte proporção: [...]"
+          </p>
+        </div>
+      ) : faltas && faltas.totalFaltasInjustificadas === 0 ? (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-2">
+          <p className="text-xs text-green-700 flex items-center gap-1">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Nenhuma falta injustificada no período — direito integral a 30 dias (Art. 130, CLT)
+          </p>
+        </div>
+      ) : null}
+
+      {faltas?.perdeuDireito ? (
+        <div className="bg-red-50 border border-red-300 rounded-lg p-3 text-center">
+          <p className="text-sm font-semibold text-red-700">Não é possível agendar férias</p>
+          <p className="text-xs text-red-600 mt-1">
+            Com {faltas.totalFaltasInjustificadas} faltas injustificadas, o funcionário perdeu o direito a férias neste período aquisitivo conforme Art. 130, §1° da CLT.
+          </p>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={onCancel}>Fechar</Button>
+          </DialogFooter>
+        </div>
+      ) : (
+        <>
+          {definirItem.dataSugeridaInicio && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs font-semibold text-blue-700 flex items-center gap-1">
+                <Info className="h-3.5 w-3.5" /> Data Sugerida pelo Sistema
+              </p>
+              <p className="text-sm font-medium text-blue-800 mt-1">
+                {formatDate(definirItem.dataSugeridaInicio)} a {formatDate(definirItem.dataSugeridaFim)}
+              </p>
+            </div>
+          )}
+
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1 mb-2">
+              <DollarSign className="h-3.5 w-3.5" /> Abono Pecuniário (Art. 143, CLT)
+            </p>
+            <div className="flex items-center gap-3">
+              <Select value={String(definirForm.abonoPecuniario || 0)} onValueChange={v => {
+                setDefinirForm({ ...definirForm, abonoPecuniario: parseInt(v) });
+              }}>
+                <SelectTrigger className="w-48 bg-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Não converter</SelectItem>
+                  <SelectItem value="1">Vender 1/3 das férias</SelectItem>
+                </SelectContent>
+              </Select>
+              {definirForm.abonoPecuniario === 1 && (
+                <p className="text-xs text-indigo-600">
+                  {diasAbono} dias convertidos em abono | {diasGozo} dias de gozo
+                </p>
+              )}
+            </div>
+            <p className="text-[9px] text-gray-500 mt-1.5 italic">
+              Art. 143, CLT — "É facultado ao empregado converter 1/3 do período de férias a que tiver direito em abono pecuniário, no valor da remuneração que lhe seria devida nos dias correspondentes."
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium">Data Início *</label>
+              <Input type="date" value={definirForm.dataInicio || ""} onChange={e => {
+                const inicio = e.target.value;
+                const dias = diasGozo;
+                let fim = "";
+                if (inicio) {
+                  const d = new Date(inicio + "T00:00:00");
+                  d.setDate(d.getDate() + dias - 1);
+                  fim = d.toISOString().slice(0, 10);
+                }
+                setDefinirForm({ ...definirForm, dataInicio: inicio, dataFim: fim });
+              }} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Dias de Gozo</label>
+              <Input type="number" min={1} max={diasDireito} value={diasGozo} disabled className="bg-muted/50" />
+              {diasDireito < 30 && (
+                <p className="text-[10px] text-amber-600 mt-0.5">Reduzido de 30 para {diasDireito} dias (Art. 130)</p>
+              )}
+            </div>
+            <div>
+              <label className="text-sm font-medium">Data Fim <span className="text-xs text-muted-foreground font-normal">(calculada)</span></label>
+              <Input type="date" value={definirForm.dataFim || ""} disabled className="bg-muted/50" />
+            </div>
+            {definirForm.abonoPecuniario === 1 && (
+              <div>
+                <label className="text-sm font-medium">Dias de Abono</label>
+                <Input type="number" value={diasAbono} disabled className="bg-indigo-50" />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Observações</label>
+            <Textarea value={definirForm.observacoes || ""} onChange={e => setDefinirForm({ ...definirForm, observacoes: e.target.value })} rows={2} placeholder="Motivo da alteração (opcional)" />
+          </div>
+
+          {definirItem.dataSugeridaInicio && definirForm.dataInicio && definirForm.dataInicio !== definirItem.dataSugeridaInicio && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+              <p className="text-xs font-semibold text-purple-700 flex items-center gap-1">
+                <AlertTriangle className="h-3.5 w-3.5" /> Data diferente da sugerida
+              </p>
+              <p className="text-[10px] text-purple-600 mt-1">
+                Esta alteração será registrada e indicada visualmente no calendário com cor roxa e ícone de edição.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+            <Button onClick={onSubmit} disabled={isPending}>
+              {isPending ? "Salvando..." : "Confirmar Data"}
+            </Button>
+          </DialogFooter>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ============================================================
 // DIALOG: Detalhes completos de férias do funcionário (Gantt click)
 // ============================================================
@@ -603,6 +808,7 @@ export default function Ferias() {
       dataInicio: item.dataInicio || item.dataSugeridaInicio || "",
       dataFim: item.dataFim || item.dataSugeridaFim || "",
       diasGozo: item.diasGozo || 30,
+      abonoPecuniario: item.abonoPecuniario || 0,
       observacoes: "",
     });
     setShowDefinirDialog(true);
@@ -618,6 +824,7 @@ export default function Ferias() {
       dataInicio: definirForm.dataInicio,
       dataFim: definirForm.dataFim,
       diasGozo: definirForm.diasGozo || 30,
+      abonoPecuniario: definirForm.abonoPecuniario || 0,
       observacoes: definirForm.observacoes || undefined,
     });
   };
@@ -1502,7 +1709,7 @@ export default function Ferias() {
 
         {/* ===== DIALOG: DEFINIR DATA DE FÉRIAS (RH Override) ===== */}
         <Dialog open={showDefinirDialog} onOpenChange={(open) => { if (!open) { setShowDefinirDialog(false); setDefinirItem(null); } }}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <PenLine className="h-5 w-5 text-blue-600" />
@@ -1510,88 +1717,16 @@ export default function Ferias() {
               </DialogTitle>
             </DialogHeader>
             {definirItem && (
-              <div className="space-y-4">
-                <div className="bg-muted/30 rounded-lg p-3">
-                  <p className="font-semibold">{definirItem.employeeName || "Funcionário"}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Período: {formatDate(definirItem.periodoAquisitivoInicio)} a {formatDate(definirItem.periodoAquisitivoFim)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Concessivo até: {formatDate(definirItem.periodoConcessivoFim)}
-                  </p>
-                </div>
-
-                {definirItem.dataSugeridaInicio && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-blue-700 flex items-center gap-1">
-                      <Info className="h-3.5 w-3.5" /> Data Sugerida pelo Sistema
-                    </p>
-                    <p className="text-sm font-medium text-blue-800 mt-1">
-                      {formatDate(definirItem.dataSugeridaInicio)} a {formatDate(definirItem.dataSugeridaFim)}
-                    </p>
-                    <p className="text-[10px] text-blue-600 mt-1">
-                      Se alterar, será marcado como "Alterado pelo RH" no calendário
-                    </p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium">Data Início *</label>
-                    <Input type="date" value={definirForm.dataInicio || ""} onChange={e => {
-                      const inicio = e.target.value;
-                      const dias = definirForm.diasGozo || 30;
-                      let fim = definirForm.dataFim || "";
-                      if (inicio) {
-                        const d = new Date(inicio + "T00:00:00");
-                        d.setDate(d.getDate() + dias - 1);
-                        fim = d.toISOString().slice(0, 10);
-                      }
-                      setDefinirForm({ ...definirForm, dataInicio: inicio, dataFim: fim });
-                    }} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Dias de Gozo</label>
-                    <Input type="number" min={1} max={90} value={definirForm.diasGozo || 30} onChange={e => {
-                      const dias = parseInt(e.target.value) || 30;
-                      let fim = definirForm.dataFim || "";
-                      if (definirForm.dataInicio) {
-                        const d = new Date(definirForm.dataInicio + "T00:00:00");
-                        d.setDate(d.getDate() + dias - 1);
-                        fim = d.toISOString().slice(0, 10);
-                      }
-                      setDefinirForm({ ...definirForm, diasGozo: dias, dataFim: fim });
-                    }} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Data Fim <span className="text-xs text-muted-foreground font-normal">(calculada automaticamente)</span></label>
-                    <Input type="date" value={definirForm.dataFim || ""} onChange={e => setDefinirForm({ ...definirForm, dataFim: e.target.value })} />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">Observações</label>
-                  <Textarea value={definirForm.observacoes || ""} onChange={e => setDefinirForm({ ...definirForm, observacoes: e.target.value })} rows={2} placeholder="Motivo da alteração (opcional)" />
-                </div>
-
-                {definirItem.dataSugeridaInicio && definirForm.dataInicio && definirForm.dataInicio !== definirItem.dataSugeridaInicio && (
-                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-purple-700 flex items-center gap-1">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Data diferente da sugerida
-                    </p>
-                    <p className="text-[10px] text-purple-600 mt-1">
-                      Esta alteração será registrada e indicada visualmente no calendário com cor roxa e ícone de edição.
-                    </p>
-                  </div>
-                )}
-              </div>
+              <DefinirFeriasForm
+                definirItem={definirItem}
+                definirForm={definirForm}
+                setDefinirForm={setDefinirForm}
+                companyId={companyId}
+                onSubmit={submitDefinirData}
+                isPending={definirDataFerias.isPending}
+                onCancel={() => { setShowDefinirDialog(false); setDefinirItem(null); }}
+              />
             )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setShowDefinirDialog(false); setDefinirItem(null); }}>Cancelar</Button>
-              <Button onClick={submitDefinirData} disabled={definirDataFerias.isPending}>
-                {definirDataFerias.isPending ? "Salvando..." : "Confirmar Data"}
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -1635,6 +1770,27 @@ export default function Ferias() {
                     <p className="text-xs text-green-600 uppercase">Dias</p>
                     <p className="font-bold text-lg">{selectedItem.diasGozo || 30}</p>
                   </div>
+                </div>
+              )}
+              {(selectedItem.faltasInjustificadas != null && selectedItem.faltasInjustificadas > 0) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-amber-700 flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    {selectedItem.faltasInjustificadas} falta(s) injustificada(s) no período aquisitivo
+                    {selectedItem.diasDireitoOriginal && selectedItem.diasDireitoOriginal < 30 && (
+                      <span> — Férias reduzidas de 30 para {selectedItem.diasDireitoOriginal} dias</span>
+                    )}
+                  </p>
+                  <p className="text-[9px] text-amber-600 mt-1 italic">Art. 130, CLT — Redução proporcional de férias por faltas injustificadas</p>
+                </div>
+              )}
+              {selectedItem.abonoPecuniario === 1 && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1">
+                    <DollarSign className="h-3.5 w-3.5" />
+                    Abono Pecuniário: {selectedItem.valorAbono ? `R$ ${fmtNum(selectedItem.valorAbono)}` : "Sim"} ({Math.floor((selectedItem.diasDireitoOriginal || 30) / 3)} dias convertidos)
+                  </p>
+                  <p className="text-[9px] text-indigo-600 mt-1 italic">Art. 143, CLT — "É facultado ao empregado converter 1/3 do período de férias a que tiver direito em abono pecuniário"</p>
                 </div>
               )}
               {/* PAINEL: MEMÓRIA DE CÁLCULO HE — Art. 142 CLT */}
