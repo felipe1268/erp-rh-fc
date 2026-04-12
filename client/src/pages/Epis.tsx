@@ -341,36 +341,6 @@ export default function Epis() {
     onError: (err) => toast.error(err.message),
   });
   const createDeliveryMut = trpc.epis.createDelivery.useMutation({
-    onSuccess: (result: any) => {
-      deliveriesQ.refetch(); episQ.refetch(); statsQ.refetch();
-      if (result?.valorCobrado) {
-        toast.success(`Entrega registrada! Valor cobrado: ${parseFloat(result.valorCobrado).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
-      } else {
-        toast.success("Entrega registrada!");
-      }
-      // Abrir ficha de entrega automaticamente após registro
-      const epi = episAllList.find((e: any) => String(e.id) === entregaForm.epiId);
-      const emp = employeesList.find((e: any) => String(e.id) === entregaForm.employeeId);
-      const obraSel = obrasList.find((o: any) => String(o.id) === entregaForm.obraId);
-      setFichaDelivery({
-        id: result.id,
-        epiId: parseInt(entregaForm.epiId),
-        employeeId: parseInt(entregaForm.employeeId),
-        quantidade: entregaForm.quantidade,
-        dataEntrega: entregaForm.dataEntrega,
-        motivo: entregaForm.motivo,
-        motivoTroca: entregaForm.motivoTroca,
-        valorCobrado: result.valorCobrado,
-        nomeEpi: epi?.nome || "",
-        caEpi: epi?.ca || "",
-        nomeFunc: emp?.nomeCompleto || "",
-        funcaoFunc: emp?.funcao || "",
-        obraNome: obraSel?.nome || emp?.obraAtualNome || "",
-      });
-      setViewMode("ficha_epi");
-      resetEntregaForm();
-      setFotoEstado({ file: null, preview: "" });
-    },
     onError: (err) => toast.error(err.message),
   });
   const deleteDeliveryMut = trpc.epis.deleteDelivery.useMutation({
@@ -1257,9 +1227,10 @@ export default function Epis() {
       setEntregaSaving(true);
       let successCount = 0;
       let lastError = "";
+      const createdResults: any[] = [];
       for (const item of allItens) {
         try {
-          await createDeliveryMut.mutateAsync({
+          const result = await createDeliveryMut.mutateAsync({
             companyId: queryCompanyId,
             epiId: parseInt(item.epiId),
             employeeId: parseInt(entregaForm.employeeId),
@@ -1276,6 +1247,7 @@ export default function Epis() {
               : (entregaForm.obraId ? parseInt(entregaForm.obraId) : undefined),
             grupoEntregaId,
           });
+          createdResults.push({ ...result, item });
           successCount++;
         } catch (err: any) {
           lastError = err?.message || "Erro desconhecido";
@@ -1283,11 +1255,67 @@ export default function Epis() {
       }
       setEntregaSaving(false);
       deliveriesQ.refetch(); episQ.refetch(); statsQ.refetch();
-      if (successCount === allItens.length) {
+      if (successCount > 0) {
         toast.success(`${successCount} EPI(s) entregue(s) com sucesso!`);
+        const emp = employeesList.find((e: any) => String(e.id) === entregaForm.employeeId);
+        const obraSel = obrasList.find((o: any) => String(o.id) === entregaForm.obraId);
+        if (allItens.length === 1) {
+          const r = createdResults[0];
+          const epi = episAllList.find((e: any) => e.id === parseInt(allItens[0].epiId));
+          setFichaDelivery({
+            id: r?.id,
+            epiId: parseInt(allItens[0].epiId),
+            employeeId: parseInt(entregaForm.employeeId),
+            quantidade: allItens[0].quantidade,
+            dataEntrega: entregaForm.dataEntrega,
+            motivo: entregaForm.motivo,
+            motivoTroca: allItens[0].motivoTroca,
+            valorCobrado: r?.valorCobrado,
+            nomeEpi: epi?.nome || "",
+            caEpi: epi?.ca || "",
+            nomeFunc: emp?.nomeCompleto || "",
+            funcaoFunc: emp?.funcao || "",
+            obraNome: obraSel?.nome || emp?.obraAtualNome || "",
+          });
+        } else {
+          const first = createdResults[0];
+          const firstEpi = episAllList.find((e: any) => e.id === parseInt(allItens[0].epiId));
+          const grupoItems = createdResults.map((r, i) => {
+            const epi = episAllList.find((e: any) => e.id === parseInt(allItens[i].epiId));
+            return {
+              id: r?.id,
+              epiId: parseInt(allItens[i].epiId),
+              quantidade: allItens[i].quantidade,
+              motivoTroca: allItens[i].motivoTroca,
+              motivo: entregaForm.motivo,
+              nomeEpi: epi?.nome || "",
+              caEpi: epi?.ca || "",
+              valorCobrado: r?.valorCobrado,
+            };
+          });
+          setFichaDelivery({
+            id: first?.id,
+            epiId: parseInt(allItens[0].epiId),
+            employeeId: parseInt(entregaForm.employeeId),
+            quantidade: allItens[0].quantidade,
+            dataEntrega: entregaForm.dataEntrega,
+            motivo: entregaForm.motivo,
+            motivoTroca: allItens[0].motivoTroca,
+            valorCobrado: first?.valorCobrado,
+            nomeEpi: firstEpi?.nome || "",
+            caEpi: firstEpi?.ca || "",
+            nomeFunc: emp?.nomeCompleto || "",
+            funcaoFunc: emp?.funcao || "",
+            obraNome: obraSel?.nome || emp?.obraAtualNome || "",
+            _grupoItems: grupoItems,
+          });
+        }
+        setViewMode("ficha_epi");
         resetEntregaForm();
-        setViewMode("entregas");
-      } else {
+        setEntregaItens([]);
+        setFotoEstado({ file: null, preview: "" });
+      }
+      if (successCount < allItens.length) {
         toast.error(`${successCount}/${allItens.length} entregas realizadas. Erro: ${lastError}`);
       }
     };
