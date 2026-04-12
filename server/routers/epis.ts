@@ -263,6 +263,7 @@ export const episRouter = router({
           funcaoFunc: employees.funcao,
           grupoEntregaId: epiDeliveries.grupoEntregaId,
           assinaturaUrl: epiDeliveries.assinaturaUrl,
+          assinaturaResponsavelUrl: epiDeliveries.assinaturaResponsavelUrl,
         })
           .from(epiDeliveries)
           .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))

@@ -829,14 +829,18 @@ export const epiAvancadoRouter = router({
 
       // Save to delivery record based on who is signing
       if (input.deliveryId) {
-        if (input.tipoAssinante === "responsavel") {
-          await db.update(epiDeliveries).set({
-            assinaturaResponsavelUrl: url,
-          } as any).where(eq(epiDeliveries.id, input.deliveryId));
+        const [delivery] = await db.select({ grupoEntregaId: epiDeliveries.grupoEntregaId })
+          .from(epiDeliveries).where(eq(epiDeliveries.id, input.deliveryId));
+        const grupoId = delivery?.grupoEntregaId;
+        const updateData = input.tipoAssinante === "responsavel"
+          ? { assinaturaResponsavelUrl: url }
+          : { assinaturaUrl: url };
+        if (grupoId) {
+          await db.update(epiDeliveries).set(updateData as any)
+            .where(eq(epiDeliveries.grupoEntregaId, grupoId));
         } else {
-          await db.update(epiDeliveries).set({
-            assinaturaUrl: url,
-          } as any).where(eq(epiDeliveries.id, input.deliveryId));
+          await db.update(epiDeliveries).set(updateData as any)
+            .where(eq(epiDeliveries.id, input.deliveryId));
         }
       }
 
