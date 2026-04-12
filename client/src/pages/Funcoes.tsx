@@ -144,29 +144,35 @@ export default function Funcoes() {
   const [activeFilter, setActiveFilter] = useState<FilterType>("todas");
 
   const [iaGenerating, setIaGenerating] = useState(false);
+  const [iaWaiting, setIaWaiting] = useState(false);
 
   const startIaProgress = useCallback(() => {
     setIaProgress(0);
     setIaGenerating(true);
+    setIaWaiting(false);
     if (iaTimerRef.current) clearInterval(iaTimerRef.current);
     let p = 0;
     iaTimerRef.current = setInterval(() => {
-      if (p < 70) {
-        p += Math.random() * 6 + 3;
-      } else if (p < 90) {
-        p += Math.random() * 2 + 0.5;
+      if (p < 60) {
+        p += Math.random() * 5 + 3;
+      } else if (p < 85) {
+        p += Math.random() * 1.5 + 0.5;
+      } else if (p < 95) {
+        p += Math.random() * 0.5 + 0.1;
       } else {
-        p += Math.random() * 0.3 + 0.1;
+        clearInterval(iaTimerRef.current!);
+        iaTimerRef.current = null;
+        setIaWaiting(true);
       }
-      if (p > 99) p = 99;
-      setIaProgress(Math.round(p));
+      setIaProgress(Math.min(Math.round(p), 95));
     }, 500);
   }, []);
 
   const finishIaProgress = useCallback(() => {
     if (iaTimerRef.current) { clearInterval(iaTimerRef.current); iaTimerRef.current = null; }
+    setIaWaiting(false);
     setIaProgress(100);
-    setTimeout(() => { setIaProgress(0); setIaGenerating(false); }, 1200);
+    setTimeout(() => { setIaProgress(0); setIaGenerating(false); }, 1500);
   }, []);
 
   useEffect(() => {
@@ -646,28 +652,31 @@ export default function Funcoes() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-purple-700 font-medium flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                    {iaProgress < 100 ? "Gerando com IA..." : "Concluído!"}
+                    <Sparkles className={`w-3.5 h-3.5 ${iaProgress < 100 ? 'animate-pulse' : ''}`} />
+                    {iaProgress >= 100 ? "Concluído!" : iaWaiting ? "Aguardando resposta da IA..." : "Gerando com IA..."}
                   </span>
-                  <span className="text-purple-600 font-semibold tabular-nums">{iaProgress}%</span>
+                  <span className="text-purple-600 font-semibold tabular-nums">
+                    {iaProgress >= 100 ? "100%" : iaWaiting ? "95%" : `${iaProgress}%`}
+                  </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                   <div
-                    className="h-full rounded-full transition-all duration-300 ease-out"
+                    className={`h-full rounded-full transition-all duration-500 ease-out ${iaWaiting && iaProgress < 100 ? 'animate-pulse' : ''}`}
                     style={{
-                      width: `${iaProgress}%`,
-                      background: iaProgress < 100
-                        ? 'linear-gradient(90deg, #7c3aed, #a78bfa)'
-                        : 'linear-gradient(90deg, #16a34a, #4ade80)',
+                      width: `${iaProgress >= 100 ? 100 : iaWaiting ? 95 : iaProgress}%`,
+                      background: iaProgress >= 100
+                        ? 'linear-gradient(90deg, #16a34a, #4ade80)'
+                        : 'linear-gradient(90deg, #7c3aed, #a78bfa)',
                     }}
                   />
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  {iaProgress < 20 ? "Consultando Regras de Ouro e legislação..." :
+                  {iaProgress >= 100 ? "Texto gerado com sucesso!" :
+                   iaWaiting ? "A IA está elaborando o texto, isso pode levar alguns segundos..." :
+                   iaProgress < 20 ? "Consultando Regras de Ouro e legislação..." :
                    iaProgress < 45 ? "Analisando CBO e normas regulamentadoras..." :
                    iaProgress < 70 ? "Redigindo descrição da função..." :
-                   iaProgress < 85 ? "Elaborando ordem de serviço NR-1..." :
-                   iaProgress < 100 ? "Finalizando e revisando texto..." : "Texto gerado com sucesso!"}
+                   "Elaborando ordem de serviço NR-1..."}
                 </p>
               </div>
             )}
