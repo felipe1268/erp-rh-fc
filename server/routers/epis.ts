@@ -262,6 +262,7 @@ export const episRouter = router({
           nomeFunc: employees.nomeCompleto,
           funcaoFunc: employees.funcao,
           grupoEntregaId: epiDeliveries.grupoEntregaId,
+          assinaturaUrl: epiDeliveries.assinaturaUrl,
         })
           .from(epiDeliveries)
           .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
@@ -549,6 +550,94 @@ export const episRouter = router({
         eq(epiDiscountAlerts.epiDeliveryId, input.id),
         eq(epiDiscountAlerts.status, 'pendente')
       ));
+      return { success: true };
+    }),
+
+  updateDelivery: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      epiId: z.number().optional(),
+      employeeId: z.number().optional(),
+      quantidade: z.number().min(1).optional(),
+      dataEntrega: z.string().optional(),
+      motivo: z.string().optional(),
+      observacoes: z.string().optional(),
+      motivoTroca: z.string().nullable().optional(),
+      oldEpiId: z.number().optional(),
+      oldQuantidade: z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const [existing] = await db.select().from(epiDeliveries).where(eq(epiDeliveries.id, input.id));
+      if (!existing) throw new Error("Entrega não encontrada");
+      if ((existing as any).assinaturaUrl) {
+        throw new Error("Entrega já assinada pelo funcionário — não pode ser editada.");
+      }
+
+      const updates: any = {};
+      if (input.dataEntrega !== undefined) updates.dataEntrega = input.dataEntrega;
+      if (input.motivo !== undefined) updates.motivo = input.motivo || null;
+      if (input.observacoes !== undefined) updates.observacoes = input.observacoes || null;
+      if (input.motivoTroca !== undefined) updates.motivoTroca = input.motivoTroca || null;
+
+      const epiChanged = input.epiId !== undefined && input.epiId !== existing.epiId;
+      const qtyChanged = input.quantidade !== undefined && input.quantidade !== existing.quantidade;
+
+      if (epiChanged || qtyChanged) {
+        const oldEpiId = existing.epiId;
+        const oldQty = existing.quantidade;
+        const newEpiId = input.epiId ?? oldEpiId;
+        const newQty = input.quantidade ?? oldQty;
+        const isObra = (existing as any).origemEntrega === 'obra' && (existing as any).obraId;
+
+        const adjustStock = async (epiId: number, delta: number) => {
+          if (isObra) {
+            await db.update(epiEstoqueObra)
+              .set({ quantidade: sql`GREATEST(${epiEstoqueObra.quantidade} + ${delta}, 0)` })
+              .where(and(eq(epiEstoqueObra.epiId, epiId), eq(epiEstoqueObra.obraId, (existing as any).obraId)));
+          } else {
+            await db.update(epis)
+              .set({ quantidadeEstoque: sql`GREATEST(${epis.quantidadeEstoque} + ${delta}, 0)` })
+              .where(eq(epis.id, epiId));
+          }
+        };
+
+        if (epiChanged) {
+          await adjustStock(oldEpiId, oldQty);
+          await adjustStock(newEpiId, -newQty);
+          updates.epiId = newEpiId;
+        } else {
+          const diff = newQty - oldQty;
+          if (diff !== 0) {
+            await adjustStock(oldEpiId, -diff);
+          }
+        }
+        updates.quantidade = newQty;
+      }
+
+      if (input.employeeId !== undefined) updates.employeeId = input.employeeId;
+
+      if (input.motivoTroca !== undefined) {
+        const newMotivo = input.motivoTroca;
+        const epiIdForCharge = input.epiId ?? existing.epiId;
+        if (newMotivo && ['perda', 'mau_uso', 'furto'].includes(newMotivo)) {
+          const [epi] = await db.select().from(epis).where(eq(epis.id, epiIdForCharge));
+          if (epi?.valorProduto) {
+            const bdiRows = await db.select().from(systemCriteria)
+              .where(and(
+                eq(systemCriteria.companyId, existing.companyId),
+                eq(systemCriteria.chave, 'epi_bdi_percentual')
+              ));
+            const bdiPct = bdiRows.length > 0 ? parseFloat(bdiRows[0].valor) : 40;
+            const custoBase = parseFloat(String(epi.valorProduto));
+            updates.valorCobrado = String(Math.round(custoBase * (1 + bdiPct / 100) * 100) / 100);
+          }
+        } else {
+          updates.valorCobrado = null;
+        }
+      }
+
+      await db.update(epiDeliveries).set(updates).where(eq(epiDeliveries.id, input.id));
       return { success: true };
     }),
 

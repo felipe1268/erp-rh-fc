@@ -180,6 +180,9 @@ export default function Epis() {
   const [showResponsavelSignPad, setShowResponsavelSignPad] = useState(false);
   const [responsavelSignature, setResponsavelSignature] = useState<string | null>(null);
   const [isSavingPdf, setIsSavingPdf] = useState(false);
+  const [selectedDeliveryIds, setSelectedDeliveryIds] = useState<Set<number>>(new Set());
+  const [editingDelivery, setEditingDelivery] = useState<any>(null);
+  const [editDeliveryForm, setEditDeliveryForm] = useState<any>({});
 
   // Queries
   // Quando Construtoras selecionado, companyId=0 mas companyIds tem os IDs do pool
@@ -371,8 +374,12 @@ export default function Epis() {
     onError: (err) => toast.error(err.message),
   });
   const deleteDeliveryMut = trpc.epis.deleteDelivery.useMutation({
-    onSuccess: () => { deliveriesQ.refetch(); episQ.refetch(); statsQ.refetch(); toast.success("Entrega removida!"); },
+    onSuccess: () => { deliveriesQ.refetch(); episQ.refetch(); statsQ.refetch(); toast.success("Entrega removida!"); setSelectedDeliveryIds(new Set()); },
     onError: (err) => toast.error(err.message),
+  });
+  const updateDeliveryMut = trpc.epis.updateDelivery.useMutation({
+    onSuccess: () => { deliveriesQ.refetch(); episQ.refetch(); statsQ.refetch(); toast.success("Entrega atualizada!"); setEditingDelivery(null); },
+    onError: (err: any) => toast.error(err.message),
   });
   const deleteBatchMut = trpc.epis.deleteBatch.useMutation({
     onSuccess: (data: any) => { episQ.refetch(); statsQ.refetch(); setSelectedEpis(new Set()); setShowBatchDeleteDialog(false); toast.success(`${data.deleted} EPI(s) removido(s)!`); },
@@ -2246,11 +2253,41 @@ export default function Epis() {
             </Card>
           ) : (
             <Card>
+              {selectedDeliveryIds.size > 0 && (
+                <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 border-b">
+                  <span className="text-sm font-medium text-blue-800">{selectedDeliveryIds.size} selecionada{selectedDeliveryIds.size !== 1 ? "s" : ""}</span>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSelectedDeliveryIds(new Set())}>
+                    Limpar seleção
+                  </Button>
+                  <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => {
+                    if (confirm(`Remover ${selectedDeliveryIds.size} entrega${selectedDeliveryIds.size !== 1 ? "s" : ""}? O estoque será devolvido.`)) {
+                      const toDelete = filteredDeliveries.filter((d: any) => selectedDeliveryIds.has(d.id));
+                      toDelete.forEach((d: any) => deleteDeliveryMut.mutate({ id: d.id, epiId: d.epiId, quantidade: d.quantidade }));
+                      setSelectedDeliveryIds(new Set());
+                    }
+                  }}>
+                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir selecionadas
+                  </Button>
+                </div>
+              )}
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/50">
+                        <th className="p-3 text-center w-10">
+                          <input type="checkbox"
+                            className="rounded border-gray-300 h-4 w-4 cursor-pointer accent-[#1B2A4A]"
+                            checked={filteredDeliveries.length > 0 && filteredDeliveries.every((d: any) => selectedDeliveryIds.has(d.id))}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedDeliveryIds(new Set(filteredDeliveries.map((d: any) => d.id)));
+                              } else {
+                                setSelectedDeliveryIds(new Set());
+                              }
+                            }}
+                          />
+                        </th>
                         <th className="p-3 text-left font-medium">Data</th>
                         <th className="p-3 text-left font-medium">Funcionário</th>
                         <th className="p-3 text-left font-medium">EPI</th>
@@ -2267,6 +2304,26 @@ export default function Epis() {
                           mau_uso: "Mau Uso",
                           desgaste_normal: "Desgaste",
                           furto: "Furto",
+                        };
+                        const toggleSelect = (id: number) => {
+                          setSelectedDeliveryIds(prev => {
+                            const next = new Set(prev);
+                            if (next.has(id)) next.delete(id); else next.add(id);
+                            return next;
+                          });
+                        };
+                        const canEdit = (d: any) => !d.assinaturaUrl;
+                        const openEdit = (d: any) => {
+                          setEditingDelivery(d);
+                          setEditDeliveryForm({
+                            dataEntrega: d.dataEntrega || "",
+                            quantidade: d.quantidade || 1,
+                            motivo: d.motivo || "",
+                            observacoes: d.observacoes || "",
+                            motivoTroca: d.motivoTroca || "",
+                            epiId: d.epiId,
+                            employeeId: d.employeeId,
+                          });
                         };
                         const grouped: any[] = [];
                         const grupoMap = new Map<string, any[]>();
@@ -2285,8 +2342,24 @@ export default function Epis() {
                           if (entry.type === 'group') {
                             const items = grupoMap.get(entry.grupoEntregaId)!;
                             const first = items[0];
+                            const allIds = items.map((d: any) => d.id);
+                            const allSelected = allIds.every((id: number) => selectedDeliveryIds.has(id));
+                            const groupSigned = items.some((d: any) => d.fichaUrl || d.assinaturaUrl);
                             return (
-                              <tr key={`grp-${entry.grupoEntregaId}`} className="border-b last:border-0 hover:bg-muted/30">
+                              <tr key={`grp-${entry.grupoEntregaId}`} className={`border-b last:border-0 hover:bg-muted/30 ${allSelected ? "bg-blue-50/50" : ""}`}>
+                                <td className="p-3 text-center">
+                                  <input type="checkbox" className="rounded border-gray-300 h-4 w-4 cursor-pointer accent-[#1B2A4A]"
+                                    checked={allSelected}
+                                    onChange={() => {
+                                      setSelectedDeliveryIds(prev => {
+                                        const next = new Set(prev);
+                                        if (allSelected) allIds.forEach((id: number) => next.delete(id));
+                                        else allIds.forEach((id: number) => next.add(id));
+                                        return next;
+                                      });
+                                    }}
+                                  />
+                                </td>
                                 <td className="p-3 text-xs">
                                   {first.dataEntrega ? new Date(first.dataEntrega + "T00:00:00").toLocaleDateString("pt-BR") : "—"}
                                 </td>
@@ -2345,8 +2418,15 @@ export default function Epis() {
                             );
                           }
                           const d = entry.delivery;
+                          const isSigned = !canEdit(d);
                           return (
-                          <tr key={d.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <tr key={d.id} className={`border-b last:border-0 hover:bg-muted/30 ${selectedDeliveryIds.has(d.id) ? "bg-blue-50/50" : ""}`}>
+                            <td className="p-3 text-center">
+                              <input type="checkbox" className="rounded border-gray-300 h-4 w-4 cursor-pointer accent-[#1B2A4A]"
+                                checked={selectedDeliveryIds.has(d.id)}
+                                onChange={() => toggleSelect(d.id)}
+                              />
+                            </td>
                             <td className="p-3 text-xs">
                               {d.dataEntrega ? new Date(d.dataEntrega + "T00:00:00").toLocaleDateString("pt-BR") : "—"}
                             </td>
@@ -2383,6 +2463,12 @@ export default function Epis() {
                             </td>
                             <td className="p-3 text-center">
                               <div className="flex items-center justify-center gap-1">
+                                {!isSigned && (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar entrega"
+                                    onClick={() => openEdit(d)}>
+                                    <Pencil className="h-3.5 w-3.5 text-amber-600" />
+                                  </Button>
+                                )}
                                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Ficha de Entrega"
                                   onClick={() => { setFichaDelivery(d); setViewMode("ficha_epi"); }}>
                                   <FileText className="h-3.5 w-3.5 text-blue-600" />
@@ -2420,6 +2506,81 @@ export default function Epis() {
               </CardContent>
             </Card>
           )
+        )}
+
+        {editingDelivery && (
+          <FullScreenDialog
+            open={!!editingDelivery}
+            onClose={() => setEditingDelivery(null)}
+            title="Editar Entrega de EPI"
+          >
+            <div className="space-y-4 p-4">
+              <div>
+                <Label>Funcionário</Label>
+                <p className="text-sm font-medium mt-1">{editingDelivery.nomeFunc || "—"}</p>
+              </div>
+              <div>
+                <Label>EPI</Label>
+                <p className="text-sm font-medium mt-1">{editingDelivery.nomeEpi || "—"} {editingDelivery.caEpi ? `(CA: ${editingDelivery.caEpi})` : ""}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Data da Entrega</Label>
+                  <Input type="date" value={editDeliveryForm.dataEntrega || ""}
+                    onChange={(e) => setEditDeliveryForm((f: any) => ({ ...f, dataEntrega: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Quantidade</Label>
+                  <Input type="number" min={1} value={editDeliveryForm.quantidade || 1}
+                    onChange={(e) => setEditDeliveryForm((f: any) => ({ ...f, quantidade: parseInt(e.target.value) || 1 }))} />
+                </div>
+              </div>
+              <div>
+                <Label>Motivo da Troca</Label>
+                <Select value={editDeliveryForm.motivoTroca || "none"} onValueChange={(v) => setEditDeliveryForm((f: any) => ({ ...f, motivoTroca: v === "none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Entrega regular (sem troca)</SelectItem>
+                    <SelectItem value="desgaste_normal">Desgaste normal</SelectItem>
+                    <SelectItem value="perda">Perda</SelectItem>
+                    <SelectItem value="mau_uso">Mau uso</SelectItem>
+                    <SelectItem value="furto">Furto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Motivo / Justificativa</Label>
+                <Input value={editDeliveryForm.motivo || ""}
+                  onChange={(e) => setEditDeliveryForm((f: any) => ({ ...f, motivo: e.target.value }))}
+                  placeholder="Ex: Entrega regular, substituição..." />
+              </div>
+              <div>
+                <Label>Observações</Label>
+                <Input value={editDeliveryForm.observacoes || ""}
+                  onChange={(e) => setEditDeliveryForm((f: any) => ({ ...f, observacoes: e.target.value }))}
+                  placeholder="Observações adicionais..." />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setEditingDelivery(null)}>Cancelar</Button>
+                <Button
+                  className="bg-[#1B2A4A] hover:bg-[#243660]"
+                  disabled={updateDeliveryMut.isPending}
+                  onClick={() => {
+                    updateDeliveryMut.mutate({
+                      id: editingDelivery.id,
+                      dataEntrega: editDeliveryForm.dataEntrega,
+                      quantidade: editDeliveryForm.quantidade,
+                      motivo: editDeliveryForm.motivo,
+                      observacoes: editDeliveryForm.observacoes,
+                      motivoTroca: editDeliveryForm.motivoTroca || null,
+                    });
+                  }}
+                >
+                  {updateDeliveryMut.isPending ? "Salvando..." : "Salvar Alterações"}
+                </Button>
+              </div>
+            </div>
+          </FullScreenDialog>
         )}
 
         {/* ============================================================ */}
