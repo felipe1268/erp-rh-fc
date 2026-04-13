@@ -156,8 +156,8 @@ export function calcularRescisaoCompleta(params: {
     : Math.max(0, calcularFeriasVencidas(dataAdmissao, dataProjecao) - 1);
   const feriasVencidas = periodosVencidos > 0 ? (baseFerias13 + baseFerias13 / 3) * periodosVencidos : 0;
 
-  // 4. 13º proporcional
-  const meses13o = calcularMeses13o(dataAdmissao, dataProjecao);
+  // 4. 13º proporcional — usa data real (não projeção fim-de-mês) para regra dos 15 dias
+  const meses13o = calcularMeses13o(dataAdmissao, dataFimAviso);
   const decimoTerceiroProporcional = (baseFerias13 * meses13o) / 12;
 
   // 5. Aviso prévio indenizado
