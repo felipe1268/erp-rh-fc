@@ -3603,7 +3603,7 @@ export default function Solicitacoes() {
                 )}
               </div>
 
-              {(itens.filter(i => i.origemEap).length > 0 || itens.filter(i => !i.origemEap && i.orcamentoItemId && i.descricao.trim()).length > 0) ? (
+              {(itens.filter(i => i.origemEap).length > 0 || (modoSC === "eap" && itens.filter(i => !i.origemEap && i.orcamentoItemId && i.descricao.trim()).length > 0)) ? (
                 <div className="space-y-1 max-h-[40vh] overflow-y-auto pr-1">
                   {(() => {
                     const consolidados = new Map<string, { descricao: string; unidade: string; qtdTotal: number; precoMeta: number; origens: string[]; insumoCodigo?: string }>();
@@ -3724,7 +3724,7 @@ export default function Solicitacoes() {
                         <ManualEapLink
                           eapItems={eapLeafItems}
                           linkedEap={linkedEap}
-                          onLink={(eapItem: any) => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: eapItem.id, eapCodigo: eapItem.eapCodigo, origemEap: true } : x))}
+                          onLink={(eapItem: any) => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: eapItem.id, eapCodigo: eapItem.eapCodigo } : x))}
                           onUnlink={() => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: undefined, eapCodigo: undefined, origemEap: false } : x))}
                         />
                       )}
