@@ -1532,9 +1532,10 @@ export default function Solicitacoes() {
       });
     }
     setItens(prev => {
+      const avulsosDeste = prev.filter(x => x.orcamentoItemId === orcItemId && !x.insumoCodigo && !x.origemEap);
       const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
       const semVazios = semEsteOrc.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
-      return [...semVazios, ...newItems];
+      return [...semVazios, ...newItems, ...avulsosDeste];
     });
     if (newItems.length > 0) {
       setSelectedEapIds(prev => { const n = new Set(prev); n.add(orcItemId); return n; });
@@ -1573,9 +1574,10 @@ export default function Solicitacoes() {
           metaMdoAjudante: (eapItem as any).mdoAjudante ?? 0,
         }];
         setItens(prev => {
+          const avulsosDeste = prev.filter(x => x.orcamentoItemId === orcItemId && !x.insumoCodigo && !x.origemEap);
           const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
           const semVazios = semEsteOrc.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
-          return [...semVazios, ...newItems];
+          return [...semVazios, ...newItems, ...avulsosDeste];
         });
         setSelectedEapIds(prev => { const n = new Set(prev); n.add(orcItemId); return n; });
       } else if (insumosList.length > 0) {
@@ -1621,9 +1623,10 @@ export default function Solicitacoes() {
           });
         }
         setItens(prev => {
+          const avulsosDeste = prev.filter(x => x.orcamentoItemId === orcItemId && !x.insumoCodigo && !x.origemEap);
           const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
           const semVazios = semEsteOrc.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
-          return [...semVazios, ...finalItems];
+          return [...semVazios, ...finalItems, ...avulsosDeste];
         });
         setSelectedEapIds(prev => { const n = new Set(prev); n.add(orcItemId); return n; });
       } else {
@@ -1637,9 +1640,10 @@ export default function Solicitacoes() {
           origemEap: true,
         }];
         setItens(prev => {
+          const avulsosDeste = prev.filter(x => x.orcamentoItemId === orcItemId && !x.insumoCodigo && !x.origemEap);
           const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
           const semVazios = semEsteOrc.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
-          return [...semVazios, ...newItems];
+          return [...semVazios, ...newItems, ...avulsosDeste];
         });
         setSelectedEapIds(prev => { const n = new Set(prev); n.add(orcItemId); return n; });
       }
@@ -1800,8 +1804,12 @@ export default function Solicitacoes() {
     if (validos.length === 0) return toast.error("Adicione pelo menos um item.");
 
     const consolidados = new Map<string, ItemForm>();
+    let avulsoIdx = 0;
     for (const it of validos) {
-      const key = form.tipo === "servico" && it.orcamentoItemId
+      const isAvulsoEap = it.orcamentoItemId && !it.insumoCodigo && !it.origemEap;
+      const key = isAvulsoEap
+        ? `avulso_${it.orcamentoItemId}_${avulsoIdx++}`
+        : form.tipo === "servico" && it.orcamentoItemId
         ? `orc_${it.orcamentoItemId}`
         : it.eapCodigo
         ? `eap_${it.eapCodigo}`
@@ -3038,13 +3046,83 @@ export default function Solicitacoes() {
                                           </div>
                                         </div>
                                       ) : insLista && insLista.length === 0 ? (
-                                        <div className="text-xs text-gray-400 py-1">Nenhum insumo cadastrado para esta composição. Use o modo Manual.</div>
+                                        <div className="text-xs text-gray-400 py-1">Nenhum insumo cadastrado para esta composição.</div>
                                       ) : !it.servicoCodigo ? (
                                         <div className="flex items-center gap-2 text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-2.5 py-2 mt-1">
                                           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                                           <span>Este item nao possui codigo de composição vinculado no orçamento. Vincule o codigo da composição no modulo de Orcamento para ver os insumos detalhados aqui, ou use o <strong>modo Manual</strong> para adicionar itens diretamente.</span>
                                         </div>
                                       ) : null}
+
+                                      {form.tipo !== "servico" && expanded && (
+                                        <div className="mt-2 space-y-1.5">
+                                          {itens.filter(x => x.orcamentoItemId === it.id && !x.insumoCodigo && !x.origemEap).length > 0 && (
+                                            <div className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide flex items-center gap-1">
+                                              <Package className="h-3 w-3" /> Itens avulsos vinculados ({itens.filter(x => x.orcamentoItemId === it.id && !x.insumoCodigo && !x.origemEap).length})
+                                            </div>
+                                          )}
+                                          {itens.map((avIt, avIdx) => {
+                                            if (avIt.orcamentoItemId !== it.id || avIt.insumoCodigo || avIt.origemEap) return null;
+                                            return (
+                                              <div key={`av-${avIdx}`} className="bg-orange-50/60 border border-orange-200 rounded px-2.5 py-2 space-y-1.5">
+                                                <div className="flex gap-2 items-center">
+                                                  <input
+                                                    className="flex-1 h-7 px-2 text-xs rounded border border-orange-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
+                                                    placeholder="Descrição do produto *"
+                                                    value={avIt.descricao}
+                                                    onClick={e => e.stopPropagation()}
+                                                    onChange={e => { const v = e.target.value; setItens(p => p.map((x, i) => i === avIdx ? { ...x, descricao: v } : x)); }}
+                                                  />
+                                                  <Select value={avIt.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === avIdx ? { ...x, unidade: v } : x))}>
+                                                    <SelectTrigger className="w-16 h-7 text-xs border-orange-300 bg-white text-gray-900" onClick={e => e.stopPropagation()}><SelectValue /></SelectTrigger>
+                                                    <SelectContent className="bg-white border-gray-200">
+                                                      {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                                                    </SelectContent>
+                                                  </Select>
+                                                  <input
+                                                    className="w-20 h-7 px-2 text-xs rounded border border-orange-300 bg-white text-gray-900 outline-none focus:border-amber-400"
+                                                    type="number" min="0.001" step="0.001" placeholder="Qtd"
+                                                    value={avIt.quantidade}
+                                                    onClick={e => e.stopPropagation()}
+                                                    onChange={e => { const v = e.target.value; setItens(p => p.map((x, i) => i === avIdx ? { ...x, quantidade: v } : x)); }}
+                                                  />
+                                                  <button onClick={e => { e.stopPropagation(); setItens(p => p.filter((_, i) => i !== avIdx)); }} className="text-gray-400 hover:text-red-500">
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                  </button>
+                                                </div>
+                                                <input
+                                                  className="w-full h-7 px-2 text-xs rounded border border-orange-200 bg-white text-gray-700 placeholder-gray-400 outline-none focus:border-amber-400"
+                                                  placeholder="Especificação do produto (ex: marca, modelo, referência)"
+                                                  value={avIt.observacoes}
+                                                  onClick={e => e.stopPropagation()}
+                                                  onChange={e => { const v = e.target.value; setItens(p => p.map((x, i) => i === avIdx ? { ...x, observacoes: v } : x)); }}
+                                                />
+                                                <div className="flex items-center gap-1 text-[9px] text-orange-600 font-medium">
+                                                  <AlertTriangle className="h-2.5 w-2.5" /> Item fora da composição — usa verba de {it.eapCodigo}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                          <button
+                                            type="button"
+                                            onClick={e => {
+                                              e.stopPropagation();
+                                              setItens(p => [...p, {
+                                                descricao: "",
+                                                unidade: "un",
+                                                quantidade: "1",
+                                                observacoes: "",
+                                                orcamentoItemId: it.id,
+                                                eapCodigo: it.eapCodigo,
+                                                origemEap: false,
+                                              }]);
+                                            }}
+                                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-300 rounded transition-colors"
+                                          >
+                                            <Plus className="h-3 w-3" /> Item avulso neste orçamento
+                                          </button>
+                                        </div>
+                                      )}
                                         </>
                                       )}
                                     </div>
@@ -3525,7 +3603,7 @@ export default function Solicitacoes() {
                 )}
               </div>
 
-              {itens.filter(i => i.origemEap).length > 0 ? (
+              {(itens.filter(i => i.origemEap).length > 0 || itens.filter(i => !i.origemEap && i.orcamentoItemId && i.descricao.trim()).length > 0) ? (
                 <div className="space-y-1 max-h-[40vh] overflow-y-auto pr-1">
                   {(() => {
                     const consolidados = new Map<string, { descricao: string; unidade: string; qtdTotal: number; precoMeta: number; origens: string[]; insumoCodigo?: string }>();
@@ -3572,6 +3650,24 @@ export default function Solicitacoes() {
                       </div>
                     ); });
                   })()}
+                  {itens.filter(i => !i.origemEap && i.orcamentoItemId && i.descricao.trim()).map((avIt, idx) => (
+                    <div key={`av-sum-${idx}`} className="flex items-center gap-2 p-2 rounded-lg bg-orange-50/50 border border-orange-200/50 text-xs">
+                      <AlertTriangle className="h-3 w-3 text-orange-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-gray-900 truncate flex items-center gap-1 flex-wrap">
+                          {avIt.descricao}
+                          <span className="text-[8px] px-1 rounded font-bold bg-orange-100 text-orange-700">AVULSO</span>
+                          {avIt.eapCodigo && <span className="text-[9px] text-gray-500">verba: {avIt.eapCodigo}</span>}
+                        </div>
+                        {avIt.observacoes && (
+                          <div className="text-[10px] text-gray-500 italic truncate">{avIt.observacoes}</div>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="font-semibold text-gray-700">{parseFloat(avIt.quantidade).toLocaleString("pt-BR")} {avIt.unidade}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : modoSC === "eap" ? (
                 <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-3 text-center">
@@ -3585,31 +3681,39 @@ export default function Solicitacoes() {
                     const linkedEap = it.orcamentoItemId ? eapLeafItems.find((e: any) => e.id === it.orcamentoItemId) : null;
                     return (
                     <div key={idx} className="space-y-1">
-                      <div className={`flex gap-2 items-center p-2 rounded-lg border ${!it.orcamentoItemId && it.descricao.trim() ? "bg-orange-50/50 border-orange-200" : "bg-gray-50 border-gray-200"}`}>
+                      <div className={`p-2 rounded-lg border space-y-1.5 ${!it.orcamentoItemId && it.descricao.trim() ? "bg-orange-50/50 border-orange-200" : "bg-gray-50 border-gray-200"}`}>
+                        <div className="flex gap-2 items-center">
+                          <input
+                            className="flex-1 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
+                            placeholder="Descrição do item *"
+                            value={it.descricao}
+                            onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
+                            onBlur={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: normalizarTexto(e.target.value) } : x))}
+                          />
+                          <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
+                            <SelectTrigger className="w-16 h-7 text-xs border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
+                            <SelectContent className="bg-white border-gray-200">
+                              {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <input
+                            className="w-20 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-400"
+                            type="number" min="0.001" step="0.001" placeholder="Qtd"
+                            value={it.quantidade}
+                            onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
+                          />
+                          {itens.length > 1 && (
+                            <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                         <input
-                          className="flex-1 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
-                          placeholder="Descrição do item *"
-                          value={it.descricao}
-                          onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
-                          onBlur={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: normalizarTexto(e.target.value) } : x))}
+                          className="w-full h-7 px-2 text-xs rounded border border-gray-200 bg-white text-gray-700 placeholder-gray-400 outline-none focus:border-amber-400"
+                          placeholder="Especificação do produto (ex: marca, modelo, referência)"
+                          value={it.observacoes}
+                          onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, observacoes: e.target.value } : x))}
                         />
-                        <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
-                          <SelectTrigger className="w-16 h-7 text-xs border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
-                          <SelectContent className="bg-white border-gray-200">
-                            {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <input
-                          className="w-20 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-400"
-                          type="number" min="0.001" step="0.001" placeholder="Qtd"
-                          value={it.quantidade}
-                          onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
-                        />
-                        {itens.length > 1 && (
-                          <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
                       </div>
                       {!it.orcamentoItemId && it.descricao.trim() && (
                         <div className="flex items-center gap-1 px-2 text-[9px] text-orange-600 font-medium">
@@ -4151,6 +4255,9 @@ export default function Solicitacoes() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-gray-900 text-sm font-medium">{it.descricao}</p>
+                          {it.observacoes && (
+                            <p className="text-gray-500 text-xs italic">{it.observacoes}</p>
+                          )}
                           <p className="text-gray-400 text-xs">{it.unidade || "un"} · Qtd: {qtdTotal.toLocaleString("pt-BR")}</p>
                           {it.semVerba && (
                             <div className="flex items-center gap-1.5 mt-1">
