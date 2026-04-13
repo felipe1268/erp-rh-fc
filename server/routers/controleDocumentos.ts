@@ -508,14 +508,25 @@ export const controleDocumentosRouter = router({
         return { success: true };
       }),
     uploadDoc: protectedProcedure
-      .input(z.object({ id: z.number(), fileBase64: z.string(), fileName: z.string() }))
+      .input(z.object({ id: z.number(), fileBase64: z.string(), fileName: z.string(), dataExame: z.string().optional(), validadeDias: z.number().min(1).max(3650).optional() }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         const buffer = Buffer.from(input.fileBase64, "base64");
         const ext = input.fileName.split(".").pop() || "pdf";
         const key = `documentos/asos/${input.id}-${Date.now()}.${ext}`;
         const { url } = await storagePut(key, buffer, ext === "pdf" ? "application/pdf" : "application/octet-stream");
-        await db.update(asos).set({ documentoUrl: url }).where(eq(asos.id, input.id));
+        const updateData: any = { documentoUrl: url };
+        if (input.dataExame) {
+          const d = new Date(input.dataExame);
+          if (!isNaN(d.getTime())) {
+            updateData.dataExame = input.dataExame;
+            const dias = input.validadeDias || 365;
+            d.setDate(d.getDate() + dias);
+            updateData.dataValidade = d.toISOString().split("T")[0];
+            updateData.validadeDias = dias;
+          }
+        }
+        await db.update(asos).set(updateData).where(eq(asos.id, input.id));
         return { url };
       }),
 

@@ -898,7 +898,7 @@ export default function ControleDocumentos() {
   const createAso = trpc.docs.asos.create.useMutation({ onSuccess: () => { refetchAso(); toast.success("ASO cadastrado!"); } });
   const updateAso = trpc.docs.asos.update.useMutation({ onSuccess: () => { refetchAso(); toast.success("ASO atualizado!"); } });
   const deleteAso = trpc.docs.asos.delete.useMutation({ onSuccess: () => { refetchAso(); toast.success("ASO excluído!"); } });
-  const uploadAsoDoc = trpc.docs.asos.uploadDoc.useMutation({ onSuccess: () => { refetchAso(); toast.success("Documento anexado!"); } });
+  const uploadAsoDoc = trpc.docs.asos.uploadDoc.useMutation({ onSuccess: () => { refetchAso(); } });
 
   const createTrein = trpc.docs.treinamentos.create.useMutation({ onSuccess: () => { refetchTrein(); toast.success("Treinamento cadastrado!"); } });
   const updateTrein = trpc.docs.treinamentos.update.useMutation({ onSuccess: () => { refetchTrein(); toast.success("Treinamento atualizado!"); } });
@@ -940,6 +940,9 @@ export default function ControleDocumentos() {
   const [previewAdvData, setPreviewAdvData] = useState<any>(null);
   const [showAdvAssinaturas, setShowAdvAssinaturas] = useState(false);
   const [advAssinaturasData, setAdvAssinaturasData] = useState<any>(null);
+  const [asoUploadDialog, setAsoUploadDialog] = useState<{ id: number; nomeCompleto: string; file: File; base64: string } | null>(null);
+  const [asoUploadDate, setAsoUploadDate] = useState("");
+  const [asoUploadValidadeDias, setAsoUploadValidadeDias] = useState(365);
 
   // ============ FORM STATES ============
   const [asoForm, setAsoForm] = useState<any>({});
@@ -1076,7 +1079,7 @@ export default function ControleDocumentos() {
   }, [advList, search]);
 
   // ============ UPLOAD HANDLER ============
-  const handleUploadDoc = async (type: string, id: number) => {
+  const handleUploadDoc = async (type: string, id: number, asoRecord?: any) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".pdf,.jpg,.jpeg,.png";
@@ -1088,7 +1091,12 @@ export default function ControleDocumentos() {
       reader.onload = async () => {
         const base64 = (reader.result as string).split(",")[1];
         try {
-          if (type === "aso") await uploadAsoDoc.mutateAsync({ id, fileBase64: base64, fileName: file.name });
+          if (type === "aso") {
+            setAsoUploadDate("");
+            setAsoUploadValidadeDias(asoRecord?.validadeDias || 365);
+            setAsoUploadDialog({ id, nomeCompleto: asoRecord?.nomeCompleto || "", file, base64 });
+            return;
+          }
           else if (type === "trein") await uploadTreinDoc.mutateAsync({ id, fileBase64: base64, fileName: file.name });
           else if (type === "atest") await uploadAtestDoc.mutateAsync({ id, fileBase64: base64, fileName: file.name });
           else if (type === "adv") await uploadAdvDoc.mutateAsync({ id, fileBase64: base64, fileName: file.name });
@@ -1097,6 +1105,20 @@ export default function ControleDocumentos() {
       reader.readAsDataURL(file);
     };
     input.click();
+  };
+
+  const handleConfirmAsoUpload = async () => {
+    if (!asoUploadDialog) return;
+    try {
+      await uploadAsoDoc.mutateAsync({
+        id: asoUploadDialog.id,
+        fileBase64: asoUploadDialog.base64,
+        fileName: asoUploadDialog.file.name,
+        ...(asoUploadDate ? { dataExame: asoUploadDate, validadeDias: asoUploadValidadeDias } : {}),
+      });
+      toast.success(asoUploadDate ? "Documento anexado e data atualizada!" : "Documento anexado!");
+    } catch { toast.error("Erro ao enviar documento"); }
+    setAsoUploadDialog(null);
   };
 
   // ============ OPEN DIALOGS ============
@@ -1667,7 +1689,7 @@ export default function ControleDocumentos() {
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEditAso(a)}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar PDF" onClick={() => handleUploadDoc("aso", a.id)}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar PDF" onClick={() => handleUploadDoc("aso", a.id, a)}>
                                 <FileUp className="h-3.5 w-3.5" />
                               </Button>
                               {a.documentoUrl && (
@@ -2093,6 +2115,39 @@ export default function ControleDocumentos() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* ===================== DIALOG: Upload ASO com data ===================== */}
+      {asoUploadDialog && (
+        <Dialog open onOpenChange={() => setAsoUploadDialog(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Anexar Documento ao ASO</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                <strong>{asoUploadDialog.nomeCompleto}</strong> — Arquivo: {asoUploadDialog.file.name}
+              </div>
+              <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md p-3 text-sm">
+                Se este é um ASO renovado, preencha a nova data do exame para atualizar automaticamente a data e o vencimento.
+              </div>
+              <div>
+                <Label>Nova Data do Exame (opcional)</Label>
+                <Input type="date" value={asoUploadDate} onChange={(e) => setAsoUploadDate(e.target.value)} />
+              </div>
+              <div>
+                <Label>Validade (dias)</Label>
+                <Input type="number" value={asoUploadValidadeDias} onChange={(e) => setAsoUploadValidadeDias(Number(e.target.value) || 365)} />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setAsoUploadDialog(null)}>Cancelar</Button>
+                <Button onClick={handleConfirmAsoUpload} disabled={uploadAsoDoc.isPending}>
+                  {uploadAsoDoc.isPending ? "Enviando..." : asoUploadDate ? "Anexar e Atualizar Data" : "Apenas Anexar Documento"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* ===================== DIALOG: ASO (Criar/Editar) ===================== */}
       <FullScreenDialog open={showAsoDialog} onClose={() => { setShowAsoDialog(false); setEditingAsoId(null); }} title={editingAsoId ? "Editar ASO" : "Novo ASO"} icon={<Stethoscope className="h-5 w-5 text-white" />}>
