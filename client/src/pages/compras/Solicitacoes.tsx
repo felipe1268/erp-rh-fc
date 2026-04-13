@@ -998,6 +998,8 @@ export default function Solicitacoes() {
   const [eapQtdServico, setEapQtdServico] = useState<Record<number, string>>({});
   const [eapInsumos, setEapInsumos] = useState<Record<number, any[]>>({});
   const [eapExtraDesbloqueado, setEapExtraDesbloqueado] = useState<Record<string, boolean>>({});
+  const [eapInsumoSel, setEapInsumoSel] = useState<Record<string, boolean>>({});
+  const [eapInsumoQtdManual, setEapInsumoQtdManual] = useState<Record<string, string>>({});
   const [incluirAjudanteGlobal, setIncluirAjudanteGlobal] = useState(true);
   const [incluirAjudanteOverride, setIncluirAjudanteOverride] = useState<Record<number, boolean>>({});
   const [loadingInsumos, setLoadingInsumos] = useState<number | null>(null);
@@ -1337,6 +1339,7 @@ export default function Solicitacoes() {
     setSelectedEapIds(new Set());
     setEapSearch(""); setModoSC("eap");
     setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setEapExtraDesbloqueado({});
+    setEapInsumoSel({}); setEapInsumoQtdManual({});
     setInsumoBusca(""); setInsumoQtds({}); setInsumoExpanded(null);
     setImagemPreview(null); setImagemBase64(null); setImagemNome("");
     setIncluirAjudanteGlobal(true); setIncluirAjudanteOverride({});
@@ -1387,6 +1390,85 @@ export default function Solicitacoes() {
     return { saldoDisponivel: found.saldoDisponivel, qtdTotalOrcada: found.qtdTotalOrcada, qtdJaSolicitada: found.qtdJaSolicitada, qtdComprada: found.qtdComprada, qtdRecebida: found.qtdRecebida };
   }
 
+  function calcInsumoQtdFinal(ins: any, qtdServ: number, extraDesbloqueados: Record<string, boolean>) {
+    const qtdCalculada = Math.ceil((qtdServ * ins.coeficiente) * 1000) / 1000;
+    const saldoGlobal = getInsumoSaldoGlobal(ins.insumoCodigo);
+    let qtdFinal = qtdCalculada;
+    if (saldoGlobal) {
+      const saldoReal = Math.max(0, saldoGlobal.saldoDisponivel);
+      if (saldoReal <= 0 && !extraDesbloqueados[ins.insumoCodigo]) {
+        qtdFinal = 0;
+      } else if (saldoReal < qtdCalculada && !extraDesbloqueados[ins.insumoCodigo]) {
+        qtdFinal = saldoReal;
+      }
+    }
+    return { qtdCalculada, qtdFinal };
+  }
+
+  function toggleInsumoSel(orcItemId: number, ins: any, eapItem: any) {
+    const selKey = `${orcItemId}_${ins.insumoCodigo}`;
+    const wasSelected = eapInsumoSel[selKey];
+    const newSel = { ...eapInsumoSel, [selKey]: !wasSelected };
+    let newQtdManual = eapInsumoQtdManual;
+    if (wasSelected) {
+      newQtdManual = { ...eapInsumoQtdManual };
+      delete newQtdManual[selKey];
+    }
+    setEapInsumoSel(newSel);
+    setEapInsumoQtdManual(newQtdManual);
+    const qtdServ = parseFloat(eapQtdServico[orcItemId] || "0");
+    rebuildInsumosItensDirect(orcItemId, eapItem, qtdServ, newSel, newQtdManual);
+  }
+
+  function handleInsumoQtdManual(orcItemId: number, ins: any, qtdStr: string, eapItem: any) {
+    const selKey = `${orcItemId}_${ins.insumoCodigo}`;
+    const newQtdManual = { ...eapInsumoQtdManual, [selKey]: qtdStr };
+    const newSel = { ...eapInsumoSel, [selKey]: true };
+    setEapInsumoQtdManual(newQtdManual);
+    setEapInsumoSel(newSel);
+    const qtdServ = parseFloat(eapQtdServico[orcItemId] || "0");
+    rebuildInsumosItensDirect(orcItemId, eapItem, qtdServ, newSel, newQtdManual);
+  }
+
+  function rebuildInsumosItensDirect(orcItemId: number, eapItem: any, qtdServ: number, selMap: Record<string, boolean>, qtdMap: Record<string, string>) {
+    const insumosList = eapInsumos[orcItemId] || [];
+    if (form.tipo === "servico" || insumosList.length === 0) return;
+    const newItems: ItemForm[] = [];
+    for (const ins of insumosList) {
+      const selKey = `${orcItemId}_${ins.insumoCodigo}`;
+      if (!selMap[selKey]) continue;
+      const manualQtd = qtdMap[selKey];
+      const { qtdCalculada, qtdFinal } = calcInsumoQtdFinal(ins, qtdServ, eapExtraDesbloqueado);
+      const qtdUsar = manualQtd !== undefined ? parseFloat(manualQtd) || 0 : qtdFinal;
+      if (qtdUsar <= 0 && manualQtd === undefined) continue;
+      newItems.push({
+        descricao: ins.descricao,
+        unidade: ins.unidade,
+        quantidade: String(Math.max(0, qtdUsar)),
+        observacoes: "",
+        orcamentoItemId: orcItemId,
+        eapCodigo: eapItem.eapCodigo,
+        insumoCodigo: ins.insumoCodigo,
+        composicaoCodigo: eapItem.servicoCodigo,
+        precoMeta: ins.precoUnitario,
+        quantidadeServico: qtdServ,
+        coeficiente: ins.coeficiente,
+        origemEap: true,
+        qtdCalculadaOriginal: qtdCalculada,
+      });
+    }
+    setItens(prev => {
+      const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
+      const semVazios = semEsteOrc.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
+      return [...semVazios, ...newItems];
+    });
+    if (newItems.length > 0) {
+      setSelectedEapIds(prev => { const n = new Set(prev); n.add(orcItemId); return n; });
+    } else {
+      setSelectedEapIds(prev => { const n = new Set(prev); n.delete(orcItemId); return n; });
+    }
+  }
+
   function handleEapQtdChange(orcItemId: number, qtdStr: string, eapItem: any) {
     setEapQtdServico(prev => ({ ...prev, [orcItemId]: qtdStr }));
     const qtdServ = parseFloat(qtdStr) || 0;
@@ -1416,25 +1498,43 @@ export default function Solicitacoes() {
           metaMdoProfissional: (eapItem as any).mdoProfissional ?? 0,
           metaMdoAjudante: (eapItem as any).mdoAjudante ?? 0,
         }];
+        setItens(prev => {
+          const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
+          const semVazios = semEsteOrc.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
+          return [...semVazios, ...newItems];
+        });
+        setSelectedEapIds(prev => { const n = new Set(prev); n.add(orcItemId); return n; });
       } else if (insumosList.length > 0) {
-        const extraDesbloqueados = eapExtraDesbloqueado;
-        newItems = insumosList.map(ins => {
-          const qtdCalculada = Math.ceil((qtdServ * ins.coeficiente) * 1000) / 1000;
-          const saldoGlobal = getInsumoSaldoGlobal(ins.insumoCodigo);
-          let qtdFinal = qtdCalculada;
-          if (saldoGlobal) {
-            const saldoReal = Math.max(0, saldoGlobal.saldoDisponivel);
-            if (saldoReal <= 0 && !extraDesbloqueados[ins.insumoCodigo]) {
-              qtdFinal = 0;
-            } else if (saldoReal < qtdCalculada && !extraDesbloqueados[ins.insumoCodigo]) {
-              qtdFinal = saldoReal;
+        const newSel: Record<string, boolean> = {};
+        const newQtd: Record<string, string> = {};
+        for (const ins of insumosList) {
+          const selKey = `${orcItemId}_${ins.insumoCodigo}`;
+          const { qtdFinal } = calcInsumoQtdFinal(ins, qtdServ, eapExtraDesbloqueado);
+          if (eapInsumoSel[selKey] !== undefined) {
+            newSel[selKey] = eapInsumoSel[selKey];
+            if (eapInsumoQtdManual[selKey] !== undefined) {
+              newQtd[selKey] = eapInsumoQtdManual[selKey];
             }
+          } else {
+            newSel[selKey] = qtdFinal > 0;
           }
-          return {
+        }
+        setEapInsumoSel(prev => ({ ...prev, ...newSel }));
+        setEapInsumoQtdManual(prev => ({ ...prev, ...newQtd }));
+
+        const finalItems: ItemForm[] = [];
+        for (const ins of insumosList) {
+          const selKey = `${orcItemId}_${ins.insumoCodigo}`;
+          if (!newSel[selKey]) continue;
+          const manualQtdVal = newQtd[selKey];
+          const { qtdCalculada, qtdFinal } = calcInsumoQtdFinal(ins, qtdServ, eapExtraDesbloqueado);
+          const qtdUsar = manualQtdVal !== undefined ? parseFloat(manualQtdVal) || 0 : qtdFinal;
+          if (qtdUsar <= 0) continue;
+          finalItems.push({
             descricao: ins.descricao,
             unidade: ins.unidade,
-            quantidade: String(qtdFinal),
-            observacoes: qtdFinal < qtdCalculada && qtdFinal > 0 ? `Qtd calculada: ${qtdCalculada} (limitada ao saldo disponível)` : qtdFinal === 0 && qtdCalculada > 0 ? `Bloqueado — saldo global esgotado (calculado: ${qtdCalculada})` : "",
+            quantidade: String(qtdUsar),
+            observacoes: manualQtdVal !== undefined ? "" : (qtdFinal < qtdCalculada && qtdFinal > 0 ? `Qtd calculada: ${qtdCalculada} (limitada ao saldo disponível)` : qtdFinal === 0 && qtdCalculada > 0 ? `Bloqueado — saldo global esgotado (calculado: ${qtdCalculada})` : ""),
             orcamentoItemId: orcItemId,
             eapCodigo: eapItem.eapCodigo,
             insumoCodigo: ins.insumoCodigo,
@@ -1444,8 +1544,14 @@ export default function Solicitacoes() {
             coeficiente: ins.coeficiente,
             origemEap: true,
             qtdCalculadaOriginal: qtdCalculada,
-          };
-        }).filter(x => x.quantidade !== "0");
+          });
+        }
+        setItens(prev => {
+          const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
+          const semVazios = semEsteOrc.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
+          return [...semVazios, ...finalItems];
+        });
+        setSelectedEapIds(prev => { const n = new Set(prev); n.add(orcItemId); return n; });
       } else {
         newItems = [{
           descricao: `[${eapItem.eapCodigo}] ${eapItem.descricao}`,
@@ -1456,17 +1562,20 @@ export default function Solicitacoes() {
           eapCodigo: eapItem.eapCodigo,
           origemEap: true,
         }];
+        setItens(prev => {
+          const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
+          const semVazios = semEsteOrc.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
+          return [...semVazios, ...newItems];
+        });
+        setSelectedEapIds(prev => { const n = new Set(prev); n.add(orcItemId); return n; });
       }
-
-      setItens(prev => {
-        const semEsteOrc = prev.filter(x => x.orcamentoItemId !== orcItemId);
-        const semVazios = semEsteOrc.filter(x => x.descricao.trim() !== "" || x.orcamentoItemId);
-        return [...semVazios, ...newItems];
-      });
-      setSelectedEapIds(prev => { const n = new Set(prev); n.add(orcItemId); return n; });
     } else {
       setItens(prev => prev.filter(x => x.orcamentoItemId !== orcItemId));
       setSelectedEapIds(prev => { const n = new Set(prev); n.delete(orcItemId); return n; });
+      const insList = eapInsumos[orcItemId] || [];
+      const keysToClean: string[] = insList.map((ins: any) => `${orcItemId}_${ins.insumoCodigo}`);
+      setEapInsumoSel(prev => { const n = { ...prev }; keysToClean.forEach(k => delete n[k]); return n; });
+      setEapInsumoQtdManual(prev => { const n = { ...prev }; keysToClean.forEach(k => delete n[k]); return n; });
     }
   }
 
@@ -2235,7 +2344,7 @@ export default function Solicitacoes() {
                           if (!editingSc && obraChanged) {
                             setSelectedEapIds(new Set());
                             setItens([newItem()]);
-                            setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setBatchSaldo({}); setEapExtraDesbloqueado({});
+                            setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setBatchSaldo({}); setEapExtraDesbloqueado({}); setEapInsumoSel({}); setEapInsumoQtdManual({});
                           }
                           setObraSearch("");
                           setObraOpen(false);
@@ -2762,11 +2871,34 @@ export default function Solicitacoes() {
                                         </div>
                                       ) : insLista && insLista.length > 0 ? (
                                         <div className="space-y-1">
-                                          <div className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide flex items-center gap-1">
-                                            <Package className="h-3 w-3" /> {form.tipo === "servico" ? "Mão de obra" : form.tipo === "pacote" ? "Insumos + Mão de obra" : "Insumos"} da composição ({insLista.length})
+                                          <div className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide flex items-center gap-1 justify-between">
+                                            <span className="flex items-center gap-1">
+                                              <Package className="h-3 w-3" /> {form.tipo === "servico" ? "Mão de obra" : form.tipo === "pacote" ? "Insumos + Mão de obra" : "Insumos"} da composição ({insLista.length})
+                                              {(() => { const selCount = insLista.filter((ins: any) => eapInsumoSel[`${it.id}_${ins.insumoCodigo}`]).length; return selCount > 0 ? <span className="text-amber-600 font-bold">— {selCount} selecionado{selCount > 1 ? "s" : ""}</span> : null; })()}
+                                            </span>
+                                            {form.tipo !== "servico" && (
+                                              <div className="flex gap-2">
+                                                <button type="button" className="text-[9px] text-blue-600 hover:text-blue-800 font-semibold" onClick={() => {
+                                                  const newSel = { ...eapInsumoSel };
+                                                  insLista.forEach((ins: any) => { newSel[`${it.id}_${ins.insumoCodigo}`] = true; });
+                                                  setEapInsumoSel(newSel);
+                                                  rebuildInsumosItensDirect(it.id, it, qtdVal, newSel, eapInsumoQtdManual);
+                                                }}>Todos</button>
+                                                <button type="button" className="text-[9px] text-gray-500 hover:text-gray-700 font-semibold" onClick={() => {
+                                                  const newSel = { ...eapInsumoSel };
+                                                  const newQtd = { ...eapInsumoQtdManual };
+                                                  insLista.forEach((ins: any) => { const k = `${it.id}_${ins.insumoCodigo}`; newSel[k] = false; delete newQtd[k]; });
+                                                  setEapInsumoSel(newSel);
+                                                  setEapInsumoQtdManual(newQtd);
+                                                  rebuildInsumosItensDirect(it.id, it, qtdVal, newSel, newQtd);
+                                                }}>Nenhum</button>
+                                              </div>
+                                            )}
                                           </div>
-                                          <div className="bg-white rounded border border-gray-200 divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                                          <div className="bg-white rounded border border-gray-200 divide-y divide-gray-100 max-h-64 overflow-y-auto">
                                             {insLista.map((ins: any, idx: number) => {
+                                              const selKey = `${it.id}_${ins.insumoCodigo}`;
+                                              const isSelected = !!eapInsumoSel[selKey];
                                               const qtdCalc = qtdVal > 0 ? Math.ceil((qtdVal * ins.coeficiente) * 1000) / 1000 : 0;
                                               const insConsolidado = (insumosConsolidadosQ.data ?? []).find((c: any) => c.insumoCodigo === ins.insumoCodigo);
                                               const insStatusGlobal = insConsolidado?.statusInsumo || "disponivel";
@@ -2779,10 +2911,13 @@ export default function Solicitacoes() {
                                               const isBloqueado = saldoReal != null && saldoReal <= 0 && !eapExtraDesbloqueado[ins.insumoCodigo];
                                               const isCapado = saldoReal != null && saldoReal > 0 && saldoReal < qtdCalc && !eapExtraDesbloqueado[ins.insumoCodigo];
                                               const isExtra = eapExtraDesbloqueado[ins.insumoCodigo];
-                                              const qtdEfetiva = isBloqueado ? 0 : isCapado ? saldoReal : qtdCalc;
-                                              const insRowBg = isBloqueado ? "bg-gray-100/80 opacity-60" : isExtra ? "bg-amber-50/60" : isCapado ? "bg-yellow-50/50" : insStatusLocal === "estouro" ? "bg-red-50/60" : insStatusLocal === "comprado" ? "bg-purple-50/50" : insStatusLocal === "recebido" ? "bg-rose-50/50" : "";
+                                              const qtdEfetiva = isBloqueado ? 0 : isCapado ? saldoReal! : qtdCalc;
+                                              const manualQtdStr = eapInsumoQtdManual[selKey];
+                                              const displayQtd = manualQtdStr !== undefined ? manualQtdStr : (isSelected && qtdEfetiva > 0 ? String(qtdEfetiva) : "0");
+                                              const insRowBg = !isSelected ? "bg-gray-50/50" : isBloqueado ? "bg-gray-100/80 opacity-60" : isExtra ? "bg-amber-50/60" : isCapado ? "bg-yellow-50/50" : insStatusLocal === "estouro" ? "bg-red-50/60" : insStatusLocal === "comprado" ? "bg-purple-50/50" : insStatusLocal === "recebido" ? "bg-rose-50/50" : "";
                                               return (
-                                                <div key={idx} className={`flex items-center gap-2 px-2.5 py-1.5 text-xs ${insRowBg}`}>
+                                                <div key={idx} className={`flex items-center gap-2 px-2.5 py-2 text-xs ${insRowBg} cursor-pointer hover:bg-blue-50/40 transition-colors`} onClick={() => toggleInsumoSel(it.id, ins, it)}>
+                                                  <input type="checkbox" checked={isSelected} onChange={() => {}} className="shrink-0 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer" />
                                                   <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${isBloqueado ? "bg-gray-400" : insStatusDotColor[insStatusLocal] || "bg-emerald-500"}`} title={isBloqueado ? "Saldo esgotado" : solicitadoNestaComposicao ? insStatusLabel[insStatusLocal] : (insStatusGlobal !== "disponivel" ? `Disponível nesta composição (${insStatusLabel[insStatusGlobal]} em outras)` : "Disponível")} />
                                                   <div className="flex-1 min-w-0">
                                                     <div className="text-gray-900 truncate flex items-center gap-1 flex-wrap">
@@ -2807,11 +2942,15 @@ export default function Solicitacoes() {
                                                         Extra-orçamento
                                                       </button>
                                                     )}
-                                                    <div>
-                                                      <div className={`font-semibold ${isBloqueado ? "text-gray-400 line-through" : isCapado ? "text-yellow-700" : "text-gray-700"}`}>{(isBloqueado ? qtdCalc : qtdEfetiva).toLocaleString("pt-BR")} {ins.unidade}</div>
-                                                      {isCapado && <div className="text-[9px] text-yellow-600">de {qtdCalc.toLocaleString("pt-BR")} calculado</div>}
-                                                      
-                                                      {(() => { const c = getConversao(ins.descricao, ins.unidade, qtdEfetiva); return c ? <div className="text-[9px] text-purple-600 bg-purple-50 rounded px-1 py-0.5 mt-0.5 font-medium">{c}</div> : null; })()}
+                                                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                                      <input
+                                                        type="number" min="0" step="0.001"
+                                                        className={`w-20 h-6 px-1.5 text-xs rounded border text-right outline-none focus:ring-1 ${isSelected ? "bg-white border-amber-300 focus:border-amber-400 focus:ring-amber-200 text-gray-900 font-semibold" : "bg-gray-100 border-gray-200 text-gray-400"}`}
+                                                        value={displayQtd}
+                                                        disabled={!isSelected && !qtdVal}
+                                                        onChange={(e) => handleInsumoQtdManual(it.id, ins, e.target.value, it)}
+                                                      />
+                                                      <span className="text-[10px] text-gray-500 font-medium w-8">{ins.unidade}</span>
                                                     </div>
                                                   </div>
                                                 </div>
