@@ -997,13 +997,14 @@ export const avisoPrevioFeriasRouter = router({
         status: z.enum(['em_andamento','concluido','cancelado','aguardando_pagamento']).optional(),
         dataConclusao: z.string().optional(),
         motivoCancelamento: z.string().optional(),
+        novoStatusFuncionario: z.enum(['Ativo','Desligado']).optional(),
         observacoes: z.string().optional(),
         diasTrabalhados: z.number().optional(),
         recalcular: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
-        const { id, recalcular, diasTrabalhados, dataDesligamento, ...rest } = input;
+        const { id, recalcular, diasTrabalhados, dataDesligamento, novoStatusFuncionario, ...rest } = input;
         const updateData: any = {};
         Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
 
@@ -1011,6 +1012,25 @@ export const avisoPrevioFeriasRouter = router({
           updateData.canceladoPorNome = ctx.user?.name ?? ctx.user?.email ?? "Sistema";
           updateData.canceladoPorId = ctx.user?.id ?? null;
           updateData.dataCancelamento = new Date().toISOString();
+
+          const [aviso] = await db.select().from(terminationNotices).where(eq(terminationNotices.id, id));
+          if (aviso) {
+            const novoStatus = input.novoStatusFuncionario || 'Ativo';
+            if (novoStatus === 'Desligado') {
+              const pendentes = await db.select({ id: employeeTerminationChecklist.id })
+                .from(employeeTerminationChecklist)
+                .where(and(
+                  eq(employeeTerminationChecklist.employeeId, aviso.employeeId),
+                  eq(employeeTerminationChecklist.obrigatorio, 1),
+                  eq(employeeTerminationChecklist.concluido, 0)
+                ));
+              if (pendentes.length > 0) {
+                throw new TRPCError({ code: 'PRECONDITION_FAILED', message: `Não é possível desligar: ${pendentes.length} item(ns) obrigatório(s) pendente(s) no checklist de desligamento.` });
+              }
+            }
+            await db.update(employees).set({ status: novoStatus } as any)
+              .where(eq(employees.id, aviso.employeeId));
+          }
         }
 
         // Se recalcular=true, busca o aviso e o funcionário para recalcular tudo

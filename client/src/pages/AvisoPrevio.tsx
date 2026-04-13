@@ -77,6 +77,8 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const [editingItem, setEditingItem] = useState<any>(null);
   const [confirmEncerrar, setConfirmEncerrar] = useState<{ open: boolean; avisoId: number | null }>({ open: false, avisoId: null });
   const [confirmExcluir, setConfirmExcluir] = useState<{ open: boolean; avisoId: number | null }>({ open: false, avisoId: null });
+  const [confirmCancelar, setConfirmCancelar] = useState<{ open: boolean; avisoId: number | null; nomeFunc: string }>({ open: false, avisoId: null, nomeFunc: '' });
+  const [cancelarMotivo, setCancelarMotivo] = useState('');
 
   // Modal "Dar Baixa"
   const [darBaixaModal, setDarBaixaModal] = useState<{ open: boolean; avisoId: number | null; funcionarioNome: string }>({ open: false, avisoId: null, funcionarioNome: '' });
@@ -436,11 +438,27 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     });
   };
 
-  const handleCancelar = (id: number) => {
-    const motivo = prompt("Motivo do cancelamento:");
-    if (motivo) {
-      updateAviso.mutate({ id, status: "cancelado", motivoCancelamento: motivo });
+  const handleCancelar = (id: number, nomeFunc?: string) => {
+    setCancelarMotivo('');
+    setConfirmCancelar({ open: true, avisoId: id, nomeFunc: nomeFunc || '' });
+  };
+
+  const executarCancelamento = (novoStatus: 'Ativo' | 'Desligado') => {
+    if (!confirmCancelar.avisoId || !cancelarMotivo.trim()) {
+      toast.error("Informe o motivo do cancelamento");
+      return;
     }
+    updateAviso.mutate(
+      { id: confirmCancelar.avisoId, status: "cancelado", motivoCancelamento: cancelarMotivo.trim(), novoStatusFuncionario: novoStatus },
+      { onSuccess: () => {
+          toast.success(novoStatus === 'Ativo' ? "Aviso cancelado — funcionário reativado!" : "Aviso cancelado — funcionário desligado!");
+          setConfirmCancelar({ open: false, avisoId: null, nomeFunc: '' });
+        },
+        onError: (err: any) => {
+          toast.error(err.message || "Erro ao cancelar aviso");
+        }
+      }
+    );
   };
 
   return (
@@ -731,7 +749,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-600" title="Encerrar Período" onClick={() => handleEncerrarPeriodo(a.id)}>
                                   <CheckCircle2 className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Cancelar" onClick={() => handleCancelar(a.id)}>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Cancelar" onClick={() => handleCancelar(a.id, a.nomeCompleto)}>
                                   <XCircle className="h-3.5 w-3.5" />
                                 </Button>
                               </>
@@ -1963,6 +1981,59 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
             <Button variant="outline" onClick={() => setConfirmExcluir({ open: false, avisoId: null })}>Cancelar</Button>
             <Button variant="destructive" onClick={() => { if (confirmExcluir.avisoId) deleteAviso.mutate({ id: confirmExcluir.avisoId }); setConfirmExcluir({ open: false, avisoId: null }); }}>Excluir</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmCancelar.open} onOpenChange={(v) => { if (!v) setConfirmCancelar({ open: false, avisoId: null, nomeFunc: '' }); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <XCircle className="h-5 w-5" /> Cancelar Aviso Prévio
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {confirmCancelar.nomeFunc && (
+              <p className="text-sm font-medium">{confirmCancelar.nomeFunc}</p>
+            )}
+            <div>
+              <label className="text-sm font-medium">Motivo do cancelamento *</label>
+              <Textarea
+                value={cancelarMotivo}
+                onChange={(e) => setCancelarMotivo(e.target.value)}
+                placeholder="Informe o motivo do cancelamento..."
+                className="mt-1"
+              />
+            </div>
+            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md p-3 text-sm">
+              Escolha o que acontece com o funcionário após o cancelamento:
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button
+                className="w-full justify-start gap-2"
+                variant="outline"
+                disabled={updateAviso.isPending || !cancelarMotivo.trim()}
+                onClick={() => executarCancelamento('Ativo')}
+              >
+                <RotateCcw className="h-4 w-4 text-green-600" />
+                <div className="text-left">
+                  <div className="font-medium">Cancelar e Reativar</div>
+                  <div className="text-xs text-muted-foreground">O funcionário volta ao status Ativo</div>
+                </div>
+              </Button>
+              <Button
+                className="w-full justify-start gap-2"
+                variant="outline"
+                disabled={updateAviso.isPending || !cancelarMotivo.trim()}
+                onClick={() => executarCancelamento('Desligado')}
+              >
+                <UserX className="h-4 w-4 text-red-600" />
+                <div className="text-left">
+                  <div className="font-medium">Cancelar e Desligar</div>
+                  <div className="text-xs text-muted-foreground">O funcionário é desligado imediatamente</div>
+                </div>
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
