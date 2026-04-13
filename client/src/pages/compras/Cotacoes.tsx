@@ -2438,15 +2438,32 @@ export default function Cotacoes() {
                 );
               })()}
 
-              {(detalheFullscreen as any)?.itens?.some((it: any) => it.semVerba) && (
-                <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
-                  <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-bold text-red-800">⚠ PREJUÍZO — Itens Acima do Orçado ou Sem Verba</p>
-                    <p className="text-xs text-red-600">Esta cotação contém {(detalheFullscreen as any).itens.filter((it: any) => it.semVerba).length} item(ns) sem verba disponível no orçamento. Os itens sinalizados geram prejuízo para a obra.</p>
+              {(detalheFullscreen as any)?.itens?.some((it: any) => it.semVerba) && (() => {
+                const avulsos = ((detalheFullscreen as any).itens as any[]).filter((it: any) => it.semVerba && it.motivoSemVerba === "avulso");
+                const estouros = ((detalheFullscreen as any).itens as any[]).filter((it: any) => it.semVerba && it.motivoSemVerba !== "avulso");
+                return (
+                  <div className="space-y-2">
+                    {avulsos.length > 0 && (
+                      <div className="flex items-center gap-3 rounded-lg border-2 border-orange-400 bg-orange-50 p-3 print:border-orange-500">
+                        <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-bold text-orange-800">⚠ FORA DO ORÇAMENTO — {avulsos.length} item(ns) avulso(s)</p>
+                          <p className="text-xs text-orange-600">Itens sem vínculo orçamentário. Necessita verba realocada ou autorização para liberar OC/OS.</p>
+                        </div>
+                      </div>
+                    )}
+                    {estouros.length > 0 && (
+                      <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
+                        <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-bold text-red-800">⚠ PREJUÍZO — {estouros.length} item(ns) acima do orçado</p>
+                          <p className="text-xs text-red-600">Os itens sinalizados excedem a verba disponível e geram prejuízo para a obra.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Tabs */}
               <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit shadow-sm">
@@ -2502,10 +2519,13 @@ export default function Cotacoes() {
                       </TableHeader>
                       <TableBody>
                         {(detalheFullscreen.itens as any[]).map((it: any) => (
-                          <TableRow key={it.id} className={`border-gray-100 hover:bg-gray-50 ${it.semVerba ? "bg-red-50 print:bg-red-50" : ""}`}>
+                          <TableRow key={it.id} className={`border-gray-100 hover:bg-gray-50 ${it.semVerba ? (it.motivoSemVerba === "avulso" ? "bg-orange-50 print:bg-orange-50" : "bg-red-50 print:bg-red-50") : ""}`}>
                             <TableCell className="text-gray-900 text-sm py-3">
                               {it.descricao}
-                              {it.semVerba && <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>}
+                              {it.semVerba && (it.motivoSemVerba === "avulso"
+                                ? <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-700 border border-orange-200 print:border-orange-400">FORA DO ORÇAMENTO</span>
+                                : <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>
+                              )}
                             </TableCell>
                             <TableCell className="text-gray-500 text-sm">{it.unidade || "un"}</TableCell>
                             <TableCell className="text-gray-700 text-sm text-right">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</TableCell>
@@ -3436,13 +3456,21 @@ export default function Cotacoes() {
                                         )}
                                         {(it as any).semVerba && (
                                           <div className="mt-1 flex items-center gap-1.5">
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
-                                              SEM VERBA
-                                            </span>
-                                            {(it as any).motivoSemVerba && (
-                                              <span className="text-[9px] text-red-500 italic">
-                                                {(it as any).motivoSemVerba === "quebra_dano" ? "Quebra/Dano" : (it as any).motivoSemVerba === "furto" ? "Furto" : (it as any).motivoSemVerba === "erro_orcamento" ? "Erro Orçamento" : (it as any).motivoSemVerba === "qtd_insuficiente" ? "Qtd Insuficiente" : (it as any).motivoSemVerba === "retrabalho" ? "Retrabalho" : "Outro"}
+                                            {(it as any).motivoSemVerba === "avulso" ? (
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">
+                                                ⚠ FORA DO ORÇAMENTO
                                               </span>
+                                            ) : (
+                                              <>
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                                  SEM VERBA
+                                                </span>
+                                                {(it as any).motivoSemVerba && (
+                                                  <span className="text-[9px] text-red-500 italic">
+                                                    {(it as any).motivoSemVerba === "quebra_dano" ? "Quebra/Dano" : (it as any).motivoSemVerba === "furto" ? "Furto" : (it as any).motivoSemVerba === "erro_orcamento" ? "Erro Orçamento" : (it as any).motivoSemVerba === "qtd_insuficiente" ? "Qtd Insuficiente" : (it as any).motivoSemVerba === "retrabalho" ? "Retrabalho" : "Outro"}
+                                                  </span>
+                                                )}
+                                              </>
                                             )}
                                           </div>
                                         )}
@@ -4857,15 +4885,32 @@ export default function Cotacoes() {
             const st = STATUS_LABELS[detalhe.status] ?? STATUS_LABELS.pendente;
             return (
               <div className="space-y-5 pt-2">
-                {(detalhe as any)?.itens?.some((it: any) => it.semVerba) && (
-                  <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
-                    <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-bold text-red-800">⚠ PREJUÍZO — Itens Acima do Orçado ou Sem Verba</p>
-                      <p className="text-xs text-red-600">Esta cotação contém itens sem verba disponível no orçamento.</p>
+                {(detalhe as any)?.itens?.some((it: any) => it.semVerba) && (() => {
+                  const avulsos = ((detalhe as any).itens as any[]).filter((it: any) => it.semVerba && it.motivoSemVerba === "avulso");
+                  const estouros = ((detalhe as any).itens as any[]).filter((it: any) => it.semVerba && it.motivoSemVerba !== "avulso");
+                  return (
+                    <div className="space-y-2">
+                      {avulsos.length > 0 && (
+                        <div className="flex items-center gap-3 rounded-lg border-2 border-orange-400 bg-orange-50 p-3 print:border-orange-500">
+                          <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-bold text-orange-800">⚠ FORA DO ORÇAMENTO — {avulsos.length} item(ns) avulso(s)</p>
+                            <p className="text-xs text-orange-600">Itens sem vínculo orçamentário. Necessita verba realocada ou autorização para liberar OC/OS.</p>
+                          </div>
+                        </div>
+                      )}
+                      {estouros.length > 0 && (
+                        <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
+                          <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-bold text-red-800">⚠ PREJUÍZO — {estouros.length} item(ns) acima do orçado</p>
+                            <p className="text-xs text-red-600">Os itens sinalizados excedem a verba disponível e geram prejuízo para a obra.</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
                 {(detalhe as any).descricao && (
                   <div className="text-gray-700 text-sm bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">{(detalhe as any).descricao}</div>
                 )}
@@ -4898,10 +4943,13 @@ export default function Cotacoes() {
                     </TableHeader>
                     <TableBody>
                       {(detalhe.itens as any[]).map((it: any) => (
-                        <TableRow key={it.id} className={`border-gray-100 ${it.semVerba ? "bg-red-50 print:bg-red-50" : ""}`}>
+                        <TableRow key={it.id} className={`border-gray-100 ${it.semVerba ? (it.motivoSemVerba === "avulso" ? "bg-orange-50 print:bg-orange-50" : "bg-red-50 print:bg-red-50") : ""}`}>
                           <TableCell className="text-gray-900 text-sm">
                             {it.descricao}
-                            {it.semVerba && <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>}
+                            {it.semVerba && (it.motivoSemVerba === "avulso"
+                              ? <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-700 border border-orange-200 print:border-orange-400">FORA DO ORÇAMENTO</span>
+                              : <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-gray-500 text-sm">{it.unidade || "un"}</TableCell>
                           <TableCell className="text-gray-500 text-sm text-right">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</TableCell>

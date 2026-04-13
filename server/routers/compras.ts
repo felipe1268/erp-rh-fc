@@ -4173,7 +4173,21 @@ Retorne APENAS um JSON válido neste formato:
       const db = await getDb();
       const [oc] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
       if (!oc) throw new TRPCError({ code: "NOT_FOUND" });
-      const itens = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+      const itensRaw = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+      const scItemIdsForEnrich = itensRaw.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
+      let scSemVerbaMap: Record<number, { semVerba: boolean; motivoSemVerba: string | null }> = {};
+      if (scItemIdsForEnrich.length > 0) {
+        const scFlags = await db.select({
+          id: comprasSolicitacoesItens.id,
+          semVerba: comprasSolicitacoesItens.semVerba,
+          motivoSemVerba: comprasSolicitacoesItens.motivoSemVerba,
+        }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIdsForEnrich));
+        for (const f of scFlags) scSemVerbaMap[f.id] = { semVerba: f.semVerba ?? false, motivoSemVerba: f.motivoSemVerba ?? null };
+      }
+      const itens = itensRaw.map(it => {
+        const scFlags = it.solicitacaoItemId ? scSemVerbaMap[it.solicitacaoItemId] : null;
+        return { ...it, semVerba: scFlags?.semVerba ?? false, motivoSemVerba: scFlags?.motivoSemVerba ?? null };
+      });
       let fornecedor = null;
       if (oc.fornecedorId) {
         const [f] = await db.select({

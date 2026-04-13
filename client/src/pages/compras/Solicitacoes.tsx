@@ -18,7 +18,7 @@ import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
   Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare,
-  UserCircle, ShieldCheck, FileSearch, Truck, Users, Layers, ArrowRightLeft, Sparkles, RotateCw, Car,
+  UserCircle, ShieldCheck, FileSearch, Truck, Users, Layers, ArrowRightLeft, Sparkles, RotateCw, Car, Link2,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -64,6 +64,80 @@ const MOTIVOS_SEM_VERBA = [
   { value: "outro", label: "Outro" },
 ];
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", observacoes: "" });
+
+function ManualEapLink({ eapItems, linkedEap, onLink, onUnlink }: {
+  eapItems: any[];
+  linkedEap: any | null;
+  onLink: (eapItem: any) => void;
+  onUnlink: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+
+  if (linkedEap) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-[10px]">
+        <Link2 className="h-3 w-3 text-emerald-600 shrink-0" />
+        <span className="text-emerald-800 font-medium truncate flex-1">
+          Vinculado: <span className="font-bold">{linkedEap.eapCodigo}</span> — {linkedEap.descricao}
+        </span>
+        <button type="button" onClick={onUnlink} className="text-red-400 hover:text-red-600 shrink-0" title="Desvincular">
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setOpen(true); setBusca(""); }}
+        className="flex items-center gap-1 px-2 py-1 text-[10px] text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition"
+      >
+        <Link2 className="h-3 w-3" /> Vincular a item da EAP (opcional)
+      </button>
+    );
+  }
+
+  const filtrados = eapItems.filter((e: any) =>
+    !busca || stripAccents(`${e.eapCodigo} ${e.descricao}`.toLowerCase()).includes(stripAccents(busca.toLowerCase()))
+  );
+
+  return (
+    <div className="border border-amber-200 rounded-lg bg-amber-50/50 overflow-hidden">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-amber-100">
+        <Link2 className="h-3 w-3 text-amber-600 shrink-0" />
+        <input
+          autoFocus
+          className="flex-1 text-[11px] bg-transparent outline-none text-gray-700 placeholder-gray-400"
+          placeholder="Buscar item da EAP..."
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+        />
+        <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600">
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+      <div className="max-h-32 overflow-y-auto divide-y divide-amber-100">
+        {filtrados.length === 0 ? (
+          <div className="px-2 py-2 text-[10px] text-gray-400 text-center">Nenhum item encontrado</div>
+        ) : filtrados.slice(0, 50).map((e: any) => (
+          <button
+            key={e.id}
+            type="button"
+            onClick={() => { onLink(e); setOpen(false); }}
+            className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-amber-100 transition flex items-center gap-1.5"
+          >
+            <span className="font-bold text-amber-700 shrink-0">{e.eapCodigo}</span>
+            <span className="text-gray-700 truncate flex-1">{e.descricao}</span>
+            {e.unidade && <span className="text-gray-400 shrink-0">{e.unidade}</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function UltimaCompraCard({ companyId, descricao, insumoCodigo }: { companyId: number; descricao: string; insumoCodigo?: string }) {
   const trimmed = descricao.replace(/^\[[\d.]+\]\s*/, "").trim();
@@ -1717,7 +1791,12 @@ export default function Solicitacoes() {
       });
     }
 
-    const validos = itensParaSalvar.filter(i => i.descricao.trim());
+    const validos = itensParaSalvar.filter(i => i.descricao.trim()).map(i => {
+      if (modoSC === "manual" && !i.orcamentoItemId && !i.origemEap) {
+        return { ...i, semVerba: true, motivoSemVerba: "avulso" };
+      }
+      return i;
+    });
     if (validos.length === 0) return toast.error("Adicione pelo menos um item.");
 
     const consolidados = new Map<string, ItemForm>();
@@ -3278,9 +3357,17 @@ export default function Solicitacoes() {
                 )}
 
                 {modoSC === "manual" && (
-                  <div className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
-                    <FileText className="h-3 w-3 text-blue-500 shrink-0" />
-                    Modo manual — adicione os itens livremente na seção abaixo.
+                  <div className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <FileText className="h-3 w-3 text-blue-500 shrink-0" />
+                      Modo manual — adicione os itens livremente na seção abaixo.
+                    </div>
+                    {form.obraId && parseInt(form.obraId) > 0 && (
+                      <div className="flex items-center gap-1.5 text-orange-600 text-[10px] font-medium">
+                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                        Itens sem vínculo à EAP serão marcados como "fora do orçamento" e exigirão verba realocada na cotação.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -3492,9 +3579,13 @@ export default function Solicitacoes() {
                 </div>
               ) : (
                 <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
-                  {itens.map((it, idx) => (
+                  {itens.map((it, idx) => {
+                    const eapItems = eapQ.data?.items ?? [];
+                    const eapLeafItems = eapItems.filter((e: any) => e.nivel >= 2 && e.tipo !== "grupo");
+                    const linkedEap = it.orcamentoItemId ? eapLeafItems.find((e: any) => e.id === it.orcamentoItemId) : null;
+                    return (
                     <div key={idx} className="space-y-1">
-                      <div className="flex gap-2 items-center p-2 rounded-lg bg-gray-50 border border-gray-200">
+                      <div className={`flex gap-2 items-center p-2 rounded-lg border ${!it.orcamentoItemId && it.descricao.trim() ? "bg-orange-50/50 border-orange-200" : "bg-gray-50 border-gray-200"}`}>
                         <input
                           className="flex-1 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
                           placeholder="Descrição do item *"
@@ -3520,11 +3611,25 @@ export default function Solicitacoes() {
                           </button>
                         )}
                       </div>
+                      {!it.orcamentoItemId && it.descricao.trim() && (
+                        <div className="flex items-center gap-1 px-2 text-[9px] text-orange-600 font-medium">
+                          <AlertTriangle className="h-2.5 w-2.5" /> Item fora do orçamento — será necessário verba realocada para liberar OC/OS
+                        </div>
+                      )}
+                      {form.obraId && parseInt(form.obraId) > 0 && eapLeafItems.length > 0 && (
+                        <ManualEapLink
+                          eapItems={eapLeafItems}
+                          linkedEap={linkedEap}
+                          onLink={(eapItem: any) => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: eapItem.id, eapCodigo: eapItem.eapCodigo, origemEap: true } : x))}
+                          onUnlink={() => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: undefined, eapCodigo: undefined, origemEap: false } : x))}
+                        />
+                      )}
                       {it.descricao.trim().length >= 3 && (
                         <UltimaCompraCard companyId={companyId} descricao={it.descricao} />
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -3707,6 +3812,8 @@ export default function Solicitacoes() {
                             quantidadeServico: it.quantidadeServico ? parseFloat(it.quantidadeServico) : undefined,
                             coeficiente: it.coeficiente ? parseFloat(it.coeficiente) : undefined,
                             origemEap: it.origemEap ?? undefined,
+                            semVerba: it.semVerba ?? undefined,
+                            motivoSemVerba: it.motivoSemVerba ?? undefined,
                             incluirAjudante: it.incluirAjudante ?? true,
                             metaMdoProfissional: it.metaMdoProfissional ? parseFloat(it.metaMdoProfissional) : undefined,
                             metaMdoAjudante: it.metaMdoAjudante ? parseFloat(it.metaMdoAjudante) : undefined,
@@ -3733,8 +3840,9 @@ export default function Solicitacoes() {
                           setIncluirAjudanteOverride(ajudOverrides);
                           const allAjud = Object.values(ajudOverrides);
                           if (allAjud.length > 0) setIncluirAjudanteGlobal(allAjud.every(v => v));
-                          const hasEapItems = (detalhe.itens as any[]).some((it: any) => it.origemEap || it.orcamentoItemId);
-                          setModoSC(hasEapItems ? "eap" : "manual");
+                          const hasAvulsoItems = (detalhe.itens as any[]).some((it: any) => it.motivoSemVerba === "avulso");
+                          const hasEapOrigemItems = (detalhe.itens as any[]).some((it: any) => it.origemEap && it.motivoSemVerba !== "avulso");
+                          setModoSC(hasAvulsoItems && !hasEapOrigemItems ? "manual" : hasEapOrigemItems ? "eap" : "manual");
                           setEditingSc({ id: detalhe.id, companyId: detalhe.companyId ?? companyId });
                           setShowDetalhe(null);
                           setShowNova(true);
@@ -3746,14 +3854,30 @@ export default function Solicitacoes() {
                     <StatusBadge status={detalhe.status} />
                   </div>
                 </div>
-                {(detalhe.itens as any[])?.some((it: any) => it.semVerba) && (
-                  <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-red-50 border-2 border-red-300 rounded-lg print:border-red-500">
-                    <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
-                    <span className="text-xs font-bold text-red-700">
-                      ATENÇÃO — ITEM(NS) ACIMA DO ORÇADO OU SEM VERBA: Esta solicitação contém {(detalhe.itens as any[]).filter((it: any) => it.semVerba).length} item(ns) que geram prejuízo
-                    </span>
-                  </div>
-                )}
+                {(detalhe.itens as any[])?.some((it: any) => it.semVerba) && (() => {
+                  const avulsos = (detalhe.itens as any[]).filter((it: any) => it.semVerba && it.motivoSemVerba === "avulso");
+                  const estouros = (detalhe.itens as any[]).filter((it: any) => it.semVerba && it.motivoSemVerba !== "avulso");
+                  return (
+                    <div className="mt-2 space-y-1.5">
+                      {avulsos.length > 0 && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 border-2 border-orange-300 rounded-lg print:border-orange-500">
+                          <AlertTriangle className="h-4 w-4 text-orange-600 shrink-0" />
+                          <span className="text-xs font-bold text-orange-700">
+                            FORA DO ORÇAMENTO — {avulsos.length} item(ns) avulso(s) sem vínculo orçamentário. Necessita verba realocada na cotação para liberação.
+                          </span>
+                        </div>
+                      )}
+                      {estouros.length > 0 && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border-2 border-red-300 rounded-lg print:border-red-500">
+                          <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                          <span className="text-xs font-bold text-red-700">
+                            ATENÇÃO — {estouros.length} item(ns) acima do orçado que geram prejuízo
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </DialogHeader>
 
               <div className="flex-1 overflow-y-auto min-h-0 space-y-3">
@@ -4030,8 +4154,14 @@ export default function Solicitacoes() {
                           <p className="text-gray-400 text-xs">{it.unidade || "un"} · Qtd: {qtdTotal.toLocaleString("pt-BR")}</p>
                           {it.semVerba && (
                             <div className="flex items-center gap-1.5 mt-1">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">SEM VERBA</span>
-                              {it.motivoSemVerba && <span className="text-[9px] text-red-500 italic">{it.motivoSemVerba === "quebra_dano" ? "Quebra/Dano" : it.motivoSemVerba === "furto" ? "Furto" : it.motivoSemVerba === "erro_orcamento" ? "Erro Orçamento" : it.motivoSemVerba === "qtd_insuficiente" ? "Qtd Insuficiente" : it.motivoSemVerba === "retrabalho" ? "Retrabalho" : "Outro"}</span>}
+                              {it.motivoSemVerba === "avulso" ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">⚠ FORA DO ORÇAMENTO</span>
+                              ) : (
+                                <>
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">SEM VERBA</span>
+                                  {it.motivoSemVerba && <span className="text-[9px] text-red-500 italic">{it.motivoSemVerba === "quebra_dano" ? "Quebra/Dano" : it.motivoSemVerba === "furto" ? "Furto" : it.motivoSemVerba === "erro_orcamento" ? "Erro Orçamento" : it.motivoSemVerba === "qtd_insuficiente" ? "Qtd Insuficiente" : it.motivoSemVerba === "retrabalho" ? "Retrabalho" : "Outro"}</span>}
+                                </>
+                              )}
                             </div>
                           )}
                         </div>

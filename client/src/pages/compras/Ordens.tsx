@@ -748,15 +748,42 @@ export default function Ordens() {
                   </div>
                   );
                 })()}
-                {(detalhe as any).pendenteCoberturaOrcamentaria && (
-                  <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
-                    <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-bold text-red-800">⚠ PREJUÍZO — Itens Acima do Orçado ou Sem Verba</p>
-                      <p className="text-xs text-red-600">Esta OC contém itens sem verba disponível no orçamento. Os itens sinalizados geram prejuízo para a obra. É necessário realizar uma realocação de verba para cobrir o custo.</p>
+                {(detalhe as any).pendenteCoberturaOrcamentaria && (() => {
+                  const ocItens = (detalhe.itens as any[]) ?? [];
+                  const avulsos = ocItens.filter((it: any) => it.semVerba && it.motivoSemVerba === "avulso");
+                  const estouros = ocItens.filter((it: any) => it.semVerba && it.motivoSemVerba !== "avulso");
+                  return (
+                    <div className="space-y-2">
+                      {avulsos.length > 0 && (
+                        <div className="flex items-center gap-3 rounded-lg border-2 border-orange-400 bg-orange-50 p-3 print:border-orange-500">
+                          <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-bold text-orange-800">⚠ FORA DO ORÇAMENTO — {avulsos.length} item(ns) avulso(s)</p>
+                            <p className="text-xs text-orange-600">Itens sem vínculo orçamentário. Necessita verba realocada ou autorização para liberar.</p>
+                          </div>
+                        </div>
+                      )}
+                      {estouros.length > 0 && (
+                        <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
+                          <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-bold text-red-800">⚠ PREJUÍZO — {estouros.length} item(ns) acima do orçado</p>
+                            <p className="text-xs text-red-600">Os itens sinalizados excedem a verba disponível e geram prejuízo para a obra.</p>
+                          </div>
+                        </div>
+                      )}
+                      {avulsos.length === 0 && estouros.length === 0 && (
+                        <div className="flex items-center gap-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 print:border-red-500">
+                          <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-bold text-red-800">⚠ PREJUÍZO — Itens sem verba disponível</p>
+                            <p className="text-xs text-red-600">Esta OC contém itens sem cobertura orçamentária. É necessário realizar uma realocação de verba.</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
                 {detalhe.status === "aguardando_aprovacao_extra" && (
                   <div className="rounded-lg border border-red-300 bg-red-50 p-3 space-y-2">
                     <div className="flex items-center gap-3">
@@ -866,10 +893,13 @@ export default function Ordens() {
                     </TableHeader>
                     <TableBody>
                       {(detalhe.itens as any[]).map((it: any) => (
-                        <TableRow key={it.id} className={`border-gray-100 ${it.semVerba ? "bg-red-50 print:bg-red-50" : ""}`}>
+                        <TableRow key={it.id} className={`border-gray-100 ${it.semVerba ? (it.motivoSemVerba === "avulso" ? "bg-orange-50 print:bg-orange-50" : "bg-red-50 print:bg-red-50") : ""}`}>
                           <TableCell className="text-gray-900 text-sm">
                             {it.descricao}
-                            {it.semVerba && <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>}
+                            {it.semVerba && (it.motivoSemVerba === "avulso"
+                              ? <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-700 border border-orange-200 print:border-orange-400">FORA DO ORÇAMENTO</span>
+                              : <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-gray-500 text-sm">{it.unidade || "un"}</TableCell>
                           <TableCell className="text-gray-500 text-sm">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</TableCell>
