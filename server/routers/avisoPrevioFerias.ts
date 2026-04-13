@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, createAuditLog } from "../db";
-import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo } from "../../drizzle/schema";
+import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -950,6 +950,38 @@ export const avisoPrevioFeriasRouter = router({
           criadoPorUserId: ctx.user.id,
         });
         
+        // Auto-iniciar checklist de desligamento + status Aviso
+        try {
+          const existingChecklist = await db.select({ id: employeeTerminationChecklist.id })
+            .from(employeeTerminationChecklist)
+            .where(and(eq(employeeTerminationChecklist.companyId, input.companyId), eq(employeeTerminationChecklist.employeeId, input.employeeId)))
+            .limit(1);
+          if (existingChecklist.length === 0) {
+            const defaultItems = [
+              { item: "exame_demissional", label: "Exame Demissional", obrigatorio: 1 },
+              { item: "devolucao_epis", label: "Devolução de EPIs", obrigatorio: 1 },
+              { item: "devolucao_ferramentas", label: "Devolução de Ferramentas / Patrimônio", obrigatorio: 0 },
+              { item: "acerto_ponto", label: "Acerto de Ponto / Banco de Horas", obrigatorio: 1 },
+              { item: "trct", label: "Termo de Rescisão (TRCT)", obrigatorio: 1 },
+              { item: "entrega_chaves_cracha", label: "Entrega de Chaves / Crachá", obrigatorio: 0 },
+              { item: "quitacao_debitos", label: "Quitação de Débitos / Cobranças Pendentes", obrigatorio: 0 },
+              { item: "documentacao_seguro", label: "Documentação do Seguro", obrigatorio: 0 },
+            ];
+            for (const it of defaultItems) {
+              await db.insert(employeeTerminationChecklist).values({
+                companyId: input.companyId,
+                employeeId: input.employeeId,
+                item: it.item,
+                label: it.label,
+                obrigatorio: it.obrigatorio,
+                concluido: 0,
+              });
+            }
+          }
+          await db.update(employees).set({ status: 'Aviso' } as any)
+            .where(eq(employees.id, input.employeeId));
+        } catch (e) { console.error('[AvisoPrevio] Erro ao criar checklist:', e); }
+
         // Corrige automaticamente registros de ponto já lançados no período
         corrigirPontoFuncionario(input.companyId, input.employeeId).catch(() => {});
         return { success: true, id: result[0].id, diasAviso, dataFim, previsao };
@@ -1176,8 +1208,18 @@ export const avisoPrevioFeriasRouter = router({
           updatedAt: sql`NOW()`,
         } as any).where(eq(terminationNotices.id, input.id));
 
-        // 2. Desligar funcionário (se solicitado)
+        // 2. Verificar checklist de desligamento antes de permitir
         let desligouFuncionario = false;
+        if (input.desligarFuncionario && aviso.employeeId) {
+          const checklistItems = await db.select().from(employeeTerminationChecklist)
+            .where(and(eq(employeeTerminationChecklist.companyId, aviso.companyId), eq(employeeTerminationChecklist.employeeId, aviso.employeeId)));
+          if (checklistItems.length > 0) {
+            const pendentes = checklistItems.filter(i => i.obrigatorio === 1 && i.concluido === 0);
+            if (pendentes.length > 0) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: `Não é possível desligar: ${pendentes.length} item(ns) obrigatório(s) pendente(s) na checklist de desligamento: ${pendentes.map(p => p.label).join(', ')}` });
+            }
+          }
+        }
         if (input.desligarFuncionario && aviso.employeeId) {
           const novoStatus = input.incluirListaNegra ? 'Lista_Negra' : 'Desligado';
           const empUpdate: any = {

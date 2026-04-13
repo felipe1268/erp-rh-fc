@@ -138,6 +138,18 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   );
   const avaliacoesList = avaliacoesQuery.data || [];
 
+  const terminationChecklistQ = trpc.employees.getTerminationChecklist.useQuery(
+    { companyId: selectedCompany?.id || 0, employeeId: employeeId! },
+    { enabled: !!employeeId && open && !!selectedCompany?.id }
+  );
+  const terminationChecklist = terminationChecklistQ.data || [];
+  const initChecklistMut = trpc.employees.initTerminationChecklist.useMutation({
+    onSuccess: () => terminationChecklistQ.refetch(),
+  });
+  const toggleChecklistMut = trpc.employees.toggleTerminationChecklistItem.useMutation({
+    onSuccess: () => terminationChecklistQ.refetch(),
+  });
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -612,8 +624,8 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-4">
                     <h2 className="text-lg sm:text-3xl font-bold text-blue-900">{emp.nomeCompleto}</h2>
-                    <Badge className={`text-sm px-3 py-1 ${emp.status === "Ativo" ? "bg-green-100 text-green-800" : emp.status === "Desligado" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
-                      {emp.status}
+                    <Badge className={`text-sm px-3 py-1 ${emp.status === "Ativo" ? "bg-green-100 text-green-800" : emp.status === "Desligado" ? "bg-red-100 text-red-800" : emp.status === "Aviso" ? "bg-orange-100 text-orange-800" : "bg-yellow-100 text-yellow-800"}`}>
+                      {emp.status === "Aviso" ? "Em Aviso Prévio" : emp.status}
                     </Badge>
                     {(emp as any).codigoInterno && (
                       <Badge variant="outline" className="text-sm px-3 py-1 border-blue-300 text-blue-700 font-mono">{(emp as any).codigoInterno}</Badge>
@@ -786,6 +798,65 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   <p className="font-bold text-amber-800 text-base">Histórico de Acidentes ({acidentes.length})</p>
                   <p className="text-sm text-amber-700 mt-1">Este colaborador possui {acidentes.length} acidente(s) de trabalho registrado(s).</p>
                 </div>
+              </div>
+            )}
+
+            {/* CHECKLIST DE DESLIGAMENTO */}
+            {(emp.status === "Aviso" || terminationChecklist.length > 0) && (
+              <div className="border-2 border-orange-300 bg-orange-50 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-orange-600" />
+                    <h3 className="font-bold text-orange-800">Checklist de Desligamento</h3>
+                    {terminationChecklist.length > 0 && (
+                      <Badge className="bg-orange-200 text-orange-800 text-xs">
+                        {terminationChecklist.filter(i => i.concluido === 1).length}/{terminationChecklist.length} concluídos
+                      </Badge>
+                    )}
+                  </div>
+                  {terminationChecklist.length === 0 && emp.status === "Aviso" && (
+                    <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white" onClick={() => initChecklistMut.mutate({ companyId: selectedCompany!.id, employeeId: emp.id })}>
+                      Iniciar Checklist
+                    </Button>
+                  )}
+                </div>
+                {terminationChecklist.length > 0 && (
+                  <div className="space-y-1">
+                    {terminationChecklist.map((item: any) => (
+                      <div key={item.id} className={`flex items-center gap-3 p-2 rounded-lg ${item.concluido ? 'bg-green-50 border border-green-200' : item.obrigatorio ? 'bg-white border border-orange-200' : 'bg-white border border-gray-200'}`}>
+                        <input
+                          type="checkbox"
+                          checked={item.concluido === 1}
+                          onChange={(e) => toggleChecklistMut.mutate({ id: item.id, concluido: e.target.checked })}
+                          className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-sm font-medium ${item.concluido ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                            {item.label}
+                          </span>
+                          {item.obrigatorio === 1 && !item.concluido && (
+                            <span className="ml-2 text-[10px] font-bold text-red-600 uppercase">obrigatório</span>
+                          )}
+                          {item.concluido === 1 && item.concluidoPor && (
+                            <span className="ml-2 text-[10px] text-gray-400">
+                              por {item.concluidoPor} em {new Date(item.concluidoEm).toLocaleDateString("pt-BR")}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {terminationChecklist.filter(i => i.obrigatorio === 1 && i.concluido === 0).length === 0 && (
+                      <div className="bg-green-100 border border-green-300 rounded-lg p-3 text-center">
+                        <p className="text-sm font-semibold text-green-800">✓ Todos os itens obrigatórios concluídos — desligamento liberado</p>
+                      </div>
+                    )}
+                    {terminationChecklist.filter(i => i.obrigatorio === 1 && i.concluido === 0).length > 0 && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                        <p className="text-xs text-red-700">Desligamento bloqueado até todos os itens obrigatórios serem concluídos</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

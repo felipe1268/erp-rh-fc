@@ -41,7 +41,7 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
-import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist } from "../drizzle/schema";
 import { eq, and, sql, or, ilike, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
@@ -710,6 +710,15 @@ export const appRouter = router({
     })).mutation(async ({ input, ctx }) => {
       const emp = await getEmployeeById(input.employeeId, input.companyId);
       if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado' });
+      const db = (await getDb())!;
+      const checklistItems = await db.select().from(employeeTerminationChecklist)
+        .where(and(eq(employeeTerminationChecklist.companyId, input.companyId), eq(employeeTerminationChecklist.employeeId, input.employeeId)));
+      if (checklistItems.length > 0) {
+        const pendentes = checklistItems.filter(i => i.obrigatorio === 1 && i.concluido === 0);
+        if (pendentes.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `Não é possível desligar: ${pendentes.length} item(ns) obrigatório(s) pendente(s) na checklist de desligamento: ${pendentes.map(p => p.label).join(', ')}` });
+        }
+      }
       await updateEmployee(input.employeeId, input.companyId, {
         experienciaStatus: 'desligado_experiencia',
         status: 'Desligado',
@@ -734,6 +743,92 @@ export const appRouter = router({
       } catch (e) { console.error('[AutoDesalocação] Erro:', e); }
       return { success: true };
     }),
+
+    getTerminationChecklist: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const ids = input.companyIds?.length ? input.companyIds : [input.companyId];
+        return db.select().from(employeeTerminationChecklist)
+          .where(and(
+            sql`${employeeTerminationChecklist.companyId} IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`,
+            eq(employeeTerminationChecklist.employeeId, input.employeeId)
+          ))
+          .orderBy(employeeTerminationChecklist.id);
+      }),
+
+    initTerminationChecklist: protectedProcedure
+      .input(z.object({ companyId: z.number(), employeeId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const existing = await db.select({ id: employeeTerminationChecklist.id })
+          .from(employeeTerminationChecklist)
+          .where(and(eq(employeeTerminationChecklist.companyId, input.companyId), eq(employeeTerminationChecklist.employeeId, input.employeeId)))
+          .limit(1);
+        if (existing.length > 0) return { success: true, alreadyExists: true };
+
+        const defaultItems = [
+          { item: "exame_demissional", label: "Exame Demissional", obrigatorio: 1 },
+          { item: "devolucao_epis", label: "Devolução de EPIs", obrigatorio: 1 },
+          { item: "devolucao_ferramentas", label: "Devolução de Ferramentas / Patrimônio", obrigatorio: 0 },
+          { item: "acerto_ponto", label: "Acerto de Ponto / Banco de Horas", obrigatorio: 1 },
+          { item: "trct", label: "Termo de Rescisão (TRCT)", obrigatorio: 1 },
+          { item: "entrega_chaves_cracha", label: "Entrega de Chaves / Crachá", obrigatorio: 0 },
+          { item: "quitacao_debitos", label: "Quitação de Débitos / Cobranças Pendentes", obrigatorio: 0 },
+          { item: "documentacao_seguro", label: "Documentação do Seguro", obrigatorio: 0 },
+        ];
+
+        for (const it of defaultItems) {
+          await db.insert(employeeTerminationChecklist).values({
+            companyId: input.companyId,
+            employeeId: input.employeeId,
+            item: it.item,
+            label: it.label,
+            obrigatorio: it.obrigatorio,
+            concluido: 0,
+          });
+        }
+
+        await updateEmployee(input.employeeId, input.companyId, { status: 'Aviso' } as any, { name: ctx.user.name ?? 'Sistema', id: ctx.user.id });
+
+        return { success: true, alreadyExists: false };
+      }),
+
+    toggleTerminationChecklistItem: protectedProcedure
+      .input(z.object({ id: z.number(), concluido: z.boolean(), observacoes: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        await db.update(employeeTerminationChecklist).set({
+          concluido: input.concluido ? 1 : 0,
+          concluidoEm: input.concluido ? new Date().toISOString() : null,
+          concluidoPor: input.concluido ? (ctx.user.name ?? 'Sistema') : null,
+          concluidoPorUserId: input.concluido ? ctx.user.id : null,
+          observacoes: input.observacoes ?? null,
+        } as any).where(eq(employeeTerminationChecklist.id, input.id));
+        return { success: true };
+      }),
+
+    checkTerminationReady: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const ids = input.companyIds?.length ? input.companyIds : [input.companyId];
+        const items = await db.select().from(employeeTerminationChecklist)
+          .where(and(
+            sql`${employeeTerminationChecklist.companyId} IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`,
+            eq(employeeTerminationChecklist.employeeId, input.employeeId)
+          ));
+        if (items.length === 0) return { hasChecklist: false, ready: true, pending: [], total: 0, done: 0 };
+        const obrigatoriosPendentes = items.filter(i => i.obrigatorio === 1 && i.concluido === 0);
+        return {
+          hasChecklist: true,
+          ready: obrigatoriosPendentes.length === 0,
+          pending: obrigatoriosPendentes.map(i => i.label),
+          total: items.length,
+          done: items.filter(i => i.concluido === 1).length,
+        };
+      }),
+
     normalizarCidades: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .mutation(async ({ input, ctx }) => {

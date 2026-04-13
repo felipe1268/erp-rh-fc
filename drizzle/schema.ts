@@ -7219,6 +7219,24 @@ export const employeeStatusLog = pgTable("employee_status_log", {
   index("idx_esl_company").on(t.companyId),
 ]);
 
+export const employeeTerminationChecklist = pgTable("employee_termination_checklist", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  employeeId: integer("employee_id").notNull(),
+  item: varchar("item", { length: 100 }).notNull(),
+  label: varchar("label", { length: 255 }).notNull(),
+  obrigatorio: smallint("obrigatorio").default(1).notNull(),
+  concluido: smallint("concluido").default(0).notNull(),
+  concluidoEm: timestamp("concluido_em", { mode: "string" }),
+  concluidoPor: varchar("concluido_por", { length: 255 }),
+  concluidoPorUserId: integer("concluido_por_user_id"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_etc_company").on(t.companyId),
+  index("idx_etc_employee").on(t.employeeId),
+]);
+
 export const disciplinaCorrecoes = pgTable("disciplina_correcoes", {
   id:                    serial().primaryKey(),
   companyId:             integer("company_id").notNull(),

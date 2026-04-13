@@ -285,6 +285,7 @@ export default function Epis() {
     motivo: "", observacoes: "", motivoTroca: "", obraId: "",
     origemEntrega: "central" as "central" | "obra",
     origemObraId: "",
+    fotoEntregaUrl: "",
   });
   const [entregaItens, setEntregaItens] = useState<Array<{ epiId: string; quantidade: number; motivoTroca: string }>>([]);
   const [entregaSaving, setEntregaSaving] = useState(false);
@@ -434,7 +435,7 @@ export default function Epis() {
   const TAMANHOS_ROUPA = ['Único', 'PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
   const TAMANHOS_CALCADO = ['34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48'];
   function resetEntregaForm() {
-    setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "", obraId: "", origemEntrega: "central", origemObraId: "" });
+    setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "", obraId: "", origemEntrega: "central", origemObraId: "", fotoEntregaUrl: "" });
     setEntregaItens([]);
     setFotoEstado({ file: null, preview: "" });
   }
@@ -1427,6 +1428,28 @@ export default function Epis() {
                   <Label>Motivo / Observações</Label>
                   <Input value={entregaForm.motivo} onChange={e => setEntregaForm(f => ({ ...f, motivo: e.target.value }))} placeholder="Observações gerais" />
                 </div>
+              </div>
+
+              <div>
+                <Label className="flex items-center gap-2">
+                  <Camera className="h-4 w-4" /> Foto do Registro de Entrega
+                </Label>
+                {fotoEstado.preview ? (
+                  <div className="flex items-center gap-3 mt-1">
+                    <img src={fotoEstado.preview} alt="Foto" className="h-20 w-20 object-cover rounded border" />
+                    <Button type="button" variant="outline" size="sm" onClick={() => setFotoEstado({ file: null, preview: "" })}>
+                      <Trash2 className="h-3 w-3 mr-1" /> Remover
+                    </Button>
+                  </div>
+                ) : (
+                  <Input type="file" accept="image/*" capture="environment" className="mt-1" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setFotoEstado({ file, preview: URL.createObjectURL(file) });
+                    }
+                  }} />
+                )}
+                <p className="text-[10px] text-muted-foreground mt-1">Tire uma foto do EPI sendo entregue para comprovação</p>
               </div>
 
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 space-y-3">
