@@ -7823,6 +7823,7 @@ Retorne APENAS um JSON válido neste formato:
       obraId: z.number().nullable().optional(),
       vehicleId: z.number().nullable().optional(),
       tipo: z.string().optional(),
+      imagemReferenciaUrl: z.string().nullable().optional(),
       itens: z.array(z.object({
         id: z.number().optional(),
         descricao: z.string(),
@@ -7885,6 +7886,7 @@ Retorne APENAS um JSON válido neste formato:
         obraId: input.obraId !== undefined ? input.obraId : sc.obraId,
         vehicleId: input.vehicleId !== undefined ? input.vehicleId : (sc as any).vehicleId,
         tipo: input.tipo ?? sc.tipo,
+        imagemReferenciaUrl: input.imagemReferenciaUrl !== undefined ? input.imagemReferenciaUrl : sc.imagemReferenciaUrl,
         atualizadoEm: new Date().toISOString(),
       }).where(eq(comprasSolicitacoes.id, input.id));
 

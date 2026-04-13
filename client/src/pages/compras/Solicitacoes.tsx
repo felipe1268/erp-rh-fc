@@ -1932,6 +1932,7 @@ export default function Solicitacoes() {
         observacoes: form.observacoes || undefined,
         tipo: form.tipo,
         incluirEquipamentos: form.incluirEquipamentos || undefined,
+        imagemReferenciaUrl: imgUrl ? imgUrl : (imagemPreview && !imagemBase64 ? undefined : null),
         itens: itensPayload,
       });
     } else {
@@ -3903,6 +3904,15 @@ export default function Solicitacoes() {
                             if (obra) setObraSearch(obra.nome || "");
                           }
                           setVeiculoSearch(""); setVeiculoOpen(false);
+                          if (detalhe.imagemReferenciaUrl) {
+                            setImagemPreview(detalhe.imagemReferenciaUrl);
+                            setImagemBase64(null);
+                            setImagemNome("");
+                          } else {
+                            setImagemPreview(null);
+                            setImagemBase64(null);
+                            setImagemNome("");
+                          }
                           const scItens = (detalhe.itens as any[]).map((it: any): ItemForm => ({
                             descricao: it.descricao || "",
                             unidade: it.unidade || "un",
