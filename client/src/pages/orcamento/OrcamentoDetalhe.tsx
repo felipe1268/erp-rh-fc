@@ -132,6 +132,8 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
   const [reuploadFile, setReuploadFile] = useState<File | null>(null);
   const [reuploadAnalise, setReuploadAnalise] = useState<{ itens: number; arquivo: string } | null>(null);
   const [reuploadLoading, setReuploadLoading] = useState(false);
+  const [reuploadProgress, setReuploadProgress] = useState(0);
+  const reuploadProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const excluirMut = trpc.orcamento.excluir.useMutation({
@@ -143,16 +145,33 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
     onError: e => toast.error(e.message || "Erro ao excluir orçamento"),
   });
 
+  const stopReuploadProgress = () => {
+    if (reuploadProgressRef.current) { clearInterval(reuploadProgressRef.current); reuploadProgressRef.current = null; }
+  };
+  const startReuploadProgress = () => {
+    setReuploadProgress(0);
+    stopReuploadProgress();
+    const start = Date.now();
+    reuploadProgressRef.current = setInterval(() => {
+      const elapsed = (Date.now() - start) / 1000;
+      const pct = Math.min(95, 100 * (1 - Math.exp(-elapsed / 30)));
+      setReuploadProgress(Math.round(pct));
+    }, 400);
+  };
+  useEffect(() => { return () => stopReuploadProgress(); }, []);
+
   const reimportarMutation = trpc.orcamento.reimportar.useMutation({
     onSuccess: (res) => {
+      stopReuploadProgress();
+      setReuploadProgress(100);
       const compMsg = res.composicoesCount ? ` ${res.composicoesCount} composições (CPUs) carregadas.` : '';
       toast.success(`Orçamento atualizado! ${res.itemCount} itens reimportados.${compMsg}`);
-      setReuploadOpen(false);
-      setReuploadFile(null);
-      setReuploadAnalise(null);
+      setTimeout(() => { setReuploadOpen(false); setReuploadFile(null); setReuploadAnalise(null); setReuploadProgress(0); }, 600);
       refetch();
     },
     onError: e => {
+      stopReuploadProgress();
+      setReuploadProgress(0);
       toast.error(e.message || "Erro ao atualizar orçamento");
       setReuploadLoading(false);
     },
@@ -192,6 +211,7 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
   const confirmarReupload = async () => {
     if (!reuploadFile) return;
     setReuploadLoading(true);
+    startReuploadProgress();
     const reader = new FileReader();
     reader.onload = (e) => {
       const b64 = (e.target?.result as string).split(",")[1];
@@ -1867,7 +1887,31 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                 className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleReuploadFile(f); }}
               />
-              {reuploadLoading ? (
+              {reimportarMutation.isPending ? (
+                <div className="flex flex-col items-center gap-3 w-full px-4">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-sm font-medium text-gray-700">Processando planilha...</p>
+                  <div className="w-full space-y-1">
+                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500 ease-out"
+                        style={{
+                          width: `${reuploadProgress}%`,
+                          background: reuploadProgress === 100
+                            ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                            : 'linear-gradient(90deg, #3b82f6, #2563eb)',
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-center font-semibold" style={{ color: reuploadProgress === 100 ? '#16a34a' : '#2563eb' }}>
+                      {reuploadProgress}%
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {reuploadProgress < 20 ? "Lendo planilha..." : reuploadProgress < 50 ? "Processando itens da EAP..." : reuploadProgress < 80 ? "Atualizando insumos e composições..." : reuploadProgress < 100 ? "Finalizando atualização..." : "Concluído!"}
+                  </p>
+                </div>
+              ) : reuploadLoading ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   <p className="text-sm text-muted-foreground">Analisando planilha...</p>
