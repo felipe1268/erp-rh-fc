@@ -2144,7 +2144,7 @@ export const obras = pgTable("obras", {
         usarConvencaoMatriz: smallint().default(1).notNull(),
         convencaoId: integer(),
         convencaoDivergencias: text("convencao_divergencias"),
-        responsavelId: integer(),
+        responsavelId: integer("responsavel_id"),
         insalubridadeGrau: varchar("insalubridade_grau", { length: 20 }).default('none'),
         periculosidade: smallint().default(0),
         adicionalNoturnoAtivo: smallint("adicional_noturno_ativo").default(0),

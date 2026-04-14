@@ -125,11 +125,16 @@ export const smoRouter = router({
 
   obrasAtivas: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const conds: any[] = [companyFilter(obras.companyId, input), isNull(obras.deletedAt), eq(obras.isActive, 1)];
+      const isMasterOrAdmin = ctx.user.role === "admin_master" || ctx.user.role === "admin";
+      if (!isMasterOrAdmin) {
+        conds.push(eq(obras.responsavelId, ctx.user.id));
+      }
       const rows = await db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo, responsavel: obras.responsavel })
         .from(obras)
-        .where(and(companyFilter(obras.companyId, input), isNull(obras.deletedAt), eq(obras.isActive, 1)));
+        .where(and(...conds));
       return rows;
     }),
 
