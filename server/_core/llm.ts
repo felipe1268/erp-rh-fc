@@ -303,25 +303,25 @@ const assertApiKey = () => {
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
-  // Gemini tem prioridade (mais rápido), fallback para Claude
-  if (process.env.GOOGLE_API_KEY) {
+  // Claude tem prioridade, fallback para Gemini
+  if (isAnthropicAvailable()) {
     try {
-      return await invokeGemini(params);
+      return await invokeAnthropic(params);
     } catch (err: any) {
       const msg = err?.message || "";
       const isRetryable = msg.includes("429") || msg.includes("rate limit") || msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("500") || msg.includes("overloaded");
-      if (isRetryable && isAnthropicAvailable()) {
-        console.warn("[LLM] Gemini falhou (" + msg.slice(0, 80) + "). Tentando fallback para Claude...");
+      if (isRetryable && process.env.GOOGLE_API_KEY) {
+        console.warn("[LLM] Claude falhou (" + msg.slice(0, 80) + "). Tentando fallback para Gemini...");
       } else {
         throw err;
       }
     }
   }
 
-  // Fallback: Claude
-  if (isAnthropicAvailable()) {
+  // Fallback: Gemini
+  if (process.env.GOOGLE_API_KEY) {
     try {
-      return await invokeAnthropic(params);
+      return await invokeGemini(params);
     } catch (err: any) {
       throw err;
     }
