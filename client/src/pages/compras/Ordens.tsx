@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
@@ -529,11 +530,14 @@ export default function Ordens() {
       </TooltipProvider>
 
       {/* Dialog Nova OC Manual */}
-      <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) resetForm(); }}>
-        <DialogContent className="border-gray-200 max-w-2xl max-h-[90vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
-          <DialogHeader>
-            <DialogTitle className="text-gray-900">Nova Ordem de Compra (Manual)</DialogTitle>
-          </DialogHeader>
+      <FullScreenDialog
+        open={showNova}
+        onClose={() => { setShowNova(false); resetForm(); }}
+        title="Nova Ordem de Compra (Manual)"
+        subtitle="Preencha os dados da OC"
+        icon={<ShoppingBag className="h-5 w-5 text-white" />}
+        headerColor="bg-gradient-to-r from-emerald-700 to-emerald-500"
+      >
           <div className="space-y-5 pt-2">
             {/* Obra obrigatória */}
             <div className="space-y-1.5">
@@ -691,8 +695,7 @@ export default function Ordens() {
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+      </FullScreenDialog>
 
       {/* Dialog Detalhe OC */}
       <Dialog open={showDetalhe !== null} onOpenChange={v => !v && setShowDetalhe(null)}>
