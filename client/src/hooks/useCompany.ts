@@ -7,6 +7,7 @@ export function useCompany() {
 
   return {
     companyId,
+    companyIds,
     selectedCompanyId,
     selectedCompany,
     isConstrutoras: false as const,

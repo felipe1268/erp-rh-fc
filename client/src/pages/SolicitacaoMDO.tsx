@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCompany } from "@/hooks/useCompany";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
