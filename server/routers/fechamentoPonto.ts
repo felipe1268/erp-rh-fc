@@ -1363,8 +1363,39 @@ export const fechamentoPontoRouter = router({
         .where(and(...conditions))
         .orderBy(sql`${timeInconsistencies.data} ASC, ${employees.nomeCompleto} ASC`);
 
+      // Buscar atestados que cobrem o mês para excluir inconsistências de dias com atestado
+      const { atestados: atSchema } = await import('../../drizzle/schema');
+      const [yy, mm] = input.mesReferencia.split("-").map(Number);
+      const prevMonthAtStart = new Date(yy, mm - 7, 1).toISOString().substring(0, 10);
+      const mesEnd = `${input.mesReferencia}-${String(new Date(yy, mm, 0).getDate()).padStart(2, "0")}`;
+      const atestList = await db.select().from(atSchema)
+        .where(and(companyFilter(atSchema.companyId, input), sql`${atSchema.deletedAt} IS NULL`, sql`${atSchema.dataEmissao} >= ${prevMonthAtStart}`, sql`${atSchema.dataEmissao} <= ${mesEnd}`));
+      const atestSet = new Set<string>();
+      for (const at of atestList) {
+        if (!at.employeeId || !at.dataEmissao) continue;
+        const afTipo = (at as any).afastamentoTipo || 'dia';
+        if (afTipo === 'horas') {
+          atestSet.add(`${at.employeeId}-${at.dataEmissao}`);
+        } else {
+          const dias = at.diasAfastamento || 1;
+          const sd = new Date(at.dataEmissao + 'T12:00:00Z');
+          for (let d = 0; d < dias; d++) {
+            const dt = new Date(sd); dt.setUTCDate(sd.getUTCDate() + d);
+            atestSet.add(`${at.employeeId}-${dt.toISOString().substring(0, 10)}`);
+          }
+        }
+      }
+
+      // Filtrar: excluir sem_registro de dias cobertos por atestado
+      const filtered = results.filter(r => {
+        if (r.inconsistency.tipoInconsistencia === 'sem_registro' && atestSet.has(`${r.inconsistency.employeeId}-${r.inconsistency.data}`)) {
+          return false;
+        }
+        return true;
+      });
+
       // Fetch time records for each inconsistency's employee+date to show context
-      const enriched = await Promise.all(results.map(async (r) => {
+      const enriched = await Promise.all(filtered.map(async (r) => {
         const dayRecords = await db.select({
           record: timeRecords,
           obraNome: obras.nome,

@@ -4214,13 +4214,29 @@ export default function FechamentoPonto() {
                         <tbody>
                           {(() => {
                             const selectedEmp = (employeesList.data || []).find((em: any) => em.id === manualData.employeeId);
+                            const atestadoSet = new Set<string>();
+                            for (const a of (atestadosMes.data || []) as any[]) {
+                              if (a.employeeId !== manualData.employeeId) continue;
+                              const afTipo = a.afastamentoTipo || "dia";
+                              if (afTipo === "horas") {
+                                atestadoSet.add(a.dataEmissao);
+                              } else {
+                                const dias = a.diasAfastamento || 1;
+                                const sd = new Date(a.dataEmissao + "T12:00:00Z");
+                                for (let d = 0; d < dias; d++) {
+                                  const dt = new Date(sd); dt.setUTCDate(sd.getUTCDate() + d);
+                                  atestadoSet.add(dt.toISOString().substring(0, 10));
+                                }
+                              }
+                            }
                             return manualDays.map((day, idx) => {
                             const dow = day.data ? ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][new Date(day.data + "T12:00:00").getDay()] : "";
                             const dowNum = day.data ? new Date(day.data + "T12:00:00").getDay() : -1;
                             const isWeekend = [0, 6].includes(dowNum);
                             const isFeriadoMarcado = !!day.feriado;
                             const isRed = isWeekend || isFeriadoMarcado;
-                            const isFaltaMarcada = !!(day.data && !isWeekend && !isFeriadoMarcado && !day.entrada1 && !day.saida1 && !day.entrada2 && !day.saida2);
+                            const isAtestado = !!(day.data && atestadoSet.has(day.data));
+                            const isFaltaMarcada = !!(day.data && !isWeekend && !isFeriadoMarcado && !isAtestado && !day.entrada1 && !day.saida1 && !day.entrada2 && !day.saida2);
                             // Schedule comparison for color coding
                             const sched = selectedEmp?.jornadaTrabalho && day.data ? getScheduleForDay(selectedEmp.jornadaTrabalho, day.data) : null;
                             const schedHasTimes = !!(sched?.entrada1 && sched?.saida2);
@@ -4238,9 +4254,10 @@ export default function FechamentoPonto() {
                               (sched!.entrada1 && sched!.saida1 ? toMins(sched!.saida1) - toMins(sched!.entrada1) : 0)
                               + (sched!.entrada2 && sched!.saida2 ? toMins(sched!.saida2) - toMins(sched!.entrada2) : 0)
                             ) : 0;
-                            const isHorasExtras = !isRed && !isFaltaMarcada && !isOnSchedule && hasAnyTime && schedHasTimes && workedMins > schedMins && workedMins > 0;
-                            const isOffSchedule = !isRed && !isFaltaMarcada && hasAnyTime && schedHasTimes && !isOnSchedule && !isHorasExtras;
-                            const rowBg = isFaltaMarcada ? "bg-red-100/70"
+                            const isHorasExtras = !isRed && !isFaltaMarcada && !isAtestado && !isOnSchedule && hasAnyTime && schedHasTimes && workedMins > schedMins && workedMins > 0;
+                            const isOffSchedule = !isRed && !isFaltaMarcada && !isAtestado && hasAnyTime && schedHasTimes && !isOnSchedule && !isHorasExtras;
+                            const rowBg = isAtestado ? "bg-purple-100/70"
+                              : isFaltaMarcada ? "bg-red-100/70"
                               : isRed ? "bg-red-50/60"
                               : isOnSchedule ? "bg-green-50/80"
                               : isHorasExtras ? "bg-blue-50/80"
@@ -4264,8 +4281,9 @@ export default function FechamentoPonto() {
                                 </td>
                                 <td className="px-0.5 py-0.5 text-center">
                                   <div className="flex flex-col items-center leading-none">
-                                    <span className={`text-[11px] font-bold ${isRed || isFaltaMarcada ? "text-red-600" : isOnSchedule ? "text-green-700" : isHorasExtras ? "text-blue-700" : isOffSchedule ? "text-amber-700" : "text-muted-foreground"}`}>{dow}</span>
+                                    <span className={`text-[11px] font-bold ${isAtestado ? "text-purple-700" : isRed || isFaltaMarcada ? "text-red-600" : isOnSchedule ? "text-green-700" : isHorasExtras ? "text-blue-700" : isOffSchedule ? "text-amber-700" : "text-muted-foreground"}`}>{dow}</span>
                                     {isFeriadoMarcado && <span className="text-[8px] text-orange-600 font-bold leading-none">fer.</span>}
+                                    {isAtestado && <span className="text-[8px] text-purple-700 font-bold leading-none">ATESTADO</span>}
                                     {isFaltaMarcada && <span className="text-[8px] text-red-700 font-bold leading-none">FALTA</span>}
                                     {isOnSchedule && <span className="text-[8px] text-green-700 font-bold leading-none">✓OK</span>}
                                     {isHorasExtras && <span className="text-[8px] text-blue-700 font-bold leading-none">HE</span>}
