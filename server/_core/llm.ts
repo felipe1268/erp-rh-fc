@@ -308,9 +308,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     try {
       return await invokeGemini(params);
     } catch (err: any) {
-      const isRateLimit = err?.message?.includes("429") || err?.message?.includes("rate limit");
-      if (isRateLimit && isAnthropicAvailable()) {
-        console.warn("[LLM] Gemini esgotou tentativas (429). Tentando fallback para Claude...");
+      const msg = err?.message || "";
+      const isRetryable = msg.includes("429") || msg.includes("rate limit") || msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("500") || msg.includes("overloaded");
+      if (isRetryable && isAnthropicAvailable()) {
+        console.warn("[LLM] Gemini falhou (" + msg.slice(0, 80) + "). Tentando fallback para Claude...");
       } else {
         throw err;
       }
