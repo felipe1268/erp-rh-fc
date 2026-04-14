@@ -995,7 +995,7 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar
                   if (confirmAprov.key === "desaprovar") {
                     desaprovar.mutate({ id: confirmAprov.id, companyId });
                   } else {
-                    aprovar.mutate({ id: confirmAprov.id, aprovacaoStatus: confirmAprov.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined });
+                    aprovar.mutate({ id: confirmAprov.id, aprovacaoStatus: confirmAprov.key, aprovadorId: user?.id ? parseInt(String(user.id)) : undefined, aprovadorNome: user?.nome || user?.name || undefined });
                   }
                   setConfirmAprov(null);
                 }}
@@ -1325,6 +1325,8 @@ export default function Solicitacoes() {
       tipo,
       obraId: detalhe.obraId ?? null,
       solicitacaoId: detalhe.id,
+      userId: user?.id ? parseInt(String(user.id)) : undefined,
+      userName: user?.nome || user?.name || undefined,
       itens,
     });
   }
@@ -1975,6 +1977,8 @@ export default function Solicitacoes() {
       criar.mutate({
         companyId,
         solicitanteId: user?.id ? parseInt(String(user.id)) : undefined,
+        userId: user?.id ? parseInt(String(user.id)) : undefined,
+        userName: user?.nome || user?.name || undefined,
         titulo: form.titulo,
         obraId: form.obraId && form.obraId !== "0" ? parseInt(form.obraId) : null,
         vehicleId: form.vehicleId ? parseInt(form.vehicleId) : null,
@@ -2096,7 +2100,7 @@ export default function Solicitacoes() {
           {lista.filter((s: any) => selectedSCIds.has(s.id) && s.aprovacaoStatus === "aguardando").length > 0 && (
             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1 ml-2"
               disabled={aprovarLote.isPending}
-              onClick={() => aprovarLote.mutate({ ids: Array.from(selectedSCIds), companyId, aprovacaoStatus: "aprovada", aprovadorId: user?.id ? parseInt(String(user.id)) : undefined })}>
+              onClick={() => aprovarLote.mutate({ ids: Array.from(selectedSCIds), companyId, aprovacaoStatus: "aprovada", aprovadorId: user?.id ? parseInt(String(user.id)) : undefined, aprovadorNome: user?.nome || user?.name || undefined })}>
               {aprovarLote.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
               Aprovar Selecionadas
             </Button>
@@ -2248,7 +2252,7 @@ export default function Solicitacoes() {
                       <button
                         title="Duplicar SC"
                         className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); duplicar.mutate({ id: sc.id, companyId }); }}
+                        onClick={(e) => { e.stopPropagation(); duplicar.mutate({ id: sc.id, companyId, userId: user?.id, userName: user?.name }); }}
                       >
                         <Copy className="h-3.5 w-3.5" />
                       </button>
@@ -4289,6 +4293,7 @@ export default function Solicitacoes() {
                             </div>
                             <div className="text-[10px] text-gray-500 mt-0.5">
                               {new Date(cot.criadoEm).toLocaleString("pt-BR")}
+                              {cot.criadoPorNome && <span className="ml-1.5 text-purple-600 font-medium">por {cot.criadoPorNome}</span>}
                               {cot.total > 0 && <span className="ml-1.5 font-medium text-gray-700">R$ {cot.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>}
                             </div>
                           </div>
@@ -4321,6 +4326,7 @@ export default function Solicitacoes() {
                             </div>
                             <div className="text-[10px] text-gray-500 mt-0.5">
                               {new Date(oc.criadoEm).toLocaleString("pt-BR")}
+                              {oc.criadoPorNome && <span className="ml-1.5 text-amber-600 font-medium">por {oc.criadoPorNome}</span>}
                               {oc.fornecedorNome && <span className="ml-1.5 text-gray-700">· Fornecedor: <b>{oc.fornecedorNome}</b></span>}
                             </div>
                             <div className="text-[10px] text-gray-500">
@@ -4480,7 +4486,7 @@ export default function Solicitacoes() {
                   );
                 })()}
                 <Button size="sm" variant="outline"
-                  onClick={() => duplicar.mutate({ id: detalhe.id, companyId })}
+                  onClick={() => duplicar.mutate({ id: detalhe.id, companyId, userId: user?.id, userName: user?.name })}
                   disabled={duplicar.isPending}
                   className="border-gray-300 text-gray-600 hover:bg-gray-50 text-xs gap-1">
                   <Copy className="h-3 w-3" /> Duplicar

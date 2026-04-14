@@ -5429,6 +5429,8 @@ export const comprasSolicitacoes = pgTable("compras_solicitacoes", {
   vehicleId:        integer("vehicle_id"),
   maintenanceId:    integer("maintenance_id"),
   origemModulo:     varchar("origem_modulo", { length: 30 }),
+  criadoPorId:      integer("criado_por_id"),
+  criadoPorNome:    varchar("criado_por_nome", { length: 255 }),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:     timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });
@@ -5481,6 +5483,8 @@ export const comprasCotacoes = pgTable("compras_cotacoes", {
   fdValor:          numeric("fd_valor", { precision: 14, scale: 2 }),
   fdPagador:        varchar("fd_pagador", { length: 20 }),
   fdBdiItemId:      integer("fd_bdi_item_id"),
+  criadoPorId:      integer("criado_por_id"),
+  criadoPorNome:    varchar("criado_por_nome", { length: 255 }),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 
@@ -5607,6 +5611,8 @@ export const comprasOrdens = pgTable("compras_ordens", {
   fdBdiItemId:        integer("fd_bdi_item_id"),
   vehicleId:          integer("vehicle_id"),
   maintenanceId:      integer("maintenance_id"),
+  criadoPorId:        integer("criado_por_id"),
+  criadoPorNome:      varchar("criado_por_nome", { length: 255 }),
   criadoEm:           timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:       timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });

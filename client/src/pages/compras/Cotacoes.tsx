@@ -1138,6 +1138,8 @@ export default function Cotacoes() {
       numeroParcelas: form.numeroParcelas ? parseInt(form.numeroParcelas) : undefined,
       prazoEntregaDias: form.prazoEntregaDias ? parseInt(form.prazoEntregaDias) : undefined,
       observacoes: form.observacoes || undefined,
+      userId: user?.id,
+      userName: user?.name,
       itens: validos.map(i => ({
         solicitacaoItemId: i.solicitacaoItemId ?? undefined,
         descricao: i.descricao,

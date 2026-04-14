@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,6 +101,7 @@ const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1"
 export default function Ordens() {
   const { selectedCompanyId } = useCompany();
   const companyId = parseInt(selectedCompanyId || "0");
+  const { user } = useAuth();
 
   const [abaAtiva, setAbaAtiva] = useState<"oc" | "os">("oc");
   const [busca, setBusca] = useState("");
@@ -246,6 +248,8 @@ export default function Ordens() {
       outrasDespesas: parseFloat(form.outrasDespesas) || 0,
       impostos: parseFloat(form.impostos) || 0,
       desconto: parseFloat(form.desconto) || 0,
+      userId: user?.id,
+      userName: user?.name,
       itens: validos.map(i => ({
         descricao: i.descricao,
         unidade: i.unidade,

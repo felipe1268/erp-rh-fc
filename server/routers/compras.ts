@@ -1654,6 +1654,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const uRows = await db.select({ nome: users.name }).from(users).where(eq(users.id, sc.solicitanteId));
         solicitanteNome = uRows[0]?.nome || null;
       }
+      if (!solicitanteNome && (sc as any).criadoPorNome) {
+        solicitanteNome = (sc as any).criadoPorNome;
+      }
       if (sc.aprovadorId) {
         const uRows = await db.select({ nome: users.name }).from(users).where(eq(users.id, sc.aprovadorId));
         aprovadorNome = uRows[0]?.nome || null;
@@ -1668,6 +1671,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           status: comprasCotacoes.status,
           criadoEm: comprasCotacoes.criadoEm,
           total: comprasCotacoes.total,
+          criadoPorNome: comprasCotacoes.criadoPorNome,
         }).from(comprasCotacoes)
           .where(and(eq(comprasCotacoes.solicitacaoId, input.id), eq(comprasCotacoes.companyId, sc.companyId)))
           .orderBy(asc(comprasCotacoes.criadoEm));
@@ -1685,6 +1689,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           criadoEm: comprasOrdens.criadoEm,
           aprovacaoStatus: comprasOrdens.aprovacaoStatus,
           aprovadorId: comprasOrdens.aprovadorId,
+          criadoPorNome: comprasOrdens.criadoPorNome,
         }).from(comprasOrdens)
           .where(and(eq(comprasOrdens.solicitacaoId, input.id), eq(comprasOrdens.companyId, sc.companyId)))
           .orderBy(asc(comprasOrdens.criadoEm));
@@ -1746,12 +1751,13 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         solicitanteNome,
         aprovadorNome,
         rastreio: {
-          cotacoes: (cotacoes || []).map(c => ({ id: c.id, numeroCotacao: c.numeroCotacao, status: c.status, criadoEm: c.criadoEm, total: parseFloat(String(c.total || "0")) })),
+          cotacoes: (cotacoes || []).map(c => ({ id: c.id, numeroCotacao: c.numeroCotacao, status: c.status, criadoEm: c.criadoEm, total: parseFloat(String(c.total || "0")), criadoPorNome: c.criadoPorNome || null })),
           ordens: (ordens || []).map(o => ({
             id: o.id, numeroOc: o.numeroOc, status: o.status, fornecedorNome: o.fornecedorNome,
             total: parseFloat(String(o.total || "0")), criadoEm: o.criadoEm,
             aprovacaoStatus: o.aprovacaoStatus, aprovadorId: o.aprovadorId,
             aprovadorNome: o.aprovadorId ? (ocAprovadores[o.aprovadorId] || null) : null,
+            criadoPorNome: o.criadoPorNome || null,
           })),
           recebimentos: recebimentos || [],
         },
@@ -1780,6 +1786,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
       tipo: z.enum(["material", "servico", "pacote", "equipamento", "pecas_veiculo"]).optional(),
       incluirEquipamentos: z.boolean().optional(),
+      userId: z.number().optional(),
+      userName: z.string().optional(),
       itens: z.array(z.object({
         descricao: z.string(),
         unidade: z.string().optional(),
@@ -1832,6 +1840,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         incluirEquipamentos: input.incluirEquipamentos ?? false,
         status: "pendente",
         aprovacaoStatus: "aguardando",
+        criadoPorId: input.userId ?? null,
+        criadoPorNome: input.userName ?? null,
       } as any).returning();
       if (input.itens.length > 0) {
         await db.insert(comprasSolicitacoesItens).values(
@@ -1935,7 +1945,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     }),
 
   aprovarSolicitacao: protectedProcedure
-    .input(z.object({ id: z.number(), aprovacaoStatus: z.string(), aprovadorId: z.number().optional() }))
+    .input(z.object({ id: z.number(), aprovacaoStatus: z.string(), aprovadorId: z.number().optional(), aprovadorNome: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       await db.update(comprasSolicitacoes).set({
@@ -1986,7 +1996,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
               total: String(totalGeral.toFixed(2)),
               status: "pendente",
               tipo: sc.tipo ?? "material",
-            }).returning();
+              criadoPorId: input.aprovadorId ?? null,
+              criadoPorNome: input.aprovadorNome ?? null,
+            } as any).returning();
 
             if (itensMapped.length > 0) {
               await db.insert(comprasCotacoesItens).values(
@@ -2279,6 +2291,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       numeroParcelas: z.number().optional(),
       prazoEntregaDias: z.number().nullable().optional(),
       observacoes: z.string().optional(),
+      userId: z.number().optional(),
+      userName: z.string().optional(),
       itens: z.array(z.object({
         solicitacaoItemId: z.number().nullable().optional(),
         descricao: z.string(),
@@ -2350,7 +2364,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         observacoes: input.observacoes,
         total: String(totalGeral.toFixed(2)),
         status: "pendente",
-      }).returning();
+        criadoPorId: input.userId ?? null,
+        criadoPorNome: input.userName ?? null,
+      } as any).returning();
       if (itensMapped.length > 0) {
         await db.insert(comprasCotacoesItens).values(
           itensMapped.map(it => ({
@@ -4450,6 +4466,8 @@ Retorne APENAS um JSON válido neste formato:
         obraId: cot.obraId ?? null,
         fornecedorId: cot.fornecedorId ?? null,
         fornecedorNome: cot.fornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId!))).map(f => f.nome || f.razao || null)[0] ?? null : null,
+        criadoPorId: input.userId ?? null,
+        criadoPorNome: input.userName ?? null,
         tipo: ordemTipo,
         status: extraAprovacaoRequerida ? "aguardando_aprovacao_extra" : "aprovada",
         aprovacaoStatus: extraAprovacaoRequerida ? "aguardando_admin" : "aprovado",
@@ -4768,6 +4786,8 @@ Retorne APENAS um JSON válido neste formato:
       outrasDespesas: z.number().optional(),
       impostos: z.number().optional(),
       desconto: z.number().optional(),
+      userId: z.number().optional(),
+      userName: z.string().optional(),
       itens: z.array(z.object({
         descricao: z.string(),
         unidade: z.string().optional(),
@@ -4808,6 +4828,8 @@ Retorne APENAS um JSON válido neste formato:
         condicaoPagamento: input.condicaoPagamento,
         status: "pendente",
         aprovacaoStatus: "aguardando",
+        criadoPorId: input.userId ?? null,
+        criadoPorNome: input.userName ?? null,
         subtotal: String(subtotal.toFixed(2)),
         frete: String(frete.toFixed(2)),
         outrasDespesas: String(outrasDespesas.toFixed(2)),
@@ -8010,6 +8032,7 @@ Retorne APENAS um JSON válido neste formato:
       companyId: z.number(),
       aprovacaoStatus: z.string(),
       aprovadorId: z.number().optional(),
+      aprovadorNome: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -8051,7 +8074,9 @@ Retorne APENAS um JSON válido neste formato:
                 solicitacaoId: sc.id,
                 total: "0",
                 status: "pendente",
-              }).returning();
+                criadoPorId: input.aprovadorId ?? null,
+                criadoPorNome: input.aprovadorNome ?? null,
+              } as any).returning();
 
               if (scItens.length > 0) {
                 await db.insert(comprasCotacoesItens).values(
@@ -8085,7 +8110,7 @@ Retorne APENAS um JSON válido neste formato:
     }),
 
   duplicarSolicitacao: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .input(z.object({ id: z.number(), companyId: z.number(), userId: z.number().optional(), userName: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
 
@@ -8113,7 +8138,9 @@ Retorne APENAS um JSON válido neste formato:
         imagemReferenciaUrl: sc.imagemReferenciaUrl,
         status: "pendente",
         aprovacaoStatus: "aguardando",
-      }).returning();
+        criadoPorId: input.userId ?? null,
+        criadoPorNome: input.userName ?? null,
+      } as any).returning();
 
       if (scItens.length > 0) {
         await db.insert(comprasSolicitacoesItens).values(
