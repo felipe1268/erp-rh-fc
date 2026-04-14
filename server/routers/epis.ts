@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias, obraFuncionarios, companies } from "../../drizzle/schema";
+import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias, obraFuncionarios, companies, comprasSolicitacoes, comprasSolicitacoesItens, epiEstoqueMinimo } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, gte, inArray } from "drizzle-orm";
 import { getConstrutorasIds } from "../db";
 import { storagePut } from "../storage";
@@ -23,6 +23,7 @@ export const episRouter = router({
       categoria: z.string().optional(),
       condicao: z.string().optional(),
       tamanho: z.string().optional(),
+      filtroEstoque: z.enum(['todos','zerado','critico','baixo']).optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -40,6 +41,13 @@ export const episRouter = router({
       }
       if (input.tamanho && input.tamanho !== 'Todos') {
         conditions.push(eq(epis.tamanho, input.tamanho));
+      }
+      if (input.filtroEstoque === 'zerado') {
+        conditions.push(sql`COALESCE(${epis.quantidadeEstoque}, 0) = 0`);
+      } else if (input.filtroEstoque === 'critico') {
+        conditions.push(sql`COALESCE(${epis.quantidadeEstoque}, 0) >= 1 AND COALESCE(${epis.quantidadeEstoque}, 0) <= 3`);
+      } else if (input.filtroEstoque === 'baixo') {
+        conditions.push(sql`COALESCE(${epis.quantidadeEstoque}, 0) >= 4 AND COALESCE(${epis.quantidadeEstoque}, 0) <= 10`);
       }
       const cond = and(...conditions);
       const [rows, countResult] = await Promise.all([
@@ -455,6 +463,72 @@ export const episRouter = router({
         await db.update(epis)
           .set({ quantidadeEstoque: sql`GREATEST(${epis.quantidadeEstoque} - ${input.quantidade}, 0)` })
           .where(eq(epis.id, input.epiId));
+      }
+
+      // Verificar se atingiu estoque mínimo e gerar SC automática (apenas para estoque central)
+      if (input.origemEntrega !== 'obra') {
+        try {
+          const [epiAtual] = await db.select({ quantidadeEstoque: epis.quantidadeEstoque, nome: epis.nome, ca: epis.ca, tamanho: epis.tamanho })
+            .from(epis).where(eq(epis.id, input.epiId));
+          const estoqueAtual = epiAtual?.quantidadeEstoque || 0;
+
+          const [minConfig] = await db.select({ quantidadeMinima: epiEstoqueMinimo.quantidadeMinima })
+            .from(epiEstoqueMinimo)
+            .where(and(
+              eq(epiEstoqueMinimo.companyId, input.companyId),
+              eq(epiEstoqueMinimo.epiId, input.epiId),
+              sql`${epiEstoqueMinimo.obraId} IS NULL`,
+            ));
+
+          if (minConfig && estoqueAtual < minConfig.quantidadeMinima) {
+            const epiNomeEscaped = (epiAtual.nome || '').replace(/'/g, "''");
+            const recentSC = await db.select({ id: comprasSolicitacoesItens.id })
+              .from(comprasSolicitacoesItens)
+              .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
+              .where(and(
+                eq(comprasSolicitacoes.companyId, input.companyId),
+                sql`${comprasSolicitacoes.titulo} LIKE '%Reposição automática de EPI%'`,
+                sql`${comprasSolicitacoes.status} NOT IN ('cancelada','concluida')`,
+                sql`${comprasSolicitacoes.criadoEm} > NOW() - INTERVAL '7 days'`,
+                sql`${comprasSolicitacoesItens.descricao} LIKE ${'%' + epiAtual.nome + '%'}`,
+              ))
+              .limit(1);
+
+            if (recentSC.length === 0) {
+              const deficit = minConfig.quantidadeMinima - estoqueAtual;
+              const descItem = `${epiAtual.nome}${epiAtual.ca ? ` (CA ${epiAtual.ca})` : ''}${epiAtual.tamanho ? ` - Tam. ${epiAtual.tamanho}` : ''}`;
+
+              const countSC = await db.select({ c: sql<number>`count(*)` }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId));
+              const seq = (parseInt(String(countSC[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+              const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
+
+              const [sc] = await db.insert(comprasSolicitacoes).values({
+                companyId: input.companyId,
+                numeroSc,
+                departamento: "SST / Almoxarifado",
+                titulo: `Reposição automática de EPI — ${epiAtual.nome} (estoque: ${estoqueAtual})`,
+                prioridade: "alta",
+                tipo: "material",
+                status: "pendente",
+                aprovacaoStatus: "aguardando",
+                observacoes: `SC gerada automaticamente. Estoque atual: ${estoqueAtual}, mínimo configurado: ${minConfig.quantidadeMinima}.`,
+                criadoPorNome: "Sistema (Auto)",
+              } as any).returning();
+
+              await db.insert(comprasSolicitacoesItens).values({
+                solicitacaoId: sc.id,
+                descricao: descItem,
+                unidade: "un",
+                quantidade: String(deficit),
+                statusItem: "pendente",
+              });
+
+              console.log(`[EPI-AutoSC] SC ${numeroSc} criada para ${epiAtual.nome} (estoque ${estoqueAtual} < mínimo ${minConfig.quantidadeMinima})`);
+            }
+          }
+        } catch (err) {
+          console.error("[EPI-AutoSC] Erro ao verificar estoque mínimo:", err);
+        }
       }
 
       // Se motivo é cobrável, criar alerta de desconto automaticamente
@@ -1812,5 +1886,96 @@ Exemplos de referência:
         criadoPorUserId: ctx.user?.id || null,
       } as any);
       return { success: true };
+    }),
+
+  gerarSCEstoqueMinimo: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      userId: z.number().optional(),
+      userName: z.string().optional(),
+      epiIds: z.array(z.number()).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+
+      const minimos = await db.select({
+        epiId: epiEstoqueMinimo.epiId,
+        quantidadeMinima: epiEstoqueMinimo.quantidadeMinima,
+        obraId: epiEstoqueMinimo.obraId,
+      }).from(epiEstoqueMinimo)
+        .where(inArray(epiEstoqueMinimo.companyId, ids));
+
+      const episData = await db.select({
+        id: epis.id,
+        nome: epis.nome,
+        ca: epis.ca,
+        categoria: epis.categoria,
+        quantidadeEstoque: epis.quantidadeEstoque,
+        companyId: epis.companyId,
+        tamanho: epis.tamanho,
+      }).from(epis).where(inArray(epis.companyId, ids));
+
+      const episMap = new Map(episData.map(e => [e.id, e]));
+
+      const itensSC: { descricao: string; unidade: string; quantidade: number; epiId: number }[] = [];
+
+      for (const min of minimos) {
+        if (min.obraId) continue;
+        if (input.epiIds && input.epiIds.length > 0 && !input.epiIds.includes(min.epiId)) continue;
+        const epi = episMap.get(min.epiId);
+        if (!epi) continue;
+        const estoqueAtual = epi.quantidadeEstoque || 0;
+        if (estoqueAtual < min.quantidadeMinima) {
+          const deficit = min.quantidadeMinima - estoqueAtual;
+          itensSC.push({
+            descricao: `${epi.nome}${epi.ca ? ` (CA ${epi.ca})` : ''}${epi.tamanho ? ` - Tam. ${epi.tamanho}` : ''}`,
+            unidade: "un",
+            quantidade: deficit,
+            epiId: epi.id,
+          });
+        }
+      }
+
+      if (itensSC.length === 0) {
+        return { ok: false, mensagem: "Nenhum item abaixo do estoque mínimo encontrado." };
+      }
+
+      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId));
+      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+      const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
+
+      const [sc] = await db.insert(comprasSolicitacoes).values({
+        companyId: input.companyId,
+        numeroSc,
+        departamento: "SST / Almoxarifado",
+        titulo: `Reposição automática de EPIs — Estoque mínimo (${itensSC.length} ${itensSC.length === 1 ? 'item' : 'itens'})`,
+        prioridade: "alta",
+        tipo: "material",
+        status: "pendente",
+        aprovacaoStatus: "aguardando",
+        observacoes: `SC gerada automaticamente pelo sistema de controle de estoque mínimo de EPIs em ${new Date().toLocaleDateString("pt-BR")}.`,
+        criadoPorId: input.userId ?? null,
+        criadoPorNome: input.userName ?? "Sistema",
+      } as any).returning();
+
+      await db.insert(comprasSolicitacoesItens).values(
+        itensSC.map(it => ({
+          solicitacaoId: sc.id,
+          descricao: it.descricao,
+          unidade: it.unidade,
+          quantidade: String(it.quantidade),
+          statusItem: "pendente",
+        }))
+      );
+
+      return {
+        ok: true,
+        scId: sc.id,
+        numeroSc,
+        totalItens: itensSC.length,
+        mensagem: `SC ${numeroSc} criada com ${itensSC.length} ${itensSC.length === 1 ? 'item' : 'itens'} para reposição.`,
+      };
     }),
 });

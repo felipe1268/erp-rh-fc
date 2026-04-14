@@ -17,7 +17,7 @@ import {
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
   DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText, FileDown, Save,
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
-  Building2, ArrowLeftRight, Warehouse, TrendingUp,
+  Building2, ArrowLeftRight, Warehouse, TrendingUp, ShoppingCart, Loader2,
   Brain, Sparkles, GraduationCap, Bell, BarChart3, PenTool, Users, Ban,
   ImagePlus, Camera, Link, X as XIcon
 } from "lucide-react";
@@ -169,6 +169,7 @@ export default function Epis() {
   const [filterCondicao, setFilterCondicao] = useState<"Todos" | "Novo" | "Reutilizado">("Todos");
   const [filterCategoria, setFilterCategoria] = useState<"Todos" | "EPI" | "Uniforme" | "Calçado">("Todos");
   const [filterTamanho, setFilterTamanho] = useState<string>("Todos");
+  const [filterEstoque, setFilterEstoque] = useState<"todos" | "zerado" | "critico" | "baixo">("todos");
   const [editingEpi, setEditingEpi] = useState<any>(null);
   const [selectedEpis, setSelectedEpis] = useState<Set<number>>(new Set());
   const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
@@ -198,9 +199,9 @@ export default function Epis() {
     const t = setTimeout(() => { setDebouncedSearch(search); setEpisPage(0); }, 350);
     return () => clearTimeout(t);
   }, [search]);
-  useEffect(() => { setEpisPage(0); }, [filterCategoria, filterCondicao, filterTamanho]);
+  useEffect(() => { setEpisPage(0); }, [filterCategoria, filterCondicao, filterTamanho, filterEstoque]);
 
-  const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: episPage * PAGE_SIZE, search: debouncedSearch || undefined, categoria: filterCategoria !== "Todos" ? filterCategoria : undefined, condicao: filterCondicao !== "Todos" ? filterCondicao : undefined, tamanho: filterTamanho !== "Todos" ? filterTamanho : undefined }, { enabled: hasValidCompany });
+  const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: episPage * PAGE_SIZE, search: debouncedSearch || undefined, categoria: filterCategoria !== "Todos" ? filterCategoria : undefined, condicao: filterCondicao !== "Todos" ? filterCondicao : undefined, tamanho: filterTamanho !== "Todos" ? filterTamanho : undefined, filtroEstoque: filterEstoque !== "todos" ? filterEstoque : undefined }, { enabled: hasValidCompany });
   const episAllQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: 200, offset: 0 }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "estoque_obra" || viewMode === "transferencias") });
   const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: deliveriesPage * PAGE_SIZE }, { enabled: hasValidCompany && (viewMode === "entregas" || viewMode === "nova_entrega" || viewMode === "ficha_epi") });
   const statsQ = trpc.epis.stats.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
@@ -362,6 +363,12 @@ export default function Epis() {
   const deleteBatchMut = trpc.epis.deleteBatch.useMutation({
     onSuccess: (data: any) => { episQ.refetch(); statsQ.refetch(); setSelectedEpis(new Set()); setShowBatchDeleteDialog(false); toast.success(`${data.deleted} EPI(s) removido(s)!`); },
     onError: (err: any) => toast.error(err.message),
+  });
+  const gerarSCMut = trpc.epis.gerarSCEstoqueMinimo.useMutation({
+    onSuccess: (data: any) => {
+      if (data.ok) { toast.success(data.mensagem); } else { toast.error(data.mensagem); }
+    },
+    onError: (err) => toast.error("Erro ao gerar SC: " + err.message),
   });
   const setBdiMut = trpc.epis.setBdi.useMutation({
     onSuccess: () => { bdiQ.refetch(); toast.success("BDI atualizado!"); },
@@ -2105,6 +2112,35 @@ export default function Epis() {
                   ))}
                 </SelectContent>
               </Select>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
+              {([
+                { key: "todos", label: "Todos", icon: Package, color: "" },
+                { key: "zerado", label: "Zerado", icon: Ban, color: "text-red-600" },
+                { key: "critico", label: "Crítico", icon: AlertTriangle, color: "text-amber-600" },
+                { key: "baixo", label: "Baixo", icon: TrendingUp, color: "text-orange-500" },
+              ] as const).map(opt => (
+                <button key={opt.key}
+                  onClick={() => setFilterEstoque(opt.key)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${filterEstoque === opt.key ? 'bg-white shadow-sm border text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                  <opt.icon className={`h-3 w-3 ${filterEstoque === opt.key ? opt.color : ''}`} />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {!readOnly && (
+              <Button size="sm" variant="outline"
+                className="text-xs gap-1 border-amber-300 text-amber-700 hover:bg-amber-50"
+                disabled={gerarSCMut.isPending}
+                onClick={() => {
+                  if (!confirm("Gerar Solicitação de Compra automática para todos os EPIs abaixo do estoque mínimo?")) return;
+                  gerarSCMut.mutate({ companyId: queryCompanyId || companyId, companyIds: isConstrutoras ? companyIds : undefined, userId: user?.id, userName: user?.name || user?.nome });
+                }}>
+                {gerarSCMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShoppingCart className="h-3 w-3" />}
+                Gerar SC (Estoque Mínimo)
+              </Button>
             )}
           </div>
         </div>
