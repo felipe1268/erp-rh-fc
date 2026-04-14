@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { eq, and, sql, isNull, desc, inArray } from "drizzle-orm";
+import { storagePut } from "../storage";
 import {
   smoSolicitacoes, smoAtividadesEap, smoOnboardingChecklist,
   obras, employees, obraFuncionarios, convencaoColetiva,
@@ -401,6 +402,8 @@ export const smoRouter = router({
       custoTotalEstimado: z.string().optional(),
       detalheCustos: z.string().optional(),
       sugestaoRealocacao: z.string().optional(),
+      candidatoIndicadoNome: z.string().optional(),
+      candidatoIndicadoTelefone: z.string().optional(),
       atividades: z.array(z.object({
         atividadeId: z.number(),
         eapCodigo: z.string().optional(),
@@ -450,6 +453,8 @@ export const smoRouter = router({
       custoTotalEstimado: z.string().optional(),
       detalheCustos: z.string().optional(),
       sugestaoRealocacao: z.string().optional(),
+      candidatoIndicadoNome: z.string().optional().nullable(),
+      candidatoIndicadoTelefone: z.string().optional().nullable(),
       status: z.string().optional(),
       atividades: z.array(z.object({
         atividadeId: z.number(),
@@ -594,5 +599,67 @@ export const smoRouter = router({
       }
 
       return { byStatus, byPrioridade, totalCusto, totalVagas, total: all.length };
+    }),
+
+  uploadCurriculo: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      fileName: z.string(),
+      fileBase64: z.string(),
+      contentType: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await assertOwnership(db, input.id, input);
+
+      const ALLOWED_EXTS = ["pdf", "doc", "docx"];
+      const ALLOWED_MIME = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ];
+      const MAX_SIZE = 10 * 1024 * 1024;
+
+      const rawExt = (input.fileName.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (!ALLOWED_EXTS.includes(rawExt)) {
+        throw new Error("Tipo de arquivo não permitido. Envie PDF, DOC ou DOCX.");
+      }
+      if (!ALLOWED_MIME.includes(input.contentType)) {
+        throw new Error("Tipo MIME não permitido.");
+      }
+
+      const buf = Buffer.from(input.fileBase64, "base64");
+      if (buf.length > MAX_SIZE) {
+        throw new Error("Arquivo muito grande. Máximo 10MB.");
+      }
+
+      const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 100);
+      const key = `smo/curriculos/${input.id}_${Date.now()}.${rawExt}`;
+      const result = await storagePut(key, buf, input.contentType);
+      await db.update(smoSolicitacoes).set({
+        curriculoArquivoNome: safeName,
+        curriculoArquivoKey: result.key,
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(smoSolicitacoes.id, input.id));
+      return { key: result.key, fileName: safeName };
+    }),
+
+  removerCurriculo: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await assertOwnership(db, input.id, input);
+      await db.update(smoSolicitacoes).set({
+        curriculoArquivoNome: null,
+        curriculoArquivoKey: null,
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(smoSolicitacoes.id, input.id));
+      return { success: true };
     }),
 });

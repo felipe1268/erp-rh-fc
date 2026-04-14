@@ -9,7 +9,7 @@ import {
   Clock, AlertTriangle, CheckCircle, XCircle, Send, Eye,
   HardHat, Building2, Calendar, TrendingUp, DollarSign,
   ArrowRight, RefreshCw, ClipboardList, Award, Briefcase,
-  Shield, Package, UserCheck, Trash2, X,
+  Shield, Package, UserCheck, Trash2, X, Upload, FileText, Phone, User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,6 +75,7 @@ export default function SolicitacaoMDO() {
   const [rejectMotivo, setRejectMotivo] = useState("");
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [funcaoOutros, setFuncaoOutros] = useState("");
+  const [curriculoFile, setCurriculoFile] = useState<File | null>(null);
 
   const [form, setForm] = useState({
     obraId: 0,
@@ -86,6 +87,8 @@ export default function SolicitacaoMDO() {
     qualificacoes: [] as string[],
     observacao: "",
     atividadesEap: [] as Array<{ atividadeId: number; eapCodigo: string; nomeAtividade: string }>,
+    candidatoIndicadoNome: "",
+    candidatoIndicadoTelefone: "",
   });
 
   const [showEapPicker, setShowEapPicker] = useState(false);
@@ -163,15 +166,35 @@ export default function SolicitacaoMDO() {
   const deleteMut = trpc.smo.delete.useMutation({
     onSuccess: () => { toast.success("Excluída."); setShowDetail(false); list.refetch(); dashQ.refetch(); },
   });
+  const uploadCurriculoMut = trpc.smo.uploadCurriculo.useMutation({
+    onSuccess: () => { toast.success("Currículo anexado!"); selectedDetail.refetch(); },
+    onError: (e) => toast.error("Erro ao enviar currículo: " + e.message),
+  });
+  const removerCurriculoMut = trpc.smo.removerCurriculo.useMutation({
+    onSuccess: () => { toast.success("Currículo removido."); selectedDetail.refetch(); },
+  });
 
   function resetForm() {
-    setForm({ obraId: 0, funcaoSolicitada: "", quantidade: 1, dataInicioNecessidade: "", duracaoMeses: 1, prioridade: "normal", qualificacoes: [], observacao: "", atividadesEap: [] });
+    setForm({ obraId: 0, funcaoSolicitada: "", quantidade: 1, dataInicioNecessidade: "", duracaoMeses: 1, prioridade: "normal", qualificacoes: [], observacao: "", atividadesEap: [], candidatoIndicadoNome: "", candidatoIndicadoTelefone: "" });
     setFuncaoOutros("");
+    setCurriculoFile(null);
   }
 
   function getFuncaoFinal() {
     if (form.funcaoSolicitada === "__outros__") return funcaoOutros.trim();
     return form.funcaoSolicitada;
+  }
+
+  async function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(",")[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 
   function handleSubmit(status: "rascunho" | "enviada") {
@@ -197,7 +220,27 @@ export default function SolicitacaoMDO() {
       detalheCustos: impactoQ.data ? JSON.stringify(impactoQ.data) : undefined,
       sugestaoRealocacao: realocQ.data && realocQ.data.length > 0 ? JSON.stringify(realocQ.data) : undefined,
       atividades: form.atividadesEap.length > 0 ? form.atividadesEap : undefined,
+      candidatoIndicadoNome: form.candidatoIndicadoNome || undefined,
+      candidatoIndicadoTelefone: form.candidatoIndicadoTelefone || undefined,
       status,
+    }, {
+      onSuccess: async (sol) => {
+        if (curriculoFile && sol?.id) {
+          try {
+            const base64 = await fileToBase64(curriculoFile);
+            uploadCurriculoMut.mutate({
+              id: sol.id,
+              companyId,
+              companyIds,
+              fileName: curriculoFile.name,
+              fileBase64: base64,
+              contentType: curriculoFile.type || "application/pdf",
+            });
+          } catch {
+            toast.error("Erro ao processar arquivo do currículo.");
+          }
+        }
+      },
     });
   }
 
@@ -476,6 +519,60 @@ export default function SolicitacaoMDO() {
               <div>
                 <Label className="text-xs font-semibold">Justificativa / Observação</Label>
                 <Textarea value={form.observacao} onChange={e => setForm(p => ({ ...p, observacao: e.target.value }))} placeholder="Descreva o motivo da necessidade de contratação..." rows={3} />
+              </div>
+
+              {/* Indicação de Candidato */}
+              <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-2">
+                  <UserCheck className="h-4 w-4" />
+                  Indicação de Candidato (opcional)
+                </h4>
+                <p className="text-xs text-blue-600">Tem alguém em mente? Preencha os dados abaixo para direcionar ao RH.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-semibold flex items-center gap-1"><User className="h-3 w-3" /> Nome do candidato</Label>
+                    <Input value={form.candidatoIndicadoNome} onChange={e => setForm(p => ({ ...p, candidatoIndicadoNome: e.target.value }))} placeholder="Nome completo" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold flex items-center gap-1"><Phone className="h-3 w-3" /> Telefone</Label>
+                    <Input value={form.candidatoIndicadoTelefone} onChange={e => setForm(p => ({ ...p, candidatoIndicadoTelefone: e.target.value }))} placeholder="(00) 00000-0000" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold flex items-center gap-1"><FileText className="h-3 w-3" /> Currículo (PDF, DOC, DOCX)</Label>
+                  <div className="mt-1">
+                    {curriculoFile ? (
+                      <div className="flex items-center gap-2 p-2 bg-white border rounded-lg">
+                        <FileText className="h-4 w-4 text-blue-600" />
+                        <span className="text-sm flex-1 truncate">{curriculoFile.name}</span>
+                        <span className="text-xs text-gray-400">{(curriculoFile.size / 1024).toFixed(0)} KB</span>
+                        <Button variant="ghost" size="sm" onClick={() => setCurriculoFile(null)} className="h-6 w-6 p-0">
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center gap-2 p-3 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors">
+                        <Upload className="h-5 w-5 text-blue-500" />
+                        <span className="text-sm text-blue-600">Clique para selecionar arquivo</span>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.size > 10 * 1024 * 1024) {
+                                toast.error("Arquivo muito grande. Máximo 10MB.");
+                                return;
+                              }
+                              setCurriculoFile(file);
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Alerta prazo mínimo */}
@@ -831,6 +928,55 @@ export default function SolicitacaoMDO() {
                   );
                 } catch { return null; }
               })()}
+
+              {/* Indicação de Candidato */}
+              {(d.candidatoIndicadoNome || d.candidatoIndicadoTelefone || d.curriculoArquivoNome) && (
+                <div className="bg-blue-50 rounded-xl border border-blue-200 p-4">
+                  <h4 className="font-semibold text-sm text-blue-800 mb-3 flex items-center gap-2"><UserCheck className="h-4 w-4" /> Candidato Indicado</h4>
+                  <div className="space-y-2">
+                    {d.candidatoIndicadoNome && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <User className="h-4 w-4 text-blue-600" />
+                        <span className="font-medium">{d.candidatoIndicadoNome}</span>
+                      </div>
+                    )}
+                    {d.candidatoIndicadoTelefone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="h-4 w-4 text-blue-600" />
+                        <span>{d.candidatoIndicadoTelefone}</span>
+                      </div>
+                    )}
+                    {d.curriculoArquivoNome && (
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-blue-600" />
+                        <span className="text-sm">{d.curriculoArquivoNome}</span>
+                        <Button variant="ghost" size="sm" className="text-red-500 h-6 px-2 text-xs"
+                          onClick={() => removerCurriculoMut.mutate({ id: d.id, companyId, companyIds })}>
+                          <Trash2 className="h-3 w-3 mr-1" /> Remover
+                        </Button>
+                      </div>
+                    )}
+                    {!d.curriculoArquivoNome && (
+                      <label className="flex items-center gap-2 p-2 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors mt-2">
+                        <Upload className="h-4 w-4 text-blue-500" />
+                        <span className="text-xs text-blue-600">Anexar currículo</span>
+                        <input type="file" className="hidden"
+                          accept=".pdf,.doc,.docx"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 10 * 1024 * 1024) { toast.error("Máximo 10MB."); return; }
+                            try {
+                              const base64 = await fileToBase64(file);
+                              uploadCurriculoMut.mutate({ id: d.id, companyId, companyIds, fileName: file.name, fileBase64: base64, contentType: file.type || "application/pdf" });
+                            } catch { toast.error("Erro ao processar arquivo."); }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

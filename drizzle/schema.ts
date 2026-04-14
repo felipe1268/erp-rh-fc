@@ -7276,6 +7276,10 @@ export const smoSolicitacoes = pgTable("smo_solicitacoes", {
   slaVencidoEm:        timestamp("sla_vencido_em", { mode: "string" }),
   criadoEm:            timestamp("criado_em", { mode: "string" }).defaultNow(),
   atualizadoEm:        timestamp("atualizado_em", { mode: "string" }).defaultNow(),
+  candidatoIndicadoNome: varchar("candidato_indicado_nome", { length: 255 }),
+  candidatoIndicadoTelefone: varchar("candidato_indicado_telefone", { length: 50 }),
+  curriculoArquivoNome: varchar("curriculo_arquivo_nome", { length: 255 }),
+  curriculoArquivoKey: varchar("curriculo_arquivo_key", { length: 500 }),
   deletedAt:           timestamp("deleted_at", { mode: "string" }),
 }, (t) => [
   index("idx_smo_company").on(t.companyId),
