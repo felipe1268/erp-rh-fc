@@ -5,11 +5,27 @@ import { getDb } from "../db";
 import {
   folhaLancamentos, folhaItens, employees, payrollUploads,
   timeRecords, pontoConsolidacao, obras, manualObraAssignments, companyBankAccounts, systemCriteria,
-  pontoDescontos, pontoDescontosResumo, heSolicitacoes, heSolicitacaoFuncionarios
+  pontoDescontos, pontoDescontosResumo, heSolicitacoes, heSolicitacaoFuncionarios,
+  auditLogs,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
+
+async function lgpdAuditLog(userId: number, userName: string, action: string, details: string) {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    await db.insert(auditLogs).values({
+      userId,
+      userName,
+      action,
+      module: "folha_pagamento",
+      entityType: "dados_sensiveis",
+      details: `[LGPD] ${details}`,
+    });
+  } catch {}
+}
 // ============================================================
 // HELPERS
 // ============================================================
@@ -495,7 +511,7 @@ export const folhaPagamentoRouter = router({
   listarLancamentos: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const lancamentos = await db.select().from(folhaLancamentos)
         .where(and(
@@ -504,6 +520,7 @@ export const folhaPagamentoRouter = router({
         ))
         .orderBy(desc(folhaLancamentos.createdAt));
 
+      lgpdAuditLog(ctx.user.id, ctx.user.name || "", "VIEW", `Acessou folha de pagamento ${input.mesReferencia}`);
       return lancamentos;
     }),
 
@@ -514,7 +531,7 @@ export const folhaPagamentoRouter = router({
     .input(z.object({
       folhaLancamentoId: z.number(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const itens = await db.select().from(folhaItens)
         .where(eq(folhaItens.folhaLancamentoId, input.folhaLancamentoId));
@@ -536,6 +553,8 @@ export const folhaPagamentoRouter = router({
           .where(inArray(companyBankAccounts.companyId, companyIds));
       }
       const bankMap = new Map(bankAccounts.map(b => [b.id, b]));
+
+      lgpdAuditLog(ctx.user.id, ctx.user.name || "", "VIEW_DETAIL", `Acessou detalhes salariais — lançamento #${input.folhaLancamentoId} (${itens.length} funcionários)`);
 
       return itens.map(item => {
         const emp = item.employeeId ? empMap.get(item.employeeId) : null;

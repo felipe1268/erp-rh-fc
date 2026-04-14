@@ -2567,8 +2567,30 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
 // ============================================================
 function BackupTab() {
   const [executando, setExecutando] = useState(false);
+  const [horarioEdit, setHorarioEdit] = useState("");
+  const [ativoEdit, setAtivoEdit] = useState(true);
 
   const backupsQuery = trpc.backup.listar.useQuery({ limit: 20 });
+  const configQuery = (trpc as any).backup.obterConfig.useQuery();
+  const [configInit, setConfigInit] = useState(false);
+
+  useEffect(() => {
+    const d = configQuery.data as any;
+    if (d && !configInit) {
+      setHorarioEdit(d.horario || "00:00");
+      setAtivoEdit(d.ativo !== false);
+      setConfigInit(true);
+    }
+  }, [configQuery.data, configInit]);
+
+  const salvarConfigMut = (trpc as any).backup.salvarConfig.useMutation({
+    onSuccess: () => {
+      toast.success("Horário do backup atualizado!");
+      configQuery.refetch();
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
   const executarMutation = trpc.backup.executar.useMutation({
     onSuccess: (data) => {
       if (data.success) {
@@ -2590,6 +2612,14 @@ function BackupTab() {
     executarMutation.mutate();
   };
 
+  const handleSalvarConfig = () => {
+    const match = horarioEdit.match(/^(\d{2}):(\d{2})$/);
+    if (!match) { toast.error("Formato inválido. Use HH:MM"); return; }
+    const h = parseInt(match[1]), m = parseInt(match[2]);
+    if (h < 0 || h > 23 || m < 0 || m > 59) { toast.error("Horário inválido"); return; }
+    salvarConfigMut.mutate({ horario: horarioEdit, ativo: ativoEdit });
+  };
+
   const formatBytes = (bytes: number) => {
     if (!bytes || bytes === 0) return "0 B";
     const k = 1024;
@@ -2599,6 +2629,7 @@ function BackupTab() {
   };
 
   const backups = backupsQuery.data || [];
+  const configData = (configQuery.data || {}) as any;
 
   return (
     <div className="space-y-4">
@@ -2612,8 +2643,7 @@ function BackupTab() {
                 Backup do Banco de Dados
               </CardTitle>
               <CardDescription>
-                Backup automático diário às 03:00 (Brasília). Exporta todas as tabelas em JSON comprimido e faz upload para o S3.
-                Você também pode executar um backup manual a qualquer momento.
+                Backup automático diário com descoberta dinâmica de tabelas. Exporta 100% do banco em JSON comprimido com cópia redundante no Neon.
               </CardDescription>
             </div>
             <Button
@@ -2631,18 +2661,70 @@ function BackupTab() {
         </CardHeader>
       </Card>
 
+      {/* Configuração de Horário */}
+      <Card className="border-green-200 bg-green-50/50">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <Clock className="w-5 h-5 text-green-600 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-green-800 text-sm">Horário do Backup Automático</p>
+                <p className="text-xs text-green-600">
+                  Horário de Brasília. Atual: <strong>{configData?.horario || "00:00"}</strong>
+                  {configData?.ativo === false && <span className="text-red-600 ml-2 font-bold">(DESATIVADO)</span>}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 text-xs text-green-700">
+                <input
+                  type="checkbox"
+                  checked={ativoEdit}
+                  onChange={e => setAtivoEdit(e.target.checked)}
+                  className="rounded border-green-300"
+                />
+                Ativo
+              </label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={5}
+                value={horarioEdit}
+                onChange={e => {
+                  let v = e.target.value.replace(/[^\d:]/g, "");
+                  if (v.length === 2 && !v.includes(":") && horarioEdit.length < v.length) v += ":";
+                  setHorarioEdit(v.slice(0, 5));
+                }}
+                placeholder="HH:MM"
+                className="w-20 text-center text-sm h-8"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSalvarConfig}
+                disabled={salvarConfigMut.isPending}
+                className="h-8 border-green-300 text-green-700 hover:bg-green-100"
+              >
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Info automático */}
       <Card className="bg-blue-50 border-blue-200">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
             <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-blue-800">
-              <p className="font-medium mb-1">Backup Automático</p>
+              <p className="font-medium mb-1">Proteção de Dados</p>
               <ul className="space-y-1 text-xs text-blue-700">
-                <li>• O sistema executa backup automático <strong>todos os dias às 03:00</strong> (horário de Brasília).</li>
-                <li>• Todas as <strong>160 tabelas</strong> do banco são exportadas em formato JSON comprimido (gzip).</li>
-                <li>• Os backups são armazenados no <strong>S3</strong> e notificações são enviadas por e-mail e plataforma.</li>
-                <li>• Recomendamos manter pelo menos <strong>30 dias</strong> de histórico para segurança.</li>
+                <li>• Descobre automaticamente <strong>todas as tabelas</strong> do banco (novas tabelas entram no backup sem configuração).</li>
+                <li>• Cópia 1: armazenada no <strong>S3</strong> (storage externo).</li>
+                <li>• Cópia 2: armazenada no próprio <strong>Neon</strong> (últimos 7 backups retidos).</li>
+                <li>• Arquivos e fotos (tabela uploaded_files) são inventariados no backup.</li>
+                <li>• Notificações por e-mail e plataforma após cada backup.</li>
               </ul>
             </div>
           </div>

@@ -2365,7 +2365,7 @@ export const appRouter = router({
       const tableName = entityMap[input.entity];
       if (!tableName) throw new TRPCError({ code: "BAD_REQUEST", message: "Entidade inválida" });
 
-      await db.execute(sqlFn.raw(`UPDATE \`${tableName}\` SET deletedAt = NULL, deletedBy = NULL, deletedByUserId = NULL WHERE id = ${input.id}`));
+      await db.execute(sqlFn.raw(`UPDATE "${tableName}" SET "deletedAt" = NULL, "deletedBy" = NULL, "deletedByUserId" = NULL WHERE id = ${input.id}`));
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "RESTORE", module: "lixeira", entityType: input.entity, entityId: input.id, details: `Item restaurado da lixeira: ${input.entity} #${input.id}` });
       return { success: true };
     }),
@@ -2397,7 +2397,7 @@ export const appRouter = router({
       const tableName = entityMap[input.entity];
       if (!tableName) throw new TRPCError({ code: "BAD_REQUEST", message: "Entidade inválida" });
 
-      await db.execute(sqlFn.raw(`DELETE FROM \`${tableName}\` WHERE id = ${input.id}`));
+      await db.execute(sqlFn.raw(`DELETE FROM "${tableName}" WHERE id = ${input.id}`));
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "PERMANENT_DELETE", module: "lixeira", entityType: input.entity, entityId: input.id, details: `Item excluído permanentemente: ${input.entity} #${input.id}` });
       return { success: true };
     }),
