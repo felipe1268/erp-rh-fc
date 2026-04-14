@@ -1319,9 +1319,9 @@ Sempre retorne JSON válido, sem markdown.`;
   updateFuelRecord: protectedProcedure
     .input(z.object({
       id: z.number(), companyId: z.number(), vehicleId: z.number().optional(), data: z.string().optional(),
-      litros: z.string().optional(), valorTotal: z.string().optional(), precoLitro: z.string().optional(),
-      kmAtual: z.string().optional(), tipoCombustivel: z.string().optional(),
-      motorista: z.string().optional(), posto: z.string().optional(), observacoes: z.string().optional(),
+      litros: z.string().optional(), valorTotal: z.string().optional(), precoLitro: z.string().nullable().optional(),
+      kmAtual: z.string().nullable().optional(), tipoCombustivel: z.string().optional(),
+      motorista: z.string().nullable().optional(), posto: z.string().nullable().optional(), observacoes: z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
