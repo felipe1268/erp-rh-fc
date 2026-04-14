@@ -1735,6 +1735,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         aprovadoEm: sc.aprovadoEm,
         observacoes: sc.observacoes,
         imagemReferenciaUrl: sc.imagemReferenciaUrl,
+        anexos: sc.anexos || [],
         vehicleId: sc.vehicleId,
         maintenanceId: sc.maintenanceId,
         origemModulo: sc.origemModulo,
@@ -1776,6 +1777,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       dataNecessidade: z.string().optional(),
       observacoes: z.string().optional(),
       imagemReferenciaUrl: z.string().optional(),
+      anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
       tipo: z.enum(["material", "servico", "pacote", "equipamento", "pecas_veiculo"]).optional(),
       incluirEquipamentos: z.boolean().optional(),
       itens: z.array(z.object({
@@ -1825,6 +1827,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         dataNecessidade: input.dataNecessidade,
         observacoes: input.observacoes,
         imagemReferenciaUrl: input.imagemReferenciaUrl ?? null,
+        anexos: input.anexos || [],
         tipo: tipoSC,
         incluirEquipamentos: input.incluirEquipamentos ?? false,
         status: "pendente",
@@ -1867,27 +1870,60 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+      const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "gif", "pdf", "mp4", "mov", "avi", "mkv", "heic", "heif", "bmp", "tiff", "tif", "svg"]);
       const ext = input.fileName.split(".").pop()?.toLowerCase() || "jpg";
-      if (!allowedExts.has(ext)) throw new TRPCError({ code: "BAD_REQUEST", message: "Formato de imagem não suportado." });
+      if (!allowedExts.has(ext)) throw new TRPCError({ code: "BAD_REQUEST", message: "Formato não suportado. Aceitos: imagens, PDF e vídeos." });
       const buffer = Buffer.from(input.fileBase64, "base64");
-      if (buffer.length > 10 * 1024 * 1024) throw new TRPCError({ code: "BAD_REQUEST", message: "Imagem muito grande (máx. 10 MB)." });
+      const maxSize = ["mp4", "mov", "avi", "mkv"].includes(ext) ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+      if (buffer.length > maxSize) throw new TRPCError({ code: "BAD_REQUEST", message: `Arquivo muito grande (máx. ${maxSize / 1024 / 1024} MB).` });
       if (input.solicitacaoId) {
         const [sc] = await db.select({ id: comprasSolicitacoes.id }).from(comprasSolicitacoes)
           .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
         if (!sc) throw new TRPCError({ code: "FORBIDDEN", message: "SC não encontrada ou sem permissão." });
       }
       const ts = Date.now();
-      const key = `compras/sc-imagens/${input.companyId}-${input.solicitacaoId || 'new'}-${ts}.${ext}`;
-      const mimeMap: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
-      const contentType = mimeMap[ext] || "image/jpeg";
+      const key = `compras/sc-anexos/${input.companyId}-${input.solicitacaoId || 'new'}-${ts}.${ext}`;
+      const mimeMap: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", pdf: "application/pdf", mp4: "video/mp4", mov: "video/quicktime", avi: "video/x-msvideo", mkv: "video/x-matroska", heic: "image/heic", heif: "image/heif", bmp: "image/bmp", tiff: "image/tiff", tif: "image/tiff", svg: "image/svg+xml" };
+      const contentType = mimeMap[ext] || "application/octet-stream";
       const { url } = await storagePut(key, buffer, contentType);
+
+      const isImage = ["jpg","jpeg","png","webp","gif","heic","heif","bmp","tiff","tif","svg"].includes(ext);
+      const isVideo = ["mp4","mov","avi","mkv"].includes(ext);
+      const tipo = isImage ? "imagem" : isVideo ? "video" : "pdf";
+
       if (input.solicitacaoId) {
+        const [current] = await db.select({ anexos: comprasSolicitacoes.anexos, imagemReferenciaUrl: comprasSolicitacoes.imagemReferenciaUrl }).from(comprasSolicitacoes)
+          .where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+        const existingAnexos = Array.isArray(current?.anexos) ? current.anexos as any[] : [];
+        const newAnexo = { url, nome: input.fileName, tipo, ts };
         await db.update(comprasSolicitacoes)
-          .set({ imagemReferenciaUrl: url, atualizadoEm: new Date().toISOString() })
+          .set({
+            anexos: [...existingAnexos, newAnexo],
+            imagemReferenciaUrl: current?.imagemReferenciaUrl || (isImage ? url : null),
+            atualizadoEm: new Date().toISOString(),
+          })
           .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
       }
-      return { url };
+      return { url, nome: input.fileName, tipo, ts };
+    }),
+
+  removeAnexoSC: protectedProcedure
+    .input(z.object({ solicitacaoId: z.number(), companyId: z.number(), url: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [sc] = await db.select({ anexos: comprasSolicitacoes.anexos, imagemReferenciaUrl: comprasSolicitacoes.imagemReferenciaUrl }).from(comprasSolicitacoes)
+        .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
+      if (!sc) throw new TRPCError({ code: "NOT_FOUND", message: "SC não encontrada." });
+      const anexos = Array.isArray(sc.anexos) ? (sc.anexos as any[]).filter(a => a.url !== input.url) : [];
+      const firstImage = anexos.find((a: any) => a.tipo === "imagem");
+      await db.update(comprasSolicitacoes)
+        .set({
+          anexos,
+          imagemReferenciaUrl: sc.imagemReferenciaUrl === input.url ? (firstImage?.url || null) : sc.imagemReferenciaUrl,
+          atualizadoEm: new Date().toISOString(),
+        })
+        .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
+      return { ok: true };
     }),
 
   atualizarStatusSolicitacao: protectedProcedure
@@ -7824,6 +7860,7 @@ Retorne APENAS um JSON válido neste formato:
       vehicleId: z.number().nullable().optional(),
       tipo: z.string().optional(),
       imagemReferenciaUrl: z.string().nullable().optional(),
+      anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
       itens: z.array(z.object({
         id: z.number().optional(),
         descricao: z.string(),
@@ -7887,6 +7924,7 @@ Retorne APENAS um JSON válido neste formato:
         vehicleId: input.vehicleId !== undefined ? input.vehicleId : (sc as any).vehicleId,
         tipo: input.tipo ?? sc.tipo,
         imagemReferenciaUrl: input.imagemReferenciaUrl !== undefined ? input.imagemReferenciaUrl : sc.imagemReferenciaUrl,
+        ...(input.anexos !== undefined ? { anexos: input.anexos } : {}),
         atualizadoEm: new Date().toISOString(),
       }).where(eq(comprasSolicitacoes.id, input.id));
 

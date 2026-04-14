@@ -5425,6 +5425,7 @@ export const comprasSolicitacoes = pgTable("compras_solicitacoes", {
   incluirEquipamentos: boolean("incluir_equipamentos").default(false),
   observacoes:      text(),
   imagemReferenciaUrl: text("imagem_referencia_url"),
+  anexos:             json().default([]),
   vehicleId:        integer("vehicle_id"),
   maintenanceId:    integer("maintenance_id"),
   origemModulo:     varchar("origem_modulo", { length: 30 }),

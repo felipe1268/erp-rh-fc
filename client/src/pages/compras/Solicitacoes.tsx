@@ -18,7 +18,7 @@ import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
   Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare,
-  UserCircle, ShieldCheck, FileSearch, Truck, Users, Layers, ArrowRightLeft, Sparkles, RotateCw, Car, Link2,
+  UserCircle, ShieldCheck, FileSearch, Truck, Users, Layers, ArrowRightLeft, Sparkles, RotateCw, Car, Link2, Film, Paperclip,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -1084,6 +1084,7 @@ export default function Solicitacoes() {
   const [uploadingImagem, setUploadingImagem] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [pendingAnexos, setPendingAnexos] = useState<{ url?: string; nome: string; tipo: string; ts: number; base64?: string; preview?: string }[]>([]);
   const [selectedSCIds, setSelectedSCIds] = useState<Set<number>>(new Set());
   const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
   const [excluirProgress, setExcluirProgress] = useState<{ total: number; done: number; errors: string[]; running: boolean } | null>(null);
@@ -1208,6 +1209,10 @@ export default function Solicitacoes() {
   );
 
   const uploadImagem = trpc.compras.uploadImagemReferenciaSC.useMutation();
+  const removeAnexo = trpc.compras.removeAnexoSC.useMutation({
+    onSuccess: () => { detalheQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
   const criar = trpc.compras.criarSolicitacao.useMutation({
     onSuccess: () => { toast.success("SC criada!"); setShowNova(false); resetForm(); q.refetch(); },
     onError: (e) => toast.error(e.message),
@@ -1416,20 +1421,35 @@ export default function Solicitacoes() {
     setEapInsumoSel({}); setEapInsumoQtdManual({});
     setInsumoBusca(""); setInsumoQtds({}); setInsumoExpanded(null);
     setImagemPreview(null); setImagemBase64(null); setImagemNome("");
+    setPendingAnexos([]);
     setIncluirAjudanteGlobal(true); setIncluirAjudanteOverride({});
   }
 
   function handleImagemFile(file: File) {
-    if (!file.type.startsWith("image/")) { toast.error("Selecione uma imagem válida."); return; }
-    if (file.size > 10 * 1024 * 1024) { toast.error("Imagem muito grande (máx. 10 MB)."); return; }
+    const allowedTypes = ["image/", "application/pdf", "video/"];
+    const isAllowed = allowedTypes.some(t => file.type.startsWith(t));
+    if (!isAllowed) { toast.error("Formato não suportado. Use imagens, PDF ou vídeo."); return; }
+    const maxSize = file.type.startsWith("video/") ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (file.size > maxSize) { toast.error(`Arquivo muito grande (máx. ${maxSize / 1024 / 1024} MB).`); return; }
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
-      setImagemPreview(dataUrl);
-      setImagemBase64(dataUrl.split(",")[1]);
-      setImagemNome(file.name);
+      const base64 = dataUrl.split(",")[1];
+      const isImg = file.type.startsWith("image/");
+      const isVid = file.type.startsWith("video/");
+      const tipo = isImg ? "imagem" : isVid ? "video" : "pdf";
+      setPendingAnexos(prev => [...prev, { nome: file.name, tipo, ts: Date.now(), base64, preview: isImg ? dataUrl : undefined }]);
+      if (isImg && !imagemPreview) {
+        setImagemPreview(dataUrl);
+        setImagemBase64(base64);
+        setImagemNome(file.name);
+      }
     };
     reader.readAsDataURL(file);
+  }
+
+  function handleMultipleFiles(files: FileList | File[]) {
+    Array.from(files).forEach(f => handleImagemFile(f));
   }
 
   async function handleEapExpand(it: any) {
@@ -1890,15 +1910,30 @@ export default function Solicitacoes() {
   }
 
   async function executarCriacao(consolidados: Map<string, ItemForm>) {
+    setUploadingImagem(true);
+    const uploadedAnexos: { url: string; nome: string; tipo: string; ts: number }[] = [];
     let imgUrl: string | undefined;
-    if (imagemBase64 && imagemNome) {
-      setUploadingImagem(true);
+
+    for (const anx of pendingAnexos) {
+      if (anx.base64) {
+        try {
+          const res = await uploadImagem.mutateAsync({ companyId, fileBase64: anx.base64, fileName: anx.nome });
+          uploadedAnexos.push({ url: res.url, nome: res.nome || anx.nome, tipo: res.tipo || anx.tipo, ts: res.ts || anx.ts });
+          if (anx.tipo === "imagem" && !imgUrl) imgUrl = res.url;
+        } catch { toast.error(`Erro ao enviar ${anx.nome}`); }
+      } else if (anx.url) {
+        uploadedAnexos.push({ url: anx.url, nome: anx.nome, tipo: anx.tipo, ts: anx.ts });
+        if (anx.tipo === "imagem" && !imgUrl) imgUrl = anx.url;
+      }
+    }
+
+    if (!imgUrl && imagemBase64 && imagemNome) {
       try {
         const res = await uploadImagem.mutateAsync({ companyId, fileBase64: imagemBase64, fileName: imagemNome });
         imgUrl = res.url;
       } catch { toast.error("Erro ao enviar imagem de referência."); }
-      setUploadingImagem(false);
     }
+    setUploadingImagem(false);
 
     const itensPayload = Array.from(consolidados.values()).map(i => ({
       descricao: i.descricao,
@@ -1933,6 +1968,7 @@ export default function Solicitacoes() {
         tipo: form.tipo,
         incluirEquipamentos: form.incluirEquipamentos || undefined,
         imagemReferenciaUrl: imgUrl ? imgUrl : (imagemPreview && !imagemBase64 ? undefined : null),
+        anexos: uploadedAnexos,
         itens: itensPayload,
       });
     } else {
@@ -1946,6 +1982,7 @@ export default function Solicitacoes() {
         prioridade: form.prioridade,
         observacoes: form.observacoes || undefined,
         imagemReferenciaUrl: imgUrl,
+        anexos: uploadedAnexos,
         tipo: form.tipo,
         incluirEquipamentos: form.incluirEquipamentos || undefined,
         itens: itensPayload,
@@ -3560,29 +3597,45 @@ export default function Solicitacoes() {
               />
             </div>
 
-            {/* Imagem de Referência */}
+            {/* Anexos (imagens, PDFs, vídeos) */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-700">Imagem de Referência (opcional)</label>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImagemFile(f); e.target.value = ""; }} />
+              <label className="text-xs font-medium text-gray-700">Anexos (opcional)</label>
+              <input ref={fileInputRef} type="file" accept="image/*,application/pdf,video/mp4,video/quicktime,video/avi,video/x-matroska" multiple className="hidden" onChange={e => { if (e.target.files) handleMultipleFiles(e.target.files); e.target.value = ""; }} />
               <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImagemFile(f); e.target.value = ""; }} />
-              {imagemPreview ? (
-                <div className="relative inline-block">
-                  <img src={imagemPreview} alt="Referência" className="h-24 w-auto rounded-lg border border-gray-200 object-cover" />
-                  <button type="button" onClick={() => { setImagemPreview(null); setImagemBase64(null); setImagemNome(""); }} className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600">
-                    <X className="h-3 w-3" />
-                  </button>
-                  <div className="text-[10px] text-gray-500 mt-1 truncate max-w-[200px]">{imagemNome}</div>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
-                    <ImageIcon className="h-3.5 w-3.5" /> Anexar Foto
-                  </button>
-                  <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
-                    <Camera className="h-3.5 w-3.5" /> Câmera
-                  </button>
+              {pendingAnexos.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {pendingAnexos.map((anx, idx) => (
+                    <div key={idx} className="relative group">
+                      {anx.tipo === "imagem" && anx.preview ? (
+                        <img src={anx.preview} alt={anx.nome} className="h-20 w-20 rounded-lg border border-gray-200 object-cover" />
+                      ) : anx.tipo === "pdf" ? (
+                        <div className="h-20 w-20 rounded-lg border border-gray-200 bg-red-50 flex flex-col items-center justify-center">
+                          <FileText className="h-6 w-6 text-red-500" />
+                          <span className="text-[9px] text-red-600 mt-1">PDF</span>
+                        </div>
+                      ) : (
+                        <div className="h-20 w-20 rounded-lg border border-gray-200 bg-blue-50 flex flex-col items-center justify-center">
+                          <Film className="h-6 w-6 text-blue-500" />
+                          <span className="text-[9px] text-blue-600 mt-1">Vídeo</span>
+                        </div>
+                      )}
+                      <button type="button" onClick={() => setPendingAnexos(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <X className="h-3 w-3" />
+                      </button>
+                      <div className="text-[9px] text-gray-500 mt-0.5 truncate max-w-[80px]">{anx.nome}</div>
+                    </div>
+                  ))}
                 </div>
               )}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+                  <Paperclip className="h-3.5 w-3.5" /> Anexar Arquivo
+                </button>
+                <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+                  <Camera className="h-3.5 w-3.5" /> Câmera
+                </button>
+              </div>
+              {uploadingImagem && <div className="text-xs text-blue-600 mt-1">Enviando anexos...</div>}
             </div>
 
             {/* Itens Solicitados */}
@@ -3904,11 +3957,20 @@ export default function Solicitacoes() {
                             if (obra) setObraSearch(obra.nome || "");
                           }
                           setVeiculoSearch(""); setVeiculoOpen(false);
-                          if (detalhe.imagemReferenciaUrl) {
+                          const existingAnexos = Array.isArray((detalhe as any).anexos) ? (detalhe as any).anexos : [];
+                          if (existingAnexos.length > 0) {
+                            setPendingAnexos(existingAnexos.map((a: any) => ({ url: a.url, nome: a.nome, tipo: a.tipo, ts: a.ts || Date.now(), preview: a.tipo === "imagem" ? a.url : undefined })));
+                            const firstImg = existingAnexos.find((a: any) => a.tipo === "imagem");
+                            setImagemPreview(firstImg?.url || null);
+                            setImagemBase64(null);
+                            setImagemNome("");
+                          } else if (detalhe.imagemReferenciaUrl) {
+                            setPendingAnexos([{ url: detalhe.imagemReferenciaUrl, nome: "imagem_referencia", tipo: "imagem", ts: Date.now(), preview: detalhe.imagemReferenciaUrl }]);
                             setImagemPreview(detalhe.imagemReferenciaUrl);
                             setImagemBase64(null);
                             setImagemNome("");
                           } else {
+                            setPendingAnexos([]);
                             setImagemPreview(null);
                             setImagemBase64(null);
                             setImagemNome("");
@@ -4033,15 +4095,76 @@ export default function Solicitacoes() {
                 ))}
               </div>
 
-              {/* Imagem de Referência */}
-              {detalhe.imagemReferenciaUrl && (
-                <div className="border border-gray-200 rounded-lg p-3 space-y-1">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Imagem de Referência</span>
-                  <a href={detalhe.imagemReferenciaUrl} target="_blank" rel="noopener noreferrer">
-                    <img src={detalhe.imagemReferenciaUrl} alt="Referência" className="h-32 w-auto rounded-lg border border-gray-200 object-cover cursor-pointer hover:opacity-90 transition" />
-                  </a>
-                </div>
-              )}
+              {/* Anexos */}
+              {(() => {
+                const anexosList: { url: string; nome: string; tipo: string }[] = Array.isArray((detalhe as any).anexos) && (detalhe as any).anexos.length > 0
+                  ? (detalhe as any).anexos
+                  : detalhe.imagemReferenciaUrl ? [{ url: detalhe.imagemReferenciaUrl, nome: "imagem_referencia", tipo: "imagem" }] : [];
+                const canEdit = ["pendente", "aprovado"].includes(detalhe.status || "");
+                return (anexosList.length > 0 || canEdit) ? (
+                  <div className="border border-gray-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+                        Anexos {anexosList.length > 0 && `(${anexosList.length})`}
+                      </span>
+                      {canEdit && (
+                        <label className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 cursor-pointer">
+                          <Paperclip className="h-3 w-3" /> Adicionar
+                          <input type="file" accept="image/*,application/pdf,video/mp4,video/quicktime,video/avi,video/x-matroska" multiple className="hidden" onChange={async (e) => {
+                            if (!e.target.files) return;
+                            for (const file of Array.from(e.target.files)) {
+                              const allowedTypes = ["image/", "application/pdf", "video/"];
+                              const isAllowed = allowedTypes.some(t => file.type.startsWith(t));
+                              if (!isAllowed) { toast.error(`${file.name}: formato não suportado`); continue; }
+                              const reader = new FileReader();
+                              reader.onload = async (ev) => {
+                                const base64 = (ev.target?.result as string).split(",")[1];
+                                try {
+                                  await uploadImagem.mutateAsync({ companyId: detalhe.companyId ?? companyId, fileBase64: base64, fileName: file.name, solicitacaoId: detalhe.id });
+                                  detalheQ.refetch();
+                                  toast.success(`${file.name} anexado`);
+                                } catch { toast.error(`Erro ao enviar ${file.name}`); }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                            e.target.value = "";
+                          }} />
+                        </label>
+                      )}
+                    </div>
+                    {anexosList.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {anexosList.map((anx, idx) => (
+                          <div key={idx} className="relative group">
+                            <a href={anx.url} target="_blank" rel="noopener noreferrer" className="block">
+                              {anx.tipo === "imagem" ? (
+                                <img src={anx.url} alt={anx.nome} className="h-24 w-24 rounded-lg border border-gray-200 object-cover hover:opacity-90 transition" />
+                              ) : anx.tipo === "pdf" ? (
+                                <div className="h-24 w-24 rounded-lg border border-gray-200 bg-red-50 flex flex-col items-center justify-center hover:bg-red-100 transition">
+                                  <FileText className="h-8 w-8 text-red-500" />
+                                  <span className="text-[9px] text-red-600 mt-1">PDF</span>
+                                </div>
+                              ) : (
+                                <div className="h-24 w-24 rounded-lg border border-gray-200 bg-blue-50 flex flex-col items-center justify-center hover:bg-blue-100 transition">
+                                  <Film className="h-8 w-8 text-blue-500" />
+                                  <span className="text-[9px] text-blue-600 mt-1">Vídeo</span>
+                                </div>
+                              )}
+                            </a>
+                            {canEdit && (
+                              <button type="button" onClick={() => removeAnexo.mutate({ solicitacaoId: detalhe.id, companyId: detalhe.companyId ?? companyId, url: anx.url })}
+                                className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
+                            <div className="text-[9px] text-gray-500 mt-0.5 truncate max-w-[96px]">{anx.nome}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null;
+              })()}
 
               {/* Aprovação */}
               <div className="border border-gray-200 rounded-lg p-3">
