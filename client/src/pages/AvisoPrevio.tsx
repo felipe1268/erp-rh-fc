@@ -1670,18 +1670,21 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     anosServico = Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000));
                   }
                   
-                  // Pedido de demissão: SEMPRE 30 dias (Lei 12.506 não se aplica ao empregado)
-                  // Aviso prévio: trabalhado = 30 fixo, indenizado = 30 + 3/ano (max 90)
+                  // Empregado indenizado = não cumpre aviso, sai no dia do pedido
+                  const isEmpregadoIndenizado = form.tipo === 'empregado_indenizado';
                   const isTrabalhado = form.tipo?.includes('trabalhado');
-                  const diasAviso = isPedidoDemissao ? 30 : (isTrabalhado ? 30 : Math.min(30 + (anosServico * 3), 90));
+                  const diasAviso = isEmpregadoIndenizado ? 0 : (isPedidoDemissao ? 30 : (isTrabalhado ? 30 : Math.min(30 + (anosServico * 3), 90)));
                   
-                  // Data início do aviso = dia seguinte à data do aviso
+                  // Data início do aviso = dia seguinte à data do aviso (exceto indenizado pelo empregado)
                   const dtInicio = new Date(dataAviso + 'T00:00:00');
-                  dtInicio.setDate(dtInicio.getDate() + 1);
+                  if (!isEmpregadoIndenizado) {
+                    dtInicio.setDate(dtInicio.getDate() + 1);
+                  }
                   
-                  // Data fim do aviso = início + dias - 1
-                  const dtFim = new Date(dtInicio);
-                  dtFim.setDate(dtFim.getDate() + diasAviso - 1);
+                  // Data fim do aviso: indenizado pelo empregado = mesma data do pedido
+                  const dtFim = isEmpregadoIndenizado
+                    ? new Date(dataAviso + 'T00:00:00')
+                    : (() => { const d = new Date(dtInicio); d.setDate(d.getDate() + diasAviso - 1); return d; })();
                   
                   // Redução: se 7 dias corridos, último dia trabalhado = 7 dias antes do fim
                   // Pedido de demissão: sem redução (Art. 488 é exclusivo do empregador)
@@ -1729,7 +1732,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           <p className="text-xs font-bold text-green-600 uppercase tracking-wide">Término do Aviso</p>
                         </div>
                         <p className="text-2xl font-bold text-green-800">{fmtDt(dtFim)}</p>
-                        <p className="text-xs text-green-500 mt-1">{diasSemana[dtFim.getDay()]} | {diasAviso} dias de aviso</p>
+                        <p className="text-xs text-green-500 mt-1">{diasSemana[dtFim.getDay()]} | {isEmpregadoIndenizado ? 'Não cumpriu aviso' : `${diasAviso} dias de aviso`}</p>
                       </div>
                       <div className="text-center p-4 bg-white rounded-lg border border-red-100 shadow-sm">
                         <div className="flex items-center justify-center gap-2 mb-2">
@@ -1778,7 +1781,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     </div>
                     <div className="text-center bg-white rounded-lg p-3 border border-green-100">
                       <p className="text-[10px] text-green-600 font-medium mb-1">Dias Aviso</p>
-                      <p className="text-xl font-bold text-green-800">{calculoPreview.diasAviso} dias</p>
+                      <p className="text-xl font-bold text-green-800">{calculoPreview.diasAviso === 0 ? 'Não cumpriu' : `${calculoPreview.diasAviso} dias`}</p>
                       {!isPedidoDemissao && (calculoPreview.diasExtras || 0) > 0 && (
                         <p className="text-[9px] text-amber-600">+ {calculoPreview.diasExtras} dias indenizados</p>
                       )}
