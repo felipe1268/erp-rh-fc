@@ -198,6 +198,7 @@ async function abonarPontoPorAtestado(
   diasAfastamento: number,
   afastamentoTipo: string,
   horasAfastamento: number,
+  atestadoId?: number,
 ) {
   try {
     const datasCobertas: string[] = [];
@@ -215,6 +216,7 @@ async function abonarPontoPorAtestado(
 
     if (datasCobertas.length === 0) return;
 
+    // 1. Abonar descontos existentes
     const descontos = await db.select({ id: pontoDescontos.id, data: pontoDescontos.data, tipo: pontoDescontos.tipo, status: pontoDescontos.status })
       .from(pontoDescontos)
       .where(and(
@@ -224,12 +226,11 @@ async function abonarPontoPorAtestado(
         ne(pontoDescontos.status, "abonado"),
       ));
 
-    if (descontos.length === 0) return;
-
     const motivoBase = afastamentoTipo === "horas"
       ? `Abono automático — Atestado médico (${horasAfastamento}h)`
       : `Abono automático — Atestado médico (${diasAfastamento} dia${diasAfastamento > 1 ? "s" : ""})`;
 
+    let abonados = 0;
     for (const desc of descontos) {
       if (afastamentoTipo === "horas" && desc.tipo !== "falta_injustificada") {
         continue;
@@ -242,9 +243,28 @@ async function abonarPontoPorAtestado(
         motivoAbono: motivoBase,
         valorTotal: "0",
       }).where(eq(pontoDescontos.id, desc.id));
+      abonados++;
     }
 
-    console.log(`[AbonoAtestado] Funcionário ${employeeId}: ${descontos.length} desconto(s) abonado(s) automaticamente`);
+    if (abonados > 0) {
+      console.log(`[AbonoAtestado] Funcionário ${employeeId}: ${abonados} desconto(s) abonado(s) automaticamente`);
+    }
+
+    // 2. Vincular atestado ao timecard_daily (marcar dias cobertos)
+    if (atestadoId) {
+      const placeholders = datasCobertas.map(d => `'${d}'`).join(',');
+      await db.execute(sql.raw(`
+        UPDATE timecard_daily 
+        SET "atestadoId" = ${atestadoId}, 
+            "statusDia" = 'atestado',
+            "isFalta" = 0
+        WHERE "employeeId" = ${employeeId} 
+          AND "companyId" = ${companyId}
+          AND data IN (${placeholders})
+          AND ("atestadoId" IS NULL OR "atestadoId" = 0)
+      `));
+      console.log(`[AbonoAtestado] Funcionário ${employeeId}: timecard_daily atualizado com atestadoId=${atestadoId} para ${datasCobertas.length} dia(s)`);
+    }
   } catch (err: any) {
     console.error(`[AbonoAtestado] Erro ao abonar ponto:`, err?.message);
   }
@@ -712,7 +732,7 @@ export const controleDocumentosRouter = router({
           motivoOutro: input.motivoOutro || null,
         }).returning({ id: atestados.id });
 
-        await abonarPontoPorAtestado(db, input.employeeId, input.companyId, input.dataEmissao, input.diasAfastamento, input.afastamentoTipo, input.horasAfastamento);
+        await abonarPontoPorAtestado(db, input.employeeId, input.companyId, input.dataEmissao, input.diasAfastamento, input.afastamentoTipo, input.horasAfastamento, result?.id);
 
         if (input.afastamentoTipo === "dia" && input.diasAfastamento > 0 && input.dataRetorno) {
           await handleAfastamentoStatus(db, input.employeeId, input.companyId, input.diasAfastamento, input.afastamentoTipo, input.dataRetorno, result?.id);
@@ -749,7 +769,7 @@ export const controleDocumentosRouter = router({
 
         const [at] = await db.select().from(atestados).where(eq(atestados.id, id)).limit(1);
         if (at) {
-          await abonarPontoPorAtestado(db, at.employeeId, at.companyId, at.dataEmissao, at.diasAfastamento || 0, (at as any).afastamentoTipo || "dia", (at as any).horasAfastamento || 0);
+          await abonarPontoPorAtestado(db, at.employeeId, at.companyId, at.dataEmissao, at.diasAfastamento || 0, (at as any).afastamentoTipo || "dia", (at as any).horasAfastamento || 0, at.id);
 
           const afTipo = (at as any).afastamentoTipo || "dia";
           const dias = at.diasAfastamento || 0;

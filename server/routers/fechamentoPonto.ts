@@ -1971,6 +1971,27 @@ export const fechamentoPontoRouter = router({
           recordMap.get(key)!.push(r);
         }
         
+        // Buscar atestados que cobrem o período do ponto
+        const { atestados: atSchema } = await import('../../drizzle/schema');
+        const prevMonthAtStart = new Date(year2, month2 - 7, 1).toISOString().substring(0, 10);
+        const atestList = await db.select().from(atSchema)
+          .where(and(companyFilter(atSchema.companyId, input), sql`${atSchema.deletedAt} IS NULL`, sql`${atSchema.dataEmissao} >= ${prevMonthAtStart}`, sql`${atSchema.dataEmissao} <= ${pontoFim2}`));
+        const atestMap = new Map<string, number>();
+        for (const at of atestList) {
+          if (!at.employeeId || !at.dataEmissao) continue;
+          const afTipo = (at as any).afastamentoTipo || 'dia';
+          if (afTipo === 'horas') {
+            atestMap.set(`${at.employeeId}-${at.dataEmissao}`, at.id);
+          } else {
+            const dias = at.diasAfastamento || 1;
+            const sd = new Date(at.dataEmissao + 'T12:00:00Z');
+            for (let d = 0; d < dias; d++) {
+              const dt = new Date(sd); dt.setUTCDate(sd.getUTCDate() + d);
+              atestMap.set(`${at.employeeId}-${dt.toISOString().substring(0, 10)}`, at.id);
+            }
+          }
+        }
+
         // Clear existing timecard_daily
         await db.execute(sql`DELETE FROM timecard_daily WHERE companyId = ${input.companyId} AND mesCompetencia = ${input.mesReferencia}`);
         
@@ -1993,7 +2014,7 @@ export const fechamentoPontoRouter = router({
             horasTrabalhadas, horasExtras, horasNoturnas,
             isFalta, isAtraso, isSaidaAntecipada, minutosAtraso, minutosSaidaAntecipada,
             tipoDia, timeRecordId, obraId, origem_registro, num_batidas, is_inconsistente, inconsistencia_tipo,
-            obra_secundaria_id, rateio_percentual) VALUES ${batchRows.join(',')}`;
+            obra_secundaria_id, rateio_percentual, "atestadoId") VALUES ${batchRows.join(',')}`;
           await db.execute(sql.raw(insertSql));
           batchRows.length = 0;
         };
@@ -2013,6 +2034,8 @@ export const fechamentoPontoRouter = router({
             let inconsistenciaTipo: string | null = null, obraId: number | null = null;
             let obraSecundariaId: number | null = null, rateioPercentual: number | null = null, timeRecordId: number | null = null;
             
+            const atestadoIdDia = atestMap.get(`${emp.id}-${dateStr}`) || null;
+            
             if (recs.length > 0) {
               const rec = recs[0];
               timeRecordId = rec.id; obraId = rec.obraId || null;
@@ -2031,28 +2054,29 @@ export const fechamentoPontoRouter = router({
               if (numBatidas > 0 && numBatidas % 2 !== 0) { isInconsistente = 1; inconsistenciaTipo = 'batida_impar'; }
               else if (!rec.entrada1 && rec.saida1) { isInconsistente = 1; inconsistenciaTipo = 'entrada_faltando'; }
               else if (rec.entrada1 && !rec.saida1 && numBatidas === 1) { isInconsistente = 1; inconsistenciaTipo = 'saida_faltando'; }
-              if (numBatidas === 0 && tipoDia === 'util') { isFalta = 1; totalFaltas++; }
+              if (numBatidas === 0 && tipoDia === 'util' && !atestadoIdDia) { isFalta = 1; totalFaltas++; }
               const entrada = _parseTime(rec.entrada1);
-              if (entrada !== null && tipoDia === 'util') {
+              if (entrada !== null && tipoDia === 'util' && !atestadoIdDia) {
                 const atraso = entrada - 7 * 60;
                 if (atraso > faltaAposAtraso) { isFalta = 1; totalFaltas++; }
                 else if (atraso > toleranciaAtraso) { isAtraso = 1; minutosAtraso = atraso; totalAtrasos++; }
               }
               const saida = _parseTime(rec.saida2 || rec.saida1);
-              if (saida !== null && tipoDia === 'util') {
+              if (saida !== null && tipoDia === 'util' && !atestadoIdDia) {
                 const saidaAnt = (7 + cargaHorariaDiaria + 1) * 60 - saida;
                 if (saidaAnt > toleranciaSaida) { isSaidaAntecipada = 1; minutosSaidaAntecipada = saidaAnt; }
               }
             } else {
-              if (tipoDia === 'util') { isFalta = 1; totalFaltas++; }
+              if (tipoDia === 'util' && !atestadoIdDia) { isFalta = 1; totalFaltas++; }
             }
             
-            batchRows.push(`(${_escNum(input.companyId)}, ${_escNum(emp.id)}, ${_esc(dateStr)}, ${_esc(input.mesReferencia)}, 'registrado',
+            const statusDia = atestadoIdDia ? 'atestado' : 'registrado';
+            batchRows.push(`(${_escNum(input.companyId)}, ${_escNum(emp.id)}, ${_esc(dateStr)}, ${_esc(input.mesReferencia)}, ${_esc(statusDia)},
               ${_esc(recs[0]?.entrada1 || null)}, ${_esc(recs[0]?.saida1 || null)}, ${_esc(recs[0]?.entrada2 || null)}, ${_esc(recs[0]?.saida2 || null)}, ${_esc(recs[0]?.entrada3 || null)}, ${_esc(recs[0]?.saida3 || null)},
               ${_esc(horasTrabalhadas)}, ${_esc(horasExtras)}, ${_esc(horasNoturnas)},
               ${_escNum(isFalta)}, ${_escNum(isAtraso)}, ${_escNum(isSaidaAntecipada)}, ${_escNum(minutosAtraso)}, ${_escNum(minutosSaidaAntecipada)},
               ${_esc(tipoDia)}, ${_escNum(timeRecordId)}, ${_escNum(obraId)}, ${_esc(origemRegistro)}, ${_escNum(numBatidas)}, ${_escNum(isInconsistente)}, ${_esc(inconsistenciaTipo)},
-              ${_escNum(obraSecundariaId)}, ${_escNum(rateioPercentual)})`);
+              ${_escNum(obraSecundariaId)}, ${_escNum(rateioPercentual)}, ${_escNum(atestadoIdDia)})`);
             totalInserted++;
             
             if (batchRows.length >= BATCH_SIZE) await flushBatch();
