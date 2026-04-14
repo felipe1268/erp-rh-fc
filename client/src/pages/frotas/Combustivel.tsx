@@ -784,7 +784,7 @@ export default function Combustivel() {
                     <td className="p-3 text-right">{r.km_atual ? parseFloat(r.km_atual).toLocaleString("pt-BR") : "—"}</td>
                     <td className="p-3 text-xs max-w-[150px] truncate">{r.motorista || "—"}</td>
                     <td className="p-3 text-xs">{r.posto || "—"}</td>
-                    <td className="p-3 text-center">{(r.anexos?.length > 0) ? <Paperclip className="h-4 w-4 text-blue-500 inline" title={`${r.anexos.length} anexo(s)`} /> : ""}</td>
+                    <td className="p-3 text-center">{(r.anexos?.length > 0) ? <button onClick={() => { const img = r.anexos.find((a: any) => a.contentType?.startsWith('image/')); if (img) setPreviewAnexo(img.url); else if (r.anexos[0]?.url) window.open(r.anexos[0].url, '_blank'); }} className="hover:scale-110 transition-transform" title={`${r.anexos.length} anexo(s) — clique para visualizar`}><Paperclip className="h-4 w-4 text-blue-500 inline" /></button> : ""}</td>
                     <td className="p-3 text-right whitespace-nowrap">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir?")) deleteMut.mutate({ id: r.id, companyId: cId }); }}>
@@ -1470,14 +1470,12 @@ export default function Combustivel() {
       </div>
 
       {previewAnexo && (
-        <Dialog open={!!previewAnexo} onOpenChange={() => setPreviewAnexo(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh]">
-            <DialogHeader><DialogTitle>Visualizar Anexo</DialogTitle></DialogHeader>
-            <div className="flex items-center justify-center overflow-auto">
-              <img src={previewAnexo} alt="Anexo" className="max-w-full max-h-[75vh] object-contain" />
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center" onClick={() => setPreviewAnexo(null)}>
+          <button className="absolute top-4 right-4 text-white bg-black/50 rounded-full p-2 hover:bg-black/70 z-10" onClick={() => setPreviewAnexo(null)}>
+            <X className="w-6 h-6" />
+          </button>
+          <img src={previewAnexo} alt="Cupom Fiscal" className="max-w-[95vw] max-h-[95vh] object-contain" onClick={e => e.stopPropagation()} />
+        </div>
       )}
     </DashboardLayout>
   );
