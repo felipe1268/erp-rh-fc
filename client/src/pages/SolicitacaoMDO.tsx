@@ -2,13 +2,14 @@ import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
-  Users, Plus, Search, Filter, ChevronDown, ChevronRight,
+  Users, Plus, Search, ChevronRight, ArrowLeft,
   Clock, AlertTriangle, CheckCircle, XCircle, Send, Eye,
   HardHat, Building2, Calendar, TrendingUp, DollarSign,
   ArrowRight, RefreshCw, ClipboardList, Award, Briefcase,
-  Shield, ChevronUp, Package, UserCheck, Trash2, X,
+  Shield, Package, UserCheck, Trash2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,7 @@ const PRIORIDADE_CONFIG: Record<string, { label: string; color: string; bg: stri
 
 function fmtMoney(v: number | string) {
   const n = typeof v === "string" ? parseFloat(v) : v;
+  if (isNaN(n)) return "R$ 0,00";
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
@@ -61,7 +63,7 @@ function PrioridadeBadge({ prioridade }: { prioridade: string }) {
 export default function SolicitacaoMDO() {
   const { user } = useAuth();
   const { companyId, companyIds } = useCompany();
-  const utils = trpc.useUtils();
+  const [, navigate] = useLocation();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -72,6 +74,7 @@ export default function SolicitacaoMDO() {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectMotivo, setRejectMotivo] = useState("");
   const [rejectingId, setRejectingId] = useState<number | null>(null);
+  const [funcaoOutros, setFuncaoOutros] = useState("");
 
   const [form, setForm] = useState({
     obraId: 0,
@@ -91,14 +94,14 @@ export default function SolicitacaoMDO() {
     { companyId, companyIds, status: filterStatus !== "all" ? filterStatus : undefined, obraId: filterObra !== "all" ? parseInt(filterObra) : undefined },
     { enabled: companyId > 0 }
   );
-  const obrasQ = trpc.smo.obrasDoResponsavel.useQuery({ companyId, companyIds, userId: user?.id || 0 }, { enabled: companyId > 0 && !!user });
+  const obrasQ = trpc.smo.obrasAtivas.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
   const funcoesQ = trpc.smo.funcoesDisponiveis.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
   const qualifsQ = trpc.smo.qualificacoesDisponiveis.useQuery();
   const dashQ = trpc.smo.dashboard.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
 
   const impactoQ = trpc.smo.calcularImpactoFinanceiro.useQuery(
     { companyId, companyIds, funcao: form.funcaoSolicitada, quantidade: form.quantidade, duracaoMeses: form.duracaoMeses, obraId: form.obraId },
-    { enabled: showForm && !!form.funcaoSolicitada && form.obraId > 0 && form.quantidade > 0 && form.duracaoMeses > 0 }
+    { enabled: showForm && !!form.funcaoSolicitada && form.funcaoSolicitada !== "__outros__" && form.obraId > 0 && form.quantidade > 0 && form.duracaoMeses > 0 }
   );
 
   const efetivoQ = trpc.smo.efetivoObra.useQuery(
@@ -113,7 +116,7 @@ export default function SolicitacaoMDO() {
 
   const realocQ = trpc.smo.sugerirRealocacao.useQuery(
     { companyId, companyIds, funcao: form.funcaoSolicitada, quantidade: form.quantidade, dataInicio: form.dataInicioNecessidade, obraIdDestino: form.obraId },
-    { enabled: showForm && form.prioridade !== "urgente" && !!form.funcaoSolicitada && !!form.dataInicioNecessidade && form.obraId > 0 }
+    { enabled: showForm && form.prioridade !== "urgente" && !!form.funcaoSolicitada && form.funcaoSolicitada !== "__outros__" && !!form.dataInicioNecessidade && form.obraId > 0 }
   );
 
   const selectedDetail = trpc.smo.getById.useQuery({ id: selectedId || 0, companyId, companyIds }, { enabled: showDetail && !!selectedId && companyId > 0 });
@@ -163,10 +166,17 @@ export default function SolicitacaoMDO() {
 
   function resetForm() {
     setForm({ obraId: 0, funcaoSolicitada: "", quantidade: 1, dataInicioNecessidade: "", duracaoMeses: 1, prioridade: "normal", qualificacoes: [], observacao: "", atividadesEap: [] });
+    setFuncaoOutros("");
+  }
+
+  function getFuncaoFinal() {
+    if (form.funcaoSolicitada === "__outros__") return funcaoOutros.trim();
+    return form.funcaoSolicitada;
   }
 
   function handleSubmit(status: "rascunho" | "enviada") {
-    if (!form.obraId || !form.funcaoSolicitada || !form.dataInicioNecessidade) {
+    const funcaoFinal = getFuncaoFinal();
+    if (!form.obraId || !funcaoFinal || !form.dataInicioNecessidade) {
       toast.error("Preencha obra, função e data de necessidade.");
       return;
     }
@@ -175,7 +185,7 @@ export default function SolicitacaoMDO() {
       obraId: form.obraId,
       solicitanteId: user?.id || 0,
       solicitanteNome: user?.name || "Usuário",
-      funcaoSolicitada: form.funcaoSolicitada,
+      funcaoSolicitada: funcaoFinal,
       quantidade: form.quantidade,
       dataInicioNecessidade: form.dataInicioNecessidade,
       duracaoMeses: form.duracaoMeses,
@@ -213,11 +223,19 @@ export default function SolicitacaoMDO() {
     return flow[status] || null;
   }
 
+  const obrasList = obrasQ.data || [];
+  const funcoesList = funcoesQ.data || [];
+  const selectedObra = obrasList.find((o: any) => o.id === form.obraId);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="bg-gradient-to-r from-[#1B2A4A] to-[#2d4a7a] text-white px-6 py-5">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-[#1B2A4A] to-[#2d4a7a] text-white px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="text-white/70 hover:text-white hover:bg-white/10 h-9 w-9">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center">
               <HardHat className="h-5 w-5" />
             </div>
@@ -262,7 +280,7 @@ export default function SolicitacaoMDO() {
           <SelectTrigger className="w-[200px]"><SelectValue placeholder="Obra" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as obras</SelectItem>
-            {(obrasQ.data || []).map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+            {obrasList.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.codigo ? `${o.codigo} - ` : ""}{o.nome}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -295,11 +313,11 @@ export default function SolicitacaoMDO() {
                       <PrioridadeBadge prioridade={s.prioridade} />
                       {s.prazoMinimoAlerta && <Badge variant="destructive" className="text-[10px] h-5">Prazo curto!</Badge>}
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1"><HardHat className="h-3.5 w-3.5" /> {s.funcaoSolicitada}</span>
                       <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {s.quantidade} vaga(s)</span>
-                      <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {s.obraNome}</span>
-                      <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Início: {s.dataInicioNecessidade}</span>
+                      <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {s.obraNome || "—"}</span>
+                      <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Início: {s.dataInicioNecessidade ? new Date(s.dataInicioNecessidade).toLocaleDateString("pt-BR") : "—"}</span>
                       <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {s.duracaoMeses} mês(es)</span>
                     </div>
                   </div>
@@ -325,45 +343,95 @@ export default function SolicitacaoMDO() {
           <div className="lg:col-span-2 space-y-5">
             <div className="bg-white rounded-xl border p-5 space-y-4">
               <h3 className="font-bold text-[#1B2A4A] flex items-center gap-2"><ClipboardList className="h-4 w-4" /> Dados da Solicitação</h3>
-              <div className="grid grid-cols-2 gap-4">
+
+              {/* Obra */}
+              <div>
+                <Label className="text-xs font-semibold">Obra *</Label>
+                {obrasList.length === 0 ? (
+                  <div className="text-sm text-muted-foreground p-3 bg-amber-50 border border-amber-200 rounded-lg mt-1">
+                    <AlertTriangle className="h-4 w-4 inline mr-1 text-amber-600" />
+                    Nenhuma obra ativa cadastrada. Cadastre uma obra antes de solicitar mão de obra.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                    {obrasList.map((o: any) => (
+                      <div
+                        key={o.id}
+                        onClick={() => setForm(p => ({ ...p, obraId: o.id, atividadesEap: [] }))}
+                        className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${form.obraId === o.id ? "border-[#1B2A4A] bg-[#1B2A4A]/5" : "border-transparent bg-slate-50 hover:bg-slate-100"}`}
+                      >
+                        <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${form.obraId === o.id ? "bg-[#1B2A4A] text-white" : "bg-slate-200 text-slate-500"}`}>
+                          <Building2 className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold truncate">{o.nome}</div>
+                          {o.codigo && <div className="text-xs text-muted-foreground">{o.codigo}</div>}
+                        </div>
+                        {form.obraId === o.id && <CheckCircle className="h-4 w-4 text-[#1B2A4A] shrink-0" />}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Função */}
+              <div>
+                <Label className="text-xs font-semibold">Função / Cargo *</Label>
+                {funcoesList.length === 0 && form.funcaoSolicitada !== "__outros__" ? (
+                  <div className="mt-2">
+                    <Input placeholder="Digite a função desejada..." value={funcaoOutros} onChange={e => { setFuncaoOutros(e.target.value); setForm(p => ({ ...p, funcaoSolicitada: "__outros__" })); }} />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {funcoesList.map((f: string) => (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => { setForm(p => ({ ...p, funcaoSolicitada: f })); setFuncaoOutros(""); }}
+                          className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${form.funcaoSolicitada === f ? "bg-[#1B2A4A] text-white border-[#1B2A4A]" : "bg-white hover:bg-slate-50 border-slate-200"}`}
+                        >
+                          {f}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setForm(p => ({ ...p, funcaoSolicitada: "__outros__" }))}
+                        className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${form.funcaoSolicitada === "__outros__" ? "bg-[#D4A843] text-white border-[#D4A843]" : "bg-white hover:bg-slate-50 border-dashed border-slate-300"}`}
+                      >
+                        + Outros
+                      </button>
+                    </div>
+                    {form.funcaoSolicitada === "__outros__" && (
+                      <div className="mt-2">
+                        <Input placeholder="Digite a função desejada..." value={funcaoOutros} onChange={e => setFuncaoOutros(e.target.value)} autoFocus />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <Label className="text-xs">Obra *</Label>
-                  <Select value={form.obraId ? String(form.obraId) : ""} onValueChange={v => setForm(p => ({ ...p, obraId: parseInt(v), atividadesEap: [] }))}>
-                    <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
-                    <SelectContent>
-                      {(obrasQ.data || []).map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Função *</Label>
-                  <Select value={form.funcaoSolicitada} onValueChange={v => setForm(p => ({ ...p, funcaoSolicitada: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Tipo de mão de obra" /></SelectTrigger>
-                    <SelectContent>
-                      {(funcoesQ.data || []).map((f: string) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Quantidade *</Label>
+                  <Label className="text-xs font-semibold">Quantidade *</Label>
                   <Input type="number" min={1} value={form.quantidade} onChange={e => setForm(p => ({ ...p, quantidade: parseInt(e.target.value) || 1 }))} />
                 </div>
                 <div>
-                  <Label className="text-xs">Data Início Necessidade *</Label>
+                  <Label className="text-xs font-semibold">Início Necessidade *</Label>
                   <Input type="date" value={form.dataInicioNecessidade} onChange={e => setForm(p => ({ ...p, dataInicioNecessidade: e.target.value }))} />
                 </div>
                 <div>
-                  <Label className="text-xs">Duração (meses)</Label>
+                  <Label className="text-xs font-semibold">Duração (meses)</Label>
                   <Input type="number" min={1} value={form.duracaoMeses} onChange={e => setForm(p => ({ ...p, duracaoMeses: parseInt(e.target.value) || 1 }))} />
                 </div>
                 <div>
-                  <Label className="text-xs">Prioridade</Label>
+                  <Label className="text-xs font-semibold">Prioridade</Label>
                   <Select value={form.prioridade} onValueChange={(v: any) => setForm(p => ({ ...p, prioridade: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="urgente">Urgente (SLA 24h)</SelectItem>
-                      <SelectItem value="normal">Normal (SLA 48h)</SelectItem>
-                      <SelectItem value="planejada">Planejada (SLA 5 dias)</SelectItem>
+                      <SelectItem value="urgente">🔴 Urgente (SLA 24h)</SelectItem>
+                      <SelectItem value="normal">🔵 Normal (SLA 48h)</SelectItem>
+                      <SelectItem value="planejada">🟢 Planejada (SLA 5 dias)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -371,7 +439,7 @@ export default function SolicitacaoMDO() {
 
               {/* Qualificações */}
               <div>
-                <Label className="text-xs mb-2 block">Qualificações Exigidas</Label>
+                <Label className="text-xs font-semibold mb-2 block">Qualificações Exigidas</Label>
                 <div className="flex flex-wrap gap-2">
                   {(qualifsQ.data || []).map((q: string) => (
                     <label key={q} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs cursor-pointer transition-all ${form.qualificacoes.includes(q) ? "bg-[#1B2A4A] text-white border-[#1B2A4A]" : "bg-white hover:bg-slate-50"}`}>
@@ -386,7 +454,7 @@ export default function SolicitacaoMDO() {
 
               {/* Atividades EAP */}
               <div>
-                <Label className="text-xs mb-2 block">Atividades da EAP (vinculação)</Label>
+                <Label className="text-xs font-semibold mb-2 block">Atividades da EAP (vinculação)</Label>
                 {form.atividadesEap.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {form.atividadesEap.map(a => (
@@ -406,7 +474,7 @@ export default function SolicitacaoMDO() {
 
               {/* Observação */}
               <div>
-                <Label className="text-xs">Justificativa / Observação</Label>
+                <Label className="text-xs font-semibold">Justificativa / Observação</Label>
                 <Textarea value={form.observacao} onChange={e => setForm(p => ({ ...p, observacao: e.target.value }))} placeholder="Descreva o motivo da necessidade de contratação..." rows={3} />
               </div>
 
@@ -434,6 +502,16 @@ export default function SolicitacaoMDO() {
 
           {/* Right: Impact Panel */}
           <div className="space-y-4">
+            {/* Obra Selecionada */}
+            {selectedObra && (
+              <div className="bg-white rounded-xl border p-4">
+                <h4 className="font-semibold text-sm text-[#1B2A4A] mb-2 flex items-center gap-2"><Building2 className="h-4 w-4" /> Obra Selecionada</h4>
+                <div className="text-sm font-medium">{selectedObra.nome}</div>
+                {selectedObra.codigo && <div className="text-xs text-muted-foreground">{selectedObra.codigo}</div>}
+                {selectedObra.responsavel && <div className="text-xs text-muted-foreground mt-1">Responsável: {selectedObra.responsavel}</div>}
+              </div>
+            )}
+
             {/* Efetivo Atual */}
             {efetivoQ.data && efetivoQ.data.length > 0 && (
               <div className="bg-white rounded-xl border p-4">
@@ -541,7 +619,7 @@ export default function SolicitacaoMDO() {
                   <InfoField icon={Building2} label="Obra" value={d.obraNome || "-"} />
                   <InfoField icon={HardHat} label="Função" value={d.funcaoSolicitada} />
                   <InfoField icon={Users} label="Quantidade" value={`${d.quantidade} vaga(s)`} />
-                  <InfoField icon={Calendar} label="Início Necessidade" value={d.dataInicioNecessidade} />
+                  <InfoField icon={Calendar} label="Início Necessidade" value={d.dataInicioNecessidade ? new Date(d.dataInicioNecessidade).toLocaleDateString("pt-BR") : "—"} />
                   <InfoField icon={Clock} label="Duração" value={`${d.duracaoMeses} mês(es)`} />
                   <InfoField icon={Briefcase} label="Solicitante" value={d.solicitanteNome} />
                 </div>
@@ -550,7 +628,7 @@ export default function SolicitacaoMDO() {
                   <div className="mt-4">
                     <span className="text-xs font-semibold text-muted-foreground">Qualificações Exigidas</span>
                     <div className="flex flex-wrap gap-1.5 mt-1">
-                      {(JSON.parse(d.qualificacoes) as string[]).map(q => (
+                      {(() => { try { return JSON.parse(d.qualificacoes) as string[]; } catch { return []; } })().map((q: string) => (
                         <Badge key={q} variant="outline" className="gap-1 text-xs"><Shield className="h-3 w-3" /> {q}</Badge>
                       ))}
                     </div>
@@ -728,7 +806,7 @@ export default function SolicitacaoMDO() {
                   {detailSimilares.data.map((s: any) => (
                     <div key={s.id} className="text-sm mb-2 last:mb-0">
                       <div className="font-semibold">SMO-{String(s.id).padStart(4, "0")} — {s.quantidade}x {d.funcaoSolicitada}</div>
-                      <div className="text-xs text-muted-foreground">{s.obraNome} • {s.solicitanteNome} • <StatusBadge status={s.status} /></div>
+                      <div className="text-xs text-muted-foreground">{s.obraNome} | {s.solicitanteNome} | <StatusBadge status={s.status} /></div>
                     </div>
                   ))}
                   <div className="text-xs text-amber-700 mt-2 bg-amber-100 rounded p-2">Considere processo seletivo conjunto para otimizar recrutamento.</div>

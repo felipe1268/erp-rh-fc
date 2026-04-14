@@ -111,11 +111,11 @@ export const smoRouter = router({
       return { ...row.solicitacao, obraNome: row.obraNome, atividades, checklist };
     }),
 
-  obrasDoResponsavel: protectedProcedure
-    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), userId: z.number() }))
+  obrasAtivas: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const rows = await db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo, responsavel: obras.responsavel, responsavelId: obras.responsavelId })
+      const rows = await db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo, responsavel: obras.responsavel })
         .from(obras)
         .where(and(companyFilter(obras.companyId, input), isNull(obras.deletedAt), eq(obras.isActive, 1)));
       return rows;
