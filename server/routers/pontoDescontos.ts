@@ -311,11 +311,13 @@ export const pontoDescontosRouter = router({
       ));
 
     // 3. Buscar atestados do mês (para justificar faltas)
+    // Inclui atestados dos últimos 6 meses que podem cobrir dias do mês atual (afastamento longo/INSS)
+    const prevMonthStart = new Date(yy, mm - 7, 1).toISOString().substring(0, 10);
     const atests = await db.select().from(atestados)
       .where(and(
         companyFilter(atestados.companyId, input),
         isNull(atestados.deletedAt),
-        sql`${atestados.dataEmissao} >= ${mesStart}`,
+        sql`${atestados.dataEmissao} >= ${prevMonthStart}`,
         sql`${atestados.dataEmissao} <= ${mesEnd}`,
       ));
 
@@ -370,6 +372,15 @@ export const pontoDescontosRouter = router({
             atestadoMap.set(key, { tipo: "dia", horas: 0 });
           }
         }
+      }
+    }
+
+    // 4e. Contar dias protegidos por atestado no mês
+    let diasProtegidosAtestado = 0;
+    for (const [key, val] of atestadoMap.entries()) {
+      const dateStr = key.split("-").slice(1).join("-");
+      if (dateStr >= mesStart && dateStr <= mesEnd) {
+        diasProtegidosAtestado++;
       }
     }
 
@@ -686,12 +697,14 @@ export const pontoDescontosRouter = router({
       details: `Descontos CLT calculados para ${input.mesReferencia}: ${descontosToInsert.length} eventos, ${resumos.length} funcionários, total R$ ${totalDescontosGeral.toFixed(2)}`,
     });
 
+    const atestMsg = diasProtegidosAtestado > 0 ? ` | ${diasProtegidosAtestado} dia(s) protegido(s) por atestado` : "";
     return {
       success: true,
       totalDescontos: descontosToInsert.length,
       totalFuncionarios: resumos.length,
       valorTotal: formatMoney(totalDescontosGeral),
-      message: `Cálculo concluído: ${descontosToInsert.length} descontos gerados para ${resumos.length} funcionários`,
+      diasProtegidosAtestado,
+      message: `Cálculo concluído: ${descontosToInsert.length} descontos gerados para ${resumos.length} funcionários${atestMsg}`,
     };
   }),
 
@@ -1006,4 +1019,52 @@ export const pontoDescontosRouter = router({
         criterios: { limiteAtrasos, limiteFaltas, alertaHE },
       };
     }),
+
+  atestadosMes: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const [yy, mm] = input.mesReferencia.split("-").map(Number);
+    const mesStart = `${input.mesReferencia}-01`;
+    const mesEnd = `${input.mesReferencia}-${String(new Date(yy, mm, 0).getDate()).padStart(2, "0")}`;
+    const prevMonthStart = new Date(yy, mm - 7, 1).toISOString().substring(0, 10);
+
+    const rows = await db.select({
+      id: atestados.id,
+      employeeId: atestados.employeeId,
+      dataEmissao: atestados.dataEmissao,
+      diasAfastamento: atestados.diasAfastamento,
+      horasAfastamento: sql<number>`COALESCE(${atestados.horasAfastamento}, 0)`.as("horasAfastamento"),
+      afastamentoTipo: sql<string>`COALESCE(${atestados.afastamentoTipo}, 'dia')`.as("afastamentoTipo"),
+      tipo: atestados.tipo,
+      cid: atestados.cid,
+      medico: atestados.medico,
+      nomeCompleto: employees.nomeCompleto,
+    }).from(atestados)
+      .innerJoin(employees, eq(atestados.employeeId, employees.id))
+      .where(and(
+        companyFilter(atestados.companyId, input),
+        isNull(atestados.deletedAt),
+        isNull(employees.deletedAt),
+        sql`${atestados.dataEmissao} >= ${prevMonthStart}`,
+        sql`${atestados.dataEmissao} <= ${mesEnd}`,
+      ))
+      .orderBy(desc(atestados.dataEmissao));
+
+    return rows.filter(a => {
+      const afTipo = a.afastamentoTipo || "dia";
+      if (afTipo === "horas") {
+        return a.dataEmissao >= mesStart && a.dataEmissao <= mesEnd;
+      }
+      const dias = a.diasAfastamento || 1;
+      const start = new Date(a.dataEmissao + "T12:00:00Z");
+      const end = new Date(start);
+      end.setUTCDate(start.getUTCDate() + dias - 1);
+      const endStr = end.toISOString().substring(0, 10);
+      return endStr >= mesStart && a.dataEmissao <= mesEnd;
+    });
+  }),
 });

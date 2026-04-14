@@ -162,7 +162,7 @@ const STATUS_DESC_COLORS: Record<string, string> = {
 };
 
 function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { companyId: number; companyIds?: number[]; mesAno: string; isMaster: boolean }) {
-  const [activeSubTab, setActiveSubTab] = useState<"resumo" | "detalhes">("resumo");
+  const [activeSubTab, setActiveSubTab] = useState<"resumo" | "detalhes" | "atestados">("resumo");
   const [filterTipo, setFilterTipo] = useState<string>("all");
   const [filterEmpId, setFilterEmpId] = useState<number | undefined>(undefined);
   const [abonoId, setAbonoId] = useState<number | null>(null);
@@ -171,6 +171,7 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
   const utils = trpc.useUtils();
   const totais = trpc.pontoDescontos.totaisMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const resumo = trpc.pontoDescontos.listResumo.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const atestadosMes = trpc.pontoDescontos.atestadosMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || (companyIds || []).length > 0 });
   const detalhes = trpc.pontoDescontos.listByMonth.useQuery(
     { companyId, mesReferencia: mesAno, tipo: filterTipo !== "all" ? filterTipo : undefined, employeeId: filterEmpId },
     { enabled: companyId > 0 || companyIds.length > 0 }
@@ -182,6 +183,7 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
       utils.pontoDescontos.totaisMes.invalidate();
       utils.pontoDescontos.listResumo.invalidate();
       utils.pontoDescontos.listByMonth.invalidate();
+      utils.pontoDescontos.atestadosMes.invalidate();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -308,7 +310,7 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
       )}
 
       {/* Sub-tabs */}
-      {t && t.totalEventos > 0 && (
+      {((t && t.totalEventos > 0) || (atestadosMes.data || []).length > 0) && (
         <>
           <div className="flex gap-2 border-b pb-2">
             <Button variant={activeSubTab === "resumo" ? "default" : "ghost"} size="sm"
@@ -320,6 +322,11 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
               onClick={() => setActiveSubTab("detalhes")}
               className={activeSubTab === "detalhes" ? "bg-rose-600 text-white" : ""}>
               <FileText className="h-4 w-4 mr-1" /> Detalhes Analíticos
+            </Button>
+            <Button variant={activeSubTab === "atestados" ? "default" : "ghost"} size="sm"
+              onClick={() => setActiveSubTab("atestados")}
+              className={activeSubTab === "atestados" ? "bg-purple-600 text-white" : ""}>
+              <ClipboardList className="h-4 w-4 mr-1" /> Atestados ({(atestadosMes.data || []).length})
             </Button>
           </div>
 
@@ -472,6 +479,82 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {/* Atestados do Mês */}
+          {activeSubTab === "atestados" && (
+            <div className="space-y-3">
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm text-purple-800">
+                <strong>Atestados registrados neste mês:</strong> dias com atestado são automaticamente excluídos do cálculo de descontos.
+                Se um desconto já existir para um dia coberto por atestado, ao recalcular ele será removido automaticamente.
+              </div>
+              {(atestadosMes.data || []).length > 0 ? (
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead><tr className="bg-purple-50 border-b">
+                      <th className="p-2.5 text-left">Funcionário</th>
+                      <th className="p-2.5 text-center">Emissão</th>
+                      <th className="p-2.5 text-center">Tipo</th>
+                      <th className="p-2.5 text-center">Afastamento</th>
+                      <th className="p-2.5 text-center">Dias Cobertos</th>
+                      <th className="p-2.5 text-left">CID</th>
+                      <th className="p-2.5 text-left">Médico</th>
+                    </tr></thead>
+                    <tbody>
+                      {(atestadosMes.data || []).map((a: any) => {
+                        const dias = a.diasAfastamento || 1;
+                        const afTipo = a.afastamentoTipo || "dia";
+                        const datasCobertas: string[] = [];
+                        if (afTipo === "horas") {
+                          datasCobertas.push(a.dataEmissao);
+                        } else {
+                          const startDate = new Date(a.dataEmissao + "T12:00:00Z");
+                          for (let d = 0; d < dias; d++) {
+                            const dt = new Date(startDate);
+                            dt.setUTCDate(startDate.getUTCDate() + d);
+                            datasCobertas.push(dt.toISOString().substring(0, 10));
+                          }
+                        }
+                        return (
+                          <tr key={a.id} className="border-b hover:bg-muted/30">
+                            <td className="p-2.5 font-medium">{a.nomeCompleto}</td>
+                            <td className="p-2.5 text-center">{new Date(a.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")}</td>
+                            <td className="p-2.5 text-center">
+                              <Badge className="bg-purple-100 text-purple-800">{a.tipo || "Médico"}</Badge>
+                            </td>
+                            <td className="p-2.5 text-center">
+                              {afTipo === "horas"
+                                ? <span className="font-medium">{a.horasAfastamento}h</span>
+                                : <span className="font-medium">{dias} dia{dias > 1 ? "s" : ""}</span>
+                              }
+                            </td>
+                            <td className="p-2.5 text-center">
+                              <div className="flex flex-wrap gap-1 justify-center">
+                                {datasCobertas.map(d => (
+                                  <span key={d} className="px-1.5 py-0.5 bg-purple-100 rounded text-[11px] font-mono">
+                                    {d.split("-").reverse().join("/")}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="p-2.5 text-muted-foreground">{a.cid || "-"}</td>
+                            <td className="p-2.5 text-muted-foreground">{a.medico || "-"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <ClipboardList className="h-12 w-12 text-muted-foreground/30 mb-4" />
+                    <p className="font-medium">Nenhum atestado registrado neste mês</p>
+                    <p className="text-sm text-muted-foreground mt-1">Atestados cadastrados em Controle de Documentos aparecem aqui automaticamente.</p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
         </>
