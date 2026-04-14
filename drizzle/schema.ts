@@ -1002,6 +1002,9 @@ export const employees = pgTable("employees", {
         convencaoColetiva: varchar({ length: 255 }),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         convencaoVigencia: date({ mode: 'string' }),
+        cargoConfianca: smallint("cargo_confianca").default(0).notNull(),
+        cargoConfiancaDesde: date("cargo_confianca_desde", { mode: "string" }),
+        cargoConfiancaGratificacao: varchar("cargo_confianca_gratificacao", { length: 20 }),
         ddsParticipacao: smallint().default(1),
         docRgUrl: text(),
         docCnhUrl: text(),

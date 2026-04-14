@@ -372,7 +372,7 @@ function matchEmployee(
 // NOW: mesReferencia is derived from each record's date, not from input
 function processRecords(
   records: Array<{ dixiId: string; nome: string; data: string; hora: string; modo: string; sn: string }>,
-  employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho: any; matricula?: string | null; codigoInterno?: string | null; acordoHoraExtra?: any; heNormal50?: any; heNoturna?: any; he100?: any; heFeriado?: any; heInterjornada?: any }>,
+  employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho: any; matricula?: string | null; codigoInterno?: string | null; acordoHoraExtra?: any; heNormal50?: any; heNoturna?: any; he100?: any; heFeriado?: any; heInterjornada?: any; cargoConfianca?: number | null }>,
   obraId: number | null,
   companyId: number,
   criteria: CriteriaMap = DEFAULT_CRITERIA,
@@ -540,8 +540,15 @@ function processRecords(
       let atrasos = 0;
       let faltas = "0";
 
-      // Dias de férias: zera faltas e atrasos — o funcionário não precisa bater ponto no período de gozo
-      if (emFeriasGozo) {
+      // CARGO DE CONFIANÇA (CLT Art. 62, II): sem controle de jornada
+      // Não registra falta, atraso ou hora extra
+      const isCargoConfianca = !!(emp as any).cargoConfianca;
+      if (isCargoConfianca) {
+        faltas = "0";
+        atrasos = 0;
+        horasExtras = 0;
+      } else if (emFeriasGozo) {
+        // Dias de férias: zera faltas e atrasos — o funcionário não precisa bater ponto no período de gozo
         faltas = "0";
         atrasos = 0;
         horasExtras = 0;
@@ -675,6 +682,7 @@ export const fechamentoPontoRouter = router({
         cpf: employees.cpf,
         funcao: employees.funcao,
         status: employees.status,
+        cargoConfianca: employees.cargoConfianca,
       }).from(employees).where(and(
         companyFilter(employees.companyId, input),
         sql`${employees.deletedAt} IS NULL`,
@@ -836,6 +844,7 @@ export const fechamentoPontoRouter = router({
         matricula: employees.matricula,
         codigoInterno: employees.codigoInterno,
         status: employees.status,
+        cargoConfianca: employees.cargoConfianca,
       }).from(employees).where(and(
         companyFilter(employees.companyId, input),
         sql`${employees.deletedAt} IS NULL`,
@@ -1233,6 +1242,7 @@ export const fechamentoPontoRouter = router({
         employeeCpf: employees.cpf,
         employeeFuncao: employees.funcao,
         employeeStatus: employees.status,
+        employeeCargoConfianca: employees.cargoConfianca,
         obraId: timeRecords.obraId,
         data: timeRecords.data,
         horasTrabalhadas: timeRecords.horasTrabalhadas,
@@ -1256,6 +1266,7 @@ export const fechamentoPontoRouter = router({
             employeeCpf: r.employeeCpf,
             employeeFuncao: r.employeeFuncao,
             employeeStatus: r.employeeStatus,
+            cargoConfianca: !!(r as any).employeeCargoConfianca,
             obraId: r.obraId,
             obraIds: new Set<number>(),
             datesSet: new Set<string>(),
@@ -1386,9 +1397,18 @@ export const fechamentoPontoRouter = router({
         }
       }
 
-      // Filtrar: excluir sem_registro de dias cobertos por atestado
+      // Buscar IDs de funcionários com cargo de confiança (CLT Art. 62, II)
+      const cargoConfiancaEmps = await db.select({ id: employees.id })
+        .from(employees)
+        .where(and(companyFilter(employees.companyId, input), sql`${employees.cargoConfianca} = 1`, sql`${employees.deletedAt} IS NULL`));
+      const cargoConfiancaIds = new Set(cargoConfiancaEmps.map(e => e.id));
+
+      // Filtrar: excluir sem_registro de dias cobertos por atestado ou de cargo de confiança
       const filtered = results.filter(r => {
         if (r.inconsistency.tipoInconsistencia === 'sem_registro' && atestSet.has(`${r.inconsistency.employeeId}-${r.inconsistency.data}`)) {
+          return false;
+        }
+        if (r.inconsistency.tipoInconsistencia === 'sem_registro' && cargoConfiancaIds.has(r.inconsistency.employeeId)) {
           return false;
         }
         return true;

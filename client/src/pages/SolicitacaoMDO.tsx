@@ -113,7 +113,7 @@ export default function SolicitacaoMDO() {
   );
 
   const eapQ = trpc.smo.atividadesEap.useQuery(
-    { obraId: form.obraId },
+    { obraId: form.obraId, companyId, companyIds },
     { enabled: showEapPicker && form.obraId > 0 }
   );
 

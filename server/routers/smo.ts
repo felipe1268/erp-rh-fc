@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { eq, and, sql, isNull, desc, inArray } from "drizzle-orm";
@@ -47,11 +48,21 @@ const PRAZO_MINIMO_DIAS = 15;
 async function assertOwnership(db: any, id: number, ctx: { companyId: number; companyIds?: number[] }) {
   const [row] = await db.select({ companyId: smoSolicitacoes.companyId })
     .from(smoSolicitacoes).where(eq(smoSolicitacoes.id, id));
-  if (!row) throw new Error("Solicitação não encontrada");
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
   const allowed = ctx.companyIds && ctx.companyIds.length > 0
     ? ctx.companyIds.includes(row.companyId)
     : row.companyId === ctx.companyId;
-  if (!allowed) throw new Error("Acesso negado");
+  if (!allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+}
+
+async function assertObraAccess(db: any, obraId: number, ctx: { companyId: number; companyIds?: number[] }) {
+  const [obra] = await db.select({ companyId: obras.companyId })
+    .from(obras).where(eq(obras.id, obraId));
+  if (!obra) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada" });
+  const allowed = ctx.companyIds && ctx.companyIds.length > 0
+    ? ctx.companyIds.includes(obra.companyId)
+    : obra.companyId === ctx.companyId;
+  if (!allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado à obra" });
 }
 
 export const smoRouter = router({
@@ -123,9 +134,10 @@ export const smoRouter = router({
     }),
 
   atividadesEap: protectedProcedure
-    .input(z.object({ obraId: z.number() }))
+    .input(z.object({ obraId: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
+      await assertObraAccess(db, input.obraId, input);
       const [proj] = await db.select().from(planejamentoProjetos).where(eq(planejamentoProjetos.obraId, input.obraId)).limit(1);
       if (!proj) return [];
       const [rev] = await db.select().from(planejamentoRevisoes)

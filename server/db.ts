@@ -474,9 +474,11 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "seguroVida", "contribuicaoSindical", "fgtsPercentual", "inssPercentual",
     "dissidioData", "dissidioPercentual", "convencaoColetiva", "convencaoVigencia",
     "ddsParticipacao",
+    // Cargo de Confiança
+    "cargoConfianca", "cargoConfiancaDesde", "cargoConfiancaGratificacao",
   ]);
   // Campos booleanos armazenados como smallint (0/1) no banco
-  const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra", "pensaoAlimenticia", "licencaMaternidade", "ddsParticipacao"]);
+  const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra", "pensaoAlimenticia", "licencaMaternidade", "ddsParticipacao", "cargoConfianca"]);
   // Campos inteiros
   const intFields = new Set(["contaBancariaEmpresaId", "desligadoUserId", "listaNegraUserId"]);
   // Campos string de HE (são varchar no banco, não int)

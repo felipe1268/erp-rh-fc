@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -514,6 +514,7 @@ export default function Colaboradores() {
         ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
         ["Complemento Salarial", viewingEmployee.recebeComplemento ? `Sim — R$ ${viewingEmployee.valorComplemento || "0"}` : "Não"],
         ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.heNormal50 ?? globalHE.heDiasUteis}% / ${viewingEmployee.he100 ?? globalHE.heDomingosFeriados}% / ${viewingEmployee.heNoturna ?? globalHE.heAdicionalNoturno}%` : `Padrão Empresa (${globalHE.heDiasUteis}/${globalHE.heDomingosFeriados}/${globalHE.heAdicionalNoturno}%)`],
+        ["Cargo de Confiança", viewingEmployee.cargoConfianca ? `Sim — Art. 62, II CLT${viewingEmployee.cargoConfiancaGratificacao ? ` (${viewingEmployee.cargoConfiancaGratificacao}%)` : ''}` : "Não"],
       ]},
       { title: "Documentos", fields: [
         ["CTPS", safeDisplay(viewingEmployee.ctps)],
@@ -777,7 +778,10 @@ export default function Colaboradores() {
                         {emp.tipoContrato || 'CLT'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.funcao ?? "-"}</td>
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                      <span>{emp.funcao ?? "-"}</span>
+                      {emp.cargoConfianca ? <span className="ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-semibold rounded-full">Art.62</span> : null}
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.setor ?? "-"}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium px-2.5 py-1 rounded ${statusColors[emp.status] ?? ""}`}>
@@ -1833,6 +1837,43 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                           placeholder="Ex: Bônus de produtividade, ajuste salarial..."
                           className="bg-white mt-1 border-amber-300 focus:border-amber-500"
                         />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Cargo de Confiança (CLT Art. 62, II) */}
+              <div className="mt-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <h4 className="text-sm font-semibold text-primary">Cargo de Confiança</h4>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={String(form.cargoConfianca) === "1"}
+                      onCheckedChange={(checked) => set("cargoConfianca", checked ? "1" : "0")}
+                    />
+                    <Label className="text-xs text-muted-foreground cursor-pointer">
+                      Enquadrado no Art. 62, II da CLT (sem controle de jornada)
+                    </Label>
+                  </div>
+                </div>
+                {String(form.cargoConfianca) === "1" && (
+                  <div className="border border-indigo-200 bg-indigo-50/50 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-xs text-indigo-700 bg-indigo-100 rounded-lg p-2">
+                      <Shield className="h-4 w-4 shrink-0" />
+                      <span>
+                        <strong>CLT Art. 62, II:</strong> Funcionários em cargo de confiança não estão sujeitos a controle de jornada. Não serão registradas faltas por ausência de ponto, horas extras ou atrasos.
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Data de enquadramento</Label>
+                        <Input type="date" value={form.cargoConfiancaDesde ?? ""} onChange={e => set("cargoConfiancaDesde", e.target.value)} className="bg-white" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Gratificação de função (%)</Label>
+                        <Input type="text" inputMode="numeric" value={form.cargoConfiancaGratificacao ?? "40"} onChange={e => set("cargoConfiancaGratificacao", e.target.value.replace(/[^0-9.,]/g, ''))} className="bg-white" placeholder="Mín. 40% (CLT)" />
+                        <span className="text-[10px] text-muted-foreground">Mínimo legal: 40% sobre o salário efetivo</span>
                       </div>
                     </div>
                   </div>

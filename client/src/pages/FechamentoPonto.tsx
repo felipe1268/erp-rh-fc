@@ -1944,6 +1944,9 @@ export default function FechamentoPonto() {
                                     {!emp.alertaInativo && emp.emAvisoPrevio && (
                                       <Badge variant="outline" className="ml-2 text-xs text-amber-600 border-amber-300 bg-amber-50">⚠ Aviso Prévio</Badge>
                                     )}
+                                    {emp.cargoConfianca && (
+                                      <Badge variant="outline" className="ml-2 text-xs text-indigo-600 border-indigo-300 bg-indigo-50">Art.62 — Confiança</Badge>
+                                    )}
                                   </td>
                                   <td className="p-2 text-muted-foreground">{formatCPF(emp.employeeCpf || "")}</td>
                                   <td className="p-2 text-muted-foreground">{emp.employeeFuncao || "-"}</td>
