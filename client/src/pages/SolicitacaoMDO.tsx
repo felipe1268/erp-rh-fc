@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/hooks/useCompany";
@@ -75,7 +75,20 @@ export default function SolicitacaoMDO() {
   const [rejectMotivo, setRejectMotivo] = useState("");
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [funcaoOutros, setFuncaoOutros] = useState("");
+  const [funcaoBusca, setFuncaoBusca] = useState("");
+  const [funcaoDropdownOpen, setFuncaoDropdownOpen] = useState(false);
+  const funcaoRef = useRef<HTMLDivElement>(null);
   const [curriculoFile, setCurriculoFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (funcaoRef.current && !funcaoRef.current.contains(e.target as Node)) {
+        setFuncaoDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const [form, setForm] = useState({
     obraId: 0,
@@ -177,6 +190,8 @@ export default function SolicitacaoMDO() {
   function resetForm() {
     setForm({ obraId: 0, funcaoSolicitada: "", quantidade: 1, dataInicioNecessidade: "", duracaoMeses: 1, prioridade: "normal", qualificacoes: [], observacao: "", atividadesEap: [], candidatoIndicadoNome: "", candidatoIndicadoTelefone: "" });
     setFuncaoOutros("");
+    setFuncaoBusca("");
+    setFuncaoDropdownOpen(false);
     setCurriculoFile(null);
   }
 
@@ -420,37 +435,67 @@ export default function SolicitacaoMDO() {
               {/* Função */}
               <div>
                 <Label className="text-xs font-semibold">Função / Cargo *</Label>
-                {funcoesList.length === 0 && form.funcaoSolicitada !== "__outros__" ? (
-                  <div className="mt-2">
-                    <Input placeholder="Digite a função desejada..." value={funcaoOutros} onChange={e => { setFuncaoOutros(e.target.value); setForm(p => ({ ...p, funcaoSolicitada: "__outros__" })); }} />
+                {form.funcaoSolicitada && form.funcaoSolicitada !== "__outros__" ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex-1 px-3 py-2 rounded-lg border border-[#1B2A4A] bg-[#1B2A4A]/5 text-sm font-semibold text-[#1B2A4A] flex items-center gap-2">
+                      <HardHat className="h-4 w-4" />
+                      {form.funcaoSolicitada}
+                    </div>
+                    <button type="button" onClick={() => { setForm(p => ({ ...p, funcaoSolicitada: "" })); setFuncaoBusca(""); setFuncaoDropdownOpen(false); }} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500">
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                ) : (
-                  <>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {funcoesList.map((f: string) => (
-                        <button
-                          key={f}
-                          type="button"
-                          onClick={() => { setForm(p => ({ ...p, funcaoSolicitada: f })); setFuncaoOutros(""); }}
-                          className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${form.funcaoSolicitada === f ? "bg-[#1B2A4A] text-white border-[#1B2A4A]" : "bg-white hover:bg-slate-50 border-slate-200"}`}
-                        >
-                          {f}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => setForm(p => ({ ...p, funcaoSolicitada: "__outros__" }))}
-                        className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${form.funcaoSolicitada === "__outros__" ? "bg-[#D4A843] text-white border-[#D4A843]" : "bg-white hover:bg-slate-50 border-dashed border-slate-300"}`}
-                      >
-                        + Outros
+                ) : form.funcaoSolicitada === "__outros__" ? (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Input placeholder="Digite a função desejada..." value={funcaoOutros} onChange={e => setFuncaoOutros(e.target.value)} autoFocus />
+                      <button type="button" onClick={() => { setForm(p => ({ ...p, funcaoSolicitada: "" })); setFuncaoOutros(""); }} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500">
+                        <X className="h-4 w-4" />
                       </button>
                     </div>
-                    {form.funcaoSolicitada === "__outros__" && (
-                      <div className="mt-2">
-                        <Input placeholder="Digite a função desejada..." value={funcaoOutros} onChange={e => setFuncaoOutros(e.target.value)} autoFocus />
+                    <p className="text-xs text-slate-500">Digite o nome da função que não está na lista</p>
+                  </div>
+                ) : (
+                  <div className="mt-2 relative" ref={funcaoRef}>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="Buscar função... (ex: Pedreiro, Eletricista)"
+                        value={funcaoBusca}
+                        onChange={e => { setFuncaoBusca(e.target.value); setFuncaoDropdownOpen(true); }}
+                        onFocus={() => setFuncaoDropdownOpen(true)}
+                        className="pl-9"
+                      />
+                    </div>
+                    {funcaoDropdownOpen && (
+                      <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                        {funcoesList
+                          .filter((f: string) => !funcaoBusca || f.toLowerCase().includes(funcaoBusca.toLowerCase()))
+                          .map((f: string) => (
+                            <button
+                              key={f}
+                              type="button"
+                              onClick={() => { setForm(p => ({ ...p, funcaoSolicitada: f })); setFuncaoBusca(""); setFuncaoDropdownOpen(false); setFuncaoOutros(""); }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0 flex items-center gap-2"
+                            >
+                              <HardHat className="h-3.5 w-3.5 text-slate-400" />
+                              {f}
+                            </button>
+                          ))}
+                        {funcoesList.filter((f: string) => !funcaoBusca || f.toLowerCase().includes(funcaoBusca.toLowerCase())).length === 0 && (
+                          <div className="px-3 py-3 text-sm text-slate-500 text-center">Nenhuma função encontrada</div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => { setForm(p => ({ ...p, funcaoSolicitada: "__outros__" })); setFuncaoDropdownOpen(false); setFuncaoBusca(""); }}
+                          className="w-full text-left px-3 py-2 text-sm font-medium text-[#D4A843] hover:bg-amber-50 border-t border-slate-200 flex items-center gap-2"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Digitar outra função manualmente
+                        </button>
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
 

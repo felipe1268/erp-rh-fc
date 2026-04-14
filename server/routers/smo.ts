@@ -18,6 +18,68 @@ function companyFilter(col: any, input: { companyId: number; companyIds?: number
   return eq(col, input.companyId);
 }
 
+const FUNCOES_PREDEFINIDAS = [
+  "Ajudante Geral",
+  "Ajudante de Armador",
+  "Ajudante de Carpinteiro",
+  "Ajudante de Eletricista",
+  "Ajudante de Encanador",
+  "Ajudante de Pedreiro",
+  "Ajudante de Pintor",
+  "Apontador de Obras",
+  "Armador",
+  "Auxiliar Administrativo",
+  "Auxiliar de Almoxarifado",
+  "Auxiliar de Topografia",
+  "Bombeiro Hidráulico",
+  "Caldeireiro",
+  "Carpinteiro",
+  "Carpinteiro de Formas",
+  "Coordenador de Obras",
+  "Eletricista",
+  "Eletricista Industrial",
+  "Encarregado de Obras",
+  "Encanador",
+  "Engenheiro Civil",
+  "Engenheiro de Segurança",
+  "Estaqueiro",
+  "Ferreiro / Armador",
+  "Gesseiro",
+  "Guincheiro",
+  "Impermeabilizador",
+  "Instalador de Drywall",
+  "Manobrista",
+  "Marmorista",
+  "Mecânico de Manutenção",
+  "Meio Oficial",
+  "Mestre de Obras",
+  "Montador de Andaimes",
+  "Montador de Estruturas Metálicas",
+  "Motorista",
+  "Motorista de Caminhão",
+  "Operador de Betoneira",
+  "Operador de Escavadeira",
+  "Operador de Grua",
+  "Operador de Guindaste",
+  "Operador de Munck",
+  "Operador de Retroescavadeira",
+  "Operador de Rolo Compactador",
+  "Pedreiro",
+  "Pedreiro de Acabamento",
+  "Pedreiro de Alvenaria",
+  "Pintor",
+  "Pintor Industrial",
+  "Poceiro",
+  "Serralheiro",
+  "Servente de Obras",
+  "Soldador",
+  "Técnico em Edificações",
+  "Técnico de Segurança do Trabalho",
+  "Topógrafo",
+  "Vidraceiro",
+  "Vigia / Vigilante",
+];
+
 const QUALIFICACOES_DISPONIVEIS = [
   "NR-10", "NR-12", "NR-18", "NR-33", "NR-35", "NR-06",
   "CNH A", "CNH B", "CNH C", "CNH D", "CNH E",
@@ -164,7 +226,10 @@ export const smoRouter = router({
       const rows = await db.selectDistinct({ funcao: employees.funcao })
         .from(employees)
         .where(and(companyFilter(employees.companyId, input), sql`${employees.funcao} IS NOT NULL AND ${employees.funcao} <> ''`));
-      return rows.map(r => r.funcao).filter(Boolean).sort() as string[];
+      const fromDb = rows.map(r => r.funcao).filter(Boolean) as string[];
+      const merged = Array.from(new Set([...FUNCOES_PREDEFINIDAS, ...fromDb]));
+      merged.sort((a, b) => a.localeCompare(b, "pt-BR"));
+      return merged;
     }),
 
   qualificacoesDisponiveis: protectedProcedure
