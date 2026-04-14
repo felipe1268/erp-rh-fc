@@ -405,7 +405,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
       html += `<div class="section"><div class="section-title">\u26A0\uFE0F Aviso Prévio (${avisosPrevios.length})</div><table><thead><tr><th>Tipo</th><th>Início</th><th>Fim</th><th>Dias</th><th>Redução</th><th>Status</th></tr></thead><tbody>`;
       avisosPrevios.forEach((a: any) => {
         const tipoLabel: Record<string, string> = { empregador_trabalhado: 'Empregador (Trabalhado)', empregador_indenizado: 'Empregador (Indenizado)', empregado_trabalhado: 'Empregado (Trabalhado)', empregado_indenizado: 'Empregado (Indenizado)' };
-        html += `<tr><td>${tipoLabel[a.tipo] || a.tipo}</td><td>${formatDate(a.dataInicio)}</td><td>${formatDate(a.dataFim)}</td><td>${a.diasAviso || 30}</td><td>${a.reducaoJornada === '2h_dia' ? '2h/dia' : a.reducaoJornada === '7_dias_corridos' ? '7 dias corridos' : 'Nenhuma'}</td><td><span class="badge ${a.status === 'concluido' ? 'badge-green' : a.status === 'cancelado' ? 'badge-red' : 'badge-yellow'}">${a.status}</span></td></tr>`;
+        html += `<tr><td>${tipoLabel[a.tipo] || a.tipo}</td><td>${formatDate(a.dataInicio)}</td><td>${formatDate(a.dataFim)}</td><td>${a.diasAviso ?? 30}</td><td>${a.reducaoJornada === '2h_dia' ? '2h/dia' : a.reducaoJornada === '7_dias_corridos' ? '7 dias corridos' : 'Nenhuma'}</td><td><span class="badge ${a.status === 'concluido' ? 'badge-green' : a.status === 'cancelado' ? 'badge-red' : 'badge-yellow'}">${a.status}</span></td></tr>`;
       });
       html += `</tbody></table></div>`;
     }
@@ -1870,7 +1870,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                 <td className="p-2 font-medium">{tipoLabel[a.tipo] || a.tipo}</td>
                                 <td className="p-2">{formatDate(a.dataInicio)}</td>
                                 <td className="p-2">{formatDate(a.dataFim)}</td>
-                                <td className="p-2 text-center font-bold">{a.diasAviso || 30}</td>
+                                <td className="p-2 text-center font-bold">{a.diasAviso ?? 30}</td>
                                 <td className="p-2">{a.reducaoJornada === '2h_dia' ? '2h/dia' : a.reducaoJornada === '7_dias_corridos' ? '7 dias corridos' : 'Nenhuma'}</td>
                                 <td className="p-2 text-right font-bold">{a.valorEstimadoTotal ? formatMoeda(a.valorEstimadoTotal) : '-'}</td>
                                 <td className="p-2 text-center"><Badge variant={a.status === 'concluido' ? 'default' : a.status === 'cancelado' ? 'destructive' : 'secondary'}>{a.status}</Badge></td>
