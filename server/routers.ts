@@ -114,6 +114,7 @@ import { databookRouter } from "./routers/databook";
 import { operacionalRouter } from "./routers/operacional";
 import { frotasRouter } from "./routers/frotas";
 import { diarioObraRouter } from "./routers/diarioObra";
+import { smoRouter } from "./routers/smo";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -179,6 +180,7 @@ export const appRouter = router({
   skills: skillsRouter,
   frotas: frotasRouter,
   diarioObra: diarioObraRouter,
+  smo: smoRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

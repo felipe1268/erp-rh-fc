@@ -104,6 +104,7 @@ const menuSectionsRHDP: MenuSection[] = [
         { icon: FileText, label: "Pedido de Demissão", path: "/pedido-demissao" },
       ]},
       { icon: Palmtree, label: "Férias", path: "/ferias" },
+      { icon: HardHat, label: "Solicitação de Mão de Obra", path: "/solicitacao-mdo" },
       { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
       { icon: FileSpreadsheet, label: "PJ Medições", path: "/pj-medicoes" },
     ],

@@ -185,6 +185,7 @@ const AlmoxarifadoPage = lazy(() => import("./pages/almoxarifado/index"));
 const AlmoxarifadoCategorias = lazy(() => import("./pages/almoxarifado/Categorias"));
 const AlmoxarifadoMovimentacoes = lazy(() => import("./pages/almoxarifado/Movimentacoes"));
 const AlmoxarifadoInventario = lazy(() => import("./pages/almoxarifado/Inventario"));
+const SolicitacaoMDO = lazy(() => import("./pages/SolicitacaoMDO"));
 const Solicitacoes = lazy(() => import("./pages/compras/Solicitacoes"));
 const Cotacoes = lazy(() => import("./pages/compras/Cotacoes"));
 const Ordens = lazy(() => import("./pages/compras/Ordens"));
@@ -301,6 +302,7 @@ function Router() {
         <Route path={"/espelho-ponto"} component={EspelhoPonto} />
         <Route path={"/folha-pagamento"} component={FolhaPagamento} />
         <Route path={"/gestao-competencias"} component={PayrollCompetencias} />
+        <Route path={"/solicitacao-mdo"} component={SolicitacaoMDO} />
         <Route path={"/controle-documentos"} component={ControleDocumentos} />
         <Route path={"/vale-alimentacao"} component={ValeAlimentacao} />
         <Route path={"/configuracoes"} component={() => <MasterOnlyGuard component={Configuracoes} />} />

@@ -7244,6 +7244,68 @@ export const employeeTerminationChecklist = pgTable("employee_termination_checkl
   index("idx_etc_employee").on(t.employeeId),
 ]);
 
+// ── Módulo SMO — Solicitação de Mão de Obra ──────────────────────────────
+export const smoSolicitacoes = pgTable("smo_solicitacoes", {
+  id:                  serial().primaryKey(),
+  companyId:           integer("company_id").notNull(),
+  obraId:              integer("obra_id").notNull(),
+  solicitanteId:       integer("solicitante_id").notNull(),
+  solicitanteNome:     varchar("solicitante_nome", { length: 255 }).notNull(),
+  funcaoSolicitada:    varchar("funcao_solicitada", { length: 150 }).notNull(),
+  quantidade:          integer().notNull().default(1),
+  dataInicioNecessidade: date("data_inicio_necessidade", { mode: "string" }).notNull(),
+  duracaoMeses:        integer("duracao_meses").notNull().default(1),
+  prioridade:          varchar({ length: 20 }).notNull().default("normal"),
+  qualificacoes:       text(),
+  observacao:          text(),
+  status:              varchar({ length: 30 }).notNull().default("rascunho"),
+  custoMensalEstimado: numeric("custo_mensal_estimado", { precision: 18, scale: 2 }).default("0"),
+  custoTotalEstimado:  numeric("custo_total_estimado", { precision: 18, scale: 2 }).default("0"),
+  detalheCustos:       text("detalhe_custos"),
+  sugestaoRealocacao:  text("sugestao_realocacao"),
+  motivoRejeicao:      text("motivo_rejeicao"),
+  aprovadoPorCoord:    varchar("aprovado_por_coord", { length: 255 }),
+  aprovadoPorCoordEm:  timestamp("aprovado_por_coord_em", { mode: "string" }),
+  aprovadoPorRh:       varchar("aprovado_por_rh", { length: 255 }),
+  aprovadoPorRhEm:     timestamp("aprovado_por_rh_em", { mode: "string" }),
+  aprovadoPorDiretoria: varchar("aprovado_por_diretoria", { length: 255 }),
+  aprovadoPorDiretoriaEm: timestamp("aprovado_por_diretoria_em", { mode: "string" }),
+  rejeitadoPor:        varchar("rejeitado_por", { length: 255 }),
+  rejeitadoEm:         timestamp("rejeitado_em", { mode: "string" }),
+  prazoMinimoAlerta:   boolean("prazo_minimo_alerta").default(false),
+  slaVencidoEm:        timestamp("sla_vencido_em", { mode: "string" }),
+  criadoEm:            timestamp("criado_em", { mode: "string" }).defaultNow(),
+  atualizadoEm:        timestamp("atualizado_em", { mode: "string" }).defaultNow(),
+  deletedAt:           timestamp("deleted_at", { mode: "string" }),
+}, (t) => [
+  index("idx_smo_company").on(t.companyId),
+  index("idx_smo_obra").on(t.obraId),
+  index("idx_smo_status").on(t.status),
+]);
+
+export const smoAtividadesEap = pgTable("smo_atividades_eap", {
+  id:              serial().primaryKey(),
+  solicitacaoId:   integer("solicitacao_id").notNull(),
+  atividadeId:     integer("atividade_id").notNull(),
+  eapCodigo:       varchar("eap_codigo", { length: 50 }),
+  nomeAtividade:   varchar("nome_atividade", { length: 500 }),
+}, (t) => [
+  index("idx_smo_eap_sol").on(t.solicitacaoId),
+]);
+
+export const smoOnboardingChecklist = pgTable("smo_onboarding_checklist", {
+  id:              serial().primaryKey(),
+  solicitacaoId:   integer("solicitacao_id").notNull(),
+  employeeId:      integer("employee_id"),
+  item:            varchar({ length: 255 }).notNull(),
+  concluido:       boolean().default(false),
+  concluidoPor:    varchar("concluido_por", { length: 255 }),
+  concluidoEm:     timestamp("concluido_em", { mode: "string" }),
+  criadoEm:        timestamp("criado_em", { mode: "string" }).defaultNow(),
+}, (t) => [
+  index("idx_smo_onb_sol").on(t.solicitacaoId),
+]);
+
 export const disciplinaCorrecoes = pgTable("disciplina_correcoes", {
   id:                    serial().primaryKey(),
   companyId:             integer("company_id").notNull(),
