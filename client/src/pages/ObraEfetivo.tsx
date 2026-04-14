@@ -1136,8 +1136,9 @@ export default function ObraEfetivo() {
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
 
       {/* Dialog: Confirmação de Transferência */}
+      {transferConfirmOpen && <div className="fixed inset-0 z-[65] bg-black/40" />}
       <Dialog open={transferConfirmOpen} onOpenChange={(open) => { if (!open) { setTransferConfirmOpen(false); setEmployeesWithAllocation([]); } }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg !z-[70]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-600">
               <AlertTriangle className="h-5 w-5" />

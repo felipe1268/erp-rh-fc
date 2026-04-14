@@ -1674,7 +1674,7 @@ export async function allocateEmployeeToObra(data: { obraId: number; employeeId:
     dataInicio: hoje,
     isActive: 1,
   };
-  const [result] = await db.insert(obraFuncionarios).values(insertData);
+  const [inserted] = await db.insert(obraFuncionarios).values(insertData).returning({ id: obraFuncionarios.id });
   // Registrar entrada no histórico
   await db.insert(employeeSiteHistory).values({
     companyId: data.companyId,
@@ -1687,7 +1687,7 @@ export async function allocateEmployeeToObra(data: { obraId: number; employeeId:
     registradoPor: data.registradoPor || null,
     registradoPorUserId: data.registradoPorUserId || null,
   } as any);
-  return { id: result[0].id, isTransferencia, obraOrigemId };
+  return { id: inserted.id, isTransferencia, obraOrigemId };
 }
 
 export async function removeEmployeeFromObra(employeeId: number, motivo?: string, registradoPor?: string, registradoPorUserId?: number) {
