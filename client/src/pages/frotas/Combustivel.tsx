@@ -801,10 +801,10 @@ export default function Combustivel() {
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent
             resizable={false}
-            className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none m-0 rounded-none flex flex-col p-6"
+            className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none m-0 rounded-none flex flex-col p-4 sm:p-6"
           >
-            <DialogHeader className="flex-shrink-0 border-b pb-4"><DialogTitle className="text-xl font-bold">{editing ? "Editar Abastecimento" : "Novo Abastecimento"}</DialogTitle></DialogHeader>
-            <div className="flex-1 overflow-y-auto py-4">
+            <DialogHeader className="flex-shrink-0 border-b pb-3"><DialogTitle className="text-xl font-bold">{editing ? "Editar Abastecimento" : "Novo Abastecimento"}</DialogTitle></DialogHeader>
+            <div className="flex-1 min-h-0 overflow-y-auto py-3">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <Label>Veículo *</Label>
@@ -879,12 +879,12 @@ export default function Combustivel() {
               )}
             </div>
             </div>
-            <DialogFooter className="flex-shrink-0 border-t pt-4">
+            <div className="flex-shrink-0 border-t pt-3 pb-2 flex justify-end gap-2 bg-white sticky bottom-0">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
               <Button onClick={save} disabled={createMut.isPending || updateMut.isPending}>
                 {(createMut.isPending || updateMut.isPending) ? "Salvando..." : "Salvar"}
               </Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
 
