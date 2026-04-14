@@ -19,14 +19,32 @@ export const episRouter = router({
       companyIds: z.array(z.number()).optional(),
       limit: z.number().min(1).max(200).default(50),
       offset: z.number().min(0).default(0),
+      search: z.string().optional(),
+      categoria: z.string().optional(),
+      condicao: z.string().optional(),
+      tamanho: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
-      const cond = inArray(epis.companyId, ids);
+      const conditions: any[] = [inArray(epis.companyId, ids)];
+      if (input.search && input.search.trim().length > 0) {
+        const term = `%${input.search.trim().toLowerCase()}%`;
+        conditions.push(sql`(LOWER(${epis.nome}) LIKE ${term} OR LOWER(COALESCE(${epis.ca},'')) LIKE ${term} OR LOWER(COALESCE(${epis.fabricante},'')) LIKE ${term})`);
+      }
+      if (input.categoria && input.categoria !== 'Todos') {
+        conditions.push(eq(epis.categoria, input.categoria));
+      }
+      if (input.condicao && input.condicao !== 'Todos') {
+        conditions.push(sql`COALESCE(${epis.condicao}, 'Novo') = ${input.condicao}`);
+      }
+      if (input.tamanho && input.tamanho !== 'Todos') {
+        conditions.push(eq(epis.tamanho, input.tamanho));
+      }
+      const cond = and(...conditions);
       const [rows, countResult] = await Promise.all([
-        db.select().from(epis).where(cond).orderBy(epis.nome).limit(input.limit).offset(input.offset),
-        db.select({ total: sql<number>`COUNT(*)` }).from(epis).where(cond),
+        db.select().from(epis).where(cond!).orderBy(epis.nome).limit(input.limit).offset(input.offset),
+        db.select({ total: sql<number>`COUNT(*)` }).from(epis).where(cond!),
       ]);
       return { items: rows, total: Number(countResult[0]?.total ?? 0) };
     }),

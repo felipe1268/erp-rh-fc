@@ -193,7 +193,14 @@ export default function Epis() {
 
   useEffect(() => { setEpisPage(0); setDeliveriesPage(0); }, [queryCompanyId]);
 
-  const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: episPage * PAGE_SIZE }, { enabled: hasValidCompany });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setEpisPage(0); }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
+  useEffect(() => { setEpisPage(0); }, [filterCategoria, filterCondicao, filterTamanho]);
+
+  const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: episPage * PAGE_SIZE, search: debouncedSearch || undefined, categoria: filterCategoria !== "Todos" ? filterCategoria : undefined, condicao: filterCondicao !== "Todos" ? filterCondicao : undefined, tamanho: filterTamanho !== "Todos" ? filterTamanho : undefined }, { enabled: hasValidCompany });
   const episAllQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: 200, offset: 0 }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "estoque_obra" || viewMode === "transferencias") });
   const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: deliveriesPage * PAGE_SIZE }, { enabled: hasValidCompany && (viewMode === "entregas" || viewMode === "nova_entrega" || viewMode === "ficha_epi") });
   const statsQ = trpc.epis.stats.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
@@ -528,24 +535,8 @@ export default function Epis() {
 
   // Filtered lists
   const filteredEpis = useMemo(() => {
-    let list = episList;
-    if (filterCondicao !== "Todos") {
-      list = list.filter((e: any) => (e.condicao || "Novo") === filterCondicao);
-    }
-    if (filterCategoria !== "Todos") {
-      list = list.filter((e: any) => (e.categoria || "EPI") === filterCategoria);
-    }
-    if (filterTamanho !== "Todos") {
-      list = list.filter((e: any) => (e.tamanho || "") === filterTamanho);
-    }
-    if (!search) return list;
-    const s = removeAccents(search);
-    return list.filter((e: any) =>
-      removeAccents(e.nome || '').includes(s) ||
-      (e.ca || "").toLowerCase().includes(s) ||
-      (e.fabricante || "").toLowerCase().includes(s)
-    );
-  }, [episList, search, filterCondicao, filterCategoria, filterTamanho]);
+    return episList;
+  }, [episList]);
 
   // Tamanhos disponíveis baseados na categoria selecionada
   const tamanhosFiltro = useMemo(() => {
