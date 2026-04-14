@@ -38,7 +38,7 @@ import {
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
   Camera, Blocks, CheckSquare, Repeat, FileCheck2, Milestone,
-  UserMinus,
+  UserMinus, Search, X,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -974,6 +974,8 @@ function DashboardLayoutContent({
   }
   const [expandedMenuItems, setExpandedMenuItems] = useState<Record<string, boolean>>({});
   const toggleMenuItem = (path: string) => setExpandedMenuItems(prev => ({ ...prev, [path]: !prev[path] }));
+  const [menuSearch, setMenuSearch] = useState("");
+  const menuSearchRef = useRef<HTMLInputElement>(null);
 
   const [sidebarActiveParam, setSidebarActiveParam] = useState<string>(() => {
     const s = window.location.search;
@@ -1241,6 +1243,27 @@ function DashboardLayoutContent({
     return [...sorted, ...pinned];
   }, [effectiveSections, sectionOrder]);
 
+  const filteredSections = useMemo(() => {
+    const q = menuSearch.trim().toLowerCase();
+    if (!q) return orderedSections;
+    const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const nq = normalize(q);
+    return orderedSections.map(section => {
+      const matchItems = (items: MenuItem[]): MenuItem[] =>
+        items.reduce<MenuItem[]>((acc, item) => {
+          const labelMatch = normalize(item.label).includes(nq);
+          const childMatches = item.children ? matchItems(item.children) : [];
+          if (labelMatch) {
+            acc.push(item);
+          } else if (childMatches.length > 0) {
+            acc.push({ ...item, children: childMatches });
+          }
+          return acc;
+        }, []);
+      return { ...section, items: matchItems(section.items) };
+    }).filter(s => s.items.length > 0);
+  }, [orderedSections, menuSearch]);
+
   const flattenItems = (items: MenuItem[]): MenuItem[] => items.flatMap(i => i.children ? [i, ...i.children] : [i]);
   const allEffectiveItems = effectiveSections.flatMap(s => flattenItems(s.items));
   const allModuleItems = Object.values(MODULE_SECTIONS).flatMap(sections => sections.flatMap(s => flattenItems(s.items)));
@@ -1256,6 +1279,7 @@ function DashboardLayoutContent({
     const newExpanded = Object.fromEntries(effectiveSections.map(s => [s.title, true]));
     setExpandedSections(newExpanded);
     _expandedSections = newExpanded;
+    setMenuSearch("");
   }, [activeModule]);
 
   const toggleSection = (title: string) => {
@@ -1416,12 +1440,36 @@ function DashboardLayoutContent({
             </div>
           )}
 
+          {!isCollapsed && (
+            <div className="px-3 pb-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-sidebar-foreground/40 pointer-events-none" />
+                <input
+                  ref={menuSearchRef}
+                  type="text"
+                  value={menuSearch}
+                  onChange={e => setMenuSearch(e.target.value)}
+                  placeholder="Buscar no menu..."
+                  className="w-full h-8 pl-8 pr-7 text-xs rounded-md bg-sidebar-accent/50 border border-sidebar-border text-sidebar-foreground placeholder:text-sidebar-foreground/40 focus:outline-none focus:ring-1 focus:ring-[#D4A843]/50 focus:border-[#D4A843]/50 transition-colors"
+                />
+                {menuSearch && (
+                  <button
+                    onClick={() => { setMenuSearch(""); menuSearchRef.current?.focus(); }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-sidebar-foreground/40 hover:text-sidebar-foreground/70 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <SidebarContent
             ref={sidebarScrollRef}
             className="gap-0"
             onScroll={(e) => { _sidebarScrollTop = (e.target as HTMLDivElement).scrollTop; }}
           >
-            {orderedSections.map(section => {
+            {filteredSections.map(section => {
               const isPinned = section.title === PINNED_LAST;
               const isSectionDragging = dragActiveSection === section.title;
               const isSectionTarget  = dragTargetSection  === section.title && !isSectionDragging;
@@ -1432,7 +1480,7 @@ function DashboardLayoutContent({
                 draggable={!isCollapsed && !isPinned}
                 onDragStart={() => handleSectionDragStart(section.title)}
                 onDragOver={(e) => handleSectionDragOver(e, section.title)}
-                onDrop={() => handleSectionDrop(orderedSections)}
+                onDrop={() => handleSectionDrop(filteredSections)}
                 onDragEnd={handleSectionDragEnd}
               >
                 {!isCollapsed ? (
@@ -1461,12 +1509,12 @@ function DashboardLayoutContent({
                     </button>
                   </div>
                 ) : null}
-                {(isCollapsed || expandedSections[section.title]) ? (
+                {(isCollapsed || expandedSections[section.title] || menuSearch.trim()) ? (
                   <SidebarMenu className="px-2 py-0.5">
                     {getSidebarOrderedItems(section).map((item: any) => {
                       const hasChildren = item.children && item.children.length > 0;
                       const childActive = hasChildren && item.children.some((c: MenuItem) => location === c.path);
-                      const isParentExpanded = expandedMenuItems[item.path] || childActive;
+                      const isParentExpanded = expandedMenuItems[item.path] || childActive || !!menuSearch.trim();
                       const isActive = item.path.includes('?')
                         ? location === item.path.split('?')[0] && item.path.split('?')[1] === sidebarActiveParam
                         : !hasChildren && location === item.path;
