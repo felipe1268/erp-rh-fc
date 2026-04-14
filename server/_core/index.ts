@@ -279,6 +279,13 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_pagador VARCHAR(20)`);
         await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_bdi_item_id INTEGER`);
         console.log("[ColFix] compras_cotacoes FD columns Rev.895 OK");
+        await db.execute(sql`ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS criado_por_id INTEGER`);
+        await db.execute(sql`ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS criado_por_nome TEXT`);
+        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS criado_por_id INTEGER`);
+        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS criado_por_nome TEXT`);
+        await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS criado_por_id INTEGER`);
+        await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS criado_por_nome TEXT`);
+        console.log("[ColFix] compras criado_por_id/criado_por_nome Rev.1156 OK");
         await db.execute(sql`ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS modulo_medicao VARCHAR(30)`);
         console.log("[ColFix] compras_cotacao_fornecedores modulo_medicao Rev.897 OK");
         await db.execute(sql`UPDATE compras_cotacoes SET status = 'concluida' WHERE contrato_terceiro_id IS NOT NULL AND status = 'aprovada'`);
