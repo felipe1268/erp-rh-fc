@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Fuel, Plus, Pencil, Trash2, Upload, Search, FileText, CheckCircle2, AlertTriangle, XCircle, ChevronLeft, ChevronRight, Calendar, Send, Undo2, DollarSign, Loader2, Lock, Users, GitMerge, Check } from "lucide-react";
+import { Fuel, Plus, Pencil, Trash2, Upload, Search, FileText, CheckCircle2, AlertTriangle, XCircle, ChevronLeft, ChevronRight, Calendar, Send, Undo2, DollarSign, Loader2, Lock, Users, GitMerge, Check, Paperclip, Eye, X, Image as ImageIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
@@ -63,6 +63,9 @@ export default function Combustivel() {
   const [canonicalName, setCanonicalName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
+  const anexoRef = useRef<HTMLInputElement>(null);
+  const [uploadingAnexo, setUploadingAnexo] = useState(false);
+  const [previewAnexo, setPreviewAnexo] = useState<string | null>(null);
 
   const vehicles = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
   const fuel = trpc.frotas.listFuelRecords.useQuery(
@@ -77,6 +80,13 @@ export default function Combustivel() {
   });
   const deleteMut = trpc.frotas.deleteFuelRecord.useMutation({
     onSuccess: () => { fuel.refetch(); toast.success("Registro excluído"); },
+  });
+  const uploadAnexoMut = trpc.frotas.uploadFuelAttachment.useMutation({
+    onSuccess: () => { fuel.refetch(); setUploadingAnexo(false); toast.success("Anexo adicionado"); },
+    onError: (err) => { setUploadingAnexo(false); toast.error(err.message); },
+  });
+  const removeAnexoMut = trpc.frotas.removeFuelAttachment.useMutation({
+    onSuccess: () => { fuel.refetch(); toast.success("Anexo removido"); },
   });
   const importCsvMut = trpc.frotas.importFuelCsv.useMutation({
     onSuccess: (data) => { fuel.refetch(); toast.success(`${data.inserted} registros importados`); },
@@ -201,6 +211,19 @@ export default function Combustivel() {
     const payload = { ...form, companyId: cId, criadoPor: user?.name };
     if (editing) updateMut.mutate({ id: editing.id, ...payload });
     else createMut.mutate(payload);
+  }
+
+  function handleAnexoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !editing) return;
+    setUploadingAnexo(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const b64 = (ev.target?.result as string).split(',')[1];
+      uploadAnexoMut.mutate({ companyId: cId, fuelRecordId: editing.id, fileName: file.name, fileData: b64, contentType: file.type });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
   }
 
   function handleCsv(e: React.ChangeEvent<HTMLInputElement>) {
@@ -745,6 +768,7 @@ export default function Combustivel() {
                   <th className="text-right p-3">KM</th>
                   <th className="text-left p-3">Motorista</th>
                   <th className="text-left p-3">Posto</th>
+                  <th className="text-center p-3 w-10"></th>
                   <th className="text-right p-3">Ações</th>
                 </tr>
               </thead>
@@ -760,6 +784,7 @@ export default function Combustivel() {
                     <td className="p-3 text-right">{r.km_atual ? parseFloat(r.km_atual).toLocaleString("pt-BR") : "—"}</td>
                     <td className="p-3 text-xs max-w-[150px] truncate">{r.motorista || "—"}</td>
                     <td className="p-3 text-xs">{r.posto || "—"}</td>
+                    <td className="p-3 text-center">{(r.anexos?.length > 0) ? <Paperclip className="h-4 w-4 text-blue-500 inline" title={`${r.anexos.length} anexo(s)`} /> : ""}</td>
                     <td className="p-3 text-right whitespace-nowrap">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir?")) deleteMut.mutate({ id: r.id, companyId: cId }); }}>
@@ -807,6 +832,51 @@ export default function Combustivel() {
               <div><Label>Posto</Label><Input value={form.posto || ""} onChange={e => setForm({ ...form, posto: e.target.value })} /></div>
               <div><Label>Motorista</Label><Input value={form.motorista || ""} onChange={e => setForm({ ...form, motorista: e.target.value })} /></div>
               <div className="md:col-span-2 lg:col-span-3"><Label>Observações</Label><Textarea value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} /></div>
+
+              {editing && (
+                <div className="md:col-span-2 lg:col-span-3 border rounded-lg p-4 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <Label className="flex items-center gap-2"><Paperclip className="w-4 h-4" /> Anexos / Cupons Fiscais</Label>
+                    <div>
+                      <input ref={anexoRef} type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" className="hidden" onChange={handleAnexoUpload} />
+                      <Button type="button" variant="outline" size="sm" onClick={() => anexoRef.current?.click()} disabled={uploadingAnexo}>
+                        {uploadingAnexo ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Enviando...</> : <><Upload className="w-4 h-4 mr-1" /> Anexar Arquivo</>}
+                      </Button>
+                    </div>
+                  </div>
+                  {(() => {
+                    const record = (fuel.data || []).find((r: any) => r.id === editing.id);
+                    const anexos = record?.anexos || [];
+                    if (anexos.length === 0) return <p className="text-sm text-gray-500">Nenhum anexo</p>;
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        {anexos.map((a: any, i: number) => (
+                          <div key={i} className="border rounded-md p-2 bg-white flex flex-col gap-2">
+                            {a.contentType?.startsWith('image/') ? (
+                              <img src={a.url} alt={a.nome} className="w-full h-32 object-contain rounded cursor-pointer hover:opacity-80" onClick={() => setPreviewAnexo(a.url)} />
+                            ) : (
+                              <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded">
+                                <FileText className="w-8 h-8 text-gray-400" />
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-600 truncate flex-1" title={a.nome}>{a.nome}</span>
+                              <div className="flex gap-1">
+                                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => window.open(a.url, '_blank')} title="Abrir">
+                                  <Eye className="w-3 h-3" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 hover:text-red-700" onClick={() => { if (confirm('Remover este anexo?')) removeAnexoMut.mutate({ companyId: cId, fuelRecordId: editing.id, key: a.key }); }} title="Remover">
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
             </div>
             <DialogFooter className="flex-shrink-0 border-t pt-4">
@@ -1398,6 +1468,17 @@ export default function Combustivel() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {previewAnexo && (
+        <Dialog open={!!previewAnexo} onOpenChange={() => setPreviewAnexo(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh]">
+            <DialogHeader><DialogTitle>Visualizar Anexo</DialogTitle></DialogHeader>
+            <div className="flex items-center justify-center overflow-auto">
+              <img src={previewAnexo} alt="Anexo" className="max-w-full max-h-[75vh] object-contain" />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </DashboardLayout>
   );
 }

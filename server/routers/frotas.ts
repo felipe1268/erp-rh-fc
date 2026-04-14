@@ -106,6 +106,7 @@ async function ensureFleetTables() {
     DO $$ BEGIN
       ALTER TABLE fleet_fuel_records ADD COLUMN IF NOT EXISTS num_doc VARCHAR(20);
       ALTER TABLE fleet_fuel_records ADD COLUMN IF NOT EXISTS desconto NUMERIC(14,2);
+      ALTER TABLE fleet_fuel_records ADD COLUMN IF NOT EXISTS anexos JSONB DEFAULT '[]';
     EXCEPTION WHEN OTHERS THEN NULL;
     END $$;
   `);
@@ -1207,6 +1208,67 @@ Sempre retorne JSON válido, sem markdown.`;
         } catch (_e) {}
       }
 
+      return { success: true, total: updatedAnexos.length };
+    }),
+
+  uploadFuelAttachment: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      fuelRecordId: z.number(),
+      fileName: z.string(),
+      fileData: z.string(),
+      contentType: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para esta empresa' });
+      }
+      const ALLOWED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
+      const ext = (input.fileName.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `Tipo de arquivo não permitido (${ext}). Use: ${ALLOWED_EXTENSIONS.join(', ')}` });
+      }
+      const buffer = Buffer.from(input.fileData, 'base64');
+      if (buffer.length > 10 * 1024 * 1024) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Arquivo muito grande (máximo 10MB)' });
+      }
+      const SAFE_CT: Record<string, string> = { '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+      const ct = SAFE_CT[ext] || 'application/octet-stream';
+      const db = await getDb();
+      const existing = await db.execute(sql`SELECT anexos FROM fleet_fuel_records WHERE id = ${input.fuelRecordId} AND company_id = ${input.companyId}`);
+      const rows = (existing as any).rows || [];
+      if (rows.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: 'Registro de abastecimento não encontrado' });
+      const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storageKey = `combustivel/${input.fuelRecordId}/${Date.now()}_${safeFileName}`;
+      const { url } = await storagePut(storageKey, buffer, ct);
+      const currentAnexos = rows[0].anexos || [];
+      const newAnexo = { nome: input.fileName, url, key: storageKey, contentType: ct, tamanho: buffer.length, uploadedAt: new Date().toISOString() };
+      const updatedAnexos = [...currentAnexos, newAnexo];
+      await db.execute(sql`UPDATE fleet_fuel_records SET anexos = ${JSON.stringify(updatedAnexos)}::jsonb, updated_at = NOW() WHERE id = ${input.fuelRecordId} AND company_id = ${input.companyId}`);
+      return { success: true, anexo: newAnexo, total: updatedAnexos.length };
+    }),
+
+  removeFuelAttachment: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      fuelRecordId: z.number(),
+      key: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para esta empresa' });
+      }
+      const db = await getDb();
+      const existing = await db.execute(sql`SELECT anexos FROM fleet_fuel_records WHERE id = ${input.fuelRecordId} AND company_id = ${input.companyId}`);
+      const rows = (existing as any).rows || [];
+      if (rows.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: 'Registro de abastecimento não encontrado' });
+      const currentAnexos = (rows[0].anexos || []) as any[];
+      const removedAnexo = currentAnexos.find((a: any) => a.key === input.key);
+      const updatedAnexos = currentAnexos.filter((a: any) => a.key !== input.key);
+      await db.execute(sql`UPDATE fleet_fuel_records SET anexos = ${JSON.stringify(updatedAnexos)}::jsonb, updated_at = NOW() WHERE id = ${input.fuelRecordId} AND company_id = ${input.companyId}`);
+      if (removedAnexo?.key) {
+        try { await db.execute(sql`DELETE FROM uploaded_files WHERE file_key = ${removedAnexo.key}`); } catch (_e) {}
+      }
       return { success: true, total: updatedAnexos.length };
     }),
 
