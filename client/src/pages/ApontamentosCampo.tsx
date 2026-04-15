@@ -658,8 +658,8 @@ export default function ApontamentosCampo() {
                       </div>
                     ))}
                   </div>
-                  {!novoEntrada1 && !novoSaida2 && (
-                    <p className="text-xs text-red-600">Preencha pelo menos a Entrada e a Saída.</p>
+                  {!novoEntrada1 && !novoSaida1 && !novoEntrada2 && !novoSaida2 && (
+                    <p className="text-xs text-red-600">Preencha pelo menos um horário.</p>
                   )}
                 </div>
               )}
@@ -679,13 +679,13 @@ export default function ApontamentosCampo() {
               <Button
                 className="bg-[#1B2A4A] hover:bg-[#2a3d66]"
                 disabled={!novoEmployeeId || !novoDescricao.trim() || createMut.isPending || (
-                  ['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'].includes(novoTipo) && (!novoEntrada1 || !novoSaida2)
+                  ['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'].includes(novoTipo) && !novoEntrada1 && !novoSaida1 && !novoEntrada2 && !novoSaida2
                 )}
                 onClick={() => {
                   if (!novoEmployeeId || !novoDescricao.trim()) return;
                   const tiposComPonto = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'];
-                  if (tiposComPonto.includes(novoTipo) && (!novoEntrada1 || !novoSaida2)) {
-                    toast.error("Preencha pelo menos a Entrada e a Saída.");
+                  if (tiposComPonto.includes(novoTipo) && !novoEntrada1 && !novoSaida1 && !novoEntrada2 && !novoSaida2) {
+                    toast.error("Preencha pelo menos um horário.");
                     return;
                   }
                   createMut.mutate({
