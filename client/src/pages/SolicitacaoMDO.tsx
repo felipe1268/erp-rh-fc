@@ -60,6 +60,45 @@ function fileToBase64(file: File): Promise<string> {
 type ViewMode = "list" | "form" | "detail";
 type FormItem = { id: string; funcao: string; quantidade: number; duracaoMeses: number };
 
+function ChecklistOnboarding({ checklist, companyId, companyIds, userName, checklistMut }: {
+  checklist: any[];
+  companyId: number;
+  companyIds?: number[];
+  userName: string;
+  checklistMut: any;
+}) {
+  const [localState, setLocalState] = React.useState<Record<number, boolean>>({});
+
+  React.useEffect(() => {
+    const m: Record<number, boolean> = {};
+    for (const c of checklist) m[c.id] = !!c.concluido;
+    setLocalState(m);
+  }, [checklist]);
+
+  const toggle = (id: number, checked: boolean) => {
+    setLocalState(prev => ({ ...prev, [id]: checked }));
+    checklistMut.mutate({ id, companyId, companyIds, concluido: checked, concluidoPor: userName });
+  };
+
+  return (
+    <div className="bg-white rounded-xl border p-5">
+      <h4 className="font-semibold text-sm text-[#1B2A4A] mb-3 flex items-center gap-2"><Package className="h-4 w-4" /> Checklist de Onboarding</h4>
+      <div className="space-y-2">
+        {checklist.map((c: any) => {
+          const checked = localState[c.id] ?? !!c.concluido;
+          return (
+            <div key={c.id} className={`flex items-center gap-3 p-2 rounded-lg transition-all cursor-pointer ${checked ? "bg-green-50" : "hover:bg-slate-50"}`} onClick={() => toggle(c.id, !checked)}>
+              <Checkbox checked={checked} onCheckedChange={(v) => toggle(c.id, !!v)} />
+              <span className={`text-sm flex-1 ${checked ? "line-through text-muted-foreground" : ""}`}>{c.item}</span>
+              {checked && <span className="text-[10px] text-green-600">{c.concluidoPor || userName}</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function SolicitacaoMDO() {
   const { user } = useAuth();
   const { companyId, companyIds } = useCompany();
@@ -931,18 +970,13 @@ export default function SolicitacaoMDO() {
 
                 {/* Onboarding */}
                 {d.checklist && d.checklist.length > 0 && (
-                  <div className="bg-white rounded-xl border p-5">
-                    <h4 className="font-semibold text-sm text-[#1B2A4A] mb-3 flex items-center gap-2"><Package className="h-4 w-4" /> Checklist de Onboarding</h4>
-                    <div className="space-y-2">
-                      {d.checklist.map((c: any) => (
-                        <div key={c.id} className={`flex items-center gap-3 p-2 rounded-lg transition-all ${c.concluido ? "bg-green-50" : "hover:bg-slate-50"}`}>
-                          <Checkbox checked={c.concluido} onCheckedChange={(checked) => checklistMut.mutate({ id: c.id, companyId, companyIds, concluido: !!checked, concluidoPor: user?.name || "RH" })} />
-                          <span className={`text-sm flex-1 ${c.concluido ? "line-through text-muted-foreground" : ""}`}>{c.item}</span>
-                          {c.concluido && <span className="text-[10px] text-green-600">{c.concluidoPor}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <ChecklistOnboarding
+                    checklist={d.checklist}
+                    companyId={companyId}
+                    companyIds={companyIds}
+                    userName={user?.name || "RH"}
+                    checklistMut={checklistMut}
+                  />
                 )}
 
                 {/* Actions */}
