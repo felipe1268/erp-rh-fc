@@ -166,10 +166,73 @@ async function startServer() {
         const db = await getDb();
         if (!db) return;
         const { sql } = await import("drizzle-orm");
-        await db.execute(sql`ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS diferencas TEXT`);
-        console.log("[ColFix] planejamento_revisoes.diferencas OK");
-        await db.execute(sql`ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS module_access TEXT`);
-        console.log("[ColFix] user_groups.module_access OK");
+        await db.execute(sql`
+          DO $$ BEGIN
+            ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS diferencas TEXT;
+            ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS consolidado BOOLEAN DEFAULT FALSE;
+            ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS module_access TEXT;
+            ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_marco BOOLEAN DEFAULT FALSE;
+            ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT FALSE;
+            ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_indireta BOOLEAN DEFAULT FALSE;
+            ALTER TABLE module_config ADD COLUMN IF NOT EXISTS disabled_pages TEXT;
+            ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT;
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsReal" VARCHAR(20);
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoManualmente" SMALLINT DEFAULT 0;
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoEm" TIMESTAMP WITHOUT TIME ZONE;
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoPor" VARCHAR(255);
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "descontosAcerto" VARCHAR(20);
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "descontosAcertoDesc" TEXT;
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "acrescimosAcerto" VARCHAR(20);
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "acrescimosAcertoDesc" TEXT;
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "novoEmpregoAtivo" SMALLINT DEFAULT 0;
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "novoEmpregoComunicadoEm" DATE;
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "novoEmpregoCartaUrl" TEXT;
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "canceladoPorNome" VARCHAR(255);
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "canceladoPorId" INTEGER;
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "dataCancelamento" TIMESTAMP WITHOUT TIME ZONE;
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS "revisao" VARCHAR(10) DEFAULT '01';
+            ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS "revisaoMotivo" TEXT;
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS ajuste_inss VARCHAR(20);
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS valor_liquido VARCHAR(20);
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS bonus_valor VARCHAR(20);
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS bonus_desc TEXT;
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS pensao_desconto VARCHAR(20);
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS outros_descontos VARCHAR(20);
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS outros_descontos_desc TEXT;
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS recibo_url TEXT;
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS recibo_nome VARCHAR(255);
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS media_he VARCHAR(20);
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS media_dsr_he VARCHAR(20);
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS arredondamento_provento VARCHAR(20);
+            ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS modalidade_fd VARCHAR(20) DEFAULT 'normal';
+            ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_valor NUMERIC(14,2);
+            ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_pagador VARCHAR(20);
+            ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_bdi_item_id INTEGER;
+            ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS criado_por_id INTEGER;
+            ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS criado_por_nome TEXT;
+            ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS criado_por_id INTEGER;
+            ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS criado_por_nome TEXT;
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS criado_por_id INTEGER;
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS criado_por_nome TEXT;
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS modulo_medicao VARCHAR(30);
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_por VARCHAR(255);
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_em TIMESTAMP;
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS data_inicio DATE;
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS data_fim DATE;
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS retencao_iss NUMERIC(18,2) DEFAULT 0;
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS retencao_inss NUMERIC(18,2) DEFAULT 0;
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS retencao_irrf NUMERIC(18,2) DEFAULT 0;
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS outras_retencoes NUMERIC(18,2) DEFAULT 0;
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS descontos NUMERIC(18,2) DEFAULT 0;
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS observacoes_retencao TEXT;
+            ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_iss NUMERIC(6,3) DEFAULT 0;
+            ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_inss NUMERIC(6,3) DEFAULT 0;
+            ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_irrf NUMERIC(6,3) DEFAULT 0;
+            ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_outras_retencoes NUMERIC(6,3) DEFAULT 0;
+          EXCEPTION WHEN OTHERS THEN NULL;
+          END $$
+        `);
+        console.log("[ColFix] Bloco principal de ALTER TABLE OK");
         await db.execute(sql`CREATE TABLE IF NOT EXISTS pj_documentos (
           id SERIAL NOT NULL,
           company_id INTEGER NOT NULL,
@@ -184,17 +247,6 @@ async function startServer() {
           created_at TIMESTAMP DEFAULT NOW() NOT NULL,
           deleted_at TIMESTAMP
         )`);
-        console.log("[ColFix] pj_documentos OK");
-        await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_marco BOOLEAN DEFAULT FALSE`);
-        console.log("[ColFix] planejamento_atividades.is_marco OK");
-        await db.execute(sql`ALTER TABLE module_config ADD COLUMN IF NOT EXISTS disabled_pages TEXT`);
-        console.log("[ColFix] module_config.disabled_pages OK");
-        await db.execute(sql`ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS consolidado BOOLEAN DEFAULT FALSE`);
-        console.log("[ColFix] planejamento_revisoes.consolidado OK");
-        await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT FALSE`);
-        console.log("[ColFix] planejamento_atividades.disabled OK");
-        await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_indireta BOOLEAN DEFAULT FALSE`);
-        console.log("[ColFix] planejamento_atividades.is_indireta OK");
         await db.execute(sql`CREATE TABLE IF NOT EXISTS bim_models (
           id SERIAL PRIMARY KEY,
           company_id INTEGER NOT NULL DEFAULT 0,
@@ -209,7 +261,6 @@ async function startServer() {
           criado_em TIMESTAMP DEFAULT NOW(),
           criado_por INTEGER DEFAULT 0
         )`);
-        console.log("[ColFix] bim_models OK");
         await db.execute(sql`CREATE TABLE IF NOT EXISTS bim_links (
           id SERIAL PRIMARY KEY,
           company_id INTEGER NOT NULL DEFAULT 0,
@@ -221,28 +272,6 @@ async function startServer() {
           descricao TEXT,
           criado_em TIMESTAMP DEFAULT NOW()
         )`);
-        console.log("[ColFix] bim_links OK");
-        await db.execute(sql`ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT`);
-        console.log("[ColFix] epis.fotoUrl OK");
-        // Rev.612: novos campos Aviso Prévio
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsReal" VARCHAR(20)`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoManualmente" SMALLINT DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoEm" TIMESTAMP WITHOUT TIME ZONE`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoPor" VARCHAR(255)`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "descontosAcerto" VARCHAR(20)`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "descontosAcertoDesc" TEXT`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "acrescimosAcerto" VARCHAR(20)`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "acrescimosAcertoDesc" TEXT`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "novoEmpregoAtivo" SMALLINT DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "novoEmpregoComunicadoEm" DATE`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "novoEmpregoCartaUrl" TEXT`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "canceladoPorNome" VARCHAR(255)`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "canceladoPorId" INTEGER`);
-        await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "dataCancelamento" TIMESTAMP WITHOUT TIME ZONE`);
-        console.log("[ColFix] termination_notices Rev.901 OK");
-        // Rev.664: Módulo PJ — revisões ISO
-        await db.execute(sql`ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS "revisao" VARCHAR(10) DEFAULT '01'`);
-        await db.execute(sql`ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS "revisaoMotivo" TEXT`);
         await db.execute(sql`
           CREATE TABLE IF NOT EXISTS pj_contract_revisoes (
             id SERIAL NOT NULL,
@@ -257,23 +286,7 @@ async function startServer() {
             "criadoEm" TIMESTAMP DEFAULT now() NOT NULL
           )
         `);
-        console.log("[ColFix] pj_contracts revisao + pj_contract_revisoes Rev.664 OK");
-        // Rev.707: vacation_periods — colunas de ajuste/líquido + acréscimos/descontos/recibo
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS ajuste_inss VARCHAR(20)`);
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS valor_liquido VARCHAR(20)`);
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS bonus_valor VARCHAR(20)`);
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS bonus_desc TEXT`);
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS pensao_desconto VARCHAR(20)`);
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS outros_descontos VARCHAR(20)`);
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS outros_descontos_desc TEXT`);
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS recibo_url TEXT`);
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS recibo_nome VARCHAR(255)`);
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS media_he VARCHAR(20)`);
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS media_dsr_he VARCHAR(20)`);
-        console.log("[ColFix] vacation_periods Rev.707 OK");
-        // Rev.734: arredondamento_provento — ajuste de arredondamento de proventos (incide no INSS)
-        await db.execute(sql`ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS arredondamento_provento VARCHAR(20)`);
-        // Sincronizar flag vencida e status para períodos concessivos expirados
+        console.log("[ColFix] CREATE TABLEs OK");
         const hoje = new Date().toISOString().split('T')[0];
         const vencResult = await db.execute(sql`
           UPDATE vacation_periods SET vencida = 1, status = 'vencida'
@@ -281,143 +294,58 @@ async function startServer() {
             AND "deletedAt" IS NULL
         `);
         const vencCount = (vencResult as any).rowCount || 0;
-        if (vencCount > 0) console.log(`[ColFix] vacation_periods: ${vencCount} período(s) expirado(s) marcado(s) como vencida`);
-        // [REMOVIDO Rev.844] Recuperação de fotos EPI — já completada, não precisa rodar a cada boot
-        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS modalidade_fd VARCHAR(20) DEFAULT 'normal'`);
-        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_valor NUMERIC(14,2)`);
-        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_pagador VARCHAR(20)`);
-        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_bdi_item_id INTEGER`);
-        console.log("[ColFix] compras_cotacoes FD columns Rev.895 OK");
-        await db.execute(sql`ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS criado_por_id INTEGER`);
-        await db.execute(sql`ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS criado_por_nome TEXT`);
-        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS criado_por_id INTEGER`);
-        await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS criado_por_nome TEXT`);
-        await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS criado_por_id INTEGER`);
-        await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS criado_por_nome TEXT`);
-        console.log("[ColFix] compras criado_por_id/criado_por_nome Rev.1156 OK");
-        await db.execute(sql`ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS modulo_medicao VARCHAR(30)`);
-        console.log("[ColFix] compras_cotacao_fornecedores modulo_medicao Rev.897 OK");
+        if (vencCount > 0) console.log(`[ColFix] vacation_periods: ${vencCount} período(s) expirado(s)`);
         await db.execute(sql`UPDATE compras_cotacoes SET status = 'concluida' WHERE contrato_terceiro_id IS NOT NULL AND status = 'aprovada'`);
-        console.log("[ColFix] cotacoes com contrato terceiro → concluida Rev.899 OK");
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_por VARCHAR(255)`);
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS rejeitado_em TIMESTAMP`);
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS data_inicio DATE`);
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS data_fim DATE`);
-        console.log("[ColFix] terceiro_medicoes rejeitadoPor/rejeitadoEm/dataInicio/dataFim Rev.905 OK");
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS retencao_iss NUMERIC(18,2) DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS retencao_inss NUMERIC(18,2) DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS retencao_irrf NUMERIC(18,2) DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS outras_retencoes NUMERIC(18,2) DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS descontos NUMERIC(18,2) DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS observacoes_retencao TEXT`);
-        console.log("[ColFix] terceiro_medicoes retencoes/descontos Rev.907 OK");
-        await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_iss NUMERIC(6,3) DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_inss NUMERIC(6,3) DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_irrf NUMERIC(6,3) DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_outras_retencoes NUMERIC(6,3) DEFAULT 0`);
-        console.log("[ColFix] terceiro_contratos perc_retencoes Rev.908 OK");
+        console.log("[ColFix] Startup migrations OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
-    // [REMOVIDO Rev.844] Normalização de textos compras — agora feita no momento de salvar/editar
-    // Rev.641: criar tabelas do módulo Hora Extra (he_periods + he_period_employees)
     import("../db").then(async ({ getDb }) => {
       try {
         const db = await getDb();
         if (!db) return;
         const { sql } = await import("drizzle-orm");
         await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS he_periods (
-            id SERIAL PRIMARY KEY,
-            "companyId" INTEGER NOT NULL,
-            "mesReferencia" VARCHAR(7) NOT NULL,
-            "dataInicio" DATE NOT NULL,
-            "dataFim" DATE NOT NULL,
-            status TEXT NOT NULL DEFAULT 'calculado',
-            "totalFuncionarios" INTEGER DEFAULT 0,
-            "totalHEMins" INTEGER DEFAULT 0,
-            "totalValorHE" NUMERIC(12,2) DEFAULT 0,
-            "criadoPor" TEXT,
-            "criadoEm" TIMESTAMP DEFAULT NOW(),
-            "aprovadoPor" TEXT,
-            "aprovadoEm" TIMESTAMP,
-            "pagoPor" TEXT,
-            "pagoEm" TIMESTAMP,
-            observacoes TEXT
-          )
+          DO $$ BEGIN
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoEm" VARCHAR(32); EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoPor" VARCHAR(200); EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "afericaoResultJson" TEXT; EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeResultJson" TEXT; EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "pagamentoResultJson" TEXT; EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "heConsolidadoEm" VARCHAR(32); EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "heConsolidadoPor" VARCHAR(200); EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "afericaoConsolidadoEm" VARCHAR(32); EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "afericaoConsolidadoPor" VARCHAR(200); EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "pagamentoConsolidadoEm" VARCHAR(32); EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "pagamentoConsolidadoPor" VARCHAR(200); EXCEPTION WHEN OTHERS THEN NULL; END;
+          END $$
         `);
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS he_period_employees (
-            id SERIAL PRIMARY KEY,
-            "hePeriodId" INTEGER NOT NULL,
-            "companyId" INTEGER NOT NULL,
-            "employeeId" INTEGER NOT NULL,
-            nome TEXT,
-            "heUtilMins" INTEGER DEFAULT 0,
-            "heFimMins" INTEGER DEFAULT 0,
-            "heTotalMins" INTEGER DEFAULT 0,
-            "valorHEUtil" NUMERIC(10,2) DEFAULT 0,
-            "valorHEFim" NUMERIC(10,2) DEFAULT 0,
-            "valorHETotal" NUMERIC(10,2) DEFAULT 0,
-            "salarioBruto" NUMERIC(10,2) DEFAULT 0,
-            "valorHora" NUMERIC(10,4) DEFAULT 0
-          )
-        `);
-        console.log("[ColFix] he_periods + he_period_employees Rev.641 OK");
-      } catch (e: any) { console.warn("[ColFix] he_periods:", e?.message ?? e); }
-    });
-    // Rev.642: colunas valeConsolidadoEm + valeConsolidadoPor em payroll_periods
-    import("../db").then(async ({ getDb }) => {
-      try {
-        const db = await getDb();
-        if (!db) return;
-        const { sql } = await import("drizzle-orm");
-        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoEm" VARCHAR(32)`);
-        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoPor" VARCHAR(200)`);
-        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "afericaoResultJson" TEXT`);
-        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeResultJson" TEXT`);
-        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "pagamentoResultJson" TEXT`);
-        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "heConsolidadoEm" VARCHAR(32)`);
-        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "heConsolidadoPor" VARCHAR(200)`);
-        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "afericaoConsolidadoEm" VARCHAR(32)`);
-        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "afericaoConsolidadoPor" VARCHAR(200)`);
-        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "pagamentoConsolidadoEm" VARCHAR(32)`);
-        await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "pagamentoConsolidadoPor" VARCHAR(200)`);
-        console.log("[ColFix] payroll_periods valeConsolidado cols Rev.642 OK");
-      } catch (e: any) { console.warn("[ColFix] payroll_periods valeConsolidado:", e?.message ?? e); }
-    });
-    // Rev.644: Banco de Horas — novas tabelas + coluna destinacao em he_period_employees
-    import("../db").then(async ({ getDb }) => {
-      try {
-        const db = await getDb();
-        if (!db) return;
-        const { sql } = await import("drizzle-orm");
+        console.log("[ColFix] payroll cols OK");
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS he_periods (
+          id SERIAL PRIMARY KEY, "companyId" INTEGER NOT NULL, "mesReferencia" VARCHAR(7) NOT NULL,
+          "dataInicio" DATE NOT NULL, "dataFim" DATE NOT NULL, status TEXT NOT NULL DEFAULT 'calculado',
+          "totalFuncionarios" INTEGER DEFAULT 0, "totalHEMins" INTEGER DEFAULT 0, "totalValorHE" NUMERIC(12,2) DEFAULT 0,
+          "criadoPor" TEXT, "criadoEm" TIMESTAMP DEFAULT NOW(), "aprovadoPor" TEXT, "aprovadoEm" TIMESTAMP,
+          "pagoPor" TEXT, "pagoEm" TIMESTAMP, observacoes TEXT
+        )`);
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS he_period_employees (
+          id SERIAL PRIMARY KEY, "hePeriodId" INTEGER NOT NULL, "companyId" INTEGER NOT NULL,
+          "employeeId" INTEGER NOT NULL, nome TEXT, "heUtilMins" INTEGER DEFAULT 0, "heFimMins" INTEGER DEFAULT 0,
+          "heTotalMins" INTEGER DEFAULT 0, "valorHEUtil" NUMERIC(10,2) DEFAULT 0, "valorHEFim" NUMERIC(10,2) DEFAULT 0,
+          "valorHETotal" NUMERIC(10,2) DEFAULT 0, "salarioBruto" NUMERIC(10,2) DEFAULT 0, "valorHora" NUMERIC(10,4) DEFAULT 0
+        )`);
         await db.execute(sql`ALTER TABLE he_period_employees ADD COLUMN IF NOT EXISTS "destinacao" TEXT NOT NULL DEFAULT 'pagamento'`);
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS banco_horas_saldo (
-            id SERIAL PRIMARY KEY,
-            "employeeId" INTEGER NOT NULL,
-            "companyId" INTEGER NOT NULL,
-            "saldoMinutos" INTEGER NOT NULL DEFAULT 0,
-            "atualizadoEm" TIMESTAMP DEFAULT NOW(),
-            UNIQUE("employeeId", "companyId")
-          )
-        `);
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS banco_horas_lancamentos (
-            id SERIAL PRIMARY KEY,
-            "employeeId" INTEGER NOT NULL,
-            "companyId" INTEGER NOT NULL,
-            "hePeriodId" INTEGER,
-            tipo TEXT NOT NULL,
-            minutos INTEGER NOT NULL,
-            descricao TEXT,
-            data DATE NOT NULL DEFAULT CURRENT_DATE,
-            "criadoEm" TIMESTAMP DEFAULT NOW(),
-            "criadoPor" TEXT
-          )
-        `);
-        console.log("[ColFix] banco_horas_saldo + banco_horas_lancamentos + he_period_employees.destinacao Rev.644 OK");
-      } catch (e: any) { console.warn("[ColFix] banco_horas Rev.644:", e?.message ?? e); }
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS banco_horas_saldo (
+          id SERIAL PRIMARY KEY, "employeeId" INTEGER NOT NULL, "companyId" INTEGER NOT NULL,
+          "saldoMinutos" INTEGER NOT NULL DEFAULT 0, "atualizadoEm" TIMESTAMP DEFAULT NOW(),
+          UNIQUE("employeeId", "companyId")
+        )`);
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS banco_horas_lancamentos (
+          id SERIAL PRIMARY KEY, "employeeId" INTEGER NOT NULL, "companyId" INTEGER NOT NULL,
+          "hePeriodId" INTEGER, tipo TEXT NOT NULL, minutos INTEGER NOT NULL, descricao TEXT,
+          data DATE NOT NULL DEFAULT CURRENT_DATE, "criadoEm" TIMESTAMP DEFAULT NOW(), "criadoPor" TEXT
+        )`);
+        console.log("[ColFix] HE + banco horas tables OK");
+      } catch (e: any) { console.warn("[ColFix] HE/banco horas:", e?.message ?? e); }
     });
 
     // Rev.650: Limpeza automática de batidas duplicadas (mesmo employeeId+obraId+data)
@@ -458,176 +386,112 @@ async function startServer() {
       } catch (e: any) { console.warn("[ColFix] Dedup batidas:", e?.message ?? e); }
     });
 
-    // Rev.590: criar tabelas do módulo Medição de Contratos (se não existirem)
     import("../db").then(async ({ getDb }) => {
       try {
         const db = await getDb();
         if (!db) return;
         const { sql } = await import("drizzle-orm");
         await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS medicao_contratos (
-            id SERIAL PRIMARY KEY,
-            company_id INTEGER NOT NULL,
-            projeto_id INTEGER NOT NULL,
-            criterio VARCHAR(30) NOT NULL DEFAULT 'avanco_fisico',
-            valor_total_contrato NUMERIC(15,2) DEFAULT 0,
-            percentual_sinal NUMERIC(5,2) DEFAULT 0,
-            valor_sinal_recebido NUMERIC(15,2) DEFAULT 0,
-            percentual_retencao NUMERIC(5,2),
-            valor_minimo_fd NUMERIC(15,2),
-            status VARCHAR(20) NOT NULL DEFAULT 'ativo',
-            observacoes TEXT,
-            criado_em TIMESTAMP DEFAULT NOW(),
-            atualizado_em TIMESTAMP DEFAULT NOW(),
-            deleted_at TIMESTAMP
-          )
+          DO $$ BEGIN
+            ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS biometria_facial_url TEXT;
+            ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS biometria_capturada_em TIMESTAMP;
+            ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS modo_identificacao VARCHAR(20) DEFAULT 'manual';
+            ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS assinatura_responsavel_url TEXT;
+            ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_funcionario_url TEXT;
+            ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_aplicador_url TEXT;
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS insalubridade_grau VARCHAR(20) DEFAULT 'none';
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS periculosidade SMALLINT DEFAULT 0;
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS adicional_noturno_ativo SMALLINT DEFAULT 0;
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS condicoes_vigencia_inicio DATE;
+            ALTER TABLE obra_funcionarios ADD COLUMN IF NOT EXISTS insalubridade_override VARCHAR(20) DEFAULT 'herda';
+            ALTER TABLE obra_funcionarios ADD COLUMN IF NOT EXISTS periculosidade_override VARCHAR(10) DEFAULT 'herda';
+            ALTER TABLE obra_funcionarios ADD COLUMN IF NOT EXISTS adicional_escolhido VARCHAR(20) DEFAULT 'auto';
+            ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_unit_mat NUMERIC(18,4);
+            ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_unit_mdo NUMERIC(18,4);
+            ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_total_mat NUMERIC(18,2);
+            ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_total_mdo NUMERIC(18,2);
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS alerta_divergencia TEXT;
+            ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS percentual_fisico_real NUMERIC(8,4);
+            ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS editado_manualmente BOOLEAN DEFAULT false;
+            ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_retencao_tecnica NUMERIC(6,3) DEFAULT 0;
+            ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS retencao_tecnica NUMERIC(18,2) DEFAULT 0;
+            ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS sinal_valor NUMERIC(18,2) DEFAULT 0;
+            ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS incluir_ajudante BOOLEAN DEFAULT true;
+            ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS meta_mdo_profissional NUMERIC(18,4) DEFAULT 0;
+            ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS meta_mdo_ajudante NUMERIC(18,4) DEFAULT 0;
+            ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca SMALLINT NOT NULL DEFAULT 0;
+            ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_desde DATE;
+            ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_gratificacao VARCHAR(20);
+          EXCEPTION WHEN OTHERS THEN NULL;
+          END $$
         `);
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS medicao_boletins (
-            id SERIAL PRIMARY KEY,
-            company_id INTEGER NOT NULL,
-            contrato_id INTEGER NOT NULL,
-            numero INTEGER NOT NULL,
-            periodo_referencia VARCHAR(7) NOT NULL,
-            status VARCHAR(20) NOT NULL DEFAULT 'rascunho',
-            data_envio DATE,
-            data_aprovacao DATE,
-            valor_bruto NUMERIC(15,2) DEFAULT 0,
-            desconto_sinal NUMERIC(15,2) DEFAULT 0,
-            desconto_retencao NUMERIC(15,2) DEFAULT 0,
-            glosa NUMERIC(15,2) DEFAULT 0,
-            deducao_fd NUMERIC(15,2) DEFAULT 0,
-            valor_liquido NUMERIC(15,2) DEFAULT 0,
-            observacoes TEXT,
-            financial_entry_id INTEGER,
-            criado_em TIMESTAMP DEFAULT NOW(),
-            atualizado_em TIMESTAMP DEFAULT NOW()
-          )
-        `);
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS medicao_boletim_itens (
-            id SERIAL PRIMARY KEY,
-            boletim_id INTEGER NOT NULL,
-            atividade_id INTEGER,
-            eap_codigo VARCHAR(50),
-            descricao VARCHAR(500) NOT NULL,
-            valor_contratual NUMERIC(15,2) DEFAULT 0,
-            percentual_acumulado_anterior NUMERIC(8,4) DEFAULT 0,
-            percentual_periodo NUMERIC(8,4) DEFAULT 0,
-            percentual_acumulado_atual NUMERIC(8,4) DEFAULT 0,
-            valor_periodo NUMERIC(15,2) DEFAULT 0,
-            tipo_avanco VARCHAR(30) NOT NULL DEFAULT 'fisico',
-            is_fd BOOLEAN DEFAULT FALSE,
-            criado_em TIMESTAMP DEFAULT NOW()
-          )
-        `);
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS medicao_fd_registros (
-            id SERIAL PRIMARY KEY,
-            company_id INTEGER NOT NULL,
-            contrato_id INTEGER NOT NULL,
-            descricao VARCHAR(500) NOT NULL,
-            valor NUMERIC(15,2) NOT NULL,
-            data_registro DATE NOT NULL,
-            status VARCHAR(20) NOT NULL DEFAULT 'pendente',
-            boletim_desconto_id INTEGER,
-            compra_id INTEGER,
-            origem VARCHAR(20) NOT NULL DEFAULT 'manual',
-            observacoes TEXT,
-            criado_em TIMESTAMP DEFAULT NOW(),
-            atualizado_em TIMESTAMP DEFAULT NOW()
-          )
-        `);
-        console.log("[MedicaoMigration] Tabelas do módulo Medição OK");
-        await db.execute(sql`ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS sinal_valor NUMERIC(18,2) DEFAULT 0`);
-        console.log("[ColFix] planejamento_medicao_config.sinal_valor OK");
-        await db.execute(sql`CREATE TABLE IF NOT EXISTS ia_modulo_conversas (
-          id SERIAL PRIMARY KEY,
-          company_id INTEGER NOT NULL DEFAULT 0,
-          user_id INTEGER NOT NULL DEFAULT 0,
-          user_name VARCHAR(200) DEFAULT '',
-          modulo VARCHAR(50) NOT NULL,
-          pergunta TEXT NOT NULL,
-          resposta TEXT NOT NULL,
-          projeto_id INTEGER,
-          criado_em TIMESTAMP DEFAULT NOW()
-        )`);
-        console.log("[ColFix] ia_modulo_conversas OK");
-        await db.execute(sql`CREATE TABLE IF NOT EXISTS user_activity_log (
-          id SERIAL PRIMARY KEY,
-          company_id INTEGER NOT NULL DEFAULT 0,
-          user_id INTEGER NOT NULL DEFAULT 0,
-          user_name VARCHAR(200) DEFAULT '',
-          tipo VARCHAR(50) NOT NULL DEFAULT 'page_visit',
-          pagina VARCHAR(500) NOT NULL DEFAULT '',
-          acao VARCHAR(500),
-          modulo VARCHAR(100),
-          detalhes TEXT,
-          duracao_segundos INTEGER DEFAULT 0,
-          criado_em TIMESTAMP DEFAULT NOW()
-        )`);
-        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_company_criado ON user_activity_log(company_id, criado_em)`);
-        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_user_company ON user_activity_log(user_id, company_id, criado_em DESC)`);
-        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_company_tipo ON user_activity_log(company_id, tipo, criado_em)`);
-        console.log("[Telemetria] user_activity_log OK");
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS alerta_divergencia TEXT`);
-        await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS percentual_fisico_real NUMERIC(8,4)`);
-        await db.execute(sql`ALTER TABLE terceiro_medicao_itens ADD COLUMN IF NOT EXISTS editado_manualmente BOOLEAN DEFAULT false`);
-        console.log("[ColFix] terceiro_medicoes alerta_divergencia + medicao_itens percentual_fisico_real Rev.909 OK");
-        await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_retencao_tecnica NUMERIC(6,3) DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS retencao_tecnica NUMERIC(18,2) DEFAULT 0`);
-        console.log("[ColFix] terceiro retencao_tecnica Rev.910 OK");
-      } catch (e: any) { console.warn("[MedicaoMigration] Aviso:", e?.message ?? e); }
+        console.log("[ColFix] EPI/warnings/obras/orcamento/terceiros/cargoConfianca cols OK");
+      } catch (e: any) { console.warn("[ColFix] Bloco2:", e?.message ?? e); }
     });
-    // [REMOVIDO Rev.844] Migração aviso prévio (Rev.547/586) — já completada
-    // [REMOVIDO Rev.844] BUG-001 retroativo (Rev.716) — já processou todas as rescisões
-    // [REMOVIDO Rev.844] BUG-002 retroativo (Rev.737) — já recalculou todas as férias
-    // Rev.721: ColFix — colunas de biometria facial em epi_deliveries (Neon DB)
     import("../db").then(async ({ getDb }) => {
       try {
         const db = await getDb();
         if (!db) return;
         const { sql } = await import("drizzle-orm");
-        await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS biometria_facial_url TEXT`);
-        await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS biometria_capturada_em TIMESTAMP`);
-        await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS modo_identificacao VARCHAR(20) DEFAULT 'manual'`);
-        await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS assinatura_responsavel_url TEXT`);
-        console.log("[ColFix] epi_deliveries biometria + assinatura_responsavel Rev.722 OK");
-      } catch (e: any) { console.warn("[ColFix] epi_deliveries biometria:", e?.message ?? e); }
+        await Promise.all([
+          db.execute(sql`CREATE TABLE IF NOT EXISTS medicao_contratos (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, projeto_id INTEGER NOT NULL,
+            criterio VARCHAR(30) NOT NULL DEFAULT 'avanco_fisico', valor_total_contrato NUMERIC(15,2) DEFAULT 0,
+            percentual_sinal NUMERIC(5,2) DEFAULT 0, valor_sinal_recebido NUMERIC(15,2) DEFAULT 0,
+            percentual_retencao NUMERIC(5,2), valor_minimo_fd NUMERIC(15,2),
+            status VARCHAR(20) NOT NULL DEFAULT 'ativo', observacoes TEXT,
+            criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW(), deleted_at TIMESTAMP
+          )`),
+          db.execute(sql`CREATE TABLE IF NOT EXISTS medicao_boletins (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, contrato_id INTEGER NOT NULL,
+            numero INTEGER NOT NULL, periodo_referencia VARCHAR(7) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'rascunho', data_envio DATE, data_aprovacao DATE,
+            valor_bruto NUMERIC(15,2) DEFAULT 0, desconto_sinal NUMERIC(15,2) DEFAULT 0,
+            desconto_retencao NUMERIC(15,2) DEFAULT 0, glosa NUMERIC(15,2) DEFAULT 0,
+            deducao_fd NUMERIC(15,2) DEFAULT 0, valor_liquido NUMERIC(15,2) DEFAULT 0,
+            observacoes TEXT, financial_entry_id INTEGER,
+            criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW()
+          )`),
+          db.execute(sql`CREATE TABLE IF NOT EXISTS medicao_boletim_itens (
+            id SERIAL PRIMARY KEY, boletim_id INTEGER NOT NULL, atividade_id INTEGER,
+            eap_codigo VARCHAR(50), descricao VARCHAR(500) NOT NULL,
+            valor_contratual NUMERIC(15,2) DEFAULT 0, percentual_acumulado_anterior NUMERIC(8,4) DEFAULT 0,
+            percentual_periodo NUMERIC(8,4) DEFAULT 0, percentual_acumulado_atual NUMERIC(8,4) DEFAULT 0,
+            valor_periodo NUMERIC(15,2) DEFAULT 0, tipo_avanco VARCHAR(30) NOT NULL DEFAULT 'fisico',
+            is_fd BOOLEAN DEFAULT FALSE, criado_em TIMESTAMP DEFAULT NOW()
+          )`),
+          db.execute(sql`CREATE TABLE IF NOT EXISTS medicao_fd_registros (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, contrato_id INTEGER NOT NULL,
+            descricao VARCHAR(500) NOT NULL, valor NUMERIC(15,2) NOT NULL, data_registro DATE NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pendente', boletim_desconto_id INTEGER,
+            compra_id INTEGER, origem VARCHAR(20) NOT NULL DEFAULT 'manual', observacoes TEXT,
+            criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW()
+          )`),
+          db.execute(sql`CREATE TABLE IF NOT EXISTS ia_modulo_conversas (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL DEFAULT 0, user_id INTEGER NOT NULL DEFAULT 0,
+            user_name VARCHAR(200) DEFAULT '', modulo VARCHAR(50) NOT NULL, pergunta TEXT NOT NULL,
+            resposta TEXT NOT NULL, projeto_id INTEGER, criado_em TIMESTAMP DEFAULT NOW()
+          )`),
+          db.execute(sql`CREATE TABLE IF NOT EXISTS user_activity_log (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL DEFAULT 0, user_id INTEGER NOT NULL DEFAULT 0,
+            user_name VARCHAR(200) DEFAULT '', tipo VARCHAR(50) NOT NULL DEFAULT 'page_visit',
+            pagina VARCHAR(500) NOT NULL DEFAULT '', acao VARCHAR(500), modulo VARCHAR(100),
+            detalhes TEXT, duracao_segundos INTEGER DEFAULT 0, criado_em TIMESTAMP DEFAULT NOW()
+          )`),
+        ]);
+        await Promise.all([
+          db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_company_criado ON user_activity_log(company_id, criado_em)`),
+          db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_user_company ON user_activity_log(user_id, company_id, criado_em DESC)`),
+          db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_company_tipo ON user_activity_log(company_id, tipo, criado_em)`),
+        ]);
+        console.log("[ColFix] Medição + IA + telemetria tables OK");
+      } catch (e: any) { console.warn("[ColFix] Tables bloco3:", e?.message ?? e); }
     });
-    // Rev.726: ColFix — colunas de assinatura digital em warnings (advertências)
     import("../db").then(async ({ getDb }) => {
       try {
         const db = await getDb();
         if (!db) return;
         const { sql } = await import("drizzle-orm");
-        await db.execute(sql`ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_funcionario_url TEXT`);
-        await db.execute(sql`ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_aplicador_url TEXT`);
-        console.log("[ColFix] warnings assinatura_funcionario_url + assinatura_aplicador_url Rev.726 OK");
-      } catch (e: any) { console.warn("[ColFix] warnings assinaturas:", e?.message ?? e); }
-      // ColFix Rev.730 — Adicionais de trabalho (insalubridade, periculosidade, noturno) em obras e alocações
-      try {
-        const db = await getDb();
-        if (!db) return;
-        const { sql } = await import("drizzle-orm");
-        await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS insalubridade_grau VARCHAR(20) DEFAULT 'none'`);
-        await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS periculosidade SMALLINT DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS adicional_noturno_ativo SMALLINT DEFAULT 0`);
-        await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS condicoes_vigencia_inicio DATE`);
-        await db.execute(sql`ALTER TABLE obra_funcionarios ADD COLUMN IF NOT EXISTS insalubridade_override VARCHAR(20) DEFAULT 'herda'`);
-        await db.execute(sql`ALTER TABLE obra_funcionarios ADD COLUMN IF NOT EXISTS periculosidade_override VARCHAR(10) DEFAULT 'herda'`);
-        await db.execute(sql`ALTER TABLE obra_funcionarios ADD COLUMN IF NOT EXISTS adicional_escolhido VARCHAR(20) DEFAULT 'auto'`);
-        console.log("[ColFix] obras + obra_funcionarios adicionais Rev.730 OK");
-      } catch (e: any) { console.warn("[ColFix] adicionais Rev.730:", e?.message ?? e); }
-
-      try {
-        const db = await getDb();
-        if (!db) return;
-        const { sql } = await import("drizzle-orm");
-        await db.execute(sql`ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_unit_mat NUMERIC(18,4)`);
-        await db.execute(sql`ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_unit_mdo NUMERIC(18,4)`);
-        await db.execute(sql`ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_total_mat NUMERIC(18,2)`);
-        await db.execute(sql`ALTER TABLE orcamento_itens ADD COLUMN IF NOT EXISTS meta_total_mdo NUMERIC(18,2)`);
         const nullCount = await db.execute(sql`
           SELECT COUNT(*) as cnt FROM orcamento_itens
           WHERE (meta_unit_mat IS NULL OR meta_unit_mdo IS NULL OR meta_total_mat IS NULL OR meta_total_mdo IS NULL)
@@ -635,121 +499,56 @@ async function startServer() {
         const cnt = parseInt((nullCount as any).rows?.[0]?.cnt ?? '0', 10);
         if (cnt > 0) {
           await db.execute(sql`
-            UPDATE orcamento_itens oi
-            SET
+            UPDATE orcamento_itens oi SET
               meta_unit_mat = ROUND(COALESCE("custoUnitMat"::numeric, 0) * (1 - COALESCE(o."metaPercentual"::numeric, 0.20)), 4),
               meta_unit_mdo = ROUND(COALESCE("custoUnitMdo"::numeric, 0) * (1 - COALESCE(o."metaPercentual"::numeric, 0.20)), 4),
               meta_total_mat = ROUND(COALESCE("custoTotalMat"::numeric, 0) * (1 - COALESCE(o."metaPercentual"::numeric, 0.20)), 2),
               meta_total_mdo = ROUND(COALESCE("custoTotalMdo"::numeric, 0) * (1 - COALESCE(o."metaPercentual"::numeric, 0.20)), 2)
-            FROM orcamentos o
-            WHERE o.id = oi."orcamentoId"
+            FROM orcamentos o WHERE o.id = oi."orcamentoId"
               AND (oi.meta_unit_mat IS NULL OR oi.meta_unit_mdo IS NULL OR oi.meta_total_mat IS NULL OR oi.meta_total_mdo IS NULL)
           `);
-          console.log(`[ColFix] orcamento_itens meta MAT/MDO: ${cnt} itens atualizados Rev.888`);
-        } else {
-          console.log("[ColFix] orcamento_itens meta MAT/MDO já OK Rev.888");
+          console.log(`[ColFix] orcamento_itens meta MAT/MDO: ${cnt} itens atualizados`);
         }
-      } catch (e: any) { console.warn("[ColFix] meta MAT/MDO Rev.888:", e?.message ?? e); }
-
-      try {
-        const dbComp = await getDb();
-        if (dbComp) {
-          const { sql: sqlComp } = await import("drizzle-orm");
-          const compostoResult = await dbComp.execute(sqlComp`
-            WITH candidates AS (
-              SELECT p.id, p."orcamentoId", p."eapCodigo", p.tipo, p."composicaoTipo", p."servicoCodigo",
-                     p.unidade, p.quantidade
-              FROM orcamento_itens p
-              WHERE p.tipo != 'Composto'
-                AND (p."composicaoTipo" IS NULL OR p."composicaoTipo" != 'COM')
-                AND (p."servicoCodigo" IS NULL OR p."servicoCodigo" = '')
-                AND p.unidade IS NOT NULL AND p.unidade != ''
-                AND p.quantidade IS NOT NULL AND CAST(p.quantidade AS numeric) > 0
-                AND EXISTS (
-                  SELECT 1 FROM orcamento_itens c
-                  WHERE c."orcamentoId" = p."orcamentoId"
-                  AND c."eapCodigo" LIKE p."eapCodigo" || '.%'
-                  AND LENGTH(c."eapCodigo") - LENGTH(REPLACE(c."eapCodigo", '.', ''))
-                    = LENGTH(p."eapCodigo") - LENGTH(REPLACE(p."eapCodigo", '.', '')) + 1
-                  AND c.unidade IS NOT NULL AND c.unidade != ''
-                  AND c.quantidade IS NOT NULL AND CAST(c.quantidade AS numeric) > 0
-                )
-                AND NOT EXISTS (
-                  SELECT 1 FROM orcamento_itens c2
-                  WHERE c2."orcamentoId" = p."orcamentoId"
-                  AND c2."eapCodigo" LIKE p."eapCodigo" || '.%'
-                  AND c2."servicoCodigo" IS NOT NULL AND c2."servicoCodigo" != '' AND c2."servicoCodigo" != 'composto'
-                )
-            )
-            UPDATE orcamento_itens SET tipo = 'Composto', "composicaoTipo" = 'COM', "servicoCodigo" = 'composto'
-            WHERE id IN (SELECT id FROM candidates)
-          `);
-          const cCnt = (compostoResult as any).rowCount ?? 0;
-          if (cCnt > 0) {
-            console.log(`[ColFix] orcamento_itens compostos auto-detectados: ${cCnt} itens Rev.1128`);
-          } else {
-            console.log("[ColFix] orcamento_itens compostos já OK Rev.1128");
-          }
-        }
-      } catch (e: any) { console.warn("[ColFix] compostos Rev.1128:", e?.message ?? e); }
-
-      try {
-        const db2 = await getDb();
-        if (!db2) return;
-        const { sql: sql2 } = await import("drizzle-orm");
-        const fixedTipo = await db2.execute(sql2`
-          UPDATE compras_cotacoes c
-          SET tipo = 'servico'
-          FROM compras_solicitacoes s
-          WHERE c.solicitacao_id = s.id
-            AND s.tipo IN ('servico', 'pacote')
-            AND c.tipo = 'material'
+        const compostoResult = await db.execute(sql`
+          WITH candidates AS (
+            SELECT p.id FROM orcamento_itens p
+            WHERE p.tipo != 'Composto' AND (p."composicaoTipo" IS NULL OR p."composicaoTipo" != 'COM')
+              AND (p."servicoCodigo" IS NULL OR p."servicoCodigo" = '')
+              AND p.unidade IS NOT NULL AND p.unidade != ''
+              AND p.quantidade IS NOT NULL AND CAST(p.quantidade AS numeric) > 0
+              AND EXISTS (
+                SELECT 1 FROM orcamento_itens c WHERE c."orcamentoId" = p."orcamentoId"
+                AND c."eapCodigo" LIKE p."eapCodigo" || '.%'
+                AND LENGTH(c."eapCodigo") - LENGTH(REPLACE(c."eapCodigo", '.', ''))
+                  = LENGTH(p."eapCodigo") - LENGTH(REPLACE(p."eapCodigo", '.', '')) + 1
+                AND c.unidade IS NOT NULL AND c.unidade != ''
+                AND c.quantidade IS NOT NULL AND CAST(c.quantidade AS numeric) > 0
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM orcamento_itens c2 WHERE c2."orcamentoId" = p."orcamentoId"
+                AND c2."eapCodigo" LIKE p."eapCodigo" || '.%'
+                AND c2."servicoCodigo" IS NOT NULL AND c2."servicoCodigo" != '' AND c2."servicoCodigo" != 'composto'
+              )
+          )
+          UPDATE orcamento_itens SET tipo = 'Composto', "composicaoTipo" = 'COM', "servicoCodigo" = 'composto'
+          WHERE id IN (SELECT id FROM candidates)
+        `);
+        const cCnt = (compostoResult as any).rowCount ?? 0;
+        if (cCnt > 0) console.log(`[ColFix] compostos auto-detectados: ${cCnt} itens`);
+        const fixedTipo = await db.execute(sql`
+          UPDATE compras_cotacoes c SET tipo = 'servico' FROM compras_solicitacoes s
+          WHERE c.solicitacao_id = s.id AND s.tipo IN ('servico', 'pacote') AND c.tipo = 'material'
         `);
         const fixCount = (fixedTipo as any).rowCount ?? 0;
-        if (fixCount > 0) {
-          console.log(`[ColFix] cotações tipo corrigido: ${fixCount} cotações material→servico Rev.888`);
-        } else {
-          console.log("[ColFix] cotações tipo já OK Rev.888");
-        }
-      } catch (e: any) { console.warn("[ColFix] cotações tipo Rev.888:", e?.message ?? e); }
-
-      try {
-        const db3 = await getDb();
-        if (!db3) return;
-        const { sql: sql3 } = await import("drizzle-orm");
-        const colCheck = await db3.execute(sql3`
-          SELECT column_name FROM information_schema.columns
-          WHERE table_name = 'compras_solicitacoes_itens' AND column_name = 'incluir_ajudante'
-        `);
-        if (((colCheck as any).rows ?? []).length === 0) {
-          await db3.execute(sql3`
-            ALTER TABLE compras_solicitacoes_itens
-            ADD COLUMN IF NOT EXISTS incluir_ajudante BOOLEAN DEFAULT true,
-            ADD COLUMN IF NOT EXISTS meta_mdo_profissional NUMERIC(18,4) DEFAULT 0,
-            ADD COLUMN IF NOT EXISTS meta_mdo_ajudante NUMERIC(18,4) DEFAULT 0
-          `);
-          console.log("[ColFix] compras_solicitacoes_itens incluir_ajudante + meta_mdo_prof/ajud Rev.889");
-        } else {
-          console.log("[ColFix] compras_solicitacoes_itens incluir_ajudante já OK Rev.889");
-        }
-      } catch (e: any) { console.warn("[ColFix] incluir_ajudante Rev.889:", e?.message ?? e); }
-
-      try {
-        const db4 = await getDb();
-        if (!db4) return;
-        const { sql: sql4 } = await import("drizzle-orm");
-        const syncCot = await db4.execute(sql4`
-          UPDATE compras_cotacoes c SET tipo = s.tipo
-          FROM compras_solicitacoes s
+        if (fixCount > 0) console.log(`[ColFix] cotações tipo corrigido: ${fixCount}`);
+        const syncCot = await db.execute(sql`
+          UPDATE compras_cotacoes c SET tipo = s.tipo FROM compras_solicitacoes s
           WHERE c.solicitacao_id = s.id AND s.tipo IS NOT NULL AND c.tipo != s.tipo
         `);
         const syncCount = (syncCot as any).rowCount ?? 0;
-        if (syncCount > 0) {
-          console.log(`[ColFix] Sync tipo cotação→SC: ${syncCount} cotação(ões) corrigidas Rev.930`);
-        } else {
-          console.log("[ColFix] Sync tipo cotação→SC OK Rev.930");
-        }
-      } catch (e: any) { console.warn("[ColFix] auto-tipo Rev.889:", e?.message ?? e); }
+        if (syncCount > 0) console.log(`[ColFix] Sync tipo cotação→SC: ${syncCount}`);
+        console.log("[ColFix] Data fixes OK");
+      } catch (e: any) { console.warn("[ColFix] Data fixes:", e?.message ?? e); }
     });
     // [REMOVIDO Rev.844] Limpeza empresas de teste (Rev.738) — já completada
     // [REMOVIDO Rev.844] Purga de orfanatos/fantasmas — já completada, limpar via deleteObra cascata
