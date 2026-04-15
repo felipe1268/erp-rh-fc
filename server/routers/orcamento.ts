@@ -2090,41 +2090,44 @@ export const orcamentoRouter = router({
       const oldMap = new Map(oldItems.map(o => [o.eapCodigo, o]));
       const newMap = new Map(itens.map((i: any) => [i.eapCodigo, i]));
 
-      // Encontra EAP codes onde o metaUnitTotal mudou
-      const conflicts: { eapCodigo: string; descricao: string; metaAntigo: string; metaNovo: string; emSC: number; emCotacao: number; emContrato: number }[] = [];
-
+      const changedItems: { eapCodigo: string; descricao: string; metaAntigo: string; metaNovo: string; oldId: number }[] = [];
       for (const [eap, oldItem] of oldMap) {
         const newItem = newMap.get(eap);
         if (!newItem) continue;
         const oldMeta = parseFloat(String(oldItem.metaUnitTotal ?? '0'));
         const newMeta = parseFloat(String(newItem.metaUnitTotal ?? '0'));
         if (Math.abs(oldMeta - newMeta) < 0.001) continue;
+        changedItems.push({ eapCodigo: eap, descricao: oldItem.descricao, metaAntigo: oldMeta.toFixed(4), metaNovo: newMeta.toFixed(4), oldId: oldItem.id });
+      }
 
-        // Verifica se este item está vinculado a SCs, cotações ou contratos
-        const [scCount] = await db.select({ c: sql<number>`count(*)` })
-          .from(comprasSolicitacoesItens)
-          .where(eq((comprasSolicitacoesItens as any).orcamentoItemId, oldItem.id));
-        const [cotCount] = await db.select({ c: sql<number>`count(*)` })
-          .from(comprasCotacoesItens)
-          .where(eq((comprasCotacoesItens as any).solicitacaoItemId, oldItem.id));
-        const [ctCount] = await db.select({ c: sql<number>`count(*)` })
-          .from(terceiroContratoItens)
-          .where(eq((terceiroContratoItens as any).orcamentoItemId, oldItem.id));
+      const conflicts: { eapCodigo: string; descricao: string; metaAntigo: string; metaNovo: string; emSC: number; emCotacao: number; emContrato: number }[] = [];
+      if (changedItems.length > 0) {
+        const changedIds = changedItems.map(c => c.oldId);
+        const [scCounts, cotCounts, ctCounts] = await Promise.all([
+          db.select({ itemId: (comprasSolicitacoesItens as any).orcamentoItemId, c: sql<number>`count(*)::int` })
+            .from(comprasSolicitacoesItens)
+            .where(inArray((comprasSolicitacoesItens as any).orcamentoItemId, changedIds))
+            .groupBy((comprasSolicitacoesItens as any).orcamentoItemId),
+          db.select({ itemId: (comprasCotacoesItens as any).solicitacaoItemId, c: sql<number>`count(*)::int` })
+            .from(comprasCotacoesItens)
+            .where(inArray((comprasCotacoesItens as any).solicitacaoItemId, changedIds))
+            .groupBy((comprasCotacoesItens as any).solicitacaoItemId),
+          db.select({ itemId: (terceiroContratoItens as any).orcamentoItemId, c: sql<number>`count(*)::int` })
+            .from(terceiroContratoItens)
+            .where(inArray((terceiroContratoItens as any).orcamentoItemId, changedIds))
+            .groupBy((terceiroContratoItens as any).orcamentoItemId),
+        ]);
+        const scMap = new Map(scCounts.map(r => [r.itemId, r.c]));
+        const cotMap = new Map(cotCounts.map(r => [r.itemId, r.c]));
+        const ctMap = new Map(ctCounts.map(r => [r.itemId, r.c]));
 
-        const emSC = Number(scCount.c);
-        const emCotacao = Number(cotCount.c);
-        const emContrato = Number(ctCount.c);
-
-        if (emSC + emCotacao + emContrato > 0) {
-          conflicts.push({
-            eapCodigo: eap,
-            descricao: oldItem.descricao,
-            metaAntigo: oldMeta.toFixed(4),
-            metaNovo: newMeta.toFixed(4),
-            emSC,
-            emCotacao,
-            emContrato,
-          });
+        for (const ch of changedItems) {
+          const emSC = scMap.get(ch.oldId) ?? 0;
+          const emCotacao = cotMap.get(ch.oldId) ?? 0;
+          const emContrato = ctMap.get(ch.oldId) ?? 0;
+          if (emSC + emCotacao + emContrato > 0) {
+            conflicts.push({ ...ch, emSC, emCotacao, emContrato });
+          }
         }
       }
 
