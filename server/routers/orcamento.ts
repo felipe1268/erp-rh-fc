@@ -1630,7 +1630,8 @@ export const orcamentoRouter = router({
         bdiLinhas.find((l: any) => l.codigo === 'L-02');
       const margemLucroBdi = lucroLine ? parseFloat(lucroLine.percentual || '0') : 0;
       // Buscar obra e empresa em paralelo
-      const [obraRes, empresaRes] = await Promise.all([
+      const itemIds = itens.map((i: any) => i.id).filter(Boolean);
+      const [obraRes, empresaRes, scVinculadas] = await Promise.all([
         orc.obraId
           ? db.select().from(obras).where(eq(obras.id, orc.obraId)).then(r => r[0] ?? null)
           : Promise.resolve(null),
@@ -1644,8 +1645,14 @@ export const orcamentoRouter = router({
           telefone:    companies.telefone,
           logoUrl:     companies.logoUrl,
         }).from(companies).where(eq(companies.id, orc.companyId)).then(r => r[0] ?? null),
+        itemIds.length > 0
+          ? db.select({ c: sql<number>`count(distinct solicitacao_id)::int` })
+              .from(comprasSolicitacoesItens)
+              .where(inArray((comprasSolicitacoesItens as any).orcamentoItemId, itemIds))
+              .then(r => Number(r[0]?.c ?? 0))
+          : Promise.resolve(0),
       ]);
-      return { ...orc, itens, insumos, bdiLinhas, margemLucroBdi, obra: obraRes, empresa: empresaRes };
+      return { ...orc, itens, insumos, bdiLinhas, margemLucroBdi, obra: obraRes, empresa: empresaRes, temSolicitacoes: scVinculadas > 0, qtdSolicitacoes: scVinculadas };
     }),
 
   // ── Pré-visualização de colunas (antes da importação) ───────
@@ -2029,6 +2036,18 @@ export const orcamentoRouter = router({
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.orcamentoId));
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
       if (Number(orc.companyId) !== Number(input.companyId)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão.' });
+
+      const existingItems = await db.select({ id: orcamentoItens.id })
+        .from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+      const existingIds = existingItems.map(i => i.id);
+      if (existingIds.length > 0) {
+        const [scCheck] = await db.select({ c: sql<number>`count(*)::int` })
+          .from(comprasSolicitacoesItens)
+          .where(inArray((comprasSolicitacoesItens as any).orcamentoItemId, existingIds));
+        if (Number(scCheck.c) > 0) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Este orçamento possui solicitações de compra vinculadas e não pode ser re-importado.' });
+        }
+      }
 
       const XLSX = await import('xlsx');
       const buffer = Buffer.from(input.fileBase64, 'base64');
@@ -2523,6 +2542,17 @@ export const orcamentoRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para excluir este orçamento.' });
 
       const oid = input.id;
+
+      const existItemIds = await db.select({ id: orcamentoItens.id })
+        .from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, oid));
+      if (existItemIds.length > 0) {
+        const [scCheck] = await db.select({ c: sql<number>`count(*)::int` })
+          .from(comprasSolicitacoesItens)
+          .where(inArray((comprasSolicitacoesItens as any).orcamentoItemId, existItemIds.map(i => i.id)));
+        if (Number(scCheck.c) > 0) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Não é possível excluir este orçamento porque existem solicitações de compra vinculadas aos seus itens.' });
+        }
+      }
 
       const projsVinculados = await db.select({ id: planejamentoProjetos.id, nome: planejamentoProjetos.nome })
         .from(planejamentoProjetos)

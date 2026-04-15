@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, TrendingUp, Target,
-  ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
+  ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save, Lock,
   UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench, Percent, Pencil, Trash2, Search,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -613,10 +613,12 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
               onClick={() => window.open(`/orcamento/${id}/print?v=${versao}&mp=${localMetaPerc.toFixed(4)}`, "_blank")}>
               <Printer className="h-4 w-4" /> Imprimir / PDF
             </Button>
-            <Button size="sm" variant="outline" className="gap-2"
-              onClick={() => { setReuploadOpen(true); setReuploadFile(null); setReuploadAnalise(null); }}>
-              <RefreshCw className="h-4 w-4" /> Atualizar Planilha
-            </Button>
+            {!data?.temSolicitacoes && (
+              <Button size="sm" variant="outline" className="gap-2"
+                onClick={() => { setReuploadOpen(true); setReuploadFile(null); setReuploadAnalise(null); }}>
+                <RefreshCw className="h-4 w-4" /> Atualizar Planilha
+              </Button>
+            )}
             <Button size="sm" variant="outline" className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
               onClick={() => { setCompOpen(true); setCompFile(null); }}
               title="Atualiza apenas os codigos de composicao (servicoCodigo) e carrega CPUs/insumos, sem alterar valores">
@@ -627,13 +629,25 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
               title="Envia os preços e composições deste orçamento para atualizar a base central do sistema">
               <BookOpen className="h-4 w-4" /> Atualizar Base
             </Button>
-            <Button size="sm" variant="outline" className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
-              onClick={() => setDeleteConfirmOpen(true)}
-              title="Excluir este orçamento permanentemente">
-              <Trash2 className="h-4 w-4" /> Excluir
-            </Button>
+            {!data?.temSolicitacoes && (
+              <Button size="sm" variant="outline" className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
+                onClick={() => setDeleteConfirmOpen(true)}
+                title="Excluir este orçamento permanentemente">
+                <Trash2 className="h-4 w-4" /> Excluir
+              </Button>
+            )}
           </div>
         </div>
+
+        {data?.temSolicitacoes && (
+          <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 mb-2">
+            <Lock className="h-5 w-5 text-blue-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-blue-800">Orçamento travado — {data.qtdSolicitacoes} solicitação(ões) de compra vinculada(s)</p>
+              <p className="text-xs text-blue-600">Não é possível re-importar a planilha ou excluir o orçamento enquanto houver solicitações de compra vinculadas aos seus itens.</p>
+            </div>
+          </div>
+        )}
 
         {/* ── Cards de versão: Meta | Custo | Venda ── */}
         <div className="grid grid-cols-3 gap-3 mb-5">
