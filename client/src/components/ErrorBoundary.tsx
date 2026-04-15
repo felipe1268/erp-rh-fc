@@ -19,15 +19,30 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
-    // Verificar se é um erro de DOM (removeChild/insertBefore)
     const isDomError = error.message?.includes('removeChild') || 
                        error.message?.includes('insertBefore') ||
                        error.message?.includes('não é filho') ||
                        error.message?.includes('is not a child');
     
     if (isDomError) {
-      // Para erros de DOM, NÃO mostrar tela de erro - tentar recuperar
       return { hasError: false, error: null };
+    }
+
+    const isChunkError = error.message?.includes('Failed to fetch dynamically imported module') ||
+                         error.message?.includes('Importing a module script failed') ||
+                         error.message?.includes('error loading dynamically imported module') ||
+                         error.message?.includes('Loading chunk') ||
+                         error.name === 'ChunkLoadError';
+
+    if (isChunkError) {
+      const reloadKey = '__erp_chunk_reload';
+      const lastReload = sessionStorage.getItem(reloadKey);
+      const now = Date.now();
+      if (!lastReload || now - Number(lastReload) > 10000) {
+        sessionStorage.setItem(reloadKey, String(now));
+        window.location.reload();
+      }
+      return { hasError: true, error };
     }
     
     return { hasError: true, error };

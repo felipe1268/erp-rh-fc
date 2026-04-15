@@ -2,6 +2,25 @@
 import { patchDomForReact } from "@/lib/dom-patch";
 patchDomForReact();
 
+window.addEventListener("unhandledrejection", (event) => {
+  const msg = event.reason?.message || String(event.reason || "");
+  if (
+    msg.includes("Failed to fetch dynamically imported module") ||
+    msg.includes("Importing a module script failed") ||
+    msg.includes("error loading dynamically imported module") ||
+    msg.includes("Loading chunk")
+  ) {
+    event.preventDefault();
+    const key = "__erp_chunk_reload";
+    const last = sessionStorage.getItem(key);
+    const now = Date.now();
+    if (!last || now - Number(last) > 10000) {
+      sessionStorage.setItem(key, String(now));
+      window.location.reload();
+    }
+  }
+});
+
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
