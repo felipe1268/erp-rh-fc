@@ -640,10 +640,10 @@ export default function ApontamentosCampo() {
                   <div className="flex items-center gap-2 mb-1">
                     <Clock className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-semibold text-blue-800">Horários de Ponto do Dia</span>
-                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">opcional</span>
+                    <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-medium">obrigatório</span>
                   </div>
                   <p className="text-xs text-blue-600">
-                    Preencha apenas os horários que você sabe. Se o DIXI já importou parte das batidas, o sistema faz o merge automaticamente — só completa o que falta. Esses dados ficam <strong>fixados</strong> e o DIXI nunca sobrescreve.
+                    Informe os horários do funcionário neste dia. Esses dados irão para o espelho de ponto caso o RH aprove. Se o DIXI já importou batidas, o sistema faz o merge automaticamente.
                   </p>
                   <div className="grid grid-cols-4 gap-2">
                     {[
@@ -658,11 +658,8 @@ export default function ApontamentosCampo() {
                       </div>
                     ))}
                   </div>
-                  {novoTipo === 'falta' && !novoEntrada1 && !novoSaida1 && !novoEntrada2 && !novoSaida2 && (
-                    <p className="text-xs text-amber-600">Sem horários = falta integral (0:00 trabalhadas).</p>
-                  )}
-                  {(novoEntrada1 || novoSaida1 || novoEntrada2 || novoSaida2) && (
-                    <p className="text-xs text-green-700">Os horários preenchidos serão mesclados com dados existentes do DIXI (se houver) e fixados no ponto.</p>
+                  {!novoEntrada1 && !novoSaida2 && (
+                    <p className="text-xs text-red-600">Preencha pelo menos a Entrada e a Saída.</p>
                   )}
                 </div>
               )}
@@ -681,10 +678,16 @@ export default function ApontamentosCampo() {
               <Button variant="outline" onClick={() => setShowNovoDialog(false)}>Cancelar</Button>
               <Button
                 className="bg-[#1B2A4A] hover:bg-[#2a3d66]"
-                disabled={!novoEmployeeId || !novoDescricao.trim() || createMut.isPending}
+                disabled={!novoEmployeeId || !novoDescricao.trim() || createMut.isPending || (
+                  ['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'].includes(novoTipo) && (!novoEntrada1 || !novoSaida2)
+                )}
                 onClick={() => {
                   if (!novoEmployeeId || !novoDescricao.trim()) return;
-                  const tiposComPonto = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto'];
+                  const tiposComPonto = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'];
+                  if (tiposComPonto.includes(novoTipo) && (!novoEntrada1 || !novoSaida2)) {
+                    toast.error("Preencha pelo menos a Entrada e a Saída.");
+                    return;
+                  }
                   createMut.mutate({
                     companyId: companyId!,
                     employeeId: novoEmployeeId,
@@ -693,12 +696,10 @@ export default function ApontamentosCampo() {
                     tipoOcorrencia: novoTipo as any,
                     prioridade: novoPrioridade as any,
                     descricao: novoDescricao.trim(),
-                    ...(tiposComPonto.includes(novoTipo) ? {
-                      entrada1: novoEntrada1 || undefined,
-                      saida1: novoSaida1 || undefined,
-                      entrada2: novoEntrada2 || undefined,
-                      saida2: novoSaida2 || undefined,
-                    } : {}),
+                    entrada1: novoEntrada1 || undefined,
+                    saida1: novoSaida1 || undefined,
+                    entrada2: novoEntrada2 || undefined,
+                    saida2: novoSaida2 || undefined,
                   });
                 }}
               >
