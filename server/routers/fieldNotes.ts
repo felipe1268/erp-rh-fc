@@ -86,7 +86,8 @@ export const fieldNotesRouter = router({
       const newId = result.id;
 
       const tiposComPonto = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'];
-      if (tiposComPonto.includes(input.tipoOcorrencia) && input.obraId && (entrada1 || saida1 || entrada2 || saida2 || input.tipoOcorrencia === 'falta' || input.tipoOcorrencia === 'abandono_posto')) {
+      const tiposSemprePonto = ['falta', 'abandono_posto', 'esqueceu_bater'];
+      if (tiposComPonto.includes(input.tipoOcorrencia) && input.obraId && (entrada1 || saida1 || entrada2 || saida2 || tiposSemprePonto.includes(input.tipoOcorrencia))) {
         const mesRef = input.data.substring(0, 7);
         const justificativa = `[Apontamento #${newId} - ${input.tipoOcorrencia}] ${input.descricao.substring(0, 200)} (por ${solicitanteNome})`;
         const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
@@ -116,6 +117,9 @@ export const fieldNotesRouter = router({
         let atrasos = "0:00";
         if (input.tipoOcorrencia === 'falta' || input.tipoOcorrencia === 'abandono_posto') {
           faltas = totalMin > 0 ? "0" : "1";
+        }
+        if (input.tipoOcorrencia === 'esqueceu_bater') {
+          faltas = "0";
         }
 
         if (ex) {
@@ -263,6 +267,38 @@ export const fieldNotesRouter = router({
               mesReferencia: mesRef,
               obraId: note.obraId,
               faltas: "1",
+              horasTrabalhadas: "00:00",
+              horasExtras: "0:00",
+              horasNoturnas: "0:00",
+              atrasos: "0:00",
+              fonte: "apontamento",
+              ajusteManual: 1,
+              ajustadoPor: resolvidoPor,
+              justificativa,
+            });
+          }
+        } else if (note.tipoOcorrencia === 'esqueceu_bater' || note.tipoOcorrencia === 'outro') {
+          if (existing.length > 0) {
+            await db.update(timeRecords).set({
+              justificativa: existing[0].justificativa
+                ? `${existing[0].justificativa} | ${justificativa}`
+                : justificativa,
+              ajusteManual: 1,
+              ajustadoPor: resolvidoPor,
+              fonte: existing[0].fonte === "dixi" ? "apontamento" : existing[0].fonte,
+            }).where(and(
+              eq(timeRecords.companyId, note.companyId),
+              eq(timeRecords.employeeId, note.employeeId),
+              eq(timeRecords.data, note.data),
+            ));
+          } else {
+            await db.insert(timeRecords).values({
+              companyId: note.companyId,
+              employeeId: note.employeeId,
+              data: note.data,
+              mesReferencia: mesRef,
+              obraId: note.obraId,
+              faltas: "0",
               horasTrabalhadas: "00:00",
               horasExtras: "0:00",
               horasNoturnas: "0:00",
