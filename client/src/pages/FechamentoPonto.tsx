@@ -645,6 +645,7 @@ export default function FechamentoPonto() {
   const verifyPasswordMut = trpc.auth.verifyPassword.useMutation();
   const [selectiveSearch, setSelectiveSearch] = useState("");
   const [showExistingEmployees, setShowExistingEmployees] = useState(false);
+  const [expandedEmpIds, setExpandedEmpIds] = useState<Set<number>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [filterObra, setFilterObra] = useState<string>("all");
   const [cardFilter, setCardFilter] = useState<CardFilter>(null);
@@ -1063,6 +1064,7 @@ export default function FechamentoPonto() {
         setSelectedEmployeeIds(new Set(preview.employees.map((e: any) => e.employeeId)));
         setSelectiveSearch("");
         setShowExistingEmployees(false);
+        setExpandedEmpIds(new Set());
         setPendingDirectUpload(!preview.hasExistingData);
         setShowSelectiveDialog(true);
       } else {
@@ -3846,16 +3848,60 @@ export default function FechamentoPonto() {
                           <p className="text-xs font-semibold text-amber-800 mb-1.5">
                             Funcionários com dados já importados ({jaImportados.length}):
                           </p>
-                          <div className="max-h-48 overflow-y-auto space-y-1">
-                            {jaImportados.sort((a: any, b: any) => a.nomeCompleto.localeCompare(b.nomeCompleto)).map((emp: any) => (
-                              <div key={emp.employeeId} className="flex items-center gap-2 text-xs bg-amber-100/60 rounded-lg px-3 py-1.5">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                                <span className="font-medium text-amber-900 flex-1 truncate">{emp.nomeCompleto}</span>
-                                <span className="text-amber-600 shrink-0">{emp.funcao || "—"}</span>
-                                <span className="text-amber-500 shrink-0">{emp.registrosExistentes} reg.</span>
-                                <span className="text-amber-500 shrink-0">{emp.meses.map((m: string) => formatMesAno(m)).join(", ")}</span>
+                          <div className="max-h-[300px] overflow-y-auto space-y-1">
+                            {jaImportados.sort((a: any, b: any) => a.nomeCompleto.localeCompare(b.nomeCompleto)).map((emp: any) => {
+                              const isExpanded = expandedEmpIds.has(emp.employeeId);
+                              const records = emp.registrosDetalhe || [];
+                              return (
+                              <div key={emp.employeeId} className="rounded-lg overflow-hidden">
+                                <button type="button" className="w-full flex items-center gap-2 text-xs bg-amber-100/60 hover:bg-amber-100 transition-colors px-3 py-1.5 text-left"
+                                  onClick={() => setExpandedEmpIds(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(emp.employeeId)) next.delete(emp.employeeId);
+                                    else next.add(emp.employeeId);
+                                    return next;
+                                  })}>
+                                  {isExpanded ? <ChevronUp className="h-3 w-3 text-amber-600 shrink-0" /> : <ChevronDown className="h-3 w-3 text-amber-600 shrink-0" />}
+                                  <span className="font-medium text-amber-900 flex-1 truncate">{emp.nomeCompleto}</span>
+                                  <span className="text-amber-600 shrink-0">{emp.funcao || "—"}</span>
+                                  <span className="text-amber-500 shrink-0">{emp.registrosExistentes} reg.</span>
+                                  <span className="text-amber-500 shrink-0">{emp.meses.map((m: string) => formatMesAno(m)).join(", ")}</span>
+                                </button>
+                                {isExpanded && records.length > 0 && (
+                                  <div className="bg-white border border-amber-200 border-t-0 rounded-b-lg">
+                                    <table className="w-full text-[11px]">
+                                      <thead>
+                                        <tr className="bg-amber-50 text-amber-700">
+                                          <th className="px-2 py-1 text-left font-medium">Data</th>
+                                          <th className="px-2 py-1 text-center font-medium">Entrada 1</th>
+                                          <th className="px-2 py-1 text-center font-medium">Saída 1</th>
+                                          <th className="px-2 py-1 text-center font-medium">Entrada 2</th>
+                                          <th className="px-2 py-1 text-center font-medium">Saída 2</th>
+                                          <th className="px-2 py-1 text-center font-medium">Trab.</th>
+                                          <th className="px-2 py-1 text-center font-medium">HE</th>
+                                          <th className="px-2 py-1 text-center font-medium">Falta</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {records.map((r: any, idx: number) => (
+                                          <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-amber-50/30"}>
+                                            <td className="px-2 py-0.5 text-gray-700">{r.data?.split('-').reverse().join('/')}</td>
+                                            <td className="px-2 py-0.5 text-center text-gray-600">{r.entrada1 || "—"}</td>
+                                            <td className="px-2 py-0.5 text-center text-gray-600">{r.saida1 || "—"}</td>
+                                            <td className="px-2 py-0.5 text-center text-gray-600">{r.entrada2 || "—"}</td>
+                                            <td className="px-2 py-0.5 text-center text-gray-600">{r.saida2 || "—"}</td>
+                                            <td className="px-2 py-0.5 text-center font-medium text-gray-800">{r.horasTrabalhadas}</td>
+                                            <td className="px-2 py-0.5 text-center text-blue-600">{r.horasExtras !== "0:00" ? r.horasExtras : "—"}</td>
+                                            <td className="px-2 py-0.5 text-center">{r.faltas === "1" ? <span className="text-red-600 font-bold">SIM</span> : "—"}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       )}

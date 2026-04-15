@@ -759,18 +759,43 @@ export const fechamentoPontoRouter = router({
 
       const mesesArr = Array.from(mesesDetectados).sort();
       let existingByEmployee: Record<number, number> = {};
+      let existingRecordsByEmployee: Record<number, Array<{ data: string; entrada1: string; saida1: string; entrada2: string; saida2: string; horasTrabalhadas: string; horasExtras: string; faltas: string; fonte: string }>> = {};
       if (mesesArr.length > 0 && obraId) {
         for (const mesRef of mesesArr) {
-          const existingRecs = await db.select({ employeeId: timeRecords.employeeId })
+          const existingRecs = await db.select({
+            employeeId: timeRecords.employeeId,
+            data: timeRecords.data,
+            entrada1: timeRecords.entrada1,
+            saida1: timeRecords.saida1,
+            entrada2: timeRecords.entrada2,
+            saida2: timeRecords.saida2,
+            horasTrabalhadas: timeRecords.horasTrabalhadas,
+            horasExtras: timeRecords.horasExtras,
+            faltas: timeRecords.faltas,
+            fonte: timeRecords.fonte,
+          })
             .from(timeRecords)
             .where(and(
               companyFilter(timeRecords.companyId, input),
               eq(timeRecords.mesReferencia, mesRef),
               eq(timeRecords.obraId, obraId),
               eq(timeRecords.fonte, "dixi"),
-            ));
+            ))
+            .orderBy(sql`${timeRecords.data} ASC`);
           for (const r of existingRecs) {
             existingByEmployee[r.employeeId] = (existingByEmployee[r.employeeId] || 0) + 1;
+            if (!existingRecordsByEmployee[r.employeeId]) existingRecordsByEmployee[r.employeeId] = [];
+            existingRecordsByEmployee[r.employeeId].push({
+              data: r.data,
+              entrada1: r.entrada1 || "",
+              saida1: r.saida1 || "",
+              entrada2: r.entrada2 || "",
+              saida2: r.saida2 || "",
+              horasTrabalhadas: r.horasTrabalhadas || "00:00",
+              horasExtras: r.horasExtras || "0:00",
+              faltas: r.faltas || "0",
+              fonte: r.fonte || "dixi",
+            });
           }
         }
       }
@@ -820,6 +845,7 @@ export const fechamentoPontoRouter = router({
           ...e,
           jaImportado: !!existingByEmployee[e.employeeId],
           registrosExistentes: existingByEmployee[e.employeeId] || 0,
+          registrosDetalhe: existingRecordsByEmployee[e.employeeId] || [],
         })).sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto)),
         totalRegistros: previewEmployees.reduce((sum, e) => sum + e.totalRegistros, 0),
       };
