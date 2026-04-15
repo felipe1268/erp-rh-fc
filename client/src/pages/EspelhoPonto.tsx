@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Search, RefreshCw, User, ChevronDown, FileText,
-  Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info, AlertTriangle,
+  Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info, AlertTriangle, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -332,6 +332,12 @@ export default function EspelhoPonto() {
   const [editDate, setEditDate] = useState<string | null>(null);
   const [editRecord, setEditRecord] = useState<any | null>(null);
 
+  // Limpar ponto dialog
+  const [showLimpar, setShowLimpar] = useState(false);
+  const [limparInicio, setLimparInicio] = useState("");
+  const [limparFim, setLimparFim] = useState("");
+  const [limparConfirmText, setLimparConfirmText] = useState("");
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -436,6 +442,16 @@ export default function EspelhoPonto() {
   const gridCols = hasThirdShift
     ? "7rem 4.5rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem minmax(8rem,1fr) 7rem 2.5rem"
     : "7rem 4.5rem 4.5rem 4.5rem 4.5rem 5.5rem 5rem minmax(8rem,1fr) 7rem 2.5rem";
+
+  const limparMut = trpc.fechamentoPonto.limparPontoPeriodo.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.deleted} registro(s) de ponto removido(s) com sucesso`);
+      setShowLimpar(false);
+      setLimparConfirmText("");
+      espelhoQ.refetch();
+    },
+    onError: (err) => toast.error(`Erro ao limpar ponto: ${err.message}`),
+  });
 
   function handleSelectEmp(emp: any) { setEmployeeId(Number(emp.id)); setSearchQuery(""); setShowDropdown(false); }
   function handleBuscar() { if (!employeeId || !dataInicio || !dataFim) return; setQueryParams({ employeeId, dataInicio, dataFim }); }
@@ -565,6 +581,13 @@ export default function EspelhoPonto() {
                 ? <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Buscando…</>
                 : <><Search className="h-3.5 w-3.5 mr-1.5" />Buscar</>}
             </Button>
+
+            {queryParams && (
+              <Button variant="outline" onClick={() => { setLimparInicio(dataInicio); setLimparFim(dataFim); setLimparConfirmText(""); setShowLimpar(true); }}
+                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-lg px-4 h-9">
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />Limpar Ponto
+              </Button>
+            )}
           </div>
 
           <div className="flex items-center gap-2 mt-3">
@@ -871,6 +894,69 @@ export default function EspelhoPonto() {
       </div>
 
       <PrintFooterLGPD />
+
+      {/* ── DIALOG: LIMPAR PONTO ─────────────────────────────── */}
+      <Dialog open={showLimpar} onOpenChange={setShowLimpar}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <Trash2 className="h-5 w-5" /> Limpar Registros de Ponto
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700 font-medium flex items-center gap-1.5">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                Atenção: Esta ação é irreversível!
+              </p>
+              <p className="text-xs text-red-600 mt-1">
+                Todos os registros de ponto do funcionário selecionado no período informado serão excluídos permanentemente.
+              </p>
+            </div>
+
+            {selectedEmp && (
+              <div className="text-sm text-slate-700">
+                <span className="font-medium">Funcionário:</span> {selectedEmp.nomeCompleto}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Data início</label>
+                <input type="date" value={limparInicio} onChange={e => setLimparInicio(e.target.value)}
+                  className="w-full py-2 px-3 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-300" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Data fim</label>
+                <input type="date" value={limparFim} onChange={e => setLimparFim(e.target.value)}
+                  className="w-full py-2 px-3 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-300" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">
+                Digite <span className="font-bold text-red-600">LIMPAR</span> para confirmar
+              </label>
+              <input type="text" value={limparConfirmText} onChange={e => setLimparConfirmText(e.target.value)}
+                placeholder="LIMPAR"
+                className="w-full py-2 px-3 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-300" />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowLimpar(false)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={limparConfirmText !== "LIMPAR" || !limparInicio || !limparFim || !employeeId || limparMut.isPending}
+              onClick={() => {
+                if (!employeeId) return;
+                limparMut.mutate({ companyId: queryCompanyId, employeeId, dataInicio: limparInicio, dataFim: limparFim });
+              }}
+            >
+              {limparMut.isPending ? "Removendo..." : "Confirmar Exclusão"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

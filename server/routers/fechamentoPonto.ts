@@ -3881,4 +3881,24 @@ export const fechamentoPontoRouter = router({
         total: corrigidasFerias + corrigidasAviso,
       };
     }),
+
+  limparPontoPeriodo: protectedProcedure
+    .input(z.object({
+      companyId:  z.number(),
+      employeeId: z.number(),
+      dataInicio: z.string(),
+      dataFim:    z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const result = await db.execute(sql`
+        DELETE FROM time_records
+        WHERE company_id = ${input.companyId}
+          AND employee_id = ${input.employeeId}
+          AND data BETWEEN ${input.dataInicio} AND ${input.dataFim}
+      `);
+      const deleted = Number((result as any).rowCount ?? 0);
+      console.log(`[LimparPonto] Removidos ${deleted} registros de ponto — emp=${input.employeeId} de ${input.dataInicio} a ${input.dataFim}`);
+      return { deleted };
+    }),
 });
