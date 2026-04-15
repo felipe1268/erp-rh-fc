@@ -800,10 +800,10 @@ function DashboardLayoutContent({
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
-  const { selectedCompany, selectedCompanyId, getCompanyIds } = useCompany();
+  const { selectedCompany, selectedCompanyId, getCompanyIdsForQuery } = useCompany();
   const [avisoBannerOpen, setAvisoBannerOpen] = useState(true);
   const cId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
-  const badgeCompanyIds = getCompanyIds();
+  const badgeCompanyIds = getCompanyIdsForQuery();
   const avisoAtivosQuery = trpc.avisoPrevio.avisoPrevio.list.useQuery(
     { companyId: cId, status: 'em_andamento' },
     { enabled: cId > 0, staleTime: 60_000 }
