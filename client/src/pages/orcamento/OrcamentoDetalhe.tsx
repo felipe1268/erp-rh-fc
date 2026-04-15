@@ -18,7 +18,7 @@ import {
 import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, TrendingUp, Target,
   ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save, Lock,
-  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench, Percent, Pencil, Trash2, Search,
+  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen, Wrench, Percent, Pencil, Trash2, Search, Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -410,6 +410,15 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
   const bdiPct  = n(orc.bdiPercentual)  * 100;
   const metaPct = n(orc.metaPercentual) * 100;
 
+  const tipoContratoObra = (orc.obra?.tipoContrato || "global").toLowerCase();
+  const isMdo = tipoContratoObra === "mdo";
+  const TIPO_CONTRATO_LABELS: Record<string, { label: string; desc: string; color: string }> = {
+    global: { label: "Empreitada Global", desc: "BDI aplicado sobre Material + MO", color: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+    mdo:    { label: "Só Mão de Obra", desc: "BDI aplicado somente sobre MO — Material apenas informativo (ADM)", color: "bg-blue-100 text-blue-800 border-blue-300" },
+    adm:    { label: "Administração", desc: "Somente administração de custos", color: "bg-purple-100 text-purple-800 border-purple-300" },
+  };
+  const tipoContratoInfo = TIPO_CONTRATO_LABELS[tipoContratoObra] ?? TIPO_CONTRATO_LABELS.global;
+
   // ── Mapa de grupos (item tem filhos) ──
   // Constrói de baixo pra cima: cada item com "." no código marca seu pai como grupo.
   // Isso é O(n) e funciona independente de ordenação — muito mais robusto que "próximo item".
@@ -464,18 +473,19 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
     : r2(totalCusto * (1 - localMetaPerc / 100));
 
   // ── Valores de Material/MO ajustados pela visão ativa ───────────────────
-  // Para os cards de summary: aplicar o mesmo fator que as linhas da tabela usam
-  // Se o usuário definiu um valor R$ exato, o fator é derivado dele (meta/custo).
-  // Isso garante que Mat/MO do resumo e as linhas da tabela usem o mesmo fator.
   const _metaFactor = (localMetaVal !== null && totalCusto > 0)
     ? localMetaVal / totalCusto
     : 1 - localMetaPerc / 100;
   const _bdiGlobalFactor = totalCusto > 0 && totalVenda > 0 ? totalVenda / totalCusto : 1;
+
+  // MDO: Material é informativo — na visão Venda, material fica como custo (sem BDI)
+  const _bdiMdoFactorRaw = totalMdo > 0 ? (totalVenda - totalMat) / totalMdo : _bdiGlobalFactor;
+  const _bdiMdoFactor = _bdiMdoFactorRaw > 0 ? _bdiMdoFactorRaw : _bdiGlobalFactor;
   const totalMatDisp = versao === "meta"  ? r2(totalMat * _metaFactor)
-                     : versao === "venda" ? r2(totalMat * _bdiGlobalFactor)
+                     : versao === "venda" ? (isMdo ? totalMat : r2(totalMat * _bdiGlobalFactor))
                      :                     totalMat;
   const totalMdoDisp = versao === "meta"  ? r2(totalMdo * _metaFactor)
-                     : versao === "venda" ? r2(totalMdo * _bdiGlobalFactor)
+                     : versao === "venda" ? (isMdo ? r2(totalMdo * _bdiMdoFactor) : r2(totalMdo * _bdiGlobalFactor))
                      :                     totalMdo;
   const totalAtual   = versao === "meta"  ? totalMeta
                      : versao === "venda" ? (valorNegociado > 0 ? valorNegociado : totalVenda)
@@ -599,12 +609,16 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
               <ArrowLeft className="h-4 w-4 mr-1" /> Lista
             </Button>
             <h1 className="text-xl font-bold tracking-tight">{orc.codigo}</h1>
-            <div className="flex gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+            <div className="flex gap-3 mt-1 text-xs text-muted-foreground flex-wrap items-center">
               {orc.revisao && <span className="text-blue-600 font-mono font-medium">{orc.revisao}</span>}
               {orc.cliente && <span>Cliente: {orc.cliente}</span>}
               {orc.local   && <span>Local: {orc.local}</span>}
               {bdiPct > 0  && <span className="text-amber-600 font-medium">BDI {bdiPct.toFixed(2)}%</span>}
               <span className="text-purple-600 font-medium">Meta −{metaPct.toFixed(2)}% do custo</span>
+              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${tipoContratoInfo.color}`}
+                title={tipoContratoInfo.desc}>
+                {tipoContratoInfo.label}
+              </span>
             </div>
           </div>
           {/* Botões de ação */}
@@ -643,6 +657,16 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
             <div>
               <p className="text-sm font-semibold text-amber-800">{data.qtdSolicitacoes} solicitação(ões) de compra vinculada(s)</p>
               <p className="text-xs text-amber-600">A exclusão do orçamento está bloqueada enquanto houver SCs vinculadas. A atualização da planilha continua disponível.</p>
+            </div>
+          </div>
+        )}
+
+        {isMdo && (
+          <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 mb-3">
+            <Info className="h-5 w-5 text-blue-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-blue-800">Contrato Só Mão de Obra (ADM de Material)</p>
+              <p className="text-xs text-blue-600">O BDI é aplicado somente sobre a Mão de Obra. O valor de Material aparece como informativo em cada item da EAP, sem entrar no cálculo de venda.</p>
             </div>
           </div>
         )}
@@ -793,7 +817,7 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
             <p className={`text-base font-bold ${versao === "custo" ? "text-amber-700" : "text-foreground"}`}>
               {formatBRL(totalCusto)}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Custo direto</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{isMdo ? "Custo total (MO + Material informativo)" : "Custo direto"}</p>
           </button>
 
           {/* CARD VENDA (direita) */}
@@ -834,7 +858,7 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                   </>
                 ) : (
                   bdiPct > 0
-                    ? <p className="text-xs text-muted-foreground mt-0.5">BDI {bdiPct.toFixed(2)}%</p>
+                    ? <p className="text-xs text-muted-foreground mt-0.5">BDI {bdiPct.toFixed(2)}%{isMdo ? " (somente MO)" : ""}</p>
                     : <p className="text-xs text-muted-foreground mt-0.5">BDI não importado</p>
                 )}
               </button>
@@ -1032,14 +1056,15 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
 
             {/* ── Barra de totais acima da tabela ── */}
             <div className="grid grid-cols-3 gap-3 mb-3">
-              <div className="rounded-lg border bg-blue-50 border-blue-200 px-4 py-2.5 flex items-center justify-between">
+              <div className={`rounded-lg border px-4 py-2.5 flex items-center justify-between ${isMdo && versao === "venda" ? "bg-slate-50 border-slate-200" : "bg-blue-50 border-blue-200"}`}>
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500">
-                    Total Material{versao !== "custo" ? ` (${cfg.label})` : ""}
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider ${isMdo && versao === "venda" ? "text-slate-500" : "text-blue-500"}`}>
+                    Total Material{isMdo ? " (informativo)" : versao !== "custo" ? ` (${cfg.label})` : ""}
                   </p>
-                  <p className="text-sm font-bold text-blue-700 tabular-nums mt-0.5">{formatBRL(totalMatDisp)}</p>
+                  <p className={`text-sm font-bold tabular-nums mt-0.5 ${isMdo && versao === "venda" ? "text-slate-500" : "text-blue-700"}`}>{formatBRL(totalMatDisp)}</p>
+                  {isMdo && versao === "venda" && <p className="text-[9px] text-slate-400 mt-0.5">Não entra no cálculo de venda</p>}
                 </div>
-                <div className="text-[10px] text-blue-400 font-medium">
+                <div className={`text-[10px] font-medium ${isMdo && versao === "venda" ? "text-slate-400" : "text-blue-400"}`}>
                   {totalAtual > 0 ? `${((totalMatDisp / totalAtual) * 100).toFixed(1)}%` : "—"}
                 </div>
               </div>
@@ -1098,17 +1123,21 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                       {showCompCol && <th className="text-left px-2 py-2 w-[80px] text-cyan-200">Composição</th>}
                       <th className="text-center px-1 py-2 w-[42px]">Un</th>
                       <th className="text-right px-2 py-2 w-[68px]">Qtd</th>
-                      <th className="text-right px-2 py-2 w-[84px] text-blue-200">
+                      <th className={`text-right px-2 py-2 w-[84px] ${isMdo && versao === "venda" ? "text-slate-400" : "text-blue-200"}`}>
                         P.Unit.<br/>Mat
-                        {versao !== "custo" && <span className="block text-[9px] text-blue-300 font-normal">{cfg.label}</span>}
+                        {isMdo && versao === "venda"
+                          ? <span className="block text-[9px] text-slate-500 font-normal">Info</span>
+                          : versao !== "custo" && <span className="block text-[9px] text-blue-300 font-normal">{cfg.label}</span>}
                       </th>
                       <th className="text-right px-2 py-2 w-[84px] text-orange-200">
                         P.Unit.<br/>MO
                         {versao !== "custo" && <span className="block text-[9px] text-orange-300 font-normal">{cfg.label}</span>}
                       </th>
-                      <th className="text-right px-2 py-2 w-[84px] text-blue-200">
+                      <th className={`text-right px-2 py-2 w-[84px] ${isMdo && versao === "venda" ? "text-slate-400" : "text-blue-200"}`}>
                         P.Total<br/>Mat
-                        {versao !== "custo" && <span className="block text-[9px] text-blue-300 font-normal">{cfg.label}</span>}
+                        {isMdo && versao === "venda"
+                          ? <span className="block text-[9px] text-slate-500 font-normal">Info</span>
+                          : versao !== "custo" && <span className="block text-[9px] text-blue-300 font-normal">{cfg.label}</span>}
                       </th>
                       <th className="text-right px-2 py-2 w-[84px] text-orange-200">
                         P.Total<br/>MO
@@ -1155,18 +1184,24 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                         : (totalCusto > 0 ? totalVenda / totalCusto : 1);
 
                       // ── Preço unitário material/MO na visão selecionada ───────────
-                      const puMat = versao === "venda" ? costUnitMat * bdiUnitFactor
+                      // MDO: material é informativo — fica sempre no custo (sem BDI)
+                      const mdoUnitFactor = _bdiMdoFactor > 0 ? _bdiMdoFactor : bdiUnitFactor;
+                      const puMat = isMdo && versao === "venda" ? costUnitMat
+                                  : versao === "venda" ? costUnitMat * bdiUnitFactor
                                   : versao === "meta"  ? costUnitMat * metaFactor
                                   :                     costUnitMat;
-                      const puMdo = versao === "venda" ? costUnitMdo * bdiUnitFactor
+                      const puMdo = isMdo && versao === "venda" ? costUnitMdo * mdoUnitFactor
+                                  : versao === "venda" ? costUnitMdo * bdiUnitFactor
                                   : versao === "meta"  ? costUnitMdo * metaFactor
                                   :                     costUnitMdo;
 
                       // ── Preço total material/MO na visão selecionada ──────────────
-                      const ptMat = versao === "venda" ? rawMat * bdiTotFactor
+                      const ptMat = isMdo && versao === "venda" ? rawMat
+                                  : versao === "venda" ? rawMat * bdiTotFactor
                                   : versao === "meta"  ? rawMat * metaFactor
                                   :                     rawMat;
-                      const ptMdo = versao === "venda" ? rawMdo * bdiTotFactor
+                      const ptMdo = isMdo && versao === "venda" ? rawMdo * _bdiMdoFactor
+                                  : versao === "venda" ? rawMdo * bdiTotFactor
                                   : versao === "meta"  ? rawMdo * metaFactor
                                   :                     rawMdo;
 
@@ -1224,7 +1259,7 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                           </td>
 
                           {/* Preço Unit. Material */}
-                          <td className="px-2 py-1.5 text-right text-blue-600 tabular-nums text-[10px]">
+                          <td className={`px-2 py-1.5 text-right tabular-nums text-[10px] ${isMdo && versao === "venda" ? "text-slate-400 italic" : "text-blue-600"}`}>
                             {isLeaf && puMat > 0 ? formatBRL(puMat) : <span className="text-slate-300">—</span>}
                           </td>
 
@@ -1234,7 +1269,7 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
                           </td>
 
                           {/* Preço Total Material */}
-                          <td className="px-2 py-1.5 text-right text-blue-600 font-medium tabular-nums text-[10px]">
+                          <td className={`px-2 py-1.5 text-right font-medium tabular-nums text-[10px] ${isMdo && versao === "venda" ? "text-slate-400 italic" : "text-blue-600"}`}>
                             {ptMat > 0 ? formatBRL(ptMat) : <span className="text-slate-300">—</span>}
                           </td>
 
