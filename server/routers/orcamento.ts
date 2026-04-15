@@ -532,7 +532,7 @@ function detectarColunas(labelRow: any[], parentRow: any[] | null): Record<strin
 // bdiPercentual: decimal fraction (ex: 0.2456 = 24.56%)
 // overrideColMap: mapeamento manual confirmado pelo usuário (se fornecido, pula detecção automática)
 // Venda = Custo × (1 + BDI%)   |   Meta = Custo × (1 − Meta%)
-function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: number = 0, overrideColMap?: Record<string, number>) {
+function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: number = 0, overrideColMap?: Record<string, number>, somenteMdo: boolean = false) {
   // ─── 1. Detectar linha de cabeçalho ────────────────────────────────────────
   // Procura a linha que contém "Item" (qualquer posição).
   // Pode haver dois padrões:
@@ -711,9 +711,17 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     }
 
     // Fórmula ABNT/TCU: PV = CD ÷ (1 − BDI%)
+    // somenteMdo: BDI incide apenas sobre MO, material passa como custo direto
     const bdiDiv = bdiPercentual > 0 ? (1 - bdiPercentual) : 1;
-    const vendaTotal     = bdiDiv < 1 ? custoTotal          / bdiDiv : custoTotal;
-    const vendaUnitTotal = bdiDiv < 1 ? custoUnitTotalFinal / bdiDiv : custoUnitTotalFinal;
+    let vendaTotal: number;
+    let vendaUnitTotal: number;
+    if (somenteMdo && bdiDiv < 1) {
+      vendaTotal     = (custoTotalMdo / bdiDiv) + custoTotalMat + custoTotalEquip;
+      vendaUnitTotal = (custoUnitMdoFinal / bdiDiv) + custoUnitMatFinal + custoUnitEquipFinal;
+    } else {
+      vendaTotal     = bdiDiv < 1 ? custoTotal          / bdiDiv : custoTotal;
+      vendaUnitTotal = bdiDiv < 1 ? custoUnitTotalFinal / bdiDiv : custoUnitTotalFinal;
+    }
     const metaTotal      = custoTotal          * (1 - metaPerc);
     const metaUnitTotal  = custoUnitTotalFinal * (1 - metaPerc);
     const metaUnitMat    = custoUnitMatFinal   * (1 - metaPerc);
@@ -1803,8 +1811,18 @@ export const orcamentoRouter = router({
       // Metadados
       const meta = extrairMetadados(dataOrc);
 
+      // Detectar tipo de contrato da obra para ajustar cálculo de venda
+      let tipoContratoImport = 'global';
+      if (input.obraId) {
+        const obraRows = await db.execute(sql`SELECT tipo_contrato FROM obras WHERE id = ${input.obraId} LIMIT 1`);
+        const obraArr: any[] = (obraRows as any).rows ?? obraRows ?? [];
+        if (obraArr[0]?.tipo_contrato) tipoContratoImport = obraArr[0].tipo_contrato;
+      }
+      const somenteMdoImport = tipoContratoImport === 'mdo';
+      if (somenteMdoImport) console.log('[Importar] Tipo contrato MDO — BDI somente sobre MO');
+
       // Itens da EAP — venda calculada via fórmula ABNT/TCU por item
-      const { itens, colMap: colMapOrc } = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual, input.colMapping);
+      const { itens, colMap: colMapOrc } = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual, input.colMapping, somenteMdoImport);
       if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
 
       // ── Insumos ──
@@ -1825,7 +1843,7 @@ export const orcamentoRouter = router({
       const totaisGerais  = extrairTotaisPlanilha(dataOrc, colMapOrc);
       const nivel1        = itens.filter(i => i.nivel === 1);
       const totalVendaEAP = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal), 0);
-      const totalVenda    = totalVendaBdi > 0 ? totalVendaBdi : totalVendaEAP;
+      const totalVenda    = (totalVendaBdi > 0 && !somenteMdoImport) ? totalVendaBdi : totalVendaEAP;
       const totalCusto    = totaisGerais?.totalCusto  ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
       const totalMateriais = totaisGerais?.totalMat   ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
       const totalMdo      = totaisGerais?.totalMdo    ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
@@ -2086,7 +2104,16 @@ export const orcamentoRouter = router({
       const { bdiPercentual, totalVendaBdi, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
       const bdiFinal = bdiPercentual > 0 ? bdiPercentual : parseFloat(orc.bdiPercentual || '0');
 
-      const { itens, colMap: colMapOrc2 } = parsearAbaCorcamento(dataOrc, metaPerc, bdiFinal);
+      // Detectar tipo de contrato da obra para cálculo de venda
+      let tipoContratoReimp = 'global';
+      if (orc.obraId) {
+        const obraRowsR = await db.execute(sql`SELECT tipo_contrato FROM obras WHERE id = ${orc.obraId} LIMIT 1`);
+        const obraArrR: any[] = (obraRowsR as any).rows ?? obraRowsR ?? [];
+        if (obraArrR[0]?.tipo_contrato) tipoContratoReimp = obraArrR[0].tipo_contrato;
+      }
+      const somenteMdoReimp = tipoContratoReimp === 'mdo';
+
+      const { itens, colMap: colMapOrc2 } = parsearAbaCorcamento(dataOrc, metaPerc, bdiFinal, undefined, somenteMdoReimp);
       if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
 
       // Insumos opcionais
@@ -2102,10 +2129,11 @@ export const orcamentoRouter = router({
         : { composicoes: [], linhasInsumos: [] };
 
       // Totais: usa PV-2 da aba BDI como total de venda autoritativo quando disponível
+      // Para contrato MDO, ignora totalVendaBdi (aba BDI calcula BDI sobre tudo, não só MO)
       const totaisGerais  = extrairTotaisPlanilha(dataOrc, colMapOrc2);
       const nivel1        = itens.filter(i => i.nivel === 1);
       const totalVendaEAP = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal), 0);
-      const totalVenda    = totalVendaBdi > 0 ? totalVendaBdi : totalVendaEAP;
+      const totalVenda    = (totalVendaBdi > 0 && !somenteMdoReimp) ? totalVendaBdi : totalVendaEAP;
       const totalCusto    = totaisGerais?.totalCusto  ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
       const totalMateriais = totaisGerais?.totalMat   ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
       const totalMdo      = totaisGerais?.totalMdo    ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
