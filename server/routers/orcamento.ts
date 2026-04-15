@@ -1980,27 +1980,30 @@ export const orcamentoRouter = router({
       // Catálogo NÃO é atualizado automaticamente — usuário decide via "Enviar para Biblioteca"
 
       // ── Recalcular venda se contrato MDO (BDI só na MO, venda = só MO) ───────────
+      // Para MDO: totalVenda = totalVendaBdi (PV-2 da aba BDI, que já calcula BDI só sobre MO).
+      // Distribuir venda proporcionalmente entre itens com base no custo MO de cada um.
       let totalVendaFinal = totalVenda;
-      if (isMdoImport && bdiPercentual > 0) {
-        const bdiDivisor = 1 - bdiPercentual;
-        if (bdiDivisor > 0) {
-          console.log('[Importar] Tipo contrato MDO — recalculando venda com BDI somente sobre MO (sem material)');
-          await db.update(orcamentoItens).set({
-            vendaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotalMdo}::numeric, 0) / ${String(bdiDivisor)}, 2)`,
-            vendaUnitTotal: sql`ROUND(COALESCE(${orcamentoItens.custoUnitMdo}::numeric, 0) / ${String(bdiDivisor)}, 4)`,
-          }).where(eq(orcamentoItens.orcamentoId, orcamentoId));
+      if (isMdoImport) {
+        const vendaRef = totalVendaBdi > 0 ? totalVendaBdi : totalVenda;
+        const totalMdoSum = totalMdo > 0 ? totalMdo : 1;
+        const mdoFactor = vendaRef / totalMdoSum;
+        console.log(`[Importar] Tipo contrato MDO — distribuindo venda proporcional ao MO (PV-2=${totalVendaBdi}, fator=${mdoFactor.toFixed(6)})`);
+        await db.update(orcamentoItens).set({
+          vendaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotalMdo}::numeric, 0) * ${String(mdoFactor)}, 2)`,
+          vendaUnitTotal: sql`ROUND(COALESCE(${orcamentoItens.custoUnitMdo}::numeric, 0) * ${String(mdoFactor)}, 4)`,
+        }).where(eq(orcamentoItens.orcamentoId, orcamentoId));
 
-          const nivel1Final = await db.select({ custoTotalMdo: orcamentoItens.custoTotalMdo })
-            .from(orcamentoItens).where(and(eq(orcamentoItens.orcamentoId, orcamentoId), eq(orcamentoItens.nivel, 1)));
-          totalVendaFinal = nivel1Final.reduce((s, i) => {
-            const mdo = parseFloat(i.custoTotalMdo || '0');
-            return s + (mdo / bdiDivisor);
-          }, 0);
+        const nivel1Final = await db.select({ custoTotalMdo: orcamentoItens.custoTotalMdo })
+          .from(orcamentoItens).where(and(eq(orcamentoItens.orcamentoId, orcamentoId), eq(orcamentoItens.nivel, 1)));
+        totalVendaFinal = nivel1Final.reduce((s, i) => {
+          const mdo = parseFloat(i.custoTotalMdo || '0');
+          return s + (mdo * mdoFactor);
+        }, 0);
+        if (totalVendaBdi > 0) totalVendaFinal = totalVendaBdi;
 
-          await db.update(orcamentos).set({
-            totalVenda: fix2(totalVendaFinal),
-          }).where(eq(orcamentos.id, orcamentoId));
-        }
+        await db.update(orcamentos).set({
+          totalVenda: fix2(totalVendaFinal),
+        }).where(eq(orcamentos.id, orcamentoId));
       }
 
       console.log(`[Importar] Concluído — orcamentoId: ${orcamentoId}, itens: ${itens.length}, CPUs: ${cpusParsed.composicoes.length}`);
@@ -2157,11 +2160,11 @@ export const orcamentoRouter = router({
         : { composicoes: [], linhasInsumos: [] };
 
       // Totais: usa PV-2 da aba BDI como total de venda autoritativo quando disponível
-      // Para contrato MDO, ignora totalVendaBdi (aba BDI calcula BDI sobre tudo, não só MO)
+      // Para contrato MDO, a aba BDI já calcula BDI apenas sobre MO — usar PV-2
       const totaisGerais  = extrairTotaisPlanilha(dataOrc, colMapOrc2);
       const nivel1        = itens.filter(i => i.nivel === 1);
       const totalVendaEAP = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal), 0);
-      const totalVenda    = (totalVendaBdi > 0 && !somenteMdoReimp) ? totalVendaBdi : totalVendaEAP;
+      const totalVenda    = totalVendaBdi > 0 ? totalVendaBdi : totalVendaEAP;
       const totalCustoFull = totaisGerais?.totalCusto  ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
       const totalMateriais = totaisGerais?.totalMat   ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
       const totalMdo      = totaisGerais?.totalMdo    ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
@@ -2299,24 +2302,20 @@ export const orcamentoRouter = router({
         }
       }
 
-      // ── Recalcular venda MDO na reimportação (BDI só MO, venda = só MO) ──
+      // ── Recalcular venda MDO na reimportação ──
+      // PV-2 da aba BDI já calcula BDI sobre MO. Distribuir proporcionalmente entre itens.
       let totalVendaFinal = totalVenda;
-      if (somenteMdoReimp && bdiFinal > 0) {
-        const bdiDivisor = 1 - bdiFinal;
-        if (bdiDivisor > 0) {
-          console.log('[Reimportar] Tipo contrato MDO — recalculando venda com BDI somente sobre MO (sem material)');
-          await db.update(orcamentoItens).set({
-            vendaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotalMdo}::numeric, 0) / ${String(bdiDivisor)}, 2)`,
-            vendaUnitTotal: sql`ROUND(COALESCE(${orcamentoItens.custoUnitMdo}::numeric, 0) / ${String(bdiDivisor)}, 4)`,
-          }).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+      if (somenteMdoReimp) {
+        const vendaRef = totalVendaBdi > 0 ? totalVendaBdi : totalVenda;
+        const totalMdoSum = totalMdo > 0 ? totalMdo : 1;
+        const mdoFactor = vendaRef / totalMdoSum;
+        console.log(`[Reimportar] Tipo contrato MDO — distribuindo venda proporcional ao MO (PV-2=${totalVendaBdi}, fator=${mdoFactor.toFixed(6)})`);
+        await db.update(orcamentoItens).set({
+          vendaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotalMdo}::numeric, 0) * ${String(mdoFactor)}, 2)`,
+          vendaUnitTotal: sql`ROUND(COALESCE(${orcamentoItens.custoUnitMdo}::numeric, 0) * ${String(mdoFactor)}, 4)`,
+        }).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
 
-          const nivel1Final = await db.select({ custoTotalMdo: orcamentoItens.custoTotalMdo })
-            .from(orcamentoItens).where(and(eq(orcamentoItens.orcamentoId, input.orcamentoId), eq(orcamentoItens.nivel, 1)));
-          totalVendaFinal = nivel1Final.reduce((s, i) => {
-            const mdo = parseFloat(i.custoTotalMdo || '0');
-            return s + (mdo / bdiDivisor);
-          }, 0);
-        }
+        totalVendaFinal = totalVendaBdi > 0 ? totalVendaBdi : vendaRef;
       }
 
       // Atualizar totais do orçamento (mantendo codigo/metadados existentes)
