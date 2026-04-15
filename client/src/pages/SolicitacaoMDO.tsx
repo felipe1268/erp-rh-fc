@@ -80,6 +80,7 @@ export default function SolicitacaoMDO() {
   const [formPrioridade, setFormPrioridade] = useState("normal");
   const [formMotivo, setFormMotivo] = useState("");
   const [formAtividades, setFormAtividades] = useState("");
+  const [lucroTercPerc, setLucroTercPerc] = useState(20);
 
   const [funcaoDropdownIdx, setFuncaoDropdownIdx] = useState<string | null>(null);
   const [funcaoBusca, setFuncaoBusca] = useState("");
@@ -119,13 +120,13 @@ export default function SolicitacaoMDO() {
 
   const analiseInput = useMemo(() => {
     const mapped = validItensForAnalise.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses }));
-    return { obraId: formObraId, itens: mapped };
+    return { obraId: formObraId, itens: mapped, lucroTerceirizacaoPerc: lucroTercPerc };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formObraId, analiseItensKey]);
+  }, [formObraId, analiseItensKey, lucroTercPerc]);
 
   const analiseEnabled = viewMode === "form" && analiseInput.obraId > 0 && analiseInput.itens.length > 0 && companyId > 0;
   const analiseQ = trpc.smo.analiseComparativa.useQuery(
-    { companyId, companyIds, obraId: analiseInput.obraId, itens: analiseInput.itens },
+    { companyId, companyIds, obraId: analiseInput.obraId, itens: analiseInput.itens, lucroTerceirizacaoPerc: analiseInput.lucroTerceirizacaoPerc },
     { enabled: analiseEnabled, keepPreviousData: true, staleTime: 30000, refetchOnWindowFocus: false }
   );
 
@@ -557,7 +558,7 @@ export default function SolicitacaoMDO() {
                   </div>
                   <div>
                     <h3 className="font-bold text-[#1B2A4A]">Análise Financeira Detalhada — CLT vs Terceirização</h3>
-                    <p className="text-xs text-muted-foreground">Encargos: {analiseQ.data.parametros.encargosPerc.toFixed(1)}% | BDI Terc.: {((analiseQ.data.parametros.fatorBDI - 1) * 100).toFixed(0)}%</p>
+                    <p className="text-xs text-muted-foreground">Encargos: {analiseQ.data.parametros.encargosPerc.toFixed(1)}% | Lucro Terc.: {analiseQ.data.parametros.lucroTercPerc}%</p>
                   </div>
                 </div>
 
@@ -656,12 +657,12 @@ export default function SolicitacaoMDO() {
                           <div className="text-xs font-bold text-purple-800 uppercase tracking-wide flex items-center gap-1.5">
                             <Users className="h-3.5 w-3.5" /> Terceirização
                           </div>
-                          <div className="text-[10px] text-muted-foreground italic">BDI de {((item.terceirizacao.fatorBDI - 1) * 100).toFixed(0)}% sobre o salário base</div>
+                          <div className="text-[10px] text-muted-foreground italic">Lucro de {item.terceirizacao.lucroPerc}% sobre o custo CLT completo</div>
 
                           <div className="space-y-0.5 text-xs">
-                            <div className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">Custos Mensais (por profissional)</div>
-                            <CostLine label="Salário Base (ref.)" value={item.salarioBase} />
-                            <CostLine label={`BDI (${((item.terceirizacao.fatorBDI - 1) * 100).toFixed(0)}%)`} value={item.salarioBase * (item.terceirizacao.fatorBDI - 1)} sub />
+                            <div className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">Composição do custo (por profissional)</div>
+                            <CostLine label="Custo CLT base (sal.+enc.+benef.)" value={item.terceirizacao.baseCustoMensal} />
+                            <CostLine label={`Lucro da terceirizada (${item.terceirizacao.lucroPerc}%)`} value={item.terceirizacao.lucroValor} sub />
                             <div className="border-t pt-1 flex justify-between font-bold text-purple-800">
                               <span>Custo Mensal/profissional</span>
                               <span className="font-mono">{fmtMoney(item.terceirizacao.custoMensalUnit)}</span>
@@ -676,16 +677,15 @@ export default function SolicitacaoMDO() {
                             <div className="mt-3 font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">Custos Únicos</div>
                             <CostLine label="Mobilização / Desmobilização" value={item.terceirizacao.mobilizacao} />
 
-                            <div className="mt-3 font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">O que está incluso no BDI</div>
+                            <div className="mt-3 font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">O que a terceirizada arca</div>
                             <div className="text-[10px] text-muted-foreground space-y-0.5 ml-2">
-                              <div>✓ Encargos sociais e trabalhistas</div>
+                              <div>✓ Salário + encargos (mesmos que CLT)</div>
                               <div>✓ Benefícios (VR, VA, VT)</div>
                               <div>✓ EPIs e uniformes</div>
                               <div>✓ Exames médicos</div>
-                              <div>✓ Treinamento e integração</div>
                               <div>✓ Férias, 13º e provisões</div>
                               <div>✓ Gestão e administração</div>
-                              <div>✓ Lucro da empresa terceirizada</div>
+                              <div className="font-semibold text-purple-700">+ Lucro da empresa ({item.terceirizacao.lucroPerc}%)</div>
                             </div>
                           </div>
 
@@ -697,14 +697,22 @@ export default function SolicitacaoMDO() {
                             <div className="text-lg font-bold text-purple-900 font-mono">{fmtMoney(item.terceirizacao.custoPeriodo)}</div>
                           </div>
 
-                          {/* Diferença */}
-                          <div className={`rounded-lg p-3 border ${item.comparativo.economiaPeriodo > 0 ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-semibold">{item.comparativo.economiaPeriodo > 0 ? "Economia terceirizando" : "Economia contratando CLT"}</span>
-                              <span className={`text-sm font-bold font-mono ${item.comparativo.economiaPeriodo > 0 ? "text-green-700" : "text-amber-700"}`}>
-                                {fmtMoney(Math.abs(item.comparativo.economiaPeriodo))}
-                              </span>
+                          {/* Análise Comparativa */}
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                            <div className="font-semibold text-[10px] text-amber-800 uppercase tracking-wide">Análise Comparativa</div>
+                            <div className="flex justify-between text-xs">
+                              <span>Diferença mensal (terc. - CLT)</span>
+                              <span className="font-mono font-semibold text-red-700">+{fmtMoney(item.comparativo.diferencaMensal)}</span>
                             </div>
+                            <div className="flex justify-between text-xs">
+                              <span>Custos admissão+demissão CLT</span>
+                              <span className="font-mono font-semibold text-blue-700">{fmtMoney(item.comparativo.custoAdmDemissaoClt)}</span>
+                            </div>
+                            {item.comparativo.mesesParaCompensarAdmissao > 0 && (
+                              <div className="text-[10px] text-amber-700 bg-amber-100 rounded p-1.5">
+                                CLT compensa a partir de <strong>{item.comparativo.mesesParaCompensarAdmissao} meses</strong> (quando a economia mensal supera os custos de admissão/demissão)
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -740,19 +748,40 @@ export default function SolicitacaoMDO() {
                   </div>
                 </div>
 
+                {/* Slider de Lucro Terceirização */}
+                <div className="bg-slate-50 border rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-[#1B2A4A] uppercase tracking-wide">Margem de lucro da terceirizada</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range" min="5" max="50" step="1" value={lucroTercPerc}
+                        onChange={e => setLucroTercPerc(parseInt(e.target.value))}
+                        className="w-32 h-1.5 accent-purple-600"
+                      />
+                      <input
+                        type="number" min="5" max="50" value={lucroTercPerc}
+                        onChange={e => setLucroTercPerc(Math.max(5, Math.min(50, parseInt(e.target.value) || 20)))}
+                        className="w-14 text-center text-sm font-bold border rounded px-1 py-0.5"
+                      />
+                      <span className="text-xs font-semibold text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Ajuste conforme as cotações recebidas. A terceirizada tem os mesmos custos CLT + esse percentual de lucro.</p>
+                </div>
+
                 {/* Recomendação */}
-                <div className={`rounded-xl p-4 flex items-start gap-3 ${analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "bg-purple-100 border border-purple-300" : "bg-blue-100 border border-blue-300"}`}>
-                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "bg-purple-200" : "bg-blue-200"}`}>
-                    <BarChart3 className={`h-5 w-5 ${analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "text-purple-800" : "text-blue-800"}`} />
+                <div className={`rounded-xl p-4 flex items-start gap-3 ${analiseQ.data.resumo.recomendacaoGeral === "contratar" ? "bg-blue-100 border border-blue-300" : "bg-amber-100 border border-amber-300"}`}>
+                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${analiseQ.data.resumo.recomendacaoGeral === "contratar" ? "bg-blue-200" : "bg-amber-200"}`}>
+                    <BarChart3 className={`h-5 w-5 ${analiseQ.data.resumo.recomendacaoGeral === "contratar" ? "text-blue-800" : "text-amber-800"}`} />
                   </div>
                   <div>
-                    <div className={`font-bold text-sm ${analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "text-purple-900" : "text-blue-900"}`}>
-                      Recomendação: {analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "Terceirizar" : "Contratar via CLT"}
+                    <div className={`font-bold text-sm ${analiseQ.data.resumo.recomendacaoGeral === "contratar" ? "text-blue-900" : "text-amber-900"}`}>
+                      Recomendação: {analiseQ.data.resumo.recomendacaoGeral === "contratar" ? "Contratar via CLT" : "Avaliar Terceirização"}
                     </div>
-                    <p className={`text-xs mt-1 ${analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "text-purple-700" : "text-blue-700"}`}>
-                      {analiseQ.data.resumo.economiaPeriodo > 0
-                        ? `Terceirizar economizaria ${fmtMoney(analiseQ.data.resumo.economiaPeriodo)} no período total. Para contratações de curta duração, terceirizar evita custos de admissão/demissão e reduz encargos trabalhistas.`
-                        : `Contratar via CLT economizaria ${fmtMoney(Math.abs(analiseQ.data.resumo.economiaPeriodo))} no período total. Para contratações de longa duração, o custo CLT compensa os custos iniciais de admissão.`
+                    <p className={`text-xs mt-1 ${analiseQ.data.resumo.recomendacaoGeral === "contratar" ? "text-blue-700" : "text-amber-700"}`}>
+                      {analiseQ.data.resumo.recomendacaoGeral === "contratar"
+                        ? `CLT é mais econômico neste período. A terceirização custaria ${fmtMoney(analiseQ.data.resumo.diferencaPeriodo)} a mais no total. Porém, considere a flexibilidade: sem vínculo, sem risco trabalhista, sem custos de demissão.`
+                        : `Para contratos curtos, a terceirização pode compensar mesmo sendo mais cara por mês — você evita custos de admissão (${fmtMoney(analiseQ.data.parametros.custoAdmissaoPorProfissional)}/profissional), demissão e risco trabalhista.`
                       }
                     </p>
                   </div>

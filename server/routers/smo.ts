@@ -317,6 +317,7 @@ export const smoRouter = router({
       companyId: z.number(),
       companyIds: z.array(z.number()).optional(),
       obraId: z.number(),
+      lucroTerceirizacaoPerc: z.number().min(0).max(100).default(20),
       itens: z.array(z.object({
         funcao: z.string(),
         quantidade: z.number().min(1),
@@ -403,18 +404,18 @@ export const smoRouter = router({
         const exameDemissionalTotal = exameDemissional * item.quantidade;
         const custoPeriodo = (custoMensalTotal * item.duracaoMeses) + custosAdmissaoTotal + examePeriodicoTotal + exameDemissionalTotal;
 
-        const fatorBDI = 1.35;
-        const tercMensalUnit = salarioRef * fatorBDI;
+        const lucroTercPerc = input.lucroTerceirizacaoPerc / 100;
+        const tercMensalUnit = custoMensalUnit * (1 + lucroTercPerc);
         const tercMensalTotal = tercMensalUnit * item.quantidade;
-        const tercPeriodo = tercMensalTotal * item.duracaoMeses;
         const tercMobilizacao = 500 * item.quantidade;
-        const tercPeriodoTotal = tercPeriodo + tercMobilizacao;
+        const tercPeriodoTotal = (tercMensalTotal * item.duracaoMeses) + tercMobilizacao;
 
-        const economiaMensal = custoMensalTotal - tercMensalTotal;
-        const economiaPeriodo = custoPeriodo - tercPeriodoTotal;
-        const recomendacao = item.duracaoMeses <= 3
-          ? (economiaPeriodo > 0 ? "terceirizar" : "contratar")
-          : (economiaPeriodo > custosAdmissaoTotal ? "terceirizar" : "contratar");
+        const diferencaMensal = tercMensalTotal - custoMensalTotal;
+        const custoAdmDemissaoClt = custosAdmissaoTotal + exameDemissionalTotal;
+        const economiaCltPeriodo = tercPeriodoTotal - custoPeriodo;
+        const recomendacao = economiaCltPeriodo > 0
+          ? "contratar"
+          : (item.duracaoMeses <= 6 ? "terceirizar" : "contratar");
 
         totalCltMensal += custoMensalTotal;
         totalCltPeriodo += custoPeriodo;
@@ -465,36 +466,43 @@ export const smoRouter = router({
             custoPeriodo,
           },
           terceirizacao: {
-            fatorBDI,
+            lucroPerc: input.lucroTerceirizacaoPerc,
+            baseCustoMensal: custoMensalUnit,
+            lucroValor: custoMensalUnit * lucroTercPerc,
             custoMensalUnit: tercMensalUnit,
             custoMensalTotal: tercMensalTotal,
             mobilizacao: tercMobilizacao,
             custoPeriodo: tercPeriodoTotal,
           },
           comparativo: {
-            economiaMensal,
-            economiaPeriodo,
+            diferencaMensal,
+            tercMaisCaro: diferencaMensal > 0,
+            custoAdmDemissaoClt,
+            economiaCltPeriodo,
+            mesesParaCompensarAdmissao: custoAdmDemissaoClt > 0 && diferencaMensal > 0 ? Math.ceil(custoAdmDemissaoClt / diferencaMensal) : 0,
             recomendacao,
           },
         });
       }
 
-      const recomendacaoGeral = totalCltPeriodo > totalTercPeriodo ? "terceirizar" : "contratar";
+      const diferencaPeriodo = totalTercPeriodo - totalCltPeriodo;
+      const recomendacaoGeral = diferencaPeriodo > 0 ? "contratar" : "avaliar_terceirizacao";
 
       return {
         itens: analiseItens,
         resumo: {
           clt: { mensal: totalCltMensal, periodo: totalCltPeriodo },
           terceirizacao: { mensal: totalTercMensal, periodo: totalTercPeriodo },
-          economiaMensal: totalCltMensal - totalTercMensal,
-          economiaPeriodo: totalCltPeriodo - totalTercPeriodo,
+          diferencaMensal: totalTercMensal - totalCltMensal,
+          diferencaPeriodo,
           impactoFolhaProximoMes: totalImpactoFolha,
           recomendacaoGeral,
         },
         parametros: {
           encargosPerc: totalEncargosPerc,
-          fatorBDI: 1.35,
-          custoUnicoPorProfissional: custoAdmissao,
+          lucroTercPerc: input.lucroTerceirizacaoPerc,
+          custoAdmissaoPorProfissional: custoAdmissao,
+          mobilizacaoPorProfissional: 500,
         },
       };
     }),
