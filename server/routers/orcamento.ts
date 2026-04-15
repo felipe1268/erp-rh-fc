@@ -1811,18 +1811,8 @@ export const orcamentoRouter = router({
       // Metadados
       const meta = extrairMetadados(dataOrc);
 
-      // Detectar tipo de contrato da obra para ajustar cálculo de venda
-      let tipoContratoImport = 'global';
-      if (input.obraId) {
-        const obraRows = await db.execute(sql`SELECT tipo_contrato FROM obras WHERE id = ${input.obraId} LIMIT 1`);
-        const obraArr: any[] = (obraRows as any).rows ?? obraRows ?? [];
-        if (obraArr[0]?.tipo_contrato) tipoContratoImport = obraArr[0].tipo_contrato;
-      }
-      const somenteMdoImport = tipoContratoImport === 'mdo';
-      if (somenteMdoImport) console.log('[Importar] Tipo contrato MDO — BDI somente sobre MO');
-
-      // Itens da EAP — venda calculada via fórmula ABNT/TCU por item
-      const { itens, colMap: colMapOrc } = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual, input.colMapping, somenteMdoImport);
+      // Itens da EAP — venda calculada sem BDI-MDO por enquanto (será recalculado após salvar)
+      const { itens, colMap: colMapOrc } = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual, input.colMapping);
       if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
 
       // ── Insumos ──
@@ -1843,7 +1833,7 @@ export const orcamentoRouter = router({
       const totaisGerais  = extrairTotaisPlanilha(dataOrc, colMapOrc);
       const nivel1        = itens.filter(i => i.nivel === 1);
       const totalVendaEAP = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal), 0);
-      const totalVenda    = (totalVendaBdi > 0 && !somenteMdoImport) ? totalVendaBdi : totalVendaEAP;
+      const totalVenda    = totalVendaBdi > 0 ? totalVendaBdi : totalVendaEAP;
       const totalCusto    = totaisGerais?.totalCusto  ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
       const totalMateriais = totaisGerais?.totalMat   ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
       const totalMdo      = totaisGerais?.totalMdo    ?? nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
@@ -1975,9 +1965,40 @@ export const orcamentoRouter = router({
       }
 
       // Catálogo NÃO é atualizado automaticamente — usuário decide via "Enviar para Biblioteca"
+
+      // ── Recalcular venda se contrato MDO (BDI só na MO) ───────────
+      let totalVendaFinal = totalVenda;
+      if (input.obraId) {
+        const obraRowsImp = await db.execute(sql`SELECT tipo_contrato FROM obras WHERE id = ${input.obraId} LIMIT 1`);
+        const obraArrImp: any[] = (obraRowsImp as any).rows ?? obraRowsImp ?? [];
+        if (obraArrImp[0]?.tipo_contrato === 'mdo' && bdiPercentual > 0) {
+          const bdiDivisor = 1 - bdiPercentual;
+          if (bdiDivisor > 0) {
+            console.log('[Importar] Tipo contrato MDO — recalculando venda com BDI somente sobre MO');
+            await db.update(orcamentoItens).set({
+              vendaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotalMdo}::numeric, 0) / ${String(bdiDivisor)} + COALESCE(${orcamentoItens.custoTotalMat}::numeric, 0) + COALESCE(${orcamentoItens.custoTotalEquip}::numeric, 0), 2)`,
+              vendaUnitTotal: sql`ROUND(COALESCE(${orcamentoItens.custoUnitMdo}::numeric, 0) / ${String(bdiDivisor)} + COALESCE(${orcamentoItens.custoUnitMat}::numeric, 0) + COALESCE(${orcamentoItens.custoUnitEquip}::numeric, 0), 4)`,
+            }).where(eq(orcamentoItens.orcamentoId, orcamentoId));
+
+            const nivel1Final = await db.select({ custoTotalMdo: orcamentoItens.custoTotalMdo, custoTotalMat: orcamentoItens.custoTotalMat, custoTotalEquip: orcamentoItens.custoTotalEquip })
+              .from(orcamentoItens).where(and(eq(orcamentoItens.orcamentoId, orcamentoId), eq(orcamentoItens.nivel, 1)));
+            totalVendaFinal = nivel1Final.reduce((s, i) => {
+              const mdo = parseFloat(i.custoTotalMdo || '0');
+              const mat = parseFloat(i.custoTotalMat || '0');
+              const equip = parseFloat(i.custoTotalEquip || '0');
+              return s + (mdo / bdiDivisor) + mat + equip;
+            }, 0);
+
+            await db.update(orcamentos).set({
+              totalVenda: fix2(totalVendaFinal),
+            }).where(eq(orcamentos.id, orcamentoId));
+          }
+        }
+      }
+
       console.log(`[Importar] Concluído — orcamentoId: ${orcamentoId}, itens: ${itens.length}, CPUs: ${cpusParsed.composicoes.length}`);
       return {
-        id: orcamentoId, codigo, totalVenda, totalCusto, totalMeta,
+        id: orcamentoId, codigo, totalVenda: totalVendaFinal, totalCusto, totalMeta,
         itemCount: itens.length,
         composicoesCount: cpusParsed.composicoes.length,
       };
