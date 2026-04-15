@@ -358,9 +358,13 @@ export const smoRouter = router({
         .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
         .orderBy(desc(convencaoColetiva.vigenciaInicio)).limit(1);
 
-      const vrDiario = parseFloat(conv?.valeRefeicao || "0");
-      const vrMensal = vrDiario * 22;
-      const vaMensal = parseFloat(conv?.valeAlimentacao || "0");
+      const convVrDiario = parseFloat(conv?.valeRefeicao || "0");
+      const convVaMensal = parseFloat(conv?.valeAlimentacao || "0");
+
+      const cafeMensal = 120;
+      const lancheMensal = 100;
+      const vrMensal = convVrDiario > 0 ? convVrDiario * 22 : (cafeMensal + lancheMensal);
+      const vaMensal = convVaMensal > 0 ? convVaMensal : 460.75;
       const exameAdmissional = 200;
       const examePeriodico = 150;
       const exameDemissional = 150;
@@ -462,6 +466,8 @@ export const smoRouter = router({
               rat,
               sistemaS,
               totalEncargos: encargosValor,
+              cafeMensal,
+              lancheMensal,
               valeRefeicao: vrMensal,
               valeAlimentacao: vaMensal,
               valeTransporte: vt,

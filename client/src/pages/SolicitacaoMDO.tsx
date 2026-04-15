@@ -651,8 +651,13 @@ export default function SolicitacaoMDO() {
                               <span className="font-mono">{fmtMoney(det?.totalEncargos || item.clt.encargosValor)}</span>
                             </div>
                             <div className="mt-2 font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">Benefícios Mensais</div>
-                            <CostLine label={`Vale Refeição (22 dias)`} value={det?.valeRefeicao} />
-                            <CostLine label="Vale Alimentação" value={det?.valeAlimentacao} />
+                            {det?.cafeMensal > 0 && <CostLine label="Café da Manhã" value={det.cafeMensal} />}
+                            {det?.lancheMensal > 0 && <CostLine label="Lanche" value={det.lancheMensal} />}
+                            {det?.cafeMensal > 0 || det?.lancheMensal > 0
+                              ? <CostLine label={`VR (Café + Lanche)`} value={det?.valeRefeicao} sub />
+                              : <CostLine label={`Vale Refeição (22 dias)`} value={det?.valeRefeicao} />
+                            }
+                            <CostLine label="Vale Alimentação (VA)" value={det?.valeAlimentacao} />
                             <CostLine label="Vale Transporte (6%)" value={det?.valeTransporte} />
                             <CostLine label="Seguro de Vida Grupo" value={det?.seguroVidaGrupo} />
                             {det?.planoSaude > 0 && <CostLine label="Plano de Saúde" value={det?.planoSaude} />}
