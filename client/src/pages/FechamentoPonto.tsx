@@ -18,9 +18,9 @@ import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
-  PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
+  PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, CheckCircle2, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
-  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight, FileText, Copy,
+  ListChecks, Filter, ChevronDown, ChevronUp, Zap, ArrowRightLeft, ArrowRight, FileText, Copy,
   ChevronsUpDown, Check, Plus, X, ClipboardList
 } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -644,6 +644,7 @@ export default function FechamentoPonto() {
   const [verifyingPassword, setVerifyingPassword] = useState(false);
   const verifyPasswordMut = trpc.auth.verifyPassword.useMutation();
   const [selectiveSearch, setSelectiveSearch] = useState("");
+  const [showExistingEmployees, setShowExistingEmployees] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterObra, setFilterObra] = useState<string>("all");
   const [cardFilter, setCardFilter] = useState<CardFilter>(null);
@@ -1061,6 +1062,7 @@ export default function FechamentoPonto() {
         setPreviewData(preview);
         setSelectedEmployeeIds(new Set(preview.employees.map((e: any) => e.employeeId)));
         setSelectiveSearch("");
+        setShowExistingEmployees(false);
         setPendingDirectUpload(!preview.hasExistingData);
         setShowSelectiveDialog(true);
       } else {
@@ -3815,20 +3817,70 @@ export default function FechamentoPonto() {
           <div className="w-full max-w-4xl mx-auto">
             {previewData && !uploading && !uploadResult && (
               <div className="space-y-4">
-                {previewData.hasExistingData && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="font-semibold text-amber-900">Já existem registros DIXI importados para esta obra/período</p>
-                      <p className="text-sm text-amber-700 mt-1">
-                        Competência: <strong>{previewData.meses.map((m: string) => formatMesAno(m)).join(", ")}</strong> —
-                        {" "}{previewData.employees.filter((e: any) => e.jaImportado).length} de {previewData.employees.length} funcionários já possuem dados.
-                      </p>
+                {previewData.hasExistingData && (() => {
+                  const jaImportados = previewData.employees.filter((e: any) => e.jaImportado);
+                  const novos = previewData.employees.filter((e: any) => !e.jaImportado);
+                  return (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">
+                  <button type="button" className="w-full p-4 text-left hover:bg-amber-100/50 transition-colors"
+                    onClick={() => setShowExistingEmployees(!showExistingEmployees)}>
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-amber-900">Já existem registros DIXI importados para esta obra/período</p>
+                        <p className="text-sm text-amber-700 mt-1">
+                          Competência: <strong>{previewData.meses.map((m: string) => formatMesAno(m)).join(", ")}</strong> —
+                          {" "}{jaImportados.length} de {previewData.employees.length} funcionários já possuem dados.
+                        </p>
+                        <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                          {showExistingEmployees ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                          {showExistingEmployees ? "Ocultar detalhes" : "Clique para ver detalhes dos funcionários"}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  </button>
+                  {showExistingEmployees && (
+                    <div className="px-4 pb-4 border-t border-amber-200">
+                      {jaImportados.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-xs font-semibold text-amber-800 mb-1.5">
+                            Funcionários com dados já importados ({jaImportados.length}):
+                          </p>
+                          <div className="max-h-48 overflow-y-auto space-y-1">
+                            {jaImportados.sort((a: any, b: any) => a.nomeCompleto.localeCompare(b.nomeCompleto)).map((emp: any) => (
+                              <div key={emp.employeeId} className="flex items-center gap-2 text-xs bg-amber-100/60 rounded-lg px-3 py-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                <span className="font-medium text-amber-900 flex-1 truncate">{emp.nomeCompleto}</span>
+                                <span className="text-amber-600 shrink-0">{emp.funcao || "—"}</span>
+                                <span className="text-amber-500 shrink-0">{emp.registrosExistentes} reg.</span>
+                                <span className="text-amber-500 shrink-0">{emp.meses.map((m: string) => formatMesAno(m)).join(", ")}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {novos.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-xs font-semibold text-green-700 mb-1.5">
+                            Funcionários novos sem dados anteriores ({novos.length}):
+                          </p>
+                          <div className="max-h-48 overflow-y-auto space-y-1">
+                            {novos.sort((a: any, b: any) => a.nomeCompleto.localeCompare(b.nomeCompleto)).map((emp: any) => (
+                              <div key={emp.employeeId} className="flex items-center gap-2 text-xs bg-green-50 rounded-lg px-3 py-1.5">
+                                <Plus className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                                <span className="font-medium text-green-900 flex-1 truncate">{emp.nomeCompleto}</span>
+                                <span className="text-green-600 shrink-0">{emp.funcao || "—"}</span>
+                                <span className="text-green-500 shrink-0">{emp.totalRegistros} batidas</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                )}
+                  );
+                })()}
 
                 {previewData.apontamentosCampo && previewData.apontamentosCampo.length > 0 && (
                   <div className="bg-blue-50 border border-blue-300 rounded-xl p-4">
