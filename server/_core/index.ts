@@ -422,6 +422,7 @@ async function startServer() {
             ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca SMALLINT NOT NULL DEFAULT 0;
             ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_desde DATE;
             ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_gratificacao VARCHAR(20);
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS responsavel_id INTEGER;
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$
         `);
@@ -434,6 +435,41 @@ async function startServer() {
         if (!db) return;
         const { sql } = await import("drizzle-orm");
         await Promise.all([
+          db.execute(sql`CREATE TABLE IF NOT EXISTS smo_solicitacoes (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER NOT NULL,
+            solicitante_id INTEGER NOT NULL, solicitante_nome VARCHAR(255) NOT NULL,
+            funcao_solicitada VARCHAR(150) NOT NULL, quantidade INTEGER NOT NULL DEFAULT 1,
+            data_inicio_necessidade DATE NOT NULL, duracao_meses INTEGER NOT NULL DEFAULT 1,
+            prioridade VARCHAR(20) NOT NULL DEFAULT 'normal', qualificacoes TEXT, observacao TEXT,
+            status VARCHAR(30) NOT NULL DEFAULT 'rascunho',
+            custo_mensal_estimado NUMERIC(18,2) DEFAULT 0, custo_total_estimado NUMERIC(18,2) DEFAULT 0,
+            detalhe_custos TEXT, sugestao_realocacao TEXT, motivo_rejeicao TEXT,
+            aprovado_por_coord VARCHAR(255), aprovado_por_coord_em TIMESTAMP,
+            aprovado_por_rh VARCHAR(255), aprovado_por_rh_em TIMESTAMP,
+            aprovado_por_diretoria VARCHAR(255), aprovado_por_diretoria_em TIMESTAMP,
+            rejeitado_por VARCHAR(255), rejeitado_em TIMESTAMP,
+            prazo_minimo_alerta BOOLEAN DEFAULT false, sla_vencido_em TIMESTAMP,
+            criado_em TIMESTAMP DEFAULT NOW(), atualizado_em TIMESTAMP DEFAULT NOW(),
+            candidato_indicado_nome VARCHAR(255), candidato_indicado_telefone VARCHAR(50),
+            curriculo_arquivo_nome VARCHAR(255), curriculo_arquivo_key VARCHAR(500),
+            lote_id VARCHAR(50), deleted_at TIMESTAMP
+          )`),
+          db.execute(sql`CREATE TABLE IF NOT EXISTS smo_atividades_eap (
+            id SERIAL PRIMARY KEY, solicitacao_id INTEGER NOT NULL,
+            atividade_id INTEGER NOT NULL, eap_codigo VARCHAR(50), nome_atividade VARCHAR(500)
+          )`),
+          db.execute(sql`CREATE TABLE IF NOT EXISTS smo_onboarding_checklist (
+            id SERIAL PRIMARY KEY, solicitacao_id INTEGER NOT NULL,
+            employee_id INTEGER, item VARCHAR(255) NOT NULL,
+            concluido BOOLEAN DEFAULT false, concluido_por VARCHAR(255),
+            concluido_em TIMESTAMP, criado_em TIMESTAMP DEFAULT NOW()
+          )`),
+          db.execute(sql`CREATE TABLE IF NOT EXISTS disciplina_correcoes (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL,
+            eap_descricao TEXT NOT NULL, disciplina_original VARCHAR(200) NOT NULL,
+            disciplina_corrigida VARCHAR(200) NOT NULL, user_id INTEGER,
+            user_name VARCHAR(200), criado_em TIMESTAMP DEFAULT NOW()
+          )`),
           db.execute(sql`CREATE TABLE IF NOT EXISTS medicao_contratos (
             id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, projeto_id INTEGER NOT NULL,
             criterio VARCHAR(30) NOT NULL DEFAULT 'avanco_fisico', valor_total_contrato NUMERIC(15,2) DEFAULT 0,
@@ -483,8 +519,14 @@ async function startServer() {
           db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_company_criado ON user_activity_log(company_id, criado_em)`),
           db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_user_company ON user_activity_log(user_id, company_id, criado_em DESC)`),
           db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ual_company_tipo ON user_activity_log(company_id, tipo, criado_em)`),
+          db.execute(sql`CREATE INDEX IF NOT EXISTS idx_smo_company ON smo_solicitacoes(company_id)`),
+          db.execute(sql`CREATE INDEX IF NOT EXISTS idx_smo_obra ON smo_solicitacoes(obra_id)`),
+          db.execute(sql`CREATE INDEX IF NOT EXISTS idx_smo_status ON smo_solicitacoes(status)`),
+          db.execute(sql`CREATE INDEX IF NOT EXISTS idx_smo_eap_sol ON smo_atividades_eap(solicitacao_id)`),
+          db.execute(sql`CREATE INDEX IF NOT EXISTS idx_smo_onb_sol ON smo_onboarding_checklist(solicitacao_id)`),
+          db.execute(sql`CREATE INDEX IF NOT EXISTS idx_disc_corr_company ON disciplina_correcoes(company_id)`),
         ]);
-        console.log("[ColFix] Medição + IA + telemetria tables OK");
+        console.log("[ColFix] SMO + Medição + IA + telemetria tables OK");
       } catch (e: any) { console.warn("[ColFix] Tables bloco3:", e?.message ?? e); }
     });
     import("../db").then(async ({ getDb }) => {
