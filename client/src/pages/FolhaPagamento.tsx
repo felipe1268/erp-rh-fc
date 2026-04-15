@@ -1808,6 +1808,7 @@ export default function FolhaPagamento() {
     const hasAnyExcluidos = funcionariosSemAlerta.some((f: any) => f.status === 'rejeitado') || valeExcluirSel.size > 0;
     const totalComAlerta = funcionariosComAlerta.reduce((s: number, f: any) => s + (f.valorLiquido ?? f.valorTotalVale ?? 0), 0);
     const totalIRRetido = todosFunc.reduce((s: number, f: any) => s + (f.irRetido || 0), 0);
+    const totalValeDinamico = todosFunc.reduce((s: number, f: any) => s + parseFloat(String(f.valorLiquido ?? f.valorTotalVale ?? 0)), 0);
     const comHE = todosFunc.filter((f: any) => (f.valorHE || 0) > 0);
     const totalHE = comHE.reduce((s: number, f: any) => s + (f.valorHE || 0), 0);
 
@@ -1888,7 +1889,7 @@ export default function FolhaPagamento() {
             </Card>
             <Card className={cardClass(false)}>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-orange-700">{formatBRL(valeResult.totalVale)}</p>
+                <p className="text-2xl font-bold text-orange-700">{formatBRL(totalValeDinamico)}</p>
                 <p className="text-xs text-muted-foreground">Total Vale (Geral)</p>
               </CardContent>
             </Card>
