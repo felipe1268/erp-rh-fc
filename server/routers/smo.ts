@@ -337,7 +337,7 @@ export const smoRouter = router({
 
       let salarioRef = 0;
       if (emps.length > 0) {
-        const sals = emps.map(e => parseFloat(e.salarioBase || "0")).filter(s => s > 0);
+        const sals = emps.map(e => parseFloat(String(e.salarioBase || "0").replace(/\./g, "").replace(",", ".")) || 0).filter(s => s > 0);
         salarioRef = sals.length > 0 ? sals.reduce((a, b) => a + b, 0) / sals.length : 0;
       }
       if (salarioRef === 0) {
@@ -468,7 +468,7 @@ export const smoRouter = router({
         let salarioRef = 0;
         let baseSalarialOrigem = "Piso salarial (padrão)";
         if (emps.length > 0) {
-          const sals = emps.map(e => parseFloat(e.salarioBase || "0")).filter(s => s > 0);
+          const sals = emps.map(e => parseFloat(String(e.salarioBase || "0").replace(/\./g, "").replace(",", ".")) || 0).filter(s => s > 0);
           salarioRef = sals.length > 0 ? sals.reduce((a, b) => a + b, 0) / sals.length : 0;
           if (salarioRef > 0) {
             const funcRef = emps[0].funcao || item.funcao;
@@ -766,7 +766,10 @@ export const smoRouter = router({
         .where(and(eq(obraFuncionarios.obraId, input.obraId), eq(obraFuncionarios.isActive, 1), eq(employees.status, "Ativo")));
 
       let totalFolhaBruta = 0;
-      for (const a of alocados) totalFolhaBruta += parseFloat(a.salarioBase || "0");
+      for (const a of alocados) {
+        const raw = String(a.salarioBase || "0").replace(/\./g, "").replace(",", ".");
+        totalFolhaBruta += parseFloat(raw) || 0;
+      }
 
       return {
         totalFuncionarios: alocados.length,
@@ -835,7 +838,7 @@ export const smoRouter = router({
 
         let salarioRef = 0;
         if (emps.length > 0) {
-          const sals = emps.map(e => parseFloat(e.salarioBase || "0")).filter(s => s > 0);
+          const sals = emps.map(e => parseFloat(String(e.salarioBase || "0").replace(/\./g, "").replace(",", ".")) || 0).filter(s => s > 0);
           salarioRef = sals.length > 0 ? sals.reduce((a, b) => a + b, 0) / sals.length : 0;
         }
         if (salarioRef === 0) salarioRef = pisoFallback;
