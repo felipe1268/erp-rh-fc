@@ -12,8 +12,13 @@ import {
   ClipboardList, Plus, Filter, Search, AlertTriangle, CheckCircle2,
   Clock, Eye, MessageSquare, ChevronDown, ChevronUp, Building2,
   User, Calendar, FileText, Shield, ArrowLeft, RefreshCw,
-  AlertCircle, Archive, Zap, MapPin
+  AlertCircle, Archive, Zap, MapPin, Pencil, Trash2, RotateCcw,
+  MoreHorizontal
 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import DashboardLayout from "@/components/DashboardLayout";
 import { fmtNum } from "@/lib/formatters";
 
@@ -60,10 +65,11 @@ export default function ApontamentosCampo() {
   const { user } = useAuth();
   const companyId = selectedCompany?.id;
 
-  // States
   const [showNovoDialog, setShowNovoDialog] = useState(false);
   const [showResolverDialog, setShowResolverDialog] = useState(false);
   const [showDetalhesDialog, setShowDetalhesDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedNote, setSelectedNote] = useState<any>(null);
   const [filtroStatus, setFiltroStatus] = useState<string>("pendente");
   const [filtroTipo, setFiltroTipo] = useState<string>("");
@@ -71,7 +77,6 @@ export default function ApontamentosCampo() {
   const [busca, setBusca] = useState("");
   const [expandedStats, setExpandedStats] = useState(true);
 
-  // Form novo apontamento
   const [novoEmployeeId, setNovoEmployeeId] = useState<number | null>(null);
   const [novoObraId, setNovoObraId] = useState<number | null>(null);
   const [novoData, setNovoData] = useState(new Date().toISOString().split("T")[0]);
@@ -79,7 +84,12 @@ export default function ApontamentosCampo() {
   const [novoPrioridade, setNovoPrioridade] = useState<string>("media");
   const [novoDescricao, setNovoDescricao] = useState("");
 
-  // Form resolver
+  const [editTipo, setEditTipo] = useState<string>("");
+  const [editPrioridade, setEditPrioridade] = useState<string>("");
+  const [editDescricao, setEditDescricao] = useState("");
+  const [editData, setEditData] = useState("");
+  const [editObraId, setEditObraId] = useState<number | null>(null);
+
   const [resolverResposta, setResolverResposta] = useState("");
   const [resolverAcao, setResolverAcao] = useState<string>("nenhuma");
 
@@ -145,12 +155,38 @@ export default function ApontamentosCampo() {
     },
   });
 
-  const deleteMut = trpc.fieldNotes.delete.useMutation({
+  const updateMut = trpc.fieldNotes.update.useMutation({
     onSuccess: () => {
-      toast.success("Apontamento removido");
+      toast.success("Apontamento atualizado!");
       utils.fieldNotes.list.invalidate();
       utils.fieldNotes.stats.invalidate();
+      setShowEditDialog(false);
+      setSelectedNote(null);
     },
+    onError: (e) => toast.error("Erro: " + e.message),
+  });
+
+  const reopenMut = trpc.fieldNotes.reopen.useMutation({
+    onSuccess: () => {
+      toast.success("Apontamento reaberto (status: Pendente)");
+      utils.fieldNotes.list.invalidate();
+      utils.fieldNotes.stats.invalidate();
+      setShowDetalhesDialog(false);
+      setSelectedNote(null);
+    },
+    onError: (e) => toast.error("Erro: " + e.message),
+  });
+
+  const deleteMut = trpc.fieldNotes.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Apontamento excluído");
+      utils.fieldNotes.list.invalidate();
+      utils.fieldNotes.stats.invalidate();
+      setShowDeleteConfirm(false);
+      setShowDetalhesDialog(false);
+      setSelectedNote(null);
+    },
+    onError: (e) => toast.error("Erro: " + e.message),
   });
 
   function resetNovoForm() {
@@ -364,30 +400,64 @@ export default function ApontamentosCampo() {
                           </div>
                         )}
                       </div>
-                      {/* Right: Actions */}
-                      <div className="flex md:flex-col gap-2 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         <Button variant="outline" size="sm" onClick={() => { setSelectedNote(note); setShowDetalhesDialog(true); }}>
                           <Eye className="h-3.5 w-3.5 mr-1" /> Ver
                         </Button>
                         {(note.status === 'pendente' || note.status === 'em_analise') && (
-                          <>
-                            {note.status === 'pendente' && (
-                              <Button variant="outline" size="sm" className="text-blue-600 border-blue-300"
-                                onClick={() => emAnaliseMut.mutate({ id: note.id })}>
-                                <Eye className="h-3.5 w-3.5 mr-1" /> Analisar
-                              </Button>
-                            )}
-                            <Button size="sm" className="bg-green-600 hover:bg-green-700"
-                              onClick={() => {
-                                setSelectedNote(note);
-                                setResolverResposta("");
-                                setResolverAcao("nenhuma");
-                                setShowResolverDialog(true);
-                              }}>
-                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Resolver
-                            </Button>
-                          </>
+                          <Button size="sm" className="bg-green-600 hover:bg-green-700"
+                            onClick={() => {
+                              setSelectedNote(note);
+                              setResolverResposta("");
+                              setResolverAcao("nenhuma");
+                              setShowResolverDialog(true);
+                            }}>
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Resolver
+                          </Button>
                         )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {note.status === 'pendente' && (
+                              <DropdownMenuItem onClick={() => emAnaliseMut.mutate({ id: note.id })}>
+                                <Eye className="h-3.5 w-3.5 mr-2 text-blue-600" /> Marcar Em Análise
+                              </DropdownMenuItem>
+                            )}
+                            {(note.status === 'pendente' || note.status === 'em_analise') && (
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedNote(note);
+                                setEditTipo(note.tipoOcorrencia);
+                                setEditPrioridade(note.prioridade);
+                                setEditDescricao(note.descricao);
+                                setEditData(note.data || "");
+                                setEditObraId(note.obraId || null);
+                                setShowEditDialog(true);
+                              }}>
+                                <Pencil className="h-3.5 w-3.5 mr-2 text-amber-600" /> Editar
+                              </DropdownMenuItem>
+                            )}
+                            {(note.status === 'resolvido' || note.status === 'arquivado') && (
+                              <DropdownMenuItem onClick={() => {
+                                if (confirm(`Reabrir apontamento #${note.id}? O status voltará para Pendente.`)) {
+                                  reopenMut.mutate({ id: note.id });
+                                }
+                              }}>
+                                <RotateCcw className="h-3.5 w-3.5 mr-2 text-orange-600" /> Reabrir (Desaprovar)
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-red-600" onClick={() => {
+                              setSelectedNote(note);
+                              setShowDeleteConfirm(true);
+                            }}>
+                              <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </CardContent>
@@ -610,19 +680,170 @@ export default function ApontamentosCampo() {
                 </div>
               </div>
             )}
-            <DialogFooter>
+            <DialogFooter className="flex-wrap gap-2">
               {selectedNote && (selectedNote.status === 'pendente' || selectedNote.status === 'em_analise') && (
-                <Button className="bg-green-600 hover:bg-green-700"
+                <>
+                  <Button variant="outline" size="sm" className="text-amber-600 border-amber-300"
+                    onClick={() => {
+                      setShowDetalhesDialog(false);
+                      setEditTipo(selectedNote.tipoOcorrencia);
+                      setEditPrioridade(selectedNote.prioridade);
+                      setEditDescricao(selectedNote.descricao);
+                      setEditData(selectedNote.data || "");
+                      setEditObraId(selectedNote.obraId || null);
+                      setShowEditDialog(true);
+                    }}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                  </Button>
+                  <Button className="bg-green-600 hover:bg-green-700" size="sm"
+                    onClick={() => {
+                      setShowDetalhesDialog(false);
+                      setResolverResposta("");
+                      setResolverAcao("nenhuma");
+                      setShowResolverDialog(true);
+                    }}>
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Resolver
+                  </Button>
+                </>
+              )}
+              {selectedNote && (selectedNote.status === 'resolvido' || selectedNote.status === 'arquivado') && (
+                <Button variant="outline" size="sm" className="text-orange-600 border-orange-300"
                   onClick={() => {
-                    setShowDetalhesDialog(false);
-                    setResolverResposta("");
-                    setResolverAcao("nenhuma");
-                    setShowResolverDialog(true);
+                    if (confirm(`Reabrir apontamento #${selectedNote.id}? O status voltará para Pendente.`)) {
+                      reopenMut.mutate({ id: selectedNote.id });
+                    }
                   }}>
-                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Resolver
+                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir
                 </Button>
               )}
+              <Button variant="outline" size="sm" className="text-red-600 border-red-300"
+                onClick={() => {
+                  setShowDetalhesDialog(false);
+                  setShowDeleteConfirm(true);
+                }}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
+              </Button>
               <Button variant="outline" onClick={() => setShowDetalhesDialog(false)}>Fechar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog: Editar Apontamento */}
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-amber-600" /> Editar Apontamento #{selectedNote?.id}
+              </DialogTitle>
+              <DialogDescription>
+                Altere os dados do apontamento
+              </DialogDescription>
+            </DialogHeader>
+            {selectedNote && (
+              <div className="space-y-3">
+                <div className="bg-gray-50 rounded p-3 text-sm">
+                  <span className="text-muted-foreground">Funcionário:</span>{" "}
+                  <span className="font-medium">{selectedNote.nomeFunc}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium">Data</label>
+                    <input type="date" value={editData} onChange={(e) => setEditData(e.target.value)}
+                      className="w-full border rounded px-3 py-2 text-sm mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Obra</label>
+                    <select value={editObraId || ""} onChange={(e) => setEditObraId(parseInt(e.target.value) || null)}
+                      className="w-full border rounded px-3 py-2 text-sm mt-1">
+                      <option value="">Sem obra</option>
+                      {obrasList.map((o: any) => (
+                        <option key={o.id} value={o.id}>{o.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium">Tipo de Ocorrência</label>
+                    <select value={editTipo} onChange={(e) => setEditTipo(e.target.value)}
+                      className="w-full border rounded px-3 py-2 text-sm mt-1">
+                      {Object.entries(TIPO_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>{v.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Prioridade</label>
+                    <select value={editPrioridade} onChange={(e) => setEditPrioridade(e.target.value)}
+                      className="w-full border rounded px-3 py-2 text-sm mt-1">
+                      {Object.entries(PRIORIDADE_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>{v.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Descrição</label>
+                  <Textarea
+                    value={editDescricao}
+                    onChange={(e) => setEditDescricao(e.target.value)}
+                    rows={4}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancelar</Button>
+              <Button
+                className="bg-[#1B2A4A] hover:bg-[#2a3d66]"
+                disabled={!editDescricao.trim() || updateMut.isPending}
+                onClick={() => {
+                  if (!selectedNote) return;
+                  updateMut.mutate({
+                    id: selectedNote.id,
+                    tipoOcorrencia: editTipo as any,
+                    prioridade: editPrioridade as any,
+                    descricao: editDescricao.trim(),
+                    data: editData || undefined,
+                    obraId: editObraId || undefined,
+                  });
+                }}
+              >
+                {updateMut.isPending ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog: Confirmar Exclusão */}
+        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                <Trash2 className="h-5 w-5" /> Excluir Apontamento
+              </DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja excluir o apontamento #{selectedNote?.id}?
+                Esta ação não pode ser desfeita.
+              </DialogDescription>
+            </DialogHeader>
+            {selectedNote && (
+              <div className="bg-red-50 border border-red-200 rounded p-3 text-sm">
+                <p><span className="font-medium">Funcionário:</span> {selectedNote.nomeFunc}</p>
+                <p><span className="font-medium">Tipo:</span> {TIPO_LABELS[selectedNote.tipoOcorrencia]?.label}</p>
+                <p><span className="font-medium">Data:</span> {selectedNote.data ? new Date(selectedNote.data + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</p>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancelar</Button>
+              <Button variant="destructive" disabled={deleteMut.isPending}
+                onClick={() => {
+                  if (!selectedNote) return;
+                  deleteMut.mutate({ id: selectedNote.id });
+                }}>
+                {deleteMut.isPending ? "Excluindo..." : "Excluir"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

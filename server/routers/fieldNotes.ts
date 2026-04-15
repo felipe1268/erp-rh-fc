@@ -242,6 +242,20 @@ export const fieldNotesRouter = router({
       return { success: true };
     }),
 
+  reopen: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      await db.update(fieldNotes).set({
+        status: 'pendente',
+        respostaRH: null,
+        acaoTomada: null,
+        resolvidoPor: null,
+        resolvidoEm: null,
+      }).where(eq(fieldNotes.id, input.id));
+      return { success: true };
+    }),
+
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
