@@ -98,6 +98,10 @@ export default function ApontamentosCampo() {
 
   const [resolverResposta, setResolverResposta] = useState("");
   const [resolverAcao, setResolverAcao] = useState<string>("nenhuma");
+  const [resolverEntrada1, setResolverEntrada1] = useState("");
+  const [resolverSaida1, setResolverSaida1] = useState("");
+  const [resolverEntrada2, setResolverEntrada2] = useState("");
+  const [resolverSaida2, setResolverSaida2] = useState("");
 
   // Queries
   const statsQ = trpc.fieldNotes.stats.useQuery(
@@ -416,6 +420,7 @@ export default function ApontamentosCampo() {
                               setSelectedNote(note);
                               setResolverResposta("");
                               setResolverAcao("nenhuma");
+                              setResolverEntrada1(""); setResolverSaida1(""); setResolverEntrada2(""); setResolverSaida2("");
                               setShowResolverDialog(true);
                             }}>
                             <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Resolver
@@ -680,6 +685,40 @@ export default function ApontamentosCampo() {
                     ))}
                   </select>
                 </div>
+                {['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'].includes(selectedNote.tipoOcorrencia) && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3 space-y-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Clock className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-semibold text-blue-800">Horários de Ponto (correção)</span>
+                    </div>
+                    <p className="text-xs text-blue-600">Preencha para corrigir/completar o ponto do dia. Horários existentes do DIXI serão mantidos se deixar em branco.</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      <div>
+                        <label className="text-xs text-muted-foreground">Entrada</label>
+                        <input type="time" value={resolverEntrada1} onChange={(e) => setResolverEntrada1(e.target.value)}
+                          className="w-full border rounded px-2 py-1.5 text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">Saída Int.</label>
+                        <input type="time" value={resolverSaida1} onChange={(e) => setResolverSaida1(e.target.value)}
+                          className="w-full border rounded px-2 py-1.5 text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">Retorno</label>
+                        <input type="time" value={resolverEntrada2} onChange={(e) => setResolverEntrada2(e.target.value)}
+                          className="w-full border rounded px-2 py-1.5 text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">Saída</label>
+                        <input type="time" value={resolverSaida2} onChange={(e) => setResolverSaida2(e.target.value)}
+                          className="w-full border rounded px-2 py-1.5 text-sm" />
+                      </div>
+                    </div>
+                    {selectedNote.entrada1 && (
+                      <p className="text-xs text-blue-600 mt-1">Horários do apontamento: {selectedNote.entrada1 || "—"} / {selectedNote.saida1 || "—"} / {selectedNote.entrada2 || "—"} / {selectedNote.saida2 || "—"}</p>
+                    )}
+                  </div>
+                )}
                 <div>
                   <label className="text-sm font-medium">Resposta / Parecer do RH *</label>
                   <Textarea
@@ -702,6 +741,10 @@ export default function ApontamentosCampo() {
                     respostaRH: resolverResposta.trim(),
                     acaoTomada: resolverAcao as any,
                     status: 'arquivado',
+                    ...(resolverEntrada1 ? { entrada1: resolverEntrada1 } : {}),
+                    ...(resolverSaida1 ? { saida1: resolverSaida1 } : {}),
+                    ...(resolverEntrada2 ? { entrada2: resolverEntrada2 } : {}),
+                    ...(resolverSaida2 ? { saida2: resolverSaida2 } : {}),
                   });
                 }}>
                 <Archive className="h-3.5 w-3.5 mr-1" /> Arquivar
@@ -715,6 +758,10 @@ export default function ApontamentosCampo() {
                     respostaRH: resolverResposta.trim(),
                     acaoTomada: resolverAcao as any,
                     status: 'resolvido',
+                    ...(resolverEntrada1 ? { entrada1: resolverEntrada1 } : {}),
+                    ...(resolverSaida1 ? { saida1: resolverSaida1 } : {}),
+                    ...(resolverEntrada2 ? { entrada2: resolverEntrada2 } : {}),
+                    ...(resolverSaida2 ? { saida2: resolverSaida2 } : {}),
                   });
                 }}>
                 {resolveMut.isPending ? "Salvando..." : "Resolver"}
@@ -783,6 +830,7 @@ export default function ApontamentosCampo() {
                       setShowDetalhesDialog(false);
                       setResolverResposta("");
                       setResolverAcao("nenhuma");
+                      setResolverEntrada1(""); setResolverSaida1(""); setResolverEntrada2(""); setResolverSaida2("");
                       setShowResolverDialog(true);
                     }}>
                     <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Resolver

@@ -80,6 +80,10 @@ export const fieldNotesRouter = router({
       const { entrada1, saida1, entrada2, saida2, ...fieldData } = input;
       const [result] = await db.insert(fieldNotes).values({
         ...fieldData,
+        entrada1: entrada1 || null,
+        saida1: saida1 || null,
+        entrada2: entrada2 || null,
+        saida2: saida2 || null,
         solicitanteNome,
         solicitanteId: ctx.user?.openId || ctx.user?.email || "",
       }).returning();
@@ -206,22 +210,33 @@ export const fieldNotesRouter = router({
       respostaRH: z.string().min(1),
       acaoTomada: acaoTomadaEnum,
       status: z.enum(['resolvido', 'arquivado']).default('resolvido'),
+      entrada1: z.string().optional(),
+      saida1: z.string().optional(),
+      entrada2: z.string().optional(),
+      saida2: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const resolvidoPor = ctx.user?.name || ctx.user?.email || "RH";
 
-      // Buscar dados do apontamento para vincular ao ponto
       const [note] = await db.select().from(fieldNotes).where(eq(fieldNotes.id, input.id));
       if (!note) throw new Error("Apontamento não encontrado");
 
-      // Atualizar o apontamento
+      const resolveEntrada1 = input.entrada1 || note.entrada1 || null;
+      const resolveSaida1 = input.saida1 || note.saida1 || null;
+      const resolveEntrada2 = input.entrada2 || note.entrada2 || null;
+      const resolveSaida2 = input.saida2 || note.saida2 || null;
+
       await db.update(fieldNotes).set({
         respostaRH: input.respostaRH,
         acaoTomada: input.acaoTomada,
         status: input.status,
         resolvidoPor,
         resolvidoEm: sql`NOW()`,
+        entrada1: resolveEntrada1,
+        saida1: resolveSaida1,
+        entrada2: resolveEntrada2,
+        saida2: resolveSaida2,
       }).where(eq(fieldNotes.id, input.id));
 
       // === VINCULAR AO PONTO ===
@@ -278,14 +293,34 @@ export const fieldNotesRouter = router({
             });
           }
         } else if (note.tipoOcorrencia === 'esqueceu_bater' || note.tipoOcorrencia === 'outro') {
-          if (existing.length > 0) {
+          const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+          const ex = existing[0];
+          const fE1 = resolveEntrada1 || ex?.entrada1 || null;
+          const fS1 = resolveSaida1 || ex?.saida1 || null;
+          const fE2 = resolveEntrada2 || ex?.entrada2 || null;
+          const fS2 = resolveSaida2 || ex?.saida2 || null;
+          let totalMin = 0;
+          if (fE1 && fS1) totalMin += toMin(fS1) - toMin(fE1);
+          if (fE2 && fS2) totalMin += toMin(fS2) - toMin(fE2);
+          if (totalMin < 0) totalMin = 0;
+          const hh = Math.floor(totalMin / 60);
+          const mm = totalMin % 60;
+          const horasTrabalhadas = `${hh}:${String(mm).padStart(2, '0')}`;
+
+          if (ex) {
             await db.update(timeRecords).set({
-              justificativa: existing[0].justificativa
-                ? `${existing[0].justificativa} | ${justificativa}`
+              entrada1: fE1,
+              saida1: fS1,
+              entrada2: fE2,
+              saida2: fS2,
+              horasTrabalhadas,
+              faltas: "0",
+              justificativa: ex.justificativa
+                ? `${ex.justificativa} | ${justificativa}`
                 : justificativa,
               ajusteManual: 1,
               ajustadoPor: resolvidoPor,
-              fonte: existing[0].fonte === "dixi" ? "apontamento" : existing[0].fonte,
+              fonte: ex.fonte === "dixi" ? "apontamento" : ex.fonte,
             }).where(and(
               eq(timeRecords.companyId, note.companyId),
               eq(timeRecords.employeeId, note.employeeId),
@@ -298,8 +333,12 @@ export const fieldNotesRouter = router({
               data: note.data,
               mesReferencia: mesRef,
               obraId: note.obraId,
+              entrada1: fE1,
+              saida1: fS1,
+              entrada2: fE2,
+              saida2: fS2,
+              horasTrabalhadas,
               faltas: "0",
-              horasTrabalhadas: "00:00",
               horasExtras: "0:00",
               horasNoturnas: "0:00",
               atrasos: "0:00",
