@@ -98,7 +98,7 @@ export default function SolicitacaoMDO() {
 
   const list = trpc.smo.list.useQuery(
     { companyId, companyIds, status: filterStatus !== "all" ? filterStatus : undefined, obraId: filterObra !== "all" ? parseInt(filterObra) : undefined },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0, retry: 3, retryDelay: 1000 }
   );
   const obrasQ = trpc.smo.obrasAtivas.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
   const funcoesQ = trpc.smo.funcoesDisponiveis.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
@@ -296,8 +296,16 @@ export default function SolicitacaoMDO() {
           </div>
 
           <div className="flex-1 overflow-y-auto px-6 pb-6">
-            {list.isLoading ? (
+            {list.isLoading && !list.data ? (
               <div className="text-center py-12 text-muted-foreground">Carregando...</div>
+            ) : list.isError ? (
+              <div className="text-center py-12">
+                <AlertTriangle className="h-8 w-8 mx-auto text-amber-500 mb-2" />
+                <p className="text-muted-foreground text-sm">Erro ao carregar solicitações</p>
+                <Button variant="outline" size="sm" onClick={() => list.refetch()} className="mt-3 gap-2">
+                  <RefreshCw className="h-3 w-3" /> Tentar novamente
+                </Button>
+              </div>
             ) : filtered.length === 0 ? (
               <div className="text-center py-16">
                 <HardHat className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
