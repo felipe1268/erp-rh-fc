@@ -1043,15 +1043,34 @@ export default function SolicitacaoMDO() {
                   </div>
                 )}
 
-                {detailCusto.data && (
-                  <div className="bg-white rounded-xl border p-4">
-                    <h4 className="font-semibold text-xs text-[#1B2A4A] mb-2 flex items-center gap-2"><TrendingUp className="h-3.5 w-3.5" /> Custo da Obra</h4>
-                    <div className="text-xs space-y-1.5">
-                      <div className="flex justify-between"><span className="text-muted-foreground">Funcionários</span><span className="font-semibold">{detailCusto.data.totalFuncionarios}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">Folha mensal</span><span className="font-semibold">{fmtMoney(detailCusto.data.folhaBrutaMensal)}</span></div>
+                {detailCusto.data && (() => {
+                  let custoNovasVagas = 0;
+                  try {
+                    const cc = JSON.parse(d.detalheCustos || "{}");
+                    custoNovasVagas = cc.custoMensalTotal || 0;
+                  } catch {}
+                  const folhaAtual = detailCusto.data.folhaBrutaMensal;
+                  const folhaPrevista = folhaAtual + custoNovasVagas;
+                  const novosFuncionarios = d.quantidade || 0;
+                  return (
+                    <div className="bg-white rounded-xl border p-4">
+                      <h4 className="font-semibold text-xs text-[#1B2A4A] mb-2 flex items-center gap-2"><TrendingUp className="h-3.5 w-3.5" /> Custo da Obra</h4>
+                      <div className="text-xs space-y-1.5">
+                        <div className="flex justify-between"><span className="text-muted-foreground">Funcionários atuais</span><span className="font-semibold">{detailCusto.data.totalFuncionarios}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Folha mensal atual</span><span className="font-semibold">{fmtMoney(folhaAtual)}</span></div>
+                        {custoNovasVagas > 0 && (
+                          <>
+                            <div className="border-t pt-1.5" />
+                            <div className="flex justify-between text-amber-700"><span>+ {novosFuncionarios} vaga(s) solicitada(s)</span><span className="font-mono">+{fmtMoney(custoNovasVagas)}</span></div>
+                            <div className="bg-amber-50 text-amber-900 rounded-lg p-2 flex justify-between font-bold">
+                              <span>Folha prevista</span><span>{fmtMoney(folhaPrevista)}</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {(d.candidatoIndicadoNome || d.candidatoIndicadoTelefone || d.curriculoArquivoNome) && (
                   <div className="bg-blue-50 rounded-xl border border-blue-200 p-4">
