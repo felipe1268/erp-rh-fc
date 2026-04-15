@@ -951,7 +951,7 @@ export const avisoPrevioFeriasRouter = router({
           observacoes: input.observacoes || null,
           criadoPor: ctx.user.name ?? 'Sistema',
           criadoPorUserId: ctx.user.id,
-        });
+        }).returning();
         
         // Auto-iniciar checklist de desligamento + status Aviso
         try {
@@ -987,7 +987,7 @@ export const avisoPrevioFeriasRouter = router({
 
         // Corrige automaticamente registros de ponto já lançados no período
         corrigirPontoFuncionario(input.companyId, input.employeeId).catch(() => {});
-        return { success: true, id: result[0].id, diasAviso, dataFim, previsao };
+        return { success: true, id: result.id, diasAviso, dataFim, previsao };
       }),
 
     update: protectedProcedure
