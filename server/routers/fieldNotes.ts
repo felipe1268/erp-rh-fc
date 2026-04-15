@@ -143,12 +143,16 @@ export const fieldNotesRouter = router({
       }).where(eq(fieldNotes.id, input.id));
 
       // === VINCULAR AO PONTO ===
-      // Se a ação é desconto_folha ou ajuste_ponto, e o tipo é falta/atraso/saida_antecipada
+      // Tipos de ocorrência que impactam o cartão de ponto
       const tiposVinculaveis = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto'];
-      const acoesVinculaveis = ['desconto_folha', 'ajuste_ponto'];
+      // Ações que NÃO gravam no ponto (somente advertências/elogios sem impacto de horas)
+      const acoesNaoVinculam = ['nenhuma'];
 
-      if (note.data && tiposVinculaveis.includes(note.tipoOcorrencia) && acoesVinculaveis.includes(input.acaoTomada)) {
-        // Verificar se já existe registro de ponto para esse dia
+      const deveVincular = note.data
+        && tiposVinculaveis.includes(note.tipoOcorrencia)
+        && !acoesNaoVinculam.includes(input.acaoTomada);
+
+      if (deveVincular) {
         const existing = await db.select().from(timeRecords)
           .where(and(
             eq(timeRecords.companyId, note.companyId),
@@ -157,10 +161,9 @@ export const fieldNotesRouter = router({
           ));
 
         const justificativa = `[Apontamento #${note.id} - ${note.tipoOcorrencia}] ${input.respostaRH} (Resolvido por ${resolvidoPor})`;
-        const mesRef = note.data.substring(0, 7); // YYYY-MM
+        const mesRef = note.data.substring(0, 7);
 
         if (note.tipoOcorrencia === 'falta' || note.tipoOcorrencia === 'abandono_posto') {
-          // Marcar como falta no ponto
           if (existing.length > 0) {
             await db.update(timeRecords).set({
               faltas: "1",
@@ -168,13 +171,13 @@ export const fieldNotesRouter = router({
               justificativa,
               ajusteManual: 1,
               ajustadoPor: resolvidoPor,
+              fonte: existing[0].fonte === "dixi" ? "apontamento" : existing[0].fonte,
             }).where(and(
               eq(timeRecords.companyId, note.companyId),
               eq(timeRecords.employeeId, note.employeeId),
               eq(timeRecords.data, note.data),
             ));
           } else {
-            // Criar registro de falta
             await db.insert(timeRecords).values({
               companyId: note.companyId,
               employeeId: note.employeeId,
@@ -193,7 +196,6 @@ export const fieldNotesRouter = router({
             });
           }
         } else if (note.tipoOcorrencia === 'atraso' || note.tipoOcorrencia === 'saida_antecipada') {
-          // Marcar atraso no ponto existente
           if (existing.length > 0) {
             await db.update(timeRecords).set({
               atrasos: note.tipoOcorrencia === 'atraso' ? "1:00" : existing[0].atrasos,
@@ -202,16 +204,34 @@ export const fieldNotesRouter = router({
                 : justificativa,
               ajusteManual: 1,
               ajustadoPor: resolvidoPor,
+              fonte: existing[0].fonte === "dixi" ? "apontamento" : existing[0].fonte,
             }).where(and(
               eq(timeRecords.companyId, note.companyId),
               eq(timeRecords.employeeId, note.employeeId),
               eq(timeRecords.data, note.data),
             ));
+          } else {
+            await db.insert(timeRecords).values({
+              companyId: note.companyId,
+              employeeId: note.employeeId,
+              data: note.data,
+              mesReferencia: mesRef,
+              obraId: note.obraId,
+              faltas: "0",
+              horasTrabalhadas: "00:00",
+              horasExtras: "0:00",
+              horasNoturnas: "0:00",
+              atrasos: note.tipoOcorrencia === 'atraso' ? "1:00" : "0:00",
+              fonte: "apontamento",
+              ajusteManual: 1,
+              ajustadoPor: resolvidoPor,
+              justificativa,
+            });
           }
         }
       }
 
-      return { success: true, vinculadoPonto: tiposVinculaveis.includes(note.tipoOcorrencia) && acoesVinculaveis.includes(input.acaoTomada) };
+      return { success: true, vinculadoPonto: !!deveVincular };
     }),
 
   setEmAnalise: protectedProcedure

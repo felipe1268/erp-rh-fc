@@ -565,7 +565,7 @@ export const dixiPontoRouter = router({
       }
 
       // ===== INSERIR REGISTROS NO BANCO =====
-      // Delete existing DIXI records for affected months/obra
+      // Delete existing DIXI records for affected months/obra (preserva manuais e apontamentos)
       for (const mesRef of Array.from(mesesAfetados)) {
         await db.delete(timeRecords).where(
           and(
@@ -584,11 +584,35 @@ export const dixiPontoRouter = router({
         );
       }
 
-      // Insert time records
-      if (timeRecordsToInsert.length > 0) {
+      // Buscar registros protegidos (manuais e apontamentos) para não duplicar
+      const protectedRecords = new Set<string>();
+      for (const mesRef of Array.from(mesesAfetados)) {
+        const existing = await db.select({
+          employeeId: timeRecords.employeeId,
+          data: timeRecords.data,
+        }).from(timeRecords).where(
+          and(
+            companyFilter(timeRecords.companyId, input),
+            eq(timeRecords.mesReferencia, mesRef),
+            eq(timeRecords.obraId, obraId!),
+          )
+        );
+        for (const r of existing) {
+          protectedRecords.add(`${r.employeeId}_${r.data}`);
+        }
+      }
+
+      // Filtrar registros DIXI que conflitam com registros protegidos
+      const filteredRecords = timeRecordsToInsert.filter(r => {
+        const key = `${r.employeeId}_${r.data}`;
+        return !protectedRecords.has(key);
+      });
+
+      // Insert time records (excluindo dias já com registro manual/apontamento)
+      if (filteredRecords.length > 0) {
         const batchSize = 50;
-        for (let i = 0; i < timeRecordsToInsert.length; i += batchSize) {
-          await db.insert(timeRecords).values(timeRecordsToInsert.slice(i, i + batchSize));
+        for (let i = 0; i < filteredRecords.length; i += batchSize) {
+          await db.insert(timeRecords).values(filteredRecords.slice(i, i + batchSize));
         }
       }
 
@@ -610,7 +634,7 @@ export const dixiPontoRouter = router({
           )
         );
 
-        const mesRecords = timeRecordsToInsert.filter(r => r.mesReferencia === mesRef);
+        const mesRecords = filteredRecords.filter(r => r.mesReferencia === mesRef);
         const empIds = Array.from(new Set(mesRecords.map(r => r.employeeId)));
 
         const rateioByEmp: Record<number, { horasNormais: number; horasExtras: number; totalHoras: number; dias: number }> = {};
