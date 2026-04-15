@@ -115,9 +115,18 @@ export default function SolicitacaoMDO() {
   );
 
   const validItensForAnalise = formItens.filter(i => i.funcao.trim() && i.quantidade > 0 && i.duracaoMeses > 0);
+  const analiseItensKey = validItensForAnalise.map(i => `${i.funcao}|${i.quantidade}|${i.duracaoMeses}`).join(",");
+
+  const analiseInput = useMemo(() => {
+    const mapped = validItensForAnalise.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses }));
+    return { obraId: formObraId, itens: mapped };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formObraId, analiseItensKey]);
+
+  const analiseEnabled = viewMode === "form" && analiseInput.obraId > 0 && analiseInput.itens.length > 0 && companyId > 0;
   const analiseQ = trpc.smo.analiseComparativa.useQuery(
-    { companyId, companyIds, obraId: formObraId, itens: validItensForAnalise.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses })) },
-    { enabled: viewMode === "form" && formObraId > 0 && validItensForAnalise.length > 0 && companyId > 0 }
+    { companyId, companyIds, obraId: analiseInput.obraId, itens: analiseInput.itens },
+    { enabled: analiseEnabled, keepPreviousData: true, staleTime: 30000, refetchOnWindowFocus: false }
   );
 
   const createMut = trpc.smo.create.useMutation({
