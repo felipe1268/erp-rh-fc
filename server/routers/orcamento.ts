@@ -580,19 +580,17 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
   // Planilhas FC podem ter colunas "Preço Total Material/MO" E "Custo Material/M.O"
   // As colunas "Custo" são os valores reais de custo — devem prevalecer.
   if (!overrideColMap || Object.keys(overrideColMap).length === 0) {
-    const custoMatAliases = ['customaterial', 'customaterial', 'customat', 'custodemateria'];
+    const custoMatAliases = ['customaterial', 'customat', 'custodemateria'];
     const custoMoAliases  = ['customo', 'customaodeobra', 'customdo', 'customodeobra'];
     labelRow.forEach((cell: any, idx: number) => {
-      const label  = normCol(String(cell || ''));
-      const parent = filledParent ? normCol(String(filledParent[idx] || '')) : '';
-      const candidates = [normCol(`${parent} ${String(cell || '')}`), label].filter(Boolean);
-      if (candidates.some(c => custoMatAliases.some(a => c === a || (a.length >= 6 && c.startsWith(a))))) {
+      const norm = normCol(String(cell || ''));
+      if (custoMatAliases.some(a => norm === a || (a.length >= 6 && norm.startsWith(a)))) {
         if (colMap['cuTotalMat'] !== idx) {
           console.log(`[Orcamento] Override cuTotalMat: col ${colMap['cuTotalMat']} → ${idx} ("${String(cell||'').substring(0,25)}")`);
           colMap['cuTotalMat'] = idx;
         }
       }
-      if (candidates.some(c => custoMoAliases.some(a => c === a || (a.length >= 6 && c.startsWith(a))))) {
+      if (custoMoAliases.some(a => norm === a || (a.length >= 6 && norm.startsWith(a)))) {
         if (colMap['cuTotalMdo'] !== idx) {
           console.log(`[Orcamento] Override cuTotalMdo: col ${colMap['cuTotalMdo']} → ${idx} ("${String(cell||'').substring(0,25)}")`);
           colMap['cuTotalMdo'] = idx;
