@@ -120,15 +120,56 @@ export default function SolicitacaoMDO() {
 
   const analiseInput = useMemo(() => {
     const mapped = validItensForAnalise.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses }));
-    return { obraId: formObraId, itens: mapped, lucroTerceirizacaoPerc: lucroTercPerc };
+    return { obraId: formObraId, itens: mapped };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formObraId, analiseItensKey, lucroTercPerc]);
+  }, [formObraId, analiseItensKey]);
 
   const analiseEnabled = viewMode === "form" && analiseInput.obraId > 0 && analiseInput.itens.length > 0 && companyId > 0;
-  const analiseQ = trpc.smo.analiseComparativa.useQuery(
-    { companyId, companyIds, obraId: analiseInput.obraId, itens: analiseInput.itens, lucroTerceirizacaoPerc: analiseInput.lucroTerceirizacaoPerc },
-    { enabled: analiseEnabled, keepPreviousData: true, staleTime: 30000, refetchOnWindowFocus: false }
+  const analiseRawQ = trpc.smo.analiseComparativa.useQuery(
+    { companyId, companyIds, obraId: analiseInput.obraId, itens: analiseInput.itens, lucroTerceirizacaoPerc: 20 },
+    { enabled: analiseEnabled, keepPreviousData: true, staleTime: 60000, refetchOnWindowFocus: false }
   );
+
+  const analiseQ = useMemo(() => {
+    if (!analiseRawQ.data) return analiseRawQ;
+    const raw = analiseRawQ.data;
+    const lucroFrac = lucroTercPerc / 100;
+
+    let totalTercMensal = 0;
+    let totalTercPeriodo = 0;
+    const itens = raw.itens.map((item: any) => {
+      const base = item.terceirizacao.baseCustoMensal;
+      const tercMensalUnit = base * (1 + lucroFrac);
+      const tercMensalTotal = tercMensalUnit * item.quantidade;
+      const tercMobilizacao = raw.parametros.mobilizacaoPorProfissional * item.quantidade;
+      const tercPeriodo = (tercMensalTotal * item.duracaoMeses) + tercMobilizacao;
+
+      const diferencaMensal = tercMensalTotal - item.clt.custoMensalTotal;
+      const custoAdmDemissaoClt = item.comparativo.custoAdmDemissaoClt;
+      const economiaCltPeriodo = tercPeriodo - item.clt.custoPeriodo;
+      const recomendacao = economiaCltPeriodo > 0 ? "contratar" : (item.duracaoMeses <= 6 ? "terceirizar" : "contratar");
+
+      totalTercMensal += tercMensalTotal;
+      totalTercPeriodo += tercPeriodo;
+
+      return {
+        ...item,
+        terceirizacao: { ...item.terceirizacao, lucroPerc: lucroTercPerc, lucroValor: base * lucroFrac, custoMensalUnit: tercMensalUnit, custoMensalTotal: tercMensalTotal, mobilizacao: tercMobilizacao, custoPeriodo: tercPeriodo },
+        comparativo: { ...item.comparativo, diferencaMensal, tercMaisCaro: diferencaMensal > 0, economiaCltPeriodo, recomendacao, mesesParaCompensarAdmissao: custoAdmDemissaoClt > 0 && diferencaMensal > 0 ? Math.ceil(custoAdmDemissaoClt / diferencaMensal) : 0 },
+      };
+    });
+
+    const diferencaPeriodo = totalTercPeriodo - raw.resumo.clt.periodo;
+    return {
+      ...analiseRawQ,
+      data: {
+        ...raw,
+        itens,
+        resumo: { ...raw.resumo, terceirizacao: { mensal: totalTercMensal, periodo: totalTercPeriodo }, diferencaMensal: totalTercMensal - raw.resumo.clt.mensal, diferencaPeriodo, recomendacaoGeral: diferencaPeriodo > 0 ? "contratar" : "avaliar_terceirizacao" },
+        parametros: { ...raw.parametros, lucroTercPerc },
+      },
+    };
+  }, [analiseRawQ, lucroTercPerc]);
 
   const createMut = trpc.smo.create.useMutation({
     onSuccess: (data) => { toast.success(`${data.count} solicitação(ões) criada(s)!`); list.refetch(); dashQ.refetch(); setViewMode("list"); },
