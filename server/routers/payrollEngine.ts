@@ -126,7 +126,7 @@ function calcularINSS(salarioMensal: number): number {
   return inss;
 }
 
-function calcularIRRF(baseIR: number, salarioBrutoMensal: number): number {
+function calcularIRRF(baseIR: number, salarioBrutoMensal: number, semReducao = false): number {
   const faixas = [
     { limite: 2428.80, aliquota: 0, deducao: 0 },
     { limite: 2826.65, aliquota: 0.075, deducao: 182.16 },
@@ -142,6 +142,7 @@ function calcularIRRF(baseIR: number, salarioBrutoMensal: number): number {
     }
   }
   if (irrfBruto <= 0) return 0;
+  if (semReducao) return irrfBruto;
   let redutor = 0;
   if (salarioBrutoMensal <= 5000) {
     redutor = irrfBruto;
@@ -2039,12 +2040,11 @@ export const payrollEngineRouter = router({
 
         const valorAdiantamento = salarioBruto * (percentual / 100);
 
-        // ── IRRF sobre adiantamento (proporcional ao percentual) ──────
-        // Para desligados/férias, usar salário real do mês (proporcional), não o cheio
-        const salarioBaseIR = (diasAusentesAviso > 0 || diasFeriasNoMes > 0) ? salarioBruto : salarioMensalCompleto;
-        const inssEmpregado = calcularINSS(salarioBaseIR);
-        const baseIR = salarioBaseIR - inssEmpregado;
-        const irrfMensal = calcularIRRF(baseIR, salarioBaseIR);
+        // ── IRRF regime caixa (bulking): projeta salário cheio, IR sem redutor MP, rateia ──
+        const salarioProjetado = salarioMensalCompleto;
+        const inssProjetado = calcularINSS(salarioProjetado);
+        const baseIR = salarioProjetado - inssProjetado;
+        const irrfMensal = calcularIRRF(baseIR, salarioProjetado, true);
         const irAdiantamento = irrfMensal > 0 ? Math.round(irrfMensal * (percentual / 100) * 100) / 100 : 0;
         const valorTotalVale = valorAdiantamento;
         const valorLiquidoVale = valorTotalVale - irAdiantamento;
@@ -2367,7 +2367,7 @@ export const payrollEngineRouter = router({
       const percentual = parseFloat(row.percentualAdiantamento) || 40;
       const inss = calcularINSS(salarioBruto);
       const baseIR = salarioBruto - inss;
-      const irrfMensal = calcularIRRF(baseIR, salarioBruto);
+      const irrfMensal = calcularIRRF(baseIR, salarioBruto, true);
       const irProporcional = irrfMensal > 0 ? Math.round(irrfMensal * (percentual / 100) * 100) / 100 : 0;
       const novoIR = Math.min(irProporcional, valorNum);
       const novoLiquido = Math.max(valorNum - novoIR, 0);
