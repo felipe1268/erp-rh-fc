@@ -97,7 +97,7 @@ export default function FolhaPagamento() {
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [valeSearch, setValeSearch] = useState("");
-  const [valeFilter, setValeFilter] = useState<"all" | "aprovados" | "alertas" | "he">("all");
+  const [valeFilter, setValeFilter] = useState<"all" | "aprovados" | "alertas" | "he" | "pago" | "naopago">("all");
   const [valeExcluirSel, setValeExcluirSel] = useState<Set<number>>(new Set());
 
   // HE Módulo state
@@ -1814,6 +1814,8 @@ export default function FolhaPagamento() {
     const totalValeDinamico = todosFunc
       .filter((f: any) => f.status !== 'rejeitado' && !valeExcluirSel.has(f.employeeId))
       .reduce((s: number, f: any) => s + parseFloat(String(f.valorLiquido ?? f.valorTotalVale ?? 0)), 0);
+    const funcPagos = todosFunc.filter((f: any) => f.status !== 'rejeitado');
+    const funcNaoPagos = todosFunc.filter((f: any) => f.status === 'rejeitado');
     const comHE = todosFunc.filter((f: any) => (f.valorHE || 0) > 0);
     const totalHE = comHE.reduce((s: number, f: any) => s + (f.valorHE || 0), 0);
 
@@ -1822,6 +1824,8 @@ export default function FolhaPagamento() {
       if (valeFilter === "aprovados") return !f.temAlerta;
       if (valeFilter === "alertas") return !!f.temAlerta;
       if (valeFilter === "he") return (f.valorHE || 0) > 0;
+      if (valeFilter === "pago") return f.status !== 'rejeitado';
+      if (valeFilter === "naopago") return f.status === 'rejeitado';
       return true;
     };
     const rowVisible = (f: any) => matchSearch(f) && matchFilter(f);
@@ -1884,46 +1888,60 @@ export default function FolhaPagamento() {
           </div>
 
           {/* RESUMO CARDS */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 no-print">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 no-print">
             <Card className={cardClass(valeFilter === "all")} onClick={() => setValeFilter("all")}>
-              <CardContent className="p-4 text-center">
+              <CardContent className="p-3 text-center">
                 <p className="text-2xl font-bold text-orange-700">{fmtNum(valeResult.totalFuncionarios)}</p>
-                <p className="text-xs text-muted-foreground">Todos os Funcionários</p>
+                <p className="text-[10px] text-muted-foreground">Todos os Funcionários</p>
                 {valeFilter === "all" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
               </CardContent>
             </Card>
             <Card className={cardClass(false)}>
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-orange-700">{formatBRL(totalValeDinamico)}</p>
-                <p className="text-xs text-muted-foreground">Total Vale (Geral)</p>
+              <CardContent className="p-3 text-center">
+                <p className="text-xl font-bold text-orange-700">{formatBRL(totalValeDinamico)}</p>
+                <p className="text-[10px] text-muted-foreground">Total Vale (Geral)</p>
               </CardContent>
             </Card>
             <Card className={cardClass(valeFilter === "aprovados")} onClick={() => setValeFilter(valeFilter === "aprovados" ? "all" : "aprovados")}>
-              <CardContent className="p-4 text-center">
+              <CardContent className="p-3 text-center">
                 <p className="text-2xl font-bold text-green-700">{fmtNum(funcionariosSemAlerta.length)}</p>
-                <p className="text-xs text-muted-foreground">Aprovados Automaticamente</p>
+                <p className="text-[10px] text-muted-foreground">Aprovados Automaticamente</p>
                 {valeFilter === "aprovados" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
               </CardContent>
             </Card>
             <Card className={`${cardClass(valeFilter === "alertas")} ${funcionariosComAlerta.length > 0 ? "border-2 border-amber-400" : ""}`} onClick={() => setValeFilter(valeFilter === "alertas" ? "all" : "alertas")}>
-              <CardContent className="p-4 text-center">
+              <CardContent className="p-3 text-center">
                 <p className="text-2xl font-bold text-amber-600">{fmtNum(funcionariosComAlerta.length)}</p>
-                <p className="text-xs text-muted-foreground">Com Alerta (Decisão Pendente)</p>
+                <p className="text-[10px] text-muted-foreground">Com Alerta (Pendente)</p>
                 {valeFilter === "alertas" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
               </CardContent>
             </Card>
             <Card className={cardClass(valeFilter === "he")} onClick={() => setValeFilter(valeFilter === "he" ? "all" : "he")}>
-              <CardContent className="p-4 text-center">
+              <CardContent className="p-3 text-center">
                 <p className="text-2xl font-bold text-purple-700">{fmtNum(comHE.length)}</p>
-                <p className="text-xs text-muted-foreground">Com Hora Extra</p>
+                <p className="text-[10px] text-muted-foreground">Com Hora Extra</p>
                 <p className="text-[10px] text-purple-600 mt-0.5">{formatBRL(totalHE)}</p>
                 {valeFilter === "he" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
               </CardContent>
             </Card>
+            <Card className={`${cardClass(valeFilter === "pago")} border-green-200`} onClick={() => setValeFilter(valeFilter === "pago" ? "all" : "pago")}>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold text-green-700">{fmtNum(funcPagos.length)}</p>
+                <p className="text-[10px] text-muted-foreground">Pago</p>
+                {valeFilter === "pago" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
+              </CardContent>
+            </Card>
+            <Card className={`${cardClass(valeFilter === "naopago")} ${funcNaoPagos.length > 0 ? "border-red-200" : ""}`} onClick={() => setValeFilter(valeFilter === "naopago" ? "all" : "naopago")}>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold text-red-600">{fmtNum(funcNaoPagos.length)}</p>
+                <p className="text-[10px] text-muted-foreground">Não Pago</p>
+                {valeFilter === "naopago" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
+              </CardContent>
+            </Card>
             <Card className={cardClass(false)}>
-              <CardContent className="p-4 text-center">
+              <CardContent className="p-3 text-center">
                 <p className="text-2xl font-bold text-blue-700">{fmtNum(valeResult.diasUteis)}</p>
-                <p className="text-xs text-muted-foreground">Dias Úteis</p>
+                <p className="text-[10px] text-muted-foreground">Dias Úteis</p>
               </CardContent>
             </Card>
           </div>
