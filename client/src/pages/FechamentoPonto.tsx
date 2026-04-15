@@ -3840,15 +3840,18 @@ export default function FechamentoPonto() {
                           Existem <strong>{previewData.apontamentosCampo.length}</strong> apontamento(s) de campo registrados para funcionários deste arquivo.
                           Os registros manuais serão <strong>preservados</strong> e o DIXI não sobrescreverá esses dias.
                         </p>
-                        <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                        <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto">
                           {previewData.apontamentosCampo.map((ap: any, idx: number) => (
-                            <div key={idx} className="flex items-center gap-2 text-xs bg-blue-100/60 rounded px-2 py-1">
-                              <span className="font-medium text-blue-900 min-w-[140px] truncate">{ap.nomeCompleto}</span>
-                              <span className="text-blue-600">{ap.data?.split('-').reverse().join('/')}</span>
-                              <span className="text-blue-800 truncate flex-1">{ap.tipoOcorrencia}: {ap.descricao}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${ap.status === 'resolvido' ? 'bg-green-200 text-green-800' : ap.status === 'em_analise' ? 'bg-yellow-200 text-yellow-800' : 'bg-gray-200 text-gray-700'}`}>
-                                {ap.status === 'resolvido' ? 'Resolvido' : ap.status === 'em_analise' ? 'Em Análise' : 'Pendente'}
-                              </span>
+                            <div key={idx} className="text-xs bg-blue-100/60 rounded-lg px-3 py-2 overflow-hidden">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-blue-900">{ap.nomeCompleto}</span>
+                                <span className="text-blue-600">{ap.data?.split('-').reverse().join('/')}</span>
+                                <span className="text-blue-700 font-medium">{ap.tipoOcorrencia}</span>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${ap.status === 'resolvido' ? 'bg-green-200 text-green-800' : ap.status === 'em_analise' ? 'bg-yellow-200 text-yellow-800' : 'bg-gray-200 text-gray-700'}`}>
+                                  {ap.status === 'resolvido' ? 'Resolvido' : ap.status === 'em_analise' ? 'Em Análise' : 'Pendente'}
+                                </span>
+                              </div>
+                              <p className="text-blue-800 mt-1 break-words">{ap.descricao}</p>
                             </div>
                           ))}
                         </div>
