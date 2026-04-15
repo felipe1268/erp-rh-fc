@@ -69,22 +69,101 @@ export const fieldNotesRouter = router({
       descricao: z.string().min(1),
       prioridade: prioridadeEnum.optional(),
       evidenciaUrl: z.string().optional(),
+      entrada1: z.string().optional(),
+      saida1: z.string().optional(),
+      entrada2: z.string().optional(),
+      saida2: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const solicitanteNome = ctx.user?.name || ctx.user?.email || "Gestor";
+      const { entrada1, saida1, entrada2, saida2, ...fieldData } = input;
       const [result] = await db.insert(fieldNotes).values({
-        ...input,
+        ...fieldData,
         solicitanteNome,
         solicitanteId: ctx.user?.openId || ctx.user?.email || "",
       }).returning();
       const newId = result.id;
 
-      // Buscar nome do funcionário para a notificação
+      const tiposComPonto = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto'];
+      if (tiposComPonto.includes(input.tipoOcorrencia) && input.obraId) {
+        const mesRef = input.data.substring(0, 7);
+        const justificativa = `[Apontamento #${newId} - ${input.tipoOcorrencia}] ${input.descricao.substring(0, 200)} (por ${solicitanteNome})`;
+        const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+
+        const existing = await db.select().from(timeRecords)
+          .where(and(
+            eq(timeRecords.companyId, input.companyId),
+            eq(timeRecords.employeeId, input.employeeId),
+            eq(timeRecords.data, input.data),
+          ));
+
+        const ex = existing[0];
+        const finalE1 = entrada1 || ex?.entrada1 || null;
+        const finalS1 = saida1 || ex?.saida1 || null;
+        const finalE2 = entrada2 || ex?.entrada2 || null;
+        const finalS2 = saida2 || ex?.saida2 || null;
+
+        let totalMin = 0;
+        if (finalE1 && finalS1) totalMin += toMin(finalS1) - toMin(finalE1);
+        if (finalE2 && finalS2) totalMin += toMin(finalS2) - toMin(finalE2);
+        if (totalMin < 0) totalMin = 0;
+        const hh = Math.floor(totalMin / 60);
+        const mm = totalMin % 60;
+        const horasTrabalhadas = `${hh}:${String(mm).padStart(2, '0')}`;
+
+        let faltas = "0";
+        let atrasos = "0:00";
+        if (input.tipoOcorrencia === 'falta' || input.tipoOcorrencia === 'abandono_posto') {
+          faltas = totalMin > 0 ? "0" : "1";
+        }
+
+        if (ex) {
+          const prevJust = ex.justificativa ? `${ex.justificativa} | ${justificativa}` : justificativa;
+          await db.update(timeRecords).set({
+            entrada1: finalE1,
+            saida1: finalS1,
+            entrada2: finalE2,
+            saida2: finalS2,
+            horasTrabalhadas,
+            faltas,
+            atrasos,
+            justificativa: prevJust,
+            ajusteManual: 1,
+            ajustadoPor: solicitanteNome,
+            fonte: "apontamento",
+          }).where(and(
+            eq(timeRecords.companyId, input.companyId),
+            eq(timeRecords.employeeId, input.employeeId),
+            eq(timeRecords.data, input.data),
+          ));
+        } else {
+          await db.insert(timeRecords).values({
+            companyId: input.companyId,
+            employeeId: input.employeeId,
+            data: input.data,
+            mesReferencia: mesRef,
+            obraId: input.obraId,
+            entrada1: finalE1,
+            saida1: finalS1,
+            entrada2: finalE2,
+            saida2: finalS2,
+            horasTrabalhadas,
+            horasExtras: "0:00",
+            horasNoturnas: "0:00",
+            faltas,
+            atrasos,
+            fonte: "apontamento",
+            ajusteManual: 1,
+            ajustadoPor: solicitanteNome,
+            justificativa,
+          });
+        }
+      }
+
       const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees).where(eq(employees.id, input.employeeId));
       const nomeFunc = emp?.nome || `Func. #${input.employeeId}`;
 
-      // Notificar owner para apontamentos urgentes ou de alta prioridade
       if (input.prioridade === 'urgente' || input.prioridade === 'alta') {
         const prioridadeLabel = input.prioridade === 'urgente' ? '🚨 URGENTE' : '⚠️ ALTA';
         const tipoLabel = input.tipoOcorrencia.replace(/_/g, ' ');
@@ -94,12 +173,11 @@ export const fieldNotesRouter = router({
             content: `Novo apontamento ${prioridadeLabel} registrado por ${solicitanteNome}:\n\nFuncionário: ${nomeFunc}\nTipo: ${tipoLabel}\nData: ${input.data}\nDescrição: ${input.descricao.substring(0, 200)}`,
           });
         } catch (e) {
-          // Notificação falhou, mas não bloqueia o registro
           console.error('[FieldNotes] Falha ao notificar owner:', e);
         }
       }
 
-      return { id: newId };
+      return { id: newId, vinculadoPonto: tiposComPonto.includes(input.tipoOcorrencia) && !!input.obraId };
     }),
 
   update: protectedProcedure

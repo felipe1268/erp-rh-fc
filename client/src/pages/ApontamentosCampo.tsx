@@ -83,6 +83,10 @@ export default function ApontamentosCampo() {
   const [novoTipo, setNovoTipo] = useState<string>("falta");
   const [novoPrioridade, setNovoPrioridade] = useState<string>("media");
   const [novoDescricao, setNovoDescricao] = useState("");
+  const [novoEntrada1, setNovoEntrada1] = useState("");
+  const [novoSaida1, setNovoSaida1] = useState("");
+  const [novoEntrada2, setNovoEntrada2] = useState("");
+  const [novoSaida2, setNovoSaida2] = useState("");
 
   const [editTipo, setEditTipo] = useState<string>("");
   const [editPrioridade, setEditPrioridade] = useState<string>("");
@@ -239,7 +243,7 @@ export default function ApontamentosCampo() {
               Registro de ocorrências pelo gestor de campo para resolução pelo RH
             </p>
           </div>
-          <Button onClick={() => setShowNovoDialog(true)} className="bg-[#1B2A4A] hover:bg-[#2a3d66]">
+          <Button onClick={() => { setNovoEntrada1(""); setNovoSaida1(""); setNovoEntrada2(""); setNovoSaida2(""); setShowNovoDialog(true); }} className="bg-[#1B2A4A] hover:bg-[#2a3d66]">
             <Plus className="h-4 w-4 mr-2" /> Novo Apontamento
           </Button>
         </div>
@@ -532,13 +536,53 @@ export default function ApontamentosCampo() {
                   </select>
                 </div>
               </div>
+              {['falta', 'atraso', 'saida_antecipada', 'abandono_posto'].includes(novoTipo) && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3 space-y-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Clock className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-semibold text-blue-800">Horários de Ponto do Dia</span>
+                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">opcional</span>
+                  </div>
+                  <p className="text-xs text-blue-600">
+                    Preencha apenas os horários que você sabe. Se o DIXI já importou parte das batidas, o sistema faz o merge automaticamente — só completa o que falta. Esses dados ficam <strong>fixados</strong> e o DIXI nunca sobrescreve.
+                  </p>
+                  <div className="grid grid-cols-4 gap-2">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">Entrada</label>
+                      <input type="time" value={novoEntrada1} onChange={(e) => setNovoEntrada1(e.target.value)}
+                        className="w-full border rounded px-2 py-1.5 text-sm mt-0.5" placeholder="--:--" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">Saída Int.</label>
+                      <input type="time" value={novoSaida1} onChange={(e) => setNovoSaida1(e.target.value)}
+                        className="w-full border rounded px-2 py-1.5 text-sm mt-0.5" placeholder="--:--" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">Retorno</label>
+                      <input type="time" value={novoEntrada2} onChange={(e) => setNovoEntrada2(e.target.value)}
+                        className="w-full border rounded px-2 py-1.5 text-sm mt-0.5" placeholder="--:--" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">Saída</label>
+                      <input type="time" value={novoSaida2} onChange={(e) => setNovoSaida2(e.target.value)}
+                        className="w-full border rounded px-2 py-1.5 text-sm mt-0.5" placeholder="--:--" />
+                    </div>
+                  </div>
+                  {novoTipo === 'falta' && !novoEntrada1 && !novoSaida1 && !novoEntrada2 && !novoSaida2 && (
+                    <p className="text-xs text-amber-600">Sem horários = falta integral (0:00 trabalhadas).</p>
+                  )}
+                  {(novoEntrada1 || novoSaida1 || novoEntrada2 || novoSaida2) && (
+                    <p className="text-xs text-green-700">Os horários preenchidos serão mesclados com dados existentes do DIXI (se houver) e fixados no ponto.</p>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="text-sm font-medium">Descrição Detalhada *</label>
                 <Textarea
                   value={novoDescricao}
                   onChange={(e) => setNovoDescricao(e.target.value)}
                   placeholder="Descreva a ocorrência com o máximo de detalhes possível..."
-                  rows={4}
+                  rows={3}
                   className="mt-1"
                 />
               </div>
@@ -550,6 +594,7 @@ export default function ApontamentosCampo() {
                 disabled={!novoEmployeeId || !novoDescricao.trim() || createMut.isPending}
                 onClick={() => {
                   if (!novoEmployeeId || !novoDescricao.trim()) return;
+                  const tiposComPonto = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto'];
                   createMut.mutate({
                     companyId: companyId!,
                     employeeId: novoEmployeeId,
@@ -558,6 +603,12 @@ export default function ApontamentosCampo() {
                     tipoOcorrencia: novoTipo as any,
                     prioridade: novoPrioridade as any,
                     descricao: novoDescricao.trim(),
+                    ...(tiposComPonto.includes(novoTipo) ? {
+                      entrada1: novoEntrada1 || undefined,
+                      saida1: novoSaida1 || undefined,
+                      entrada2: novoEntrada2 || undefined,
+                      saida2: novoSaida2 || undefined,
+                    } : {}),
                   });
                 }}
               >
