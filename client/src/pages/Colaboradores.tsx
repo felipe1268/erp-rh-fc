@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -178,7 +178,7 @@ export default function Colaboradores() {
     { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined },
     { enabled: hasValidSelection }
   );
-  const serverStatus = statusFilter !== "Todos" && statusFilter !== "CLT" && statusFilter !== "PJ" && statusFilter !== "Socio" ? statusFilter : undefined;
+  const serverStatus = statusFilter !== "Todos" && statusFilter !== "CLT" && statusFilter !== "PJ" && statusFilter !== "Socio" && statusFilter !== "ListaNegra" ? statusFilter : undefined;
   const { data: employees, isLoading } = trpc.employees.list.useQuery(
     { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined, search: search || undefined, status: serverStatus },
     { enabled: hasValidSelection }
@@ -202,6 +202,7 @@ export default function Colaboradores() {
     if (statusFilter === "CLT") list = list.filter(e => (e as any).tipoContrato === "CLT");
     if (statusFilter === "PJ") list = list.filter(e => (e as any).tipoContrato === "PJ");
     if (statusFilter === "Socio") list = list.filter(e => (e as any).tipoContrato === "Socio");
+    if (statusFilter === "ListaNegra") list = list.filter(e => (e as any).listaNegra === 1 || (e as any).listaNegra === true);
     if (statusFilter === "Desligado" && (desligDe || desligAte)) {
       list = list.filter(e => {
         const d = (e as any).dataDesligamentoEfetiva;
@@ -653,6 +654,7 @@ export default function Colaboradores() {
                 { label: "Afastados", value: statsQ.data.afastados, icon: HeartPulse, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", filter: "Afastado" },
                 { label: "Licença", value: statsQ.data.licenca, icon: Clock, color: "text-purple-700", bg: "bg-purple-50 border-purple-200", filter: "Licenca" },
                 { label: "Desligados", value: statsQ.data.desligados, icon: UserX, color: "text-red-700", bg: "bg-red-50 border-red-200", filter: "Desligado" },
+                { label: "Blacklist", value: statsQ.data.blacklist || 0, icon: ShieldX, color: "text-red-800", bg: "bg-red-100 border-red-300", filter: "ListaNegra" },
                 { label: "Reclusos", value: statsQ.data.reclusos, icon: Ban, color: "text-gray-700", bg: "bg-gray-50 border-gray-200", filter: "Recluso" },
               ].map(item => (
                 <button
@@ -694,6 +696,7 @@ export default function Colaboradores() {
               {EMPLOYEE_STATUS.map(s => (
                 <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
               ))}
+              <SelectItem value="ListaNegra">Blacklist</SelectItem>
             </SelectContent>
           </Select>
           <SkillFilterDropdown value={skillFilter} onChange={setSkillFilter} companyId={queryCompanyId} companyIds={isConstrutoras ? queryCompanyIds : undefined} />

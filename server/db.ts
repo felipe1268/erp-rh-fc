@@ -724,7 +724,11 @@ export async function getEmployeeStats(companyId: number, companyIds?: number[])
     if (r.tipoContrato === 'CLT') clt = Number(r.cnt);
     else if (r.tipoContrato === 'PJ') pj = Number(r.cnt);
   });
-  const stats = { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, clt, pj, porStatus: {} as Record<string, number> };
+  const blResult = ((await db.execute(
+    sql`SELECT COUNT(*) as cnt FROM employees WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)}) AND "deletedAt" IS NULL AND "listaNegra" = 1`
+  )) as any).rows || [];
+  const blacklist = Number(blResult[0]?.cnt || 0);
+  const stats = { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, blacklist, clt, pj, porStatus: {} as Record<string, number> };
   result.forEach(r => {
     const c = Number(r.count);
     const s = r.status || 'Sem Status';
