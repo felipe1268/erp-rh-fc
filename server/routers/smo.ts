@@ -18,6 +18,63 @@ function companyFilter(col: any, input: { companyId: number; companyIds?: number
   return eq(col, input.companyId);
 }
 
+const parseBRL = (v: any) => parseFloat(String(v || "0").replace(/\./g, "").replace(",", ".")) || 0;
+
+async function getMealConfig(db: any, input: { companyId: number; companyIds?: number[] }, obraId?: number) {
+  let mealCfg: any = null;
+  if (obraId) {
+    const [obraCfg] = await db.select().from(mealBenefitConfigs)
+      .where(and(companyFilter(mealBenefitConfigs.companyId, input), eq(mealBenefitConfigs.obraId, obraId), eq(mealBenefitConfigs.ativo, 1)))
+      .orderBy(desc(mealBenefitConfigs.createdAt)).limit(1);
+    mealCfg = obraCfg || null;
+  }
+  if (!mealCfg) {
+    const [padrao] = await db.select().from(mealBenefitConfigs)
+      .where(and(companyFilter(mealBenefitConfigs.companyId, input), isNull(mealBenefitConfigs.obraId), eq(mealBenefitConfigs.ativo, 1)))
+      .orderBy(desc(mealBenefitConfigs.createdAt)).limit(1);
+    mealCfg = padrao || null;
+  }
+  if (!mealCfg) {
+    const [any] = await db.select().from(mealBenefitConfigs)
+      .where(and(companyFilter(mealBenefitConfigs.companyId, input), eq(mealBenefitConfigs.ativo, 1)))
+      .orderBy(desc(mealBenefitConfigs.createdAt)).limit(1);
+    mealCfg = any || null;
+  }
+  return mealCfg;
+}
+
+function calcBeneficiosFromConfig(mealCfg: any, convVrDiario: number, convVaMensal: number) {
+  const diasUteisRef = mealCfg?.diasUteisRef || 22;
+  let cafeMensal = 0, lancheMensal = 0, vrMensal = 0, vaMensal = 0;
+
+  if (mealCfg) {
+    const cafeAtivo = mealCfg.cafeAtivo === 1;
+    const lancheAtivo = mealCfg.lancheAtivo === 1;
+    const cafeDia = cafeAtivo ? parseBRL(mealCfg.cafeManhaDia) : 0;
+    const lancheDia = lancheAtivo ? parseBRL(mealCfg.lancheTardeDia) : 0;
+    cafeMensal = Math.round(cafeDia * diasUteisRef * 100) / 100;
+    lancheMensal = Math.round(lancheDia * diasUteisRef * 100) / 100;
+    vrMensal = cafeMensal + lancheMensal;
+
+    const cfgVaMensal = parseBRL(mealCfg.valeAlimentacaoMes);
+    const cfgTotalIFood = parseBRL(mealCfg.totalVaIFood);
+
+    if (cfgTotalIFood > 0) {
+      vaMensal = Math.round((cfgTotalIFood - vrMensal) * 100) / 100;
+    } else if (cfgVaMensal > 0) {
+      vaMensal = Math.round(cfgVaMensal * diasUteisRef * 100) / 100;
+    }
+  } else if (convVrDiario > 0 || convVaMensal > 0) {
+    vrMensal = convVrDiario * 22;
+    vaMensal = convVaMensal;
+  } else {
+    vrMensal = 220;
+    vaMensal = 460.75;
+  }
+
+  return { cafeMensal, lancheMensal, vrMensal, vaMensal, diasUteisRef };
+}
+
 function isTransientDbError(err: any): boolean {
   const texts = [err?.message, err?.cause?.message, err?.code, err?.cause?.code].filter(Boolean).join(' ');
   return /connection|timeout|socket|ECONNRE|ETIMEDOUT|EPIPE|terminating|SSL|57P01|08006|53300|57P03/i.test(texts);
@@ -299,20 +356,27 @@ export const smoRouter = router({
         .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
         .orderBy(desc(convencaoColetiva.vigenciaInicio)).limit(1);
 
-      const vr = parseFloat(conv?.valeRefeicao || "0") * 22;
-      const va = parseFloat(conv?.valeAlimentacao || "0");
+      const mealCfg = await getMealConfig(db, input, input.obraId);
+      const convVrDiario = parseFloat(conv?.valeRefeicao || "0");
+      const convVaMensal = parseFloat(conv?.valeAlimentacao || "0");
+      const benef = calcBeneficiosFromConfig(mealCfg, convVrDiario, convVaMensal);
+
+      const vr = benef.vrMensal;
+      const va = benef.vaMensal;
       const vt = salarioRef * 0.06;
+      const seguroVidaGrupo = 45;
       const exameAdmissional = 200;
       const epiEstimado = 350;
       const uniformeEstimado = 250;
 
       const encargosValor = salarioRef * (totalEncargosPerc / 100);
-      const custoMensal = salarioRef + encargosValor + vr + va + vt;
+      const custoMensal = salarioRef + encargosValor + vr + va + vt + seguroVidaGrupo;
       const custoUnico = exameAdmissional + epiEstimado + uniformeEstimado;
       const custoMensalTotal = custoMensal * input.quantidade;
       const custoTotal = (custoMensal * input.quantidade * input.duracaoMeses) + (custoUnico * input.quantidade);
 
       const ferias13 = salarioRef / 12 + (salarioRef / 12) / 3 + salarioRef / 12;
+      const totalBeneficios = vr + va + vt + seguroVidaGrupo;
 
       return {
         salarioBase: salarioRef,
@@ -321,6 +385,8 @@ export const smoRouter = router({
         valeRefeicao: vr,
         valeAlimentacao: va,
         valeTransporte: vt,
+        seguroVidaGrupo,
+        totalBeneficios,
         exameAdmissional,
         epiEstimado,
         uniformeEstimado,
@@ -331,6 +397,9 @@ export const smoRouter = router({
         custoTotal,
         baseSalarial: emps.length > 0 ? "Média dos ativos" : "Piso salarial (convenção)",
         qtdReferencia: emps.length,
+        beneficiosOrigem: mealCfg ? `Config: ${mealCfg.nome || "VR/VA"}` : (convVrDiario > 0 ? "Convenção Coletiva" : "Valores padrão"),
+        cafeMensal: benef.cafeMensal,
+        lancheMensal: benef.lancheMensal,
       };
     }),
 
@@ -361,41 +430,9 @@ export const smoRouter = router({
       const convVrDiario = parseFloat(conv?.valeRefeicao || "0");
       const convVaMensal = parseFloat(conv?.valeAlimentacao || "0");
 
-      const [mealCfg] = await db.select().from(mealBenefitConfigs)
-        .where(and(companyFilter(mealBenefitConfigs.companyId, input), eq(mealBenefitConfigs.ativo, 1)))
-        .orderBy(desc(mealBenefitConfigs.createdAt)).limit(1);
-
-      const parseBRL = (v: any) => parseFloat(String(v || "0").replace(/\./g, "").replace(",", ".")) || 0;
-      const diasUteisRef = mealCfg?.diasUteisRef || 22;
-      const cafeAtivo = mealCfg ? (mealCfg.cafeAtivo === 1) : true;
-      const lancheAtivo = mealCfg ? (mealCfg.lancheAtivo === 1) : true;
-      const cafeDia = cafeAtivo ? parseBRL(mealCfg?.cafeManhaDia) : 0;
-      const lancheDia = lancheAtivo ? parseBRL(mealCfg?.lancheTardeDia) : 0;
-      const cafeMensal = Math.round(cafeDia * diasUteisRef * 100) / 100;
-      const lancheMensal = Math.round(lancheDia * diasUteisRef * 100) / 100;
-
-      const cfgVaMensal = parseBRL(mealCfg?.valeAlimentacaoMes);
-      const cfgTotalIFood = parseBRL(mealCfg?.totalVA_iFood);
-
-      let vrMensal: number;
-      let vaMensal: number;
-
-      if (mealCfg) {
-        vrMensal = cafeMensal + lancheMensal;
-        if (cfgVaMensal > 0) {
-          vaMensal = cfgVaMensal;
-        } else if (cfgTotalIFood > 0) {
-          vaMensal = Math.round((cfgTotalIFood - vrMensal) * 100) / 100;
-        } else {
-          vaMensal = 0;
-        }
-      } else if (convVrDiario > 0 || convVaMensal > 0) {
-        vrMensal = convVrDiario * 22;
-        vaMensal = convVaMensal;
-        } else {
-        vrMensal = 220;
-        vaMensal = 460.75;
-      }
+      const mealCfg = await getMealConfig(db, input, input.obraId);
+      const benef = calcBeneficiosFromConfig(mealCfg, convVrDiario, convVaMensal);
+      const { cafeMensal, lancheMensal, vrMensal, vaMensal, diasUteisRef } = benef;
       const exameAdmissional = 200;
       const examePeriodico = 150;
       const exameDemissional = 150;
@@ -773,9 +810,12 @@ export const smoRouter = router({
         .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
         .orderBy(desc(convencaoColetiva.vigenciaInicio)).limit(1);
 
-      const vrDiario = parseFloat(convData?.valeRefeicao || "0");
-      const vaValor = parseFloat(convData?.valeAlimentacao || "0");
+      const convVrDiario = parseFloat(convData?.valeRefeicao || "0");
+      const convVaVal = parseFloat(convData?.valeAlimentacao || "0");
       const pisoFallback = parseFloat(convData?.pisoSalarial || "2500");
+
+      const mealCfgCreate = await getMealConfig(db, input, input.obraId);
+      const benefCreate = calcBeneficiosFromConfig(mealCfgCreate, convVrDiario, convVaVal);
 
       const results = [];
       for (const item of input.itens) {
@@ -800,11 +840,11 @@ export const smoRouter = router({
         }
         if (salarioRef === 0) salarioRef = pisoFallback;
 
-        const vr = vrDiario * 22;
-        const va = vaValor;
+        const vr = benefCreate.vrMensal;
+        const va = benefCreate.vaMensal;
         const vt = salarioRef * 0.06;
         const encargosValor = salarioRef * (totalEncargosPerc / 100);
-        const custoMensal = (salarioRef + encargosValor + vr + va + vt) * item.quantidade;
+        const custoMensal = (salarioRef + encargosValor + vr + va + vt + 45) * item.quantidade;
         const custoUnico = (200 + 350 + 250) * item.quantidade;
         const custoTotal = (custoMensal * (item.duracaoMeses || 1)) + custoUnico;
 
@@ -816,8 +856,8 @@ export const smoRouter = router({
           salarioBase: salarioRef,
           encargosPerc: totalEncargosPerc,
           encargosValor,
-          beneficios: vr + va + vt,
-          custoMensalUnit: salarioRef + encargosValor + vr + va + vt,
+          beneficios: vr + va + vt + 45,
+          custoMensalUnit: salarioRef + encargosValor + vr + va + vt + 45,
           custoMensalTotal: custoMensal,
           custoTotal,
           tercMensalTotal: tercMensal,

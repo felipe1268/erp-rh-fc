@@ -661,6 +661,10 @@ export default function SolicitacaoMDO() {
                             <CostLine label="Vale Transporte (6%)" value={det?.valeTransporte} />
                             <CostLine label="Seguro de Vida Grupo" value={det?.seguroVidaGrupo} />
                             {det?.planoSaude > 0 && <CostLine label="Plano de Saúde" value={det?.planoSaude} />}
+                            <div className="border-t pt-1 flex justify-between font-semibold text-blue-800">
+                              <span>Total Benefícios</span>
+                              <span className="font-mono">{fmtMoney((det?.valeRefeicao || 0) + (det?.valeAlimentacao || 0) + (det?.valeTransporte || 0) + (det?.seguroVidaGrupo || 0) + (det?.planoSaude || 0))}</span>
+                            </div>
 
                             <div className="border-t border-blue-200 pt-1.5 mt-2">
                               <div className="flex justify-between font-bold text-blue-900 text-sm">
