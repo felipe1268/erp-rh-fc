@@ -10,6 +10,7 @@ import {
   HardHat, Building2, Calendar, TrendingUp, DollarSign,
   ArrowRight, RefreshCw, ClipboardList, Award, Briefcase,
   Shield, Package, UserCheck, Trash2, X, Upload, FileText, Phone, User,
+  Scale, ThumbsUp, ThumbsDown, BarChart3, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 type ViewMode = "list" | "form" | "detail";
+type FormItem = { id: string; funcao: string; quantidade: number; duracaoMeses: number };
 
 export default function SolicitacaoMDO() {
   const { user } = useAuth();
@@ -71,36 +73,27 @@ export default function SolicitacaoMDO() {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectMotivo, setRejectMotivo] = useState("");
   const [rejectingId, setRejectingId] = useState<number | null>(null);
-  const [funcaoOutros, setFuncaoOutros] = useState("");
+
+  const [formObraId, setFormObraId] = useState(0);
+  const [formItens, setFormItens] = useState<FormItem[]>([{ id: "1", funcao: "", quantidade: 1, duracaoMeses: 1 }]);
+  const [formDataInicio, setFormDataInicio] = useState("");
+  const [formPrioridade, setFormPrioridade] = useState("normal");
+  const [formMotivo, setFormMotivo] = useState("");
+  const [formAtividades, setFormAtividades] = useState("");
+
+  const [funcaoDropdownIdx, setFuncaoDropdownIdx] = useState<string | null>(null);
   const [funcaoBusca, setFuncaoBusca] = useState("");
-  const [funcaoDropdownOpen, setFuncaoDropdownOpen] = useState(false);
   const funcaoRef = useRef<HTMLDivElement>(null);
-  const [curriculoFile, setCurriculoFile] = useState<File | null>(null);
-  const [showEapPicker, setShowEapPicker] = useState(false);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (funcaoRef.current && !funcaoRef.current.contains(e.target as Node)) {
-        setFuncaoDropdownOpen(false);
+        setFuncaoDropdownIdx(null);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  const [form, setForm] = useState({
-    obraId: 0,
-    funcaoSolicitada: "",
-    quantidade: 1,
-    dataInicioNecessidade: "",
-    duracaoMeses: 1,
-    prioridade: "normal",
-    qualificacoes: [] as string[],
-    observacao: "",
-    atividadesEap: [] as { atividadeId: number; eapCodigo: string; nomeAtividade: string }[],
-    candidatoIndicadoNome: "",
-    candidatoIndicadoTelefone: "",
-  });
 
   const list = trpc.smo.list.useQuery(
     { companyId, companyIds, status: filterStatus !== "all" ? filterStatus : undefined, obraId: filterObra !== "all" ? parseInt(filterObra) : undefined },
@@ -108,28 +101,7 @@ export default function SolicitacaoMDO() {
   );
   const obrasQ = trpc.smo.obrasAtivas.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
   const funcoesQ = trpc.smo.funcoesDisponiveis.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
-  const qualifsQ = trpc.smo.qualificacoesDisponiveis.useQuery();
   const dashQ = trpc.smo.dashboard.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
-
-  const impactoQ = trpc.smo.calcularImpactoFinanceiro.useQuery(
-    { companyId, companyIds, funcao: form.funcaoSolicitada, quantidade: form.quantidade, duracaoMeses: form.duracaoMeses, obraId: form.obraId },
-    { enabled: viewMode === "form" && !!form.funcaoSolicitada && form.funcaoSolicitada !== "__outros__" && form.obraId > 0 && form.quantidade > 0 && form.duracaoMeses > 0 }
-  );
-
-  const efetivoQ = trpc.smo.efetivoAtualObra.useQuery(
-    { companyId, companyIds, obraId: form.obraId },
-    { enabled: viewMode === "form" && form.obraId > 0 }
-  );
-
-  const eapQ = trpc.smo.atividadesEap.useQuery(
-    { obraId: form.obraId, companyId, companyIds },
-    { enabled: viewMode === "form" && form.obraId > 0 }
-  );
-
-  const realocQ = trpc.smo.sugestaoRealocacao.useQuery(
-    { companyId, companyIds, funcao: form.funcaoSolicitada, quantidade: form.quantidade, dataInicio: form.dataInicioNecessidade, obraIdDestino: form.obraId },
-    { enabled: viewMode === "form" && form.prioridade !== "urgente" && !!form.funcaoSolicitada && form.funcaoSolicitada !== "__outros__" && !!form.dataInicioNecessidade && form.obraId > 0 }
-  );
 
   const selectedDetail = trpc.smo.getById.useQuery({ id: selectedId || 0, companyId, companyIds }, { enabled: viewMode === "detail" && !!selectedId && companyId > 0 });
 
@@ -141,17 +113,15 @@ export default function SolicitacaoMDO() {
     { companyId, companyIds, obraId: selectedDetail.data?.obraId || 0 },
     { enabled: viewMode === "detail" && !!selectedDetail.data?.obraId }
   );
-  const detailTurnover = trpc.smo.turnoverFuncao.useQuery(
-    { companyId, companyIds, obraId: selectedDetail.data?.obraId || 0, funcao: selectedDetail.data?.funcaoSolicitada || "" },
-    { enabled: viewMode === "detail" && !!selectedDetail.data?.obraId && !!selectedDetail.data?.funcaoSolicitada }
-  );
-  const detailSimilares = trpc.smo.solicitacoesSimilares.useQuery(
-    { companyId, companyIds, funcao: selectedDetail.data?.funcaoSolicitada || "", excludeId: selectedId || 0 },
-    { enabled: viewMode === "detail" && !!selectedDetail.data?.funcaoSolicitada }
+
+  const validItensForAnalise = formItens.filter(i => i.funcao.trim() && i.quantidade > 0 && i.duracaoMeses > 0);
+  const analiseQ = trpc.smo.analiseComparativa.useQuery(
+    { companyId, companyIds, obraId: formObraId, itens: validItensForAnalise.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses })) },
+    { enabled: viewMode === "form" && formObraId > 0 && validItensForAnalise.length > 0 && companyId > 0 }
   );
 
   const createMut = trpc.smo.create.useMutation({
-    onSuccess: () => { toast.success("Solicitação criada!"); list.refetch(); dashQ.refetch(); setViewMode("list"); },
+    onSuccess: (data) => { toast.success(`${data.count} solicitação(ões) criada(s)!`); list.refetch(); dashQ.refetch(); setViewMode("list"); },
     onError: (e) => toast.error(e.message),
   });
   const aprovarMut = trpc.smo.aprovar.useMutation({
@@ -165,6 +135,10 @@ export default function SolicitacaoMDO() {
   });
   const concluirMut = trpc.smo.concluir.useMutation({
     onSuccess: () => { toast.success("Solicitação concluída!"); selectedDetail.refetch(); list.refetch(); dashQ.refetch(); },
+  });
+  const updateMut = trpc.smo.update.useMutation({
+    onSuccess: () => { toast.success("Atualizado!"); selectedDetail.refetch(); list.refetch(); dashQ.refetch(); },
+    onError: (e: any) => toast.error(e.message),
   });
   const deleteMut = trpc.smo.delete.useMutation({
     onSuccess: () => { toast.success("Excluída."); list.refetch(); dashQ.refetch(); setViewMode("list"); },
@@ -180,50 +154,47 @@ export default function SolicitacaoMDO() {
   });
 
   function resetForm() {
-    setForm({ obraId: 0, funcaoSolicitada: "", quantidade: 1, dataInicioNecessidade: "", duracaoMeses: 1, prioridade: "normal", qualificacoes: [], observacao: "", atividadesEap: [], candidatoIndicadoNome: "", candidatoIndicadoTelefone: "" });
-    setFuncaoOutros("");
+    setFormObraId(0);
+    setFormItens([{ id: "1", funcao: "", quantidade: 1, duracaoMeses: 1 }]);
+    setFormDataInicio("");
+    setFormPrioridade("normal");
+    setFormMotivo("");
+    setFormAtividades("");
+    setFuncaoDropdownIdx(null);
     setFuncaoBusca("");
-    setFuncaoDropdownOpen(false);
-    setCurriculoFile(null);
   }
 
-  function getFuncaoFinal() {
-    if (form.funcaoSolicitada === "__outros__") return funcaoOutros.trim();
-    return form.funcaoSolicitada;
+  function addItem() {
+    setFormItens(prev => [...prev, { id: String(Date.now()), funcao: "", quantidade: 1, duracaoMeses: 1 }]);
   }
 
-  async function handleSubmit(status: "rascunho" | "enviada") {
-    const funcaoFinal = getFuncaoFinal();
-    if (!form.obraId || !funcaoFinal || !form.dataInicioNecessidade) {
-      toast.error("Preencha Obra, Função e Data de Início.");
+  function removeItem(id: string) {
+    if (formItens.length <= 1) return;
+    setFormItens(prev => prev.filter(i => i.id !== id));
+  }
+
+  function updateItem(id: string, field: keyof FormItem, value: any) {
+    setFormItens(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
+  }
+
+  function handleSubmit(status: "rascunho" | "enviada") {
+    const validItens = formItens.filter(i => i.funcao.trim());
+    if (!formObraId || validItens.length === 0 || !formDataInicio) {
+      toast.error("Preencha a obra, pelo menos uma função e a data de início.");
       return;
-    }
-    let curriculoData: any = {};
-    if (curriculoFile) {
-      try {
-        const base64 = await fileToBase64(curriculoFile);
-        curriculoData = { curriculoArquivoNome: curriculoFile.name, curriculoArquivoBase64: base64, curriculoArquivoContentType: curriculoFile.type || "application/pdf" };
-      } catch { toast.error("Erro ao processar currículo."); }
     }
     createMut.mutate({
       companyId,
-      companyIds,
-      obraId: form.obraId,
+      obraId: formObraId,
       solicitanteId: user?.id || 0,
       solicitanteNome: user?.name || "Usuário",
-      funcaoSolicitada: funcaoFinal,
-      quantidade: form.quantidade,
-      dataInicioNecessidade: form.dataInicioNecessidade,
-      duracaoMeses: form.duracaoMeses,
-      prioridade: form.prioridade as any,
+      itens: validItens.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses })),
+      dataInicioNecessidade: formDataInicio,
+      prioridade: formPrioridade as any,
+      observacao: formMotivo || undefined,
+      atividadesDescricao: formAtividades || undefined,
       status,
-      qualificacoes: form.qualificacoes.length > 0 ? JSON.stringify(form.qualificacoes) : undefined,
-      observacao: form.observacao || undefined,
-      atividadesEap: form.atividadesEap.length > 0 ? form.atividadesEap : undefined,
-      candidatoIndicadoNome: form.candidatoIndicadoNome || undefined,
-      candidatoIndicadoTelefone: form.candidatoIndicadoTelefone || undefined,
-      ...curriculoData,
-    } as any);
+    });
   }
 
   const filtered = useMemo(() => {
@@ -241,17 +212,13 @@ export default function SolicitacaoMDO() {
   const d = selectedDetail.data;
 
   function getProximaEtapa(status: string): string | null {
-    const flow: Record<string, string> = {
-      enviada: "coord",
-      aprovada_coord: "rh",
-      aprovada_rh: "diretoria",
-    };
+    const flow: Record<string, string> = { enviada: "coord", aprovada_coord: "rh", aprovada_rh: "diretoria" };
     return flow[status] || null;
   }
 
   const obrasList = obrasQ.data || [];
   const funcoesList = funcoesQ.data || [];
-  const selectedObra = obrasList.find((o: any) => o.id === form.obraId);
+  const selectedObra = obrasList.find((o: any) => o.id === formObraId);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col">
@@ -285,7 +252,6 @@ export default function SolicitacaoMDO() {
       {/* ===== LIST VIEW ===== */}
       {viewMode === "list" && (
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Dashboard Cards */}
           {dashQ.data && (
             <div className="px-6 py-3 shrink-0">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -298,7 +264,6 @@ export default function SolicitacaoMDO() {
             </div>
           )}
 
-          {/* Filters */}
           <div className="px-6 pb-3 flex flex-wrap items-center gap-3 shrink-0">
             <div className="relative flex-1 min-w-[200px] max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -320,7 +285,6 @@ export default function SolicitacaoMDO() {
             </Select>
           </div>
 
-          {/* List */}
           <div className="flex-1 overflow-y-auto px-6 pb-6">
             {list.isLoading ? (
               <div className="text-center py-12 text-muted-foreground">Carregando...</div>
@@ -342,7 +306,7 @@ export default function SolicitacaoMDO() {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="font-bold text-[#1B2A4A]">SMO-{String(s.id).padStart(4, "0")}</span>
                           <StatusBadge status={s.status} />
                           <PrioridadeBadge prioridade={s.prioridade} />
@@ -352,8 +316,8 @@ export default function SolicitacaoMDO() {
                           <span className="flex items-center gap-1"><HardHat className="h-3.5 w-3.5" /> {s.funcaoSolicitada}</span>
                           <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {s.quantidade} vaga(s)</span>
                           <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {s.obraNome || "—"}</span>
-                          <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Início: {s.dataInicioNecessidade ? new Date(s.dataInicioNecessidade).toLocaleDateString("pt-BR") : "—"}</span>
-                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {s.duracaoMeses} mês(es)</span>
+                          <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {s.dataInicioNecessidade ? new Date(s.dataInicioNecessidade).toLocaleDateString("pt-BR") : "—"}</span>
+                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {s.duracaoMeses}m</span>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -362,7 +326,7 @@ export default function SolicitacaoMDO() {
                       </div>
                     </div>
                     <div className="flex items-center justify-between mt-2 pt-2 border-t text-xs text-muted-foreground">
-                      <span>Solicitado por {s.solicitanteNome} em {s.criadoEm ? new Date(s.criadoEm).toLocaleDateString("pt-BR") : "-"}</span>
+                      <span>Por {s.solicitanteNome} em {s.criadoEm ? new Date(s.criadoEm).toLocaleDateString("pt-BR") : "-"}</span>
                       <span className="text-[#D4A843] font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">Ver detalhes <ArrowRight className="h-3 w-3" /></span>
                     </div>
                   </div>
@@ -373,328 +337,343 @@ export default function SolicitacaoMDO() {
         </div>
       )}
 
-      {/* ===== FORM VIEW (Full Page) ===== */}
+      {/* ===== FORM VIEW ===== */}
       {viewMode === "form" && (
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-[1400px] mx-auto p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="max-w-4xl mx-auto p-6 space-y-5">
 
-              {/* Col 1: Obra + Função (left) */}
-              <div className="lg:col-span-4 space-y-4">
-                <div className="bg-white rounded-xl border p-5 space-y-4">
-                  <h3 className="font-bold text-[#1B2A4A] flex items-center gap-2 text-sm"><Building2 className="h-4 w-4" /> 1. Obra *</h3>
-                  {obrasList.length === 0 ? (
-                    <div className="text-sm text-muted-foreground p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                      <AlertTriangle className="h-4 w-4 inline mr-1 text-amber-600" />
-                      Nenhuma obra ativa cadastrada.
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-1">
-                      {obrasList.map((o: any) => (
-                        <div
-                          key={o.id}
-                          onClick={() => setForm(p => ({ ...p, obraId: o.id, atividadesEap: [] }))}
-                          className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${form.obraId === o.id ? "border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm" : "border-transparent hover:bg-slate-50"}`}
-                        >
-                          <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${form.obraId === o.id ? "bg-[#1B2A4A] text-white" : "bg-slate-100 text-slate-400"}`}>
-                            <Building2 className="h-3.5 w-3.5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">{o.nome}</div>
-                            {o.codigo && <div className="text-[10px] text-muted-foreground">{o.codigo}</div>}
-                          </div>
-                          {form.obraId === o.id && <CheckCircle className="h-4 w-4 text-[#1B2A4A] shrink-0" />}
-                        </div>
-                      ))}
+            {/* Obra + Info */}
+            <div className="bg-white rounded-xl border p-6">
+              <h3 className="font-bold text-[#1B2A4A] flex items-center gap-2 mb-4"><Building2 className="h-5 w-5" /> Obra</h3>
+              <Select value={formObraId ? String(formObraId) : ""} onValueChange={v => setFormObraId(parseInt(v))}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione a obra..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {obrasList.map((o: any) => (
+                    <SelectItem key={o.id} value={String(o.id)}>
+                      {o.codigo ? `${o.codigo} — ` : ""}{o.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedObra && (
+                <div className="mt-3 flex items-center gap-4 text-sm text-muted-foreground bg-slate-50 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-[#1B2A4A]" />
+                    <span className="font-semibold text-[#1B2A4A]">{selectedObra.nome}</span>
+                  </div>
+                  {selectedObra.responsavel && (
+                    <div className="flex items-center gap-1">
+                      <User className="h-3.5 w-3.5" />
+                      <span>Responsável: <strong>{selectedObra.responsavel}</strong></span>
                     </div>
                   )}
+                  {selectedObra.codigo && (
+                    <div className="text-xs">Código: {selectedObra.codigo}</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Itens — tabela dinâmica */}
+            <div className="bg-white rounded-xl border p-6" ref={funcaoRef}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-[#1B2A4A] flex items-center gap-2"><Users className="h-5 w-5" /> Funções Solicitadas</h3>
+                <Button variant="outline" size="sm" onClick={addItem} className="gap-1 text-xs">
+                  <Plus className="h-3.5 w-3.5" /> Adicionar função
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                {/* Header */}
+                <div className="grid grid-cols-12 gap-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
+                  <div className="col-span-6">Função / Cargo</div>
+                  <div className="col-span-2 text-center">Qtd</div>
+                  <div className="col-span-3 text-center">Duração (meses)</div>
+                  <div className="col-span-1"></div>
                 </div>
 
-                <div className="bg-white rounded-xl border p-5 space-y-3">
-                  <h3 className="font-bold text-[#1B2A4A] flex items-center gap-2 text-sm"><HardHat className="h-4 w-4" /> 2. Função / Cargo *</h3>
-                  {form.funcaoSolicitada && form.funcaoSolicitada !== "__outros__" ? (
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 px-3 py-2 rounded-lg border border-[#1B2A4A] bg-[#1B2A4A]/5 text-sm font-semibold text-[#1B2A4A] flex items-center gap-2">
-                        <HardHat className="h-4 w-4" />
-                        {form.funcaoSolicitada}
-                      </div>
-                      <button type="button" onClick={() => { setForm(p => ({ ...p, funcaoSolicitada: "" })); setFuncaoBusca(""); setFuncaoDropdownOpen(false); }} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500">
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : form.funcaoSolicitada === "__outros__" ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Input placeholder="Digite a função desejada..." value={funcaoOutros} onChange={e => setFuncaoOutros(e.target.value)} autoFocus />
-                        <button type="button" onClick={() => { setForm(p => ({ ...p, funcaoSolicitada: "" })); setFuncaoOutros(""); }} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500">
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-slate-500">Função personalizada</p>
-                    </div>
-                  ) : (
-                    <div className="relative" ref={funcaoRef}>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <Input
-                          placeholder="Buscar função..."
-                          value={funcaoBusca}
-                          onChange={e => { setFuncaoBusca(e.target.value); setFuncaoDropdownOpen(true); }}
-                          onFocus={() => setFuncaoDropdownOpen(true)}
-                          className="pl-9"
-                        />
-                      </div>
-                      {funcaoDropdownOpen && (
-                        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
-                          {funcoesList
-                            .filter((f: string) => !funcaoBusca || f.toLowerCase().includes(funcaoBusca.toLowerCase()))
-                            .map((f: string) => (
-                              <button
-                                key={f}
-                                type="button"
-                                onClick={() => { setForm(p => ({ ...p, funcaoSolicitada: f })); setFuncaoBusca(""); setFuncaoDropdownOpen(false); setFuncaoOutros(""); }}
-                                className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0 flex items-center gap-2"
-                              >
-                                <HardHat className="h-3 w-3 text-slate-400" />
-                                {f}
-                              </button>
-                            ))}
-                          {funcoesList.filter((f: string) => !funcaoBusca || f.toLowerCase().includes(funcaoBusca.toLowerCase())).length === 0 && (
-                            <div className="px-3 py-2 text-sm text-slate-500 text-center">Nenhuma função encontrada</div>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => { setForm(p => ({ ...p, funcaoSolicitada: "__outros__" })); setFuncaoDropdownOpen(false); setFuncaoBusca(""); }}
-                            className="w-full text-left px-3 py-2 text-sm font-medium text-[#D4A843] hover:bg-amber-50 border-t border-slate-200 flex items-center gap-2"
-                          >
-                            <Plus className="h-3 w-3" />
-                            Digitar outra função
+                {formItens.map((item, idx) => (
+                  <div key={item.id} className="grid grid-cols-12 gap-3 items-center">
+                    {/* Função com autocomplete */}
+                    <div className="col-span-6 relative">
+                      {item.funcao ? (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#1B2A4A]/30 bg-[#1B2A4A]/5 text-sm font-medium text-[#1B2A4A]">
+                          <HardHat className="h-3.5 w-3.5 shrink-0" />
+                          <span className="flex-1 truncate">{item.funcao}</span>
+                          <button type="button" onClick={() => updateItem(item.id, "funcao", "")} className="text-red-400 hover:text-red-600 shrink-0">
+                            <X className="h-3.5 w-3.5" />
                           </button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                          <Input
+                            placeholder="Buscar função..."
+                            value={funcaoDropdownIdx === item.id ? funcaoBusca : ""}
+                            onChange={e => { setFuncaoBusca(e.target.value); setFuncaoDropdownIdx(item.id); }}
+                            onFocus={() => { setFuncaoDropdownIdx(item.id); setFuncaoBusca(""); }}
+                            className="pl-9 text-sm"
+                          />
+                          {funcaoDropdownIdx === item.id && (
+                            <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                              {funcoesList
+                                .filter((f: string) => !funcaoBusca || f.toLowerCase().includes(funcaoBusca.toLowerCase()))
+                                .slice(0, 20)
+                                .map((f: string) => (
+                                  <button
+                                    key={f}
+                                    type="button"
+                                    onClick={() => { updateItem(item.id, "funcao", f); setFuncaoDropdownIdx(null); setFuncaoBusca(""); }}
+                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2"
+                                  >
+                                    <HardHat className="h-3 w-3 text-slate-400" />
+                                    {f}
+                                  </button>
+                                ))}
+                              {funcoesList.filter((f: string) => !funcaoBusca || f.toLowerCase().includes(funcaoBusca.toLowerCase())).length === 0 && funcaoBusca && (
+                                <button
+                                  type="button"
+                                  onClick={() => { updateItem(item.id, "funcao", funcaoBusca); setFuncaoDropdownIdx(null); setFuncaoBusca(""); }}
+                                  className="w-full text-left px-3 py-2 text-sm text-[#D4A843] font-medium hover:bg-amber-50 flex items-center gap-2"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Usar: "{funcaoBusca}"
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
 
-                {/* Obra info & efetivo */}
-                {selectedObra && (
-                  <div className="bg-white rounded-xl border p-4">
-                    <h4 className="font-semibold text-xs text-[#1B2A4A] mb-2 flex items-center gap-2"><Building2 className="h-3.5 w-3.5" /> Obra Selecionada</h4>
-                    <div className="text-sm font-medium">{selectedObra.nome}</div>
-                    {selectedObra.codigo && <div className="text-xs text-muted-foreground">{selectedObra.codigo}</div>}
-                    {selectedObra.responsavel && <div className="text-xs text-muted-foreground mt-1">Resp: {selectedObra.responsavel}</div>}
-                  </div>
-                )}
+                    {/* Quantidade */}
+                    <div className="col-span-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        value={item.quantidade}
+                        onChange={e => updateItem(item.id, "quantidade", parseInt(e.target.value) || 1)}
+                        className="text-center text-sm"
+                      />
+                    </div>
 
-                {efetivoQ.data && efetivoQ.data.length > 0 && (
-                  <div className="bg-white rounded-xl border p-4">
-                    <h4 className="font-semibold text-xs text-[#1B2A4A] mb-2 flex items-center gap-2"><Users className="h-3.5 w-3.5" /> Efetivo Atual</h4>
-                    <div className="space-y-1 max-h-32 overflow-y-auto">
-                      {efetivoQ.data.map((e: any) => (
-                        <div key={e.funcao} className={`flex justify-between text-xs px-2 py-0.5 rounded ${e.funcao === form.funcaoSolicitada ? "bg-amber-50 font-semibold" : ""}`}>
-                          <span>{e.funcao}</span>
-                          <span className="font-mono">{e.quantidade}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Col 2: Detalhes (center) */}
-              <div className="lg:col-span-5 space-y-4">
-                <div className="bg-white rounded-xl border p-5 space-y-4">
-                  <h3 className="font-bold text-[#1B2A4A] flex items-center gap-2 text-sm"><ClipboardList className="h-4 w-4" /> 3. Detalhes da Solicitação</h3>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div>
-                      <Label className="text-xs font-semibold">Quantidade *</Label>
-                      <Input type="number" min={1} value={form.quantidade} onChange={e => setForm(p => ({ ...p, quantidade: parseInt(e.target.value) || 1 }))} />
-                    </div>
-                    <div>
-                      <Label className="text-xs font-semibold">Início *</Label>
-                      <Input type="date" value={form.dataInicioNecessidade} onChange={e => setForm(p => ({ ...p, dataInicioNecessidade: e.target.value }))} />
-                    </div>
-                    <div>
-                      <Label className="text-xs font-semibold">Duração (meses)</Label>
-                      <Input type="number" min={1} value={form.duracaoMeses} onChange={e => setForm(p => ({ ...p, duracaoMeses: parseInt(e.target.value) || 1 }))} />
-                    </div>
-                    <div>
-                      <Label className="text-xs font-semibold">Prioridade</Label>
-                      <Select value={form.prioridade} onValueChange={(v: any) => setForm(p => ({ ...p, prioridade: v }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="urgente">🔴 Urgente</SelectItem>
-                          <SelectItem value="normal">🔵 Normal</SelectItem>
-                          <SelectItem value="planejada">🟢 Planejada</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Qualificações */}
-                  <div>
-                    <Label className="text-xs font-semibold mb-2 block">Qualificações Exigidas</Label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(qualifsQ.data || []).map((q: string) => (
-                        <label key={q} className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] cursor-pointer transition-all ${form.qualificacoes.includes(q) ? "bg-[#1B2A4A] text-white border-[#1B2A4A]" : "bg-white hover:bg-slate-50"}`}>
-                          <Checkbox checked={form.qualificacoes.includes(q)} onCheckedChange={checked => {
-                            setForm(p => ({ ...p, qualificacoes: checked ? [...p.qualificacoes, q] : p.qualificacoes.filter(x => x !== q) }));
-                          }} className="h-3 w-3" />
-                          {q}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* EAP */}
-                  <div>
-                    <Label className="text-xs font-semibold mb-1.5 block">Atividades EAP</Label>
-                    {form.atividadesEap.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {form.atividadesEap.map(a => (
-                          <Badge key={a.atividadeId} variant="secondary" className="gap-1 text-[10px]">
-                            {a.eapCodigo} - {a.nomeAtividade}
-                            <button onClick={() => setForm(p => ({ ...p, atividadesEap: p.atividadesEap.filter(x => x.atividadeId !== a.atividadeId) }))}>
-                              <X className="h-2.5 w-2.5" />
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    <Button variant="outline" size="sm" onClick={() => setShowEapPicker(true)} disabled={!form.obraId} className="gap-1 text-xs h-7">
-                      <Plus className="h-3 w-3" /> Vincular
-                    </Button>
-                  </div>
-
-                  {/* Observação */}
-                  <div>
-                    <Label className="text-xs font-semibold">Justificativa / Observação</Label>
-                    <Textarea value={form.observacao} onChange={e => setForm(p => ({ ...p, observacao: e.target.value }))} placeholder="Descreva o motivo da contratação..." rows={2} />
-                  </div>
-                </div>
-
-                {/* Indicação de Candidato */}
-                <div className="bg-white rounded-xl border border-blue-200 p-5 space-y-3">
-                  <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-2">
-                    <UserCheck className="h-4 w-4" />
-                    Indicação de Candidato (opcional)
-                  </h4>
-                  <p className="text-[10px] text-blue-600">Tem alguém em mente? Preencha para direcionar ao RH.</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs flex items-center gap-1"><User className="h-3 w-3" /> Nome</Label>
-                      <Input value={form.candidatoIndicadoNome} onChange={e => setForm(p => ({ ...p, candidatoIndicadoNome: e.target.value }))} placeholder="Nome completo" />
-                    </div>
-                    <div>
-                      <Label className="text-xs flex items-center gap-1"><Phone className="h-3 w-3" /> Telefone</Label>
-                      <Input value={form.candidatoIndicadoTelefone} onChange={e => setForm(p => ({ ...p, candidatoIndicadoTelefone: e.target.value }))} placeholder="(00) 00000-0000" />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs flex items-center gap-1"><FileText className="h-3 w-3" /> Currículo</Label>
-                    {curriculoFile ? (
-                      <div className="flex items-center gap-2 p-2 bg-blue-50 border rounded-lg mt-1">
-                        <FileText className="h-4 w-4 text-blue-600" />
-                        <span className="text-xs flex-1 truncate">{curriculoFile.name}</span>
-                        <span className="text-[10px] text-gray-400">{(curriculoFile.size / 1024).toFixed(0)} KB</span>
-                        <Button variant="ghost" size="sm" onClick={() => setCurriculoFile(null)} className="h-5 w-5 p-0"><X className="h-3 w-3" /></Button>
-                      </div>
-                    ) : (
-                      <label className="flex items-center gap-2 p-2 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors mt-1">
-                        <Upload className="h-4 w-4 text-blue-500" />
-                        <span className="text-xs text-blue-600">Selecionar arquivo</span>
-                        <input type="file" className="hidden"
-                          accept=".pdf,.doc,.docx"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              if (file.size > 10 * 1024 * 1024) { toast.error("Máximo 10MB."); return; }
-                              setCurriculoFile(file);
-                            }
-                          }}
+                    {/* Duração */}
+                    <div className="col-span-3">
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min={1}
+                          value={item.duracaoMeses}
+                          onChange={e => updateItem(item.id, "duracaoMeses", parseInt(e.target.value) || 1)}
+                          className="text-center text-sm"
                         />
-                      </label>
-                    )}
-                  </div>
-                </div>
+                        <span className="text-xs text-muted-foreground shrink-0">mês(es)</span>
+                      </div>
+                    </div>
 
-                {/* Prazo alerta */}
-                {form.prioridade !== "urgente" && form.dataInicioNecessidade && (() => {
-                  const diff = (new Date(form.dataInicioNecessidade).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-                  return diff < 15;
-                })() && (
-                  <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Data de início a menos de 15 dias. Considere marcar como <strong>Urgente</strong>.</span>
+                    {/* Remover */}
+                    <div className="col-span-1 flex justify-center">
+                      {formItens.length > 1 && (
+                        <button type="button" onClick={() => removeItem(item.id)} className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Resumo */}
+                {formItens.filter(i => i.funcao).length > 0 && (
+                  <div className="mt-2 pt-3 border-t flex items-center gap-4 text-sm">
+                    <span className="text-muted-foreground">Total:</span>
+                    <span className="font-semibold text-[#1B2A4A]">
+                      {formItens.filter(i => i.funcao).length} função(ões), {formItens.filter(i => i.funcao).reduce((s, i) => s + i.quantidade, 0)} profissional(is)
+                    </span>
                   </div>
                 )}
+              </div>
+            </div>
 
-                {/* Botões */}
-                <div className="flex justify-end gap-3">
-                  <Button variant="outline" onClick={() => setViewMode("list")}>Cancelar</Button>
-                  <Button variant="secondary" onClick={() => handleSubmit("rascunho")} disabled={createMut.isPending}>Salvar Rascunho</Button>
-                  <Button onClick={() => handleSubmit("enviada")} disabled={createMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660] gap-2">
-                    <Send className="h-4 w-4" /> Enviar para Aprovação
-                  </Button>
+            {/* Detalhes */}
+            <div className="bg-white rounded-xl border p-6 space-y-4">
+              <h3 className="font-bold text-[#1B2A4A] flex items-center gap-2"><ClipboardList className="h-5 w-5" /> Detalhes</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-semibold">Data de Início *</Label>
+                  <Input type="date" value={formDataInicio} onChange={e => setFormDataInicio(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold">Prioridade</Label>
+                  <Select value={formPrioridade} onValueChange={setFormPrioridade}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="urgente">🔴 Urgente (SLA 24h)</SelectItem>
+                      <SelectItem value="normal">🔵 Normal (SLA 48h)</SelectItem>
+                      <SelectItem value="planejada">🟢 Planejada (SLA 5 dias)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              {/* Col 3: Impact / Realocação (right) */}
-              <div className="lg:col-span-3 space-y-4">
-                {impactoQ.data && (
-                  <div className="bg-white rounded-xl border p-4">
-                    <h4 className="font-semibold text-xs text-[#1B2A4A] mb-3 flex items-center gap-2"><DollarSign className="h-3.5 w-3.5" /> Impacto Financeiro</h4>
-                    <div className="space-y-1.5 text-sm">
-                      <div className="flex justify-between"><span className="text-muted-foreground text-xs">Salário Base</span><span className="font-mono text-xs">{fmtMoney(impactoQ.data.salarioBase)}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground text-xs">Encargos ({impactoQ.data.encargosPercentual.toFixed(1)}%)</span><span className="font-mono text-xs">{fmtMoney(impactoQ.data.encargosValor)}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground text-xs">VR</span><span className="font-mono text-xs">{fmtMoney(impactoQ.data.valeRefeicao)}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground text-xs">VA</span><span className="font-mono text-xs">{fmtMoney(impactoQ.data.valeAlimentacao)}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground text-xs">VT</span><span className="font-mono text-xs">{fmtMoney(impactoQ.data.valeTransporte)}</span></div>
-                      <div className="border-t pt-1.5 flex justify-between font-semibold text-xs"><span>Mensal (unit.)</span><span className="font-mono">{fmtMoney(impactoQ.data.custoMensalUnitario)}</span></div>
-                      <div className="flex justify-between text-xs text-muted-foreground"><span>Admissional</span><span className="font-mono">{fmtMoney(impactoQ.data.exameAdmissional)}</span></div>
-                      <div className="flex justify-between text-xs text-muted-foreground"><span>EPIs + Uniforme</span><span className="font-mono">{fmtMoney(impactoQ.data.epiEstimado + impactoQ.data.uniformeEstimado)}</span></div>
-                      <div className="border-t pt-1.5 flex justify-between font-semibold text-xs"><span>Mensal Total ({form.quantidade}x)</span><span className="font-mono text-[#1B2A4A]">{fmtMoney(impactoQ.data.custoMensalTotal)}</span></div>
-                      <div className="bg-[#1B2A4A] text-white rounded-lg p-2.5 flex justify-between font-bold text-xs">
-                        <span>TOTAL ({form.duracaoMeses}m)</span><span className="font-mono">{fmtMoney(impactoQ.data.custoTotal)}</span>
-                      </div>
-                      <div className="text-[9px] text-muted-foreground">Base: {impactoQ.data.baseSalarial} ({impactoQ.data.qtdReferencia} ref.)</div>
+              <div>
+                <Label className="text-sm font-semibold">Atividades que serão executadas</Label>
+                <Textarea value={formAtividades} onChange={e => setFormAtividades(e.target.value)} placeholder="Descreva quais atividades a equipe irá executar na obra..." rows={2} className="mt-1" />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold">Motivo / Justificativa</Label>
+                <Textarea value={formMotivo} onChange={e => setFormMotivo(e.target.value)} placeholder="Por que precisa dessa mão de obra? (ex: aumento de produção, substituição, nova etapa...)" rows={2} className="mt-1" />
+              </div>
+
+              {formPrioridade !== "urgente" && formDataInicio && (() => {
+                const diff = (new Date(formDataInicio).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+                return diff < 15;
+              })() && (
+                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>Início em menos de 15 dias. Considere marcar como <strong>Urgente</strong>.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Análise Financeira Comparativa */}
+            {analiseQ.data && (
+              <div className="bg-white rounded-xl border border-indigo-200 p-6 space-y-5">
+                <div className="flex items-center gap-2">
+                  <div className="h-9 w-9 rounded-lg bg-indigo-100 flex items-center justify-center">
+                    <Scale className="h-5 w-5 text-indigo-700" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-[#1B2A4A]">Análise Financeira — CLT vs Terceirização</h3>
+                    <p className="text-xs text-muted-foreground">Baseada nos salários atuais e encargos ({analiseQ.data.parametros.encargosPerc.toFixed(1)}%)</p>
+                  </div>
+                </div>
+
+                {/* Tabela por função */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b bg-slate-50">
+                        <th className="text-left py-2 px-3 font-semibold text-muted-foreground">Função</th>
+                        <th className="text-center py-2 px-2 font-semibold text-muted-foreground">Qtd</th>
+                        <th className="text-center py-2 px-2 font-semibold text-muted-foreground">Meses</th>
+                        <th className="text-right py-2 px-3 font-semibold text-blue-700">CLT/mês</th>
+                        <th className="text-right py-2 px-3 font-semibold text-purple-700">Terc./mês</th>
+                        <th className="text-right py-2 px-3 font-semibold text-blue-700">CLT Total</th>
+                        <th className="text-right py-2 px-3 font-semibold text-purple-700">Terc. Total</th>
+                        <th className="text-center py-2 px-3 font-semibold text-muted-foreground">Melhor Opção</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analiseQ.data.itens.map((item: any, idx: number) => (
+                        <tr key={idx} className="border-b last:border-0 hover:bg-slate-50">
+                          <td className="py-2 px-3">
+                            <div className="font-medium">{item.funcao}</div>
+                            <div className="text-[10px] text-muted-foreground">Base: {fmtMoney(item.salarioBase)} ({item.baseSalarial})</div>
+                          </td>
+                          <td className="text-center py-2 px-2 font-mono">{item.quantidade}</td>
+                          <td className="text-center py-2 px-2 font-mono">{item.duracaoMeses}</td>
+                          <td className="text-right py-2 px-3 font-mono text-blue-700">{fmtMoney(item.clt.custoMensalTotal)}</td>
+                          <td className="text-right py-2 px-3 font-mono text-purple-700">{fmtMoney(item.terceirizacao.custoMensalTotal)}</td>
+                          <td className="text-right py-2 px-3 font-mono text-blue-700 font-semibold">{fmtMoney(item.clt.custoPeriodo)}</td>
+                          <td className="text-right py-2 px-3 font-mono text-purple-700 font-semibold">{fmtMoney(item.terceirizacao.custoPeriodo)}</td>
+                          <td className="text-center py-2 px-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${item.comparativo.recomendacao === "terceirizar" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"}`}>
+                              {item.comparativo.recomendacao === "terceirizar" ? "Terceirizar" : "Contratar CLT"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Resumo Consolidado */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                  {/* Impacto Folha */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Wallet className="h-4 w-4 text-amber-700" />
+                      <span className="text-xs font-bold text-amber-800 uppercase tracking-wide">Impacto na Folha</span>
                     </div>
+                    <div className="text-xl font-bold text-amber-900">{fmtMoney(analiseQ.data.resumo.impactoFolhaProximoMes)}</div>
+                    <p className="text-[10px] text-amber-700 mt-1">Acréscimo mensal na folha de pagamento (salários + encargos + benefícios)</p>
                   </div>
-                )}
 
-                {realocQ.data && realocQ.data.length > 0 && (
-                  <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4">
-                    <h4 className="font-semibold text-xs text-emerald-800 mb-2 flex items-center gap-2"><RefreshCw className="h-3.5 w-3.5" /> Sugestão de Realocação</h4>
-                    {realocQ.data.map((s: any, i: number) => (
-                      <div key={i} className="mb-2 last:mb-0 bg-white rounded-lg p-2 text-xs">
-                        <div className="font-semibold text-emerald-800">{s.obraNome}</div>
-                        <div className="text-muted-foreground mt-0.5">{s.motivo}</div>
-                        <div className="mt-0.5">{s.funcionarios.length} profissional(is)</div>
-                      </div>
-                    ))}
+                  {/* CLT Total */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Briefcase className="h-4 w-4 text-blue-700" />
+                      <span className="text-xs font-bold text-blue-800 uppercase tracking-wide">Custo CLT Total</span>
+                    </div>
+                    <div className="text-xl font-bold text-blue-900">{fmtMoney(analiseQ.data.resumo.clt.periodo)}</div>
+                    <p className="text-[10px] text-blue-700 mt-1">Inclui encargos ({analiseQ.data.parametros.encargosPerc.toFixed(1)}%), benefícios, admissão e EPIs</p>
                   </div>
-                )}
 
-                {!impactoQ.data && !realocQ.data?.length && (
-                  <div className="bg-white rounded-xl border p-6 text-center">
-                    <TrendingUp className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-                    <p className="text-xs text-muted-foreground">Selecione obra e função para ver o impacto financeiro e sugestões de realocação.</p>
+                  {/* Terceirização Total */}
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="h-4 w-4 text-purple-700" />
+                      <span className="text-xs font-bold text-purple-800 uppercase tracking-wide">Custo Terceirização</span>
+                    </div>
+                    <div className="text-xl font-bold text-purple-900">{fmtMoney(analiseQ.data.resumo.terceirizacao.periodo)}</div>
+                    <p className="text-[10px] text-purple-700 mt-1">BDI estimado de {((analiseQ.data.parametros.fatorBDI - 1) * 100).toFixed(0)}% sobre o salário base</p>
                   </div>
-                )}
+                </div>
+
+                {/* Recomendação */}
+                <div className={`rounded-xl p-4 flex items-start gap-3 ${analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "bg-purple-100 border border-purple-300" : "bg-blue-100 border border-blue-300"}`}>
+                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "bg-purple-200" : "bg-blue-200"}`}>
+                    <BarChart3 className={`h-5 w-5 ${analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "text-purple-800" : "text-blue-800"}`} />
+                  </div>
+                  <div>
+                    <div className={`font-bold text-sm ${analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "text-purple-900" : "text-blue-900"}`}>
+                      Recomendação: {analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "Terceirizar" : "Contratar via CLT"}
+                    </div>
+                    <p className={`text-xs mt-1 ${analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "text-purple-700" : "text-blue-700"}`}>
+                      {analiseQ.data.resumo.economiaPeriodo > 0
+                        ? `Terceirizar economizaria ${fmtMoney(analiseQ.data.resumo.economiaPeriodo)} no período total. Para contratações de curta duração, terceirizar evita custos de admissão/demissão.`
+                        : `Contratar via CLT economizaria ${fmtMoney(Math.abs(analiseQ.data.resumo.economiaPeriodo))} no período total. Para contratações de longa duração, o custo CLT compensa os custos iniciais.`
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {analiseQ.isLoading && validItensForAnalise.length > 0 && formObraId > 0 && (
+              <div className="bg-white rounded-xl border p-6 text-center text-sm text-muted-foreground">
+                <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2" />
+                Calculando análise financeira...
+              </div>
+            )}
+
+            {/* Botões */}
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" onClick={() => setViewMode("list")} className="text-muted-foreground">
+                Cancelar
+              </Button>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => handleSubmit("rascunho")} disabled={createMut.isPending}>
+                  Salvar Rascunho
+                </Button>
+                <Button onClick={() => handleSubmit("enviada")} disabled={createMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660] gap-2 px-6">
+                  <Send className="h-4 w-4" /> Enviar para Aprovação
+                </Button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ===== DETAIL VIEW (Full Page) ===== */}
+      {/* ===== DETAIL VIEW ===== */}
       {viewMode === "detail" && d && (
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-[1400px] mx-auto p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Main Info */}
-              <div className="lg:col-span-8 space-y-4">
+          <div className="max-w-5xl mx-auto p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-4">
                 <div className="bg-white rounded-xl border p-5">
                   <div className="flex items-center gap-3 mb-4">
                     <StatusBadge status={d.status} />
@@ -705,45 +684,30 @@ export default function SolicitacaoMDO() {
                     <InfoField icon={Building2} label="Obra" value={d.obraNome || "-"} />
                     <InfoField icon={HardHat} label="Função" value={d.funcaoSolicitada} />
                     <InfoField icon={Users} label="Quantidade" value={`${d.quantidade} vaga(s)`} />
-                    <InfoField icon={Calendar} label="Início Necessidade" value={d.dataInicioNecessidade ? new Date(d.dataInicioNecessidade).toLocaleDateString("pt-BR") : "—"} />
+                    <InfoField icon={Calendar} label="Início" value={d.dataInicioNecessidade ? new Date(d.dataInicioNecessidade).toLocaleDateString("pt-BR") : "—"} />
                     <InfoField icon={Clock} label="Duração" value={`${d.duracaoMeses} mês(es)`} />
                     <InfoField icon={Briefcase} label="Solicitante" value={d.solicitanteNome} />
                   </div>
 
                   {d.qualificacoes && (
-                    <div className="mt-4">
-                      <span className="text-xs font-semibold text-muted-foreground">Qualificações</span>
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {(() => { try { return JSON.parse(d.qualificacoes) as string[]; } catch { return []; } })().map((q: string) => (
-                          <Badge key={q} variant="outline" className="gap-1 text-xs"><Shield className="h-3 w-3" /> {q}</Badge>
-                        ))}
-                      </div>
+                    <div className="mt-4 p-3 bg-slate-50 rounded-lg text-sm">
+                      <span className="text-xs font-semibold text-muted-foreground block mb-1">Atividades</span>
+                      {d.qualificacoes}
                     </div>
                   )}
 
                   {d.observacao && (
-                    <div className="mt-4 p-3 bg-slate-50 rounded-lg text-sm">
-                      <span className="text-xs font-semibold text-muted-foreground block mb-1">Justificativa</span>
+                    <div className="mt-3 p-3 bg-slate-50 rounded-lg text-sm">
+                      <span className="text-xs font-semibold text-muted-foreground block mb-1">Motivo / Justificativa</span>
                       {d.observacao}
                     </div>
                   )}
 
-                  {(d.atividades || []).length > 0 && (
-                    <div className="mt-4">
-                      <span className="text-xs font-semibold text-muted-foreground">Atividades EAP</span>
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {d.atividades.map((a: any) => (
-                          <Badge key={a.id} variant="secondary" className="text-xs">{a.eapCodigo} - {a.nomeAtividade}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   {d.motivoRejeicao && (
-                    <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                    <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
                       <span className="font-semibold block mb-1">Motivo da Rejeição</span>
                       {d.motivoRejeicao}
-                      <div className="text-xs mt-1 text-red-600">Rejeitado por {d.rejeitadoPor} em {d.rejeitadoEm ? new Date(d.rejeitadoEm).toLocaleDateString("pt-BR") : "-"}</div>
+                      <div className="text-xs mt-1 text-red-600">Por {d.rejeitadoPor} em {d.rejeitadoEm ? new Date(d.rejeitadoEm).toLocaleDateString("pt-BR") : "-"}</div>
                     </div>
                   )}
                 </div>
@@ -762,19 +726,16 @@ export default function SolicitacaoMDO() {
                   </div>
                 </div>
 
-                {/* Checklist */}
+                {/* Onboarding */}
                 {d.checklist && d.checklist.length > 0 && (
                   <div className="bg-white rounded-xl border p-5">
                     <h4 className="font-semibold text-sm text-[#1B2A4A] mb-3 flex items-center gap-2"><Package className="h-4 w-4" /> Checklist de Onboarding</h4>
                     <div className="space-y-2">
                       {d.checklist.map((c: any) => (
                         <div key={c.id} className={`flex items-center gap-3 p-2 rounded-lg transition-all ${c.concluido ? "bg-green-50" : "hover:bg-slate-50"}`}>
-                          <Checkbox
-                            checked={c.concluido}
-                            onCheckedChange={(checked) => checklistMut.mutate({ id: c.id, companyId, companyIds, concluido: !!checked, concluidoPor: user?.name || "RH" })}
-                          />
+                          <Checkbox checked={c.concluido} onCheckedChange={(checked) => checklistMut.mutate({ id: c.id, companyId, companyIds, concluido: !!checked, concluidoPor: user?.name || "RH" })} />
                           <span className={`text-sm flex-1 ${c.concluido ? "line-through text-muted-foreground" : ""}`}>{c.item}</span>
-                          {c.concluido && <span className="text-[10px] text-green-600">{c.concluidoPor} em {c.concluidoEm ? new Date(c.concluidoEm).toLocaleDateString("pt-BR") : ""}</span>}
+                          {c.concluido && <span className="text-[10px] text-green-600">{c.concluidoPor}</span>}
                         </div>
                       ))}
                     </div>
@@ -784,11 +745,7 @@ export default function SolicitacaoMDO() {
                 {/* Actions */}
                 <div className="flex flex-wrap gap-3">
                   {getProximaEtapa(d.status) && (
-                    <Button
-                      onClick={() => aprovarMut.mutate({ id: d.id, companyId, companyIds, etapa: getProximaEtapa(d.status) as any, aprovadorNome: user?.name || "Aprovador" })}
-                      disabled={aprovarMut.isPending}
-                      className="bg-emerald-600 hover:bg-emerald-700 gap-2"
-                    >
+                    <Button onClick={() => aprovarMut.mutate({ id: d.id, companyId, companyIds, etapa: getProximaEtapa(d.status) as any, aprovadorNome: user?.name || "Aprovador" })} disabled={aprovarMut.isPending} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
                       <CheckCircle className="h-4 w-4" /> Aprovar ({getProximaEtapa(d.status) === "coord" ? "Coordenação" : getProximaEtapa(d.status) === "rh" ? "RH" : "Diretoria"})
                     </Button>
                   )}
@@ -804,13 +761,13 @@ export default function SolicitacaoMDO() {
                   )}
                   {d.status === "em_recrutamento" && (
                     <Button onClick={() => concluirMut.mutate({ id: d.id, companyId, companyIds })} disabled={concluirMut.isPending} className="bg-green-600 hover:bg-green-700 gap-2">
-                      <UserCheck className="h-4 w-4" /> Concluir (Contratado)
+                      <UserCheck className="h-4 w-4" /> Concluir
                     </Button>
                   )}
                   {d.status === "rascunho" && (
                     <Button variant="outline" onClick={() => {
-                      createMut.mutate({ companyId, obraId: d.obraId, solicitanteId: d.solicitanteId, solicitanteNome: d.solicitanteNome, funcaoSolicitada: d.funcaoSolicitada, quantidade: d.quantidade, dataInicioNecessidade: d.dataInicioNecessidade, duracaoMeses: d.duracaoMeses, prioridade: d.prioridade as any, status: "enviada" } as any);
-                    }} className="gap-2">
+                      updateMut.mutate({ id: d.id, companyId, companyIds, status: "enviada" });
+                    }} disabled={updateMut.isPending} className="gap-2">
                       <Send className="h-4 w-4" /> Enviar para Aprovação
                     </Button>
                   )}
@@ -823,24 +780,49 @@ export default function SolicitacaoMDO() {
               </div>
 
               {/* Right sidebar */}
-              <div className="lg:col-span-4 space-y-4">
+              <div className="space-y-4">
                 {d.detalheCustos && (() => {
                   try {
                     const c = JSON.parse(d.detalheCustos);
                     return (
-                      <div className="bg-white rounded-xl border p-4">
-                        <h4 className="font-semibold text-xs text-[#1B2A4A] mb-3 flex items-center gap-2"><DollarSign className="h-3.5 w-3.5" /> Impacto Financeiro</h4>
-                        <div className="space-y-1.5 text-xs">
-                          <div className="flex justify-between"><span className="text-muted-foreground">Salário Base</span><span className="font-mono">{fmtMoney(c.salarioBase)}</span></div>
-                          <div className="flex justify-between"><span className="text-muted-foreground">Encargos</span><span className="font-mono">{fmtMoney(c.encargosValor)}</span></div>
-                          <div className="flex justify-between"><span className="text-muted-foreground">VR + VA + VT</span><span className="font-mono">{fmtMoney(c.valeRefeicao + c.valeAlimentacao + c.valeTransporte)}</span></div>
-                          <div className="border-t pt-1.5 flex justify-between font-semibold"><span>Mensal ({d.quantidade}x)</span><span>{fmtMoney(c.custoMensalTotal)}</span></div>
-                          <div className="flex justify-between text-muted-foreground"><span>Custos únicos</span><span>{fmtMoney(c.custoUnicoTotal)}</span></div>
-                          <div className="bg-[#1B2A4A] text-white rounded-lg p-2.5 flex justify-between font-bold mt-1">
-                            <span>TOTAL ({d.duracaoMeses}m)</span><span>{fmtMoney(c.custoTotal)}</span>
+                      <>
+                        <div className="bg-white rounded-xl border p-4">
+                          <h4 className="font-semibold text-xs text-[#1B2A4A] mb-3 flex items-center gap-2"><DollarSign className="h-3.5 w-3.5" /> Impacto Financeiro</h4>
+                          <div className="space-y-1.5 text-xs">
+                            <div className="flex justify-between"><span className="text-muted-foreground">Salário Base</span><span className="font-mono">{fmtMoney(c.salarioBase)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Encargos ({(c.encargosPerc || 79.3).toFixed(1)}%)</span><span className="font-mono">{fmtMoney(c.encargosValor)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Benefícios</span><span className="font-mono">{fmtMoney(c.beneficios || 0)}</span></div>
+                            <div className="border-t pt-1.5 flex justify-between font-semibold"><span>Mensal CLT ({d.quantidade}x)</span><span className="text-blue-700">{fmtMoney(c.custoMensalTotal)}</span></div>
+                            <div className="bg-blue-50 text-blue-900 rounded-lg p-2 flex justify-between font-bold">
+                              <span>CLT Total ({d.duracaoMeses}m)</span><span>{fmtMoney(c.custoTotal)}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
+
+                        {c.tercMensalTotal && (
+                          <div className={`rounded-xl border p-4 ${c.recomendacao === "terceirizar" ? "bg-purple-50 border-purple-200" : "bg-blue-50 border-blue-200"}`}>
+                            <h4 className="font-semibold text-xs mb-2 flex items-center gap-2">
+                              <Scale className="h-3.5 w-3.5" /> CLT vs Terceirização
+                            </h4>
+                            <div className="space-y-1.5 text-xs">
+                              <div className="flex justify-between"><span>Terc. mensal</span><span className="font-mono text-purple-700">{fmtMoney(c.tercMensalTotal)}</span></div>
+                              <div className="flex justify-between"><span>Terc. total ({d.duracaoMeses}m)</span><span className="font-mono text-purple-700 font-semibold">{fmtMoney(c.tercTotal)}</span></div>
+                              <div className="border-t pt-1.5">
+                                <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg font-bold text-xs ${c.recomendacao === "terceirizar" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"}`}>
+                                  {c.recomendacao === "terceirizar" ? <ThumbsUp className="h-3.5 w-3.5" /> : <ThumbsUp className="h-3.5 w-3.5" />}
+                                  {c.recomendacao === "terceirizar" ? "Recomendado: Terceirizar" : "Recomendado: Contratar CLT"}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-1">
+                                  {c.recomendacao === "terceirizar"
+                                    ? `Economia de ${fmtMoney(c.custoTotal - c.tercTotal)} no período.`
+                                    : `Economia de ${fmtMoney(c.tercTotal - c.custoTotal)} no período.`
+                                  }
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     );
                   } catch { return null; }
                 })()}
@@ -868,93 +850,12 @@ export default function SolicitacaoMDO() {
                   </div>
                 )}
 
-                {detailTurnover.data && (detailTurnover.data.contratados > 0 || detailTurnover.data.desligados > 0) && (
-                  <div className={`rounded-xl border p-4 ${detailTurnover.data.desligados >= 3 ? "bg-red-50 border-red-200" : "bg-white"}`}>
-                    <h4 className="font-semibold text-xs text-[#1B2A4A] mb-2 flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5" /> Turnover (6 meses)</h4>
-                    <div className="text-xs space-y-1">
-                      <div className="flex justify-between"><span>Contratados ({d.funcaoSolicitada})</span><span className="font-semibold">{detailTurnover.data.contratados}</span></div>
-                      <div className="flex justify-between"><span>Desligados</span><span className="font-semibold text-red-600">{detailTurnover.data.desligados}</span></div>
-                    </div>
-                    {detailTurnover.data.desligados >= 3 && (
-                      <div className="mt-2 text-[10px] text-red-700 bg-red-100 rounded p-2">Alto turnover! Investigar antes de aprovar.</div>
-                    )}
-                  </div>
-                )}
-
-                {detailSimilares.data && detailSimilares.data.length > 0 && (
-                  <div className="bg-amber-50 rounded-xl border border-amber-200 p-4">
-                    <h4 className="font-semibold text-xs text-amber-800 mb-2 flex items-center gap-2"><Award className="h-3.5 w-3.5" /> Similares (7 dias)</h4>
-                    {detailSimilares.data.map((s: any) => (
-                      <div key={s.id} className="text-xs mb-2 last:mb-0">
-                        <div className="font-semibold">SMO-{String(s.id).padStart(4, "0")} — {s.quantidade}x {d.funcaoSolicitada}</div>
-                        <div className="text-muted-foreground">{s.obraNome} | {s.solicitanteNome} | <StatusBadge status={s.status} /></div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {d.sugestaoRealocacao && (() => {
-                  try {
-                    const sug = JSON.parse(d.sugestaoRealocacao) as any[];
-                    if (sug.length === 0) return null;
-                    return (
-                      <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4">
-                        <h4 className="font-semibold text-xs text-emerald-800 mb-2 flex items-center gap-2"><RefreshCw className="h-3.5 w-3.5" /> Realocação</h4>
-                        {sug.map((s: any, i: number) => (
-                          <div key={i} className="mb-2 last:mb-0 bg-white rounded-lg p-2 text-xs">
-                            <div className="font-semibold text-emerald-800">{s.obraNome}</div>
-                            <div className="text-muted-foreground mt-0.5">{s.motivo}</div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  } catch { return null; }
-                })()}
-
                 {(d.candidatoIndicadoNome || d.candidatoIndicadoTelefone || d.curriculoArquivoNome) && (
                   <div className="bg-blue-50 rounded-xl border border-blue-200 p-4">
-                    <h4 className="font-semibold text-xs text-blue-800 mb-2 flex items-center gap-2"><UserCheck className="h-3.5 w-3.5" /> Candidato Indicado</h4>
-                    <div className="space-y-1.5">
-                      {d.candidatoIndicadoNome && (
-                        <div className="flex items-center gap-2 text-xs">
-                          <User className="h-3.5 w-3.5 text-blue-600" />
-                          <span className="font-medium">{d.candidatoIndicadoNome}</span>
-                        </div>
-                      )}
-                      {d.candidatoIndicadoTelefone && (
-                        <div className="flex items-center gap-2 text-xs">
-                          <Phone className="h-3.5 w-3.5 text-blue-600" />
-                          <span>{d.candidatoIndicadoTelefone}</span>
-                        </div>
-                      )}
-                      {d.curriculoArquivoNome && (
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-3.5 w-3.5 text-blue-600" />
-                          <span className="text-xs">{d.curriculoArquivoNome}</span>
-                          <Button variant="ghost" size="sm" className="text-red-500 h-5 px-1 text-[10px]"
-                            onClick={() => removerCurriculoMut.mutate({ id: d.id, companyId, companyIds })}>
-                            <Trash2 className="h-3 w-3 mr-0.5" /> Remover
-                          </Button>
-                        </div>
-                      )}
-                      {!d.curriculoArquivoNome && (
-                        <label className="flex items-center gap-2 p-2 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors mt-1">
-                          <Upload className="h-3.5 w-3.5 text-blue-500" />
-                          <span className="text-[10px] text-blue-600">Anexar currículo</span>
-                          <input type="file" className="hidden"
-                            accept=".pdf,.doc,.docx"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              if (file.size > 10 * 1024 * 1024) { toast.error("Máximo 10MB."); return; }
-                              try {
-                                const base64 = await fileToBase64(file);
-                                uploadCurriculoMut.mutate({ id: d.id, companyId, companyIds, fileName: file.name, fileBase64: base64, contentType: file.type || "application/pdf" });
-                              } catch { toast.error("Erro ao processar arquivo."); }
-                            }}
-                          />
-                        </label>
-                      )}
+                    <h4 className="font-semibold text-xs text-blue-800 mb-2 flex items-center gap-2"><UserCheck className="h-3.5 w-3.5" /> Candidato</h4>
+                    <div className="space-y-1.5 text-xs">
+                      {d.candidatoIndicadoNome && <div className="flex items-center gap-2"><User className="h-3 w-3 text-blue-600" /><span>{d.candidatoIndicadoNome}</span></div>}
+                      {d.candidatoIndicadoTelefone && <div className="flex items-center gap-2"><Phone className="h-3 w-3 text-blue-600" /><span>{d.candidatoIndicadoTelefone}</span></div>}
                     </div>
                   </div>
                 )}
@@ -964,49 +865,13 @@ export default function SolicitacaoMDO() {
         </div>
       )}
 
-      {/* ===== EAP Picker Dialog ===== */}
-      <Dialog open={showEapPicker} onOpenChange={setShowEapPicker}>
-        <DialogContent className="max-w-lg max-h-[70vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Selecionar Atividades da EAP</DialogTitle></DialogHeader>
-          {eapQ.isLoading ? <div className="py-8 text-center text-muted-foreground">Carregando EAP...</div> : (
-            <div className="space-y-1">
-              {(eapQ.data || []).length === 0 && <div className="text-sm text-muted-foreground py-4 text-center">Nenhuma EAP cadastrada para esta obra.</div>}
-              {(eapQ.data || []).filter((a: any) => !a.isGrupo).map((a: any) => {
-                const selected = form.atividadesEap.some(x => x.atividadeId === a.id);
-                return (
-                  <div
-                    key={a.id}
-                    onClick={() => {
-                      if (selected) {
-                        setForm(p => ({ ...p, atividadesEap: p.atividadesEap.filter(x => x.atividadeId !== a.id) }));
-                      } else {
-                        setForm(p => ({ ...p, atividadesEap: [...p.atividadesEap, { atividadeId: a.id, eapCodigo: a.eapCodigo || "", nomeAtividade: a.nome }] }));
-                      }
-                    }}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all ${selected ? "bg-[#1B2A4A] text-white" : "hover:bg-slate-50"}`}
-                    style={{ paddingLeft: `${(a.nivel || 1) * 16}px` }}
-                  >
-                    <Checkbox checked={selected} className="h-3.5 w-3.5" />
-                    <span className="font-mono text-xs opacity-60">{a.eapCodigo}</span>
-                    <span className="flex-1">{a.nome}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          <div className="flex justify-end mt-3">
-            <Button onClick={() => setShowEapPicker(false)}>Confirmar ({form.atividadesEap.length})</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Reject Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Rejeitar Solicitação</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <Label>Motivo da Rejeição *</Label>
-            <Textarea value={rejectMotivo} onChange={e => setRejectMotivo(e.target.value)} placeholder="Descreva o motivo da rejeição..." rows={3} />
+            <Textarea value={rejectMotivo} onChange={e => setRejectMotivo(e.target.value)} placeholder="Descreva o motivo..." rows={3} />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowRejectDialog(false)}>Cancelar</Button>
               <Button variant="destructive" disabled={!rejectMotivo.trim() || rejeitarMut.isPending}

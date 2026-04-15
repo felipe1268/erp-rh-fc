@@ -302,6 +302,128 @@ export const smoRouter = router({
       };
     }),
 
+  analiseComparativa: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      obraId: z.number(),
+      itens: z.array(z.object({
+        funcao: z.string(),
+        quantidade: z.number().min(1),
+        duracaoMeses: z.number().min(1),
+      })).min(1),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+
+      const encargos = await db.select().from(encargosSociais).where(companyFilter(encargosSociais.companyId, input));
+      let totalEncargosPerc = 0;
+      for (const e of encargos) totalEncargosPerc += parseFloat(String(e.valor) || "0");
+      if (totalEncargosPerc === 0) totalEncargosPerc = 79.3;
+
+      const [conv] = await db.select().from(convencaoColetiva)
+        .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
+        .orderBy(desc(convencaoColetiva.vigenciaInicio)).limit(1);
+
+      const vr = parseFloat(conv?.valeRefeicao || "0") * 22;
+      const va = parseFloat(conv?.valeAlimentacao || "0");
+      const exameAdmissional = 200;
+      const epiEstimado = 350;
+      const uniformeEstimado = 250;
+      const custoUnico = exameAdmissional + epiEstimado + uniformeEstimado;
+
+      const analiseItens = [];
+      let totalCltMensal = 0;
+      let totalCltPeriodo = 0;
+      let totalTercMensal = 0;
+      let totalTercPeriodo = 0;
+      let totalImpactoFolha = 0;
+
+      for (const item of input.itens) {
+        const emps = await db.select({ salarioBase: employees.salarioBase })
+          .from(employees)
+          .where(and(companyFilter(employees.companyId, input), eq(employees.funcao, item.funcao), eq(employees.status, "Ativo")));
+
+        let salarioRef = 0;
+        if (emps.length > 0) {
+          const sals = emps.map(e => parseFloat(e.salarioBase || "0")).filter(s => s > 0);
+          salarioRef = sals.length > 0 ? sals.reduce((a, b) => a + b, 0) / sals.length : 0;
+        }
+        if (salarioRef === 0) salarioRef = parseFloat(conv?.pisoSalarial || "2500");
+
+        const vt = salarioRef * 0.06;
+        const encargosValor = salarioRef * (totalEncargosPerc / 100);
+        const custoMensalUnit = salarioRef + encargosValor + vr + va + vt;
+        const custoMensalTotal = custoMensalUnit * item.quantidade;
+        const custoPeriodo = (custoMensalTotal * item.duracaoMeses) + (custoUnico * item.quantidade);
+
+        const fatorBDI = 1.35;
+        const tercMensalUnit = salarioRef * fatorBDI;
+        const tercMensalTotal = tercMensalUnit * item.quantidade;
+        const tercPeriodo = tercMensalTotal * item.duracaoMeses;
+
+        const economiaMensal = custoMensalTotal - tercMensalTotal;
+        const economiaPeriodo = custoPeriodo - tercPeriodo;
+        const recomendacao = item.duracaoMeses <= 3
+          ? (economiaPeriodo > 0 ? "terceirizar" : "contratar")
+          : (economiaPeriodo > custoUnico * item.quantidade ? "terceirizar" : "contratar");
+
+        totalCltMensal += custoMensalTotal;
+        totalCltPeriodo += custoPeriodo;
+        totalTercMensal += tercMensalTotal;
+        totalTercPeriodo += tercPeriodo;
+        totalImpactoFolha += custoMensalTotal;
+
+        analiseItens.push({
+          funcao: item.funcao,
+          quantidade: item.quantidade,
+          duracaoMeses: item.duracaoMeses,
+          salarioBase: salarioRef,
+          baseSalarial: emps.length > 0 ? "Média dos ativos" : "Piso salarial",
+          qtdReferencia: emps.length,
+          clt: {
+            encargosPerc: totalEncargosPerc,
+            encargosValor,
+            beneficios: vr + va + vt,
+            custoMensalUnit,
+            custoMensalTotal,
+            custoUnicoTotal: custoUnico * item.quantidade,
+            custoPeriodo,
+          },
+          terceirizacao: {
+            fatorBDI,
+            custoMensalUnit: tercMensalUnit,
+            custoMensalTotal: tercMensalTotal,
+            custoPeriodo: tercPeriodo,
+          },
+          comparativo: {
+            economiaMensal,
+            economiaPeriodo,
+            recomendacao,
+          },
+        });
+      }
+
+      const recomendacaoGeral = totalCltPeriodo > totalTercPeriodo ? "terceirizar" : "contratar";
+
+      return {
+        itens: analiseItens,
+        resumo: {
+          clt: { mensal: totalCltMensal, periodo: totalCltPeriodo },
+          terceirizacao: { mensal: totalTercMensal, periodo: totalTercPeriodo },
+          economiaMensal: totalCltMensal - totalTercMensal,
+          economiaPeriodo: totalCltPeriodo - totalTercPeriodo,
+          impactoFolhaProximoMes: totalImpactoFolha,
+          recomendacaoGeral,
+        },
+        parametros: {
+          encargosPerc: totalEncargosPerc,
+          fatorBDI: 1.35,
+          custoUnicoPorProfissional: custoUnico,
+        },
+      };
+    }),
+
   efetivoObra: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number() }))
     .query(async ({ input }) => {
@@ -473,29 +595,20 @@ export const smoRouter = router({
       obraId: z.number(),
       solicitanteId: z.number(),
       solicitanteNome: z.string(),
-      funcaoSolicitada: z.string(),
-      quantidade: z.number().min(1),
+      itens: z.array(z.object({
+        funcao: z.string(),
+        quantidade: z.number().min(1),
+        duracaoMeses: z.number().min(1).default(1),
+      })).min(1),
       dataInicioNecessidade: z.string(),
-      duracaoMeses: z.number().min(1),
       prioridade: z.enum(["urgente", "normal", "planejada"]),
-      qualificacoes: z.string().optional(),
       observacao: z.string().optional(),
-      custoMensalEstimado: z.string().optional(),
-      custoTotalEstimado: z.string().optional(),
-      detalheCustos: z.string().optional(),
-      sugestaoRealocacao: z.string().optional(),
-      candidatoIndicadoNome: z.string().optional(),
-      candidatoIndicadoTelefone: z.string().optional(),
-      atividades: z.array(z.object({
-        atividadeId: z.number(),
-        eapCodigo: z.string().optional(),
-        nomeAtividade: z.string().optional(),
-      })).optional(),
+      atividadesDescricao: z.string().optional(),
       status: z.enum(["rascunho", "enviada"]).default("rascunho"),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      const { atividades, ...data } = input;
+      const loteId = `L${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
       const prazoMinimoAlerta = input.prioridade !== "urgente" &&
         (() => {
@@ -503,20 +616,80 @@ export const smoRouter = router({
           return diff < PRAZO_MINIMO_DIAS;
         })();
 
-      const [sol] = await db.insert(smoSolicitacoes).values({
-        ...data,
-        custoMensalEstimado: data.custoMensalEstimado || "0",
-        custoTotalEstimado: data.custoTotalEstimado || "0",
-        prazoMinimoAlerta,
-      } as any).returning();
+      const encargosRows = await db.select().from(encargosSociais).where(companyFilter(encargosSociais.companyId, input));
+      let totalEncargosPerc = 0;
+      for (const e of encargosRows) totalEncargosPerc += parseFloat(String(e.valor) || "0");
+      if (totalEncargosPerc === 0) totalEncargosPerc = 79.3;
 
-      if (atividades && atividades.length > 0) {
-        await db.insert(smoAtividadesEap).values(
-          atividades.map(a => ({ solicitacaoId: sol.id, ...a }))
-        );
+      const [convData] = await db.select().from(convencaoColetiva)
+        .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
+        .orderBy(desc(convencaoColetiva.vigenciaInicio)).limit(1);
+
+      const vrDiario = parseFloat(convData?.valeRefeicao || "0");
+      const vaValor = parseFloat(convData?.valeAlimentacao || "0");
+      const pisoFallback = parseFloat(convData?.pisoSalarial || "2500");
+
+      const results = [];
+      for (const item of input.itens) {
+        const emps = await db.select({ salarioBase: employees.salarioBase })
+          .from(employees)
+          .where(and(companyFilter(employees.companyId, input), eq(employees.funcao, item.funcao), eq(employees.status, "Ativo")));
+
+        let salarioRef = 0;
+        if (emps.length > 0) {
+          const sals = emps.map(e => parseFloat(e.salarioBase || "0")).filter(s => s > 0);
+          salarioRef = sals.length > 0 ? sals.reduce((a, b) => a + b, 0) / sals.length : 0;
+        }
+        if (salarioRef === 0) salarioRef = pisoFallback;
+
+        const vr = vrDiario * 22;
+        const va = vaValor;
+        const vt = salarioRef * 0.06;
+        const encargosValor = salarioRef * (totalEncargosPerc / 100);
+        const custoMensal = (salarioRef + encargosValor + vr + va + vt) * item.quantidade;
+        const custoUnico = (200 + 350 + 250) * item.quantidade;
+        const custoTotal = (custoMensal * (item.duracaoMeses || 1)) + custoUnico;
+
+        const fatorBDI = 1.35;
+        const tercMensal = salarioRef * fatorBDI * item.quantidade;
+        const tercTotal = tercMensal * (item.duracaoMeses || 1);
+
+        const detalhes = {
+          salarioBase: salarioRef,
+          encargosPerc: totalEncargosPerc,
+          encargosValor,
+          beneficios: vr + va + vt,
+          custoMensalUnit: salarioRef + encargosValor + vr + va + vt,
+          custoMensalTotal: custoMensal,
+          custoTotal,
+          tercMensalTotal: tercMensal,
+          tercTotal,
+          recomendacao: custoTotal > tercTotal ? "terceirizar" : "contratar",
+          baseSalarial: emps.length > 0 ? "Média ativos" : "Piso convenção",
+        };
+
+        const [sol] = await db.insert(smoSolicitacoes).values({
+          companyId: input.companyId,
+          obraId: input.obraId,
+          solicitanteId: input.solicitanteId,
+          solicitanteNome: input.solicitanteNome,
+          funcaoSolicitada: item.funcao,
+          quantidade: item.quantidade,
+          dataInicioNecessidade: input.dataInicioNecessidade,
+          duracaoMeses: item.duracaoMeses || 1,
+          prioridade: input.prioridade,
+          observacao: input.observacao || null,
+          qualificacoes: input.atividadesDescricao || null,
+          status: input.status,
+          custoMensalEstimado: String(custoMensal.toFixed(2)),
+          custoTotalEstimado: String(custoTotal.toFixed(2)),
+          detalheCustos: JSON.stringify(detalhes),
+          prazoMinimoAlerta,
+          loteId,
+        } as any).returning();
+        results.push(sol);
       }
-
-      return sol;
+      return { loteId, count: results.length, ids: results.map(r => r.id) };
     }),
 
   update: protectedProcedure
