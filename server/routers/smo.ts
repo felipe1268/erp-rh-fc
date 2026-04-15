@@ -777,6 +777,24 @@ export const smoRouter = router({
       };
     }),
 
+  updateChecklist: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      concluido: z.boolean(),
+      concluidoPor: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await db.update(smoOnboardingChecklist).set({
+        concluido: input.concluido,
+        concluidoPor: input.concluido ? (input.concluidoPor || "RH") : null,
+        concluidoEm: input.concluido ? new Date().toISOString() : null,
+      }).where(eq(smoOnboardingChecklist.id, input.id));
+      return { success: true };
+    }),
+
   create: protectedProcedure
     .input(z.object({
       companyId: z.number(),
