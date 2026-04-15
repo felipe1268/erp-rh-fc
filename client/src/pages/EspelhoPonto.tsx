@@ -376,12 +376,12 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function EspelhoPonto() {
+  const { isAdminMaster, hasGroup, groupCanAccessRoute, isLoading: permissionsLoading } = usePermissions();
   const { selectedCompanyId, getCompanyIdsForQuery, isConstrutoras } = useCompany();
   const companyId = selectedCompanyId
     ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
-  const { isAdminMaster, hasGroup, groupCanAccessRoute } = usePermissions();
   const canAccess = isAdminMaster || !hasGroup || groupCanAccessRoute("/espelho-ponto");
 
   const def = useMemo(() => defaultPeriodo(), []);
@@ -417,6 +417,34 @@ export default function EspelhoPonto() {
       setQueryParams({ employeeId: id, dataInicio: inicio, dataFim: fim });
     }
   }, []);
+
+  if (permissionsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-[60vh]">
+          <RefreshCw className="h-8 w-8 animate-spin text-slate-400 mb-4" />
+          <p className="text-slate-500 font-medium">Carregando permissões...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!canAccess) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
+          <div className="bg-red-50 p-4 rounded-full mb-4">
+            <ShieldAlert className="h-10 w-10 text-red-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Acesso Restrito</h1>
+          <p className="text-slate-600 max-w-md">
+            Você não tem permissão para acessar esta página. 
+            Entre em contato com o administrador do sistema se acreditar que isso é um erro.
+          </p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   const [incluirDesligados, setIncluirDesligados] = useState(false);
   const empAllQ = trpc.employees.list.useQuery(
@@ -543,17 +571,6 @@ export default function EspelhoPonto() {
     v ? <span className="font-mono text-base text-slate-700">{v}</span>
        : <span className="text-slate-300 text-base">—</span>;
 
-  if (!canAccess) {
-    return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-          <ShieldAlert className="h-12 w-12 text-muted-foreground/40 mb-4" />
-          <h2 className="text-lg font-semibold text-muted-foreground">Acesso Restrito</h2>
-          <p className="text-sm text-muted-foreground/70 mt-1">Você não tem permissão para acessar o Espelho de Ponto.</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
 
   return (
     <DashboardLayout>

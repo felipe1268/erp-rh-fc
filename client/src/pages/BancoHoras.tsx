@@ -24,9 +24,9 @@ function minsToHHMM(mins: number): string {
 type TabView = "saldos" | "extrato" | "alertas" | "configuracao";
 
 export default function BancoHoras() {
+  const { isAdminMaster, hasGroup, groupCanAccessRoute, isLoading: permissionsLoading } = usePermissions();
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
-  const { isAdminMaster, hasGroup, groupCanAccessRoute } = usePermissions();
   const canAccess = isAdminMaster || !hasGroup || groupCanAccessRoute("/banco-horas");
   const [activeTab, setActiveTab] = useState<TabView>("saldos");
   const [searchTerm, setSearchTerm] = useState("");
@@ -132,13 +132,28 @@ export default function BancoHoras() {
     { id: "configuracao", label: "Regras & Orientação", icon: Scale },
   ];
 
+  if (permissionsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="text-center text-muted-foreground">
+            <RefreshCw className="h-10 w-10 mx-auto mb-3 animate-spin opacity-30" />
+            <p className="text-sm">Verificando permissões...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (!canAccess) {
     return (
       <DashboardLayout>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-          <ShieldAlert className="h-12 w-12 text-muted-foreground/40 mb-4" />
-          <h2 className="text-lg font-semibold text-muted-foreground">Acesso Restrito</h2>
-          <p className="text-sm text-muted-foreground/70 mt-1">Você não tem permissão para acessar o Banco de Horas.</p>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="text-center text-muted-foreground">
+            <ShieldAlert className="h-16 w-16 mx-auto mb-4 opacity-30" />
+            <p className="text-lg font-medium">Acesso Restrito</p>
+            <p className="text-sm">Você não tem permissão para acessar o Banco de Horas.</p>
+          </div>
         </div>
       </DashboardLayout>
     );
