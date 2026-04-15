@@ -277,7 +277,7 @@ export default function SolicitacaoMDO() {
       <div className="bg-gradient-to-r from-[#1B2A4A] to-[#2d4a7a] text-white px-6 py-3 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => viewMode === "list" ? navigate("/") : setViewMode("list")} className="text-white/70 hover:text-white hover:bg-white/10 h-9 w-9">
+            <Button variant="ghost" size="icon" onClick={() => viewMode === "list" ? navigate("/painel/rh") : setViewMode("list")} className="text-white/70 hover:text-white hover:bg-white/10 h-9 w-9">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center">
