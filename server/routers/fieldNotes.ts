@@ -62,6 +62,31 @@ export const fieldNotesRouter = router({
         .where(and(...conds))
         .orderBy(desc(fieldNotes.data), desc(fieldNotes.createdAt));
 
+      const needsTimeEnrich = rows.filter(r => !r.entrada1 && !r.saida1 && !r.entrada2 && !r.saida2);
+      if (needsTimeEnrich.length > 0) {
+        const enrichKeys = needsTimeEnrich.map(r => ({ empId: r.employeeId, data: r.data }));
+        const uniqueKeys = [...new Map(enrichKeys.map(k => [`${k.empId}-${k.data}`, k])).values()];
+        for (const uk of uniqueKeys) {
+          const [tr] = await db.select({
+            entrada1: timeRecords.entrada1, saida1: timeRecords.saida1,
+            entrada2: timeRecords.entrada2, saida2: timeRecords.saida2,
+          }).from(timeRecords).where(and(
+            eq(timeRecords.employeeId, uk.empId),
+            eq(timeRecords.data, uk.data),
+          )).limit(1);
+          if (tr) {
+            for (const row of rows) {
+              if (row.employeeId === uk.empId && row.data === uk.data && !row.entrada1 && !row.saida1) {
+                row.entrada1 = tr.entrada1;
+                row.saida1 = tr.saida1;
+                row.entrada2 = tr.entrada2;
+                row.saida2 = tr.saida2;
+              }
+            }
+          }
+        }
+      }
+
       return rows;
     }),
 

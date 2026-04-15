@@ -745,7 +745,7 @@ export default function ApontamentosCampo() {
                       <span className="text-sm font-semibold text-blue-800">Horários de Ponto (correção)</span>
                     </div>
                     <p className="text-xs text-blue-600">Preencha para corrigir/completar o ponto do dia. Horários existentes do DIXI serão mantidos se deixar em branco.</p>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-4 gap-2" key={`resolve-times-${selectedNote.id}`}>
                       {[
                         { label: "Entrada", val: resolverEntrada1, set: setResolverEntrada1 },
                         { label: "Saída Int.", val: resolverSaida1, set: setResolverSaida1 },
@@ -758,9 +758,6 @@ export default function ApontamentosCampo() {
                         </div>
                       ))}
                     </div>
-                    {selectedNote.entrada1 && (
-                      <p className="text-xs text-blue-600 mt-1">Horários do apontamento: {selectedNote.entrada1 || "—"} / {selectedNote.saida1 || "—"} / {selectedNote.entrada2 || "—"} / {selectedNote.saida2 || "—"}</p>
-                    )}
                   </div>
                 )}
                 <div>
