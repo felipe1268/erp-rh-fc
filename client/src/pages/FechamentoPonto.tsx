@@ -650,6 +650,9 @@ export default function FechamentoPonto() {
   const [filterObra, setFilterObra] = useState<string>("all");
   const [cardFilter, setCardFilter] = useState<CardFilter>(null);
   const [clearType, setClearType] = useState<string>("tudo");
+  const [clearPeriodDe, setClearPeriodDe] = useState("");
+  const [clearPeriodAte, setClearPeriodAte] = useState("");
+  const [clearPeriodTipo, setClearPeriodTipo] = useState<string>("tudo");
   const [consolidarObs, setConsolidarObs] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
@@ -827,6 +830,15 @@ export default function FechamentoPonto() {
       setShowClearDialog(false);
       stats.refetch(); summary.refetch(); inconsistencies.refetch(); monthStatuses.refetch(); conflitos.refetch();
       toast.success("Base de dados limpa com sucesso!");
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+  const clearByPeriodMut = trpc.fechamentoPonto.clearByPeriod.useMutation({
+    onSuccess: (data) => {
+      setShowClearDialog(false);
+      setClearPeriodDe(""); setClearPeriodAte("");
+      stats.refetch(); summary.refetch(); inconsistencies.refetch(); monthStatuses.refetch(); conflitos.refetch();
+      toast.success(`Período limpo: ${data.deletedRecords} registros e ${data.deletedInconsistencias} inconsistências removidos.`);
     },
     onError: (err) => toast.error("Erro: " + err.message),
   });
@@ -4708,6 +4720,46 @@ export default function FechamentoPonto() {
                   </Button>
                 </div>
               </div>
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-orange-800 mb-1">Limpar por Período (Data Início / Data Fim)</p>
+                <p className="text-xs text-orange-700 mb-3">
+                  Remove todos os registros de ponto e inconsistências entre as datas selecionadas, independente do mês de referência.
+                </p>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <Label className="text-xs">Data Início</Label>
+                    <input type="date" value={clearPeriodDe} onChange={e => setClearPeriodDe(e.target.value)} className="w-full border rounded px-3 py-2 text-sm mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Data Fim</Label>
+                    <input type="date" value={clearPeriodAte} onChange={e => setClearPeriodAte(e.target.value)} className="w-full border rounded px-3 py-2 text-sm mt-1" />
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <Label className="text-xs">O que limpar?</Label>
+                  <Select value={clearPeriodTipo} onValueChange={setClearPeriodTipo}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="tudo">Registros + Inconsistências</SelectItem>
+                      <SelectItem value="registros">Apenas Registros de Ponto</SelectItem>
+                      <SelectItem value="inconsistencias">Apenas Inconsistências</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button size="sm" variant="destructive" className="text-xs"
+                  disabled={!clearPeriodDe || !clearPeriodAte || clearByPeriodMut.isPending}
+                  onClick={() => {
+                    if (confirm(`Limpar TODOS os registros de ${new Date(clearPeriodDe + "T12:00:00").toLocaleDateString("pt-BR")} até ${new Date(clearPeriodAte + "T12:00:00").toLocaleDateString("pt-BR")}?\n\nEsta ação é irreversível.`)) {
+                      clearByPeriodMut.mutate({ companyId, companyIds, dataInicio: clearPeriodDe, dataFim: clearPeriodAte, tipo: clearPeriodTipo as any });
+                    }
+                  }}>
+                  {clearByPeriodMut.isPending ? "Limpando..." : "Limpar Período"}
+                </Button>
+              </div>
+
+              <div className="border-t border-gray-200 pt-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Limpar por Mês de Referência</p>
+              </div>
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
                 <strong>Atenção:</strong> Esta ação é irreversível.
               </div>
@@ -4731,7 +4783,7 @@ export default function FechamentoPonto() {
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowClearDialog(false)}>Cancelar</Button>
               <Button variant="destructive" onClick={() => clearMut.mutate({ companyId, companyIds, mesReferencia: mesAno, tipo: clearType as any })} disabled={clearMut.isPending}>
-                {clearMut.isPending ? "Limpando..." : "Confirmar Exclusão"}
+                {clearMut.isPending ? "Limpando..." : `Limpar Mês ${formatMesAno(mesAno)}`}
               </Button>
             </div>
           </div>

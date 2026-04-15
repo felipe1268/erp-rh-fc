@@ -1792,6 +1792,36 @@ export const fechamentoPontoRouter = router({
       return { success: true };
     }),
 
+  clearByPeriod: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+      tipo: z.enum(["tudo", "registros", "inconsistencias"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new Error("Apenas administradores podem limpar a base de dados");
+      const db = (await getDb())!;
+      let deletedRecords = 0;
+      let deletedInconsistencias = 0;
+      if (input.tipo === "tudo" || input.tipo === "registros") {
+        const res = await db.delete(timeRecords).where(and(
+          companyFilter(timeRecords.companyId, input),
+          sql`${timeRecords.data} >= ${input.dataInicio}`,
+          sql`${timeRecords.data} <= ${input.dataFim}`,
+        )).returning({ id: timeRecords.id });
+        deletedRecords = res.length;
+      }
+      if (input.tipo === "tudo" || input.tipo === "inconsistencias") {
+        const res = await db.delete(timeInconsistencies).where(and(
+          companyFilter(timeInconsistencies.companyId, input),
+          sql`${timeInconsistencies.data} >= ${input.dataInicio}`,
+          sql`${timeInconsistencies.data} <= ${input.dataFim}`,
+        )).returning({ id: timeInconsistencies.id });
+        deletedInconsistencias = res.length;
+      }
+      return { success: true, deletedRecords, deletedInconsistencias };
+    }),
+
   // ===================== VERIFICAÇÃO DE DUPLICIDADE =====================
   checkDuplicates: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
