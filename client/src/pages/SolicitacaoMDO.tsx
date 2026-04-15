@@ -510,9 +510,9 @@ export default function SolicitacaoMDO() {
                   <Select value={formPrioridade} onValueChange={setFormPrioridade}>
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="urgente">🔴 Urgente (SLA 24h)</SelectItem>
-                      <SelectItem value="normal">🔵 Normal (SLA 48h)</SelectItem>
-                      <SelectItem value="planejada">🟢 Planejada (SLA 5 dias)</SelectItem>
+                      <SelectItem value="urgente">🔴 Urgente (10 dias úteis)</SelectItem>
+                      <SelectItem value="normal">🔵 Normal (15 dias úteis)</SelectItem>
+                      <SelectItem value="planejada">🟢 Planejada (30 dias úteis)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -530,11 +530,11 @@ export default function SolicitacaoMDO() {
 
               {formPrioridade !== "urgente" && formDataInicio && (() => {
                 const diff = (new Date(formDataInicio).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-                return diff < 15;
+                return diff < 10;
               })() && (
                 <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span>Início em menos de 15 dias. Considere marcar como <strong>Urgente</strong>.</span>
+                  <span>Início em menos de 10 dias úteis. Prazo muito curto para divulgação, entrevista e exames. Considere marcar como <strong>Urgente</strong>.</span>
                 </div>
               )}
             </div>

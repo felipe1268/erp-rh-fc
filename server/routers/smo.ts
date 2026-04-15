@@ -99,13 +99,13 @@ const ONBOARDING_ITEMS = [
   "Treinamento Inicial da Função",
 ];
 
-const SLA_HORAS: Record<string, number> = {
-  urgente: 24,
-  normal: 48,
-  planejada: 120,
+const SLA_DIAS: Record<string, number> = {
+  urgente: 10,
+  normal: 15,
+  planejada: 30,
 };
 
-const PRAZO_MINIMO_DIAS = 15;
+const PRAZO_MINIMO_DIAS = 10;
 
 async function assertOwnership(db: any, id: number, ctx: { companyId: number; companyIds?: number[] }) {
   const [row] = await db.select({ companyId: smoSolicitacoes.companyId })
