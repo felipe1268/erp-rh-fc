@@ -441,11 +441,27 @@ export default function FolhaPagamento() {
   });
 
   const editarValeMut = trpc.payrollEngine.editarValorVale.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       toast.success(data.message);
       setValeEditId(null);
       setValeEditValor("");
-      gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
+      if (valeResult && data.employeeId) {
+        const updatedFuncs = valeResult.funcionarios.map((f: any) => {
+          if (f.employeeId === data.employeeId) {
+            return {
+              ...f,
+              valorTotalVale: data.novoValor ?? f.valorTotalVale,
+              valorAdiantamento: data.novoValor ?? f.valorAdiantamento,
+              irRetido: data.novoIR ?? f.irRetido,
+              valorLiquido: data.novoLiquido ?? f.valorLiquido,
+            };
+          }
+          return f;
+        });
+        setValeResult({ ...valeResult, funcionarios: updatedFuncs });
+      } else {
+        payrollPeriod.refetch();
+      }
     },
     onError: (err) => toast.error(`Erro: ${err.message}`),
   });

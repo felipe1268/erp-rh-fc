@@ -2396,7 +2396,7 @@ export const payrollEngineRouter = router({
           AND tipo = 'saida_vale'
       `);
 
-      return { success: true, valorAnterior, novoValor: valorFormatado, novoLiquido: novoLiquido.toFixed(2), message: `Vale editado: R$ ${valorAnterior} → R$ ${valorFormatado} (líquido: R$ ${novoLiquido.toFixed(2)})` };
+      return { success: true, employeeId: input.employeeId, valorAnterior, novoValor: valorFormatado, novoIR: novoIR.toFixed(2), novoLiquido: novoLiquido.toFixed(2), message: `Vale editado: R$ ${valorAnterior} → R$ ${valorFormatado} (líquido: R$ ${novoLiquido.toFixed(2)})` };
     }),
 
   // ============================================================
