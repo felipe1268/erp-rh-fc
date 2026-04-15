@@ -565,13 +565,18 @@ export default function ControleKm() {
                               days.push(d.toISOString().slice(0, 10));
                               d.setDate(d.getDate() + 1);
                             }
+                            const visibleDays = days.slice(-14);
+                            const visibleTotal = visibleDays.reduce((sum, day) => {
+                              const dd = dayMap[day];
+                              return sum + (dd && dd.km > 0 ? dd.km : 0);
+                            }, 0);
                             return (
                               <tr key={v.infleetId} className="border-b hover:bg-gray-50">
                                 <td className="py-2 px-3 font-medium whitespace-nowrap">
                                   {v.placa}
                                   <span className="text-xs text-gray-400 ml-1">{v.tipo}</span>
                                 </td>
-                                {days.slice(-14).map(day => {
+                                {visibleDays.map(day => {
                                   const dd = dayMap[day];
                                   const dt2 = new Date(day + "T12:00:00");
                                   const dow2 = dt2.getDay();
@@ -591,7 +596,7 @@ export default function ControleKm() {
                                     </td>
                                   );
                                 })}
-                                <td className="py-2 px-3 text-right font-bold">{formatNum(v.totalKm, 0)}</td>
+                                <td className="py-2 px-3 text-right font-bold">{formatNum(visibleTotal, 0)}</td>
                               </tr>
                             );
                           })}
