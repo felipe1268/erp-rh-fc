@@ -103,13 +103,15 @@ function ChecklistOnboarding({ checklist, companyId, companyIds, userName, check
 export default function SolicitacaoMDO() {
   const { user } = useAuth();
   const { companyId, companyIds } = useCompany();
-  const { isAdminMaster, groupCanEdit } = usePermissions();
+  const { isAdminMaster, hasGroup, groupCanAccessRoute, groupCanEdit } = usePermissions();
   const userRole = user?.role || "";
   const isAdmin = userRole === "admin" || userRole === "admin_master";
   const canAprovarCoord = isAdmin || groupCanEdit("/smo");
   const canAprovarRH = isAdmin || groupCanEdit("/painel/rh");
   const canAprovarDiretoria = userRole === "admin_master";
   const [, navigate] = useLocation();
+
+  const canAccess = isAdminMaster || !hasGroup || groupCanAccessRoute("/solicitacao-mdo");
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [searchTerm, setSearchTerm] = useState("");
@@ -144,11 +146,11 @@ export default function SolicitacaoMDO() {
 
   const list = trpc.smo.list.useQuery(
     { companyId, companyIds, status: filterStatus !== "all" ? filterStatus : undefined, obraId: filterObra !== "all" ? parseInt(filterObra) : undefined },
-    { enabled: companyId > 0, retry: 3, retryDelay: 1000 }
+    { enabled: canAccess && companyId > 0, retry: 3, retryDelay: 1000 }
   );
-  const obrasQ = trpc.smo.obrasAtivas.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
-  const funcoesQ = trpc.smo.funcoesDisponiveis.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
-  const dashQ = trpc.smo.dashboard.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
+  const obrasQ = trpc.smo.obrasAtivas.useQuery({ companyId, companyIds }, { enabled: canAccess && companyId > 0 });
+  const funcoesQ = trpc.smo.funcoesDisponiveis.useQuery({ companyId, companyIds }, { enabled: canAccess && companyId > 0 });
+  const dashQ = trpc.smo.dashboard.useQuery({ companyId, companyIds }, { enabled: canAccess && companyId > 0 });
 
   const selectedDetail = trpc.smo.getById.useQuery({ id: selectedId || 0, companyId, companyIds }, { enabled: viewMode === "detail" && !!selectedId && companyId > 0 });
 
@@ -316,6 +318,18 @@ export default function SolicitacaoMDO() {
   const obrasList = obrasQ.data || [];
   const funcoesList = funcoesQ.data || [];
   const selectedObra = obrasList.find((o: any) => o.id === formObraId);
+
+  if (!canAccess) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="flex flex-col items-center text-center px-4">
+          <Shield className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h2 className="text-lg font-semibold text-muted-foreground">Acesso Restrito</h2>
+          <p className="text-sm text-muted-foreground/70 mt-1">Você não tem permissão para acessar a Solicitação de Mão de Obra.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col">

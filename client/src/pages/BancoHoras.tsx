@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import { toast } from "sonner";
 import {
   ArrowLeftRight, AlertTriangle, Clock, CreditCard, RefreshCw,
   Users, FileText, Settings, Search, Printer, ChevronDown, ChevronRight,
-  CalendarDays, Scale, Info,
+  CalendarDays, Scale, Info, ShieldAlert,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,6 +26,8 @@ type TabView = "saldos" | "extrato" | "alertas" | "configuracao";
 export default function BancoHoras() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
+  const { isAdminMaster, hasGroup, groupCanAccessRoute } = usePermissions();
+  const canAccess = isAdminMaster || !hasGroup || groupCanAccessRoute("/banco-horas");
   const [activeTab, setActiveTab] = useState<TabView>("saldos");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -43,7 +46,7 @@ export default function BancoHoras() {
 
   const destinoPadrao = trpc.horasExtras.getHeDestinoPadrao.useQuery(
     { companyId },
-    { enabled: companyId > 0 }
+    { enabled: canAccess && companyId > 0 }
   );
   const setDestinoPadraoMut = trpc.horasExtras.setHeDestinoPadrao.useMutation({
     onSuccess: (data) => {
@@ -58,11 +61,11 @@ export default function BancoHoras() {
 
   const saldoBanco = trpc.horasExtras.getSaldoBanco.useQuery(
     { companyId },
-    { enabled: companyId > 0 }
+    { enabled: canAccess && companyId > 0 }
   );
   const alertasExpiracao = trpc.horasExtras.getAlertasExpiracao.useQuery(
     { companyId },
-    { enabled: companyId > 0 }
+    { enabled: canAccess && companyId > 0 }
   );
   const lancamentosSaldos = trpc.horasExtras.getLancamentos.useQuery(
     { employeeId: selectedEmpId ?? 0, companyId },
@@ -128,6 +131,18 @@ export default function BancoHoras() {
     { id: "alertas", label: "Alertas", icon: AlertTriangle, count: alertas.length },
     { id: "configuracao", label: "Regras & Orientação", icon: Scale },
   ];
+
+  if (!canAccess) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+          <ShieldAlert className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h2 className="text-lg font-semibold text-muted-foreground">Acesso Restrito</h2>
+          <p className="text-sm text-muted-foreground/70 mt-1">Você não tem permissão para acessar o Banco de Horas.</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

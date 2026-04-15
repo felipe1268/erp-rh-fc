@@ -146,6 +146,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "pedido-demissao", label: "Pedido de Demissão", route: "/pedido-demissao", icon: "FileText" },
       { key: "ferias", label: "Férias", route: "/ferias", icon: "Palmtree" },
       { key: "solicitacao-mdo", label: "Solicitação de Mão de Obra", route: "/solicitacao-mdo", icon: "HardHat" },
+      { key: "banco-horas", label: "Banco de Horas", route: "/banco-horas", icon: "ArrowLeftRight" },
+      { key: "espelho-ponto", label: "Espelho de Ponto", route: "/espelho-ponto", icon: "FileText" },
       { key: "modulo-pj", label: "Módulo PJ", route: "/modulo-pj", icon: "Briefcase" },
       { key: "pj-medicoes", label: "PJ Medições", route: "/pj-medicoes", icon: "FileSpreadsheet" },
       // === Relatórios ===

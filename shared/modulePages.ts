@@ -46,6 +46,9 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "comparativo",         label: "Comparativo de Convenções",            actions: ["view"] },
       { id: "relatorios",          label: "Relatórios RH (Raio-X, Ponto, Folha, Divergências)", actions: ["view"] },
       { id: "dashboards",          label: "Dashboards RH",                        actions: ["view"] },
+      { id: "solicitacao_mdo",     label: "Solicitação de Mão de Obra",            actions: ["view","create","edit","delete"] },
+      { id: "banco_horas",         label: "Banco de Horas",                        actions: ["view","create","edit","delete"] },
+      { id: "espelho_ponto",       label: "Espelho de Ponto",                      actions: ["view","edit"] },
     ],
     sensitiveFlags: [
       { id: "salarios",        label: "Salários, benefícios e remunerações" },
@@ -359,6 +362,9 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/dissidio":                        "dissidio",
     "/comparativo-convencoes":          "comparativo",
     "/dixi-ponto":                      "ponto",
+    "/solicitacao-mdo":                 "solicitacao_mdo",
+    "/banco-horas":                     "banco_horas",
+    "/espelho-ponto":                   "espelho_ponto",
   },
   "sst": {
     "/epis":             "epi",

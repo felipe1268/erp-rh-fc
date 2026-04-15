@@ -5,13 +5,14 @@ import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Search, RefreshCw, User, ChevronDown, FileText,
-  Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info, AlertTriangle, Trash2, Lock, Unlock,
+  Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info, AlertTriangle, Trash2, Lock, Unlock, ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -380,6 +381,8 @@ export default function EspelhoPonto() {
     ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
+  const { isAdminMaster, hasGroup, groupCanAccessRoute } = usePermissions();
+  const canAccess = isAdminMaster || !hasGroup || groupCanAccessRoute("/espelho-ponto");
 
   const def = useMemo(() => defaultPeriodo(), []);
   const [dataInicio, setDataInicio] = useState(def.inicio);
@@ -418,7 +421,7 @@ export default function EspelhoPonto() {
   const [incluirDesligados, setIncluirDesligados] = useState(false);
   const empAllQ = trpc.employees.list.useQuery(
     { companyId, companyIds },
-    { enabled: companyId > 0 || companyIds.length > 0 }
+    { enabled: canAccess && (companyId > 0 || companyIds.length > 0) }
   );
   const allEmps: any[] = (empAllQ.data as any[]) || [];
   const empList: any[] = incluirDesligados
@@ -539,6 +542,18 @@ export default function EspelhoPonto() {
   const T = (v: string | null | undefined) =>
     v ? <span className="font-mono text-base text-slate-700">{v}</span>
        : <span className="text-slate-300 text-base">—</span>;
+
+  if (!canAccess) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+          <ShieldAlert className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h2 className="text-lg font-semibold text-muted-foreground">Acesso Restrito</h2>
+          <p className="text-sm text-muted-foreground/70 mt-1">Você não tem permissão para acessar o Espelho de Ponto.</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
