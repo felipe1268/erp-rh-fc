@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Search, RefreshCw, User, ChevronDown, FileText,
-  Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info, AlertTriangle, Trash2,
+  Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info, AlertTriangle, Trash2, Lock, Unlock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -81,7 +81,7 @@ function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string
   const today = new Date().toISOString().slice(0, 10);
   if (dateStr > today) return "escuro";
   if (!rec?.horasTrabalhadas || rec.horasTrabalhadas === "0:00" || rec.horasTrabalhadas === "") {
-    if (rec?.fonte === "apontamento" && rec?.justificativa) return "apontamento";
+    if ((rec?.fonte === "apontamento" || rec?.fonte === "dixi+apontamento") && rec?.justificativa) return "apontamento";
     return "falta";
   }
   const bat = getBatidas(rec);
@@ -135,6 +135,9 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
   const { name, num, monthNum, month, year, dow } = dayInfo(dateStr);
   const mesReferencia = `${year}-${monthNum}`;
 
+  const isApontamento = record?.fonte === "apontamento" || record?.fonte === "dixi+apontamento";
+  const [timeLocked, setTimeLocked] = useState(isApontamento);
+
   const [form, setForm] = useState<EditForm>({
     entrada1: record?.entrada1 || "",
     saida1:   record?.saida1   || "",
@@ -146,8 +149,8 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
     motivoAjuste: "Correção manual",
   });
 
-  // Reset form when record/dateStr changes
   useEffect(() => {
+    setTimeLocked(record?.fonte === "apontamento");
     setForm({
       entrada1: record?.entrada1 || "",
       saida1:   record?.saida1   || "",
@@ -191,7 +194,7 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
   const f = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(prev => ({ ...prev, [field]: e.target.value }));
 
-  const TimeInput = ({ label, field }: { label: string; field: keyof EditForm }) => {
+  const TimeInput = ({ label, field, disabled }: { label: string; field: keyof EditForm; disabled?: boolean }) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const localRef = useRef(form[field] as string);
     useEffect(() => { localRef.current = form[field] as string; }, [form[field]]);
@@ -206,12 +209,15 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
             inputMode="numeric"
             maxLength={5}
             placeholder="--:--"
+            disabled={disabled}
             defaultValue={form[field] as string}
             onFocus={(e) => {
+              if (disabled) return;
               if (!e.target.value) { e.target.value = '--:--'; localRef.current = '--:--'; }
               setTimeout(() => e.target.setSelectionRange(0, 0), 0);
             }}
             onBlur={(e) => {
+              if (disabled) return;
               const val = e.target.value;
               if (!val || val === '--:--') {
                 e.target.value = '';
@@ -227,6 +233,7 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
               setForm(prev => ({ ...prev, [field]: formatted }));
             }}
             onKeyDown={(e) => {
+              if (disabled) { e.preventDefault(); return; }
               if (['Backspace','Delete','Tab','ArrowLeft','ArrowRight','Home','End'].includes(e.key)) {
                 if (e.key === 'Backspace') {
                   e.preventDefault();
@@ -259,7 +266,7 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
               el.setSelectionRange(nextPos, nextPos);
             }}
             onChange={() => {}}
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full pr-8"
+            className={`border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 w-full pr-8 ${disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
           />
           <Clock className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
         </div>
@@ -284,12 +291,28 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
             <span>Esta edição será gravada como <strong>ajuste manual</strong> e sincronizada com o Fechamento de Ponto, substituindo o registro original.</span>
           </div>
 
+          {isApontamento && (
+            <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                {timeLocked ? <Lock className="h-3.5 w-3.5 text-slate-400" /> : <Unlock className="h-3.5 w-3.5 text-amber-600" />}
+                <span>Horários do apontamento {timeLocked ? 'protegidos' : 'liberados para edição'}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTimeLocked(!timeLocked)}
+                className={`text-[10px] font-semibold px-2 py-1 rounded transition-colors ${timeLocked ? 'bg-slate-200 text-slate-600 hover:bg-slate-300' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+              >
+                {timeLocked ? 'Desbloquear' : 'Bloquear'}
+              </button>
+            </div>
+          )}
+
           {/* Turno 1 */}
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 1</p>
             <div className="grid grid-cols-2 gap-3">
-              <TimeInput label="Entrada" field="entrada1" />
-              <TimeInput label="Saída"   field="saida1" />
+              <TimeInput label="Entrada" field="entrada1" disabled={timeLocked} />
+              <TimeInput label="Saída"   field="saida1" disabled={timeLocked} />
             </div>
           </div>
 
@@ -297,8 +320,8 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 2 <span className="font-normal normal-case">(intervalo)</span></p>
             <div className="grid grid-cols-2 gap-3">
-              <TimeInput label="Entrada" field="entrada2" />
-              <TimeInput label="Saída"   field="saida2" />
+              <TimeInput label="Entrada" field="entrada2" disabled={timeLocked} />
+              <TimeInput label="Saída"   field="saida2" disabled={timeLocked} />
             </div>
           </div>
 
@@ -306,8 +329,8 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 3 <span className="font-normal normal-case">(opcional)</span></p>
             <div className="grid grid-cols-2 gap-3">
-              <TimeInput label="Entrada" field="entrada3" />
-              <TimeInput label="Saída"   field="saida3" />
+              <TimeInput label="Entrada" field="entrada3" disabled={timeLocked} />
+              <TimeInput label="Saída"   field="saida3" disabled={timeLocked} />
             </div>
           </div>
 
@@ -464,7 +487,7 @@ export default function EspelhoPonto() {
       const today = new Date().toISOString().slice(0, 10);
       if (d > today) continue;
       if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") {
-        if (r?.fonte === "apontamento" && r?.justificativa) { trabalhados++; }
+        if ((r?.fonte === "apontamento" || r?.fonte === "dixi+apontamento") && r?.justificativa) { trabalhados++; }
         else diasFalta++;
       }
       else { trabalhados++; totalTrabMins += parseHHMM(r.horasTrabalhadas); }
@@ -838,13 +861,24 @@ export default function EspelhoPonto() {
                             ? <span className="text-xs text-slate-600 truncate leading-tight" title={rec.obraNome}>{rec.obraNome}</span>
                             : <span className="text-slate-200 text-sm">—</span>}
                           {rec && (
-                            <span className={`text-[10px] font-semibold px-1.5 py-px rounded w-fit leading-tight ${
-                              rec.fonte === 'manual' || rec.ajusteManual
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-slate-100 text-slate-400'
-                            }`}>
-                              {rec.ajusteManual ? 'Manual' : rec.fonte === 'dixi' ? 'Dixi' : rec.fonte || 'manual'}
-                            </span>
+                            <div className="flex gap-1 flex-wrap">
+                              {rec.fonte === 'dixi+apontamento' ? (
+                                <>
+                                  <span className="text-[10px] font-semibold px-1.5 py-px rounded w-fit leading-tight bg-slate-100 text-slate-400">Dixi</span>
+                                  <span className="text-[10px] font-semibold px-1.5 py-px rounded w-fit leading-tight bg-amber-100 text-amber-700">Apontamento</span>
+                                </>
+                              ) : (
+                                <span className={`text-[10px] font-semibold px-1.5 py-px rounded w-fit leading-tight ${
+                                  rec.fonte === 'manual' || rec.ajusteManual
+                                    ? 'bg-amber-100 text-amber-700'
+                                    : rec.fonte === 'apontamento'
+                                      ? 'bg-amber-100 text-amber-700'
+                                      : 'bg-slate-100 text-slate-400'
+                                }`}>
+                                  {rec.fonte === 'apontamento' ? 'Apontamento' : rec.ajusteManual ? 'Manual' : rec.fonte === 'dixi' ? 'Dixi' : rec.fonte || 'manual'}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </>}
                     </div>

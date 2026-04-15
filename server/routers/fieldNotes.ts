@@ -132,6 +132,9 @@ export const fieldNotesRouter = router({
           faltas = "0";
         }
 
+        const hadDixi = existing.some((r: any) => r.fonte === "dixi" || r.fonte === "dixi+apontamento");
+        const fonteValue = hadDixi ? "dixi+apontamento" : "apontamento";
+
         if (existing.length > 1) {
           const keepId = existing[0].id;
           const removeIds = existing.slice(1).map((r: any) => r.id);
@@ -141,7 +144,7 @@ export const fieldNotesRouter = router({
             entrada1: finalE1, saida1: finalS1, entrada2: finalE2, saida2: finalS2,
             horasTrabalhadas, faltas, atrasos,
             justificativa: fullJust,
-            ajusteManual: 1, ajustadoPor: solicitanteNome, fonte: "apontamento",
+            ajusteManual: 1, ajustadoPor: solicitanteNome, fonte: fonteValue,
             obraId: mergedObra,
           }).where(eq(timeRecords.id, keepId));
         } else if (existing.length === 1) {
@@ -151,7 +154,7 @@ export const fieldNotesRouter = router({
             entrada1: finalE1, saida1: finalS1, entrada2: finalE2, saida2: finalS2,
             horasTrabalhadas, faltas, atrasos,
             justificativa: prevJust,
-            ajusteManual: 1, ajustadoPor: solicitanteNome, fonte: "apontamento",
+            ajusteManual: 1, ajustadoPor: solicitanteNome, fonte: fonteValue,
           }).where(eq(timeRecords.id, ex.id));
         } else {
           await db.insert(timeRecords).values({
@@ -286,6 +289,8 @@ export const fieldNotesRouter = router({
 
         const justificativa = `[Apontamento #${note.id} - ${note.tipoOcorrencia}] ${input.respostaRH} (Resolvido por ${resolvidoPor})`;
         const mesRef = note.data.substring(0, 7);
+        const exHadDixi = ex && (ex.fonte === "dixi" || ex.fonte === "dixi+apontamento");
+        const resolveFonte = exHadDixi ? "dixi+apontamento" : "apontamento";
 
         if (note.tipoOcorrencia === 'falta' || note.tipoOcorrencia === 'abandono_posto') {
           if (ex) {
@@ -293,7 +298,7 @@ export const fieldNotesRouter = router({
               faltas: "1", horasTrabalhadas: "00:00",
               justificativa: ex.justificativa ? `${ex.justificativa} | ${justificativa}` : justificativa,
               ajusteManual: 1, ajustadoPor: resolvidoPor,
-              fonte: "apontamento",
+              fonte: resolveFonte,
             }).where(eq(timeRecords.id, ex.id));
           } else {
             await db.insert(timeRecords).values({
@@ -323,7 +328,7 @@ export const fieldNotesRouter = router({
               entrada1: fE1, saida1: fS1, entrada2: fE2, saida2: fS2,
               horasTrabalhadas, faltas: "0",
               justificativa: ex.justificativa ? `${ex.justificativa} | ${justificativa}` : justificativa,
-              ajusteManual: 1, ajustadoPor: resolvidoPor, fonte: "apontamento",
+              ajusteManual: 1, ajustadoPor: resolvidoPor, fonte: resolveFonte,
             }).where(eq(timeRecords.id, ex.id));
           } else {
             await db.insert(timeRecords).values({
@@ -340,7 +345,7 @@ export const fieldNotesRouter = router({
             await db.update(timeRecords).set({
               atrasos: note.tipoOcorrencia === 'atraso' ? "1:00" : ex.atrasos,
               justificativa: ex.justificativa ? `${ex.justificativa} | ${justificativa}` : justificativa,
-              ajusteManual: 1, ajustadoPor: resolvidoPor, fonte: "apontamento",
+              ajusteManual: 1, ajustadoPor: resolvidoPor, fonte: resolveFonte,
             }).where(eq(timeRecords.id, ex.id));
           } else {
             await db.insert(timeRecords).values({
