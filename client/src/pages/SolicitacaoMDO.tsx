@@ -547,80 +547,187 @@ export default function SolicitacaoMDO() {
                     <Scale className="h-5 w-5 text-indigo-700" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-[#1B2A4A]">Análise Financeira — CLT vs Terceirização</h3>
-                    <p className="text-xs text-muted-foreground">Baseada nos salários atuais e encargos ({analiseQ.data.parametros.encargosPerc.toFixed(1)}%)</p>
+                    <h3 className="font-bold text-[#1B2A4A]">Análise Financeira Detalhada — CLT vs Terceirização</h3>
+                    <p className="text-xs text-muted-foreground">Encargos: {analiseQ.data.parametros.encargosPerc.toFixed(1)}% | BDI Terc.: {((analiseQ.data.parametros.fatorBDI - 1) * 100).toFixed(0)}%</p>
                   </div>
                 </div>
 
-                {/* Tabela por função */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b bg-slate-50">
-                        <th className="text-left py-2 px-3 font-semibold text-muted-foreground">Função</th>
-                        <th className="text-center py-2 px-2 font-semibold text-muted-foreground">Qtd</th>
-                        <th className="text-center py-2 px-2 font-semibold text-muted-foreground">Meses</th>
-                        <th className="text-right py-2 px-3 font-semibold text-blue-700">CLT/mês</th>
-                        <th className="text-right py-2 px-3 font-semibold text-purple-700">Terc./mês</th>
-                        <th className="text-right py-2 px-3 font-semibold text-blue-700">CLT Total</th>
-                        <th className="text-right py-2 px-3 font-semibold text-purple-700">Terc. Total</th>
-                        <th className="text-center py-2 px-3 font-semibold text-muted-foreground">Melhor Opção</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analiseQ.data.itens.map((item: any, idx: number) => (
-                        <tr key={idx} className="border-b last:border-0 hover:bg-slate-50">
-                          <td className="py-2 px-3">
-                            <div className="font-medium">{item.funcao}</div>
-                            <div className="text-[10px] text-muted-foreground">Base: {fmtMoney(item.salarioBase)} ({item.baseSalarial})</div>
-                          </td>
-                          <td className="text-center py-2 px-2 font-mono">{item.quantidade}</td>
-                          <td className="text-center py-2 px-2 font-mono">{item.duracaoMeses}</td>
-                          <td className="text-right py-2 px-3 font-mono text-blue-700">{fmtMoney(item.clt.custoMensalTotal)}</td>
-                          <td className="text-right py-2 px-3 font-mono text-purple-700">{fmtMoney(item.terceirizacao.custoMensalTotal)}</td>
-                          <td className="text-right py-2 px-3 font-mono text-blue-700 font-semibold">{fmtMoney(item.clt.custoPeriodo)}</td>
-                          <td className="text-right py-2 px-3 font-mono text-purple-700 font-semibold">{fmtMoney(item.terceirizacao.custoPeriodo)}</td>
-                          <td className="text-center py-2 px-3">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${item.comparativo.recomendacao === "terceirizar" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"}`}>
-                              {item.comparativo.recomendacao === "terceirizar" ? "Terceirizar" : "Contratar CLT"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {/* Detalhamento por função */}
+                {analiseQ.data.itens.map((item: any, idx: number) => {
+                  const det = item.clt.detalhamento;
+                  const adm = item.clt.custosAdmissao;
+                  const dem = item.clt.custosDemissao;
+                  return (
+                    <div key={idx} className="border rounded-xl overflow-hidden">
+                      <div className="bg-slate-50 px-4 py-2 flex items-center justify-between border-b">
+                        <div className="flex items-center gap-3">
+                          <HardHat className="h-4 w-4 text-[#1B2A4A]" />
+                          <span className="font-bold text-sm text-[#1B2A4A]">{item.funcao}</span>
+                          <span className="text-xs text-muted-foreground">({item.quantidade} profissional(is) × {item.duracaoMeses} meses)</span>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${item.comparativo.recomendacao === "terceirizar" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"}`}>
+                          {item.comparativo.recomendacao === "terceirizar" ? "⇒ Terceirizar" : "⇒ Contratar CLT"}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-0 divide-y md:divide-y-0 md:divide-x">
+                        {/* CLT */}
+                        <div className="p-4 space-y-3">
+                          <div className="text-xs font-bold text-blue-800 uppercase tracking-wide flex items-center gap-1.5">
+                            <Briefcase className="h-3.5 w-3.5" /> Contratação CLT
+                          </div>
+                          <div className="text-[10px] text-muted-foreground italic">Base salarial: {fmtMoney(item.salarioBase)} ({item.baseSalarial}{item.qtdReferencia > 0 ? `, ${item.qtdReferencia} ref.` : ""})</div>
+
+                          <div className="space-y-0.5 text-xs">
+                            <div className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wide mt-1">Custos Mensais (por profissional)</div>
+                            <CostLine label="Salário Bruto" value={det?.salarioBruto || item.salarioBase} />
+                            <CostLine label="INSS Patronal (20%)" value={det?.inss} sub />
+                            <CostLine label="FGTS (8%)" value={det?.fgts} sub />
+                            <CostLine label="RAT/SAT (3%)" value={det?.rat} sub />
+                            <CostLine label="Sistema S (5,8%)" value={det?.sistemaS} sub />
+                            <CostLine label="Prov. Férias + 1/3" value={det?.provisaoFerias} sub />
+                            <CostLine label="Prov. 13º Salário" value={det?.provisao13} sub />
+                            <CostLine label="Prov. Multa FGTS" value={det?.provisaoMultaFGTS} sub />
+                            <div className="border-t pt-1 flex justify-between font-semibold text-blue-800">
+                              <span>Total Encargos ({item.clt.encargosPerc.toFixed(1)}%)</span>
+                              <span className="font-mono">{fmtMoney(det?.totalEncargos || item.clt.encargosValor)}</span>
+                            </div>
+                            <div className="mt-2 font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">Benefícios Mensais</div>
+                            <CostLine label={`Vale Refeição (22 dias)`} value={det?.valeRefeicao} />
+                            <CostLine label="Vale Alimentação" value={det?.valeAlimentacao} />
+                            <CostLine label="Vale Transporte (6%)" value={det?.valeTransporte} />
+                            <CostLine label="Seguro de Vida Grupo" value={det?.seguroVidaGrupo} />
+                            {det?.planoSaude > 0 && <CostLine label="Plano de Saúde" value={det?.planoSaude} />}
+
+                            <div className="border-t border-blue-200 pt-1.5 mt-2">
+                              <div className="flex justify-between font-bold text-blue-900 text-sm">
+                                <span>Custo Mensal/profissional</span>
+                                <span className="font-mono">{fmtMoney(item.clt.custoMensalUnit)}</span>
+                              </div>
+                              {item.quantidade > 1 && (
+                                <div className="flex justify-between font-bold text-blue-800 text-xs mt-0.5">
+                                  <span>× {item.quantidade} = Custo Mensal Total</span>
+                                  <span className="font-mono">{fmtMoney(item.clt.custoMensalTotal)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-0.5 text-xs">
+                            <div className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">Custos de Admissão (únicos)</div>
+                            <CostLine label="Exame Admissional" value={adm?.exameAdmissional} />
+                            <CostLine label="EPIs" value={adm?.epiEstimado} />
+                            <CostLine label="Uniformes" value={adm?.uniformeEstimado} />
+                            <CostLine label="Treinamento / Integração" value={adm?.treinamentoIntegracao} />
+                            <div className="flex justify-between font-semibold text-blue-700 border-t pt-1">
+                              <span>Total Admissão ({item.quantidade}x)</span>
+                              <span className="font-mono">{fmtMoney(adm?.totalGeral)}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-0.5 text-xs">
+                            <div className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">Custos de Demissão</div>
+                            <CostLine label="Exame Demissional" value={dem?.exameDemissional} />
+                            <div className="flex justify-between font-semibold text-blue-700 border-t pt-1">
+                              <span>Total Demissão ({item.quantidade}x)</span>
+                              <span className="font-mono">{fmtMoney(dem?.totalGeral)}</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-blue-100 rounded-lg p-3 flex justify-between items-center">
+                            <div>
+                              <div className="text-[10px] font-bold text-blue-800 uppercase">Custo CLT Total</div>
+                              <div className="text-[10px] text-blue-600">{item.duracaoMeses}m × {fmtMoney(item.clt.custoMensalTotal)} + admissão + demissão</div>
+                            </div>
+                            <div className="text-lg font-bold text-blue-900 font-mono">{fmtMoney(item.clt.custoPeriodo)}</div>
+                          </div>
+                        </div>
+
+                        {/* Terceirização */}
+                        <div className="p-4 space-y-3">
+                          <div className="text-xs font-bold text-purple-800 uppercase tracking-wide flex items-center gap-1.5">
+                            <Users className="h-3.5 w-3.5" /> Terceirização
+                          </div>
+                          <div className="text-[10px] text-muted-foreground italic">BDI de {((item.terceirizacao.fatorBDI - 1) * 100).toFixed(0)}% sobre o salário base</div>
+
+                          <div className="space-y-0.5 text-xs">
+                            <div className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">Custos Mensais (por profissional)</div>
+                            <CostLine label="Salário Base (ref.)" value={item.salarioBase} />
+                            <CostLine label={`BDI (${((item.terceirizacao.fatorBDI - 1) * 100).toFixed(0)}%)`} value={item.salarioBase * (item.terceirizacao.fatorBDI - 1)} sub />
+                            <div className="border-t pt-1 flex justify-between font-bold text-purple-800">
+                              <span>Custo Mensal/profissional</span>
+                              <span className="font-mono">{fmtMoney(item.terceirizacao.custoMensalUnit)}</span>
+                            </div>
+                            {item.quantidade > 1 && (
+                              <div className="flex justify-between font-semibold text-purple-700 text-xs mt-0.5">
+                                <span>× {item.quantidade} = Custo Mensal Total</span>
+                                <span className="font-mono">{fmtMoney(item.terceirizacao.custoMensalTotal)}</span>
+                              </div>
+                            )}
+
+                            <div className="mt-3 font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">Custos Únicos</div>
+                            <CostLine label="Mobilização / Desmobilização" value={item.terceirizacao.mobilizacao} />
+
+                            <div className="mt-3 font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">O que está incluso no BDI</div>
+                            <div className="text-[10px] text-muted-foreground space-y-0.5 ml-2">
+                              <div>✓ Encargos sociais e trabalhistas</div>
+                              <div>✓ Benefícios (VR, VA, VT)</div>
+                              <div>✓ EPIs e uniformes</div>
+                              <div>✓ Exames médicos</div>
+                              <div>✓ Treinamento e integração</div>
+                              <div>✓ Férias, 13º e provisões</div>
+                              <div>✓ Gestão e administração</div>
+                              <div>✓ Lucro da empresa terceirizada</div>
+                            </div>
+                          </div>
+
+                          <div className="bg-purple-100 rounded-lg p-3 flex justify-between items-center">
+                            <div>
+                              <div className="text-[10px] font-bold text-purple-800 uppercase">Custo Terc. Total</div>
+                              <div className="text-[10px] text-purple-600">{item.duracaoMeses}m × {fmtMoney(item.terceirizacao.custoMensalTotal)} + mobilização</div>
+                            </div>
+                            <div className="text-lg font-bold text-purple-900 font-mono">{fmtMoney(item.terceirizacao.custoPeriodo)}</div>
+                          </div>
+
+                          {/* Diferença */}
+                          <div className={`rounded-lg p-3 border ${item.comparativo.economiaPeriodo > 0 ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs font-semibold">{item.comparativo.economiaPeriodo > 0 ? "Economia terceirizando" : "Economia contratando CLT"}</span>
+                              <span className={`text-sm font-bold font-mono ${item.comparativo.economiaPeriodo > 0 ? "text-green-700" : "text-amber-700"}`}>
+                                {fmtMoney(Math.abs(item.comparativo.economiaPeriodo))}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
 
                 {/* Resumo Consolidado */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                  {/* Impacto Folha */}
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Wallet className="h-4 w-4 text-amber-700" />
                       <span className="text-xs font-bold text-amber-800 uppercase tracking-wide">Impacto na Folha</span>
                     </div>
                     <div className="text-xl font-bold text-amber-900">{fmtMoney(analiseQ.data.resumo.impactoFolhaProximoMes)}</div>
-                    <p className="text-[10px] text-amber-700 mt-1">Acréscimo mensal na folha de pagamento (salários + encargos + benefícios)</p>
+                    <p className="text-[10px] text-amber-700 mt-1">Acréscimo mensal na folha (salários + encargos + benefícios)</p>
                   </div>
-
-                  {/* CLT Total */}
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Briefcase className="h-4 w-4 text-blue-700" />
-                      <span className="text-xs font-bold text-blue-800 uppercase tracking-wide">Custo CLT Total</span>
+                      <span className="text-xs font-bold text-blue-800 uppercase tracking-wide">CLT Total Período</span>
                     </div>
                     <div className="text-xl font-bold text-blue-900">{fmtMoney(analiseQ.data.resumo.clt.periodo)}</div>
-                    <p className="text-[10px] text-blue-700 mt-1">Inclui encargos ({analiseQ.data.parametros.encargosPerc.toFixed(1)}%), benefícios, admissão e EPIs</p>
+                    <p className="text-[10px] text-blue-700 mt-1">Mensal + admissão + demissão</p>
                   </div>
-
-                  {/* Terceirização Total */}
                   <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Users className="h-4 w-4 text-purple-700" />
-                      <span className="text-xs font-bold text-purple-800 uppercase tracking-wide">Custo Terceirização</span>
+                      <span className="text-xs font-bold text-purple-800 uppercase tracking-wide">Terceirização Total</span>
                     </div>
                     <div className="text-xl font-bold text-purple-900">{fmtMoney(analiseQ.data.resumo.terceirizacao.periodo)}</div>
-                    <p className="text-[10px] text-purple-700 mt-1">BDI estimado de {((analiseQ.data.parametros.fatorBDI - 1) * 100).toFixed(0)}% sobre o salário base</p>
+                    <p className="text-[10px] text-purple-700 mt-1">Mensal + mobilização</p>
                   </div>
                 </div>
 
@@ -635,8 +742,8 @@ export default function SolicitacaoMDO() {
                     </div>
                     <p className={`text-xs mt-1 ${analiseQ.data.resumo.recomendacaoGeral === "terceirizar" ? "text-purple-700" : "text-blue-700"}`}>
                       {analiseQ.data.resumo.economiaPeriodo > 0
-                        ? `Terceirizar economizaria ${fmtMoney(analiseQ.data.resumo.economiaPeriodo)} no período total. Para contratações de curta duração, terceirizar evita custos de admissão/demissão.`
-                        : `Contratar via CLT economizaria ${fmtMoney(Math.abs(analiseQ.data.resumo.economiaPeriodo))} no período total. Para contratações de longa duração, o custo CLT compensa os custos iniciais.`
+                        ? `Terceirizar economizaria ${fmtMoney(analiseQ.data.resumo.economiaPeriodo)} no período total. Para contratações de curta duração, terceirizar evita custos de admissão/demissão e reduz encargos trabalhistas.`
+                        : `Contratar via CLT economizaria ${fmtMoney(Math.abs(analiseQ.data.resumo.economiaPeriodo))} no período total. Para contratações de longa duração, o custo CLT compensa os custos iniciais de admissão.`
                       }
                     </p>
                   </div>
@@ -646,7 +753,7 @@ export default function SolicitacaoMDO() {
             {analiseQ.isLoading && validItensForAnalise.length > 0 && formObraId > 0 && (
               <div className="bg-white rounded-xl border p-6 text-center text-sm text-muted-foreground">
                 <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2" />
-                Calculando análise financeira...
+                Calculando análise financeira detalhada...
               </div>
             )}
 
@@ -903,6 +1010,16 @@ function InfoField({ icon: Icon, label, value }: { icon: any; label: string; val
     <div>
       <div className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Icon className="h-3 w-3" /> {label}</div>
       <div className="text-sm font-medium mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function CostLine({ label, value, sub }: { label: string; value: number | undefined | null; sub?: boolean }) {
+  if (value === undefined || value === null) return null;
+  return (
+    <div className={`flex justify-between ${sub ? "ml-3 text-muted-foreground" : ""}`}>
+      <span>{sub ? "├ " : ""}{label}</span>
+      <span className="font-mono">{fmtMoney(value)}</span>
     </div>
   );
 }

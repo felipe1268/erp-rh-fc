@@ -325,12 +325,18 @@ export const smoRouter = router({
         .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
         .orderBy(desc(convencaoColetiva.vigenciaInicio)).limit(1);
 
-      const vr = parseFloat(conv?.valeRefeicao || "0") * 22;
-      const va = parseFloat(conv?.valeAlimentacao || "0");
+      const vrDiario = parseFloat(conv?.valeRefeicao || "0");
+      const vrMensal = vrDiario * 22;
+      const vaMensal = parseFloat(conv?.valeAlimentacao || "0");
       const exameAdmissional = 200;
+      const examePeriodico = 150;
+      const exameDemissional = 150;
       const epiEstimado = 350;
       const uniformeEstimado = 250;
-      const custoUnico = exameAdmissional + epiEstimado + uniformeEstimado;
+      const treinamentoIntegracao = 300;
+      const seguroVidaGrupo = 45;
+      const planoSaudeMensal = 0;
+      const custoAdmissao = exameAdmissional + epiEstimado + uniformeEstimado + treinamentoIntegracao;
 
       const analiseItens = [];
       let totalCltMensal = 0;
@@ -353,25 +359,40 @@ export const smoRouter = router({
 
         const vt = salarioRef * 0.06;
         const encargosValor = salarioRef * (totalEncargosPerc / 100);
-        const custoMensalUnit = salarioRef + encargosValor + vr + va + vt;
+
+        const inss = salarioRef * 0.20;
+        const fgts = salarioRef * 0.08;
+        const rat = salarioRef * 0.03;
+        const sistemaS = salarioRef * 0.058;
+        const provisaoFerias = (salarioRef / 12) + ((salarioRef / 12) / 3);
+        const provisao13 = salarioRef / 12;
+        const provisaoMultaFGTS = salarioRef * 0.08 * 0.40 / 12;
+
+        const custoMensalUnit = salarioRef + encargosValor + vrMensal + vaMensal + vt + seguroVidaGrupo + planoSaudeMensal;
         const custoMensalTotal = custoMensalUnit * item.quantidade;
-        const custoPeriodo = (custoMensalTotal * item.duracaoMeses) + (custoUnico * item.quantidade);
+
+        const custosAdmissaoTotal = custoAdmissao * item.quantidade;
+        const examePeriodicoTotal = Math.floor(item.duracaoMeses / 12) * examePeriodico * item.quantidade;
+        const exameDemissionalTotal = exameDemissional * item.quantidade;
+        const custoPeriodo = (custoMensalTotal * item.duracaoMeses) + custosAdmissaoTotal + examePeriodicoTotal + exameDemissionalTotal;
 
         const fatorBDI = 1.35;
         const tercMensalUnit = salarioRef * fatorBDI;
         const tercMensalTotal = tercMensalUnit * item.quantidade;
         const tercPeriodo = tercMensalTotal * item.duracaoMeses;
+        const tercMobilizacao = 500 * item.quantidade;
+        const tercPeriodoTotal = tercPeriodo + tercMobilizacao;
 
         const economiaMensal = custoMensalTotal - tercMensalTotal;
-        const economiaPeriodo = custoPeriodo - tercPeriodo;
+        const economiaPeriodo = custoPeriodo - tercPeriodoTotal;
         const recomendacao = item.duracaoMeses <= 3
           ? (economiaPeriodo > 0 ? "terceirizar" : "contratar")
-          : (economiaPeriodo > custoUnico * item.quantidade ? "terceirizar" : "contratar");
+          : (economiaPeriodo > custosAdmissaoTotal ? "terceirizar" : "contratar");
 
         totalCltMensal += custoMensalTotal;
         totalCltPeriodo += custoPeriodo;
         totalTercMensal += tercMensalTotal;
-        totalTercPeriodo += tercPeriodo;
+        totalTercPeriodo += tercPeriodoTotal;
         totalImpactoFolha += custoMensalTotal;
 
         analiseItens.push({
@@ -384,17 +405,44 @@ export const smoRouter = router({
           clt: {
             encargosPerc: totalEncargosPerc,
             encargosValor,
-            beneficios: vr + va + vt,
+            detalhamento: {
+              salarioBruto: salarioRef,
+              inss,
+              fgts,
+              rat,
+              sistemaS,
+              totalEncargos: encargosValor,
+              valeRefeicao: vrMensal,
+              valeAlimentacao: vaMensal,
+              valeTransporte: vt,
+              seguroVidaGrupo,
+              planoSaude: planoSaudeMensal,
+              provisaoFerias,
+              provisao13,
+              provisaoMultaFGTS,
+            },
             custoMensalUnit,
             custoMensalTotal,
-            custoUnicoTotal: custoUnico * item.quantidade,
+            custosAdmissao: {
+              exameAdmissional,
+              epiEstimado,
+              uniformeEstimado,
+              treinamentoIntegracao,
+              totalPorProfissional: custoAdmissao,
+              totalGeral: custosAdmissaoTotal,
+            },
+            custosDemissao: {
+              exameDemissional,
+              totalGeral: exameDemissionalTotal,
+            },
             custoPeriodo,
           },
           terceirizacao: {
             fatorBDI,
             custoMensalUnit: tercMensalUnit,
             custoMensalTotal: tercMensalTotal,
-            custoPeriodo: tercPeriodo,
+            mobilizacao: tercMobilizacao,
+            custoPeriodo: tercPeriodoTotal,
           },
           comparativo: {
             economiaMensal,
