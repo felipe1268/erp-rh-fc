@@ -24,6 +24,14 @@ A full-stack HR/ERP system built for FC Engenharia. It handles employees, payrol
 
 12. **SMO — Solicitação de Mão de Obra** (Rev.1169) — Módulo completo de gestão de solicitações de mão de obra para obras. Tabelas: `smo_solicitacoes`, `smo_atividades_eap`, `smo_onboarding_checklist`. Router: `server/routers/smo.ts` (list, create, approve, reject, recruitment, checklist, financial impact, reallocation suggestion, turnover history, similar requests, análise comparativa CLT vs Terceirização com lucro configurável). Frontend: `client/src/pages/SolicitacaoMDO.tsx` com 4 telas (listagem com filtros e KPIs, formulário full-screen multi-step, detalhes/aprovação com impacto financeiro e sugestão de realocação, checklist de onboarding). Rota: `/solicitacao-mdo`. Menu: Gestão de Pessoas > Solicitação de Mão de Obra. **Resiliência DB** (Rev.1168): withRetry helper com detecção de erros transientes (timeout, connection reset, PG codes 57P01/08006/53300) e 3 tentativas automáticas nos endpoints list e dashboard. tRPC onError extrai causa real do DrizzleQueryError.
 
+## Tipos de Contrato (Rev. 1171)
+Obras agora suportam 3 tipos de contrato:
+- **global** (Empreitada Global) — MDO + Material + Equipamentos, BDI aplicado em tudo (padrão)
+- **mdo** (Fornecimento de MDO) — Contrato de mão de obra, material como referência para Compras. BDI aplicado somente sobre MDO. Percentual de gerenciamento de material (8-12%) gera recebível variável
+- **adm** (ADM Geral) — % sobre tudo que foi gasto na obra no mês
+Campos: `tipo_contrato`, `percentual_gerenciamento_material`, `percentual_adm` em `obras`
+Impacto: Orçamento (BDI condicional por tipo), Medição (banner + tipo exposto), Compras (sem mudança)
+
 ## Telemetria & Analytics Module (Rev. 799)
 - Route: `/admin/telemetria` (admin_master only, MasterOnlyGuard)
 - Backend: `server/routers/telemetria.ts` (7 tRPC endpoints)

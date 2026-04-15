@@ -2653,22 +2653,41 @@ export const orcamentoRouter = router({
       // ── Recalcular Venda dos itens com novo BDI% ───────────────
       if (bdiPercentual > 0) {
         const bdiDivisor = 1 - bdiPercentual;
-        // Um único UPDATE em massa em vez de um loop por item (evita timeout com muitos itens)
-        if (bdiDivisor > 0) {
-          await db.update(orcamentoItens).set({
-            vendaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotal}::numeric, 0) / ${String(bdiDivisor)}, 2)`,
-            vendaUnitTotal: sql`ROUND(COALESCE(${orcamentoItens.custoUnitTotal}::numeric, 0) / ${String(bdiDivisor)}, 4)`,
-          }).where(eq(orcamentoItens.orcamentoId, oid));
+
+        let tipoContrato = 'global';
+        if (orc.obraId) {
+          const obraRows = await db.execute(sql`SELECT tipo_contrato FROM obras WHERE id = ${orc.obraId} LIMIT 1`);
+          const rows: any[] = (obraRows as any).rows ?? obraRows ?? [];
+          if (rows[0]?.tipo_contrato) tipoContrato = rows[0].tipo_contrato;
         }
-        // Total de venda final: usa PV-2 da aba BDI se disponível, senão calcula da EAP
+        const somenteMdo = tipoContrato === 'mdo';
+
+        if (bdiDivisor > 0) {
+          if (somenteMdo) {
+            await db.update(orcamentoItens).set({
+              vendaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotalMdo}::numeric, 0) / ${String(bdiDivisor)} + COALESCE(${orcamentoItens.custoTotalMat}::numeric, 0), 2)`,
+              vendaUnitTotal: sql`ROUND(COALESCE(${orcamentoItens.custoUnitMdo}::numeric, 0) / ${String(bdiDivisor)} + COALESCE(${orcamentoItens.custoUnitMat}::numeric, 0), 4)`,
+            }).where(eq(orcamentoItens.orcamentoId, oid));
+          } else {
+            await db.update(orcamentoItens).set({
+              vendaTotal:     sql`ROUND(COALESCE(${orcamentoItens.custoTotal}::numeric, 0) / ${String(bdiDivisor)}, 2)`,
+              vendaUnitTotal: sql`ROUND(COALESCE(${orcamentoItens.custoUnitTotal}::numeric, 0) / ${String(bdiDivisor)}, 4)`,
+            }).where(eq(orcamentoItens.orcamentoId, oid));
+          }
+        }
         let totalVendaFinal: number;
-        if (totalVendaBdi > 0) {
+        if (totalVendaBdi > 0 && !somenteMdo) {
           totalVendaFinal = totalVendaBdi;
         } else {
-          const nivel1 = await db.select({ custoTotal: orcamentoItens.custoTotal })
+          const nivel1 = await db.select({ custoTotal: orcamentoItens.custoTotal, custoTotalMdo: orcamentoItens.custoTotalMdo, custoTotalMat: orcamentoItens.custoTotalMat })
             .from(orcamentoItens)
             .where(and(eq(orcamentoItens.orcamentoId, oid), eq(orcamentoItens.nivel, 1)));
           totalVendaFinal = nivel1.reduce((s, i) => {
+            if (somenteMdo) {
+              const mdo = parseFloat(i.custoTotalMdo || '0');
+              const mat = parseFloat(i.custoTotalMat || '0');
+              return s + (bdiDivisor > 0 ? mdo / bdiDivisor : mdo) + mat;
+            }
             const c = parseFloat(i.custoTotal || '0');
             return s + (bdiDivisor > 0 ? c / bdiDivisor : c);
           }, 0);
@@ -3169,22 +3188,50 @@ export const orcamentoRouter = router({
       const itens = await db.select().from(orcamentoItens)
         .where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
 
+      const [orc] = await db.select({ obraId: orcamentos.obraId }).from(orcamentos)
+        .where(eq(orcamentos.id, input.orcamentoId));
+      let tipoContrato = 'global';
+      if (orc?.obraId) {
+        const obraRows = await db.execute(sql`SELECT tipo_contrato FROM obras WHERE id = ${orc.obraId} LIMIT 1`);
+        const rows: any[] = (obraRows as any).rows ?? obraRows ?? [];
+        if (rows[0]?.tipo_contrato) tipoContrato = rows[0].tipo_contrato;
+      }
+      const somenteMdo = tipoContrato === 'mdo';
+
       // Fórmula ABNT/TCU: PV = CD ÷ (1 − BDI%)
       const bdiDivisor = 1 - bdi;
       const BATCH = 500;
       for (let i = 0; i < itens.length; i += BATCH) {
         for (const item of itens.slice(i, i + BATCH)) {
-          const custo     = parseFloat(item.custoTotal     || '0');
-          const custoUnit = parseFloat(item.custoUnitTotal || '0');
-          await db.update(orcamentoItens).set({
-            vendaTotal:     fix2(bdiDivisor > 0 ? custo     / bdiDivisor : custo),
-            vendaUnitTotal: fix4(bdiDivisor > 0 ? custoUnit / bdiDivisor : custoUnit),
-          }).where(eq(orcamentoItens.id, item.id));
+          if (somenteMdo) {
+            const custoMdo     = parseFloat(item.custoTotalMdo  || '0');
+            const custoMat     = parseFloat(item.custoTotalMat  || '0');
+            const custoUnitMdo = parseFloat(item.custoUnitMdo   || '0');
+            const custoUnitMat = parseFloat(item.custoUnitMat   || '0');
+            const vendaMdo     = bdiDivisor > 0 ? custoMdo     / bdiDivisor : custoMdo;
+            const vendaUnitMdo = bdiDivisor > 0 ? custoUnitMdo / bdiDivisor : custoUnitMdo;
+            await db.update(orcamentoItens).set({
+              vendaTotal:     fix2(vendaMdo + custoMat),
+              vendaUnitTotal: fix4(vendaUnitMdo + custoUnitMat),
+            }).where(eq(orcamentoItens.id, item.id));
+          } else {
+            const custo     = parseFloat(item.custoTotal     || '0');
+            const custoUnit = parseFloat(item.custoUnitTotal || '0');
+            await db.update(orcamentoItens).set({
+              vendaTotal:     fix2(bdiDivisor > 0 ? custo     / bdiDivisor : custo),
+              vendaUnitTotal: fix4(bdiDivisor > 0 ? custoUnit / bdiDivisor : custoUnit),
+            }).where(eq(orcamentoItens.id, item.id));
+          }
         }
       }
 
       const nivel1     = itens.filter(i => i.nivel === 1);
       const totalVenda = nivel1.reduce((s, i) => {
+        if (somenteMdo) {
+          const mdo = parseFloat(i.custoTotalMdo || '0');
+          const mat = parseFloat(i.custoTotalMat || '0');
+          return s + (bdiDivisor > 0 ? mdo / bdiDivisor : mdo) + mat;
+        }
         const c = parseFloat(i.custoTotal || '0');
         return s + (bdiDivisor > 0 ? c / bdiDivisor : c);
       }, 0);
@@ -3194,7 +3241,7 @@ export const orcamentoRouter = router({
         totalVenda:    fix2(totalVenda),
       }).where(eq(orcamentos.id, input.orcamentoId));
 
-      return { success: true, totalVenda, bdiPercentual: bdi };
+      return { success: true, totalVenda, bdiPercentual: bdi, tipoContrato };
     }),
 
   // ── Deletar (soft delete) ─────────────────────────────────

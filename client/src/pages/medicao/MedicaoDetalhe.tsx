@@ -347,6 +347,7 @@ export default function MedicaoDetalhe() {
               const totalVendaOrc = (planilhaData as any).totalVendaOrc || 0;
               const somaFolhasVenda = allItens.filter((i: any) => !childMap[i.eapCodigo]).reduce((s: number, i: any) => s + n(i.vendaTotal), 0);
               const fatorContrato = somaFolhasVenda > 0 && vcContrato > 0 ? vcContrato / somaFolhasVenda : 1;
+              const isMdoContrato = contrato?.tipoContrato === 'mdo';
 
               const groupTotals: Record<string, { mat: number; mdo: number; venda: number }> = {};
               allItens.forEach(item => {
@@ -443,6 +444,12 @@ export default function MedicaoDetalhe() {
                       <span className="text-blue-600">Progresso: <strong>{totalContratual > 0 ? ((totalMedidoGlobal / totalContratual) * 100).toFixed(2) : "0.00"}%</strong></span>
                     </div>
                   </div>
+                  {isMdoContrato && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-800 flex items-center gap-2">
+                      <HardHat className="h-4 w-4 flex-shrink-0" />
+                      <span><strong>Contrato de Fornecimento de MDO</strong> — O BDI foi aplicado somente sobre Mão de Obra. Material é referencial para Compras{contrato?.percentualGerenciamentoMaterial && parseFloat(contrato.percentualGerenciamentoMaterial) > 0 ? ` (Taxa de gerenciamento: ${contrato.percentualGerenciamentoMaterial}%)` : ''}. O valor contratual (Valor de Venda) já reflete essa regra.</span>
+                    </div>
+                  )}
                   {excedeu && (
                     <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex items-center gap-2">
                       <AlertCircle className="h-4 w-4 flex-shrink-0" />

@@ -41,7 +41,16 @@ type ObraForm = {
   gerenciadoraNome: string;
   gerenciadoraLogoUrl: string;
   clienteLogoUrl: string;
+  tipoContrato: string;
+  percentualGerenciamentoMaterial: string;
+  percentualAdm: string;
 };
+
+const TIPO_CONTRATO_OPTIONS = [
+  { value: "global", label: "Empreitada Global", color: "bg-blue-100 text-blue-800", desc: "MDO + Material + Equipamentos" },
+  { value: "mdo", label: "Fornecimento de MDO", color: "bg-amber-100 text-amber-800", desc: "MDO + Gerenciamento de Material (% sobre compras)" },
+  { value: "adm", label: "ADM Geral", color: "bg-purple-100 text-purple-800", desc: "% sobre tudo que foi gasto na obra" },
+];
 
 const emptyForm: ObraForm = {
   nome: "", numOrcamento: "",
@@ -58,6 +67,9 @@ const emptyForm: ObraForm = {
   gerenciadoraNome: "",
   gerenciadoraLogoUrl: "",
   clienteLogoUrl: "",
+  tipoContrato: "global",
+  percentualGerenciamentoMaterial: "0",
+  percentualAdm: "0",
 };
 
 export default function Obras() {
@@ -215,6 +227,9 @@ export default function Obras() {
       gerenciadoraNome: obra.gerenciadoraNome || "",
       gerenciadoraLogoUrl: obra.gerenciadoraLogoUrl || "",
       clienteLogoUrl: obra.clienteLogoUrl || "",
+      tipoContrato: obra.tipoContrato || "global",
+      percentualGerenciamentoMaterial: obra.percentualGerenciamentoMaterial || "0",
+      percentualAdm: obra.percentualAdm || "0",
     });
     setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setNomeError(false);
     setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca("");
@@ -340,6 +355,12 @@ export default function Obras() {
     return opt ? <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${opt.color}`}>{opt.label}</span> : status;
   };
 
+  const getTipoContratoBadge = (tipo: string) => {
+    const opt = TIPO_CONTRATO_OPTIONS.find(t => t.value === tipo);
+    if (!opt || tipo === "global") return null;
+    return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${opt.color}`}>{opt.label}</span>;
+  };
+
   const isObraInativa = form.status === "Concluida" || form.status === "Cancelada" || form.status === "Paralisada";
 
   return (
@@ -403,7 +424,10 @@ export default function Obras() {
                           </div>
                         )}
                       </div>
-                      {getStatusBadge(obra.status)}
+                      <div className="flex items-center gap-1.5">
+                        {getTipoContratoBadge(obra.tipoContrato)}
+                        {getStatusBadge(obra.status)}
+                      </div>
                     </div>
                     {/* Condições de trabalho */}
                     {(obra.insalubridadeGrau && obra.insalubridadeGrau !== "none") || obra.periculosidade === 1 || obra.adicionalNoturnoAtivo === 1 ? (
@@ -496,6 +520,73 @@ export default function Obras() {
               />
               {nomeError && <p className="text-xs text-red-500 mt-1">Informe o nome da obra ou o Nº do Orçamento.</p>}
             </div>
+
+            {/* ── TIPO DE CONTRATO ─────────────────── */}
+            <div className="sm:col-span-2">
+              <Label className="flex items-center gap-1.5 mb-1">
+                <FileText className="h-3.5 w-3.5 text-indigo-500" />
+                Tipo de Contrato
+              </Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {TIPO_CONTRATO_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, tipoContrato: opt.value }))}
+                    className={`flex flex-col items-start p-3 rounded-lg border-2 transition-all text-left ${
+                      form.tipoContrato === opt.value
+                        ? "border-indigo-500 bg-indigo-50 shadow-sm"
+                        : "border-slate-200 hover:border-slate-300 bg-white"
+                    }`}
+                  >
+                    <span className="font-medium text-sm">{opt.label}</span>
+                    <span className="text-xs text-slate-500 mt-0.5">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {form.tipoContrato === "mdo" && (
+              <div className="sm:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <Label className="text-amber-800 font-medium text-sm mb-2 block">
+                  Percentual de Gerenciamento de Material (%)
+                </Label>
+                <p className="text-xs text-amber-600 mb-2">
+                  Taxa cobrada sobre o valor total de material comprado (ex: 8% a 12%). Esse percentual gera um recebível variável além do contrato de MDO.
+                </p>
+                <Input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="100"
+                  value={form.percentualGerenciamentoMaterial}
+                  onChange={e => setForm(f => ({ ...f, percentualGerenciamentoMaterial: e.target.value }))}
+                  placeholder="Ex: 10"
+                  className="max-w-[150px] bg-white"
+                />
+              </div>
+            )}
+
+            {form.tipoContrato === "adm" && (
+              <div className="sm:col-span-2 bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <Label className="text-purple-800 font-medium text-sm mb-2 block">
+                  Percentual ADM (%)
+                </Label>
+                <p className="text-xs text-purple-600 mb-2">
+                  Percentual cobrado sobre tudo que foi gasto na obra no mês.
+                </p>
+                <Input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="100"
+                  value={form.percentualAdm}
+                  onChange={e => setForm(f => ({ ...f, percentualAdm: e.target.value }))}
+                  placeholder="Ex: 15"
+                  className="max-w-[150px] bg-white"
+                />
+              </div>
+            )}
 
             {/* ── CLIENTE ────────────────────────────── */}
             <div className="sm:col-span-2" ref={clienteRef}>

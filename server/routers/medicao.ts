@@ -76,11 +76,21 @@ export const medicaoRouter = router({
           cliente: planejamentoProjetos.cliente,
           local: planejamentoProjetos.local,
           orcamentoId: planejamentoProjetos.orcamentoId,
+          obraId: planejamentoProjetos.obraId,
         })
         .from(medicaoContratos)
         .leftJoin(planejamentoProjetos, eq(medicaoContratos.projetoId, planejamentoProjetos.id))
         .where(eq(medicaoContratos.id, input.id));
-      return contrato ?? null;
+      if (!contrato) return null;
+      let tipoContrato = 'global';
+      let percentualGerenciamentoMaterial = '0';
+      if (contrato.obraId) {
+        const obraRows = await db.execute(sql`SELECT tipo_contrato, percentual_gerenciamento_material FROM obras WHERE id = ${contrato.obraId} LIMIT 1`);
+        const rows: any[] = (obraRows as any).rows ?? obraRows ?? [];
+        if (rows[0]?.tipo_contrato) tipoContrato = rows[0].tipo_contrato;
+        if (rows[0]?.percentual_gerenciamento_material) percentualGerenciamentoMaterial = String(rows[0].percentual_gerenciamento_material);
+      }
+      return { ...contrato, tipoContrato, percentualGerenciamentoMaterial };
     }),
 
   criarContrato: protectedProcedure

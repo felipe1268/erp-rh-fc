@@ -423,6 +423,9 @@ async function startServer() {
             ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_desde DATE;
             ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_gratificacao VARCHAR(20);
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS responsavel_id INTEGER;
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS tipo_contrato VARCHAR(30) NOT NULL DEFAULT 'global';
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS percentual_gerenciamento_material NUMERIC(5,2) DEFAULT 0;
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS percentual_adm NUMERIC(5,2) DEFAULT 0;
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$
         `);

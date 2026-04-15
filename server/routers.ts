@@ -1167,6 +1167,9 @@ export const appRouter = router({
       gerenciadoraNome: z.string().nullable().optional(),
       gerenciadoraLogoUrl: z.string().nullable().optional(),
       clienteLogoUrl: z.string().nullable().optional(),
+      tipoContrato: z.enum(["global", "mdo", "adm"]).optional(),
+      percentualGerenciamentoMaterial: z.string().nullable().optional(),
+      percentualAdm: z.string().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { sns, ...obraData } = input;
       const result = await createObra(obraData as any);
@@ -1228,6 +1231,9 @@ export const appRouter = router({
       gerenciadoraNome: z.string().nullable().optional(),
       gerenciadoraLogoUrl: z.string().nullable().optional(),
       clienteLogoUrl: z.string().nullable().optional(),
+      tipoContrato: z.enum(["global", "mdo", "adm"]).optional(),
+      percentualGerenciamentoMaterial: z.string().nullable().optional(),
+      percentualAdm: z.string().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, responsavelId, ...data } = input;
       if (data.status && data.status !== "Em_Andamento") {

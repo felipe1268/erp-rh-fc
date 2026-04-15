@@ -2152,6 +2152,9 @@ export const obras = pgTable("obras", {
         gerenciadoraNome: varchar("gerenciadora_nome", { length: 255 }),
         gerenciadoraLogoUrl: text("gerenciadora_logo_url"),
         clienteLogoUrl: text("cliente_logo_url"),
+        tipoContrato: varchar("tipo_contrato", { length: 30 }).default('global').notNull(),
+        percentualGerenciamentoMaterial: numeric("percentual_gerenciamento_material", { precision: 5, scale: 2 }).default("0"),
+        percentualAdm: numeric("percentual_adm", { precision: 5, scale: 2 }).default("0"),
 },
 (table) => [
         index("idx_obra_company").on(table.companyId),
