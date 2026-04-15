@@ -329,9 +329,9 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
             <textarea
               value={form.justificativa}
               onChange={f("justificativa")}
-              rows={2}
+              rows={5}
               placeholder="Justificativa adicional..."
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 resize-none"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 resize-y"
             />
           </div>
         </div>
