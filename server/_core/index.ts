@@ -121,7 +121,16 @@ async function startServer() {
       router: appRouter,
       createContext,
       onError({ error, path }) {
-        console.error(`[tRPC Error] ${path}:`, error.message);
+        const isFailedQuery = error.message.startsWith('Failed query:');
+        if (isFailedQuery) {
+          const drizzleErr = error.cause as any;
+          const pgErr = drizzleErr?.cause || drizzleErr;
+          const realError = pgErr?.message || pgErr?.code || error.message.substring(0, 150);
+          console.error(`[tRPC Error] ${path}: DB error: ${realError}`);
+        } else {
+          const msg = error.message.length > 200 ? error.message.substring(0, 200) + '...' : error.message;
+          console.error(`[tRPC Error] ${path}:`, msg);
+        }
       },
     })
   );

@@ -18,6 +18,26 @@ function companyFilter(col: any, input: { companyId: number; companyIds?: number
   return eq(col, input.companyId);
 }
 
+function isTransientDbError(err: any): boolean {
+  const texts = [err?.message, err?.cause?.message, err?.code, err?.cause?.code].filter(Boolean).join(' ');
+  return /connection|timeout|socket|ECONNRE|ETIMEDOUT|EPIPE|terminating|SSL|57P01|08006|53300|57P03/i.test(texts);
+}
+
+async function withRetry<T>(label: string, fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const transient = isTransientDbError(err);
+      const msg = err?.cause?.message || err?.message || '';
+      console.warn(`[SMO] ${label} attempt ${attempt}/${maxAttempts} failed (transient=${transient}):`, msg.slice(0, 120));
+      if (!transient || attempt === maxAttempts) throw err;
+      await new Promise(r => setTimeout(r, 800 * attempt));
+    }
+  }
+  throw new Error(`${label}: all retries exhausted`);
+}
+
 const FUNCOES_PREDEFINIDAS = [
   "Ajudante Geral",
   "Ajudante de Armador",
@@ -141,30 +161,32 @@ export const smoRouter = router({
       if (input.status) conds.push(eq(smoSolicitacoes.status, input.status));
       if (input.obraId) conds.push(eq(smoSolicitacoes.obraId, input.obraId));
 
-      const rows = await db.select({
-        solicitacao: smoSolicitacoes,
-        obraNome: obras.nome,
-      })
-        .from(smoSolicitacoes)
-        .leftJoin(obras, eq(smoSolicitacoes.obraId, obras.id))
-        .where(and(...conds))
-        .orderBy(desc(smoSolicitacoes.criadoEm));
+      return await withRetry('list', async () => {
+        const rows = await db.select({
+          solicitacao: smoSolicitacoes,
+          obraNome: obras.nome,
+        })
+          .from(smoSolicitacoes)
+          .leftJoin(obras, eq(smoSolicitacoes.obraId, obras.id))
+          .where(and(...conds))
+          .orderBy(desc(smoSolicitacoes.criadoEm));
 
-      const solIds = rows.map(r => r.solicitacao.id);
-      let eapMap: Record<number, any[]> = {};
-      if (solIds.length > 0) {
-        const eaps = await db.select().from(smoAtividadesEap).where(inArray(smoAtividadesEap.solicitacaoId, solIds));
-        for (const e of eaps) {
-          if (!eapMap[e.solicitacaoId]) eapMap[e.solicitacaoId] = [];
-          eapMap[e.solicitacaoId].push(e);
+        const solIds = rows.map(r => r.solicitacao.id);
+        let eapMap: Record<number, any[]> = {};
+        if (solIds.length > 0) {
+          const eaps = await db.select().from(smoAtividadesEap).where(inArray(smoAtividadesEap.solicitacaoId, solIds));
+          for (const e of eaps) {
+            if (!eapMap[e.solicitacaoId]) eapMap[e.solicitacaoId] = [];
+            eapMap[e.solicitacaoId].push(e);
+          }
         }
-      }
 
-      return rows.map(r => ({
-        ...r.solicitacao,
-        obraNome: r.obraNome,
-        atividades: eapMap[r.solicitacao.id] || [],
-      }));
+        return rows.map(r => ({
+          ...r.solicitacao,
+          obraNome: r.obraNome,
+          atividades: eapMap[r.solicitacao.id] || [],
+        }));
+      });
     }),
 
   getById: protectedProcedure
@@ -925,14 +947,16 @@ export const smoRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const all = await db.select({
-        status: smoSolicitacoes.status,
-        quantidade: smoSolicitacoes.quantidade,
-        custoTotalEstimado: smoSolicitacoes.custoTotalEstimado,
-        prioridade: smoSolicitacoes.prioridade,
-      })
-        .from(smoSolicitacoes)
-        .where(and(companyFilter(smoSolicitacoes.companyId, input), isNull(smoSolicitacoes.deletedAt)));
+      const all = await withRetry('dashboard', () =>
+        db.select({
+          status: smoSolicitacoes.status,
+          quantidade: smoSolicitacoes.quantidade,
+          custoTotalEstimado: smoSolicitacoes.custoTotalEstimado,
+          prioridade: smoSolicitacoes.prioridade,
+        })
+          .from(smoSolicitacoes)
+          .where(and(companyFilter(smoSolicitacoes.companyId, input), isNull(smoSolicitacoes.deletedAt)))
+      );
 
       const byStatus: Record<string, number> = {};
       const byPrioridade: Record<string, number> = {};

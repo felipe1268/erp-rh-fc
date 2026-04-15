@@ -43,9 +43,9 @@ export async function getDb() {
       _pool = new Pool({
         connectionString: dbUrl,
         max: 15,
-        min: 2,
+        min: 0,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 10000,
+        connectionTimeoutMillis: 30000,
         allowExitOnIdle: false,
       });
       _pool.on('error', (err) => {
