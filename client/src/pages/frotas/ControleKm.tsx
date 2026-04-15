@@ -185,9 +185,18 @@ export default function ControleKm() {
       const map = L.map(mapRef.current!, { zoomControl: true }).setView(center, 12);
       mapInstanceRef.current = map;
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      const streets = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
-      }).addTo(map);
+      });
+      const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        attribution: "&copy; Esri, Maxar, Earthstar Geographics",
+      });
+      const hybridLabels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+        attribution: "",
+      });
+      const satelliteHybrid = L.layerGroup([satellite, hybridLabels]);
+      streets.addTo(map);
+      L.control.layers({ "Mapa": streets, "Satélite": satelliteHybrid }, {}, { position: "topright" }).addTo(map);
 
       const latlngs = positions.map((p: any) => [p.latitude, p.longitude] as [number, number]);
       L.polyline(latlngs, { color: "#3b82f6", weight: 3, opacity: 0.8 }).addTo(map);

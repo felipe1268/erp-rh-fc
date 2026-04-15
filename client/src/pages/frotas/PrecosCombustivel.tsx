@@ -119,9 +119,18 @@ export default function PrecosCombustivel() {
   const initMap = useCallback(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
     const map = L.map(mapRef.current).setView([BASE_LAT, BASE_LNG], 13);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    const streets = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; OpenStreetMap',
-    }).addTo(map);
+    });
+    const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "&copy; Esri, Maxar, Earthstar Geographics",
+    });
+    const hybridLabels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "",
+    });
+    const satelliteHybrid = L.layerGroup([satellite, hybridLabels]);
+    streets.addTo(map);
+    L.control.layers({ "Mapa": streets, "Satélite": satelliteHybrid }, {}, { position: "topright" }).addTo(map);
 
     const baseIcon = L.divIcon({
       html: '<div style="background:#1e40af;color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">FC</div>',

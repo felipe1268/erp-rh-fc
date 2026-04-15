@@ -123,9 +123,18 @@ export default function Rastreamento() {
         const map = L.map(mapRef.current!, { zoomControl: true }).setView(center, withPos.length > 0 ? 10 : 6);
         mapInstanceRef.current = map;
 
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        const streets = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: "&copy; OpenStreetMap contributors",
-        }).addTo(map);
+        });
+        const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+          attribution: "&copy; Esri, Maxar, Earthstar Geographics",
+        });
+        const hybridLabels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+          attribution: "",
+        });
+        const satelliteHybrid = L.layerGroup([satellite, hybridLabels]);
+        streets.addTo(map);
+        L.control.layers({ "Mapa": streets, "Satélite": satelliteHybrid }, {}, { position: "topright" }).addTo(map);
 
         withPos.forEach((v: any) => {
           const isOn = v.status === 'ON';
@@ -188,9 +197,18 @@ export default function Rastreamento() {
         const map = L.map(mapRef.current!, { zoomControl: true }).setView(center, points.length > 0 ? 13 : 6);
         mapInstanceRef.current = map;
 
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        const hStreets = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: "&copy; OpenStreetMap contributors",
-        }).addTo(map);
+        });
+        const hSatellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+          attribution: "&copy; Esri, Maxar, Earthstar Geographics",
+        });
+        const hLabels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+          attribution: "",
+        });
+        const hSatHybrid = L.layerGroup([hSatellite, hLabels]);
+        hStreets.addTo(map);
+        L.control.layers({ "Mapa": hStreets, "Satélite": hSatHybrid }, {}, { position: "topright" }).addTo(map);
 
         if (points.length === 0) return;
 
