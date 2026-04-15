@@ -8,7 +8,7 @@ import {
   smoSolicitacoes, smoAtividadesEap, smoOnboardingChecklist,
   obras, employees, obraFuncionarios, convencaoColetiva,
   encargosSociais, planejamentoProjetos, planejamentoAtividades,
-  planejamentoRevisoes,
+  planejamentoRevisoes, mealBenefitConfigs,
 } from "../../drizzle/schema";
 
 function companyFilter(col: any, input: { companyId: number; companyIds?: number[] }) {
@@ -361,10 +361,41 @@ export const smoRouter = router({
       const convVrDiario = parseFloat(conv?.valeRefeicao || "0");
       const convVaMensal = parseFloat(conv?.valeAlimentacao || "0");
 
-      const cafeMensal = 120;
-      const lancheMensal = 100;
-      const vrMensal = convVrDiario > 0 ? convVrDiario * 22 : (cafeMensal + lancheMensal);
-      const vaMensal = convVaMensal > 0 ? convVaMensal : 460.75;
+      const [mealCfg] = await db.select().from(mealBenefitConfigs)
+        .where(and(companyFilter(mealBenefitConfigs.companyId, input), eq(mealBenefitConfigs.ativo, 1)))
+        .orderBy(desc(mealBenefitConfigs.createdAt)).limit(1);
+
+      const parseBRL = (v: any) => parseFloat(String(v || "0").replace(/\./g, "").replace(",", ".")) || 0;
+      const diasUteisRef = mealCfg?.diasUteisRef || 22;
+      const cafeAtivo = mealCfg ? (mealCfg.cafeAtivo === 1) : true;
+      const lancheAtivo = mealCfg ? (mealCfg.lancheAtivo === 1) : true;
+      const cafeDia = cafeAtivo ? parseBRL(mealCfg?.cafeManhaDia) : 0;
+      const lancheDia = lancheAtivo ? parseBRL(mealCfg?.lancheTardeDia) : 0;
+      const cafeMensal = Math.round(cafeDia * diasUteisRef * 100) / 100;
+      const lancheMensal = Math.round(lancheDia * diasUteisRef * 100) / 100;
+
+      const cfgVaMensal = parseBRL(mealCfg?.valeAlimentacaoMes);
+      const cfgTotalIFood = parseBRL(mealCfg?.totalVA_iFood);
+
+      let vrMensal: number;
+      let vaMensal: number;
+
+      if (mealCfg) {
+        vrMensal = cafeMensal + lancheMensal;
+        if (cfgVaMensal > 0) {
+          vaMensal = cfgVaMensal;
+        } else if (cfgTotalIFood > 0) {
+          vaMensal = Math.round((cfgTotalIFood - vrMensal) * 100) / 100;
+        } else {
+          vaMensal = 0;
+        }
+      } else if (convVrDiario > 0 || convVaMensal > 0) {
+        vrMensal = convVrDiario * 22;
+        vaMensal = convVaMensal;
+        } else {
+        vrMensal = 220;
+        vaMensal = 460.75;
+      }
       const exameAdmissional = 200;
       const examePeriodico = 150;
       const exameDemissional = 150;
@@ -531,6 +562,12 @@ export const smoRouter = router({
           lucroTercPerc: input.lucroTerceirizacaoPerc,
           custoAdmissaoPorProfissional: custoAdmissao,
           mobilizacaoPorProfissional: 500,
+          beneficiosOrigem: mealCfg ? "Configuração VR/VA" : (convVrDiario > 0 ? "Convenção Coletiva" : "Valores padrão"),
+          cafeMensal,
+          lancheMensal,
+          vaMensal,
+          vrMensal,
+          diasUteisRef,
         },
       };
     }),

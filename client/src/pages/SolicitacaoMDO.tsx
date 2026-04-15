@@ -607,7 +607,7 @@ export default function SolicitacaoMDO() {
                   </div>
                   <div>
                     <h3 className="font-bold text-[#1B2A4A]">Análise Financeira Detalhada — CLT vs Terceirização</h3>
-                    <p className="text-xs text-muted-foreground">Encargos: {analiseQ.data.parametros.encargosPerc.toFixed(1)}% | Lucro Terc.: {analiseQ.data.parametros.lucroTercPerc}%</p>
+                    <p className="text-xs text-muted-foreground">Encargos: {analiseQ.data.parametros.encargosPerc.toFixed(1)}% | Lucro Terc.: {analiseQ.data.parametros.lucroTercPerc}% | Benefícios: {analiseQ.data.parametros.beneficiosOrigem || "—"}</p>
                   </div>
                 </div>
 
