@@ -192,39 +192,65 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
     setForm(prev => ({ ...prev, [field]: e.target.value }));
 
   const TimeInput = ({ label, field }: { label: string; field: keyof EditForm }) => {
-    const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const raw = e.target.value.replace(/[^0-9]/g, '');
-      let formatted = '';
-      if (raw.length === 0) {
-        formatted = '';
-      } else if (raw.length <= 2) {
-        formatted = raw;
-      } else {
-        formatted = raw.slice(0, 2) + ':' + raw.slice(2, 4);
-      }
-      setForm(prev => ({ ...prev, [field]: formatted }));
+    const inputRef = React.useRef<HTMLInputElement>(null);
+    const handleTimeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      const el = e.currentTarget;
+      const val = (form[field] as string) || '';
+      if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Tab' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') return;
+      if (!/^[0-9]$/.test(e.key)) { e.preventDefault(); return; }
+      e.preventDefault();
+      const pos = el.selectionStart ?? 0;
+      const digits = val.replace(/[^0-9]/g, '');
+      let chars = val.split('');
+      if (val === '' || val === '--:--') chars = ['-','-',':','-','-'];
+      if (chars.length < 5) chars = ['-','-',':','-','-'];
+      const slotMap = [0,1,3,4];
+      const curSlot = slotMap.findIndex((s, i) => s >= pos && chars[s] !== undefined);
+      const slot = curSlot >= 0 ? curSlot : slotMap.length - 1;
+      const charPos = slotMap[slot];
+      chars[charPos] = e.key;
+      const newVal = chars.join('');
+      setForm(prev => ({ ...prev, [field]: newVal }));
+      setTimeout(() => {
+        const nextSlot = slot + 1;
+        const nextPos = nextSlot < slotMap.length ? slotMap[nextSlot] : 5;
+        el.setSelectionRange(nextPos, nextPos);
+      }, 0);
     };
     const handleTimeBlur = () => {
       const val = (form[field] as string) || '';
-      if (!val) return;
-      const parts = val.split(':');
+      if (!val || val === '--:--') { setForm(prev => ({ ...prev, [field]: '' })); return; }
+      const clean = val.replace(/[-]/g, '0');
+      const parts = clean.split(':');
       const h = Math.min(23, parseInt(parts[0] || '0', 10));
       const m = Math.min(59, parseInt(parts[1] || '0', 10));
       const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       setForm(prev => ({ ...prev, [field]: formatted }));
+    };
+    const handleTimeFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+      const val = (form[field] as string) || '';
+      if (!val) setForm(prev => ({ ...prev, [field]: '--:--' }));
+      setTimeout(() => { e.target.setSelectionRange(0, 0); }, 0);
+    };
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const raw = e.target.value.replace(/[^0-9:-]/g, '');
+      if (raw.length <= 5) setForm(prev => ({ ...prev, [field]: raw }));
     };
     return (
       <div className="flex flex-col gap-1">
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</label>
         <div className="relative">
           <input
+            ref={inputRef}
             type="text"
             inputMode="numeric"
             maxLength={5}
             placeholder="--:--"
             value={form[field] as string}
-            onChange={handleTimeChange}
+            onChange={handleChange}
+            onKeyDown={handleTimeKeyDown}
             onBlur={handleTimeBlur}
+            onFocus={handleTimeFocus}
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full pr-8"
           />
           <Clock className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />

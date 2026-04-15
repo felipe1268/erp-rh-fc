@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,47 @@ import {
 } from "@/components/ui/dropdown-menu";
 import DashboardLayout from "@/components/DashboardLayout";
 import { fmtNum } from "@/lib/formatters";
+
+function MaskedTimeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = React.useRef<HTMLInputElement>(null);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (['Backspace','Delete','Tab','ArrowLeft','ArrowRight','Home','End'].includes(e.key)) return;
+    if (!/^[0-9]$/.test(e.key)) { e.preventDefault(); return; }
+    e.preventDefault();
+    const el = e.currentTarget;
+    const pos = el.selectionStart ?? 0;
+    let chars = (value || '--:--').split('');
+    if (chars.length < 5) chars = ['-','-',':','-','-'];
+    const slotMap = [0,1,3,4];
+    const idx = slotMap.findIndex(s => s >= pos);
+    const slot = idx >= 0 ? idx : slotMap.length - 1;
+    chars[slotMap[slot]] = e.key;
+    const newVal = chars.join('');
+    onChange(newVal);
+    setTimeout(() => {
+      const next = slot + 1;
+      el.setSelectionRange(next < slotMap.length ? slotMap[next] : 5, next < slotMap.length ? slotMap[next] : 5);
+    }, 0);
+  };
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (!value) onChange('--:--');
+    setTimeout(() => e.target.setSelectionRange(0, 0), 0);
+  };
+  const handleBlur = () => {
+    if (!value || value === '--:--') { onChange(''); return; }
+    const clean = value.replace(/-/g, '0');
+    const parts = clean.split(':');
+    const h = Math.min(23, parseInt(parts[0] || '0', 10));
+    const m = Math.min(59, parseInt(parts[1] || '0', 10));
+    onChange(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+  };
+  return (
+    <input ref={ref} type="text" inputMode="numeric" maxLength={5} placeholder="--:--"
+      value={value} onChange={(e) => { const v = e.target.value.replace(/[^0-9:-]/g,''); if (v.length <= 5) onChange(v); }}
+      onKeyDown={handleKeyDown} onFocus={handleFocus} onBlur={handleBlur}
+      className="w-full border rounded px-2 py-1.5 text-sm font-mono mt-0.5 focus:outline-none focus:ring-2 focus:ring-blue-200" />
+  );
+}
 
 const TIPO_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   falta: { label: "Falta", color: "bg-red-100 text-red-700", icon: AlertCircle },
@@ -584,26 +625,17 @@ export default function ApontamentosCampo() {
                     Preencha apenas os horários que você sabe. Se o DIXI já importou parte das batidas, o sistema faz o merge automaticamente — só completa o que falta. Esses dados ficam <strong>fixados</strong> e o DIXI nunca sobrescreve.
                   </p>
                   <div className="grid grid-cols-4 gap-2">
-                    <div>
-                      <label className="text-xs font-medium text-gray-600">Entrada</label>
-                      <input type="time" value={novoEntrada1} onChange={(e) => setNovoEntrada1(e.target.value)}
-                        className="w-full border rounded px-2 py-1.5 text-sm mt-0.5" placeholder="--:--" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-600">Saída Int.</label>
-                      <input type="time" value={novoSaida1} onChange={(e) => setNovoSaida1(e.target.value)}
-                        className="w-full border rounded px-2 py-1.5 text-sm mt-0.5" placeholder="--:--" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-600">Retorno</label>
-                      <input type="time" value={novoEntrada2} onChange={(e) => setNovoEntrada2(e.target.value)}
-                        className="w-full border rounded px-2 py-1.5 text-sm mt-0.5" placeholder="--:--" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-600">Saída</label>
-                      <input type="time" value={novoSaida2} onChange={(e) => setNovoSaida2(e.target.value)}
-                        className="w-full border rounded px-2 py-1.5 text-sm mt-0.5" placeholder="--:--" />
-                    </div>
+                    {[
+                      { label: "Entrada", val: novoEntrada1, set: setNovoEntrada1 },
+                      { label: "Saída Int.", val: novoSaida1, set: setNovoSaida1 },
+                      { label: "Retorno", val: novoEntrada2, set: setNovoEntrada2 },
+                      { label: "Saída", val: novoSaida2, set: setNovoSaida2 },
+                    ].map(({ label, val, set }) => (
+                      <div key={label}>
+                        <label className="text-xs font-medium text-gray-600">{label}</label>
+                        <MaskedTimeInput value={val} onChange={set} />
+                      </div>
+                    ))}
                   </div>
                   {novoTipo === 'falta' && !novoEntrada1 && !novoSaida1 && !novoEntrada2 && !novoSaida2 && (
                     <p className="text-xs text-amber-600">Sem horários = falta integral (0:00 trabalhadas).</p>
@@ -693,26 +725,17 @@ export default function ApontamentosCampo() {
                     </div>
                     <p className="text-xs text-blue-600">Preencha para corrigir/completar o ponto do dia. Horários existentes do DIXI serão mantidos se deixar em branco.</p>
                     <div className="grid grid-cols-4 gap-2">
-                      <div>
-                        <label className="text-xs text-muted-foreground">Entrada</label>
-                        <input type="time" value={resolverEntrada1} onChange={(e) => setResolverEntrada1(e.target.value)}
-                          className="w-full border rounded px-2 py-1.5 text-sm" />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">Saída Int.</label>
-                        <input type="time" value={resolverSaida1} onChange={(e) => setResolverSaida1(e.target.value)}
-                          className="w-full border rounded px-2 py-1.5 text-sm" />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">Retorno</label>
-                        <input type="time" value={resolverEntrada2} onChange={(e) => setResolverEntrada2(e.target.value)}
-                          className="w-full border rounded px-2 py-1.5 text-sm" />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">Saída</label>
-                        <input type="time" value={resolverSaida2} onChange={(e) => setResolverSaida2(e.target.value)}
-                          className="w-full border rounded px-2 py-1.5 text-sm" />
-                      </div>
+                      {[
+                        { label: "Entrada", val: resolverEntrada1, set: setResolverEntrada1 },
+                        { label: "Saída Int.", val: resolverSaida1, set: setResolverSaida1 },
+                        { label: "Retorno", val: resolverEntrada2, set: setResolverEntrada2 },
+                        { label: "Saída", val: resolverSaida2, set: setResolverSaida2 },
+                      ].map(({ label, val, set }) => (
+                        <div key={label}>
+                          <label className="text-xs text-muted-foreground">{label}</label>
+                          <MaskedTimeInput value={val} onChange={set} />
+                        </div>
+                      ))}
                     </div>
                     {selectedNote.entrada1 && (
                       <p className="text-xs text-blue-600 mt-1">Horários do apontamento: {selectedNote.entrada1 || "—"} / {selectedNote.saida1 || "—"} / {selectedNote.entrada2 || "—"} / {selectedNote.saida2 || "—"}</p>
