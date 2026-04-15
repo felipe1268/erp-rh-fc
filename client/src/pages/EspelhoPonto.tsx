@@ -64,7 +64,7 @@ function getBatidas(r: any): string[] {
   return [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3].filter(Boolean);
 }
 
-type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado" | "escuro";
+type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado" | "escuro" | "apontamento";
 
 function nextDay(d: string): string {
   const dt = new Date(d + "T12:00:00Z");
@@ -80,7 +80,10 @@ function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string
   if (feriasDates?.has(dateStr)) return "ferias";
   const today = new Date().toISOString().slice(0, 10);
   if (dateStr > today) return "escuro";
-  if (!rec?.horasTrabalhadas || rec.horasTrabalhadas === "0:00" || rec.horasTrabalhadas === "") return "falta";
+  if (!rec?.horasTrabalhadas || rec.horasTrabalhadas === "0:00" || rec.horasTrabalhadas === "") {
+    if (rec?.fonte === "apontamento" && rec?.justificativa) return "apontamento";
+    return "falta";
+  }
   const bat = getBatidas(rec);
   if (bat.length > 0 && bat.length % 2 !== 0) return "incompleto";
   if (parseHHMM(rec.horasExtras) > 0) return "he";
@@ -97,6 +100,7 @@ const STATUS_STYLE: Record<DayStatus, { row: string; badge: string; label: strin
   atraso:     { row: "bg-amber-50/20",  badge: "bg-amber-100 text-amber-700",   label: "Atraso" },
   sabado:     { row: "bg-slate-50/60",  badge: "bg-slate-100 text-slate-500",   label: "Sábado" },
   domingo:    { row: "bg-slate-50/30",  badge: "",                              label: "Domingo" },
+  apontamento:{ row: "bg-amber-50/30",   badge: "bg-amber-100 text-amber-700",   label: "Apontamento" },
   desligado:  { row: "bg-gray-100/50",  badge: "bg-gray-200 text-gray-500",    label: "Desligado" },
   escuro:     { row: "bg-indigo-50/30", badge: "bg-indigo-100 text-indigo-600", label: "Pendente" },
 };
@@ -425,7 +429,10 @@ export default function EspelhoPonto() {
       if (isFerias) { diasFerias++; continue; }
       const today = new Date().toISOString().slice(0, 10);
       if (d > today) continue;
-      if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") diasFalta++;
+      if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") {
+        if (r?.fonte === "apontamento" && r?.justificativa) { trabalhados++; }
+        else diasFalta++;
+      }
       else { trabalhados++; totalTrabMins += parseHHMM(r.horasTrabalhadas); }
     }
     const saldoHEMins = totalHEMins - totalAtrasoMins;
@@ -682,6 +689,7 @@ export default function EspelhoPonto() {
                   ["bg-red-100 text-red-700","Falta"],
                   ["bg-orange-100 text-orange-700","Incompleto"],
                   ["bg-amber-100 text-amber-700","Atraso"],
+                  ["bg-amber-100 text-amber-700","Apontamento"],
                   ["bg-slate-100 text-slate-500","Fim de semana"],
                   ["bg-indigo-100 text-indigo-600","Pendente"],
                 ].map(([cls, lbl]) => (
