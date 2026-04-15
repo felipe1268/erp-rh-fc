@@ -2040,14 +2040,6 @@ export const orcamentoRouter = router({
       const existingItems = await db.select({ id: orcamentoItens.id })
         .from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
       const existingIds = existingItems.map(i => i.id);
-      if (existingIds.length > 0) {
-        const [scCheck] = await db.select({ c: sql<number>`count(*)::int` })
-          .from(comprasSolicitacoesItens)
-          .where(inArray((comprasSolicitacoesItens as any).orcamentoItemId, existingIds));
-        if (Number(scCheck.c) > 0) {
-          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Este orçamento possui solicitações de compra vinculadas e não pode ser re-importado.' });
-        }
-      }
 
       const XLSX = await import('xlsx');
       const buffer = Buffer.from(input.fileBase64, 'base64');

@@ -613,12 +613,10 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
               onClick={() => window.open(`/orcamento/${id}/print?v=${versao}&mp=${localMetaPerc.toFixed(4)}`, "_blank")}>
               <Printer className="h-4 w-4" /> Imprimir / PDF
             </Button>
-            {!data?.temSolicitacoes && (
-              <Button size="sm" variant="outline" className="gap-2"
-                onClick={() => { setReuploadOpen(true); setReuploadFile(null); setReuploadAnalise(null); }}>
-                <RefreshCw className="h-4 w-4" /> Atualizar Planilha
-              </Button>
-            )}
+            <Button size="sm" variant="outline" className="gap-2"
+              onClick={() => { setReuploadOpen(true); setReuploadFile(null); setReuploadAnalise(null); }}>
+              <RefreshCw className="h-4 w-4" /> Atualizar Planilha
+            </Button>
             <Button size="sm" variant="outline" className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
               onClick={() => { setCompOpen(true); setCompFile(null); }}
               title="Atualiza apenas os codigos de composicao (servicoCodigo) e carrega CPUs/insumos, sem alterar valores">
@@ -640,11 +638,11 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
         </div>
 
         {data?.temSolicitacoes && (
-          <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 mb-2">
-            <Lock className="h-5 w-5 text-blue-600 flex-shrink-0" />
+          <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 mb-2">
+            <Lock className="h-5 w-5 text-amber-600 flex-shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-blue-800">Orçamento travado — {data.qtdSolicitacoes} solicitação(ões) de compra vinculada(s)</p>
-              <p className="text-xs text-blue-600">Não é possível re-importar a planilha ou excluir o orçamento enquanto houver solicitações de compra vinculadas aos seus itens.</p>
+              <p className="text-sm font-semibold text-amber-800">{data.qtdSolicitacoes} solicitação(ões) de compra vinculada(s)</p>
+              <p className="text-xs text-amber-600">A exclusão do orçamento está bloqueada enquanto houver SCs vinculadas. A atualização da planilha continua disponível.</p>
             </div>
           </div>
         )}
