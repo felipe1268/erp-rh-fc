@@ -478,9 +478,10 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
     : 1 - localMetaPerc / 100;
   const _bdiGlobalFactor = totalCusto > 0 && totalVenda > 0 ? totalVenda / totalCusto : 1;
 
-  // MDO: Material é informativo — na visão Venda, material fica como custo (sem BDI)
-  const _bdiMdoFactorRaw = totalMdo > 0 ? (totalVenda - totalMat) / totalMdo : _bdiGlobalFactor;
-  const _bdiMdoFactor = _bdiMdoFactorRaw > 0 ? _bdiMdoFactorRaw : _bdiGlobalFactor;
+  // MDO: totalVenda e totalCusto do banco já são somente MO.
+  // _bdiMdoFactor = totalVenda / totalMdo (BDI aplicado só sobre MO).
+  // Material é informativo — exibido a custo em qualquer visão.
+  const _bdiMdoFactor = totalMdo > 0 && totalVenda > 0 ? totalVenda / totalMdo : _bdiGlobalFactor;
   const totalMatDisp = versao === "meta"  ? r2(totalMat * _metaFactor)
                      : versao === "venda" ? (isMdo ? totalMat : r2(totalMat * _bdiGlobalFactor))
                      :                     totalMat;
@@ -817,7 +818,7 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
             <p className={`text-base font-bold ${versao === "custo" ? "text-amber-700" : "text-foreground"}`}>
               {formatBRL(totalCusto)}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">{isMdo ? "Custo total (MO + Material informativo)" : "Custo direto"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{isMdo ? "Custo somente MO" : "Custo direto"}</p>
           </button>
 
           {/* CARD VENDA (direita) */}
