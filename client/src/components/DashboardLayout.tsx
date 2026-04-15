@@ -64,6 +64,8 @@ type MenuItem = {
   soon?: boolean;
   adminMasterOnly?: boolean;
   children?: MenuItem[];
+  badge?: number;
+  badgePulse?: boolean;
 };
 
 type MenuSection = {
@@ -798,12 +800,17 @@ function DashboardLayoutContent({
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
-  const { selectedCompany, selectedCompanyId } = useCompany();
+  const { selectedCompany, selectedCompanyId, getCompanyIds } = useCompany();
   const [avisoBannerOpen, setAvisoBannerOpen] = useState(true);
   const cId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
+  const badgeCompanyIds = getCompanyIds();
   const avisoAtivosQuery = trpc.avisoPrevio.avisoPrevio.list.useQuery(
     { companyId: cId, status: 'em_andamento' },
     { enabled: cId > 0, staleTime: 60_000 }
+  );
+  const comprasBadgeQ = trpc.compras.getComprasBadgeCounts.useQuery(
+    { companyIds: badgeCompanyIds },
+    { enabled: badgeCompanyIds.length > 0, refetchInterval: 30_000, staleTime: 15_000 }
   );
   const { activeModule, setActiveModule } = useModule();
   const { isModuleEnabled, isPageEnabled } = useModuleConfig();
@@ -1225,10 +1232,25 @@ function DashboardLayoutContent({
       }
     }
 
-    return sections.filter(s => s.items.length > 0);
-  }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, canViewPage, savedMenuConfig]);
+    if (activeModule === "compras" && comprasBadgeQ.data) {
+      const bd = comprasBadgeQ.data;
+      sections = sections.map(s => ({
+        ...s,
+        items: s.items.map(item => {
+          if (item.path === "/compras/aprovacoes" && bd.aprovacoesPendentes > 0) {
+            return { ...item, badge: bd.aprovacoesPendentes, badgePulse: bd.emergenciais > 0 };
+          }
+          if (item.path === "/compras/emergencial" && bd.emergenciais > 0) {
+            return { ...item, badge: bd.emergenciais, badgePulse: true };
+          }
+          return item;
+        }),
+      }));
+    }
 
-  // Aplicar ordem de seções salva, mantendo Ajuda sempre por último
+    return sections.filter(s => s.items.length > 0);
+  }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, canViewPage, savedMenuConfig, comprasBadgeQ.data]);
+
   const orderedSections = useMemo(() => {
     const pinned   = effectiveSections.filter(s => s.title === PINNED_LAST);
     const movable  = effectiveSections.filter(s => s.title !== PINNED_LAST);
@@ -1610,9 +1632,17 @@ function DashboardLayoutContent({
                             className={`h-9 transition-all font-normal ${item.soon ? "opacity-50" : ""}`}
                           >
                             <item.icon
-                              className={`h-4 w-4 ${isActive ? "text-[#D4A843]" : ""}`}
+                              className={`h-4 w-4 ${isActive ? "text-[#D4A843]" : ""} ${item.badge && item.badge > 0 && item.badgePulse ? "text-red-500 animate-pulse" : ""}`}
                             />
                             <span>{item.label}</span>
+                            {item.badge && item.badge > 0 && !isCollapsed ? (
+                              <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[20px] text-center ${item.badgePulse ? "bg-red-500 text-white animate-pulse" : "bg-orange-100 text-orange-700"}`}>
+                                {item.badge}
+                              </span>
+                            ) : null}
+                            {item.badge && item.badge > 0 && isCollapsed ? (
+                              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                            ) : null}
                             {item.soon && !isCollapsed ? (
                               <span className="ml-auto text-[10px] bg-sidebar-accent px-1.5 py-0.5 rounded text-sidebar-foreground/50">Em breve</span>
                             ) : null}

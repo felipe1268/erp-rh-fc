@@ -5257,6 +5257,32 @@ Retorne APENAS um JSON válido neste formato:
       return { kpis, alertasOC, scsPendentesAprov, cotsPendentes, ocsRecentes, scsRecentes, gastosMensais, fornecedores: forn, obraMap, ocsAtrasadasPorObra };
     }),
 
+  getComprasBadgeCounts: protectedProcedure
+    .input(z.object({ companyIds: z.array(z.number()).min(1) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const ids = input.companyIds;
+      const hoje = new Date().toISOString().slice(0, 10);
+
+      const [scs, ocs] = await Promise.all([
+        db.select({
+          aprovacaoStatus: comprasSolicitacoes.aprovacaoStatus,
+          status: comprasSolicitacoes.status,
+          tipo: comprasSolicitacoes.tipo,
+        }).from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.companyId, ids)),
+        db.select({
+          status: comprasOrdens.status,
+          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
+        }).from(comprasOrdens).where(inArray(comprasOrdens.companyId, ids)),
+      ]);
+
+      const aprovacoesPendentes = scs.filter(r => r.aprovacaoStatus === "aguardando" && r.status !== "cancelado").length;
+      const emergenciais = scs.filter(r => r.aprovacaoStatus === "aguardando" && r.status !== "cancelado" && r.tipo === "emergencial").length;
+      const ocsAtrasadas = ocs.filter(r => r.dataEntregaPrevista && r.dataEntregaPrevista < hoje && !["entregue", "cancelada", "recebido"].includes(r.status)).length;
+
+      return { aprovacoesPendentes, emergenciais, ocsAtrasadas };
+    }),
+
   getAlertasCompras: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number()).min(1) }))
     .query(async ({ input }) => {

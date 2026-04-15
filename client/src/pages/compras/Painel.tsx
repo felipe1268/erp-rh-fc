@@ -160,9 +160,73 @@ export default function PainelCompras() {
     ocsAtrasadasPorObra = [],
   } = data ?? {};
 
+  const urgentes = scsPendentesAprov.filter((sc: any) => sc.tipo === "emergencial" || sc.prioridade === "urgente");
+  const totalPendAprov = scsPendentesAprov.length;
+
   return (
     <DashboardLayout>
       <div className="p-5 space-y-5 min-h-screen bg-gray-50">
+
+        {totalPendAprov > 0 && (
+          <div
+            className={`rounded-xl border-2 p-4 flex items-center gap-4 cursor-pointer transition-all ${
+              urgentes.length > 0
+                ? "bg-red-50 border-red-300 animate-pulse"
+                : "bg-amber-50 border-amber-300"
+            }`}
+            onClick={() => navigate("/compras/aprovacoes")}
+          >
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
+              urgentes.length > 0 ? "bg-red-500" : "bg-amber-500"
+            }`}>
+              <ShieldAlert className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className={`font-bold text-sm ${urgentes.length > 0 ? "text-red-800" : "text-amber-800"}`}>
+                  {urgentes.length > 0
+                    ? `⚠ ${urgentes.length} Aprovação Urgente${urgentes.length > 1 ? "s" : ""} Pendente${urgentes.length > 1 ? "s" : ""}!`
+                    : `${totalPendAprov} Aprovação${totalPendAprov > 1 ? "ões" : ""} Pendente${totalPendAprov > 1 ? "s" : ""}`
+                  }
+                </h3>
+                {urgentes.length > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold animate-bounce">
+                    URGENTE
+                  </span>
+                )}
+              </div>
+              <p className={`text-xs mt-0.5 ${urgentes.length > 0 ? "text-red-600" : "text-amber-600"}`}>
+                {totalPendAprov} solicitação{totalPendAprov > 1 ? "ões" : ""} aguardando aprovação
+                {urgentes.length > 0 && ` (${urgentes.length} emergencial${urgentes.length > 1 ? "is" : ""})`}
+                {alertasOC.length > 0 && ` · ${alertasOC.length} OC${alertasOC.length > 1 ? "s" : ""} com entrega atrasada`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${
+                urgentes.length > 0 ? "bg-red-500 text-white" : "bg-amber-500 text-white"
+              }`}>
+                Aprovar Agora →
+              </span>
+            </div>
+          </div>
+        )}
+
+        {alertasOC.length > 0 && (
+          <div
+            className="rounded-xl border-2 bg-orange-50 border-orange-300 p-4 flex items-center gap-4 cursor-pointer transition-all hover:bg-orange-100"
+            onClick={() => setAbaAtiva("alertas")}
+          >
+            <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
+              <Truck className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-bold text-sm text-orange-800">
+                {alertasOC.length} Entrega{alertasOC.length > 1 ? "s" : ""} Atrasada{alertasOC.length > 1 ? "s" : ""}
+              </h3>
+              <p className="text-xs text-orange-600">Clique para ver detalhes na aba Alertas</p>
+            </div>
+          </div>
+        )}
 
         {/* Header + Tabs */}
         <div className="flex items-center justify-between">
