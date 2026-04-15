@@ -10,7 +10,7 @@ import {
   Clock, AlertTriangle, CheckCircle, XCircle, Send, Eye,
   HardHat, Building2, Calendar, TrendingUp, DollarSign,
   ArrowRight, RefreshCw, ClipboardList, Award, Briefcase,
-  Shield, Package, UserCheck, Trash2, X, Upload, FileText, Phone, User,
+  Shield, Package, UserCheck, Trash2, X, Upload, FileText, Phone, User, Pencil, MoreVertical,
   Scale, ThumbsUp, ThumbsDown, BarChart3, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -432,7 +432,18 @@ export default function SolicitacaoMDO() {
                     </div>
                     <div className="flex items-center justify-between mt-2 pt-2 border-t text-xs text-muted-foreground">
                       <span>Por {s.solicitanteNome} em {s.criadoEm ? new Date(s.criadoEm).toLocaleDateString("pt-BR") : "-"}</span>
-                      <span className="text-[#D4A843] font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">Ver detalhes <ArrowRight className="h-3 w-3" /></span>
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {isAdmin && (
+                          <button
+                            className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+                            title="Excluir solicitação"
+                            onClick={(e) => { e.stopPropagation(); if (confirm(`Excluir a solicitação SMO-${String(s.id).padStart(4, "0")}?`)) deleteMut.mutate({ id: s.id, companyId, companyIds }); }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                        <span className="text-[#D4A843] font-medium flex items-center gap-1">Ver detalhes <ArrowRight className="h-3 w-3" /></span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1025,8 +1036,8 @@ export default function SolicitacaoMDO() {
                       <Send className="h-4 w-4" /> Enviar para Aprovação
                     </Button>
                   )}
-                  {["rascunho", "rejeitada"].includes(d.status) && (
-                    <Button variant="ghost" className="text-red-600 gap-2" onClick={() => { if (confirm("Excluir esta solicitação?")) deleteMut.mutate({ id: d.id, companyId, companyIds }); }}>
+                  {(["rascunho", "rejeitada"].includes(d.status) || isAdmin) && (
+                    <Button variant="ghost" className="text-red-600 gap-2" onClick={() => { if (confirm(`Excluir a solicitação SMO-${String(d.id).padStart(4, "0")}?`)) deleteMut.mutate({ id: d.id, companyId, companyIds }); }}>
                       <Trash2 className="h-4 w-4" /> Excluir
                     </Button>
                   )}
