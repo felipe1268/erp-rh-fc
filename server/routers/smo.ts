@@ -467,7 +467,7 @@ export const smoRouter = router({
         parametros: {
           encargosPerc: totalEncargosPerc,
           fatorBDI: 1.35,
-          custoUnicoPorProfissional: custoUnico,
+          custoUnicoPorProfissional: custoAdmissao,
         },
       };
     }),
