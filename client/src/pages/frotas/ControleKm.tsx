@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import "leaflet/dist/leaflet.css";
 import {
   Gauge, Fuel, Route, TrendingUp, Clock, Car, Truck, AlertTriangle,
   MapPin, Calendar, ArrowUpDown, Eye, ChevronDown, ChevronUp, DollarSign,
@@ -1029,7 +1030,7 @@ export default function ControleKm() {
                       <div className="text-sm text-gray-500 mb-2">
                         {positionsQuery.data.positions.length} pontos GPS registrados
                       </div>
-                      <div ref={mapRef} style={{ height: 450 }} className="rounded-lg border overflow-hidden" />
+                      <div ref={mapRef} style={{ height: 450, width: "100%" }} className="rounded-lg border overflow-hidden" />
                     </>
                   ) : (
                     <div className="text-center py-10 text-gray-400">
