@@ -1022,6 +1022,7 @@ export default function Solicitacoes() {
 
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [filtroObra, setFiltroObra] = useState("todas");
   const [showNova, setShowNova] = useState(false);
   const [showDisciplinas, setShowDisciplinas] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
@@ -2031,14 +2032,15 @@ export default function Solicitacoes() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  const listaFiltradaObra = filtroObra === "todas" ? lista : lista.filter((r: any) => String(r.obraId) === filtroObra);
   const todasSCs = filtroStatus !== "todos" ? (qTodas.data ?? lista) : lista;
   const urgentesAtivos = useMemo(() => todasSCs.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(r.status) && !r._hasOC), [todasSCs]);
   const kpis = useMemo(() => ({
-    pendente: lista.filter(r => r.status === "pendente").length,
-    cotacao:  lista.filter(r => r.status === "cotacao").length,
-    aprovado: lista.filter(r => r.status === "aprovado").length,
-    recusado: lista.filter(r => r.status === "recusado" || r.status === "cancelado").length,
-  }), [lista]);
+    pendente: listaFiltradaObra.filter(r => r.status === "pendente").length,
+    cotacao:  listaFiltradaObra.filter(r => r.status === "cotacao").length,
+    aprovado: listaFiltradaObra.filter(r => r.status === "aprovado").length,
+    recusado: listaFiltradaObra.filter(r => r.status === "recusado" || r.status === "cancelado").length,
+  }), [listaFiltradaObra]);
 
   function nomeObra(id: number | null | undefined) {
     if (!id) return null;
@@ -2082,11 +2084,23 @@ export default function Solicitacoes() {
       </div>
 
       {/* Busca + filtro */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input placeholder="Buscar por número, título, setor..." className="pl-9 bg-white border-gray-300 text-gray-900" value={busca} onChange={e => setBusca(e.target.value)} />
         </div>
+        <Select value={filtroObra} onValueChange={setFiltroObra}>
+          <SelectTrigger className="w-[240px] bg-white border-gray-300">
+            <Building2 className="h-4 w-4 text-gray-400 mr-1" />
+            <SelectValue placeholder="Todas as obras" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas as obras</SelectItem>
+            {obras.map((o: any) => (
+              <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <button onClick={() => setFiltroStatus("todos")}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === "todos" ? "bg-amber-600 border-amber-500 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"}`}>
           Todos
@@ -2140,10 +2154,10 @@ export default function Solicitacoes() {
             <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
               <TableHead className="w-10">
                 <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-amber-600"
-                  checked={lista.length > 0 && lista.every((s: any) => selectedSCIds.has(s.id))}
+                  checked={listaFiltradaObra.length > 0 && listaFiltradaObra.every((s: any) => selectedSCIds.has(s.id))}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedSCIds(new Set(lista.map((s: any) => s.id)));
+                      setSelectedSCIds(new Set(listaFiltradaObra.map((s: any) => s.id)));
                     } else {
                       setSelectedSCIds(new Set());
                     }
@@ -2163,9 +2177,9 @@ export default function Solicitacoes() {
           <TableBody>
             {q.isLoading ? (
               <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
-            ) : lista.length === 0 ? (
+            ) : listaFiltradaObra.length === 0 ? (
               <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-400">Nenhuma solicitação encontrada</TableCell></TableRow>
-            ) : lista.map((sc: any) => {
+            ) : listaFiltradaObra.map((sc: any) => {
               const itC = sc._itens ?? { total: 0, atendidos: 0 };
               const pct = itC.total > 0 ? Math.round((itC.atendidos / itC.total) * 100) : 0;
               const isUrgente = sc.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(sc.status);
