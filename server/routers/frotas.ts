@@ -394,6 +394,33 @@ async function ensureFleetTables() {
       created_at TIMESTAMP DEFAULT NOW() NOT NULL
     )
   `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_daily_km (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      vehicle_id INTEGER,
+      infleet_vehicle_id VARCHAR(100),
+      placa VARCHAR(20) NOT NULL,
+      nome_veiculo VARCHAR(255),
+      data DATE NOT NULL,
+      km_total NUMERIC(12,1) DEFAULT 0,
+      viagens INTEGER DEFAULT 0,
+      num_viagens INTEGER DEFAULT 0,
+      tempo_rodando_min INTEGER DEFAULT 0,
+      vel_media NUMERIC(6,1) DEFAULT 0,
+      vel_maxima NUMERIC(6,1) DEFAULT 0,
+      motoristas TEXT,
+      motorista TEXT,
+      odometro_fim NUMERIC(12,1),
+      km_odometro_fim NUMERIC(12,1),
+      alerta_gps TEXT,
+      primeira_ligacao TIMESTAMP,
+      ultima_desligacao TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      UNIQUE(company_id, placa, data)
+    )
+  `);
 }
 let tablesReady = false;
 
@@ -5961,7 +5988,7 @@ Sempre retorne JSON válido, sem markdown.`;
           });
         });
 
-        let infleetStatusMap: Record<string, { status: string; odometer: number | null; driver: string | null; type: string }> = {};
+        let infleetStatusMap: Record<string, { id: string; status: string; odometer: number | null; driver: string | null; type: string }> = {};
         const token = process.env.FROTA_API_TOKEN;
         if (token) {
           try {
@@ -5974,7 +6001,7 @@ Sempre retorne JSON válido, sem markdown.`;
             const vData = await vResp.json() as any;
             (vData.data?.listVehicles || []).forEach((v: any) => {
               const p = (v.plate || '').replace(/[-\s]/g, '').toUpperCase();
-              infleetStatusMap[p] = { status: v.status, odometer: v.odometer ? Math.round(v.odometer) : null, driver: v.driver?.name || null, type: v.type };
+              infleetStatusMap[p] = { id: v.id, status: v.status, odometer: v.odometer ? Math.round(v.odometer) : null, driver: v.driver?.name || null, type: v.type };
             });
           } catch { /* status info is optional */ }
         }
@@ -6049,7 +6076,7 @@ Sempre retorne JSON válido, sem markdown.`;
 
           return {
             vehicleId: plateToId[placaNorm] || null,
-            infleetId: kmData?.infleetId || null,
+            infleetId: kmData?.infleetId || statusInfo?.id || null,
             placa: rawPlaca,
             nome: kmData?.nome || '',
             tipo: statusInfo?.type || '',
@@ -6161,6 +6188,8 @@ export async function coletarKmDiarioJob(companyId: number, dataOverride?: strin
   const token = process.env.FROTA_API_TOKEN;
   if (!token) return { coletados: 0, veiculos: 0, erro: 'FROTA_API_TOKEN não configurado' };
 
+  if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+
   const targetDate = dataOverride || new Date().toISOString().slice(0, 10);
 
   try {
@@ -6228,7 +6257,6 @@ export async function coletarKmDiarioJob(companyId: number, dataOverride?: strin
         const velMedia = kmTotal > 0 ? velMediaPond / kmTotal : 0;
         const placaNorm = v.plate.replace(/[-\s]/g, '').toUpperCase();
         const localVehicleId = plateToLocalId[placaNorm] || null;
-        if (!localVehicleId) continue;
         const nomeVeiculo = v.displayName || `${v.brand || ''} ${v.model || ''}`.trim();
 
         let alertaGps: string | null = null;
