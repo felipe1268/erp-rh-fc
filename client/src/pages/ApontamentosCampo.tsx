@@ -24,41 +24,59 @@ import { fmtNum } from "@/lib/formatters";
 
 function MaskedTimeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const ref = React.useRef<HTMLInputElement>(null);
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (['Backspace','Delete','Tab','ArrowLeft','ArrowRight','Home','End'].includes(e.key)) return;
-    if (!/^[0-9]$/.test(e.key)) { e.preventDefault(); return; }
-    e.preventDefault();
-    const el = e.currentTarget;
-    const pos = el.selectionStart ?? 0;
-    let chars = (value || '--:--').split('');
-    if (chars.length < 5) chars = ['-','-',':','-','-'];
-    const slotMap = [0,1,3,4];
-    const idx = slotMap.findIndex(s => s >= pos);
-    const slot = idx >= 0 ? idx : slotMap.length - 1;
-    chars[slotMap[slot]] = e.key;
-    const newVal = chars.join('');
-    onChange(newVal);
-    setTimeout(() => {
-      const next = slot + 1;
-      el.setSelectionRange(next < slotMap.length ? slotMap[next] : 5, next < slotMap.length ? slotMap[next] : 5);
-    }, 0);
-  };
-  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    if (!value) onChange('--:--');
-    setTimeout(() => e.target.setSelectionRange(0, 0), 0);
-  };
-  const handleBlur = () => {
-    if (!value || value === '--:--') { onChange(''); return; }
-    const clean = value.replace(/-/g, '0');
-    const parts = clean.split(':');
-    const h = Math.min(23, parseInt(parts[0] || '0', 10));
-    const m = Math.min(59, parseInt(parts[1] || '0', 10));
-    onChange(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
-  };
+  React.useEffect(() => {
+    if (ref.current && ref.current !== document.activeElement) {
+      ref.current.value = value;
+    }
+  }, [value]);
   return (
     <input ref={ref} type="text" inputMode="numeric" maxLength={5} placeholder="--:--"
-      value={value} onChange={(e) => { const v = e.target.value.replace(/[^0-9:-]/g,''); if (v.length <= 5) onChange(v); }}
-      onKeyDown={handleKeyDown} onFocus={handleFocus} onBlur={handleBlur}
+      defaultValue={value}
+      onFocus={(e) => {
+        if (!e.target.value) e.target.value = '--:--';
+        setTimeout(() => e.target.setSelectionRange(0, 0), 0);
+      }}
+      onBlur={(e) => {
+        const val = e.target.value;
+        if (!val || val === '--:--') { e.target.value = ''; onChange(''); return; }
+        const clean = val.replace(/-/g, '0');
+        const parts = clean.split(':');
+        const h = Math.min(23, parseInt(parts[0] || '0', 10));
+        const m = Math.min(59, parseInt(parts[1] || '0', 10));
+        const fmt = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+        e.target.value = fmt;
+        onChange(fmt);
+      }}
+      onKeyDown={(e) => {
+        if (['Tab','ArrowLeft','ArrowRight','Home','End','Delete'].includes(e.key)) return;
+        if (e.key === 'Backspace') {
+          e.preventDefault();
+          const el = e.currentTarget;
+          const pos = el.selectionStart ?? 0;
+          if (pos <= 0) return;
+          const slots = [0,1,3,4];
+          const prev = slots.filter(s => s < pos);
+          if (!prev.length) return;
+          const t = prev[prev.length - 1];
+          const c = el.value.split(''); c[t] = '-'; el.value = c.join('');
+          el.setSelectionRange(t, t);
+          return;
+        }
+        if (!/^[0-9]$/.test(e.key)) { e.preventDefault(); return; }
+        e.preventDefault();
+        const el = e.currentTarget;
+        const pos = el.selectionStart ?? 0;
+        let chars = el.value.split('');
+        if (chars.length < 5) chars = ['-','-',':','-','-'];
+        const slots = [0,1,3,4];
+        const idx = slots.findIndex(s => s >= pos);
+        const slot = idx >= 0 ? idx : slots.length - 1;
+        chars[slots[slot]] = e.key;
+        el.value = chars.join('');
+        const next = slot + 1 < slots.length ? slots[slot + 1] : 5;
+        el.setSelectionRange(next, next);
+      }}
+      onChange={() => {}}
       className="w-full border rounded px-2 py-1.5 text-sm font-mono mt-0.5 focus:outline-none focus:ring-2 focus:ring-blue-200" />
   );
 }

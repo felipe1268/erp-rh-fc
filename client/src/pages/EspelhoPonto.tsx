@@ -192,50 +192,10 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
     setForm(prev => ({ ...prev, [field]: e.target.value }));
 
   const TimeInput = ({ label, field }: { label: string; field: keyof EditForm }) => {
-    const inputRef = React.useRef<HTMLInputElement>(null);
-    const handleTimeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-      const el = e.currentTarget;
-      const val = (form[field] as string) || '';
-      if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Tab' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') return;
-      if (!/^[0-9]$/.test(e.key)) { e.preventDefault(); return; }
-      e.preventDefault();
-      const pos = el.selectionStart ?? 0;
-      const digits = val.replace(/[^0-9]/g, '');
-      let chars = val.split('');
-      if (val === '' || val === '--:--') chars = ['-','-',':','-','-'];
-      if (chars.length < 5) chars = ['-','-',':','-','-'];
-      const slotMap = [0,1,3,4];
-      const curSlot = slotMap.findIndex((s, i) => s >= pos && chars[s] !== undefined);
-      const slot = curSlot >= 0 ? curSlot : slotMap.length - 1;
-      const charPos = slotMap[slot];
-      chars[charPos] = e.key;
-      const newVal = chars.join('');
-      setForm(prev => ({ ...prev, [field]: newVal }));
-      setTimeout(() => {
-        const nextSlot = slot + 1;
-        const nextPos = nextSlot < slotMap.length ? slotMap[nextSlot] : 5;
-        el.setSelectionRange(nextPos, nextPos);
-      }, 0);
-    };
-    const handleTimeBlur = () => {
-      const val = (form[field] as string) || '';
-      if (!val || val === '--:--') { setForm(prev => ({ ...prev, [field]: '' })); return; }
-      const clean = val.replace(/[-]/g, '0');
-      const parts = clean.split(':');
-      const h = Math.min(23, parseInt(parts[0] || '0', 10));
-      const m = Math.min(59, parseInt(parts[1] || '0', 10));
-      const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      setForm(prev => ({ ...prev, [field]: formatted }));
-    };
-    const handleTimeFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-      const val = (form[field] as string) || '';
-      if (!val) setForm(prev => ({ ...prev, [field]: '--:--' }));
-      setTimeout(() => { e.target.setSelectionRange(0, 0); }, 0);
-    };
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const raw = e.target.value.replace(/[^0-9:-]/g, '');
-      if (raw.length <= 5) setForm(prev => ({ ...prev, [field]: raw }));
-    };
+    const inputRef = useRef<HTMLInputElement>(null);
+    const localRef = useRef(form[field] as string);
+    useEffect(() => { localRef.current = form[field] as string; }, [form[field]]);
+
     return (
       <div className="flex flex-col gap-1">
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</label>
@@ -246,11 +206,59 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
             inputMode="numeric"
             maxLength={5}
             placeholder="--:--"
-            value={form[field] as string}
-            onChange={handleChange}
-            onKeyDown={handleTimeKeyDown}
-            onBlur={handleTimeBlur}
-            onFocus={handleTimeFocus}
+            defaultValue={form[field] as string}
+            onFocus={(e) => {
+              if (!e.target.value) { e.target.value = '--:--'; localRef.current = '--:--'; }
+              setTimeout(() => e.target.setSelectionRange(0, 0), 0);
+            }}
+            onBlur={(e) => {
+              const val = e.target.value;
+              if (!val || val === '--:--') {
+                e.target.value = '';
+                setForm(prev => ({ ...prev, [field]: '' }));
+                return;
+              }
+              const clean = val.replace(/-/g, '0');
+              const parts = clean.split(':');
+              const h = Math.min(23, parseInt(parts[0] || '0', 10));
+              const m = Math.min(59, parseInt(parts[1] || '0', 10));
+              const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+              e.target.value = formatted;
+              setForm(prev => ({ ...prev, [field]: formatted }));
+            }}
+            onKeyDown={(e) => {
+              if (['Backspace','Delete','Tab','ArrowLeft','ArrowRight','Home','End'].includes(e.key)) {
+                if (e.key === 'Backspace') {
+                  e.preventDefault();
+                  const el = e.currentTarget;
+                  const pos = el.selectionStart ?? 0;
+                  if (pos <= 0) return;
+                  const slots = [0,1,3,4];
+                  const prevSlots = slots.filter(s => s < pos);
+                  if (prevSlots.length === 0) return;
+                  const target = prevSlots[prevSlots.length - 1];
+                  const chars = el.value.split('');
+                  chars[target] = '-';
+                  el.value = chars.join('');
+                  el.setSelectionRange(target, target);
+                }
+                return;
+              }
+              if (!/^[0-9]$/.test(e.key)) { e.preventDefault(); return; }
+              e.preventDefault();
+              const el = e.currentTarget;
+              const pos = el.selectionStart ?? 0;
+              let chars = el.value.split('');
+              if (chars.length < 5) chars = ['-','-',':','-','-'];
+              const slots = [0,1,3,4];
+              const idx = slots.findIndex(s => s >= pos);
+              const slot = idx >= 0 ? idx : slots.length - 1;
+              chars[slots[slot]] = e.key;
+              el.value = chars.join('');
+              const nextPos = slot + 1 < slots.length ? slots[slot + 1] : 5;
+              el.setSelectionRange(nextPos, nextPos);
+            }}
+            onChange={() => {}}
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white w-full pr-8"
           />
           <Clock className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
