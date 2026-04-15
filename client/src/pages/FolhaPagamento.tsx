@@ -450,15 +450,18 @@ export default function FolhaPagamento() {
           if (f.employeeId === data.employeeId) {
             return {
               ...f,
-              valorTotalVale: data.novoValor ?? f.valorTotalVale,
-              valorAdiantamento: data.novoValor ?? f.valorAdiantamento,
-              irRetido: data.novoIR ?? f.irRetido,
-              valorLiquido: data.novoLiquido ?? f.valorLiquido,
+              valorTotalVale: parseFloat(data.novoValor) || f.valorTotalVale,
+              valorAdiantamento: parseFloat(data.novoValor) || f.valorAdiantamento,
+              irRetido: parseFloat(data.novoIR) || 0,
+              valorLiquido: parseFloat(data.novoLiquido) || f.valorLiquido,
             };
           }
           return f;
         });
-        setValeResult({ ...valeResult, funcionarios: updatedFuncs });
+        const novoTotal = updatedFuncs
+          .filter((f: any) => f.status !== 'rejeitado')
+          .reduce((s: number, f: any) => s + (parseFloat(String(f.valorLiquido ?? f.valorTotalVale ?? 0))), 0);
+        setValeResult({ ...valeResult, funcionarios: updatedFuncs, totalVale: novoTotal });
       } else {
         payrollPeriod.refetch();
       }
@@ -1801,12 +1804,12 @@ export default function FolhaPagamento() {
     const todosFunc = valeResult.funcionarios || [];
     const funcionariosComAlerta = todosFunc.filter((f: any) => f.temAlerta).sort((a: any, b: any) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
     const funcionariosSemAlerta = todosFunc.filter((f: any) => !f.temAlerta).sort((a: any, b: any) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
-    const totalSemAlerta = funcionariosSemAlerta.reduce((s: number, f: any) => s + (f.valorLiquido ?? f.valorTotalVale ?? 0), 0);
+    const totalSemAlerta = funcionariosSemAlerta.reduce((s: number, f: any) => s + parseFloat(String(f.valorLiquido ?? f.valorTotalVale ?? 0)), 0);
     const totalSemAlertaEfetivo = funcionariosSemAlerta
       .filter((f: any) => f.status !== 'rejeitado' && !valeExcluirSel.has(f.employeeId))
-      .reduce((s: number, f: any) => s + (f.valorLiquido ?? f.valorTotalVale ?? 0), 0);
+      .reduce((s: number, f: any) => s + parseFloat(String(f.valorLiquido ?? f.valorTotalVale ?? 0)), 0);
     const hasAnyExcluidos = funcionariosSemAlerta.some((f: any) => f.status === 'rejeitado') || valeExcluirSel.size > 0;
-    const totalComAlerta = funcionariosComAlerta.reduce((s: number, f: any) => s + (f.valorLiquido ?? f.valorTotalVale ?? 0), 0);
+    const totalComAlerta = funcionariosComAlerta.reduce((s: number, f: any) => s + parseFloat(String(f.valorLiquido ?? f.valorTotalVale ?? 0)), 0);
     const totalIRRetido = todosFunc.reduce((s: number, f: any) => s + (f.irRetido || 0), 0);
     const totalValeDinamico = todosFunc
       .filter((f: any) => f.status !== 'rejeitado' && !valeExcluirSel.has(f.employeeId))
