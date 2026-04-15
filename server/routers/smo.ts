@@ -242,9 +242,19 @@ export const smoRouter = router({
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const emps = await db.select({ salarioBase: employees.salarioBase, funcao: employees.funcao })
+      let emps = await db.select({ salarioBase: employees.salarioBase, funcao: employees.funcao })
         .from(employees)
         .where(and(companyFilter(employees.companyId, input), eq(employees.funcao, input.funcao), eq(employees.status, "Ativo")));
+
+      if (emps.length === 0) {
+        const palavras = input.funcao.split(/\s+/).filter(p => p.length > 2);
+        if (palavras.length > 0) {
+          const likePattern = `%${palavras[0]}%`;
+          emps = await db.select({ salarioBase: employees.salarioBase, funcao: employees.funcao })
+            .from(employees)
+            .where(and(companyFilter(employees.companyId, input), sql`${employees.funcao} ILIKE ${likePattern}`, eq(employees.status, "Ativo")));
+        }
+      }
 
       let salarioRef = 0;
       if (emps.length > 0) {
@@ -346,14 +356,31 @@ export const smoRouter = router({
       let totalImpactoFolha = 0;
 
       for (const item of input.itens) {
-        const emps = await db.select({ salarioBase: employees.salarioBase })
+        let emps = await db.select({ salarioBase: employees.salarioBase, funcao: employees.funcao })
           .from(employees)
           .where(and(companyFilter(employees.companyId, input), eq(employees.funcao, item.funcao), eq(employees.status, "Ativo")));
 
+        if (emps.length === 0) {
+          const palavras = item.funcao.split(/\s+/).filter(p => p.length > 2);
+          if (palavras.length > 0) {
+            const likePattern = `%${palavras[0]}%`;
+            emps = await db.select({ salarioBase: employees.salarioBase, funcao: employees.funcao })
+              .from(employees)
+              .where(and(companyFilter(employees.companyId, input), sql`${employees.funcao} ILIKE ${likePattern}`, eq(employees.status, "Ativo")));
+          }
+        }
+
         let salarioRef = 0;
+        let baseSalarialOrigem = "Piso salarial (padrão)";
         if (emps.length > 0) {
           const sals = emps.map(e => parseFloat(e.salarioBase || "0")).filter(s => s > 0);
           salarioRef = sals.length > 0 ? sals.reduce((a, b) => a + b, 0) / sals.length : 0;
+          if (salarioRef > 0) {
+            const funcRef = emps[0].funcao || item.funcao;
+            baseSalarialOrigem = emps.length === 1
+              ? `Salário real (${funcRef})`
+              : `Média de ${emps.length} profissionais (${funcRef})`;
+          }
         }
         if (salarioRef === 0) salarioRef = parseFloat(conv?.pisoSalarial || "2500");
 
@@ -400,7 +427,7 @@ export const smoRouter = router({
           quantidade: item.quantidade,
           duracaoMeses: item.duracaoMeses,
           salarioBase: salarioRef,
-          baseSalarial: emps.length > 0 ? "Média dos ativos" : "Piso salarial",
+          baseSalarial: baseSalarialOrigem,
           qtdReferencia: emps.length,
           clt: {
             encargosPerc: totalEncargosPerc,
@@ -679,9 +706,19 @@ export const smoRouter = router({
 
       const results = [];
       for (const item of input.itens) {
-        const emps = await db.select({ salarioBase: employees.salarioBase })
+        let emps = await db.select({ salarioBase: employees.salarioBase })
           .from(employees)
           .where(and(companyFilter(employees.companyId, input), eq(employees.funcao, item.funcao), eq(employees.status, "Ativo")));
+
+        if (emps.length === 0) {
+          const palavras = item.funcao.split(/\s+/).filter(p => p.length > 2);
+          if (palavras.length > 0) {
+            const likePattern = `%${palavras[0]}%`;
+            emps = await db.select({ salarioBase: employees.salarioBase })
+              .from(employees)
+              .where(and(companyFilter(employees.companyId, input), sql`${employees.funcao} ILIKE ${likePattern}`, eq(employees.status, "Ativo")));
+          }
+        }
 
         let salarioRef = 0;
         if (emps.length > 0) {
