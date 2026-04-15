@@ -2147,6 +2147,24 @@ export const orcamentoRouter = router({
         return { requiresConfirmation: true, conflicts, saved: false };
       }
 
+      // ── Preservar vínculos de SCs e contratos ──────────────────────
+      const oldEapToId = new Map(oldItems.map(o => [o.eapCodigo, o.id]));
+      const linkedScItems = existingIds.length > 0
+        ? await db.select({
+            id: (comprasSolicitacoesItens as any).id,
+            orcamentoItemId: (comprasSolicitacoesItens as any).orcamentoItemId,
+          }).from(comprasSolicitacoesItens)
+            .where(inArray((comprasSolicitacoesItens as any).orcamentoItemId, existingIds))
+        : [];
+      const linkedCtItems = existingIds.length > 0
+        ? await db.select({
+            id: (terceiroContratoItens as any).id,
+            orcamentoItemId: (terceiroContratoItens as any).orcamentoItemId,
+          }).from(terceiroContratoItens)
+            .where(inArray((terceiroContratoItens as any).orcamentoItemId, existingIds))
+        : [];
+      const oldIdToEap = new Map(oldItems.map(o => [o.id, o.eapCodigo]));
+
       // Apagar dados antigos
       await db.delete(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
       await db.delete(orcamentoInsumos).where(eq(orcamentoInsumos.orcamentoId, input.orcamentoId));
@@ -2160,6 +2178,32 @@ export const orcamentoRouter = router({
         await db.insert(orcamentoItens).values(
           itens.slice(i, i + BATCH).map(it => ({ ...it, orcamentoId: input.orcamentoId, companyId: input.companyId }))
         );
+      }
+
+      // ── Remapear vínculos de SCs e contratos para novos IDs ─────────
+      if (linkedScItems.length > 0 || linkedCtItems.length > 0) {
+        const newItems = await db.select({ id: orcamentoItens.id, eapCodigo: orcamentoItens.eapCodigo })
+          .from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+        const newEapToId = new Map(newItems.map(n => [n.eapCodigo, n.id]));
+
+        for (const sc of linkedScItems) {
+          const eap = oldIdToEap.get(sc.orcamentoItemId);
+          const newId = eap ? newEapToId.get(eap) : undefined;
+          if (newId) {
+            await db.update(comprasSolicitacoesItens)
+              .set({ orcamentoItemId: newId } as any)
+              .where(eq((comprasSolicitacoesItens as any).id, sc.id));
+          }
+        }
+        for (const ct of linkedCtItems) {
+          const eap = oldIdToEap.get(ct.orcamentoItemId);
+          const newId = eap ? newEapToId.get(eap) : undefined;
+          if (newId) {
+            await db.update(terceiroContratoItens)
+              .set({ orcamentoItemId: newId } as any)
+              .where(eq((terceiroContratoItens as any).id, ct.id));
+          }
+        }
       }
       for (let i = 0; i < insumosItens.length; i += BATCH) {
         await db.insert(orcamentoInsumos).values(
