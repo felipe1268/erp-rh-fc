@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/hooks/useCompany";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
@@ -102,6 +103,12 @@ function ChecklistOnboarding({ checklist, companyId, companyIds, userName, check
 export default function SolicitacaoMDO() {
   const { user } = useAuth();
   const { companyId, companyIds } = useCompany();
+  const { isAdminMaster, groupCanEdit } = usePermissions();
+  const userRole = user?.role || "";
+  const isAdmin = userRole === "admin" || userRole === "admin_master";
+  const canAprovarCoord = isAdmin || groupCanEdit("/smo");
+  const canAprovarRH = isAdmin || groupCanEdit("/painel/rh");
+  const canAprovarDiretoria = userRole === "admin_master";
   const [, navigate] = useLocation();
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -969,7 +976,7 @@ export default function SolicitacaoMDO() {
                 </div>
 
                 {/* Onboarding */}
-                {d.checklist && d.checklist.length > 0 && (
+                {d.checklist && d.checklist.length > 0 && ["aprovada_diretoria", "em_recrutamento", "concluida"].includes(d.status) && (
                   <ChecklistOnboarding
                     checklist={d.checklist}
                     companyId={companyId}
@@ -981,17 +988,27 @@ export default function SolicitacaoMDO() {
 
                 {/* Actions */}
                 <div className="flex flex-wrap gap-3">
-                  {getProximaEtapa(d.status) && (
-                    <Button onClick={() => aprovarMut.mutate({ id: d.id, companyId, companyIds, etapa: getProximaEtapa(d.status) as any, aprovadorNome: user?.name || "Aprovador" })} disabled={aprovarMut.isPending} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
-                      <CheckCircle className="h-4 w-4" /> Aprovar ({getProximaEtapa(d.status) === "coord" ? "Coordenação" : getProximaEtapa(d.status) === "rh" ? "RH" : "Diretoria"})
+                  {d.status === "enviada" && canAprovarCoord && (
+                    <Button onClick={() => aprovarMut.mutate({ id: d.id, companyId, companyIds, etapa: "coord", aprovadorNome: user?.name || "Aprovador" })} disabled={aprovarMut.isPending} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+                      <CheckCircle className="h-4 w-4" /> Aprovar (Coordenação)
                     </Button>
                   )}
-                  {["enviada", "aprovada_coord", "aprovada_rh"].includes(d.status) && (
+                  {d.status === "aprovada_coord" && canAprovarRH && (
+                    <Button onClick={() => aprovarMut.mutate({ id: d.id, companyId, companyIds, etapa: "rh", aprovadorNome: user?.name || "Aprovador" })} disabled={aprovarMut.isPending} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+                      <CheckCircle className="h-4 w-4" /> Aprovar (RH)
+                    </Button>
+                  )}
+                  {d.status === "aprovada_rh" && canAprovarDiretoria && (
+                    <Button onClick={() => aprovarMut.mutate({ id: d.id, companyId, companyIds, etapa: "diretoria", aprovadorNome: user?.name || "Aprovador" })} disabled={aprovarMut.isPending} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+                      <CheckCircle className="h-4 w-4" /> Aprovar (Diretoria)
+                    </Button>
+                  )}
+                  {["enviada", "aprovada_coord", "aprovada_rh"].includes(d.status) && (canAprovarCoord || canAprovarRH || canAprovarDiretoria) && (
                     <Button variant="destructive" onClick={() => { setRejectingId(d.id); setShowRejectDialog(true); }} className="gap-2">
                       <XCircle className="h-4 w-4" /> Rejeitar
                     </Button>
                   )}
-                  {["aprovada_rh", "aprovada_diretoria"].includes(d.status) && (
+                  {d.status === "aprovada_diretoria" && canAprovarRH && (
                     <Button onClick={() => recrutarMut.mutate({ id: d.id, companyId, companyIds })} disabled={recrutarMut.isPending} className="bg-amber-600 hover:bg-amber-700 gap-2">
                       <Users className="h-4 w-4" /> Iniciar Recrutamento
                     </Button>
