@@ -13,7 +13,7 @@ import {
   Clock, Eye, MessageSquare, ChevronDown, ChevronUp, Building2,
   User, Calendar, FileText, Shield, ArrowLeft, RefreshCw,
   AlertCircle, Archive, Zap, MapPin, Pencil, Trash2, RotateCcw,
-  MoreHorizontal
+  MoreHorizontal, X as XIcon
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -27,6 +27,7 @@ const TIPO_LABELS: Record<string, { label: string; color: string; icon: any }> =
   atraso: { label: "Atraso", color: "bg-orange-100 text-orange-700", icon: Clock },
   saida_antecipada: { label: "Saída Antecipada", color: "bg-yellow-100 text-yellow-700", icon: ArrowLeft },
   abandono_posto: { label: "Abandono de Posto", color: "bg-red-100 text-red-800", icon: AlertTriangle },
+  esqueceu_bater: { label: "Esqueceu de Bater", color: "bg-amber-100 text-amber-700", icon: Clock },
   insubordinacao: { label: "Insubordinação", color: "bg-red-200 text-red-800", icon: Shield },
   acidente: { label: "Acidente", color: "bg-purple-100 text-purple-700", icon: Zap },
   atestado_medico: { label: "Atestado Médico", color: "bg-blue-100 text-blue-700", icon: FileText },
@@ -78,6 +79,7 @@ export default function ApontamentosCampo() {
   const [expandedStats, setExpandedStats] = useState(true);
 
   const [novoEmployeeId, setNovoEmployeeId] = useState<number | null>(null);
+  const [novoEmployeeSearch, setNovoEmployeeSearch] = useState("");
   const [novoObraId, setNovoObraId] = useState<number | null>(null);
   const [novoData, setNovoData] = useState(new Date().toISOString().split("T")[0]);
   const [novoTipo, setNovoTipo] = useState<string>("falta");
@@ -243,7 +245,7 @@ export default function ApontamentosCampo() {
               Registro de ocorrências pelo gestor de campo para resolução pelo RH
             </p>
           </div>
-          <Button onClick={() => { setNovoEntrada1(""); setNovoSaida1(""); setNovoEntrada2(""); setNovoSaida2(""); setShowNovoDialog(true); }} className="bg-[#1B2A4A] hover:bg-[#2a3d66]">
+          <Button onClick={() => { setNovoEntrada1(""); setNovoSaida1(""); setNovoEntrada2(""); setNovoSaida2(""); setNovoEmployeeSearch(""); setNovoEmployeeId(null); setShowNovoDialog(true); }} className="bg-[#1B2A4A] hover:bg-[#2a3d66]">
             <Plus className="h-4 w-4 mr-2" /> Novo Apontamento
           </Button>
         </div>
@@ -483,21 +485,51 @@ export default function ApontamentosCampo() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
-              <div>
+              <div className="relative">
                 <label className="text-sm font-medium">Funcionário *</label>
-                <select value={novoEmployeeId || ""} onChange={(e) => {
-                  const empId = parseInt(e.target.value);
-                  setNovoEmployeeId(empId);
-                  // Auto-preencher obra do funcionário
-                  const emp = employees.find((em: any) => em.id === empId);
-                  if (emp?.obraAtualId) setNovoObraId(emp.obraAtualId);
-                }}
-                  className="w-full border rounded px-3 py-2 text-sm mt-1">
-                  <option value="">Selecione...</option>
-                  {employees.map((e: any) => (
-                    <option key={e.id} value={e.id}>{e.nomeCompleto} — {e.funcao || "Sem função"}</option>
-                  ))}
-                </select>
+                <div className="relative mt-1">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    value={novoEmployeeSearch}
+                    onChange={(e) => { setNovoEmployeeSearch(e.target.value); setNovoEmployeeId(null); }}
+                    placeholder="Digite o nome do funcionário..."
+                    className="w-full border rounded pl-8 pr-3 py-2 text-sm"
+                    autoComplete="off"
+                  />
+                  {novoEmployeeId && (
+                    <button type="button" className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+                      onClick={() => { setNovoEmployeeId(null); setNovoEmployeeSearch(""); }}>
+                      <XIcon className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                {novoEmployeeSearch && !novoEmployeeId && (() => {
+                  const s = novoEmployeeSearch.toLowerCase();
+                  const filtered = employees.filter((e: any) =>
+                    e.nomeCompleto?.toLowerCase().includes(s) || e.funcao?.toLowerCase().includes(s) || e.cpf?.includes(s)
+                  ).slice(0, 15);
+                  return filtered.length > 0 ? (
+                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {filtered.map((e: any) => (
+                        <button key={e.id} type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-100 last:border-0"
+                          onClick={() => {
+                            setNovoEmployeeId(e.id);
+                            setNovoEmployeeSearch(`${e.nomeCompleto} — ${e.funcao || "Sem função"}`);
+                            if (e.obraAtualId) setNovoObraId(e.obraAtualId);
+                          }}>
+                          <span className="font-medium">{e.nomeCompleto}</span>
+                          <span className="text-muted-foreground ml-2">— {e.funcao || "Sem função"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg p-3 text-sm text-muted-foreground">
+                      Nenhum funcionário encontrado
+                    </div>
+                  );
+                })()}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -536,7 +568,7 @@ export default function ApontamentosCampo() {
                   </select>
                 </div>
               </div>
-              {['falta', 'atraso', 'saida_antecipada', 'abandono_posto'].includes(novoTipo) && (
+              {['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'].includes(novoTipo) && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3 space-y-2">
                   <div className="flex items-center gap-2 mb-1">
                     <Clock className="h-4 w-4 text-blue-600" />

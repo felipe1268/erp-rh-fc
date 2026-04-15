@@ -6,7 +6,7 @@ import { eq, and, desc, sql, isNull, asc, gte, lte, inArray } from "drizzle-orm"
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { notifyOwner } from "../_core/notification";
 
-const tipoOcorrenciaEnum = z.enum(['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'insubordinacao', 'acidente', 'atestado_medico', 'desvio_conduta', 'elogio', 'outro']);
+const tipoOcorrenciaEnum = z.enum(['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'insubordinacao', 'acidente', 'atestado_medico', 'desvio_conduta', 'elogio', 'outro']);
 const prioridadeEnum = z.enum(['baixa', 'media', 'alta', 'urgente']);
 const statusEnum = z.enum(['pendente', 'em_analise', 'resolvido', 'arquivado']);
 const acaoTomadaEnum = z.enum(['nenhuma', 'advertencia_verbal', 'advertencia_escrita', 'suspensao', 'desconto_folha', 'ajuste_ponto', 'encaminhamento_medico', 'outro']);
@@ -85,8 +85,8 @@ export const fieldNotesRouter = router({
       }).returning();
       const newId = result.id;
 
-      const tiposComPonto = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto'];
-      if (tiposComPonto.includes(input.tipoOcorrencia) && input.obraId) {
+      const tiposComPonto = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'];
+      if (tiposComPonto.includes(input.tipoOcorrencia) && input.obraId && (entrada1 || saida1 || entrada2 || saida2 || input.tipoOcorrencia === 'falta' || input.tipoOcorrencia === 'abandono_posto')) {
         const mesRef = input.data.substring(0, 7);
         const justificativa = `[Apontamento #${newId} - ${input.tipoOcorrencia}] ${input.descricao.substring(0, 200)} (por ${solicitanteNome})`;
         const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
@@ -222,7 +222,7 @@ export const fieldNotesRouter = router({
 
       // === VINCULAR AO PONTO ===
       // Tipos de ocorrência que impactam o cartão de ponto
-      const tiposVinculaveis = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto'];
+      const tiposVinculaveis = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'];
       // Ações que NÃO gravam no ponto (somente advertências/elogios sem impacto de horas)
       const acoesNaoVinculam = ['nenhuma'];
 
