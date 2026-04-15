@@ -1023,6 +1023,7 @@ export default function Solicitacoes() {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroObra, setFiltroObra] = useState("todas");
+  const [filtroClassificacao, setFiltroClassificacao] = useState("todas");
   const [showNova, setShowNova] = useState(false);
   const [showDisciplinas, setShowDisciplinas] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
@@ -2032,7 +2033,18 @@ export default function Solicitacoes() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const listaFiltradaObra = filtroObra === "todas" ? lista : lista.filter((r: any) => String(r.obraId) === filtroObra);
+  const listaFiltradaObraBase = filtroObra === "todas" ? lista : lista.filter((r: any) => String(r.obraId) === filtroObra);
+  const listaFiltradaObra = filtroClassificacao === "todas"
+    ? listaFiltradaObraBase
+    : listaFiltradaObraBase.filter((r: any) => {
+        const tipo = r.tipo || "material";
+        if (filtroClassificacao === "material") return tipo === "material" && !r.vehicleId;
+        if (filtroClassificacao === "servico") return tipo === "servico";
+        if (filtroClassificacao === "equipamento") return tipo === "equipamento";
+        if (filtroClassificacao === "pacote") return tipo === "pacote";
+        if (filtroClassificacao === "manutencao") return tipo === "manutencao" || tipo === "pecas_veiculo" || !!r.vehicleId;
+        return true;
+      });
   const todasSCs = filtroStatus !== "todos" ? (qTodas.data ?? lista) : lista;
   const urgentesAtivos = useMemo(() => todasSCs.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(r.status) && !r._hasOC), [todasSCs]);
   const kpis = useMemo(() => ({
@@ -2101,8 +2113,22 @@ export default function Solicitacoes() {
             ))}
           </SelectContent>
         </Select>
-        <button onClick={() => setFiltroStatus("todos")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === "todos" ? "bg-amber-600 border-amber-500 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"}`}>
+        <Select value={filtroClassificacao} onValueChange={setFiltroClassificacao}>
+          <SelectTrigger className="w-[220px] bg-white border-gray-300">
+            <Layers className="h-4 w-4 text-gray-400 mr-1" />
+            <SelectValue placeholder="Classificação" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas classificações</SelectItem>
+            <SelectItem value="material">Material</SelectItem>
+            <SelectItem value="servico">Serviço / MDO</SelectItem>
+            <SelectItem value="equipamento">Equipamento</SelectItem>
+            <SelectItem value="pacote">Pacote (MAT + MO)</SelectItem>
+            <SelectItem value="manutencao">Manutenção de Veículos</SelectItem>
+          </SelectContent>
+        </Select>
+        <button onClick={() => { setFiltroStatus("todos"); setFiltroClassificacao("todas"); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === "todos" && filtroClassificacao === "todas" ? "bg-amber-600 border-amber-500 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"}`}>
           Todos
         </button>
       </div>
@@ -2206,8 +2232,8 @@ export default function Solicitacoes() {
                         </span>
                       )}
                       {sc.numeroSc}
-                      <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (sc as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : (sc as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : (sc as any).tipo === "pecas_veiculo" ? "bg-teal-100 text-teal-700" : "bg-blue-100 text-blue-700"}`}>
-                        {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "MAT+MDO" : (sc as any).tipo === "equipamento" ? "EQUIP" : (sc as any).tipo === "pecas_veiculo" ? "VEÍC" : "MAT"}
+                      <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (sc as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : (sc as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : (sc as any).tipo === "pecas_veiculo" || (sc as any).tipo === "manutencao" ? "bg-teal-100 text-teal-700" : "bg-blue-100 text-blue-700"}`}>
+                        {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "MAT+MDO" : (sc as any).tipo === "equipamento" ? "EQUIP" : (sc as any).tipo === "pecas_veiculo" || (sc as any).tipo === "manutencao" ? "VEÍC" : "MAT"}
                       </span>
                       {((sc as any).origemModulo === "frotas" || (sc as any).origem_modulo === "frotas") && (
                         <span className="ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded bg-orange-100 text-orange-700">FROTAS</span>
