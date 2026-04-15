@@ -479,7 +479,10 @@ export default function ApontamentosCampo() {
                               setSelectedNote(note);
                               setResolverResposta("");
                               setResolverAcao("nenhuma");
-                              setResolverEntrada1(""); setResolverSaida1(""); setResolverEntrada2(""); setResolverSaida2("");
+                              setResolverEntrada1(note.entrada1 || "");
+                              setResolverSaida1(note.saida1 || "");
+                              setResolverEntrada2(note.entrada2 || "");
+                              setResolverSaida2(note.saida2 || "");
                               setShowResolverDialog(true);
                             }}>
                             <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Resolver
@@ -871,7 +874,10 @@ export default function ApontamentosCampo() {
                       setShowDetalhesDialog(false);
                       setResolverResposta("");
                       setResolverAcao("nenhuma");
-                      setResolverEntrada1(""); setResolverSaida1(""); setResolverEntrada2(""); setResolverSaida2("");
+                      setResolverEntrada1(selectedNote?.entrada1 || "");
+                      setResolverSaida1(selectedNote?.saida1 || "");
+                      setResolverEntrada2(selectedNote?.entrada2 || "");
+                      setResolverSaida2(selectedNote?.saida2 || "");
                       setShowResolverDialog(true);
                     }}>
                     <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Resolver
