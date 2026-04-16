@@ -3476,7 +3476,9 @@ export default function FolhaPagamento() {
                         if (term && !(f.nome || '').toLowerCase().includes(term)) return false;
                         if (funcaoFilter !== "__all__" && (f.funcao || '').trim() !== funcaoFilter) return false;
                         return true;
-                      });
+                      }).sort((a: any, b: any) =>
+                        (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' })
+                      );
                       if (filtered.length === 0) {
                         return (
                           <tr><td colSpan={15} className="py-6 text-center text-xs text-muted-foreground">
