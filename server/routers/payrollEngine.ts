@@ -2823,20 +2823,40 @@ export const payrollEngineRouter = router({
         const descontoAdiantamento = adv ? parseBRL(adv.valorTotalVale) : 0;
 
         const faltaData = faltasMap.get(emp.id);
-        const faltasQtd = faltaData?.totalFaltas || 0;
+        const faltasQtdMes = faltaData?.totalFaltas || 0;
         const atrasosMinutos = faltaData?.totalMinutosAtraso || 0;
-        const descontoFaltas = faltasQtd * valorHora * criteria.cargaHorariaDiaria;
-        const descontoAtrasos = (atrasosMinutos / 60) * valorHora;
 
         const vrDiario = vrDiarioMap.get(emp.id) || 0;
-        const descontoVrFaltas = criteria.descontoVrFalta ? faltasQtd * vrDiario : 0;
-
         const vaLancamento = vaMap.get(emp.id) || 0;
         const descontoVaTotal = 0;
-
         const vtDiario = parseBRL(emp.vtValorDiario);
         const vtValorMensal = vtDiario * diasUteis;
-        const descontoVtFaltas = criteria.descontoVtFalta ? faltasQtd * vtDiario : 0;
+
+        // Ajustes da Aferição do Escuro: redistribuir nos campos corretos
+        // (faltas vão p/ "FALTAS", atrasos p/ "ATRASOS" e o resto p/ "OUTROS"=acertoEscuroValor)
+        const adjustments = adjMap.get(emp.id) || [];
+        let escFaltasValor = 0, escFaltasVr = 0, escFaltasVt = 0, escFaltasQtd = 0;
+        let escAtrasosValor = 0;
+        let acertoEscuroValor = 0;
+        const acertoEscuroDetalhes = adjustments.map((a: any) => ({ data: a.data, tipo: a.tipo, valor: a.valorTotal, descricao: a.descricao }));
+        for (const a of adjustments) {
+          if (a.tipo === 'falta') {
+            escFaltasValor += parseBRL(a.valorDesconto);
+            escFaltasVr    += parseBRL(a.valorVrDesconto);
+            escFaltasVt    += parseBRL(a.valorVtDesconto);
+            escFaltasQtd   += 1;
+          } else if (a.tipo === 'atraso') {
+            escAtrasosValor += parseBRL(a.valorTotal);
+          } else {
+            acertoEscuroValor += parseBRL(a.valorTotal);
+          }
+        }
+
+        const faltasQtd = faltasQtdMes + escFaltasQtd;
+        const descontoFaltas = (faltasQtdMes * valorHora * criteria.cargaHorariaDiaria) + escFaltasValor;
+        const descontoAtrasos = ((atrasosMinutos / 60) * valorHora) + escAtrasosValor;
+        const descontoVrFaltas = (criteria.descontoVrFalta ? faltasQtdMes * vrDiario : 0) + escFaltasVr;
+        const descontoVtFaltas = (criteria.descontoVtFalta ? faltasQtdMes * vtDiario : 0) + escFaltasVt;
 
         let descontoPensao = 0;
         if (emp.pensaoAlimenticia) {
@@ -2844,10 +2864,6 @@ export const payrollEngineRouter = router({
             ? salarioBruto * (parseBRL(emp.pensaoPercentual) / 100)
             : parseBRL(emp.pensaoValor);
         }
-
-        const adjustments = adjMap.get(emp.id) || [];
-        const acertoEscuroValor = adjustments.reduce((acc: number, a: any) => acc + parseBRL(a.valorTotal), 0);
-        const acertoEscuroDetalhes = adjustments.map((a: any) => ({ data: a.data, tipo: a.tipo, valor: a.valorTotal, descricao: a.descricao }));
 
         const vaValor = vaLancamento;
         const vrValorMensal = vrDiario * diasUteis;

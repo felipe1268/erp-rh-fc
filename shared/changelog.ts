@@ -8369,4 +8369,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-16 17:30:00",
   },
+  {
+    version: 1189,
+    titulo: "Folha: redistribui ajustes da Aferição do Escuro nas colunas certas (Falta/Atraso/Outros)",
+    descricao:
+      "Antes, todos os ajustes vindos da Aferição do Escuro caíam na coluna 'OUTROS' (acertoEscuroValor), " +
+      "independentemente do tipo. Agora a redistribuição segue o tipo do ajuste: " +
+      "tipo='falta' incrementa descontoFaltas (valor) + descontoVrFaltas + descontoVtFaltas + faltasQtd; " +
+      "tipo='atraso' incrementa descontoAtrasos; demais tipos permanecem em 'OUTROS' (acertoEscuroValor). " +
+      "Sem dupla contagem (totalDescontos inalterado para o mesmo conjunto de ajustes); auditoria preservada via acertoEscuroDetalhes.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-16 18:30:00",
+  },
 ];
