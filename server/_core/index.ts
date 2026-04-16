@@ -1,5 +1,5 @@
-// Forçar timezone UTC no Node.js para garantir que timestamps do banco sejam retornados em UTC
-process.env.TZ = 'UTC';
+// Forçar timezone de Brasília (UTC-3) no Node.js
+process.env.TZ = 'America/Sao_Paulo';
 
 import "dotenv/config";
 import compression from "compression";
