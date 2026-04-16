@@ -1902,10 +1902,21 @@ export default function AlmoxarifadoPage() {
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Selecionar Ferramenta *</label>
-                    <select className="w-full border-2 rounded-xl p-3 text-base" value={empItemId} onChange={e => setEmpItemId(Number(e.target.value))}>
-                      <option value={0}>— escolha o item —</option>
-                      {itens.map(i => <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(i.quantidadeAtual)}</option>)}
-                    </select>
+                    {(() => {
+                      const ferramentasList = itens.filter((i: any) => {
+                        const cat = String(i.categoria || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                        return cat.includes("ferramenta") || cat.includes("equipamento");
+                      });
+                      return (
+                        <>
+                          <select className="w-full border-2 rounded-xl p-3 text-base" value={empItemId} onChange={e => setEmpItemId(Number(e.target.value))}>
+                            <option value={0}>— escolha a ferramenta —</option>
+                            {ferramentasList.map((i: any) => <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(i.quantidadeAtual)}</option>)}
+                          </select>
+                          <p className="text-[11px] text-gray-500 mt-1">Mostrando apenas itens das categorias Ferramentas e Equipamentos ({ferramentasList.length} de {itens.length} itens do almoxarifado).</p>
+                        </>
+                      );
+                    })()}
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade</label>
