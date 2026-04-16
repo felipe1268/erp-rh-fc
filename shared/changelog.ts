@@ -8353,4 +8353,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-16 16:30:00",
   },
+  {
+    version: 1188,
+    titulo: "Correção: faltas/atrasos da aferição do escuro voltando a zerar na re-simulação da folha",
+    descricao:
+      "Bug crítico: ao re-simular a folha do mês, os ajustes vindos da aferição do escuro " +
+      "(payroll_adjustments com mesDesconto = mês da folha) ficavam com status='aplicado' vinculados " +
+      "ao payroll_payment anterior. Como o DELETE dos payments removia esses pagamentos sem resetar " +
+      "os ajustes, a próxima simulação só lia status='pendente' e ignorava as 36 faltas/atrasos já decididos, " +
+      "zerando o desconto (acertoEscuroValor=0) para todos os funcionários afetados. " +
+      "Correção: a query passa a aceitar status IN ('pendente','aplicado') E os ajustes 'aplicado' " +
+      "são resetados para 'pendente' (paymentId NULL) imediatamente após o DELETE dos payments.",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-16 17:30:00",
+  },
 ];

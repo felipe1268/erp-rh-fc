@@ -2694,9 +2694,14 @@ export const payrollEngineRouter = router({
       }
 
       // Get adjustments (from escuro aferição) for this month
+      // Inclui 'pendente' E 'aplicado': os 'aplicado' ficaram órfãos na última simulação
+      // (paymentId apontava para um payroll_payments que será deletado abaixo).
+      // Também resetamos os 'aplicado' para 'pendente' depois do DELETE para manter consistência.
       const adjRows = ((await db.execute(sql`
         SELECT * FROM payroll_adjustments 
-        WHERE "companyId" = ${input.companyId} AND "mesDesconto" = ${input.mesReferencia} AND status = 'pendente'
+        WHERE "companyId" = ${input.companyId} 
+          AND "mesDesconto" = ${input.mesReferencia} 
+          AND status IN ('pendente', 'aplicado')
       `)) as any).rows || [];
       const adjMap = new Map<number, any[]>();
       for (const a of (adjRows || [])) {
@@ -2727,6 +2732,16 @@ export const payrollEngineRouter = router({
       // Clear existing payments for this month
       await db.execute(sql`
         DELETE FROM payroll_payments WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `);
+
+      // Reseta ajustes que estavam vinculados aos payments deletados de volta para 'pendente'
+      // para que sejam re-aplicados consistentemente nesta nova simulação.
+      await db.execute(sql`
+        UPDATE payroll_adjustments 
+        SET status = 'pendente', "paymentId" = NULL, "updatedAt" = NOW()
+        WHERE "companyId" = ${input.companyId} 
+          AND "mesDesconto" = ${input.mesReferencia} 
+          AND status = 'aplicado'
       `);
 
       const results: any[] = [];
