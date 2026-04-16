@@ -8572,4 +8572,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-16 17:30:00",
   },
+  {
+    version: 1205,
+    titulo: "Pensão alimentícia dinâmica — base configurável (bruto do mês OU salário mínimo)",
+    descricao: "LÓGICA DE PENSÃO TOTALMENTE REFORMULADA: (1) Cálculo agora é DINÂMICO a cada simulação — lê direto do cadastro do funcionário (pensaoTipo, pensaoPercentual, pensaoValor, pensaoBase). Antes usava salário base FIXO do cadastro; agora usa bruto do mês real. (2) Campo novo pensaoBase no cadastro: opções salario_bruto (default, inclui HE/adicional noturno aprovados) OU salario_minimo (usa salário mínimo vigente). (3) Salário mínimo vigente armazenado em system_criteria.salario_minimo_vigente = 1518,00 (atualizar anualmente em janeiro). (4) HE integrada ao bruto da pensão via prefetch de he_period_employees (apenas períodos status aprovado/pago). (5) Removida dependência de adjustment tipo=pensao — pensão não precisa mais passar por aprovação RH mensal (está no cadastro, que já é controlado).",
+    tipo: "feature",
+    modulos: "Folha de Pagamento, Cadastro de Funcionários",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-16 18:00:00",
+  },
 ];

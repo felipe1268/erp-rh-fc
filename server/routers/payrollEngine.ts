@@ -2687,6 +2687,7 @@ export const payrollEngineRouter = router({
         pensaoValor: employees.pensaoValor,
         pensaoTipo: employees.pensaoTipo,
         pensaoPercentual: employees.pensaoPercentual,
+        pensaoBase: employees.pensaoBase,
         vtValorDiario: employees.vtValorDiario,
         seguroVida: employees.seguroVida,
         fgtsPercentual: employees.fgtsPercentual,
@@ -2918,7 +2919,8 @@ export const payrollEngineRouter = router({
       const convenioMap = new Map<number, number>();
       for (const r of convenioBatchRows) convenioMap.set(Number(r.employee_id), parseFloat(r.totalConvenio || '0'));
 
-      // PRE-FETCH: Adjustments do mês de desconto (pensão, outros) — para filtrar aprovação RH
+      // PRE-FETCH: Adjustments do mês de desconto (outros) — para filtrar aprovação RH
+      // Pensão NÃO vem mais de adjustments (agora é calculada dinâmica do cadastro + bruto do mês)
       const adjBatchRows = ((await db.execute(sql`
         SELECT "employeeId", tipo, "valorDesconto", "aprovadoRh", id, descricao, data
         FROM payroll_adjustments
@@ -2926,7 +2928,7 @@ export const payrollEngineRouter = router({
           AND "employeeId" IN (${empIdsSql})
           AND "mesDesconto" = ${input.mesReferencia}
           AND status IN ('pendente','aplicado')
-          AND tipo IN ('pensao','outros')
+          AND tipo = 'outros'
       `)) as any).rows || [];
       const adjustmentsByEmp = new Map<number, any[]>();
       for (const r of adjBatchRows) {
@@ -2934,6 +2936,28 @@ export const payrollEngineRouter = router({
         if (!adjustmentsByEmp.has(id)) adjustmentsByEmp.set(id, []);
         adjustmentsByEmp.get(id)!.push(r);
       }
+
+      // PRE-FETCH: Horas extras do mês (he_period_employees) — para base da pensão
+      const heBatchRows = ((await db.execute(sql`
+        SELECT hpe."employeeId", COALESCE(SUM(CAST(hpe."valorHETotal" AS DECIMAL(15,2))), 0) as "totalHE"
+        FROM he_period_employees hpe
+        JOIN he_periods hp ON hp.id = hpe."hePeriodId"
+        WHERE hpe."companyId" = ${input.companyId}
+          AND hpe."employeeId" IN (${empIdsSql})
+          AND hp."mesReferencia" = ${input.mesReferencia}
+          AND hp.status IN ('aprovado','pago')
+        GROUP BY hpe."employeeId"
+      `)) as any).rows || [];
+      const heMap = new Map<number, number>();
+      for (const r of heBatchRows) heMap.set(Number(r.employeeId), parseFloat(r.totalHE || '0'));
+
+      // Salário mínimo vigente (system_criteria)
+      const salMinRow = ((await db.execute(sql`
+        SELECT valor FROM system_criteria
+        WHERE "companyId" = ${input.companyId} AND chave = 'salario_minimo_vigente'
+        LIMIT 1
+      `)) as any).rows || [];
+      const salarioMinimoVigente = parseBRL(salMinRow[0]?.valor) || 1518;
 
       // PRE-FETCH: EPI discount alerts aprovados do mês
       const epiBatchRows = ((await db.execute(sql`
@@ -3023,11 +3047,21 @@ export const payrollEngineRouter = router({
         const descontoFaltas  = descontoFaltasBase + dsrFaltaValorAplicado;
         const descontoAtrasos = descontoAtrasosBase;
 
-        // PENSÃO: agora vem APENAS de payroll_adjustments tipo='pensao' aprovado pelo RH
-        const pensaoAdjs = (adjustmentsByEmp.get(emp.id) || []).filter(
-          (a: any) => a.tipo === 'pensao' && a.aprovadoRh === true
-        );
-        const descontoPensao = pensaoAdjs.reduce((s: number, a: any) => s + parseBRL(a.valorDesconto), 0);
+        // PENSÃO ALIMENTÍCIA: calculada dinamicamente do cadastro do funcionário
+        // Base configurável: bruto do mês (incl. HE/adicionais) OU salário mínimo vigente
+        let descontoPensao = 0;
+        if (emp.pensaoAlimenticia) {
+          if (emp.pensaoTipo === 'percentual') {
+            const perc = parseBRL(emp.pensaoPercentual) / 100;
+            const heValor = heMap.get(emp.id) || 0;
+            const brutoDoMes = salarioBruto + heValor; // base dinâmica do mês (incl. HE aprovada/paga)
+            const basePensao = emp.pensaoBase === 'salario_minimo' ? salarioMinimoVigente : brutoDoMes;
+            descontoPensao = basePensao * perc;
+          } else {
+            // valor_fixo mensal
+            descontoPensao = parseBRL(emp.pensaoValor);
+          }
+        }
 
         const vaValor = vaLancamento;
         const vrValorMensal = vrDiario * diasUteis;
