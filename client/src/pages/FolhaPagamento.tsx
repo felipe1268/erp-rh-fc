@@ -97,7 +97,7 @@ export default function FolhaPagamento() {
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [valeSearch, setValeSearch] = useState("");
-  const [valeFilter, setValeFilter] = useState<"all" | "aprovados" | "alertas" | "he" | "pago" | "naopago">("all");
+  const [valeFilter, setValeFilter] = useState<"all" | "aprovados" | "alertas" | "he" | "pago" | "naopago" | "editados">("all");
   const [valeExcluirSel, setValeExcluirSel] = useState<Set<number>>(new Set());
 
   // HE Módulo state
@@ -460,6 +460,7 @@ export default function FolhaPagamento() {
               valorAdiantamento: parseFloat(data.novoValor) || f.valorAdiantamento,
               irRetido: parseFloat(data.novoIR) || 0,
               valorLiquido: parseFloat(data.novoLiquido) || f.valorLiquido,
+              editadoManualmente: true,
             };
           }
           return f;
@@ -491,6 +492,7 @@ export default function FolhaPagamento() {
               valorAdiantamento: parseFloat(data.novoBruto) || f.valorAdiantamento,
               irRetido: parseFloat(data.novoIR) || 0,
               valorLiquido: parseFloat(data.novoLiquido) || f.valorLiquido,
+              editadoManualmente: true,
             };
           }
           return f;
@@ -1856,6 +1858,9 @@ export default function FolhaPagamento() {
     const comHE = todosFunc.filter((f: any) => (f.valorHE || 0) > 0);
     const totalHE = comHE.reduce((s: number, f: any) => s + (f.valorHE || 0), 0);
 
+    const isEditado = (f: any) => f.editadoManualmente === true || (f.observacoes && (f.observacoes.includes('[EDITADO') || f.observacoes.includes('LÍQUIDO EDITADO')));
+    const funcEditados = todosFunc.filter(isEditado);
+
     const matchSearch = (f: any) => !valeSearch || f.nome?.toUpperCase().includes(valeSearch.toUpperCase());
     const matchFilter = (f: any) => {
       if (valeFilter === "aprovados") return !f.temAlerta;
@@ -1863,6 +1868,7 @@ export default function FolhaPagamento() {
       if (valeFilter === "he") return (f.valorHE || 0) > 0;
       if (valeFilter === "pago") return f.status !== 'rejeitado';
       if (valeFilter === "naopago") return f.status === 'rejeitado';
+      if (valeFilter === "editados") return isEditado(f);
       return true;
     };
     const rowVisible = (f: any) => matchSearch(f) && matchFilter(f);
@@ -1975,6 +1981,15 @@ export default function FolhaPagamento() {
                 {valeFilter === "naopago" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
               </CardContent>
             </Card>
+            {funcEditados.length > 0 && (
+              <Card className={`${cardClass(valeFilter === "editados")} border-blue-200`} onClick={() => setValeFilter(valeFilter === "editados" ? "all" : "editados")}>
+                <CardContent className="p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-600">{fmtNum(funcEditados.length)}</p>
+                  <p className="text-[10px] text-muted-foreground">Editado Manual</p>
+                  {valeFilter === "editados" && <p className="text-[10px] text-primary mt-1 font-semibold">▲ Filtro ativo</p>}
+                </CardContent>
+              </Card>
+            )}
             <Card className={cardClass(false)}>
               <CardContent className="p-3 text-center">
                 <p className="text-2xl font-bold text-blue-700">{fmtNum(valeResult.diasUteis)}</p>
@@ -2281,13 +2296,20 @@ export default function FolhaPagamento() {
                             )}
                           </td>
                           <td className="py-2 px-2 font-medium">
-                            <button
-                              className="text-left hover:text-blue-600 hover:underline focus:outline-none"
-                              onClick={() => { setEspelhoPopupEmpId(f.employeeId); setEspelhoPopupEmpNome(f.nome || `ID ${f.employeeId}`); }}
-                              title="Abrir espelho de ponto"
-                            >
-                              {f.nome}
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                className="text-left hover:text-blue-600 hover:underline focus:outline-none"
+                                onClick={() => { setEspelhoPopupEmpId(f.employeeId); setEspelhoPopupEmpNome(f.nome || `ID ${f.employeeId}`); }}
+                                title="Abrir espelho de ponto"
+                              >
+                                {f.nome}
+                              </button>
+                              {isEditado(f) && (
+                                <Badge className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0 no-print" title="Valor editado manualmente">
+                                  <PenLine className="h-2.5 w-2.5 mr-0.5" /> Editado
+                                </Badge>
+                              )}
+                            </div>
                           </td>
                           <td className="text-right py-2 px-2">{formatBRL(f.salarioBruto)}</td>
                           <td className="text-right py-2 px-2">{formatBRL(f.valorAdiantamento)}</td>
