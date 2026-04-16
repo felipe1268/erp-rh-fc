@@ -3206,6 +3206,32 @@ export default function FolhaPagamento() {
             );
           })()}
 
+          {pagamentoResult.valeForaDaFolha && pagamentoResult.valeForaDaFolha.length > 0 && (
+            <div className="bg-blue-50 border border-blue-300 rounded-lg p-3 print:hidden">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold text-blue-800 text-sm">
+                    {pagamentoResult.valeForaDaFolha.length} funcionário(s) com vale calculado mas fora da folha mensal — bruto {formatBRL(pagamentoResult.totalValeForaDaFolha)} / líquido {formatBRL(pagamentoResult.totalValeForaDaFolhaLiquido ?? pagamentoResult.totalValeForaDaFolha)}
+                  </p>
+                  <p className="text-blue-700 text-xs mt-1">
+                    Esses funcionários receberam vale mas não estão sendo descontados nesta folha (provavelmente terminados, sem ponto válido ou sem vínculo CLT ativo no mês). Por isso o total descontado em "VALE" é menor que o total do card "Calcular Vale". A coluna ao lado de cada nome mostra o valor BRUTO do vale.
+                  </p>
+                  <ul className="mt-2 space-y-0.5 max-h-40 overflow-y-auto">
+                    {pagamentoResult.valeForaDaFolha.map((f: any, i: number) => (
+                      <li key={`vfa-${i}`} className="text-xs text-blue-800 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0" />
+                        <strong>{f.nome}</strong>
+                        {f.funcao && <span className="text-blue-600">({f.funcao})</span>}
+                        <span className="text-blue-600 ml-auto">{formatBRL(f.valorBruto)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <Button
               variant={pagamentoSubView === "geral" ? "default" : "outline"}

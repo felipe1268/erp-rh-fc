@@ -276,6 +276,65 @@ async function computeHEFromTimeRecords(
   return { heUtilMap, heFimMap, heMap };
 }
 
+/**
+ * Recalcula `valeResultJson.totalVale` e atualiza os valores dos funcionários no JSON
+ * a partir dos dados reais em `payroll_advances`. Persiste no `payroll_periods.valeResultJson`.
+ * Use sempre que houver edição/alteração individual de um vale para manter card e folha em sincronia.
+ */
+async function sincronizarValeJson(db: any, companyId: number, mesReferencia: string) {
+  try {
+    const periodRows = ((await db.execute(sql`
+      SELECT "valeResultJson" FROM payroll_periods
+      WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}
+      LIMIT 1
+    `)) as any).rows || [];
+    if (periodRows.length === 0 || !periodRows[0].valeResultJson) return;
+
+    const raw = periodRows[0].valeResultJson;
+    const json = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!json || !Array.isArray(json.funcionarios)) return;
+
+    const advRows = ((await db.execute(sql`
+      SELECT "employeeId", "valorTotalVale", "valorAdiantamento", "irRetidoAdiantamento",
+             "valorLiquidoVale", status, observacoes
+      FROM payroll_advances
+      WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}
+    `)) as any).rows || [];
+    const advMap = new Map<number, any>();
+    for (const a of advRows) advMap.set(Number(a.employeeId), a);
+
+    let totalVale = 0;
+    json.funcionarios = json.funcionarios.map((f: any) => {
+      const adv = advMap.get(Number(f.employeeId));
+      if (!adv) return f;
+      const bruto = parseFloat(adv.valorTotalVale) || 0;
+      const liq = parseFloat(adv.valorLiquidoVale) || 0;
+      const ir = parseFloat(adv.irRetidoAdiantamento) || 0;
+      const status = adv.status || f.status;
+      const editado = (adv.observacoes || "").includes("[EDITADO") || (adv.observacoes || "").includes("LÍQUIDO EDITADO");
+      if (status === "calculado") totalVale += liq;
+      return {
+        ...f,
+        valorTotalVale: bruto,
+        valorAdiantamento: bruto,
+        irRetido: ir,
+        valorLiquido: liq,
+        status,
+        editadoManualmente: editado || !!f.editadoManualmente,
+      };
+    });
+    json.totalVale = Math.round(totalVale * 100) / 100;
+
+    await db.execute(sql`
+      UPDATE payroll_periods
+      SET "valeResultJson" = ${JSON.stringify(json)}
+      WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}
+    `);
+  } catch (e) {
+    console.error("[sincronizarValeJson] erro:", e);
+  }
+}
+
 export const payrollEngineRouter = router({
   // ============================================================
   // 1. ABRIR / LISTAR COMPETÊNCIAS
@@ -2463,6 +2522,8 @@ export const payrollEngineRouter = router({
           AND tipo = 'saida_vale'
       `);
 
+      await sincronizarValeJson(db, input.companyId, input.mesReferencia);
+
       return { success: true, employeeId: input.employeeId, valorAnterior, novoValor: valorFormatado, novoIR: "0.00", novoLiquido: valorFormatado, message: `Bruto editado: R$ ${valorAnterior} → R$ ${valorFormatado} (Líquido = R$ ${valorFormatado}, IR zerado)` };
     }),
 
@@ -2528,6 +2589,8 @@ export const payrollEngineRouter = router({
           AND "origemTipo" = 'payroll_advance'
           AND tipo = 'saida_vale'
       `);
+
+      await sincronizarValeJson(db, input.companyId, input.mesReferencia);
 
       return {
         success: true, employeeId: input.employeeId,
@@ -2838,6 +2901,29 @@ export const payrollEngineRouter = router({
         `);
       }
 
+      // Vale fora da folha: funcionários com vale calculado mas não incluídos na folha mensal
+      const empIdsNaFolha = new Set(empList.map((e: any) => Number(e.id)));
+      const valeAdvRows = ((await db.execute(sql`
+        SELECT pa."employeeId", pa."valorTotalVale", pa."valorLiquidoVale", e."nomeCompleto", e.funcao
+        FROM payroll_advances pa
+        LEFT JOIN employees e ON e.id = pa."employeeId"
+        WHERE pa."companyId" IN (${sql.join(allCompanyIds.map(id => sql`${id}`), sql`,`)})
+          AND pa."mesReferencia" = ${input.mesReferencia}
+          AND pa.status = 'calculado'
+      `)) as any).rows || [];
+      const valeForaDaFolha = valeAdvRows
+        .filter((r: any) => !empIdsNaFolha.has(Number(r.employeeId)))
+        .map((r: any) => ({
+          employeeId: Number(r.employeeId),
+          nome: r.nomeCompleto || `ID ${r.employeeId}`,
+          funcao: r.funcao || null,
+          valorBruto: parseFloat(r.valorTotalVale) || 0,
+          valorLiquido: parseFloat(r.valorLiquidoVale) || 0,
+        }));
+      // Soma pelo Líquido para coerência com a UI (cada item exibe valorBruto, total exibe a soma do bruto)
+      const totalValeForaDaFolhaBruto = valeForaDaFolha.reduce((s: number, r: any) => s + r.valorBruto, 0);
+      const totalValeForaDaFolhaLiquido = valeForaDaFolha.reduce((s: number, r: any) => s + r.valorLiquido, 0);
+
       const pagamentoResultPayload = {
         totalFuncionarios: empList.length,
         totalCltAtivos: allCltAtivos.length,
@@ -2848,6 +2934,9 @@ export const payrollEngineRouter = router({
         diasUteis,
         funcionarios: results,
         divergencias,
+        valeForaDaFolha,
+        totalValeForaDaFolha: Math.round(totalValeForaDaFolhaBruto * 100) / 100,
+        totalValeForaDaFolhaLiquido: Math.round(totalValeForaDaFolhaLiquido * 100) / 100,
         message: divergencias.length > 0
           ? `Simulação concluída: ${empList.length} de ${allCltAtivos.length} CLTs ativos processados. ATENÇÃO: ${divergencias.length} funcionário(s) excluído(s) da folha — verifique as divergências.`
           : `Simulação concluída: ${empList.length} funcionários, líquido total R$ ${formatMoney(grandTotalLiquido)}`,

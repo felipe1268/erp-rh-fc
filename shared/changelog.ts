@@ -8340,4 +8340,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-16 14:00:00",
   },
+  {
+    version: 1187,
+    titulo: "Sincronização Vale ↔ Folha + aviso de funcionários do vale fora da folha",
+    descricao:
+      "Edições individuais do vale (Bruto ou Líquido) agora recalculam e persistem o totalVale do snapshot " +
+      "(payroll_periods.valeResultJson), mantendo o card 'Calcular Vale' sempre coerente com payroll_advances. " +
+      "A simulação da folha passa a retornar 'valeForaDaFolha': lista de funcionários com vale calculado mas " +
+      "sem vínculo CLT ativo na folha mensal — exibida como aviso azul na tela de Pagamento, explicando a divergência entre o card do vale e o desconto na folha.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-16 16:30:00",
+  },
 ];
