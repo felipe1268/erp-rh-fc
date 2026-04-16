@@ -2369,11 +2369,11 @@ export const payrollEngineRouter = router({
       const obs = `[EDITADO por ${editadoPor}: R$ ${valorAnterior} → R$ ${valorFormatado}${input.motivo ? ` | Motivo: ${input.motivo}` : ""}]`;
 
       const empInfoRows = ((await db.execute(sql`
-        SELECT COALESCE(dependentes_ir, 0) as dep,
-               salario_base as "salarioBase",
-               valor_hora as "valorHora",
-               horas_mensais as "horasMensais",
-               tipo_remuneracao as "tipoRemuneracao"
+        SELECT COALESCE("dependentesIR", 0) as dep,
+               "salarioBase",
+               "valorHora",
+               "horasMensais",
+               "tipoRemuneracao"
         FROM employees WHERE id = ${input.employeeId}
       `)) as any).rows || [];
       const empInfo = empInfoRows[0] || {};
