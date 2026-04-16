@@ -976,6 +976,7 @@ export const employees = pgTable("employees", {
         vtOperadora: varchar({ length: 100 }),
         vtLinhas: varchar({ length: 255 }),
         vtDescontoFolha: varchar({ length: 20 }),
+        dependentesIR: smallint("dependentes_ir").default(0),
         pensaoAlimenticia: smallint().default(0),
         pensaoValor: varchar({ length: 20 }),
         pensaoTipo: text(),

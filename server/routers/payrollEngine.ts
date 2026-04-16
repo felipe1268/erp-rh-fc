@@ -110,10 +110,10 @@ function getDateRange(startDate: string, endDate: string): string[] {
 // Parse month reference to year and month
 function calcularINSS(salarioMensal: number): number {
   const faixas = [
-    { teto: 1412.00, aliquota: 0.075 },
-    { teto: 2666.68, aliquota: 0.09 },
-    { teto: 4000.03, aliquota: 0.12 },
-    { teto: 7786.02, aliquota: 0.14 },
+    { teto: 1621.00, aliquota: 0.075 },
+    { teto: 2902.84, aliquota: 0.09 },
+    { teto: 4354.00, aliquota: 0.12 },
+    { teto: 8475.55, aliquota: 0.14 },
   ];
   let inss = 0;
   let anterior = 0;
@@ -125,6 +125,8 @@ function calcularINSS(salarioMensal: number): number {
   }
   return inss;
 }
+
+const VALOR_DEPENDENTE_IR = 228.80;
 
 function calcularIRRF(baseIR: number, salarioBrutoMensal: number, semReducao = false): number {
   const faixas = [
@@ -1800,6 +1802,7 @@ export const payrollEngineRouter = router({
         horasMensais: employees.horasMensais,
         dataAdmissao: employees.dataAdmissao,
         tipoRemuneracao: employees.tipoRemuneracao,
+        dependentesIR: employees.dependentesIR,
       }).from(employees).where(
         and(
           companyFilter(employees.companyId, input),
@@ -1819,6 +1822,7 @@ export const payrollEngineRouter = router({
       const avisoDesligadosRows = ((await db.execute(sql`
         SELECT e.id, e."companyId", e."nomeCompleto", e."valorHora", e."salarioBase", 
                e."horasMensais", e."dataAdmissao", e."tipoRemuneracao",
+               COALESCE(e.dependentes_ir, 0) as "dependentesIR",
                tn."dataFim" as "avisoUltimoDia"
         FROM employees e
         INNER JOIN termination_notices tn ON tn."employeeId" = e.id AND tn."deletedAt" IS NULL
@@ -1859,6 +1863,7 @@ export const payrollEngineRouter = router({
             horasMensais: row.horasMensais,
             dataAdmissao: row.dataAdmissao,
             tipoRemuneracao: row.tipoRemuneracao || 'horista',
+            dependentesIR: Number(row.dependentesIR) || 0,
           });
         }
       }
@@ -2040,12 +2045,12 @@ export const payrollEngineRouter = router({
 
         const valorAdiantamento = salarioBruto * (percentual / 100);
 
-        // ── IRRF regime caixa (bulking): projeta salário cheio, IR sem redutor MP, rateia ──
+        const numDependentes = Number(emp.dependentesIR) || 0;
         const salarioProjetado = salarioMensalCompleto;
         const inssProjetado = calcularINSS(salarioProjetado);
-        const baseIR = salarioProjetado - inssProjetado;
-        const irrfMensal = calcularIRRF(baseIR, salarioProjetado, true);
-        const irAdiantamento = irrfMensal > 0 ? Math.round(irrfMensal * (percentual / 100) * 100) / 100 : 0;
+        const baseIR = salarioProjetado - inssProjetado - (numDependentes * VALOR_DEPENDENTE_IR);
+        const irrfMensal = calcularIRRF(baseIR, salarioProjetado, false);
+        const irAdiantamento = irrfMensal > 0 ? Math.round(Math.min(irrfMensal, valorAdiantamento) * 100) / 100 : 0;
         const valorTotalVale = valorAdiantamento;
         const valorLiquidoVale = valorTotalVale - irAdiantamento;
 
@@ -2363,13 +2368,31 @@ export const payrollEngineRouter = router({
       const editadoPor = ctx.user.name || "Master";
       const obs = `[EDITADO por ${editadoPor}: R$ ${valorAnterior} → R$ ${valorFormatado}${input.motivo ? ` | Motivo: ${input.motivo}` : ""}]`;
 
-      const salarioBruto = parseFloat(row.salarioBrutoMes) || 0;
-      const percentual = parseFloat(row.percentualAdiantamento) || 40;
-      const inss = calcularINSS(salarioBruto);
-      const baseIR = salarioBruto - inss;
-      const irrfMensal = calcularIRRF(baseIR, salarioBruto, true);
-      const irProporcional = irrfMensal > 0 ? Math.round(irrfMensal * (percentual / 100) * 100) / 100 : 0;
-      const novoIR = Math.min(irProporcional, valorNum);
+      const empInfoRows = ((await db.execute(sql`
+        SELECT COALESCE(dependentes_ir, 0) as dep,
+               salario_base as "salarioBase",
+               valor_hora as "valorHora",
+               horas_mensais as "horasMensais",
+               tipo_remuneracao as "tipoRemuneracao"
+        FROM employees WHERE id = ${input.employeeId}
+      `)) as any).rows || [];
+      const empInfo = empInfoRows[0] || {};
+      const numDep = Number(empInfo.dep) || 0;
+
+      const isMensalista = (empInfo.tipoRemuneracao === 'mensalista');
+      let salarioMensalCompleto: number;
+      if (isMensalista) {
+        salarioMensalCompleto = parseBRL(empInfo.salarioBase);
+      } else {
+        const vh = parseFloat(empInfo.valorHora) || 0;
+        const hm = parseFloat(empInfo.horasMensais) || 220;
+        salarioMensalCompleto = vh * hm;
+      }
+
+      const inss = calcularINSS(salarioMensalCompleto);
+      const baseIR = salarioMensalCompleto - inss - (numDep * VALOR_DEPENDENTE_IR);
+      const irrfMensal = calcularIRRF(baseIR, salarioMensalCompleto, false);
+      const novoIR = Math.min(irrfMensal > 0 ? Math.round(irrfMensal * 100) / 100 : 0, valorNum);
       const novoLiquido = Math.max(valorNum - novoIR, 0);
 
       await db.execute(sql`

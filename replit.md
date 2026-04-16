@@ -153,6 +153,14 @@ SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date a
     Consultas de debug/verificação devem usar `process.env.NEON_DATABASE_URL` diretamente.
 - Neon usa pooler URL para conexões da app; syncSchema e ColFix também conectam ao Neon via getDb().
 
+## Rev. 1186 — INSS 2026 + IR com Redutor MP + Dependentes (16/04/2026)
+- **INSS 2026**: Faixas atualizadas (1.621/2.902,84/4.354/8.475,55) em `calcularINSS()`
+- **IR com Redutor MP**: `calcularIRRF()` agora usa `semReducao=false` no vale — isenção total até R$5.000, redução parcial até R$7.350
+- **100% IR no vale**: IR mensal completo retido no vale (sem rateio por percentual). `Math.min(irrfMensal, valorAdiantamento)` garante que IR não exceda o vale
+- **Dependentes IR**: Novo campo `dependentes_ir` (smallint) na tabela `employees`. Dedução de R$228,80/dependente na base IRRF. UI na aba "Obrigações Legais" da ficha do funcionário
+- **Constante**: `VALOR_DEPENDENTE_IR = 228.80` em `payrollEngine.ts`
+- **editarValorVale**: Busca dependentes do funcionário e recalcula IR com nova lógica
+
 ## Rev. 416 — Custo de MO nas Atividades (16/03/2026)
 - **Novas tabelas**: `cargo_categorias_custo` (cargo→categoria), `folha_mo_transferencias` (histórico), `planejamento_custos_mo` (custo real por atividade/mês)
 - **Router**: `server/routers/moAlocacao.ts` — CRUD categorias, `fecharFolhaMes`, `verificarTransferenciaMO`, `executarTransferenciaMO` (3 camadas: direto, indireta_obra, escritorio_central), `desfazerTransferenciaMO`

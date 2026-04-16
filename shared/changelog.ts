@@ -8327,4 +8327,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-06 06:00:00",
   },
+  {
+    version: 1186,
+    titulo: "INSS 2026, IR com redutor MP, dependentes IR e 100% IR no vale",
+    descricao:
+      "Tabela INSS atualizada para 2026 (faixas: 1.621/2.902,84/4.354/8.475,55). " +
+      "IR do vale agora usa redutor da MP (isenção até R$5.000, redução até R$7.350). " +
+      "100% do IR mensal é retido no vale (sem rateio proporcional). " +
+      "Novo campo 'Dependentes IR' na ficha do funcionário (aba Obrigações Legais) com dedução de R$228,80 por dependente na base do IRRF.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento, Colaboradores",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-16 14:00:00",
+  },
 ];

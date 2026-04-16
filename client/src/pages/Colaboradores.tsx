@@ -2197,6 +2197,18 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
             {/* ===== ABA OBRIGAÇÕES LEGAIS (Pensão, Licença, Seguro de Vida) ===== */}
             <TabsContent value="obrigacoes" className="pt-4">
               <div className="space-y-5">
+                {/* Dependentes IR */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">👥 Dependentes para IR</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Qtd. Dependentes</Label>
+                      <Input type="number" min="0" max="20" value={form.dependentesIR ?? "0"} onChange={e => set("dependentesIR", e.target.value)} className="bg-input mt-1" placeholder="0" />
+                      <p className="text-xs text-muted-foreground mt-1">Dedução de R$ 228,80 por dependente na base do IRRF</p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Pensão Alimentícia */}
                 <div>
                   <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">⚖️ Pensão Alimentícia</h4>

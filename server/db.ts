@@ -465,6 +465,8 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "vaRecebe", "vaValor", "vaOperadora", "vaNumeroCartao",
     "auxFarmacia", "auxFarmaciaValor", "planoSaude", "planoSaudeOperadora", "planoSaudeValor",
     "benefObs",
+    // Dependentes IR
+    "dependentesIR",
     // Pensão Alimentícia
     "pensaoAlimenticia", "pensaoValor", "pensaoTipo", "pensaoPercentual",
     "pensaoBeneficiario", "pensaoBanco", "pensaoAgencia", "pensaoConta", "pensaoObservacoes",
@@ -480,7 +482,7 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
   // Campos booleanos armazenados como smallint (0/1) no banco
   const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra", "pensaoAlimenticia", "licencaMaternidade", "ddsParticipacao", "cargoConfianca"]);
   // Campos inteiros
-  const intFields = new Set(["contaBancariaEmpresaId", "desligadoUserId", "listaNegraUserId"]);
+  const intFields = new Set(["contaBancariaEmpresaId", "desligadoUserId", "listaNegraUserId", "dependentesIR"]);
   // Campos string de HE (são varchar no banco, não int)
   const stringFields = new Set(["heNormal50", "he100", "heNoturna"]);
   // Sanitizar: remover campos inválidos e converter tipos
