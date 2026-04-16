@@ -34,6 +34,52 @@ function contarDomingos(ano: number, mes: number): number {
   return count;
 }
 
+/**
+ * Conta quantos dias dentro do mês da data de saída o colaborador esteve em
+ * férias (vacation_periods em status agendada/em_gozo/concluida) — usado
+ * para descontar do "saldo de salário" da rescisão. Dias em férias são pagos
+ * como férias/1-3, não como saldo de salário.
+ */
+async function diasFeriasNoMesDaSaida(
+  db: any,
+  employeeId: number,
+  dataSaida: string, // YYYY-MM-DD
+): Promise<number> {
+  if (!dataSaida || dataSaida.length < 10) return 0;
+  const ano = parseInt(dataSaida.slice(0, 4));
+  const mes = parseInt(dataSaida.slice(5, 7));
+  if (!ano || !mes) return 0;
+  const ini = `${dataSaida.slice(0, 7)}-01`;
+  const fim = `${dataSaida.slice(0, 7)}-${String(new Date(ano, mes, 0).getDate()).padStart(2, "0")}`;
+  const rows = await db.select({
+    dataInicio: vacationPeriods.dataInicio,
+    dataFim: vacationPeriods.dataFim,
+  }).from(vacationPeriods).where(and(
+    eq(vacationPeriods.employeeId, employeeId),
+    isNull(vacationPeriods.deletedAt),
+    sql`${vacationPeriods.dataInicio} IS NOT NULL AND ${vacationPeriods.dataFim} IS NOT NULL`,
+    sql`${vacationPeriods.status} IN ('agendada','em_gozo','concluida')`,
+    // Intersecção: inicio <= fim_mes AND fim >= ini_mes
+    sql`${vacationPeriods.dataInicio} <= ${fim} AND ${vacationPeriods.dataFim} >= ${ini}`,
+  ));
+  const dias = new Set<string>();
+  const saidaNum = parseInt(dataSaida.slice(8, 10));
+  for (const r of rows) {
+    const di = new Date(r.dataInicio + "T00:00:00");
+    const df = new Date(r.dataFim + "T00:00:00");
+    const d = new Date(di);
+    while (d <= df) {
+      if (d.getFullYear() === ano && d.getMonth() + 1 === mes) {
+        const dia = d.getDate();
+        // Só conta dias até a saída (inclusive). Dias após saída não entram no mês.
+        if (dia <= saidaNum) dias.add(d.toISOString().slice(0, 10));
+      }
+      d.setDate(d.getDate() + 1);
+    }
+  }
+  return dias.size;
+}
+
 /** Dias totais em um mês */
 function diasNoMes(ano: number, mes: number): number {
   return new Date(ano, mes, 0).getDate();
@@ -202,7 +248,8 @@ export const avisoPrevioFeriasRouter = router({
               const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split('T')[0];
               const salarioBase = parseBRL(emp.salarioBase);
               const dtFimAviso = new Date(r.dataFim + 'T00:00:00');
-              const diasTrabalhadosMes = dtFimAviso.getDate();
+              const diasFeriasMesSaidaList = await diasFeriasNoMesDaSaida(db, r.employeeId, r.dataFim);
+              const diasTrabalhadosMes = Math.max(0, dtFimAviso.getDate() - diasFeriasMesSaidaList);
 
               const periodosVencidosRealList = vpCountMap.get(`${r.employeeId}|${r.dataFim}`) ?? 0;
               
@@ -264,7 +311,8 @@ export const avisoPrevioFeriasRouter = router({
             const dataFim = row.dataFim;
             
             const dtFimAviso = new Date(dataFim + 'T00:00:00');
-            const diasTrabalhadosMes = dtFimAviso.getDate();
+            const diasFeriasMesSaidaById = await diasFeriasNoMesDaSaida(db, row.employeeId, dataFim);
+            const diasTrabalhadosMes = Math.max(0, dtFimAviso.getDate() - diasFeriasMesSaidaById);
             
             let diasTrabMes = diasTrabalhadosMes;
             let dataFimParaCalculo = dataFim;
@@ -273,7 +321,8 @@ export const avisoPrevioFeriasRouter = router({
             // Recalcula saldo de salário até a data da comunicação
             if (row.novoEmpregoAtivo && row.novoEmpregoComunicadoEm) {
               const dtComun = new Date(row.novoEmpregoComunicadoEm + 'T00:00:00');
-              diasTrabMes = dtComun.getDate(); // dias no mês até a comunicação
+              const diasFeriasMesComun = await diasFeriasNoMesDaSaida(db, row.employeeId, row.novoEmpregoComunicadoEm);
+              diasTrabMes = Math.max(0, dtComun.getDate() - diasFeriasMesComun); // dias no mês até a comunicação
               dataFimParaCalculo = row.novoEmpregoComunicadoEm;
             }
 
@@ -387,9 +436,10 @@ export const avisoPrevioFeriasRouter = router({
           ? dataDesligamento
           : calcularDataFim(dataInicioAviso, diasAviso);
         
-        // Dias trabalhados no mês da SAÍDA
+        // Dias trabalhados no mês da SAÍDA (desconta dias em férias dentro do mês)
         const dtFimAviso = new Date(dataFimAviso + 'T00:00:00');
-        const diasTrabalhadosMes = input.diasTrabalhadosOverride ?? dtFimAviso.getDate();
+        const diasFeriasMesSaida = await diasFeriasNoMesDaSaida(db, emp.id, dataFimAviso);
+        const diasTrabalhadosMes = input.diasTrabalhadosOverride ?? Math.max(0, dtFimAviso.getDate() - diasFeriasMesSaida);
         
         // ============================================================
         // VR: buscar da config de benefícios da obra do funcionário
@@ -661,7 +711,8 @@ export const avisoPrevioFeriasRouter = router({
         const dataInicioTrab = calcularDataInicioAviso(input.dataDesligamento);
         const dataFimTrab = calcularDataFim(dataInicioTrab, diasAvisoTrab);
         const dtFimTrab = new Date(dataFimTrab + 'T00:00:00');
-        const diasTrabMesTrab = dtFimTrab.getDate();
+        const diasFeriasMesTrab = await diasFeriasNoMesDaSaida(db, input.employeeId, dataFimTrab);
+        const diasTrabMesTrab = Math.max(0, dtFimTrab.getDate() - diasFeriasMesTrab);
 
         const prevTrab = calcularRescisaoCompleta({
           salarioBase, dataAdmissao, dataDesligamento: input.dataDesligamento,
@@ -686,7 +737,8 @@ export const avisoPrevioFeriasRouter = router({
         const dataInicioInd = calcularDataInicioAviso(input.dataDesligamento);
         const dataFimInd = calcularDataFim(dataInicioInd, diasAvisoInd);
         const dtFimInd = new Date(dataFimInd + 'T00:00:00');
-        const diasTrabMesInd = dtFimInd.getDate();
+        const diasFeriasMesInd = await diasFeriasNoMesDaSaida(db, input.employeeId, dataFimInd);
+        const diasTrabMesInd = Math.max(0, dtFimInd.getDate() - diasFeriasMesInd);
 
         const prevInd = calcularRescisaoCompleta({
           salarioBase, dataAdmissao, dataDesligamento: input.dataDesligamento,
@@ -908,7 +960,8 @@ export const avisoPrevioFeriasRouter = router({
         const dataFim = isEmpregadoInd ? dataDesligamento : calcularDataFim(dataInicioAviso, diasAviso);
         
         const dtFimAviso = new Date(dataFim + 'T00:00:00');
-        const diasTrabalhadosMes = input.diasTrabalhados ?? dtFimAviso.getDate();
+        const diasFeriasMesSaidaCreate = await diasFeriasNoMesDaSaida(db, input.employeeId, dataFim);
+        const diasTrabalhadosMes = input.diasTrabalhados ?? Math.max(0, dtFimAviso.getDate() - diasFeriasMesSaidaCreate);
 
         // Contagem real de férias vencidas do banco
         let periodosVencidosRealCreate: number | undefined;
@@ -1055,7 +1108,8 @@ export const avisoPrevioFeriasRouter = router({
           const salarioBase = parseBRL(emp.salarioBase);
           const dataFim = isEmpInd ? dataDesligFinal : calcularDataFim(dataInicioFinal, diasAviso);
           const dtFimAviso = new Date(dataFim + 'T00:00:00');
-          const diasTrabalhadosMes = diasTrabalhados ?? dtFimAviso.getDate();
+          const diasFeriasMesSaidaUpd = await diasFeriasNoMesDaSaida(db, aviso.employeeId, dataFim);
+          const diasTrabalhadosMes = diasTrabalhados ?? Math.max(0, dtFimAviso.getDate() - diasFeriasMesSaidaUpd);
 
           // Contagem real de férias vencidas do banco
           let periodosVencidosRealUpd: number | undefined;
@@ -1146,7 +1200,8 @@ export const avisoPrevioFeriasRouter = router({
             const dataFim = isEmpIndRec ? dataDesligFinal : calcularDataFim(dataInicioFinal, diasAviso);
 
             const dtFimAviso = new Date(dataFim + 'T00:00:00');
-            const diasTrabalhadosMes = dtFimAviso.getDate();
+            const diasFeriasMesRec = await diasFeriasNoMesDaSaida(db, aviso.employeeId, dataFim);
+            const diasTrabalhadosMes = Math.max(0, dtFimAviso.getDate() - diasFeriasMesRec);
 
             // Contagem real de férias vencidas do banco
             let periodosVencidosRealRec: number | undefined;
