@@ -8430,4 +8430,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-16 23:30:00",
   },
+  {
+    version: 1193,
+    titulo: "Descontos CLT: tabela e KPIs com DSR-Falta e DSR-Atraso separados",
+    descricao:
+      "O painel Motor de Descontos CLT (Fechamento de Ponto) agora mostra DSR-Falta e DSR-Atraso como " +
+      "colunas e KPIs próprios, no mesmo padrão das colunas de Faltas e Atrasos. Cards de totais do mês " +
+      "ampliados para 8 (cores fúcsia/violeta), tabela Resumo por Funcionário com duas colunas dedicadas " +
+      "e filtro Detalhes Analíticos com opções DSR-Falta / DSR-Atraso (mantida opção legado 'DSR Perdido' " +
+      "para registros antigos). Backend: totaisMes/listResumo agora retornam totalDsrFalta, totalDsrAtraso, " +
+      "valorDsrFalta e valorDsrAtraso a partir de pontoDescontos/pontoDescontosResumo.",
+    tipo: "melhoria",
+    modulos: "Ponto, Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-16 23:55:00",
+  },
 ];
