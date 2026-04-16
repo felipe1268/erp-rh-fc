@@ -8518,4 +8518,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: 'Sistema',
     dataPublicacao: '2026-04-16 14:30:00',
   },
+  {
+    version: 1199,
+    titulo: "Folha respeita janela cut-to-cut do Aferir Escuro (16/prev → 15/current)",
+    descricao: "BUGFIX: simularPagamento puxava adjustments antigos com data fora da janela escuro da competência (Ex.: faltas de janeiro entrando na folha de mar/2026). Agora a query filtra payroll_adjustments por data BETWEEN escuroInicio AND escuroFim, garantindo que só dias dentro do período cut-to-cut da competência atual sejam considerados. Limpeza de dados: 717 adjustments stale com data fora da janela foram cancelados automaticamente. Caso ACACIO LESCURA: removidas 22 faltas de jan/2026 incorretamente debitadas em mar/2026.",
+    tipo: 'bugfix',
+    modulos: 'Folha de Pagamento, Aferir Escuro',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-04-16 14:50:00',
+  },
 ];

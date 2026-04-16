@@ -2713,11 +2713,20 @@ export const payrollEngineRouter = router({
       // Inclui 'pendente' E 'aplicado': os 'aplicado' ficaram órfãos na última simulação
       // (paymentId apontava para um payroll_payments que será deletado abaixo).
       // Também resetamos os 'aplicado' para 'pendente' depois do DELETE para manter consistência.
+      // IMPORTANTE (Rev. 1199): filtrar por janela cut-to-cut da competência (16/prev → 15/current).
+      // Adjustments antigos com data fora dessa janela são considerados stale e ignorados.
+      const prevMesRefSim = getPrevMesRef(input.mesReferencia);
+      const prevParsedSim = parseMesRef(prevMesRefSim);
+      const diaCorteSim = criteria.diaCorte;
+      const escuroInicioSim = `${prevParsedSim.year}-${String(prevParsedSim.month).padStart(2, "0")}-${String(diaCorteSim + 1).padStart(2, "0")}`;
+      const escuroFimSim = `${year}-${String(month).padStart(2, "0")}-${String(diaCorteSim).padStart(2, "0")}`;
       const adjRows = ((await db.execute(sql`
         SELECT * FROM payroll_adjustments 
         WHERE "companyId" = ${input.companyId} 
           AND "mesDesconto" = ${input.mesReferencia} 
           AND status IN ('pendente', 'aplicado')
+          AND data >= ${escuroInicioSim}
+          AND data <= ${escuroFimSim}
       `)) as any).rows || [];
       const adjMap = new Map<number, any[]>();
       for (const a of (adjRows || [])) {
