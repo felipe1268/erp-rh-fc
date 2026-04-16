@@ -129,6 +129,12 @@ export default function AlmoxarifadoPage() {
     { companyId, obraId: obraContexto === "todos" ? undefined : obraContexto },
     { enabled: !!companyId && obraContexto !== "todos" }
   );
+  // Lista de todos os itens da empresa (usada pelo modal de empréstimo de ferramentas
+  // quando o usuário está no view Consolidado — onde `itens` fica vazio)
+  const { data: itensTodos = [] } = trpc.compras.listarItens.useQuery(
+    { companyId },
+    { enabled: !!companyId && obraContexto === "todos" && modalEmprestimo }
+  );
   const { data: consolidado, isLoading: loadingConsolidado } = trpc.compras.listarItensConsolidado.useQuery(
     { companyId, busca: busca || undefined },
     { enabled: !!companyId && obraContexto === "todos" }
@@ -1904,7 +1910,8 @@ export default function AlmoxarifadoPage() {
                     )}
                   </div>
                   {(() => {
-                    const ferramentasList = itens.filter((i: any) => {
+                    const fonteItens = obraContexto === "todos" ? itensTodos : itens;
+                    const ferramentasList = (fonteItens as any[]).filter((i: any) => {
                       const cat = String(i.categoria || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                       return cat.includes("ferramenta") || cat.includes("equipamento");
                     });
