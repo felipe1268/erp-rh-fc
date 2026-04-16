@@ -185,8 +185,15 @@ export function valorDiaLegal(salarioBaseStr: string | null | undefined, valorHo
   return valorHora * (220 / 30);
 }
 function parseBRLLocal(v: string | null | undefined): number {
-  if (!v) return 0;
-  const s = String(v).trim().replace(/\./g, '').replace(',', '.');
+  if (v === null || v === undefined) return 0;
+  const s = String(v).trim();
+  if (!s) return 0;
+  // Formato BR ("2.774,20"): remove pontos de milhar, troca vírgula por ponto
+  if (s.includes(',')) {
+    const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  }
+  // Formato decimal americano ("6200.00") ou inteiro: parseFloat direto
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }

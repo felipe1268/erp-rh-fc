@@ -8545,4 +8545,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: 'Sistema',
     dataPublicacao: '2026-04-16 15:40:00',
   },
+  {
+    version: 1202,
+    titulo: "Normalização BR de salarioBase + fix bug R$ 41.333,34 (Renato)",
+    descricao: "BUGFIX CRÍTICO: parseBRLLocal não tratava formato decimal americano ('6200.00'), causando R$ 6.200 ÷ 30 = R$ 20.666,67/dia (Renato 2 faltas = R$ 41.333,34). Helper agora detecta formato BR vs decimal antes de parsear. SQL recalc também ajustado. Padronização: 232 salarioBase do banco normalizados para formato BR ('6.200,00') — agora 100% dos cadastros em formato uniforme. Renato corrigido: 2 × R$ 206,67 = R$ 413,34.",
+    tipo: 'bugfix',
+    modulos: 'Folha de Pagamento, Cadastro de Funcionários',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-04-16 16:00:00',
+  },
 ];
