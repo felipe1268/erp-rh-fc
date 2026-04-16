@@ -557,7 +557,7 @@ export default function AlmoxarifadoPage() {
     { enabled: modalFecharDia && !!companyId }
   );
   const returnLoan = trpc.warehouse.returnLoanById.useMutation({
-    onSuccess: () => { refetchLoans(); refetch(); toast.success("Ferramenta devolvida!"); },
+    onSuccess: () => { refetchLoans(); refetchLoansAbertos(); refetch(); toast.success("Ferramenta devolvida!"); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -573,7 +573,7 @@ export default function AlmoxarifadoPage() {
     { companyId, tipo: "saida", limit: 300, data: filtroData },
     { enabled: !!companyId && modalRegistros && abaRegistros === "saidas" }
   );
-  const { data: loansAbertos = [], isLoading: loadingLoans } = trpc.warehouse.listOpenLoans.useQuery(
+  const { data: loansAbertos = [], isLoading: loadingLoans, refetch: refetchLoansAbertos } = trpc.warehouse.listOpenLoans.useQuery(
     { companyId, data: filtroData },
     { enabled: !!companyId && modalRegistros && abaRegistros === "emprestados" }
   );
@@ -2297,13 +2297,7 @@ export default function AlmoxarifadoPage() {
                       {loan.status === "devolvido" ? (
                         <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full flex-shrink-0">✅ Devolvido</span>
                       ) : (
-                        <button
-                          className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-4 py-2 rounded-xl text-sm flex-shrink-0 active:scale-95 transition disabled:opacity-50"
-                          disabled={returnLoan.isPending}
-                          onClick={() => returnLoan.mutate({ loanId: loan.id })}
-                        >
-                          Devolver
-                        </button>
+                        <span className="text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded-full flex-shrink-0">⏳ Pendente</span>
                       )}
                     </div>
                   </div>
