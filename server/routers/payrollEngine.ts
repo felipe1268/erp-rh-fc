@@ -1783,7 +1783,13 @@ export const payrollEngineRouter = router({
   // 4. GERAR VALE / ADIANTAMENTO
   // ============================================================
   gerarVale: protectedProcedure
-    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      mesReferencia: z.string(),
+      preservarEditados: z.boolean().optional(),
+      forcarRecalculoTodos: z.boolean().optional(),
+    }))
     .mutation(async ({ input, ctx }) => {
       try {
       const db = await getDb();
@@ -1985,12 +1991,57 @@ export const payrollEngineRouter = router({
       `)) as any).rows || [];
       const aprovadosAlertaSet = new Set<number>((aprovadosAlertaRows as any[]).map((r: any) => Number(r.employeeId)));
 
+      // Detect manually edited advances
+      const editadosRows = ((await db.execute(sql`
+        SELECT pa."employeeId", e."nomeCompleto", pa."valorTotalVale", pa."irRetidoAdiantamento",
+               pa."valorLiquidoVale", pa."observacoes", pa."companyId", pa."salarioBrutoMes",
+               pa."percentualAdiantamento", pa."valorAdiantamento", pa."valorHorasExtras",
+               pa."horasExtrasQtd", pa.bloqueado, pa."motivoBloqueio", pa."faltasNoPeriodo",
+               pa."valorHora", pa."cargaHorariaDiaria", pa."diasUteisNoMes", pa.status
+        FROM payroll_advances pa
+        JOIN employees e ON e.id = pa."employeeId"
+        WHERE pa."companyId" IN (${companyIdsSql}) AND pa."mesReferencia" = ${input.mesReferencia}
+          AND (pa."observacoes" LIKE '%[EDITADO%' OR pa."observacoes" LIKE '%LÍQUIDO EDITADO%')
+      `)) as any).rows || [];
+
+      const editadosMap = new Map<number, any>();
+      const editadosNomes: string[] = [];
+      for (const r of editadosRows as any[]) {
+        editadosMap.set(Number(r.employeeId), r);
+        editadosNomes.push(r.nomeCompleto);
+      }
+
+      // If there are edited advances and user hasn't chosen yet, return warning
+      if (editadosMap.size > 0 && !input.preservarEditados && !input.forcarRecalculoTodos) {
+        return {
+          success: false,
+          needsConfirmation: true,
+          editados: editadosNomes,
+          editadosCount: editadosMap.size,
+          message: `${editadosMap.size} funcionário(s) com valores editados manualmente: ${editadosNomes.join(", ")}. Deseja manter os valores editados ou recalcular tudo?`,
+          funcionarios: [],
+          totalVale: 0,
+          bloqueados: 0,
+        };
+      }
+
+      const preservarEditados = input.preservarEditados === true;
+
       // Clear existing advances for this month (all companies)
       const allCompanyIds = resolveCompanyIds(input);
       for (const cid of allCompanyIds) {
-        await db.execute(sql`
-          DELETE FROM payroll_advances WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
-        `);
+        if (preservarEditados && editadosMap.size > 0) {
+          const editadosIds = [...editadosMap.keys()];
+          await db.execute(sql`
+            DELETE FROM payroll_advances
+            WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+              AND "employeeId" NOT IN (${sql.join(editadosIds.map(id => sql`${id}`), sql`,`)})
+          `);
+        } else {
+          await db.execute(sql`
+            DELETE FROM payroll_advances WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia}
+          `);
+        }
       }
 
       const results: any[] = [];
@@ -2013,6 +2064,25 @@ export const payrollEngineRouter = router({
       const diasNoMes = new Date(year, month, 0).getDate();
 
       for (const emp of empList) {
+        // Skip employees with preserved manual edits
+        if (preservarEditados && editadosMap.has(emp.id)) {
+          const ed = editadosMap.get(emp.id)!;
+          const edBruto = parseFloat(ed.valorTotalVale) || 0;
+          const edLiq = parseFloat(ed.valorLiquidoVale) || 0;
+          const edIR = parseFloat(ed.irRetidoAdiantamento) || 0;
+          totalVale += edLiq;
+          results.push({
+            employeeId: emp.id, nome: emp.nomeCompleto,
+            valorHora: parseBRL(emp.valorHora), salarioBruto: parseFloat(ed.salarioBrutoMes) || 0,
+            valorAdiantamento: edBruto, valorHE: 0, valorTotalVale: edBruto,
+            irRetido: edIR, valorLiquido: edLiq,
+            isMensalista: emp.tipoRemuneracao === 'mensalista',
+            temAlerta: false, bloqueado: false, faltas: 0, minutosHE: 0,
+            status: ed.status || 'calculado', editadoManualmente: true,
+          });
+          continue;
+        }
+
         const valorHora = parseBRL(emp.valorHora);
         const horasMensaisBase = emp.horasMensais ? Number(emp.horasMensais) : 220;
         const percentual = criteria.percentualAdiantamento;

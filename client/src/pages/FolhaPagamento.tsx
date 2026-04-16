@@ -243,12 +243,18 @@ export default function FolhaPagamento() {
     setStepProgress(p => ({ ...p, [key]: 0 }));
   }, []);
 
+  const [editadosConfirm, setEditadosConfirm] = useState<{ show: boolean; nomes: string[]; count: number } | null>(null);
+
   const gerarValeMut = trpc.payrollEngine.gerarVale.useMutation({
     onMutate: () => startProgress('vale'),
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       finishProgress('vale');
       setCalcType(null);
       setCalcElapsed(0);
+      if (data.needsConfirmation) {
+        setEditadosConfirm({ show: true, nomes: data.editados || [], count: data.editadosCount || 0 });
+        return;
+      }
       setValeResult(data);
       setValeExcluirSel(new Set());
       setViewMode("calculo_vale");
@@ -2538,6 +2544,66 @@ export default function FolhaPagamento() {
               </div>
             </>
           )}
+
+          <Dialog open={!!editadosConfirm?.show} onOpenChange={(open) => { if (!open) setEditadosConfirm(null); }}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-amber-700">
+                  <AlertTriangle className="h-5 w-5" />
+                  Valores Editados Manualmente
+                </DialogTitle>
+                <DialogDescription asChild>
+                  <div className="mt-2 space-y-3">
+                    <p className="text-sm text-slate-700">
+                      {editadosConfirm?.count} funcionário(s) tiveram valores de vale editados manualmente:
+                    </p>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 max-h-40 overflow-y-auto">
+                      <ul className="text-sm space-y-1">
+                        {editadosConfirm?.nomes.map((nome, i) => (
+                          <li key={i} className="flex items-center gap-1.5">
+                            <Pencil className="h-3 w-3 text-amber-600 shrink-0" />
+                            <span className="font-medium">{nome}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <p className="text-sm text-slate-600">
+                      O que deseja fazer?
+                    </p>
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  className="border-slate-300"
+                  onClick={() => { setEditadosConfirm(null); }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => {
+                    setEditadosConfirm(null);
+                    gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, preservarEditados: true });
+                  }}
+                >
+                  <ShieldCheck className="h-4 w-4 mr-1" />
+                  Manter Editados
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setEditadosConfirm(null);
+                    gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, forcarRecalculoTodos: true });
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Recalcular Tudo
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={!!detalheAfericaoEmpId} onOpenChange={(open) => { if (!open) setDetalheAfericaoEmpId(null); }}>
             <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] flex flex-col p-0" resizable={false}>
