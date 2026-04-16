@@ -324,8 +324,11 @@ export default function FolhaPagamento() {
   // HE Módulo state
   const prevMes = mesSelecionado === 1 ? 12 : mesSelecionado - 1;
   const prevAno = mesSelecionado === 1 ? anoSelecionado - 1 : anoSelecionado;
+  // Aferir Escuro confere apenas os dias estimados do mês anterior:
+  // do dia 16 (após dia_corte) até o ÚLTIMO dia do mês anterior.
+  const prevUltimoDia = new Date(prevAno, prevMes, 0).getDate();
   const escuroInicio = `16/${String(prevMes).padStart(2, '0')}/${prevAno}`;
-  const escuroFim = `15/${String(mesSelecionado).padStart(2, '0')}/${anoSelecionado}`;
+  const escuroFim = `${String(prevUltimoDia).padStart(2, '0')}/${String(prevMes).padStart(2, '0')}/${prevAno}`;
   const mesEscuroLabel = `${MESES_CURTOS[prevMes - 1]}/${prevAno}`;
   const prevMesAno = `${prevAno}-${String(prevMes).padStart(2, '0')}`;
   const defaultHeInicio = `${prevAno}-${String(prevMes).padStart(2, "0")}-16`;

@@ -8462,4 +8462,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-17 00:30:00",
   },
+  {
+    version: 1195,
+    titulo: "Aferir Escuro: período exibido alinhado ao que o backend realmente confere",
+    descricao:
+      "O card e o diálogo informativo do passo 'Aferir Escuro' (Folha → Pagamento) mostravam o " +
+      "período da competência inteira (cut-to-cut, ex.: 16/02 a 15/03), enquanto o backend só " +
+      "confere os dias estimados do mês anterior (16/02 a 28/02). Isso dava a falsa impressão de " +
+      "que a aferição estava 'consultando mais coisa do que deveria'. Ajustado o cálculo do " +
+      "escuroFim no frontend para o ÚLTIMO dia do mês anterior, alinhando o display ao escopo real " +
+      "da query (timecard_daily mesCompetencia=prev + statusDia='escuro' entre dia_corte+1 e fim do " +
+      "mês anterior).",
+    tipo: "correcao",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-17 00:50:00",
+  },
 ];
