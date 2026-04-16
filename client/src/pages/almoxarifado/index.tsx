@@ -133,7 +133,7 @@ export default function AlmoxarifadoPage() {
   // quando o usuário está no view Consolidado — onde `itens` fica vazio)
   const { data: itensTodos = [] } = trpc.compras.listarItens.useQuery(
     { companyId },
-    { enabled: !!companyId && obraContexto === "todos" && modalEmprestimo }
+    { enabled: !!companyId && obraContexto === "todos" }
   );
   const { data: consolidado, isLoading: loadingConsolidado } = trpc.compras.listarItensConsolidado.useQuery(
     { companyId, busca: busca || undefined },
