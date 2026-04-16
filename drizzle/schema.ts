@@ -982,6 +982,8 @@ export const employees = pgTable("employees", {
         pensaoTipo: text(),
         pensaoPercentual: varchar({ length: 10 }),
         pensaoBase: text().default("salario_bruto"),
+        pensaoIncideFerias: boolean().default(true),
+        pensaoIncideDecimoTerceiro: boolean().default(true),
         pensaoBeneficiario: varchar({ length: 255 }),
         pensaoBanco: varchar({ length: 100 }),
         pensaoAgencia: varchar({ length: 20 }),

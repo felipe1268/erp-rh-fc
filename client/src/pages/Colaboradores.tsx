@@ -2266,6 +2266,32 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                           <Label className="text-xs font-medium text-muted-foreground">Beneficiário</Label>
                           <Input value={form.pensaoBeneficiario ?? ""} onChange={e => set("pensaoBeneficiario", e.target.value)} className="bg-input mt-1" />
                         </div>
+                        <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4 mt-1">
+                          <Label className="text-xs font-medium text-muted-foreground block mb-2">Incidência da Pensão (conforme decisão judicial)</Label>
+                          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={form.pensaoIncideFerias !== false && form.pensaoIncideFerias !== 0}
+                                onChange={e => set("pensaoIncideFerias", e.target.checked)}
+                                className="h-4 w-4 accent-primary"
+                              />
+                              <span>Desconta de <strong>Férias</strong> (incl. 1/3 constitucional)</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={form.pensaoIncideDecimoTerceiro !== false && form.pensaoIncideDecimoTerceiro !== 0}
+                                onChange={e => set("pensaoIncideDecimoTerceiro", e.target.checked)}
+                                className="h-4 w-4 accent-primary"
+                              />
+                              <span>Desconta de <strong>13º Salário</strong></span>
+                            </label>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-1">
+                            Padrão: ambos marcados (regra geral). Desmarque conforme o que constar na sentença/acordo judicial deste funcionário.
+                          </p>
+                        </div>
                       </>
                     )}
                   </div>
