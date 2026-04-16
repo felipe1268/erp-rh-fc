@@ -4082,6 +4082,8 @@ export const payrollPayments = pgTable("payroll_payments", {
         totalDescontos: varchar({ length: 20 }).notNull(),
         acertoEscuroValor: varchar({ length: 20 }).default('0'),
         acertoEscuroDetalhes: json(),
+        descontosManuaisJson: json(),
+        descontosManuaisHistorico: json(),
         salarioLiquido: varchar({ length: 20 }).notNull(),
         status: text().default('simulado').notNull(),
         dataPagamento: date({ mode: 'string' }),

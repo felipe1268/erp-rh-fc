@@ -2609,7 +2609,13 @@ export const payrollEngineRouter = router({
   // 6. SIMULAR PAGAMENTO
   // ============================================================
   simularPagamento: protectedProcedure
-    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      mesReferencia: z.string(),
+      manterOverrides: z.boolean().optional(),
+      descartarOverrides: z.boolean().optional(),
+    }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -2730,6 +2736,34 @@ export const payrollEngineRouter = router({
 
       // HE is now a SEPARATE MODULE (he_periods) — simularPagamento = salário base only
       // HE is tracked and paid via the dedicated HE module in Folha → Hora Extra
+
+      // Capture existing manual overrides BEFORE deleting
+      const existingOverridesRows = ((await db.execute(sql`
+        SELECT "employeeId", "descontosManuaisJson", "descontosManuaisHistorico"
+        FROM payroll_payments
+        WHERE "companyId" = ${input.companyId}
+          AND "mesReferencia" = ${input.mesReferencia}
+          AND "descontosManuaisJson" IS NOT NULL
+      `)) as any).rows || [];
+      const overridesMap = new Map<number, { manuais: any; historico: any }>();
+      for (const r of existingOverridesRows) {
+        const manuais = r.descontosManuaisJson || {};
+        const hasAny = Object.keys(manuais).length > 0;
+        if (hasAny) {
+          overridesMap.set(Number(r.employeeId), {
+            manuais,
+            historico: r.descontosManuaisHistorico || {},
+          });
+        }
+      }
+      if (overridesMap.size > 0 && !input.manterOverrides && !input.descartarOverrides) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `OVERRIDES_EXIST:${overridesMap.size}`,
+        });
+      }
+      // descartarOverrides: limpa o map → não reaplica
+      if (input.descartarOverrides) overridesMap.clear();
 
       // Clear existing payments for this month
       await db.execute(sql`
@@ -2893,15 +2927,40 @@ export const payrollEngineRouter = router({
         });
 
         const descontoConvenio = convenioMap.get(emp.id) || 0;
-        const totalDescontos = descontoAdiantamento + descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVaTotal + descontoVtFaltas + descontoPensao + acertoEscuroValor + inssValor + descontoConvenio;
+
+        // Valores calculados (originais) — usados como referência para overrides
+        const calcVale = descontoAdiantamento;
+        const calcInss = inssValor;
+        const calcVt = vtValorMensal;
+        const calcVa = descontoVaTotal;
+        const calcFaltas = descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVtFaltas;
+        const calcOutros = descontoPensao + seguroVidaValor + acertoEscuroValor;
+        const calcConvenio = descontoConvenio;
+
+        // Aplica overrides manuais (se mantidos)
+        const ovr = overridesMap.get(emp.id);
+        const ovrManuais: any = ovr?.manuais || {};
+        const ovrHist: any = ovr?.historico || {};
+        const finalVale = ovrManuais.vale != null ? Number(ovrManuais.vale) : calcVale;
+        const finalInss = ovrManuais.inss != null ? Number(ovrManuais.inss) : calcInss;
+        const finalVt = ovrManuais.vt != null ? Number(ovrManuais.vt) : calcVt;
+        const finalVa = ovrManuais.va != null ? Number(ovrManuais.va) : calcVa;
+        const finalFaltas = ovrManuais.faltas != null ? Number(ovrManuais.faltas) : calcFaltas;
+        const finalOutros = ovrManuais.outros != null ? Number(ovrManuais.outros) : calcOutros;
+        const finalConvenio = ovrManuais.convenio != null ? Number(ovrManuais.convenio) : calcConvenio;
+
+        const totalDescontos = finalVale + finalInss + finalVt + finalVa + finalFaltas + finalOutros + finalConvenio;
         const salarioLiquido = totalProventos - totalDescontos;
+
+        const manuaisJsonStr = Object.keys(ovrManuais).length > 0 ? JSON.stringify(ovrManuais) : null;
+        const histJsonStr = Object.keys(ovrHist).length > 0 ? JSON.stringify(ovrHist) : null;
 
         paymentInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis},
           ${formatMoney(salarioBruto)}, ${formatMoney(valorHE)}, ${formatMoney(totalProventos)},
-          ${formatMoney(descontoAdiantamento)}, ${formatMoney(descontoFaltas)}, ${faltasQtd}, ${formatMoney(descontoAtrasos)}, ${atrasosMinutos},
-          ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(descontoPensao)}, ${formatMoney(inssValor)}, ${formatMoney(fgtsValor)}, ${formatMoney(descontoConvenio)},
+          ${formatMoney(finalVale)}, ${formatMoney(descontoFaltas)}, ${faltasQtd}, ${formatMoney(descontoAtrasos)}, ${atrasosMinutos},
+          ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(descontoPensao)}, ${formatMoney(finalInss)}, ${formatMoney(fgtsValor)}, ${formatMoney(finalConvenio)},
           ${formatMoney(totalDescontos)}, ${formatMoney(acertoEscuroValor)}, ${JSON.stringify(acertoEscuroDetalhes)}, ${formatMoney(salarioLiquido)},
-          'simulado', ${dataPagamentoPrevista})`);
+          'simulado', ${dataPagamentoPrevista}, ${manuaisJsonStr}, ${histJsonStr})`);
 
         grandTotalLiquido += salarioLiquido;
         grandTotalBruto += salarioBruto;
@@ -2909,11 +2968,49 @@ export const payrollEngineRouter = router({
 
         results.push({
           employeeId: emp.id, nome: emp.nomeCompleto, funcao: emp.funcao, codigoInterno: emp.codigoInterno,
-          salarioBruto, valorHE, totalProventos, descontoAdiantamento, descontoFaltas, faltasQtd,
-          descontoAtrasos, descontoVrFaltas, descontoVtFaltas, descontoVaTotal, descontoPensao,
-          descontoInss: inssValor, descontoFgts: fgtsValor, acertoEscuroValor, descontoConvenio,
+          salarioBruto, valorHE, totalProventos,
+          // Valores finais (com overrides aplicados) — usados na tabela
+          descontoAdiantamento: finalVale, descontoInss: finalInss,
+          descontoFaltas, faltasQtd, descontoAtrasos, atrasosMinutos,
+          descontoVrFaltas, descontoVtFaltas, descontoVaTotal: finalVa, descontoPensao,
+          descontoFgts: fgtsValor, acertoEscuroValor, descontoConvenio: finalConvenio,
           totalDescontos, salarioLiquido, dataPagamentoPrevista, vaValor,
-          vtValor: vtValorMensal, vtDiario, vrValor: vrValorMensal, seguroVidaValor, rateioPorObra,
+          vtValor: finalVt, vtDiario, vrValor: vrValorMensal, vrDiario, seguroVidaValor, rateioPorObra,
+          // Memorial de cálculo (valores originais antes de overrides)
+          calculadoOriginal: {
+            vale: calcVale, inss: calcInss, vt: calcVt, va: calcVa,
+            faltas: calcFaltas, outros: calcOutros, convenio: calcConvenio,
+          },
+          memorialCalculo: {
+            valorHora: parseBRL(emp.valorHora || '0'),
+            cargaHorariaDiaria: criteria.cargaHorariaDiaria,
+            diasUteis,
+            // Faltas
+            faltasQtdMes, escFaltasQtd,
+            descontoFaltasMes: faltasQtdMes * valorHora * criteria.cargaHorariaDiaria,
+            descontoFaltasEscuro: escFaltasValor,
+            descontoVrFaltasMes: criteria.descontoVrFalta ? faltasQtdMes * vrDiario : 0,
+            descontoVrFaltasEscuro: escFaltasVr,
+            descontoVtFaltasMes: criteria.descontoVtFalta ? faltasQtdMes * vtDiario : 0,
+            descontoVtFaltasEscuro: escFaltasVt,
+            // Atrasos
+            atrasosMinutos,
+            descontoAtrasosMinutos: (atrasosMinutos / 60) * valorHora,
+            descontoAtrasosEscuro: escAtrasosValor,
+            // INSS
+            inssPercentual: parseBRL(emp.inssPercentual || '0'),
+            // VT
+            vtDiario, vtValorMensal,
+            // VA
+            vaLancamento,
+            // Outros
+            descontoPensao, seguroVidaValor, acertoEscuroValor,
+            pensaoTipo: emp.pensaoTipo, pensaoPercentual: emp.pensaoPercentual, pensaoValor: emp.pensaoValor,
+            // Adjustments detalhe
+            acertoEscuroDetalhes,
+          },
+          descontosManuais: ovrManuais,
+          descontosManuaisHistorico: ovrHist,
           banco: emp.banco || null, bancoNome: emp.bancoNome || null,
           agencia: emp.agencia || null, conta: emp.conta || null,
           tipoConta: emp.tipoConta || null, tipoChavePix: emp.tipoChavePix || null,
@@ -2929,7 +3026,7 @@ export const payrollEngineRouter = router({
             "descontoAdiantamento", "descontoFaltas", "descontoFaltasQtd", "descontoAtrasos", "descontoAtrasosMinutos",
             "descontoVrFaltas", "descontoVtFaltas", "descontoPensao", "descontoInss", "descontoFgts", "descontoOutros",
             "totalDescontos", "acertoEscuroValor", "acertoEscuroDetalhes", "salarioLiquido",
-            status, "dataPagamentoPrevista")
+            status, "dataPagamentoPrevista", "descontosManuaisJson", "descontosManuaisHistorico")
           VALUES ${sql.join(paymentInsertRows, sql`,`)}
         `);
       }
@@ -2992,6 +3089,162 @@ export const payrollEngineRouter = router({
 
       return pagamentoResultPayload;
     }),
+
+  // ============================================================
+  // 6.1. EDITAR DESCONTO MANUAL (override)
+  // ============================================================
+  editarDescontoManual: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      employeeId: z.number(),
+      campo: z.enum(['vale', 'inss', 'vt', 'va', 'faltas', 'outros', 'convenio']),
+      valorNovo: z.number().nullable(), // null = reverter ao calculado
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Guard: bloqueia edição se pagamento estiver consolidado
+      const guard = ((await db.execute(sql`
+        SELECT "pagamentoConsolidadoEm", "pagamentoResultJson"
+        FROM payroll_periods
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+        LIMIT 1
+      `)) as any).rows || [];
+      if (guard.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Período de folha não encontrado" });
+      }
+      if (guard[0].pagamentoConsolidadoEm) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Pagamento consolidado — desconsolide para editar" });
+      }
+      const payload = (() => { try { return JSON.parse(guard[0].pagamentoResultJson || '{}'); } catch { return {}; } })();
+      const funcionarios: any[] = payload.funcionarios || [];
+      const idx = funcionarios.findIndex(f => Number(f.employeeId) === Number(input.employeeId));
+      if (idx < 0) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado na folha" });
+      const f = funcionarios[idx];
+
+      // Carrega manuais/historico atuais
+      const manuais = { ...(f.descontosManuais || {}) };
+      const historico = { ...(f.descontosManuaisHistorico || {}) };
+      const calc = f.calculadoOriginal || {};
+
+      // Mapeamento campo → field na funcionario
+      const camposCampo: Record<string, string> = {
+        vale: 'descontoAdiantamento', inss: 'descontoInss', vt: 'vtValor',
+        va: 'descontoVaTotal', faltas: 'descontoFaltas', outros: 'acertoEscuroValor',
+        convenio: 'descontoConvenio',
+      };
+
+      const userName = ctx.user?.name || ctx.user?.email || 'Sistema';
+      const agora = new Date().toISOString();
+
+      if (input.valorNovo == null) {
+        // Reverter ao calculado
+        delete manuais[input.campo];
+        delete historico[input.campo];
+      } else {
+        const valorOriginal = (calc as any)[input.campo] ?? 0;
+        manuais[input.campo] = Math.round(input.valorNovo * 100) / 100;
+        // Preserva valorOriginal da PRIMEIRA edição (não sobrescreve)
+        if (!historico[input.campo]) {
+          historico[input.campo] = {
+            valorOriginal: Math.round(valorOriginal * 100) / 100,
+            alteradoPor: userName,
+            alteradoEm: agora,
+            motivo: input.motivo || null,
+          };
+        } else {
+          historico[input.campo] = {
+            ...historico[input.campo],
+            alteradoPor: userName,
+            alteradoEm: agora,
+            motivo: input.motivo || historico[input.campo].motivo || null,
+          };
+        }
+      }
+
+      // Recalcula valores finais e total para esta linha
+      const finalVale = manuais.vale != null ? Number(manuais.vale) : Number(calc.vale || 0);
+      const finalInss = manuais.inss != null ? Number(manuais.inss) : Number(calc.inss || 0);
+      const finalVt = manuais.vt != null ? Number(manuais.vt) : Number(calc.vt || 0);
+      const finalVa = manuais.va != null ? Number(manuais.va) : Number(calc.va || 0);
+      const finalFaltas = manuais.faltas != null ? Number(manuais.faltas) : Number(calc.faltas || 0);
+      const finalOutros = manuais.outros != null ? Number(manuais.outros) : Number(calc.outros || 0);
+      const finalConvenio = manuais.convenio != null ? Number(manuais.convenio) : Number(calc.convenio || 0);
+
+      const totalDescontos = finalVale + finalInss + finalVt + finalVa + finalFaltas + finalOutros + finalConvenio;
+      const totalProventos = Number(f.totalProventos || 0);
+      const salarioLiquido = totalProventos - totalDescontos;
+
+      // Atualiza objeto funcionario no payload
+      funcionarios[idx] = {
+        ...f,
+        descontoAdiantamento: finalVale,
+        descontoInss: finalInss,
+        vtValor: finalVt,
+        descontoVaTotal: finalVa,
+        // FALTAS é exibido como descontoFaltas+descontoAtrasos+descontoVrFaltas+descontoVtFaltas;
+        // armazenamos o override em campo derivado para a UI usar quando manuais.faltas != null
+        descontoConvenio: finalConvenio,
+        // OUTROS exibido como descontoPensao+seguroVidaValor+acertoEscuroValor; mesma lógica
+        totalDescontos,
+        salarioLiquido,
+        descontosManuais: manuais,
+        descontosManuaisHistorico: historico,
+      };
+
+      // Recalcula totais agregados
+      const grandTotalDescontos = funcionarios.reduce((s, x) => s + Number(x.totalDescontos || 0), 0);
+      const grandTotalLiquido = funcionarios.reduce((s, x) => s + Number(x.salarioLiquido || 0), 0);
+      payload.funcionarios = funcionarios;
+      payload.totalDescontos = grandTotalDescontos;
+      payload.totalLiquido = grandTotalLiquido;
+
+      // Persiste no payroll_payments
+      // Estratégia: mantemos os componentes calculados intactos nas colunas concretas (descontoFaltas,
+      // descontoAtrasos, descontoPensao, acertoEscuroValor etc.) e gravamos os overrides apenas no JSON.
+      // Apenas vale e INSS, que têm coluna 1:1 sem composição, recebem write na coluna concreta —
+      // assim reports legados continuam funcionando para esses dois campos.
+      // O totalDescontos e salarioLiquido sempre refletem os overrides aplicados.
+      const manuaisStr = Object.keys(manuais).length > 0 ? JSON.stringify(manuais) : null;
+      const histStr = Object.keys(historico).length > 0 ? JSON.stringify(historico) : null;
+
+      const setFragments: any[] = [
+        sql`"totalDescontos" = ${formatMoney(totalDescontos)}`,
+        sql`"salarioLiquido" = ${formatMoney(salarioLiquido)}`,
+        sql`"descontosManuaisJson" = ${manuaisStr}::jsonb`,
+        sql`"descontosManuaisHistorico" = ${histStr}::jsonb`,
+        sql`"updatedAt" = NOW()`,
+      ];
+      if (input.campo === 'vale') setFragments.push(sql`"descontoAdiantamento" = ${formatMoney(finalVale)}`);
+      if (input.campo === 'inss') setFragments.push(sql`"descontoInss" = ${formatMoney(finalInss)}`);
+
+      await db.execute(sql`
+        UPDATE payroll_payments
+        SET ${sql.join(setFragments, sql`, `)}
+        WHERE "companyId" = ${input.companyId}
+          AND "mesReferencia" = ${input.mesReferencia}
+          AND "employeeId" = ${input.employeeId}
+      `);
+
+      // Atualiza payroll_periods com payload novo + totais
+      await db.execute(sql`
+        UPDATE payroll_periods SET
+          "totalDescontos" = ${formatMoney(grandTotalDescontos)},
+          "totalLiquido" = ${formatMoney(grandTotalLiquido)},
+          "pagamentoResultJson" = ${JSON.stringify(payload)}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `);
+
+      return {
+        funcionario: funcionarios[idx],
+        totalDescontos: grandTotalDescontos,
+        totalLiquido: grandTotalLiquido,
+      };
+    }),
+
 
   // ============================================================
   // 7. LISTAR PAGAMENTOS

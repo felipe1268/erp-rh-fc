@@ -25,6 +25,8 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { fmtNum } from "@/lib/formatters";
 import AlertaDivergenciaFolha from "@/components/AlertaDivergenciaFolha";
 
@@ -64,6 +66,211 @@ function parseBRLNum(val: string | number | null | undefined): number {
 }
 
 type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo" | "auditoria_folha";
+
+type CampoDesconto = 'vale' | 'inss' | 'vt' | 'va' | 'faltas' | 'outros' | 'convenio';
+
+const CAMPO_LABELS: Record<CampoDesconto, string> = {
+  vale: 'Vale (Adiantamento)', inss: 'INSS', vt: 'Vale-Transporte (VT)', va: 'Vale-Alimentação (VA)',
+  faltas: 'Faltas / Atrasos', outros: 'Outros (Pensão / Seguro / Aferição)', convenio: 'Convênio',
+};
+
+function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
+  const m = f.memorialCalculo || {};
+  const fmt = (n: number) => `R$ ${(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const calc = f.calculadoOriginal || {};
+  if (campo === 'vale') {
+    return (<div className="text-xs space-y-1">
+      <div className="font-semibold text-gray-700">Memorial de cálculo — Vale</div>
+      <div>Adiantamento (vale) referente ao mês: <b>{fmt(calc.vale)}</b></div>
+      <div className="text-[10px] text-muted-foreground">Origem: cálculo de vale (50% do líquido projetado, descontados VR/VT por dia útil até a data do vale).</div>
+    </div>);
+  }
+  if (campo === 'inss') {
+    const sal = Number(f.salarioBruto || 0);
+    const perc = Number(m.inssPercentual || 0);
+    return (<div className="text-xs space-y-1">
+      <div className="font-semibold text-gray-700">Memorial de cálculo — INSS</div>
+      <div>Salário bruto: <b>{fmt(sal)}</b></div>
+      <div>Alíquota cadastrada: <b>{perc.toFixed(2)}%</b></div>
+      <div>{fmt(sal)} × {perc.toFixed(2)}% = <b>{fmt(calc.inss)}</b></div>
+      <div className="text-[10px] text-muted-foreground">Para INSS escalonado por faixa, ajuste o percentual no cadastro do funcionário.</div>
+    </div>);
+  }
+  if (campo === 'vt') {
+    return (<div className="text-xs space-y-1">
+      <div className="font-semibold text-gray-700">Memorial de cálculo — VT</div>
+      <div>VT diário: <b>{fmt(m.vtDiario)}</b></div>
+      <div>Dias úteis: <b>{m.diasUteis}</b></div>
+      <div>{fmt(m.vtDiario)} × {m.diasUteis} = <b>{fmt(calc.vt)}</b></div>
+    </div>);
+  }
+  if (campo === 'va') {
+    return (<div className="text-xs space-y-1">
+      <div className="font-semibold text-gray-700">Memorial de cálculo — VA</div>
+      <div>Lançamento de VA do mês: <b>{fmt(m.vaLancamento)}</b></div>
+      <div>Total descontado em folha: <b>{fmt(calc.va)}</b></div>
+      <div className="text-[10px] text-muted-foreground">VA é benefício; o desconto em folha é configurável por critério da empresa.</div>
+    </div>);
+  }
+  if (campo === 'faltas') {
+    return (<div className="text-xs space-y-1">
+      <div className="font-semibold text-gray-700">Memorial de cálculo — Faltas / Atrasos</div>
+      <div>Valor-hora: <b>{fmt(m.valorHora)}</b> · Carga diária: <b>{m.cargaHorariaDiaria}h</b></div>
+      <div className="border-t pt-1 mt-1">
+        <div>Faltas no mês: <b>{m.faltasQtdMes}</b> dia(s) → {fmt(m.descontoFaltasMes)}</div>
+        {m.descontoVrFaltasMes > 0 && <div className="pl-3">+ VR descontado por faltas: {fmt(m.descontoVrFaltasMes)}</div>}
+        {m.descontoVtFaltasMes > 0 && <div className="pl-3">+ VT descontado por faltas: {fmt(m.descontoVtFaltasMes)}</div>}
+        <div>Atrasos no mês: <b>{m.atrasosMinutos}</b> min → {fmt(m.descontoAtrasosMinutos)}</div>
+      </div>
+      {(m.escFaltasQtd > 0 || m.descontoFaltasEscuro > 0 || m.descontoAtrasosEscuro > 0) && (
+        <div className="border-t pt-1 mt-1">
+          <div className="font-semibold text-amber-700">Aferição do Escuro:</div>
+          {m.escFaltasQtd > 0 && <div className="pl-3">Faltas retroativas: <b>{m.escFaltasQtd}</b> → {fmt(m.descontoFaltasEscuro)}</div>}
+          {m.descontoVrFaltasEscuro > 0 && <div className="pl-3">+ VR retroativo: {fmt(m.descontoVrFaltasEscuro)}</div>}
+          {m.descontoVtFaltasEscuro > 0 && <div className="pl-3">+ VT retroativo: {fmt(m.descontoVtFaltasEscuro)}</div>}
+          {m.descontoAtrasosEscuro > 0 && <div className="pl-3">Atrasos retroativos: {fmt(m.descontoAtrasosEscuro)}</div>}
+        </div>
+      )}
+      <div className="border-t pt-1 mt-1 font-semibold">Total Faltas: {fmt(calc.faltas)}</div>
+    </div>);
+  }
+  if (campo === 'outros') {
+    const det: any[] = m.acertoEscuroDetalhes || [];
+    return (<div className="text-xs space-y-1">
+      <div className="font-semibold text-gray-700">Memorial de cálculo — Outros</div>
+      {Number(m.descontoPensao) > 0 && (
+        <div>Pensão alimentícia ({m.pensaoTipo === 'percentual' ? `${m.pensaoPercentual}%` : 'fixo'}): <b>{fmt(m.descontoPensao)}</b></div>
+      )}
+      {Number(m.seguroVidaValor) > 0 && <div>Seguro de vida: <b>{fmt(m.seguroVidaValor)}</b></div>}
+      {Number(m.acertoEscuroValor) > 0 && (
+        <div>Acerto do Escuro (outros tipos): <b>{fmt(m.acertoEscuroValor)}</b>
+          {det.length > 0 && (
+            <ul className="pl-3 text-[10px] text-muted-foreground list-disc list-inside">
+              {det.filter((d: any) => d.tipo !== 'falta' && d.tipo !== 'atraso').map((d: any, i: number) => (
+                <li key={i}>{d.data} — {d.tipo}: {fmt(Number(d.valor))} {d.descricao ? `(${d.descricao})` : ''}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      <div className="border-t pt-1 mt-1 font-semibold">Total Outros: {fmt(calc.outros)}</div>
+    </div>);
+  }
+  if (campo === 'convenio') {
+    return (<div className="text-xs space-y-1">
+      <div className="font-semibold text-gray-700">Memorial de cálculo — Convênio</div>
+      <div>Lançamento de convênio do mês: <b>{fmt(calc.convenio)}</b></div>
+      <div className="text-[10px] text-muted-foreground">Origem: módulo de Convênio (lançamentos importados/cadastrados para o mês).</div>
+    </div>);
+  }
+  return null;
+}
+
+function DescontoCell({
+  f, campo, valor, onSave, isLoading, baseClassName,
+}: {
+  f: any; campo: CampoDesconto; valor: number;
+  onSave: (campo: CampoDesconto, valorNovo: number | null, motivo?: string) => void;
+  isLoading: boolean; baseClassName: string;
+}) {
+  const manuais = f.descontosManuais || {};
+  const historico = f.descontosManuaisHistorico || {};
+  const isOverride = manuais[campo] != null;
+  const hist = historico[campo];
+
+  const [open, setOpen] = useState(false);
+  const [editValor, setEditValor] = useState<string>(valor.toFixed(2).replace('.', ','));
+  const [motivo, setMotivo] = useState<string>('');
+
+  useEffect(() => {
+    if (open) {
+      setEditValor(valor.toFixed(2).replace('.', ','));
+      setMotivo(hist?.motivo || '');
+    }
+  }, [open, valor, hist]);
+
+  const fmtBR = (n: number) => `R$ ${(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const handleSave = () => {
+    const num = parseFloat(editValor.replace(/\./g, '').replace(',', '.'));
+    if (isNaN(num) || num < 0) { toast.error("Valor inválido"); return; }
+    onSave(campo, num, motivo.trim() || undefined);
+    setOpen(false);
+  };
+  const handleRevert = () => { onSave(campo, null); setOpen(false); };
+
+  const overrideClass = isOverride ? 'bg-orange-100 hover:bg-orange-200 font-semibold' : 'hover:bg-blue-50/60';
+  const cellInner = (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className={`w-full h-full text-right px-2 py-2 transition-colors cursor-pointer ${overrideClass}`}
+      title="Clique para ver memorial de cálculo ou editar"
+    >
+      {valor > 0 ? fmtBR(valor) : '—'}
+      {isOverride && <span className="ml-0.5 text-orange-700">*</span>}
+    </button>
+  );
+
+  return (
+    <td className={baseClassName + ' p-0'}>
+      {isOverride && hist ? (
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <Popover open={open} onOpenChange={setOpen}>
+                  <PopoverTrigger asChild>{cellInner}</PopoverTrigger>
+                  <PopoverContent className="w-96" align="end">
+                    <div className="space-y-3">
+                      <MemorialCalculo campo={campo} f={f} />
+                      <div className="border-t pt-2 space-y-1">
+                        <div className="text-xs font-semibold text-orange-700">Alteração manual</div>
+                        <div className="text-[11px]">Valor original: <b>{fmtBR(hist.valorOriginal || 0)}</b></div>
+                        <div className="text-[11px]">Por: {hist.alteradoPor} em {hist.alteradoEm ? new Date(hist.alteradoEm).toLocaleString('pt-BR') : '—'}</div>
+                        {hist.motivo && <div className="text-[11px] italic">"{hist.motivo}"</div>}
+                      </div>
+                      <div className="border-t pt-2 space-y-2">
+                        <label className="text-[11px] text-gray-600">Novo valor (R$)</label>
+                        <Input value={editValor} onChange={(e) => setEditValor(e.target.value)} className="h-8 text-xs" />
+                        <label className="text-[11px] text-gray-600">Motivo (opcional)</label>
+                        <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} className="text-xs min-h-[60px]" placeholder="Ex.: ajuste por acordo, erro de cadastro..." />
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={handleSave} disabled={isLoading} className="flex-1">Salvar</Button>
+                          <Button size="sm" variant="outline" onClick={handleRevert} disabled={isLoading}>Reverter</Button>
+                        </div>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              <div>Alterado de <b>{fmtBR(hist.valorOriginal || 0)}</b> para <b>{fmtBR(valor)}</b></div>
+              <div className="text-[10px] opacity-80">por {hist.alteradoPor} · {hist.alteradoEm ? new Date(hist.alteradoEm).toLocaleString('pt-BR') : '—'}</div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>{cellInner}</PopoverTrigger>
+          <PopoverContent className="w-96" align="end">
+            <div className="space-y-3">
+              <MemorialCalculo campo={campo} f={f} />
+              <div className="border-t pt-2 space-y-2">
+                <div className="text-xs font-semibold text-gray-700">Alterar valor manualmente</div>
+                <label className="text-[11px] text-gray-600">Novo valor (R$)</label>
+                <Input value={editValor} onChange={(e) => setEditValor(e.target.value)} className="h-8 text-xs" />
+                <label className="text-[11px] text-gray-600">Motivo (opcional)</label>
+                <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} className="text-xs min-h-[60px]" placeholder="Ex.: ajuste por acordo, erro de cadastro..." />
+                <Button size="sm" onClick={handleSave} disabled={isLoading} className="w-full">Salvar alteração manual</Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
+    </td>
+  );
+}
 
 export default function FolhaPagamento() {
   const { selectedCompanyId, getCompanyIdsForQuery} = useCompany();
@@ -267,6 +474,7 @@ export default function FolhaPagamento() {
     },
     onError: (err) => { resetProgress('vale'); setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao calcular vale: ${err.message}`); },
   });
+  const [overridesPrompt, setOverridesPrompt] = useState<{ open: boolean; count: number }>({ open: false, count: 0 });
   const simularPagamentoMut = trpc.payrollEngine.simularPagamento.useMutation({
     onMutate: () => startProgress('pagamento'),
     onSuccess: (data) => {
@@ -275,6 +483,7 @@ export default function FolhaPagamento() {
       setCalcElapsed(0);
       setPagamentoResult(data);
       setViewMode("calculo_pagamento");
+      setOverridesPrompt({ open: false, count: 0 });
       if (data.divergencias && data.divergencias.length > 0) {
         toast.warning(`ATENÇÃO: ${data.divergencias.length} funcionário(s) CLT ativo(s) excluído(s) da folha por cadastro incompleto. Verifique o alerta na tela.`, { duration: 8000 });
       }
@@ -282,7 +491,32 @@ export default function FolhaPagamento() {
       divergenciasFolha.refetch();
       payrollPeriod.refetch();
     },
-    onError: (err) => { resetProgress('pagamento'); setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao simular pagamento: ${err.message}`); },
+    onError: (err) => {
+      resetProgress('pagamento'); setCalcType(null); setCalcElapsed(0);
+      const m = String(err.message || '');
+      const ovrMatch = m.match(/OVERRIDES_EXIST:(\d+)/);
+      if (ovrMatch) {
+        setOverridesPrompt({ open: true, count: Number(ovrMatch[1]) });
+      } else {
+        toast.error(`Erro ao simular pagamento: ${err.message}`);
+      }
+    },
+  });
+
+  // Edição manual de descontos
+  const editarDescontoMut = trpc.payrollEngine.editarDescontoManual.useMutation({
+    onSuccess: (data: any) => {
+      // Atualiza local: substitui o funcionario no pagamentoResult e atualiza totais
+      setPagamentoResult((prev: any) => {
+        if (!prev) return prev;
+        const funcs = (prev.funcionarios || []).map((f: any) =>
+          Number(f.employeeId) === Number(data.funcionario.employeeId) ? data.funcionario : f
+        );
+        return { ...prev, funcionarios: funcs, totalDescontos: data.totalDescontos, totalLiquido: data.totalLiquido };
+      });
+      toast.success("Desconto atualizado");
+    },
+    onError: (err) => toast.error(`Erro ao salvar desconto: ${err.message}`),
   });
 
   const lastLoadedPeriodId = useRef<number | null>(null);
@@ -3487,14 +3721,27 @@ export default function FolhaPagamento() {
                         );
                       }
                       return filtered.map((f: any, i: number) => {
+                      const manuais = f.descontosManuais || {};
                       const vtVal = f.vtValor || 0;
                       const vaDesc = f.descontoVaTotal || 0;
-                      const descFaltas = (f.descontoFaltas || 0) + (f.descontoAtrasos || 0);
                       const pensao = f.descontoPensao || 0;
                       const seguro = f.seguroVidaValor || 0;
                       const acertoEsc = f.acertoEscuroValor || 0;
                       const convenio = f.descontoConvenio || 0;
-                      const outros = pensao + seguro + acertoEsc;
+                      const descFaltasCalc = (f.descontoFaltas || 0) + (f.descontoAtrasos || 0) + (f.descontoVrFaltas || 0) + (f.descontoVtFaltas || 0);
+                      const outrosCalc = pensao + seguro + acertoEsc;
+                      const valVale = manuais.vale != null ? Number(manuais.vale) : (f.descontoAdiantamento || 0);
+                      const valInss = manuais.inss != null ? Number(manuais.inss) : (f.descontoInss || 0);
+                      const valVt = manuais.vt != null ? Number(manuais.vt) : vtVal;
+                      const valVa = manuais.va != null ? Number(manuais.va) : vaDesc;
+                      const valFaltas = manuais.faltas != null ? Number(manuais.faltas) : descFaltasCalc;
+                      const valOutros = manuais.outros != null ? Number(manuais.outros) : outrosCalc;
+                      const valConv = manuais.convenio != null ? Number(manuais.convenio) : convenio;
+                      const onSaveCell = (campo: CampoDesconto, valorNovo: number | null, motivo?: string) =>
+                        editarDescontoMut.mutate({
+                          companyId, mesReferencia: mesAno,
+                          employeeId: Number(f.employeeId), campo, valorNovo, motivo,
+                        });
                       const zebra = i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50';
                       return (
                         <tr key={i} className={`border-b border-gray-100 hover:bg-blue-50/40 transition-colors ${zebra}`}>
@@ -3503,13 +3750,13 @@ export default function FolhaPagamento() {
                           <td className="text-right py-2 px-2 border-l border-green-100">{formatBRL(f.salarioBruto)}</td>
                           <td className="text-right py-2 px-2 text-green-700">{f.valorHE > 0 ? formatBRL(f.valorHE) : '—'}</td>
                           <td className="text-right py-2 px-2 font-semibold text-green-800">{formatBRL(f.totalProventos)}</td>
-                          <td className="text-right py-2 px-2 border-l border-red-100 text-orange-600">{f.descontoAdiantamento > 0 ? formatBRL(f.descontoAdiantamento) : '—'}</td>
-                          <td className="text-right py-2 px-2 text-red-600">{f.descontoInss > 0 ? formatBRL(f.descontoInss) : '—'}</td>
-                          <td className="text-right py-2 px-2 text-red-600">{vtVal > 0 ? formatBRL(vtVal) : '—'}</td>
-                          <td className="text-right py-2 px-2 text-red-600">{vaDesc > 0 ? formatBRL(vaDesc) : '—'}</td>
-                          <td className="text-right py-2 px-2 text-red-600">{descFaltas > 0 ? formatBRL(descFaltas) : '—'}</td>
-                          <td className="text-right py-2 px-2 text-red-600">{outros > 0 ? formatBRL(outros) : '—'}</td>
-                          <td className="text-right py-2 px-2 text-purple-700">{convenio > 0 ? formatBRL(convenio) : '—'}</td>
+                          <DescontoCell f={f} campo="vale" valor={valVale} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="border-l border-red-100 text-orange-600 text-right" />
+                          <DescontoCell f={f} campo="inss" valor={valInss} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
+                          <DescontoCell f={f} campo="vt" valor={valVt} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
+                          <DescontoCell f={f} campo="va" valor={valVa} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
+                          <DescontoCell f={f} campo="faltas" valor={valFaltas} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
+                          <DescontoCell f={f} campo="outros" valor={valOutros} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
+                          <DescontoCell f={f} campo="convenio" valor={valConv} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-purple-700 text-right" />
                           <td className="text-right py-2 px-2 font-semibold text-red-700">{formatBRL(f.totalDescontos)}</td>
                           <td className="text-right py-2 px-2 border-l border-blue-100 font-bold text-[#1B2A4A]">{formatBRL(f.salarioLiquido)}</td>
                           <td className="text-right py-2 px-2 text-[10px] text-muted-foreground">{formatBRL(f.descontoFgts)}</td>
@@ -3523,27 +3770,32 @@ export default function FolhaPagamento() {
                       <td className="py-3 px-2 sticky left-0 bg-gray-100 z-10" colSpan={2}>TOTAL — {pagamentoResult.totalFuncionarios} funcionários</td>
                       <td className="text-right py-3 px-2 border-l border-green-200" colSpan={2}></td>
                       <td className="text-right py-3 px-2 text-green-800">{formatBRL(pagamentoResult.totalBruto)}</td>
-                      <td className="text-right py-3 px-2 border-l border-red-200 text-orange-600">
-                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoAdiantamento || 0), 0) || 0)}
-                      </td>
-                      <td className="text-right py-3 px-2 text-red-600">
-                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoInss || 0), 0) || 0)}
-                      </td>
-                      <td className="text-right py-3 px-2 text-red-600">
-                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.vtValor || 0), 0) || 0)}
-                      </td>
-                      <td className="text-right py-3 px-2 text-red-600">
-                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoVaTotal || 0), 0) || 0)}
-                      </td>
-                      <td className="text-right py-3 px-2 text-red-600">
-                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoFaltas || 0) + (f.descontoAtrasos || 0), 0) || 0)}
-                      </td>
-                      <td className="text-right py-3 px-2 text-red-600">
-                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoPensao || 0) + (f.seguroVidaValor || 0) + (f.acertoEscuroValor || 0), 0) || 0)}
-                      </td>
-                      <td className="text-right py-3 px-2 text-purple-700">
-                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoConvenio || 0), 0) || 0)}
-                      </td>
+                      {(() => {
+                        const eff = (f: any, campo: CampoDesconto, fallback: number) => {
+                          const m = f.descontosManuais || {};
+                          return m[campo] != null ? Number(m[campo]) : fallback;
+                        };
+                        const sum = (campo: CampoDesconto, getCalc: (f: any) => number) =>
+                          (pagamentoResult.funcionarios || []).reduce((s: number, f: any) => s + eff(f, campo, getCalc(f)), 0);
+                        const totVale = sum('vale', (f) => f.descontoAdiantamento || 0);
+                        const totInss = sum('inss', (f) => f.descontoInss || 0);
+                        const totVt = sum('vt', (f) => f.vtValor || 0);
+                        const totVa = sum('va', (f) => f.descontoVaTotal || 0);
+                        const totFaltas = sum('faltas', (f) => (f.descontoFaltas || 0) + (f.descontoAtrasos || 0) + (f.descontoVrFaltas || 0) + (f.descontoVtFaltas || 0));
+                        const totOutros = sum('outros', (f) => (f.descontoPensao || 0) + (f.seguroVidaValor || 0) + (f.acertoEscuroValor || 0));
+                        const totConv = sum('convenio', (f) => f.descontoConvenio || 0);
+                        return (
+                          <>
+                            <td className="text-right py-3 px-2 border-l border-red-200 text-orange-600">{formatBRL(totVale)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totInss)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totVt)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totVa)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totFaltas)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totOutros)}</td>
+                            <td className="text-right py-3 px-2 text-purple-700">{formatBRL(totConv)}</td>
+                          </>
+                        );
+                      })()}
                       <td className="text-right py-3 px-2 text-red-700">{formatBRL(pagamentoResult.totalDescontos)}</td>
                       <td className="text-right py-3 px-2 border-l border-blue-200 text-base text-[#1B2A4A]">{formatBRL(pagamentoResult.totalLiquido)}</td>
                       <td className="text-right py-3 px-2 text-[10px] text-muted-foreground">
@@ -3556,7 +3808,40 @@ export default function FolhaPagamento() {
             </CardContent>
           </Card>
           )}
+          {pagamentoSubView === "geral" && (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              <span className="inline-block w-2 h-2 bg-orange-200 border border-orange-400 mr-1 align-middle"></span>
+              Célula laranja com <b className="text-orange-700">*</b> = valor alterado manualmente. Clique em qualquer desconto para ver o memorial de cálculo ou editar.
+            </p>
+          )}
         </div>
+
+        {/* Dialog: confirma o que fazer com overrides na re-simulação */}
+        <Dialog open={overridesPrompt.open} onOpenChange={(o) => setOverridesPrompt(p => ({ ...p, open: o }))}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Existem alterações manuais nesta folha</DialogTitle>
+              <DialogDescription>
+                Foram encontrados <b>{overridesPrompt.count}</b> funcionário(s) com descontos editados manualmente.
+                O que deseja fazer ao re-simular?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
+              <Button variant="outline" onClick={() => setOverridesPrompt({ open: false, count: 0 })}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => {
+                setOverridesPrompt({ open: false, count: 0 });
+                setCalcType("pagamento");
+                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, descartarOverrides: true });
+              }}>Descartar e recalcular do zero</Button>
+              <Button onClick={() => {
+                setOverridesPrompt({ open: false, count: 0 });
+                setCalcType("pagamento");
+                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, manterOverrides: true });
+              }}>Manter alterações manuais</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <PrintFooterLGPD />
       </DashboardLayout>
     );

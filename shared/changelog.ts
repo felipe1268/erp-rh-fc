@@ -8397,4 +8397,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-16 19:00:00",
   },
+  {
+    version: 1191,
+    titulo: "Folha de Pagamento: Memorial de Cálculo + edição manual de descontos",
+    descricao:
+      "Cada célula de desconto na visão Geral da aba Pagamento (Vale, INSS, VT, VA, Faltas, Outros, Convênio) " +
+      "agora é clicável e abre um popover com o memorial de cálculo detalhado (origem dos valores, fórmulas, " +
+      "componentes do Acerto do Escuro etc.) e permite editar o valor manualmente com motivo. Valores alterados " +
+      "ficam destacados em laranja com asterisco e o tooltip mostra o valor original, autor e data da alteração. " +
+      "Ao re-simular uma folha que já tem alterações manuais, o sistema pergunta se deseja Manter as alterações " +
+      "manuais ou Descartar e recalcular do zero. Persistência via colunas JSONB descontosManuaisJson e " +
+      "descontosManuaisHistorico em payroll_payments.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-16 22:00:00",
+  },
 ];
