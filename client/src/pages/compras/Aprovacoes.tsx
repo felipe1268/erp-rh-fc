@@ -21,21 +21,24 @@ export default function ComprasAprovacoes() {
   const [recusaId, setRecusaId] = useState<number | null>(null);
   const [justificativa, setJustificativa] = useState("");
 
-  const { data: pendentes, isLoading, refetch } = trpc.purchase.pendentesAprovacao.useQuery(
-    { companyId },
+  const { data: pendentes, isLoading, refetch } = trpc.compras.listarSolicitacoes.useQuery(
+    { companyId, aprovacaoStatus: "aguardando" },
     { enabled: !!companyId }
   );
 
-  const aprovarMut = trpc.purchase.aprovarSolicitacao.useMutation({
-    onSuccess: () => { toast.success("Solicitação aprovada!"); refetch(); },
-    onError: () => toast.error("Erro ao aprovar"),
+  const aprovarMut = trpc.compras.aprovarSolicitacao.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(r?.cotacaoCriada ? `Solicitação aprovada! Cotação ${r.cotacaoCriada.numeroCotacao} criada.` : "Solicitação aprovada!");
+      refetch();
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao aprovar"),
   });
-  const recusarMut = trpc.purchase.recusarSolicitacao.useMutation({
+  const recusarMut = trpc.compras.aprovarSolicitacao.useMutation({
     onSuccess: () => { toast.success("Solicitação recusada."); setRecusaId(null); setJustificativa(""); refetch(); },
-    onError: () => toast.error("Erro ao recusar"),
+    onError: (e: any) => toast.error(e?.message || "Erro ao recusar"),
   });
 
-  const lista = pendentes ?? [];
+  const lista = (pendentes ?? []).filter((r: any) => r.status !== "cancelado");
 
   return (
     <DashboardLayout>
@@ -74,58 +77,64 @@ export default function ComprasAprovacoes() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>SC #</TableHead>
-                    <TableHead>Solicitante</TableHead>
-                    <TableHead>Obra</TableHead>
+                    <TableHead>Título</TableHead>
+                    <TableHead>Departamento</TableHead>
                     <TableHead>Tipo</TableHead>
-                    <TableHead>Valor Est.</TableHead>
+                    <TableHead>Itens</TableHead>
                     <TableHead>Prazo</TableHead>
                     <TableHead>Prioridade</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {lista.map((sc: any) => (
-                    <TableRow key={sc.id} className={sc.emergencial ? "bg-red-50" : ""}>
-                      <TableCell className="font-mono font-medium">#{sc.id}</TableCell>
-                      <TableCell>{sc.solicitanteNome || "—"}</TableCell>
-                      <TableCell>{sc.obraNome || "—"}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">{sc.tipo}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {sc.valorEstimadoTotal
-                          ? `R$ ${Number(sc.valorEstimadoTotal).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {sc.prazoNecessidade
-                          ? format(new Date(sc.prazoNecessidade), "dd/MM/yyyy", { locale: ptBR })
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {sc.emergencial ? (
-                          <Badge className="bg-red-100 text-red-700 flex items-center gap-1 w-fit">
-                            <AlertTriangle className="h-3 w-3" />Emergencial
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-gray-500">Normal</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
-                          <Button size="sm" className="bg-green-600 hover:bg-green-700"
-                            disabled={aprovarMut.isPending}
-                            onClick={() => aprovarMut.mutate({ id: sc.id, aprovadorId: user?.id ?? 0, aprovadorNome: user?.nome })}>
-                            <CheckCircle2 className="h-3 w-3 mr-1" />Aprovar
-                          </Button>
-                          <Button size="sm" variant="destructive"
-                            onClick={() => { setRecusaId(sc.id); setJustificativa(""); }}>
-                            <XCircle className="h-3 w-3 mr-1" />Recusar
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {lista.map((sc: any) => {
+                    const isEmerg = sc.tipo === "emergencial" || sc.prioridade === "urgente";
+                    return (
+                      <TableRow key={sc.id} className={isEmerg ? "bg-red-50" : ""}>
+                        <TableCell className="font-mono font-medium">{sc.numeroSc || `#${sc.id}`}</TableCell>
+                        <TableCell className="max-w-[240px] truncate" title={sc.titulo || ""}>{sc.titulo || "—"}</TableCell>
+                        <TableCell>{sc.departamento || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">{sc.tipo || "material"}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-xs text-gray-600">{sc._itens?.total ?? 0} itens</span>
+                        </TableCell>
+                        <TableCell>
+                          {sc.prazoNecessidade
+                            ? format(new Date(sc.prazoNecessidade), "dd/MM/yyyy", { locale: ptBR })
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {isEmerg ? (
+                            <Badge className="bg-red-100 text-red-700 flex items-center gap-1 w-fit">
+                              <AlertTriangle className="h-3 w-3" />{sc.prioridade === "urgente" ? "Urgente" : "Emergencial"}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-gray-500 capitalize">{sc.prioridade || "normal"}</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700"
+                              disabled={aprovarMut.isPending}
+                              onClick={() => aprovarMut.mutate({
+                                id: sc.id,
+                                aprovacaoStatus: "aprovada",
+                                aprovadorId: user?.id ?? undefined,
+                                aprovadorNome: user?.name ?? undefined,
+                              })}>
+                              <CheckCircle2 className="h-3 w-3 mr-1" />Aprovar
+                            </Button>
+                            <Button size="sm" variant="destructive"
+                              onClick={() => { setRecusaId(sc.id); setJustificativa(""); }}>
+                              <XCircle className="h-3 w-3 mr-1" />Recusar
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
@@ -144,7 +153,12 @@ export default function ComprasAprovacoes() {
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => setRecusaId(null)}>Cancelar</Button>
                 <Button variant="destructive" disabled={!justificativa.trim() || recusarMut.isPending}
-                  onClick={() => recusaId && recusarMut.mutate({ id: recusaId, justificativa })}>
+                  onClick={() => recusaId && recusarMut.mutate({
+                    id: recusaId,
+                    aprovacaoStatus: "recusada",
+                    aprovadorId: user?.id ?? undefined,
+                    aprovadorNome: user?.name ?? undefined,
+                  })}>
                   {recusarMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                   Confirmar Recusa
                 </Button>
