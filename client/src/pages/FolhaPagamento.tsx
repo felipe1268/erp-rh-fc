@@ -4573,7 +4573,8 @@ export default function FolhaPagamento() {
             if (!ts) return null;
             try {
               const d = new Date(ts);
-              return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+              const fmt = d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+              return fmt;
             } catch { return null; }
           };
 
