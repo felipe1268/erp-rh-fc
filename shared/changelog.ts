@@ -8527,4 +8527,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: 'Sistema',
     dataPublicacao: '2026-04-16 14:50:00',
   },
+  {
+    version: 1200,
+    titulo: "Memorial de Faltas com fórmulas explícitas (valor-hora × carga × dias)",
+    descricao: "O tooltip de FALTAS agora mostra cada fórmula passo a passo: valor-hora, valor-dia (vh × carga), qtd × valor-dia para faltas, qtd × VR-diário, qtd × VT-diário, (min ÷ 60) × vh para atrasos, e a soma final visível como expressão completa. Layout em blocos coloridos separando Mês corrente, DSR, Aferição do Escuro retroativo, com scroll para casos com muitos dias.",
+    tipo: 'melhoria',
+    modulos: 'Folha de Pagamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-04-16 15:10:00',
+  },
 ];

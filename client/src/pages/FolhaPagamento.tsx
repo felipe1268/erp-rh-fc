@@ -114,46 +114,88 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
     </div>);
   }
   if (campo === 'faltas') {
-    return (<div className="text-xs space-y-1">
+    const vh = Number(m.valorHora) || 0;
+    const cargaH = Number(m.cargaHorariaDiaria) || 0;
+    const valorDia = vh * cargaH;
+    const escFaltasQtd = Number(m.escFaltasQtd) || 0;
+    const escVrUnit = escFaltasQtd > 0 ? (Number(m.descontoVrFaltasEscuro) || 0) / escFaltasQtd : 0;
+    const escVtUnit = escFaltasQtd > 0 ? (Number(m.descontoVtFaltasEscuro) || 0) / escFaltasQtd : 0;
+    const vrDiarioMes = m.faltasQtdMes > 0 ? (Number(m.descontoVrFaltasMes) || 0) / m.faltasQtdMes : 0;
+    const vtDiarioMes = m.faltasQtdMes > 0 ? (Number(m.descontoVtFaltasMes) || 0) / m.faltasQtdMes : 0;
+    return (<div className="text-xs space-y-1 max-h-[70vh] overflow-y-auto">
       <div className="font-semibold text-gray-700">Memorial de cálculo — Faltas / Atrasos</div>
-      <div>Valor-hora: <b>{fmt(m.valorHora)}</b> · Carga diária: <b>{m.cargaHorariaDiaria}h</b></div>
-      <div className="border-t pt-1 mt-1">
-        <div>Faltas no mês: <b>{m.faltasQtdMes}</b> dia(s) → {fmt(m.descontoFaltasMes)}</div>
-        {Array.isArray(m.faltasMesDias) && m.faltasMesDias.length > 0 && (
-          <div className="pl-3 text-[10px] text-muted-foreground">Dias: {m.faltasMesDias.join(', ')}</div>
-        )}
-        {m.descontoVrFaltasMes > 0 && <div className="pl-3">+ VR descontado por faltas: {fmt(m.descontoVrFaltasMes)}</div>}
-        {m.descontoVtFaltasMes > 0 && <div className="pl-3">+ VT descontado por faltas: {fmt(m.descontoVtFaltasMes)}</div>}
-        <div>Atrasos no mês: <b>{m.atrasosMinutos}</b> min → {fmt(m.descontoAtrasosMinutos)}</div>
-        {Array.isArray(m.atrasosMesDias) && m.atrasosMesDias.length > 0 && (
-          <div className="pl-3 text-[10px] text-muted-foreground">Dias: {m.atrasosMesDias.join(', ')}</div>
-        )}
+      <div className="bg-gray-50 rounded px-2 py-1 text-[11px]">
+        <div>Valor-hora: <b>{fmt(vh)}</b> · Carga diária: <b>{cargaH}h</b></div>
+        <div>Valor-dia (base falta): <b>{fmt(vh)} × {cargaH}h = {fmt(valorDia)}</b></div>
       </div>
+
+      <div className="border-t pt-1 mt-1">
+        <div className="font-semibold text-gray-700">Faltas no mês corrente</div>
+        <div className="pl-2">Qtd: <b>{m.faltasQtdMes}</b> dia(s)</div>
+        {Array.isArray(m.faltasMesDias) && m.faltasMesDias.length > 0 && (
+          <div className="pl-2 text-[10px] text-muted-foreground">Dias: {m.faltasMesDias.join(', ')}</div>
+        )}
+        <div className="pl-2 font-mono text-[11px]">{m.faltasQtdMes} × {fmt(valorDia)} = <b>{fmt(m.descontoFaltasMes)}</b></div>
+        {m.descontoVrFaltasMes > 0 && (
+          <div className="pl-2 font-mono text-[11px]">+ VR: {m.faltasQtdMes} × {fmt(vrDiarioMes)} = <b>{fmt(m.descontoVrFaltasMes)}</b></div>
+        )}
+        {m.descontoVtFaltasMes > 0 && (
+          <div className="pl-2 font-mono text-[11px]">+ VT: {m.faltasQtdMes} × {fmt(vtDiarioMes)} = <b>{fmt(m.descontoVtFaltasMes)}</b></div>
+        )}
+        <div className="pl-2 font-semibold">Atrasos: <b>{m.atrasosMinutos}</b> min</div>
+        {Array.isArray(m.atrasosMesDias) && m.atrasosMesDias.length > 0 && (
+          <div className="pl-2 text-[10px] text-muted-foreground">Dias: {m.atrasosMesDias.join(', ')}</div>
+        )}
+        <div className="pl-2 font-mono text-[11px]">({m.atrasosMinutos} ÷ 60) × {fmt(vh)} = <b>{fmt(m.descontoAtrasosMinutos)}</b></div>
+      </div>
+
       {Number(m.dsrFaltaValor) > 0 && (
         <div className="border-t pt-1 mt-1">
-          <div className="font-semibold text-purple-700">DSR Falta — Lei 605/49 Art. 6º:</div>
-          <div className={`pl-3 ${m.dsrFaltaAplicado ? '' : 'text-muted-foreground line-through'}`}>
-            <b>{m.dsrFaltaQtd}</b> dia(s) × valor-DSR → {fmt(m.dsrFaltaValor)}
+          <div className="font-semibold text-purple-700">DSR Falta — Lei 605/49 Art. 6º</div>
+          <div className={`pl-2 font-mono text-[11px] ${m.dsrFaltaAplicado ? '' : 'text-muted-foreground line-through'}`}>
+            <b>{m.dsrFaltaQtd}</b> dia(s) × valor-DSR = <b>{fmt(m.dsrFaltaValor)}</b>
             {!m.dsrFaltaAplicado && <span className="text-[10px] ml-1 italic">(desativado pelo RH)</span>}
           </div>
         </div>
       )}
+
       {(m.escFaltasQtd > 0 || m.descontoFaltasEscuro > 0 || m.descontoAtrasosEscuro > 0) && (
         <div className="border-t pt-1 mt-1">
-          <div className="font-semibold text-amber-700">Aferição do Escuro:</div>
-          {m.escFaltasQtd > 0 && <div className="pl-3">Faltas retroativas: <b>{m.escFaltasQtd}</b> → {fmt(m.descontoFaltasEscuro)}</div>}
-          {Array.isArray(m.escFaltasDias) && m.escFaltasDias.length > 0 && (
-            <div className="pl-6 text-[10px] text-muted-foreground">Dias: {m.escFaltasDias.join(', ')}</div>
+          <div className="font-semibold text-amber-700">Aferição do Escuro (retroativo)</div>
+          {m.escFaltasQtd > 0 && (
+            <>
+              <div className="pl-2">Faltas: <b>{m.escFaltasQtd}</b> dia(s)</div>
+              {Array.isArray(m.escFaltasDias) && m.escFaltasDias.length > 0 && (
+                <div className="pl-2 text-[10px] text-muted-foreground">Dias: {m.escFaltasDias.join(', ')}</div>
+              )}
+              <div className="pl-2 font-mono text-[11px]">{m.escFaltasQtd} × {fmt(valorDia)} = <b>{fmt(m.descontoFaltasEscuro)}</b></div>
+            </>
           )}
-          {m.descontoVrFaltasEscuro > 0 && <div className="pl-3">+ VR retroativo: {fmt(m.descontoVrFaltasEscuro)}</div>}
-          {m.descontoVtFaltasEscuro > 0 && <div className="pl-3">+ VT retroativo: {fmt(m.descontoVtFaltasEscuro)}</div>}
-          {m.descontoAtrasosEscuro > 0 && <div className="pl-3">Atrasos retroativos: {fmt(m.descontoAtrasosEscuro)}</div>}
-          {Array.isArray(m.escAtrasosDias) && m.escAtrasosDias.length > 0 && (
-            <div className="pl-6 text-[10px] text-muted-foreground">Dias: {m.escAtrasosDias.join(', ')}</div>
+          {m.descontoVrFaltasEscuro > 0 && (
+            <div className="pl-2 font-mono text-[11px]">+ VR retroativo: {m.escFaltasQtd} × {fmt(escVrUnit)} = <b>{fmt(m.descontoVrFaltasEscuro)}</b></div>
+          )}
+          {m.descontoVtFaltasEscuro > 0 && (
+            <div className="pl-2 font-mono text-[11px]">+ VT retroativo: {m.escFaltasQtd} × {fmt(escVtUnit)} = <b>{fmt(m.descontoVtFaltasEscuro)}</b></div>
+          )}
+          {m.descontoAtrasosEscuro > 0 && (
+            <>
+              <div className="pl-2">Atrasos retroativos: <b>{fmt(m.descontoAtrasosEscuro)}</b></div>
+              {Array.isArray(m.escAtrasosDias) && m.escAtrasosDias.length > 0 && (
+                <div className="pl-2 text-[10px] text-muted-foreground">Dias: {m.escAtrasosDias.join(', ')}</div>
+              )}
+            </>
           )}
         </div>
       )}
-      <div className="border-t pt-1 mt-1 font-semibold">Total Faltas: {fmt(calc.faltas)}</div>
+
+      <div className="border-t pt-1 mt-1 bg-blue-50 rounded px-2 py-1">
+        <div className="font-mono text-[11px] text-gray-700">
+          {fmt(m.descontoFaltasMes)} + {fmt(m.descontoVrFaltasMes)} + {fmt(m.descontoVtFaltasMes)} + {fmt(m.descontoAtrasosMinutos)}
+          {Number(m.dsrFaltaValor) > 0 && m.dsrFaltaAplicado && ` + ${fmt(m.dsrFaltaValor)}`}
+          {' + '}{fmt(m.descontoFaltasEscuro)} + {fmt(m.descontoVrFaltasEscuro)} + {fmt(m.descontoVtFaltasEscuro)} + {fmt(m.descontoAtrasosEscuro)}
+        </div>
+        <div className="font-bold text-blue-900">Total Faltas: {fmt(calc.faltas)}</div>
+      </div>
     </div>);
   }
   if (campo === 'outros') {
