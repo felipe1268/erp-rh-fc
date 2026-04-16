@@ -8494,4 +8494,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-17 01:10:00",
   },
+  {
+    version: 1197,
+    titulo: "Aferir Escuro: janela = competência inteira (16 do mês anterior até 15 do mês atual)",
+    descricao:
+      "Correção de escopo: o RH FC Engenharia confirmou que o 'Aferir Escuro' deve conferir a " +
+      "competência INTEIRA (cut-to-cut) — ex.: competência Mar/2026 = 16/02/2026 a 15/03/2026 — e " +
+      "não apenas o resto do mês anterior (16/02–28/02). Ajustado escuroFim no backend " +
+      "(realizarAfericao) para `${year}-${month}-${diaCorte}` e no frontend para " +
+      "`15/${mesSelecionado}/${anoSelecionado}`. A query de escuroRecords (com filtro de data " +
+      "adicionado na Rev. 1196) e a de actualRecords agora cobrem os mesmos 30 dias da competência.",
+    tipo: "correcao",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-17 01:25:00",
+  },
 ];

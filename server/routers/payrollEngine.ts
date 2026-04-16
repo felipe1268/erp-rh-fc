@@ -874,9 +874,12 @@ export const payrollEngineRouter = router({
         )
       `);
 
-      // Janela do "escuro" a aferir = dia_corte+1 .. último dia do mês anterior
+      // Janela do "escuro" a aferir = competência inteira (cut-to-cut)
+      // Ex.: competência Mar/2026 → 16/02/2026 a 15/03/2026.
+      // Cobre tanto os dias do mês anterior pós-corte quanto os dias do mês atual
+      // até o dia_corte (todos podem ter sido projetados/estimados).
       const escuroInicio = `${prevParsed.year}-${String(prevParsed.month).padStart(2, "0")}-${String(diaCorte + 1).padStart(2, "0")}`;
-      const escuroFim = `${prevParsed.year}-${String(prevParsed.month).padStart(2, "0")}-${String(prevLastDay).padStart(2, "0")}`;
+      const escuroFim = `${year}-${String(month).padStart(2, "0")}-${String(diaCorte).padStart(2, "0")}`;
 
       // Buscar registros escuro + já decididos (preservados do reset) — excluir PJ/Sócio
       // IMPORTANTE: amarrar td.data >= escuroInicio para não puxar dias do início da
