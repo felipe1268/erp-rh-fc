@@ -481,6 +481,8 @@ export default function FolhaPagamento() {
           if (f.employeeId === data.employeeId) {
             return {
               ...f,
+              valorTotalVale: parseFloat(data.novoBruto) || f.valorTotalVale,
+              valorAdiantamento: parseFloat(data.novoBruto) || f.valorAdiantamento,
               irRetido: parseFloat(data.novoIR) || 0,
               valorLiquido: parseFloat(data.novoLiquido) || f.valorLiquido,
             };

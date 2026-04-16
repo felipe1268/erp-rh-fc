@@ -2451,21 +2451,21 @@ export const payrollEngineRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Registro de vale não encontrado." });
       }
       const row = oldRows[0];
-      const bruto = parseFloat(row.valorTotalVale) || 0;
+      const brutoAnterior = row.valorTotalVale;
       const liquidoAnterior = row.valorLiquidoVale;
 
-      if (liquidoNum > bruto) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: `Líquido (R$ ${liquidoNum.toFixed(2)}) não pode ser maior que o bruto (R$ ${bruto.toFixed(2)}).` });
-      }
-
-      const novoIR = Math.max(bruto - liquidoNum, 0);
+      const novoBruto = liquidoNum;
+      const novoIR = 0;
       const liquidoFormatado = liquidoNum.toFixed(2);
+      const brutoFormatado = novoBruto.toFixed(2);
       const editadoPor = ctx.user.name || "Master";
-      const obs = `[LÍQUIDO EDITADO por ${editadoPor}: R$ ${liquidoAnterior} → R$ ${liquidoFormatado}, IR ajustado: R$ ${novoIR.toFixed(2)}${input.motivo ? ` | Motivo: ${input.motivo}` : ""}]`;
+      const obs = `[LÍQUIDO EDITADO por ${editadoPor}: Líq R$ ${liquidoAnterior} → R$ ${liquidoFormatado}, Bruto R$ ${brutoAnterior} → R$ ${brutoFormatado}, IR zerado${input.motivo ? ` | Motivo: ${input.motivo}` : ""}]`;
 
       await db.execute(sql`
         UPDATE payroll_advances
-        SET "irRetidoAdiantamento" = ${novoIR.toFixed(2)},
+        SET "valorTotalVale" = ${brutoFormatado},
+            "valorAdiantamento" = ${brutoFormatado},
+            "irRetidoAdiantamento" = ${"0.00"},
             "valorLiquidoVale" = ${liquidoFormatado},
             "observacoes" = COALESCE("observacoes", '') || ${' ' + obs},
             "updatedAt" = NOW()
@@ -2477,7 +2477,7 @@ export const payrollEngineRouter = router({
       await db.execute(sql`
         UPDATE financial_events
         SET valor = ${liquidoFormatado},
-            descricao = descricao || ${` (líquido editado: ${liquidoAnterior} → ${liquidoFormatado}, IR: ${novoIR.toFixed(2)})`}
+            descricao = descricao || ${` (líquido editado: ${liquidoAnterior} → ${liquidoFormatado})`}
         WHERE "companyId" = ${input.companyId}
           AND "mesCompetencia" = ${input.mesReferencia}
           AND "employeeId" = ${input.employeeId}
@@ -2487,11 +2487,12 @@ export const payrollEngineRouter = router({
 
       return {
         success: true, employeeId: input.employeeId,
-        valorBruto: bruto.toFixed(2),
-        novoIR: novoIR.toFixed(2),
+        novoBruto: brutoFormatado,
+        novoIR: "0.00",
         novoLiquido: liquidoFormatado,
+        brutoAnterior,
         liquidoAnterior,
-        message: `Líquido editado: R$ ${liquidoAnterior} → R$ ${liquidoFormatado} (IR ajustado: R$ ${novoIR.toFixed(2)})`,
+        message: `Líquido editado: R$ ${liquidoAnterior} → R$ ${liquidoFormatado} (Bruto ajustado: R$ ${brutoAnterior} → R$ ${brutoFormatado}, IR zerado)`,
       };
     }),
 
