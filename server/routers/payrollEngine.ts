@@ -5087,6 +5087,55 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       return { ok: true };
     }),
 
+  // Aprova/reprova cobrança de EPI (usada na tela de Aprovações RH)
+  aprovarEpiCobranca: protectedProcedure
+    .input(z.object({ epiAlertId: z.number(), aprovado: z.boolean(), justificativa: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const userCompanyId = Number((ctx as any)?.user?.companyId);
+      const userId = Number((ctx as any)?.user?.id);
+      if (!userCompanyId || !userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
+      const chk = ((await db.execute(sql`SELECT "companyId" FROM epi_discount_alerts WHERE id = ${input.epiAlertId} LIMIT 1`)) as any).rows || [];
+      if (chk.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Cobrança não encontrada" });
+      if (Number(chk[0].companyId) !== userCompanyId) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      await db.execute(sql`
+        UPDATE epi_discount_alerts
+        SET status = ${input.aprovado ? 'aprovado' : 'rejeitado'},
+            "validadoPorUserId" = ${userId},
+            data_validacao = NOW(),
+            justificativa = ${input.justificativa || null},
+            "updatedAt" = NOW()
+        WHERE id = ${input.epiAlertId} AND "companyId" = ${userCompanyId}
+      `);
+      return { ok: true };
+    }),
+
+  // Aprova/reprova lançamento de parceiro (convênio)
+  aprovarLancamentoParceiro: protectedProcedure
+    .input(z.object({ lancamentoId: z.number(), aprovado: z.boolean(), motivo: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const userCompanyId = Number((ctx as any)?.user?.companyId);
+      const userId = Number((ctx as any)?.user?.id);
+      if (!userCompanyId || !userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
+      const chk = ((await db.execute(sql`SELECT "companyId" FROM lancamentos_parceiros WHERE id = ${input.lancamentoId} LIMIT 1`)) as any).rows || [];
+      if (chk.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
+      if (Number(chk[0].companyId) !== userCompanyId) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      await db.execute(sql`
+        UPDATE lancamentos_parceiros
+        SET status = ${input.aprovado ? 'aprovado' : 'rejeitado'},
+            aprovado_por = ${userId},
+            aprovado_em = NOW(),
+            motivo_rejeicao = ${input.aprovado ? null : (input.motivo || null)},
+            comentario_admin = ${input.motivo || null},
+            updated_at = NOW()
+        WHERE id = ${input.lancamentoId} AND "companyId" = ${userCompanyId}
+      `);
+      return { ok: true };
+    }),
+
   // DEPRECATED (Rev. 1205): pensão agora é calculada dinamicamente no simularPagamento.
   // Endpoint mantido como no-op para compatibilidade — retorna total da folha sem criar nada.
   gerarPensoesMes: protectedProcedure

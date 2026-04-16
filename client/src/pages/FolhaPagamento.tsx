@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import FolhaAprovacoesRh from "./FolhaAprovacoesRh";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +11,7 @@ import {
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp, TrendingDown,
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
-  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine
+  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine, ClipboardCheck
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -66,7 +67,7 @@ function parseBRLNum(val: string | number | null | undefined): number {
   return parseFloat(str) || 0;
 }
 
-type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo" | "auditoria_folha";
+type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo" | "auditoria_folha" | "aprovacoes_rh";
 
 type CampoDesconto = 'vale' | 'inss' | 'vt' | 'va' | 'faltas' | 'outros' | 'convenio';
 
@@ -476,6 +477,19 @@ export default function FolhaPagamento() {
     { companyId, mesReferencia: mesAno },
     { enabled: companyId > 0 && viewMode === "auditoria_folha" }
   );
+  // Contagem de pendências p/ badge do botão "Aprovações RH"
+  const pendenciasCount = trpc.payrollEngine.listarPendenciasAprovacaoRh.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 && !!mesAno, refetchInterval: 60_000 }
+  );
+  const totalPendenciasAprovacao = (() => {
+    const d = pendenciasCount.data;
+    if (!d) return 0;
+    const conv = (d.convenios || []).filter((r: any) => r.status === "pendente").length;
+    const epi = (d.epi || []).filter((r: any) => r.status === "pendente").length;
+    const outros = (d.adjustments || []).filter((r: any) => r.tipo === "outros" && r.aprovadoRh !== true).length;
+    return conv + epi + outros;
+  })();
   const [auditFiltroCategoria, setAuditFiltroCategoria] = useState<string>("todos");
   const [auditExpandedIdx, setAuditExpandedIdx] = useState<number | null>(null);
   const [auditOpenSections, setAuditOpenSections] = useState<Record<string, boolean>>({
@@ -4905,6 +4919,18 @@ export default function FolhaPagamento() {
     );
   }
 
+  if (viewMode === "aprovacoes_rh") {
+    return (
+      <DashboardLayout>
+        <FolhaAprovacoesRh
+          companyId={companyId}
+          mesAno={mesAno}
+          onBack={() => { setViewMode("resumo"); pendenciasCount.refetch(); }}
+        />
+      </DashboardLayout>
+    );
+  }
+
   // ===== MAIN VIEW (resumo) =====
   return (
     <DashboardLayout>
@@ -4926,6 +4952,14 @@ export default function FolhaPagamento() {
             </Button>
             <Button size="sm" variant="outline" className="text-amber-700 border-amber-200" onClick={() => setViewMode("descontos_epi")}>
               <HardHat className="h-4 w-4 mr-1" /> Descontos EPI
+            </Button>
+            <Button size="sm" variant="outline" className="text-rose-700 border-rose-200 relative" onClick={() => setViewMode("aprovacoes_rh")}>
+              <ClipboardCheck className="h-4 w-4 mr-1" /> Aprovações RH
+              {totalPendenciasAprovacao > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                  {totalPendenciasAprovacao}
+                </span>
+              )}
             </Button>
             <PrintActions title={`Folha de Pagamento - ${formatMesAno(mesAno)}`} />
           </div>
