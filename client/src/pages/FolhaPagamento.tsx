@@ -471,6 +471,35 @@ export default function FolhaPagamento() {
   const [valeEditId, setValeEditId] = useState<number | null>(null);
   const [valeEditValor, setValeEditValor] = useState("");
 
+  const editarLiquidoMut = trpc.payrollEngine.editarLiquidoVale.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(data.message);
+      setLiqEditId(null);
+      setLiqEditValor("");
+      if (valeResult && data.employeeId) {
+        const updatedFuncs = valeResult.funcionarios.map((f: any) => {
+          if (f.employeeId === data.employeeId) {
+            return {
+              ...f,
+              irRetido: parseFloat(data.novoIR) || 0,
+              valorLiquido: parseFloat(data.novoLiquido) || f.valorLiquido,
+            };
+          }
+          return f;
+        });
+        const novoTotal = updatedFuncs
+          .filter((f: any) => f.status !== 'rejeitado')
+          .reduce((s: number, f: any) => s + (parseFloat(String(f.valorLiquido ?? f.valorTotalVale ?? 0))), 0);
+        setValeResult({ ...valeResult, funcionarios: updatedFuncs, totalVale: novoTotal });
+      } else {
+        payrollPeriod.refetch();
+      }
+    },
+    onError: (err) => toast.error(`Erro: ${err.message}`),
+  });
+  const [liqEditId, setLiqEditId] = useState<number | null>(null);
+  const [liqEditValor, setLiqEditValor] = useState("");
+
   // ===== HE MÓDULO =====
   const hePeriods = trpc.horasExtras.listarPeriods.useQuery(
     { companyId, mesReferencia: mesAno },
@@ -2080,7 +2109,43 @@ export default function FolhaPagamento() {
                             {(f.irRetido || 0) > 0 ? `-${formatBRL(f.irRetido)}` : '—'}
                           </td>
                           <td className="text-right py-2 px-2 font-bold text-green-700">
-                            {formatBRL(f.valorLiquido ?? f.valorTotalVale)}
+                            {liqEditId === f.employeeId ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-xs text-slate-400">R$</span>
+                                <input
+                                  type="text"
+                                  value={liqEditValor}
+                                  onChange={e => setLiqEditValor(e.target.value)}
+                                  className="w-24 h-7 text-right text-sm border rounded px-1 font-bold text-green-700"
+                                  autoFocus
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") {
+                                      editarLiquidoMut.mutate({ companyId, mesReferencia: mesAno, employeeId: f.employeeId, novoLiquido: liqEditValor });
+                                    } else if (e.key === "Escape") {
+                                      setLiqEditId(null); setLiqEditValor("");
+                                    }
+                                  }}
+                                />
+                                <button className="text-green-600 hover:text-green-800" title="Salvar" disabled={editarLiquidoMut.isPending}
+                                  onClick={() => editarLiquidoMut.mutate({ companyId, mesReferencia: mesAno, employeeId: f.employeeId, novoLiquido: liqEditValor })}>
+                                  <Save className="h-3.5 w-3.5" />
+                                </button>
+                                <button className="text-slate-400 hover:text-slate-600" title="Cancelar"
+                                  onClick={() => { setLiqEditId(null); setLiqEditValor(""); }}>
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1">
+                                {formatBRL(f.valorLiquido ?? f.valorTotalVale)}
+                                {isMaster && (
+                                  <button className="text-slate-300 hover:text-green-600 transition-colors no-print" title="Editar líquido (Master)"
+                                    onClick={() => { setLiqEditId(f.employeeId); setLiqEditValor(String(parseFloat(String(f.valorLiquido ?? f.valorTotalVale ?? "0").toString().replace(/[^\d.,]/g, "").replace(",", ".")).toFixed(2))); }}>
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="text-center py-2 px-2 no-print">
                             <div className="flex items-center justify-center gap-1">
@@ -2262,7 +2327,43 @@ export default function FolhaPagamento() {
                             {(f.irRetido || 0) > 0 ? `-${formatBRL(f.irRetido)}` : '—'}
                           </td>
                           <td className={`text-right py-2 px-2 font-bold text-green-700 ${isHighlighted ? "line-through text-red-500" : ""}`}>
-                            {formatBRL(f.valorLiquido ?? f.valorTotalVale)}
+                            {liqEditId === f.employeeId ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-xs text-slate-400">R$</span>
+                                <input
+                                  type="text"
+                                  value={liqEditValor}
+                                  onChange={e => setLiqEditValor(e.target.value)}
+                                  className="w-24 h-7 text-right text-sm border rounded px-1 font-bold text-green-700"
+                                  autoFocus
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") {
+                                      editarLiquidoMut.mutate({ companyId, mesReferencia: mesAno, employeeId: f.employeeId, novoLiquido: liqEditValor });
+                                    } else if (e.key === "Escape") {
+                                      setLiqEditId(null); setLiqEditValor("");
+                                    }
+                                  }}
+                                />
+                                <button className="text-green-600 hover:text-green-800" title="Salvar" disabled={editarLiquidoMut.isPending}
+                                  onClick={() => editarLiquidoMut.mutate({ companyId, mesReferencia: mesAno, employeeId: f.employeeId, novoLiquido: liqEditValor })}>
+                                  <Save className="h-3.5 w-3.5" />
+                                </button>
+                                <button className="text-slate-400 hover:text-slate-600" title="Cancelar"
+                                  onClick={() => { setLiqEditId(null); setLiqEditValor(""); }}>
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1">
+                                {formatBRL(f.valorLiquido ?? f.valorTotalVale)}
+                                {isMaster && !isRejeitado && (
+                                  <button className="text-slate-300 hover:text-green-600 transition-colors no-print" title="Editar líquido (Master)"
+                                    onClick={() => { setLiqEditId(f.employeeId); setLiqEditValor(String(parseFloat(String(f.valorLiquido ?? f.valorTotalVale ?? "0").toString().replace(/[^\d.,]/g, "").replace(",", ".")).toFixed(2))); }}>
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="text-center py-2 px-2">
                             {isRejeitado ? (

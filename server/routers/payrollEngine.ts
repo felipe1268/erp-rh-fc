@@ -2422,6 +2422,79 @@ export const payrollEngineRouter = router({
       return { success: true, employeeId: input.employeeId, valorAnterior, novoValor: valorFormatado, novoIR: novoIR.toFixed(2), novoLiquido: novoLiquido.toFixed(2), message: `Vale editado: R$ ${valorAnterior} → R$ ${valorFormatado} (líquido: R$ ${novoLiquido.toFixed(2)})` };
     }),
 
+  editarLiquidoVale: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      employeeId: z.number(),
+      novoLiquido: z.string(),
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user?.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas usuários Master podem editar valores de vale." });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const liquidoNum = parseFloat(input.novoLiquido.replace(/[^\d.,]/g, "").replace(",", "."));
+      if (isNaN(liquidoNum) || liquidoNum < 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Valor líquido inválido." });
+      }
+
+      const oldRows = ((await db.execute(sql`
+        SELECT "valorTotalVale", "valorAdiantamento", "irRetidoAdiantamento", "valorLiquidoVale"
+        FROM payroll_advances
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${input.employeeId}
+      `)) as any).rows || [];
+      if (oldRows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Registro de vale não encontrado." });
+      }
+      const row = oldRows[0];
+      const bruto = parseFloat(row.valorTotalVale) || 0;
+      const liquidoAnterior = row.valorLiquidoVale;
+
+      if (liquidoNum > bruto) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Líquido (R$ ${liquidoNum.toFixed(2)}) não pode ser maior que o bruto (R$ ${bruto.toFixed(2)}).` });
+      }
+
+      const novoIR = Math.max(bruto - liquidoNum, 0);
+      const liquidoFormatado = liquidoNum.toFixed(2);
+      const editadoPor = ctx.user.name || "Master";
+      const obs = `[LÍQUIDO EDITADO por ${editadoPor}: R$ ${liquidoAnterior} → R$ ${liquidoFormatado}, IR ajustado: R$ ${novoIR.toFixed(2)}${input.motivo ? ` | Motivo: ${input.motivo}` : ""}]`;
+
+      await db.execute(sql`
+        UPDATE payroll_advances
+        SET "irRetidoAdiantamento" = ${novoIR.toFixed(2)},
+            "valorLiquidoVale" = ${liquidoFormatado},
+            "observacoes" = COALESCE("observacoes", '') || ${' ' + obs},
+            "updatedAt" = NOW()
+        WHERE "companyId" = ${input.companyId}
+          AND "mesReferencia" = ${input.mesReferencia}
+          AND "employeeId" = ${input.employeeId}
+      `);
+
+      await db.execute(sql`
+        UPDATE financial_events
+        SET valor = ${liquidoFormatado},
+            descricao = descricao || ${` (líquido editado: ${liquidoAnterior} → ${liquidoFormatado}, IR: ${novoIR.toFixed(2)})`}
+        WHERE "companyId" = ${input.companyId}
+          AND "mesCompetencia" = ${input.mesReferencia}
+          AND "employeeId" = ${input.employeeId}
+          AND "origemTipo" = 'payroll_advance'
+          AND tipo = 'saida_vale'
+      `);
+
+      return {
+        success: true, employeeId: input.employeeId,
+        valorBruto: bruto.toFixed(2),
+        novoIR: novoIR.toFixed(2),
+        novoLiquido: liquidoFormatado,
+        liquidoAnterior,
+        message: `Líquido editado: R$ ${liquidoAnterior} → R$ ${liquidoFormatado} (IR ajustado: R$ ${novoIR.toFixed(2)})`,
+      };
+    }),
+
   // ============================================================
   // 6. SIMULAR PAGAMENTO
   // ============================================================
