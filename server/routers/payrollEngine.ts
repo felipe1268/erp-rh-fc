@@ -182,8 +182,8 @@ async function getPayrollCriteria(db: any, companyId: number) {
   return {
     // Ponto
     diaCorte: parseInt(map["ponto_dia_corte"] || "15"),
-    pontoToleranciaAtraso: parseInt(map["ponto_tolerancia_atraso"] || "10"),
-    pontoToleranciaSaida: parseInt(map["ponto_tolerancia_saida"] || "10"),
+    pontoToleranciaAtraso: parseInt(map["ponto_tolerancia_atraso"] || "5"),
+    pontoToleranciaSaida: parseInt(map["ponto_tolerancia_saida"] || "5"),
     pontoToleranciaLegal: 10, // CLT Art. 58 §1º + Súmula 366 TST — 10 min/dia total
     pontoBatidaImparTolerancia: parseInt(map["ponto_batida_impar_tolerancia"] || "30"),
     pontoFaltaAposAtraso: parseInt(map["ponto_falta_apos_atraso"] || "120"),
@@ -2616,7 +2616,6 @@ export const payrollEngineRouter = router({
       manterOverrides: z.boolean().optional(),
       descartarOverrides: z.boolean().optional(),
       aplicarDsrFalta: z.boolean().optional(),
-      aplicarDsrAtraso: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -2742,36 +2741,29 @@ export const payrollEngineRouter = router({
       const dsrRows = ((await db.execute(sql`
         SELECT "employeeId",
                COALESCE("totalDsrFalta", 0)        AS "qtdFalta",
-               COALESCE("totalDsrAtraso", 0)       AS "qtdAtraso",
-               COALESCE("valorTotalDsrFalta",  '0') AS "valorFalta",
-               COALESCE("valorTotalDsrAtraso", '0') AS "valorAtraso"
+               COALESCE("valorTotalDsrFalta",  '0') AS "valorFalta"
         FROM ponto_descontos_resumo
         WHERE "companyId" = ${input.companyId}
           AND "mesReferencia" = ${input.mesReferencia}
       `)) as any).rows || [];
-      const dsrMap = new Map<number, { qtdFalta: number; qtdAtraso: number; valorFalta: number; valorAtraso: number }>();
+      const dsrMap = new Map<number, { qtdFalta: number; valorFalta: number }>();
       for (const r of dsrRows) {
         dsrMap.set(Number(r.employeeId), {
           qtdFalta: Number(r.qtdFalta) || 0,
-          qtdAtraso: Number(r.qtdAtraso) || 0,
           valorFalta: parseBRL(r.valorFalta) || 0,
-          valorAtraso: parseBRL(r.valorAtraso) || 0,
         });
       }
 
-      // Ler defaults de aplicarDsr* do payroll_periods (se já existir registro)
+      // Ler default de aplicarDsrFalta do payroll_periods (se já existir registro)
       const ppCfgRows = ((await db.execute(sql`
-        SELECT COALESCE("aplicarDsrFalta", 1)  AS "aplicarDsrFalta",
-               COALESCE("aplicarDsrAtraso", 1) AS "aplicarDsrAtraso"
+        SELECT COALESCE("aplicarDsrFalta", 1)  AS "aplicarDsrFalta"
         FROM payroll_periods
         WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
         LIMIT 1
       `)) as any).rows || [];
       const cfgFalta = ppCfgRows.length > 0 ? Number(ppCfgRows[0].aplicarDsrFalta) === 1 : true;
-      const cfgAtraso = ppCfgRows.length > 0 ? Number(ppCfgRows[0].aplicarDsrAtraso) === 1 : true;
       // Input override > config persistida > default true
       const aplicarDsrFalta  = input.aplicarDsrFalta  != null ? input.aplicarDsrFalta  : cfgFalta;
-      const aplicarDsrAtraso = input.aplicarDsrAtraso != null ? input.aplicarDsrAtraso : cfgAtraso;
 
       // HE is now a SEPARATE MODULE (he_periods) — simularPagamento = salário base only
       // HE is tracked and paid via the dedicated HE module in Folha → Hora Extra
@@ -2933,13 +2925,12 @@ export const payrollEngineRouter = router({
         const descontoVrFaltas = (criteria.descontoVrFalta ? faltasQtdMes * vrDiario : 0) + escFaltasVr;
         const descontoVtFaltas = (criteria.descontoVtFalta ? faltasQtdMes * vtDiario : 0) + escFaltasVt;
 
-        // DSR perdido (Lei 605/49 Art. 6º) — RH controla via toggles aplicarDsrFalta/aplicarDsrAtraso
-        const dsrInfo = dsrMap.get(emp.id) || { qtdFalta: 0, qtdAtraso: 0, valorFalta: 0, valorAtraso: 0 };
-        const dsrFaltaValorAplicado  = aplicarDsrFalta  ? dsrInfo.valorFalta  : 0;
-        const dsrAtrasoValorAplicado = aplicarDsrAtraso ? dsrInfo.valorAtraso : 0;
+        // DSR perdido (Lei 605/49 Art. 6º) — apenas DSR Falta (decisão RH FC, Rev. 1194)
+        const dsrInfo = dsrMap.get(emp.id) || { qtdFalta: 0, valorFalta: 0 };
+        const dsrFaltaValorAplicado = aplicarDsrFalta ? dsrInfo.valorFalta : 0;
         // Soma o DSR aplicado na coluna FALTAS (mesma natureza CLT)
-        const descontoFaltas  = descontoFaltasBase  + dsrFaltaValorAplicado;
-        const descontoAtrasos = descontoAtrasosBase + dsrAtrasoValorAplicado;
+        const descontoFaltas  = descontoFaltasBase + dsrFaltaValorAplicado;
+        const descontoAtrasos = descontoAtrasosBase;
 
         let descontoPensao = 0;
         if (emp.pensaoAlimenticia) {
@@ -3040,13 +3031,10 @@ export const payrollEngineRouter = router({
             descontoVrFaltasEscuro: escFaltasVr,
             descontoVtFaltasMes: criteria.descontoVtFalta ? faltasQtdMes * vtDiario : 0,
             descontoVtFaltasEscuro: escFaltasVt,
-            // DSR (Lei 605/49 Art. 6º)
+            // DSR Falta (Lei 605/49 Art. 6º)
             dsrFaltaQtd: dsrInfo.qtdFalta,
             dsrFaltaValor: dsrInfo.valorFalta,
             dsrFaltaAplicado: aplicarDsrFalta,
-            dsrAtrasoQtd: dsrInfo.qtdAtraso,
-            dsrAtrasoValor: dsrInfo.valorAtraso,
-            dsrAtrasoAplicado: aplicarDsrAtraso,
             // Atrasos
             atrasosMinutos,
             descontoAtrasosMinutos: (atrasosMinutos / 60) * valorHora,
@@ -3138,12 +3126,12 @@ export const payrollEngineRouter = router({
           "totalDescontos" = ${formatMoney(grandTotalDescontos)},
           "totalLiquido" = ${formatMoney(grandTotalLiquido)},
           "aplicarDsrFalta"  = ${aplicarDsrFalta  ? 1 : 0},
-          "aplicarDsrAtraso" = ${aplicarDsrAtraso ? 1 : 0},
+          "aplicarDsrAtraso" = 0,
           "pagamentoResultJson" = ${pagJson}
         WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
       `);
 
-      return { ...pagamentoResultPayload, aplicarDsrFalta, aplicarDsrAtraso };
+      return { ...pagamentoResultPayload, aplicarDsrFalta };
     }),
 
   // ============================================================

@@ -8445,4 +8445,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-16 23:55:00",
   },
+  {
+    version: 1194,
+    titulo: "DSR só por Falta + tolerância de ponto reduzida para 5 min (Art. 58 §1º CLT)",
+    descricao:
+      "Decisão RH FC: o DSR (Lei 605/49 Art. 6º) passa a ser perdido APENAS por falta injustificada na " +
+      "semana — atrasos isolados não tiram mais o DSR (atraso ≥ 2h continua virando falta e, portanto, " +
+      "perde DSR). Removidos: card KPI 'DSR-Atraso' e coluna no painel Motor de Descontos CLT, switch " +
+      "'Descontar por Atraso' no header da Folha → Pagamento, lógica de aplicarDsrAtraso no " +
+      "payrollEngine, e linha 'DSR por atraso' do memorial de cálculo da célula Faltas. Renomeado " +
+      "DSR-Falta → 'DSR Falta'. Tolerância de atraso/saída reduzida de 10 → 5 min por evento (Art. 58 " +
+      "§1º CLT, padrão pleno da lei). Registros antigos com tipo='dsr_atraso' permanecem no histórico " +
+      "(serão removidos no próximo recálculo do mês).",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento, Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-17 00:30:00",
+  },
 ];

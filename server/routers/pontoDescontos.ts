@@ -197,8 +197,8 @@ interface CriteriaMap {
 }
 
 const DEFAULT_CRITERIA: CriteriaMap = {
-  pontoToleranciaAtraso: 10,
-  pontoToleranciaSaida: 10,
+  pontoToleranciaAtraso: 5,
+  pontoToleranciaSaida: 5,
   pontoFaltaAposAtraso: 120,
   jornadaHorasDiarias: 8,
   jornadaHorasSemanais: 44,
@@ -214,8 +214,8 @@ async function getCriteriaMap(db: any, companyId: number): Promise<CriteriaMap> 
     const map: Record<string, string> = {};
     for (const r of rows) map[r.chave] = r.valor;
     return {
-      pontoToleranciaAtraso: parseFloat(map["ponto_tolerancia_atraso"] || "10"),
-      pontoToleranciaSaida: parseFloat(map["ponto_tolerancia_saida"] || "10"),
+      pontoToleranciaAtraso: parseFloat(map["ponto_tolerancia_atraso"] || "5"),
+      pontoToleranciaSaida: parseFloat(map["ponto_tolerancia_saida"] || "5"),
       pontoFaltaAposAtraso: parseFloat(map["ponto_falta_apos_atraso"] || "120"),
       jornadaHorasDiarias: parseFloat(map["jornada_horas_diarias"] || "8"),
       jornadaHorasSemanais: parseFloat(map["jornada_horas_semanais"] || "44"),
@@ -418,7 +418,6 @@ export const pontoDescontosRouter = router({
       let totalDescontosEmp = 0;
       let totalDescontoDsr = 0;
       const semanasComFalta = new Set<string>();
-      const semanasComAtraso = new Set<string>();
 
       for (const rec of empRecords) {
         const data = rec.data as string;
@@ -494,11 +493,9 @@ export const pontoDescontosRouter = router({
             totalAtrasos++;
             totalMinutosAtraso += minutosDesconto;
             totalDescontosEmp += valorAtraso;
-            // Se vira falta, classifica como FALTA; senão, ATRASO
+            // Se atraso vira falta (>= limite), perde DSR daquela semana
             if (atrasoMinutos >= criteria.pontoFaltaAposAtraso) {
               semanasComFalta.add(getSundayOfWeek(data));
-            } else {
-              semanasComAtraso.add(getSundayOfWeek(data));
             }
 
             // Se atraso > limite, considerar como falta
@@ -558,7 +555,6 @@ export const pontoDescontosRouter = router({
             totalSaidasAntecipadas++;
             totalMinutosSaidaAnt += saidaAntecipada;
             totalDescontosEmp += valorSaida;
-            semanasComAtraso.add(getSundayOfWeek(data));
 
             descontosToInsert.push({
               companyId: input.companyId,
@@ -617,48 +613,37 @@ export const pontoDescontosRouter = router({
       }
 
       // --- DSR PERDIDO ---
-      // Lei 605/49 Art. 6º — Perde o DSR quem teve falta ou atraso injustificado na semana.
-      // Para evitar dupla contagem, classificamos por prioridade:
-      //   - Se a semana tem FALTA → DSR-falta (mesmo se também tem atraso na mesma semana)
-      //   - Senão, se tem ATRASO → DSR-atraso
+      // Lei 605/49 Art. 6º — Perde o DSR quem teve falta injustificada na semana.
+      // (Atraso isolado NÃO faz mais perder DSR — apenas faltas. Decisão RH FC, Rev. 1194)
     const valorDsrDia = calcDsrPerdido(salarioBase);
     const dsrFaltaSemanas = Array.from(semanasComFalta);
-    const dsrAtrasoSemanas = Array.from(semanasComAtraso).filter(s => !semanasComFalta.has(s));
-    const dsrPerdidos = dsrFaltaSemanas.length + dsrAtrasoSemanas.length;
+    const dsrPerdidos = dsrFaltaSemanas.length;
     let totalDescontoDsrFalta = 0;
-    let totalDescontoDsrAtraso = 0;
-    const pushDsr = (domingo: string, subtipo: 'falta' | 'atraso') => {
+    for (const domingo of dsrFaltaSemanas) {
       totalDescontoDsr += valorDsrDia;
       totalDescontosEmp += valorDsrDia;
-      if (subtipo === 'falta') totalDescontoDsrFalta += valorDsrDia;
-      else totalDescontoDsrAtraso += valorDsrDia;
+      totalDescontoDsrFalta += valorDsrDia;
       descontosToInsert.push({
         companyId: input.companyId,
         employeeId: emp.id,
         mesReferencia: input.mesReferencia,
         data: domingo,
-        tipo: subtipo === 'falta' ? "dsr_falta" : "dsr_atraso",
+        tipo: "dsr_falta",
         minutosAtraso: 0,
         minutosHe: 0,
         valorDesconto: "0",
         valorDsr: formatMoney(valorDsrDia),
         valorTotal: formatMoney(valorDsrDia),
         baseCalculo: JSON.stringify({
-          salarioBase, valorDsrDia, subtipo,
+          salarioBase, valorDsrDia,
           formula: `salário / 30 = ${valorDsrDia.toFixed(2)}`,
           artigo: "Lei 605/49 Art. 6º",
-          motivo: subtipo === 'falta'
-            ? "Falta injustificada na semana"
-            : "Atraso injustificado na semana",
+          motivo: "Falta injustificada na semana",
         }),
         status: "calculado",
-        fundamentacaoLegal: subtipo === 'falta'
-          ? "Lei 605/49 Art. 6º - Perda do DSR por falta na semana"
-          : "Lei 605/49 Art. 6º - Perda do DSR por atraso na semana",
+        fundamentacaoLegal: "Lei 605/49 Art. 6º - Perda do DSR por falta na semana",
       });
-    };
-    for (const domingo of dsrFaltaSemanas) pushDsr(domingo, 'falta');
-    for (const domingo of dsrAtrasoSemanas) pushDsr(domingo, 'atraso');
+    }
 
       totalDescontosGeral += totalDescontosEmp;
 
@@ -674,7 +659,7 @@ export const pontoDescontosRouter = router({
         totalMinutosSaidaAntecipada: totalMinutosSaidaAnt,
         totalDsrPerdidos: dsrPerdidos,
         totalDsrFalta: dsrFaltaSemanas.length,
-        totalDsrAtraso: dsrAtrasoSemanas.length,
+        totalDsrAtraso: 0,
         totalFeriadosPerdidos: 0,
         totalHeNaoAutorizadas,
         totalMinutosHeNaoAutorizada: totalMinutosHeNaoAut,
@@ -682,7 +667,7 @@ export const pontoDescontosRouter = router({
         valorTotalFaltas: formatMoney(totalFaltasInjust * calcDescontoFalta(salarioBase)),
         valorTotalDsr: formatMoney(totalDescontoDsr),
         valorTotalDsrFalta: formatMoney(totalDescontoDsrFalta),
-        valorTotalDsrAtraso: formatMoney(totalDescontoDsrAtraso),
+        valorTotalDsrAtraso: "0",
         valorTotalFeriados: "0",
         valorTotalSaidasAntecipadas: formatMoney(totalMinutosSaidaAnt > 0 ? calcDescontoAtraso(salarioBase, horasMes, totalMinutosSaidaAnt) : 0),
         valorTotalHeNaoAutorizada: "0",
@@ -828,11 +813,9 @@ export const pontoDescontosRouter = router({
       totalAtrasos: sql<number>`SUM(CASE WHEN ${pontoDescontos.tipo} = 'atraso' THEN 1 ELSE 0 END)`,
       totalFaltas: sql<number>`SUM(CASE WHEN ${pontoDescontos.tipo} = 'falta_injustificada' THEN 1 ELSE 0 END)`,
       totalSaidas: sql<number>`SUM(CASE WHEN ${pontoDescontos.tipo} = 'saida_antecipada' THEN 1 ELSE 0 END)`,
-      totalDsr: sql<number>`SUM(CASE WHEN ${pontoDescontos.tipo} IN ('falta_dsr','dsr_falta','dsr_atraso') THEN 1 ELSE 0 END)`,
-      totalDsrFalta: sql<number>`SUM(CASE WHEN ${pontoDescontos.tipo} = 'dsr_falta' THEN 1 ELSE 0 END)`,
-      totalDsrAtraso: sql<number>`SUM(CASE WHEN ${pontoDescontos.tipo} = 'dsr_atraso' THEN 1 ELSE 0 END)`,
-      valorDsrFalta: sql<string>`COALESCE(SUM(CASE WHEN ${pontoDescontos.tipo} = 'dsr_falta' THEN CAST(${pontoDescontos.valorTotal} AS DECIMAL(10,2)) ELSE 0 END), 0)`,
-      valorDsrAtraso: sql<string>`COALESCE(SUM(CASE WHEN ${pontoDescontos.tipo} = 'dsr_atraso' THEN CAST(${pontoDescontos.valorTotal} AS DECIMAL(10,2)) ELSE 0 END), 0)`,
+      totalDsr: sql<number>`SUM(CASE WHEN ${pontoDescontos.tipo} IN ('falta_dsr','dsr_falta') THEN 1 ELSE 0 END)`,
+      totalDsrFalta: sql<number>`SUM(CASE WHEN ${pontoDescontos.tipo} IN ('falta_dsr','dsr_falta') THEN 1 ELSE 0 END)`,
+      valorDsrFalta: sql<string>`COALESCE(SUM(CASE WHEN ${pontoDescontos.tipo} IN ('falta_dsr','dsr_falta') THEN CAST(${pontoDescontos.valorTotal} AS DECIMAL(10,2)) ELSE 0 END), 0)`,
       totalHeNaoAut: sql<number>`SUM(CASE WHEN ${pontoDescontos.tipo} = 'he_nao_autorizada' THEN 1 ELSE 0 END)`,
       valorTotal: sql<string>`COALESCE(SUM(CAST(${pontoDescontos.valorTotal} AS DECIMAL(10,2))), 0)`,
       funcionariosAfetados: sql<number>`COUNT(DISTINCT ${pontoDescontos.employeeId})`,

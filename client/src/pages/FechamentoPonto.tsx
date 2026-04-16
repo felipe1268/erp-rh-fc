@@ -138,9 +138,8 @@ const TIPO_LABELS: Record<string, string> = {
   atraso: "Atraso",
   falta_injustificada: "Falta Injustificada",
   saida_antecipada: "Saída Antecipada",
-  falta_dsr: "DSR Perdido",
-  dsr_falta: "DSR-Falta",
-  dsr_atraso: "DSR-Atraso",
+  falta_dsr: "DSR Falta",
+  dsr_falta: "DSR Falta",
   he_nao_autorizada: "HE Não Autorizada",
 };
 const TIPO_COLORS: Record<string, string> = {
@@ -148,8 +147,7 @@ const TIPO_COLORS: Record<string, string> = {
   falta_injustificada: "bg-red-100 text-red-800",
   saida_antecipada: "bg-orange-100 text-orange-800",
   falta_dsr: "bg-purple-100 text-purple-800",
-  dsr_falta: "bg-fuchsia-100 text-fuchsia-800",
-  dsr_atraso: "bg-violet-100 text-violet-800",
+  dsr_falta: "bg-purple-100 text-purple-800",
   he_nao_autorizada: "bg-pink-100 text-pink-800",
 };
 const STATUS_DESC_LABELS: Record<string, string> = {
@@ -254,7 +252,7 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
 
       {/* Totais Cards */}
       {t && t.totalEventos > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
           <Card className="border-t-2 border-t-yellow-400">
             <CardContent className="p-3 text-center">
               <p className="text-xl font-bold text-yellow-600">{t.totalAtrasos}</p>
@@ -273,16 +271,10 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
               <p className="text-xs text-muted-foreground">Saídas Antecip.</p>
             </CardContent>
           </Card>
-          <Card className="border-t-2 border-t-fuchsia-400">
+          <Card className="border-t-2 border-t-purple-400">
             <CardContent className="p-3 text-center">
-              <p className="text-xl font-bold text-fuchsia-600">{(t as any).totalDsrFalta ?? 0}</p>
-              <p className="text-xs text-muted-foreground">DSR-Falta</p>
-            </CardContent>
-          </Card>
-          <Card className="border-t-2 border-t-violet-400">
-            <CardContent className="p-3 text-center">
-              <p className="text-xl font-bold text-violet-600">{(t as any).totalDsrAtraso ?? 0}</p>
-              <p className="text-xs text-muted-foreground">DSR-Atraso</p>
+              <p className="text-xl font-bold text-purple-600">{(t as any).totalDsrFalta ?? t.totalDsr ?? 0}</p>
+              <p className="text-xs text-muted-foreground">DSR Falta</p>
             </CardContent>
           </Card>
           <Card className="border-t-2 border-t-pink-400">
@@ -350,8 +342,7 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
                   <th className="p-2.5 text-center">Atrasos</th>
                   <th className="p-2.5 text-center">Faltas</th>
                   <th className="p-2.5 text-center">Saídas Ant.</th>
-                  <th className="p-2.5 text-center">DSR-Falta</th>
-                  <th className="p-2.5 text-center">DSR-Atraso</th>
+                  <th className="p-2.5 text-center">DSR Falta</th>
                   <th className="p-2.5 text-center">HE Não Aut.</th>
                   <th className="p-2.5 text-right">Total Desc.</th>
                   <th className="p-2.5 text-center">Férias</th>
@@ -373,10 +364,7 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
                         {r.totalSaidasAntecipadas > 0 ? <Badge className="bg-orange-100 text-orange-800">{r.totalSaidasAntecipadas}</Badge> : "-"}
                       </td>
                       <td className="p-2.5 text-center">
-                        {(r.totalDsrFalta ?? 0) > 0 ? <Badge className="bg-fuchsia-100 text-fuchsia-800">{r.totalDsrFalta}</Badge> : "-"}
-                      </td>
-                      <td className="p-2.5 text-center">
-                        {(r.totalDsrAtraso ?? 0) > 0 ? <Badge className="bg-violet-100 text-violet-800">{r.totalDsrAtraso}</Badge> : "-"}
+                        {(r.totalDsrFalta ?? r.totalDsrPerdidos ?? 0) > 0 ? <Badge className="bg-purple-100 text-purple-800">{r.totalDsrFalta ?? r.totalDsrPerdidos}</Badge> : "-"}
                       </td>
                       <td className="p-2.5 text-center">
                         {r.totalHeNaoAutorizadas > 0 ? <Badge className="bg-pink-100 text-pink-800">{r.totalHeNaoAutorizadas}</Badge> : "-"}
@@ -395,7 +383,7 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
                     </tr>
                   ))}
                   {(resumo.data || []).length === 0 && (
-                    <tr><td colSpan={11} className="p-8 text-center text-muted-foreground">Nenhum resumo encontrado</td></tr>
+                    <tr><td colSpan={10} className="p-8 text-center text-muted-foreground">Nenhum resumo encontrado</td></tr>
                   )}
                 </tbody>
               </table>
@@ -413,9 +401,8 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
                     <SelectItem value="atraso">Atrasos</SelectItem>
                     <SelectItem value="falta_injustificada">Faltas</SelectItem>
                     <SelectItem value="saida_antecipada">Saídas Antecipadas</SelectItem>
-                    <SelectItem value="dsr_falta">DSR-Falta</SelectItem>
-                    <SelectItem value="dsr_atraso">DSR-Atraso</SelectItem>
-                    <SelectItem value="falta_dsr">DSR Perdido (legado)</SelectItem>
+                    <SelectItem value="dsr_falta">DSR Falta</SelectItem>
+                    <SelectItem value="falta_dsr">DSR Falta (legado)</SelectItem>
                     <SelectItem value="he_nao_autorizada">HE Não Autorizadas</SelectItem>
                   </SelectContent>
                 </Select>

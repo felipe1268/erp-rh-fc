@@ -357,8 +357,8 @@ export const dixiPontoRouter = router({
       const criteriaRows = await db.select().from(systemCriteria).where(companyFilter(systemCriteria.companyId, input));
       const criteriaMap: Record<string, string> = {};
       for (const c of criteriaRows) { criteriaMap[c.chave] = c.valor; }
-      const tolAtraso = parseInt(criteriaMap['ponto_tolerancia_atraso'] || '10');
-      const tolSaida = parseInt(criteriaMap['ponto_tolerancia_saida'] || '10');
+      const tolAtraso = parseInt(criteriaMap['ponto_tolerancia_atraso'] || '5');
+      const tolSaida = parseInt(criteriaMap['ponto_tolerancia_saida'] || '5');
       const faltaApos = parseInt(criteriaMap['ponto_falta_apos_atraso'] || '120');
 
       // ===== AGRUPAR MARCAÇÕES POR CPF+DIA =====

@@ -14,8 +14,8 @@ async function getCriteria(companyId: number) {
     .where(eq(systemCriteria.companyId, companyId)).limit(1);
   const c = rows[0];
   return {
-    tolAtraso: c ? Number(c.pontoToleranciaAtraso ?? 10) : 10,
-    tolSaida:  c ? Number(c.pontoToleranciaSaida  ?? 10) : 10,
+    tolAtraso: c ? Number(c.pontoToleranciaAtraso ?? 5) : 5,
+    tolSaida:  c ? Number(c.pontoToleranciaSaida  ?? 5) : 5,
     faltaApos: c ? Number(c.pontoFaltaAposAtraso   ?? 240) : 240,
   };
 }

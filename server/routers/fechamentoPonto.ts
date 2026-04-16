@@ -94,8 +94,8 @@ interface CriteriaMap {
   jornadaIntervaloAlmoco: number; // Intervalo almoço em min (padrão: 60)
   jornadaSabadoTipo: string;     // compensado, meio_periodo, normal, folga
   // Ponto
-  pontoToleranciaAtraso: number;  // Tolerância atraso entrada em min (padrão: 10)
-  pontoToleranciaSaida: number;   // Tolerância saída antecipada em min (padrão: 10)
+  pontoToleranciaAtraso: number;  // Tolerância atraso entrada em min (padrão: 5 — Art. 58 §1º CLT)
+  pontoToleranciaSaida: number;   // Tolerância saída antecipada em min (padrão: 5 — Art. 58 §1º CLT)
   pontoFaltaAposAtraso: number;   // Considerar falta após X min de atraso (padrão: 120)
   pontoHoraNoturnaReduzida: string; // Duração hora noturna reduzida (padrão: 52:30)
 }
@@ -113,8 +113,8 @@ const DEFAULT_CRITERIA: CriteriaMap = {
   jornadaHorasSemanais: 44,
   jornadaIntervaloAlmoco: 60,
   jornadaSabadoTipo: "compensado",
-  pontoToleranciaAtraso: 10,
-  pontoToleranciaSaida: 10,
+  pontoToleranciaAtraso: 5,
+  pontoToleranciaSaida: 5,
   pontoFaltaAposAtraso: 120,
   pontoHoraNoturnaReduzida: "52:30",
 };
@@ -143,8 +143,8 @@ async function getCriteriaMap(companyId: number): Promise<CriteriaMap> {
       jornadaHorasSemanais: parseFloat(map["jornada_horas_semanais"] || "44"),
       jornadaIntervaloAlmoco: parseFloat(map["jornada_intervalo_almoco"] || "60"),
       jornadaSabadoTipo: map["jornada_sabado_tipo"] || "compensado",
-      pontoToleranciaAtraso: parseFloat(map["ponto_tolerancia_atraso"] || "10"),
-      pontoToleranciaSaida: parseFloat(map["ponto_tolerancia_saida"] || "10"),
+      pontoToleranciaAtraso: parseFloat(map["ponto_tolerancia_atraso"] || "5"),
+      pontoToleranciaSaida: parseFloat(map["ponto_tolerancia_saida"] || "5"),
       pontoFaltaAposAtraso: parseFloat(map["ponto_falta_apos_atraso"] || "120"),
       pontoHoraNoturnaReduzida: map["ponto_hora_noturna_reduzida"] || "52:30",
     };
@@ -2048,9 +2048,9 @@ export const fechamentoPontoRouter = router({
         for (const r of criteriaRows) criteriaMap[r.chave] = r.valor;
         const diaCorte = parseInt(criteriaMap['ponto_dia_corte'] || '15');
         const cargaHorariaDiaria = parseInt(criteriaMap['jornada_horas_diarias'] || '8');
-        const toleranciaAtraso = parseInt(criteriaMap['ponto_tolerancia_atraso'] || '10');
+        const toleranciaAtraso = parseInt(criteriaMap['ponto_tolerancia_atraso'] || '5');
         const faltaAposAtraso = parseInt(criteriaMap['ponto_falta_apos_atraso'] || '120');
-        const toleranciaSaida = parseInt(criteriaMap['ponto_tolerancia_saida'] || '10');
+        const toleranciaSaida = parseInt(criteriaMap['ponto_tolerancia_saida'] || '5');
         const sabadoTipo = criteriaMap['jornada_sabado_tipo'] || 'compensado';
         const fecharNoEscuro = criteriaMap['fechar_no_escuro'] !== 'nao';
         

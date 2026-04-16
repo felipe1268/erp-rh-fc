@@ -2048,8 +2048,8 @@ export const appRouter = router({
         { categoria: "jornada", chave: "jornada_descanso_semanal", valor: "1", descricao: "Dias de descanso semanal remunerado", valorPadraoClt: "1", unidade: "dias" },
         { categoria: "jornada", chave: "jornada_sabado_tipo", valor: "compensado", descricao: "Tipo de sábado (compensado, meio_periodo, normal, folga)", valorPadraoClt: "compensado", unidade: "tipo" },
         // PONTO
-        { categoria: "ponto", chave: "ponto_tolerancia_atraso", valor: "10", descricao: "Tolerância de atraso na entrada (minutos)", valorPadraoClt: "10", unidade: "min" },
-        { categoria: "ponto", chave: "ponto_tolerancia_saida", valor: "10", descricao: "Tolerância de saída antecipada (minutos)", valorPadraoClt: "10", unidade: "min" },
+        { categoria: "ponto", chave: "ponto_tolerancia_atraso", valor: "5", descricao: "Tolerância de atraso na entrada (minutos)", valorPadraoClt: "5", unidade: "min" },
+        { categoria: "ponto", chave: "ponto_tolerancia_saida", valor: "5", descricao: "Tolerância de saída antecipada (minutos)", valorPadraoClt: "5", unidade: "min" },
         { categoria: "ponto", chave: "ponto_batida_impar_tolerancia", valor: "30", descricao: "Tolerância para batida ímpar (minutos)", valorPadraoClt: "30", unidade: "min" },
         { categoria: "ponto", chave: "ponto_falta_apos_atraso", valor: "120", descricao: "Considerar falta após X minutos de atraso", valorPadraoClt: "120", unidade: "min" },
         { categoria: "ponto", chave: "ponto_hora_noturna_reduzida", valor: "52:30", descricao: "Duração da hora noturna reduzida (mm:ss)", valorPadraoClt: "52:30", unidade: "mm:ss" },
