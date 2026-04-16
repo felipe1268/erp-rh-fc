@@ -3046,8 +3046,10 @@ export const payrollEngineRouter = router({
         const baseIrrf = Math.max(0, salarioBruto - inssValor - (numDependentes * VALOR_DEPENDENTE_IR));
         const irrfValor = calcularIRRF(baseIrrf, salarioBruto);
 
-        // SINDICATO: valor mensal direto do cadastro do funcionário
-        const sindicatoValor = parseBRL(emp.contribuicaoSindical) || 0;
+        // SINDICATO (CCT): 1% sobre salário bruto, com teto máximo de R$ 46,30/mês
+        const SINDICATO_PERCENTUAL = 0.01;
+        const SINDICATO_TETO = 46.30;
+        const sindicatoValor = Math.min(salarioBruto * SINDICATO_PERCENTUAL, SINDICATO_TETO);
 
         // EPI: somente alertas com status='aprovado' do mês de referência
         const epiAprovados = (epiAlertsMap.get(emp.id) || []).filter(

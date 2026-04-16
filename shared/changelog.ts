@@ -8563,4 +8563,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-16 17:00:00",
   },
+  {
+    version: 1204,
+    titulo: "Sindicato automático conforme CCT (1% com teto R\$ 46,30)",
+    descricao: "Contribuição sindical agora é calculada automaticamente conforme CCT: 1% sobre salário bruto, com teto máximo de R\$ 46,30/mês. Não depende mais do campo do cadastro do funcionário. Aplicado em todos os funcionários da folha.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-16 17:30:00",
+  },
 ];
