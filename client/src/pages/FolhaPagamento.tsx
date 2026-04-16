@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Switch } from "@/components/ui/switch";
 import { fmtNum } from "@/lib/formatters";
 import AlertaDivergenciaFolha from "@/components/AlertaDivergenciaFolha";
 
@@ -122,6 +123,23 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
         {m.descontoVtFaltasMes > 0 && <div className="pl-3">+ VT descontado por faltas: {fmt(m.descontoVtFaltasMes)}</div>}
         <div>Atrasos no mês: <b>{m.atrasosMinutos}</b> min → {fmt(m.descontoAtrasosMinutos)}</div>
       </div>
+      {(Number(m.dsrFaltaValor) > 0 || Number(m.dsrAtrasoValor) > 0) && (
+        <div className="border-t pt-1 mt-1">
+          <div className="font-semibold text-purple-700">DSR — Lei 605/49 Art. 6º:</div>
+          {Number(m.dsrFaltaValor) > 0 && (
+            <div className={`pl-3 ${m.dsrFaltaAplicado ? '' : 'text-muted-foreground line-through'}`}>
+              DSR por falta: <b>{m.dsrFaltaQtd}</b> dia(s) × valor-DSR → {fmt(m.dsrFaltaValor)}
+              {!m.dsrFaltaAplicado && <span className="text-[10px] ml-1 italic">(desativado pelo RH)</span>}
+            </div>
+          )}
+          {Number(m.dsrAtrasoValor) > 0 && (
+            <div className={`pl-3 ${m.dsrAtrasoAplicado ? '' : 'text-muted-foreground line-through'}`}>
+              DSR por atraso: <b>{m.dsrAtrasoQtd}</b> dia(s) × valor-DSR → {fmt(m.dsrAtrasoValor)}
+              {!m.dsrAtrasoAplicado && <span className="text-[10px] ml-1 italic">(desativado pelo RH)</span>}
+            </div>
+          )}
+        </div>
+      )}
       {(m.escFaltasQtd > 0 || m.descontoFaltasEscuro > 0 || m.descontoAtrasosEscuro > 0) && (
         <div className="border-t pt-1 mt-1">
           <div className="font-semibold text-amber-700">Aferição do Escuro:</div>
@@ -475,6 +493,8 @@ export default function FolhaPagamento() {
     onError: (err) => { resetProgress('vale'); setCalcType(null); setCalcElapsed(0); toast.error(`Erro ao calcular vale: ${err.message}`); },
   });
   const [overridesPrompt, setOverridesPrompt] = useState<{ open: boolean; count: number }>({ open: false, count: 0 });
+  const [aplicarDsrFalta, setAplicarDsrFalta] = useState<boolean>(true);
+  const [aplicarDsrAtraso, setAplicarDsrAtraso] = useState<boolean>(true);
   const simularPagamentoMut = trpc.payrollEngine.simularPagamento.useMutation({
     onMutate: () => startProgress('pagamento'),
     onSuccess: (data) => {
@@ -484,6 +504,8 @@ export default function FolhaPagamento() {
       setPagamentoResult(data);
       setViewMode("calculo_pagamento");
       setOverridesPrompt({ open: false, count: 0 });
+      if (typeof (data as any).aplicarDsrFalta === 'boolean')  setAplicarDsrFalta((data as any).aplicarDsrFalta);
+      if (typeof (data as any).aplicarDsrAtraso === 'boolean') setAplicarDsrAtraso((data as any).aplicarDsrAtraso);
       if (data.divergencias && data.divergencias.length > 0) {
         toast.warning(`ATENÇÃO: ${data.divergencias.length} funcionário(s) CLT ativo(s) excluído(s) da folha por cadastro incompleto. Verifique o alerta na tela.`, { duration: 8000 });
       }
@@ -542,6 +564,13 @@ export default function FolhaPagamento() {
     }
     if (pd.pagamentoResultJson && !pagamentoResult) {
       try { setPagamentoResult(JSON.parse(pd.pagamentoResultJson)); } catch { /* ignore */ }
+    }
+    // Hidrata toggles DSR a partir das colunas persistidas em payroll_periods
+    if (pd.aplicarDsrFalta !== undefined && pd.aplicarDsrFalta !== null) {
+      setAplicarDsrFalta(Number(pd.aplicarDsrFalta) === 1);
+    }
+    if (pd.aplicarDsrAtraso !== undefined && pd.aplicarDsrAtraso !== null) {
+      setAplicarDsrAtraso(Number(pd.aplicarDsrAtraso) === 1);
     }
   }, [payrollPeriod.data]);
 
@@ -3315,6 +3344,7 @@ export default function FolhaPagamento() {
   }
 
   if (viewMode === "calculo_pagamento" && pagamentoResult) {
+    const pagamentoConsolidado = !!(payrollPeriod.data as any)?.pagamentoConsolidadoEm;
     return (
       <DashboardLayout>
         <PrintHeader />
@@ -3470,7 +3500,7 @@ export default function FolhaPagamento() {
             </div>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant={pagamentoSubView === "geral" ? "default" : "outline"}
               size="sm"
@@ -3487,6 +3517,36 @@ export default function FolhaPagamento() {
             >
               <Building2 className="h-3.5 w-3.5 mr-1" /> Por Banco
             </Button>
+            {/* Toggles DSR — Lei 605/49 Art. 6º */}
+            <div className="ml-auto flex items-center gap-3 border rounded-md px-3 py-1.5 bg-amber-50 border-amber-200 print:hidden">
+              <span className="text-[11px] font-semibold text-amber-900">DSR:</span>
+              <label className="flex items-center gap-1.5 text-[11px] text-amber-900 cursor-pointer">
+                <Switch
+                  checked={aplicarDsrFalta}
+                  onCheckedChange={(v: boolean) => {
+                    setAplicarDsrFalta(v);
+                    if (pagamentoConsolidado) return;
+                    setCalcType("pagamento");
+                    simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, aplicarDsrFalta: v, aplicarDsrAtraso, manterOverrides: true });
+                  }}
+                  disabled={simularPagamentoMut.isPending || pagamentoConsolidado}
+                />
+                Descontar por Falta
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-amber-900 cursor-pointer">
+                <Switch
+                  checked={aplicarDsrAtraso}
+                  onCheckedChange={(v: boolean) => {
+                    setAplicarDsrAtraso(v);
+                    if (pagamentoConsolidado) return;
+                    setCalcType("pagamento");
+                    simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, aplicarDsrFalta, aplicarDsrAtraso: v, manterOverrides: true });
+                  }}
+                  disabled={simularPagamentoMut.isPending || pagamentoConsolidado}
+                />
+                Descontar por Atraso
+              </label>
+            </div>
           </div>
 
           {pagamentoSubView === "geral" && (() => {

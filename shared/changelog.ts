@@ -8413,4 +8413,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-16 22:00:00",
   },
+  {
+    version: 1192,
+    titulo: "Folha de Pagamento: DSR separado em Falta e Atraso (Lei 605/49)",
+    descricao:
+      "O Descanso Semanal Remunerado (DSR) perdido por falta e por atraso agora é calculado e exibido " +
+      "separadamente. O RH controla individualmente cada componente via dois switches no header da aba " +
+      "Pagamento → Visão Geral (\"Descontar DSR por Falta\" e \"Descontar DSR por Atraso\"); ao alternar " +
+      "qualquer toggle a folha é re-simulada automaticamente preservando alterações manuais. As novas " +
+      "colunas pontoDescontosResumo.totalDsrFalta/totalDsrAtraso/valorTotalDsrFalta/valorTotalDsrAtraso e " +
+      "payrollPeriods.aplicarDsrFalta/aplicarDsrAtraso persistem o estado. O memorial de cálculo da célula " +
+      "Faltas mostra o breakdown DSR (qtd dias × valor-DSR) com indicação visual quando o RH desativa um " +
+      "dos componentes. Prioridade falta > atraso na mesma semana evita dupla contagem.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento, Ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-16 23:30:00",
+  },
 ];

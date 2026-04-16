@@ -417,7 +417,8 @@ export const pontoDescontosRouter = router({
       let totalHeNaoAutorizadas = 0, totalMinutosHeNaoAut = 0;
       let totalDescontosEmp = 0;
       let totalDescontoDsr = 0;
-      const semanasComAtrasoOuFalta = new Set<string>();
+      const semanasComFalta = new Set<string>();
+      const semanasComAtraso = new Set<string>();
 
       for (const rec of empRecords) {
         const data = rec.data as string;
@@ -451,7 +452,7 @@ export const pontoDescontosRouter = router({
               const valorParcial = valorHora * (minutosNaoCobertos / 60);
               totalFaltasInjust++;
               totalDescontosEmp += valorParcial;
-              semanasComAtrasoOuFalta.add(getSundayOfWeek(data));
+              semanasComFalta.add(getSundayOfWeek(data));
               descontosToInsert.push({
                 companyId: input.companyId, employeeId: emp.id, mesReferencia: input.mesReferencia, data,
                 tipo: "falta_parcial_atestado_horas",
@@ -467,7 +468,7 @@ export const pontoDescontosRouter = router({
           const valorFalta = calcDescontoFalta(salarioBase);
           totalFaltasInjust++;
           totalDescontosEmp += valorFalta;
-          semanasComAtrasoOuFalta.add(getSundayOfWeek(data));
+          semanasComFalta.add(getSundayOfWeek(data));
           descontosToInsert.push({
             companyId: input.companyId, employeeId: emp.id, mesReferencia: input.mesReferencia, data,
             tipo: "falta_injustificada",
@@ -493,7 +494,12 @@ export const pontoDescontosRouter = router({
             totalAtrasos++;
             totalMinutosAtraso += minutosDesconto;
             totalDescontosEmp += valorAtraso;
-            semanasComAtrasoOuFalta.add(getSundayOfWeek(data));
+            // Se vira falta, classifica como FALTA; senão, ATRASO
+            if (atrasoMinutos >= criteria.pontoFaltaAposAtraso) {
+              semanasComFalta.add(getSundayOfWeek(data));
+            } else {
+              semanasComAtraso.add(getSundayOfWeek(data));
+            }
 
             // Se atraso > limite, considerar como falta
             if (atrasoMinutos >= criteria.pontoFaltaAposAtraso) {
@@ -552,7 +558,7 @@ export const pontoDescontosRouter = router({
             totalSaidasAntecipadas++;
             totalMinutosSaidaAnt += saidaAntecipada;
             totalDescontosEmp += valorSaida;
-            semanasComAtrasoOuFalta.add(getSundayOfWeek(data));
+            semanasComAtraso.add(getSundayOfWeek(data));
 
             descontosToInsert.push({
               companyId: input.companyId,
@@ -611,35 +617,48 @@ export const pontoDescontosRouter = router({
       }
 
       // --- DSR PERDIDO ---
-      // Para cada semana com atraso ou falta, o funcionário perde o DSR
+      // Lei 605/49 Art. 6º — Perde o DSR quem teve falta ou atraso injustificado na semana.
+      // Para evitar dupla contagem, classificamos por prioridade:
+      //   - Se a semana tem FALTA → DSR-falta (mesmo se também tem atraso na mesma semana)
+      //   - Senão, se tem ATRASO → DSR-atraso
     const valorDsrDia = calcDsrPerdido(salarioBase);
-    const dsrPerdidos = semanasComAtrasoOuFalta.size;
-    const semanasArray = Array.from(semanasComAtrasoOuFalta);
-    for (const domingo of semanasArray) {
-        totalDescontoDsr += valorDsrDia;
-        totalDescontosEmp += valorDsrDia;
-
-        descontosToInsert.push({
-          companyId: input.companyId,
-          employeeId: emp.id,
-          mesReferencia: input.mesReferencia,
-          data: domingo,
-          tipo: "falta_dsr",
-          minutosAtraso: 0,
-          minutosHe: 0,
-          valorDesconto: "0",
-          valorDsr: formatMoney(valorDsrDia),
-          valorTotal: formatMoney(valorDsrDia),
-          baseCalculo: JSON.stringify({
-            salarioBase, valorDsrDia,
-            formula: `salário / 30 = ${valorDsrDia.toFixed(2)}`,
-            artigo: "Lei 605/49 Art. 6º",
-            motivo: "Atraso/falta injustificada na semana",
-          }),
-          status: "calculado",
-          fundamentacaoLegal: "Lei 605/49 Art. 6º - Perda do DSR por falta/atraso na semana",
-        });
-      }
+    const dsrFaltaSemanas = Array.from(semanasComFalta);
+    const dsrAtrasoSemanas = Array.from(semanasComAtraso).filter(s => !semanasComFalta.has(s));
+    const dsrPerdidos = dsrFaltaSemanas.length + dsrAtrasoSemanas.length;
+    let totalDescontoDsrFalta = 0;
+    let totalDescontoDsrAtraso = 0;
+    const pushDsr = (domingo: string, subtipo: 'falta' | 'atraso') => {
+      totalDescontoDsr += valorDsrDia;
+      totalDescontosEmp += valorDsrDia;
+      if (subtipo === 'falta') totalDescontoDsrFalta += valorDsrDia;
+      else totalDescontoDsrAtraso += valorDsrDia;
+      descontosToInsert.push({
+        companyId: input.companyId,
+        employeeId: emp.id,
+        mesReferencia: input.mesReferencia,
+        data: domingo,
+        tipo: subtipo === 'falta' ? "dsr_falta" : "dsr_atraso",
+        minutosAtraso: 0,
+        minutosHe: 0,
+        valorDesconto: "0",
+        valorDsr: formatMoney(valorDsrDia),
+        valorTotal: formatMoney(valorDsrDia),
+        baseCalculo: JSON.stringify({
+          salarioBase, valorDsrDia, subtipo,
+          formula: `salário / 30 = ${valorDsrDia.toFixed(2)}`,
+          artigo: "Lei 605/49 Art. 6º",
+          motivo: subtipo === 'falta'
+            ? "Falta injustificada na semana"
+            : "Atraso injustificado na semana",
+        }),
+        status: "calculado",
+        fundamentacaoLegal: subtipo === 'falta'
+          ? "Lei 605/49 Art. 6º - Perda do DSR por falta na semana"
+          : "Lei 605/49 Art. 6º - Perda do DSR por atraso na semana",
+      });
+    };
+    for (const domingo of dsrFaltaSemanas) pushDsr(domingo, 'falta');
+    for (const domingo of dsrAtrasoSemanas) pushDsr(domingo, 'atraso');
 
       totalDescontosGeral += totalDescontosEmp;
 
@@ -654,12 +673,16 @@ export const pontoDescontosRouter = router({
         totalSaidasAntecipadas,
         totalMinutosSaidaAntecipada: totalMinutosSaidaAnt,
         totalDsrPerdidos: dsrPerdidos,
+        totalDsrFalta: dsrFaltaSemanas.length,
+        totalDsrAtraso: dsrAtrasoSemanas.length,
         totalFeriadosPerdidos: 0,
         totalHeNaoAutorizadas,
         totalMinutosHeNaoAutorizada: totalMinutosHeNaoAut,
         valorTotalAtrasos: formatMoney(totalMinutosAtraso > 0 ? calcDescontoAtraso(salarioBase, horasMes, totalMinutosAtraso) : 0),
         valorTotalFaltas: formatMoney(totalFaltasInjust * calcDescontoFalta(salarioBase)),
         valorTotalDsr: formatMoney(totalDescontoDsr),
+        valorTotalDsrFalta: formatMoney(totalDescontoDsrFalta),
+        valorTotalDsrAtraso: formatMoney(totalDescontoDsrAtraso),
         valorTotalFeriados: "0",
         valorTotalSaidasAntecipadas: formatMoney(totalMinutosSaidaAnt > 0 ? calcDescontoAtraso(salarioBase, horasMes, totalMinutosSaidaAnt) : 0),
         valorTotalHeNaoAutorizada: "0",

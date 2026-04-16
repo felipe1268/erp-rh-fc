@@ -319,6 +319,12 @@ async function startServer() {
             BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "pagamentoConsolidadoPor" VARCHAR(200); EXCEPTION WHEN OTHERS THEN NULL; END;
             BEGIN ALTER TABLE payroll_payments ADD COLUMN IF NOT EXISTS "descontosManuaisJson" JSONB; EXCEPTION WHEN OTHERS THEN NULL; END;
             BEGIN ALTER TABLE payroll_payments ADD COLUMN IF NOT EXISTS "descontosManuaisHistorico" JSONB; EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "aplicarDsrFalta" SMALLINT NOT NULL DEFAULT 1; EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "aplicarDsrAtraso" SMALLINT NOT NULL DEFAULT 1; EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE ponto_descontos_resumo ADD COLUMN IF NOT EXISTS "totalDsrFalta" INTEGER DEFAULT 0; EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE ponto_descontos_resumo ADD COLUMN IF NOT EXISTS "totalDsrAtraso" INTEGER DEFAULT 0; EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE ponto_descontos_resumo ADD COLUMN IF NOT EXISTS "valorTotalDsrFalta" VARCHAR(20) DEFAULT '0'; EXCEPTION WHEN OTHERS THEN NULL; END;
+            BEGIN ALTER TABLE ponto_descontos_resumo ADD COLUMN IF NOT EXISTS "valorTotalDsrAtraso" VARCHAR(20) DEFAULT '0'; EXCEPTION WHEN OTHERS THEN NULL; END;
           END $$
         `);
         console.log("[ColFix] payroll cols OK");
