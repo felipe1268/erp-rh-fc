@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { trpc } from "@/utils/trpc";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
