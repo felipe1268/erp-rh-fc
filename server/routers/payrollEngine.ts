@@ -2435,42 +2435,16 @@ export const payrollEngineRouter = router({
       }
       const row = oldRows[0];
       const valorAnterior = row.valorTotalVale;
+      const liquidoAnterior = row.valorLiquidoVale;
       const editadoPor = ctx.user.name || "Master";
-      const obs = `[EDITADO por ${editadoPor}: R$ ${valorAnterior} → R$ ${valorFormatado}${input.motivo ? ` | Motivo: ${input.motivo}` : ""}]`;
-
-      const empInfoRows = ((await db.execute(sql`
-        SELECT COALESCE(dependentes_ir, 0) as dep,
-               "salarioBase",
-               "valorHora",
-               "horasMensais",
-               "tipoRemuneracao"
-        FROM employees WHERE id = ${input.employeeId}
-      `)) as any).rows || [];
-      const empInfo = empInfoRows[0] || {};
-      const numDep = Number(empInfo.dep) || 0;
-
-      const isMensalista = (empInfo.tipoRemuneracao === 'mensalista');
-      let salarioMensalCompleto: number;
-      if (isMensalista) {
-        salarioMensalCompleto = parseBRL(empInfo.salarioBase);
-      } else {
-        const vh = parseFloat(empInfo.valorHora) || 0;
-        const hm = parseFloat(empInfo.horasMensais) || 220;
-        salarioMensalCompleto = vh * hm;
-      }
-
-      const inss = calcularINSS(salarioMensalCompleto);
-      const baseIR = salarioMensalCompleto - inss - (numDep * VALOR_DEPENDENTE_IR);
-      const irrfMensal = calcularIRRF(baseIR, salarioMensalCompleto, false);
-      const novoIR = Math.min(irrfMensal > 0 ? Math.round(irrfMensal * 100) / 100 : 0, valorNum);
-      const novoLiquido = Math.max(valorNum - novoIR, 0);
+      const obs = `[EDITADO por ${editadoPor}: Bruto R$ ${valorAnterior} → R$ ${valorFormatado}, Líq R$ ${liquidoAnterior} → R$ ${valorFormatado}, IR zerado${input.motivo ? ` | Motivo: ${input.motivo}` : ""}]`;
 
       await db.execute(sql`
         UPDATE payroll_advances
         SET "valorTotalVale" = ${valorFormatado},
             "valorAdiantamento" = ${valorFormatado},
-            "irRetidoAdiantamento" = ${novoIR.toFixed(2)},
-            "valorLiquidoVale" = ${novoLiquido.toFixed(2)},
+            "irRetidoAdiantamento" = ${"0.00"},
+            "valorLiquidoVale" = ${valorFormatado},
             "observacoes" = COALESCE("observacoes", '') || ${' ' + obs},
             "updatedAt" = NOW()
         WHERE "companyId" = ${input.companyId}
@@ -2480,8 +2454,8 @@ export const payrollEngineRouter = router({
 
       await db.execute(sql`
         UPDATE financial_events
-        SET valor = ${novoLiquido.toFixed(2)},
-            descricao = descricao || ${` (valor editado: ${valorAnterior} → ${valorFormatado}, líquido: ${novoLiquido.toFixed(2)})`}
+        SET valor = ${valorFormatado},
+            descricao = descricao || ${` (bruto editado: ${valorAnterior} → ${valorFormatado})`}
         WHERE "companyId" = ${input.companyId}
           AND "mesCompetencia" = ${input.mesReferencia}
           AND "employeeId" = ${input.employeeId}
@@ -2489,7 +2463,7 @@ export const payrollEngineRouter = router({
           AND tipo = 'saida_vale'
       `);
 
-      return { success: true, employeeId: input.employeeId, valorAnterior, novoValor: valorFormatado, novoIR: novoIR.toFixed(2), novoLiquido: novoLiquido.toFixed(2), message: `Vale editado: R$ ${valorAnterior} → R$ ${valorFormatado} (líquido: R$ ${novoLiquido.toFixed(2)})` };
+      return { success: true, employeeId: input.employeeId, valorAnterior, novoValor: valorFormatado, novoIR: "0.00", novoLiquido: valorFormatado, message: `Bruto editado: R$ ${valorAnterior} → R$ ${valorFormatado} (Líquido = R$ ${valorFormatado}, IR zerado)` };
     }),
 
   editarLiquidoVale: protectedProcedure
