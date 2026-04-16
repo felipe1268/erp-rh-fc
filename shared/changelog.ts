@@ -8536,4 +8536,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: 'Sistema',
     dataPublicacao: '2026-04-16 15:10:00',
   },
+  {
+    version: 1201,
+    titulo: "Base legal de cálculo de falta — Súmula 431 TST (Salário ÷ 30)",
+    descricao: "CRÍTICO — Correção legal: o desconto de falta agora segue a base do mês comercial conforme Súmula 431 TST e CLT Art. 64: Valor-dia = Salário Base ÷ 30 (com fallback Valor-hora × 220 ÷ 30 = vh × 7,3333). Antes o sistema usava Valor-hora × 8h (jornada efetiva), descontando ~9% acima do devido. Helper valorDiaLegal() centralizado, aplicado em 5 pontos do payrollEngine: simulação de folha (mês corrente), aferição do escuro (3 fluxos: já decidido, falta com registro, falta sem registro) e memorial. Recálculo retroativo: 36 payroll_adjustments pendentes/aplicados foram recalculados no banco. 219 payroll_payments simulados precisam ser resimulados pelo RH. Caso ACACIO: valor-dia caiu de R$ 100,88 (12,61 × 8) para R$ 92,47 (2.774,20 ÷ 30). Memorial mostra fórmula explícita com fundamentação legal.",
+    tipo: 'bugfix',
+    modulos: 'Folha de Pagamento, Aferir Escuro',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-04-16 15:40:00',
+  },
 ];

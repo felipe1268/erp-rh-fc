@@ -173,6 +173,24 @@ function getNextMesRef(mesRef: string): string {
   return `${year}-${String(month + 1).padStart(2, "0")}`;
 }
 
+// CLT — base legal de cálculo do dia para descontos de falta:
+// "Mês comercial" de 30 dias, independentemente do mês ter 28/29/30/31 dias
+// e independentemente da jornada diária (8h, 6h, 12x36, etc).
+// Súmula 431 TST + Lei 605/49 + CLT Art. 64.
+// Valor-dia = salarioBase / 30
+// Fallback (se salarioBase vazio): valorHora × 220 / 30 = valorHora × 7,3333
+export function valorDiaLegal(salarioBaseStr: string | null | undefined, valorHora: number): number {
+  const salBase = parseBRLLocal(salarioBaseStr);
+  if (salBase > 0) return salBase / 30;
+  return valorHora * (220 / 30);
+}
+function parseBRLLocal(v: string | null | undefined): number {
+  if (!v) return 0;
+  const s = String(v).trim().replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
 // Get payroll criteria from systemCriteria table
 // Maps the actual DB keys (system_criteria.chave) to the engine's internal names
 async function getPayrollCriteria(db: any, companyId: number) {
@@ -938,9 +956,10 @@ export const payrollEngineRouter = router({
 
       // ===== BATCH-LOAD employee data upfront to avoid N+1 queries =====
       const empDataRows = escuroEmployeeIds.length > 0
-        ? ((await db.execute(sql`SELECT id, "valorHora", "vtValorDiario", "nomeCompleto", funcao, status, "codigoInterno" FROM employees WHERE id IN (${sql.join(escuroEmployeeIds.map(id => sql`${id}`), sql`,`)})`)) as any).rows || []
+        ? ((await db.execute(sql`SELECT id, "valorHora", "salarioBase", "vtValorDiario", "nomeCompleto", funcao, status, "codigoInterno" FROM employees WHERE id IN (${sql.join(escuroEmployeeIds.map(id => sql`${id}`), sql`,`)})`)) as any).rows || []
         : [];
       const empValorHoraMap = new Map<number, number>();
+      const empSalarioBaseMap = new Map<number, string>();
       const empVtDiarioMap = new Map<number, number>();
       const empNomeMap = new Map<number, string>();
       const empFuncaoMap = new Map<number, string>();
@@ -948,6 +967,7 @@ export const payrollEngineRouter = router({
       const empCodigoMap = new Map<number, string>();
       for (const row of empDataRows) {
         empValorHoraMap.set(row.id, parseBRL(row.valorHora));
+        empSalarioBaseMap.set(row.id, row.salarioBase || '');
         empVtDiarioMap.set(row.id, parseBRL(row.vtValorDiario));
         empNomeMap.set(row.id, row.nomeCompleto || `ID ${row.id}`);
         empFuncaoMap.set(row.id, row.funcao || '');
@@ -1059,7 +1079,7 @@ export const payrollEngineRouter = router({
             const faltaValD = parseBRL(jaDecidido.valorTotal || jaDecidido.valorDesconto || '0');
             const vrDescD = parseBRL(jaDecidido.vrDesconto || '0');
             const vtDescD = parseBRL(jaDecidido.vtDesconto || '0');
-            const salDescD = valorHoraEmpD * criteria.cargaHorariaDiaria;
+            const salDescD = valorDiaLegal(empSalarioBaseMap.get(escuro.employeeId), valorHoraEmpD);
             divergenciasList.push({
               employeeId: escuro.employeeId,
               employeeName: empNome,
@@ -1194,7 +1214,7 @@ export const payrollEngineRouter = router({
             divergencias++;
 
             const valorHoraEmp = empValorHoraMap.get(escuro.employeeId) || 0;
-            const valorFalta = valorHoraEmp * criteria.cargaHorariaDiaria;
+            const valorFalta = valorDiaLegal(empSalarioBaseMap.get(escuro.employeeId), valorHoraEmp);
             let vrDesconto = "0", vtDesconto = "0";
             if (criteria.descontoVrFalta) {
               vrDesconto = formatMoney(empVrDiarioMap.get(escuro.employeeId) || 0);
@@ -1323,7 +1343,7 @@ export const payrollEngineRouter = router({
           divergencias++;
 
           const valorHoraEmpSR = empValorHoraMap.get(escuro.employeeId) || 0;
-          const valorFaltaSR = valorHoraEmpSR * criteria.cargaHorariaDiaria;
+          const valorFaltaSR = valorDiaLegal(empSalarioBaseMap.get(escuro.employeeId), valorHoraEmpSR);
           let vrDescontoSR = "0", vtDescontoSR = "0";
           if (criteria.descontoVrFalta) {
             vrDescontoSR = formatMoney(empVrDiarioMap.get(escuro.employeeId) || 0);
@@ -2949,7 +2969,8 @@ export const payrollEngineRouter = router({
         }
 
         const faltasQtd = faltasQtdMes + escFaltasQtd;
-        const descontoFaltasBase  = (faltasQtdMes * valorHora * criteria.cargaHorariaDiaria) + escFaltasValor;
+        const valorDiaFalta = valorDiaLegal(emp.salarioBase, valorHora);
+        const descontoFaltasBase  = (faltasQtdMes * valorDiaFalta) + escFaltasValor;
         const descontoAtrasosBase = ((atrasosMinutos / 60) * valorHora) + escAtrasosValor;
         const descontoVrFaltas = (criteria.descontoVrFalta ? faltasQtdMes * vrDiario : 0) + escFaltasVr;
         const descontoVtFaltas = (criteria.descontoVtFalta ? faltasQtdMes * vtDiario : 0) + escFaltasVt;
@@ -3058,7 +3079,9 @@ export const payrollEngineRouter = router({
             atrasosMesDias: (faltaData?.diasAtraso || []).filter((d: any) => d),
             escFaltasDias,
             escAtrasosDias,
-            descontoFaltasMes: faltasQtdMes * valorHora * criteria.cargaHorariaDiaria,
+            descontoFaltasMes: faltasQtdMes * valorDiaFalta,
+            valorDiaFalta,
+            salarioBaseRef: parseBRL(emp.salarioBase || '0'),
             descontoFaltasEscuro: escFaltasValor,
             descontoVrFaltasMes: criteria.descontoVrFalta ? faltasQtdMes * vrDiario : 0,
             descontoVrFaltasEscuro: escFaltasVr,

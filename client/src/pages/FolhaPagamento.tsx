@@ -116,7 +116,8 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
   if (campo === 'faltas') {
     const vh = Number(m.valorHora) || 0;
     const cargaH = Number(m.cargaHorariaDiaria) || 0;
-    const valorDia = vh * cargaH;
+    const salBaseRef = Number(m.salarioBaseRef) || 0;
+    const valorDia = Number(m.valorDiaFalta) || (salBaseRef > 0 ? salBaseRef / 30 : vh * (220 / 30));
     const escFaltasQtd = Number(m.escFaltasQtd) || 0;
     const escVrUnit = escFaltasQtd > 0 ? (Number(m.descontoVrFaltasEscuro) || 0) / escFaltasQtd : 0;
     const escVtUnit = escFaltasQtd > 0 ? (Number(m.descontoVtFaltasEscuro) || 0) / escFaltasQtd : 0;
@@ -125,8 +126,13 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
     return (<div className="text-xs space-y-1 max-h-[70vh] overflow-y-auto">
       <div className="font-semibold text-gray-700">Memorial de cálculo — Faltas / Atrasos</div>
       <div className="bg-gray-50 rounded px-2 py-1 text-[11px]">
-        <div>Valor-hora: <b>{fmt(vh)}</b> · Carga diária: <b>{cargaH}h</b></div>
-        <div>Valor-dia (base falta): <b>{fmt(vh)} × {cargaH}h = {fmt(valorDia)}</b></div>
+        <div>Valor-hora: <b>{fmt(vh)}</b> · Carga diária: <b>{cargaH}h</b> · Salário base: <b>{fmt(salBaseRef)}</b></div>
+        <div>Valor-dia (base falta) <span className="text-amber-700">— Súmula 431 TST / CLT Art. 64</span>:</div>
+        {salBaseRef > 0 ? (
+          <div className="font-mono">{fmt(salBaseRef)} ÷ 30 = <b>{fmt(valorDia)}</b></div>
+        ) : (
+          <div className="font-mono">{fmt(vh)} × (220 ÷ 30) = {fmt(vh)} × 7,3333 = <b>{fmt(valorDia)}</b></div>
+        )}
       </div>
 
       <div className="border-t pt-1 mt-1">
