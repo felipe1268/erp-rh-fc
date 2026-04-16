@@ -470,7 +470,10 @@ export default function AlmoxarifadoPage() {
   const [empShowSug, setEmpShowSug] = useState(false);
   const [empItemId, setEmpItemId] = useState<number>(0);
   const [empQtd, setEmpQtd] = useState("1");
-  const [empOk, setEmpOk] = useState<null | { nome: string }>(null);
+  // Múltiplas ferramentas no mesmo empréstimo
+  const [empItens, setEmpItens] = useState<Array<{ itemId: number; qtd: string }>>([]);
+  const [empSubmitting, setEmpSubmitting] = useState(false);
+  const [empOk, setEmpOk] = useState<null | { nome: string; total?: number }>(null);
   const [empErr, setEmpErr] = useState<string | null>(null);
   const { data: empFuncionario } = trpc.warehouse.getFuncionarioByCodigo.useQuery(
     { companyId, codigo: empCodigo },
@@ -588,7 +591,7 @@ export default function AlmoxarifadoPage() {
 
   function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
   function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraId(typeof obraContexto === "number" ? obraContexto : 0); setSaidaOk(null); }
-  function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpOk(null); setEmpErr(null); }
+  function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpItens([]); setEmpSubmitting(false); setEmpOk(null); setEmpErr(null); }
 
   // ── Abrir modal via URL param (?modal=X) ──────────────────────
   useEffect(() => {
@@ -1900,36 +1903,88 @@ export default function AlmoxarifadoPage() {
                       <p className="text-xs text-red-500 mt-1">Nenhum funcionário encontrado</p>
                     )}
                   </div>
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 block mb-1">Selecionar Ferramenta *</label>
-                    {(() => {
-                      const ferramentasList = itens.filter((i: any) => {
-                        const cat = String(i.categoria || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                        return cat.includes("ferramenta") || cat.includes("equipamento");
-                      });
-                      return (
-                        <>
-                          <select className="w-full border-2 rounded-xl p-3 text-base" value={empItemId} onChange={e => setEmpItemId(Number(e.target.value))}>
-                            <option value={0}>— escolha a ferramenta —</option>
-                            {ferramentasList.map((i: any) => <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(i.quantidadeAtual)}</option>)}
-                          </select>
-                          <p className="text-[11px] text-gray-500 mt-1">Mostrando apenas itens das categorias Ferramentas e Equipamentos ({ferramentasList.length} de {itens.length} itens do almoxarifado).</p>
-                        </>
-                      );
-                    })()}
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 block mb-1">Quantidade</label>
-                    <input type="number" inputMode="numeric" className="w-full border-2 rounded-xl p-4 text-xl font-bold text-center" value={empQtd} onChange={e => setEmpQtd(e.target.value)} />
-                  </div>
-                  {empErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{empErr}</p>}
-                  <button
-                    className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
-                    disabled={!empSelecionado || !empItemId || !empQtd || registerLoan.isPending}
-                    onClick={() => registerLoan.mutate({ companyId, itemId: empItemId, quantidade: parseFloat(empQtd), funcionarioCodigo: empSelecionado?.codigoInterno || empCodigo, obraId: typeof obraContexto === "number" ? obraContexto : undefined })}
-                  >
-                    {registerLoan.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "🔧 CONFIRMAR EMPRÉSTIMO"}
-                  </button>
+                  {(() => {
+                    const ferramentasList = itens.filter((i: any) => {
+                      const cat = String(i.categoria || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                      return cat.includes("ferramenta") || cat.includes("equipamento");
+                    });
+                    const jaEscolhidos = new Set(empItens.map(x => x.itemId));
+                    const podeAdicionar = empItemId > 0 && Number(empQtd) > 0 && !jaEscolhidos.has(empItemId);
+                    function adicionar() {
+                      if (!podeAdicionar) return;
+                      setEmpItens(prev => [...prev, { itemId: empItemId, qtd: empQtd }]);
+                      setEmpItemId(0); setEmpQtd("1");
+                    }
+                    return (
+                      <>
+                        {/* Lista de ferramentas já adicionadas */}
+                        {empItens.length > 0 && (
+                          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3 space-y-2">
+                            <p className="text-xs font-semibold text-blue-800">Ferramentas neste empréstimo ({empItens.length}):</p>
+                            {empItens.map((it, idx) => {
+                              const info = itens.find((i: any) => i.id === it.itemId);
+                              return (
+                                <div key={idx} className="flex items-center gap-2 bg-white rounded-lg p-2 border border-blue-200">
+                                  <Wrench className="w-4 h-4 text-blue-500 shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{info?.nome || `#${it.itemId}`}</p>
+                                    <p className="text-[11px] text-gray-500">Qtd: <b>{it.qtd}</b> · Estoque: {info ? n(info.quantidadeAtual) : "—"}</p>
+                                  </div>
+                                  <button type="button" onClick={() => setEmpItens(prev => prev.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 transition" title="Remover">
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {/* Linha para adicionar nova ferramenta */}
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 block mb-1">{empItens.length === 0 ? "Selecionar Ferramenta *" : "Adicionar outra ferramenta"}</label>
+                          <div className="flex gap-2">
+                            <select className="flex-1 min-w-0 border-2 rounded-xl p-3 text-sm" value={empItemId} onChange={e => setEmpItemId(Number(e.target.value))}>
+                              <option value={0}>— escolha a ferramenta —</option>
+                              {ferramentasList.filter((i: any) => !jaEscolhidos.has(i.id)).map((i: any) => <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(i.quantidadeAtual)}</option>)}
+                            </select>
+                            <input type="number" inputMode="numeric" className="w-20 border-2 rounded-xl p-3 text-base font-bold text-center" value={empQtd} onChange={e => setEmpQtd(e.target.value)} placeholder="Qtd" />
+                            <button type="button" onClick={adicionar} disabled={!podeAdicionar} className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold px-3 rounded-xl disabled:opacity-40 transition" title="Adicionar à lista">+</button>
+                          </div>
+                          <p className="text-[11px] text-gray-500 mt-1">Mostrando apenas Ferramentas e Equipamentos ({ferramentasList.length} de {itens.length}). Use o <b>+</b> para adicionar mais de uma ferramenta para o mesmo funcionário.</p>
+                        </div>
+                        {empErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{empErr}</p>}
+                        <button
+                          className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
+                          disabled={!empSelecionado || (empItens.length === 0 && !podeAdicionar) || empSubmitting}
+                          onClick={async () => {
+                            // Junta o item "em digitação" + a lista
+                            const lista = [...empItens];
+                            if (empItemId > 0 && Number(empQtd) > 0 && !jaEscolhidos.has(empItemId)) {
+                              lista.push({ itemId: empItemId, qtd: empQtd });
+                            }
+                            if (lista.length === 0) return;
+                            setEmpSubmitting(true); setEmpErr(null);
+                            const codFunc = empSelecionado?.codigoInterno || empCodigo;
+                            const obraIdParam = typeof obraContexto === "number" ? obraContexto : undefined;
+                            let okCount = 0; let lastNome = "";
+                            try {
+                              for (const it of lista) {
+                                const r = await registerLoan.mutateAsync({ companyId, itemId: it.itemId, quantidade: parseFloat(it.qtd), funcionarioCodigo: codFunc, obraId: obraIdParam });
+                                lastNome = r.funcionarioNome || lastNome;
+                                okCount++;
+                              }
+                              setEmpOk({ nome: lastNome, total: okCount });
+                            } catch (e: any) {
+                              setEmpErr(`Falha após ${okCount} de ${lista.length} ferramentas: ${e?.message || 'erro desconhecido'}`);
+                            } finally {
+                              setEmpSubmitting(false);
+                            }
+                          }}
+                        >
+                          {empSubmitting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : `🔧 CONFIRMAR EMPRÉSTIMO${(empItens.length + (empItemId > 0 && Number(empQtd) > 0 && !jaEscolhidos.has(empItemId) ? 1 : 0)) > 1 ? ` (${empItens.length + (empItemId > 0 && Number(empQtd) > 0 && !jaEscolhidos.has(empItemId) ? 1 : 0)} itens)` : ""}`}
+                        </button>
+                      </>
+                    );
+                  })()}
                 </div>
               </>
             )}
@@ -2612,28 +2667,66 @@ export default function AlmoxarifadoPage() {
                   <p className="text-gray-500 font-medium">Nenhuma ferramenta emprestada em aberto</p>
                 </div>
               ) :
-              <div className="space-y-2">
-                {loansAbertos.map((l: any) => (
-                  <div key={l.id} className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex items-center gap-3">
-                    <Wrench className="w-5 h-5 text-blue-500 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 text-sm truncate">{l.itemNome}</p>
-                      <p className="text-xs text-gray-600">
-                        {n(l.quantidade)} un · <span className="font-medium">{l.funcionarioNome}</span>
-                        {l.funcionarioCodigo ? ` (${l.funcionarioCodigo})` : ""}
-                      </p>
-                      <p className="text-[11px] text-gray-400">Emprestado em {l.dataEmprestimo}{l.horaEmprestimo ? ` às ${l.horaEmprestimo}` : ""}</p>
-                    </div>
-                    <button
-                      onClick={() => returnLoan.mutate({ loanId: l.id })}
-                      disabled={returnLoan.isPending}
-                      className="shrink-0 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 font-semibold transition disabled:opacity-60"
-                    >
-                      Devolver
-                    </button>
+              (() => {
+                // Agrupa empréstimos abertos por funcionário (chave: codigo || nome)
+                const grupos = new Map<string, { nome: string; codigo: string; itens: any[] }>();
+                for (const l of loansAbertos as any[]) {
+                  const key = String(l.funcionarioCodigo || l.funcionarioNome || "—");
+                  if (!grupos.has(key)) grupos.set(key, { nome: l.funcionarioNome || "—", codigo: l.funcionarioCodigo || "", itens: [] });
+                  grupos.get(key)!.itens.push(l);
+                }
+                const gruposArr = Array.from(grupos.values()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+                async function devolverGrupo(g: { itens: any[] }) {
+                  for (const it of g.itens) {
+                    try { await returnLoan.mutateAsync({ loanId: it.id }); } catch { /* segue */ }
+                  }
+                }
+                return (
+                  <div className="space-y-3">
+                    {gruposArr.map((g) => (
+                      <div key={g.codigo + g.nome} className="border-2 border-blue-200 rounded-xl overflow-hidden">
+                        <div className="bg-blue-100 px-4 py-2 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <User className="w-4 h-4 text-blue-700 shrink-0" />
+                            <p className="font-bold text-blue-900 text-sm truncate">
+                              {g.nome}{g.codigo ? <span className="text-blue-700 font-normal"> ({g.codigo})</span> : null}
+                            </p>
+                            <span className="text-[11px] font-semibold text-blue-700 bg-white px-2 py-0.5 rounded-full shrink-0">{g.itens.length} item(ns)</span>
+                          </div>
+                          {g.itens.length > 1 && (
+                            <button
+                              onClick={() => devolverGrupo(g)}
+                              disabled={returnLoan.isPending}
+                              className="shrink-0 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 font-semibold transition disabled:opacity-60"
+                              title="Devolver todas as ferramentas deste funcionário"
+                            >
+                              Devolver Todas
+                            </button>
+                          )}
+                        </div>
+                        <div className="divide-y divide-blue-100">
+                          {g.itens.map((l: any) => (
+                            <div key={l.id} className="bg-blue-50 px-4 py-2 flex items-center gap-3">
+                              <Wrench className="w-4 h-4 text-blue-500 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900 text-sm truncate">{l.itemNome}</p>
+                                <p className="text-[11px] text-gray-500">{n(l.quantidade)} un · Emprestado em {l.dataEmprestimo}{l.horaEmprestimo ? ` às ${l.horaEmprestimo}` : ""}</p>
+                              </div>
+                              <button
+                                onClick={() => returnLoan.mutate({ loanId: l.id })}
+                                disabled={returnLoan.isPending}
+                                className="shrink-0 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 font-semibold transition disabled:opacity-60"
+                              >
+                                Devolver
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()
             )}
 
             {/* INSUMOS */}
