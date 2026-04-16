@@ -8554,4 +8554,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: 'Sistema',
     dataPublicacao: '2026-04-16 16:00:00',
   },
+  {
+    version: 1203,
+    titulo: "Tributos legais (INSS/IRRF/Sindicato) + Fluxo de aprovação RH",
+    descricao: "BACKEND CRÍTICO: (1) INSS agora usa tabela progressiva Lei 8.212/91 automaticamente (faixas 7,5%/9%/12%/14%, teto R\$ 8.475,55); inssPercentual no cadastro continua disponível como override manual. (2) IRRF descontado automaticamente — base = bruto - INSS - dependentes×R\$ 228,80 (Lei 7.713/88, IN RFB 2.141/2023). (3) Contribuição sindical lê de employees.contribuicaoSindical (coluna nova descontoSindicato no holerite). (4) Fluxo de APROVAÇÃO RH: lançamentos de pensão, outros, EPI e convênio só descontam se aprovados pelo RH. Novas colunas em payroll_adjustments: aprovadoRh/Por/Em/Motivo. Faltas/atrasos automáticos do timecard ficam auto-aprovados (regra CLT). (5) Endpoint listarPendenciasAprovacaoRh + aprovarAdjustmentRh + gerarPensoesMes (cria adjustments mensais de pensão aguardando aprovação). (6) Coluna descontoConvenio separada (antes ficava misturada em descontoOutros).",
+    tipo: "feature",
+    modulos: "Folha de Pagamento, EPI, Convênios, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-16 17:00:00",
+  },
 ];

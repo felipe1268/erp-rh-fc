@@ -2691,6 +2691,8 @@ export const payrollEngineRouter = router({
         seguroVida: employees.seguroVida,
         fgtsPercentual: employees.fgtsPercentual,
         inssPercentual: employees.inssPercentual,
+        contribuicaoSindical: employees.contribuicaoSindical,
+        dependentesIr: employees.dependentesIR,
         vaRecebe: employees.vaRecebe,
         vaValor: employees.vaValor,
         banco: employees.banco,
@@ -2910,11 +2912,43 @@ export const payrollEngineRouter = router({
         FROM lancamentos_parceiros lp
         WHERE lp."employeeId" IN (${empIdsSql}) AND lp."companyId" = ${input.companyId}
           AND lp.competencia_desconto = ${input.mesReferencia}
-          AND lp.status IN ('pendente', 'aprovado')
+          AND lp.status = 'aprovado'
         GROUP BY lp."employeeId"
       `)) as any).rows || [];
       const convenioMap = new Map<number, number>();
       for (const r of convenioBatchRows) convenioMap.set(Number(r.employee_id), parseFloat(r.totalConvenio || '0'));
+
+      // PRE-FETCH: Adjustments do mês de desconto (pensão, outros) — para filtrar aprovação RH
+      const adjBatchRows = ((await db.execute(sql`
+        SELECT "employeeId", tipo, "valorDesconto", "aprovadoRh", id, descricao, data
+        FROM payroll_adjustments
+        WHERE "companyId" = ${input.companyId}
+          AND "employeeId" IN (${empIdsSql})
+          AND "mesDesconto" = ${input.mesReferencia}
+          AND status IN ('pendente','aplicado')
+          AND tipo IN ('pensao','outros')
+      `)) as any).rows || [];
+      const adjustmentsByEmp = new Map<number, any[]>();
+      for (const r of adjBatchRows) {
+        const id = Number(r.employeeId);
+        if (!adjustmentsByEmp.has(id)) adjustmentsByEmp.set(id, []);
+        adjustmentsByEmp.get(id)!.push(r);
+      }
+
+      // PRE-FETCH: EPI discount alerts aprovados do mês
+      const epiBatchRows = ((await db.execute(sql`
+        SELECT "employeeId", status, valor_total, epi_nome, id
+        FROM epi_discount_alerts
+        WHERE "companyId" = ${input.companyId}
+          AND "employeeId" IN (${empIdsSql})
+          AND mes_referencia = ${input.mesReferencia}
+      `)) as any).rows || [];
+      const epiAlertsMap = new Map<number, any[]>();
+      for (const r of epiBatchRows) {
+        const id = Number(r.employeeId);
+        if (!epiAlertsMap.has(id)) epiAlertsMap.set(id, []);
+        epiAlertsMap.get(id)!.push(r);
+      }
 
       const paymentInsertRows: any[] = [];
 
@@ -2989,20 +3023,43 @@ export const payrollEngineRouter = router({
         const descontoFaltas  = descontoFaltasBase + dsrFaltaValorAplicado;
         const descontoAtrasos = descontoAtrasosBase;
 
-        let descontoPensao = 0;
-        if (emp.pensaoAlimenticia) {
-          descontoPensao = emp.pensaoTipo === "percentual"
-            ? salarioBruto * (parseBRL(emp.pensaoPercentual) / 100)
-            : parseBRL(emp.pensaoValor);
-        }
+        // PENSÃO: agora vem APENAS de payroll_adjustments tipo='pensao' aprovado pelo RH
+        const pensaoAdjs = (adjustmentsByEmp.get(emp.id) || []).filter(
+          (a: any) => a.tipo === 'pensao' && a.aprovadoRh === true
+        );
+        const descontoPensao = pensaoAdjs.reduce((s: number, a: any) => s + parseBRL(a.valorDesconto), 0);
 
         const vaValor = vaLancamento;
         const vrValorMensal = vrDiario * diasUteis;
         const seguroVidaValor = parseBRL(emp.seguroVida);
         const fgtsPerc = parseBRL(emp.fgtsPercentual) || 8;
         const fgtsValor = salarioBruto * (fgtsPerc / 100);
-        const inssPerc = parseBRL(emp.inssPercentual) || 0;
-        const inssValor = inssPerc > 0 ? salarioBruto * (inssPerc / 100) : 0;
+
+        // INSS: se inssPercentual preenchido (>0), usa override manual; senão tabela progressiva (Lei 8.212/91)
+        const inssPercManual = parseBRL(emp.inssPercentual) || 0;
+        const inssValor = inssPercManual > 0
+          ? salarioBruto * (inssPercManual / 100)
+          : calcularINSS(salarioBruto);
+
+        // IRRF: base = bruto - INSS - (dependentes × R$ 228,80) — Lei 7.713/88, IN RFB 2.141/2023
+        const numDependentes = Number(emp.dependentesIr) || 0;
+        const baseIrrf = Math.max(0, salarioBruto - inssValor - (numDependentes * VALOR_DEPENDENTE_IR));
+        const irrfValor = calcularIRRF(baseIrrf, salarioBruto);
+
+        // SINDICATO: valor mensal direto do cadastro do funcionário
+        const sindicatoValor = parseBRL(emp.contribuicaoSindical) || 0;
+
+        // EPI: somente alertas com status='aprovado' do mês de referência
+        const epiAprovados = (epiAlertsMap.get(emp.id) || []).filter(
+          (a: any) => a.status === 'aprovado'
+        );
+        const descontoEpi = epiAprovados.reduce((s: number, a: any) => s + Number(a.valor_total || 0), 0);
+
+        // OUTROS: adjustments tipo='outros' aprovados pelo RH (seguro vida + escuro continuam automáticos)
+        const outrosAdjs = (adjustmentsByEmp.get(emp.id) || []).filter(
+          (a: any) => a.tipo === 'outros' && a.aprovadoRh === true
+        );
+        const outrosManuaisValor = outrosAdjs.reduce((s: number, a: any) => s + parseBRL(a.valorDesconto), 0);
 
         const obraDiasRows = obraMap.get(emp.id) || [];
         const totalDiasObra = obraDiasRows.reduce((s: number, r: any) => s + Number(r.dias), 0) || diasUteis;
@@ -3029,7 +3086,7 @@ export const payrollEngineRouter = router({
         const calcVt = vtValorMensal;
         const calcVa = descontoVaTotal;
         const calcFaltas = descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVtFaltas;
-        const calcOutros = descontoPensao + seguroVidaValor + acertoEscuroValor;
+        const calcOutros = seguroVidaValor + acertoEscuroValor + outrosManuaisValor;
         const calcConvenio = descontoConvenio;
 
         // Aplica overrides manuais (se mantidos)
@@ -3044,7 +3101,8 @@ export const payrollEngineRouter = router({
         const finalOutros = ovrManuais.outros != null ? Number(ovrManuais.outros) : calcOutros;
         const finalConvenio = ovrManuais.convenio != null ? Number(ovrManuais.convenio) : calcConvenio;
 
-        const totalDescontos = finalVale + finalInss + finalVt + finalVa + finalFaltas + finalOutros + finalConvenio;
+        const totalDescontos = finalVale + finalInss + finalVt + finalVa + finalFaltas + finalOutros + finalConvenio
+                              + descontoPensao + irrfValor + sindicatoValor + descontoEpi;
         const salarioLiquido = totalProventos - totalDescontos;
 
         const manuaisJsonStr = Object.keys(ovrManuais).length > 0 ? JSON.stringify(ovrManuais) : null;
@@ -3053,7 +3111,8 @@ export const payrollEngineRouter = router({
         paymentInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis},
           ${formatMoney(salarioBruto)}, ${formatMoney(valorHE)}, ${formatMoney(totalProventos)},
           ${formatMoney(finalVale)}, ${formatMoney(descontoFaltas)}, ${faltasQtd}, ${formatMoney(descontoAtrasos)}, ${atrasosMinutos},
-          ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(descontoPensao)}, ${formatMoney(finalInss)}, ${formatMoney(fgtsValor)}, ${formatMoney(finalConvenio)},
+          ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(descontoPensao)}, ${formatMoney(finalInss)}, ${formatMoney(fgtsValor)}, ${formatMoney(finalOutros)},
+          ${formatMoney(finalConvenio)}, ${formatMoney(irrfValor)}, ${formatMoney(sindicatoValor)}, ${formatMoney(descontoEpi)},
           ${formatMoney(totalDescontos)}, ${formatMoney(acertoEscuroValor)}, ${JSON.stringify(acertoEscuroDetalhes)}, ${formatMoney(salarioLiquido)},
           'simulado', ${dataPagamentoPrevista}, ${manuaisJsonStr}, ${histJsonStr})`);
 
@@ -3069,6 +3128,8 @@ export const payrollEngineRouter = router({
           descontoFaltas, faltasQtd, descontoAtrasos, atrasosMinutos,
           descontoVrFaltas, descontoVtFaltas, descontoVaTotal: finalVa, descontoPensao,
           descontoFgts: fgtsValor, acertoEscuroValor, descontoConvenio: finalConvenio,
+          descontoIrrf: irrfValor, descontoSindicato: sindicatoValor, descontoEpi,
+          descontoOutros: finalOutros,
           totalDescontos, salarioLiquido, dataPagamentoPrevista, vaValor,
           vtValor: finalVt, vtDiario, vrValor: vrValorMensal, vrDiario, seguroVidaValor, rateioPorObra,
           // Memorial de cálculo (valores originais antes de overrides)
@@ -3130,6 +3191,7 @@ export const payrollEngineRouter = router({
             "salarioBrutoMes", "horasExtrasValor", "totalProventos",
             "descontoAdiantamento", "descontoFaltas", "descontoFaltasQtd", "descontoAtrasos", "descontoAtrasosMinutos",
             "descontoVrFaltas", "descontoVtFaltas", "descontoPensao", "descontoInss", "descontoFgts", "descontoOutros",
+            "descontoConvenio", "descontoIrrf", "descontoSindicato", "descontoEpi",
             "totalDescontos", "acertoEscuroValor", "acertoEscuroDetalhes", "salarioLiquido",
             status, "dataPagamentoPrevista", "descontosManuaisJson", "descontosManuaisHistorico")
           VALUES ${sql.join(paymentInsertRows, sql`,`)}
@@ -4917,6 +4979,109 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         totalValor,
         banco: bancoNome,
       };
+    }),
+
+  // ===== APROVAÇÃO RH (Rev. 1203) =====
+  // Lista lançamentos pendentes de aprovação RH (pensão, outros, EPI, convênio)
+  listarPendenciasAprovacaoRh: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const adjs = ((await db.execute(sql`
+        SELECT pa.id, pa."employeeId", pa.tipo, pa.descricao, pa."valorDesconto", pa.data,
+               pa."aprovadoRh", pa."aprovadoRhEm", pa."aprovadoRhMotivo",
+               e."nomeCompleto", e."codigoInterno", e.funcao
+        FROM payroll_adjustments pa
+        JOIN employees e ON e.id = pa."employeeId"
+        WHERE pa."companyId" = ${input.companyId}
+          AND pa."mesDesconto" = ${input.mesReferencia}
+          AND pa.status IN ('pendente','aplicado')
+          AND pa.tipo IN ('pensao','outros')
+        ORDER BY e."nomeCompleto", pa.data
+      `)) as any).rows || [];
+      const epi = ((await db.execute(sql`
+        SELECT ed.id, ed."employeeId", ed.epi_nome, ed.ca, ed.quantidade, ed.valor_total, ed.status,
+               ed.justificativa, ed.motivo_cobranca, ed.data_validacao,
+               e."nomeCompleto", e."codigoInterno", e.funcao
+        FROM epi_discount_alerts ed
+        JOIN employees e ON e.id = ed."employeeId"
+        WHERE ed."companyId" = ${input.companyId}
+          AND ed.mes_referencia = ${input.mesReferencia}
+        ORDER BY e."nomeCompleto"
+      `)) as any).rows || [];
+      const conv = ((await db.execute(sql`
+        SELECT lp.id, lp."employeeId", lp.valor, lp.status, lp.descricao,
+               e."nomeCompleto", e."codigoInterno", e.funcao
+        FROM lancamentos_parceiros lp
+        JOIN employees e ON e.id = lp."employeeId"
+        WHERE lp."companyId" = ${input.companyId}
+          AND lp.competencia_desconto = ${input.mesReferencia}
+        ORDER BY e."nomeCompleto"
+      `)) as any).rows || [];
+      return { adjustments: adjs, epi, convenios: conv };
+    }),
+
+  // Aprova/reprova lançamento (pensão / outros)
+  aprovarAdjustmentRh: protectedProcedure
+    .input(z.object({ adjustmentId: z.number(), aprovado: z.boolean(), motivo: z.string().optional(), userId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      await db.execute(sql`
+        UPDATE payroll_adjustments
+        SET "aprovadoRh" = ${input.aprovado},
+            "aprovadoRhPor" = ${input.userId},
+            "aprovadoRhEm" = NOW(),
+            "aprovadoRhMotivo" = ${input.motivo || null},
+            "updatedAt" = NOW()
+        WHERE id = ${input.adjustmentId}
+      `);
+      return { ok: true };
+    }),
+
+  // Gera lançamentos mensais de pensão alimentícia (aguardando aprovação RH)
+  gerarPensoesMes: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      // Funcionários com pensão ativa
+      const emps = ((await db.execute(sql`
+        SELECT id, "salarioBase", "pensaoTipo", "pensaoValor", "pensaoPercentual", "pensaoBeneficiario"
+        FROM employees
+        WHERE "companyId" = ${input.companyId}
+          AND "pensaoAlimenticia" = TRUE
+          AND ("deletedAt" IS NULL OR "deletedAt" > NOW())
+      `)) as any).rows || [];
+      const [year, month] = input.mesReferencia.split('-').map(Number);
+      const dataRef = `${year}-${String(month).padStart(2, '0')}-01`;
+      let criados = 0;
+      for (const e of emps) {
+        // Verifica se já existe lançamento de pensão deste mês
+        const existe = ((await db.execute(sql`
+          SELECT id FROM payroll_adjustments
+          WHERE "companyId" = ${input.companyId} AND "employeeId" = ${e.id}
+            AND tipo = 'pensao' AND "mesDesconto" = ${input.mesReferencia}
+            AND status IN ('pendente','aplicado')
+          LIMIT 1
+        `)) as any).rows || [];
+        if (existe.length > 0) continue;
+        const salBase = parseBRL(e.salarioBase);
+        const valor = e.pensaoTipo === 'percentual'
+          ? salBase * (parseBRL(e.pensaoPercentual) / 100)
+          : parseBRL(e.pensaoValor);
+        if (valor <= 0) continue;
+        await db.execute(sql`
+          INSERT INTO payroll_adjustments
+            ("companyId","employeeId","mesOrigem","mesDesconto","data","tipo","descricao","valorDesconto","valorTotal","status","aprovadoRh","createdAt","updatedAt")
+          VALUES (${input.companyId}, ${e.id}, ${input.mesReferencia}, ${input.mesReferencia}, ${dataRef},
+                  'pensao', ${'Pensão alimentícia — ' + (e.pensaoBeneficiario || 'beneficiário')},
+                  ${formatMoney(valor)}, ${formatMoney(valor)}, 'pendente', FALSE, NOW(), NOW())
+        `);
+        criados++;
+      }
+      return { criados, total: emps.length };
     }),
 
   listarContasBancariasEmpresa: protectedProcedure
