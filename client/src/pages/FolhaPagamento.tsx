@@ -119,9 +119,15 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
       <div>Valor-hora: <b>{fmt(m.valorHora)}</b> · Carga diária: <b>{m.cargaHorariaDiaria}h</b></div>
       <div className="border-t pt-1 mt-1">
         <div>Faltas no mês: <b>{m.faltasQtdMes}</b> dia(s) → {fmt(m.descontoFaltasMes)}</div>
+        {Array.isArray(m.faltasMesDias) && m.faltasMesDias.length > 0 && (
+          <div className="pl-3 text-[10px] text-muted-foreground">Dias: {m.faltasMesDias.join(', ')}</div>
+        )}
         {m.descontoVrFaltasMes > 0 && <div className="pl-3">+ VR descontado por faltas: {fmt(m.descontoVrFaltasMes)}</div>}
         {m.descontoVtFaltasMes > 0 && <div className="pl-3">+ VT descontado por faltas: {fmt(m.descontoVtFaltasMes)}</div>}
         <div>Atrasos no mês: <b>{m.atrasosMinutos}</b> min → {fmt(m.descontoAtrasosMinutos)}</div>
+        {Array.isArray(m.atrasosMesDias) && m.atrasosMesDias.length > 0 && (
+          <div className="pl-3 text-[10px] text-muted-foreground">Dias: {m.atrasosMesDias.join(', ')}</div>
+        )}
       </div>
       {Number(m.dsrFaltaValor) > 0 && (
         <div className="border-t pt-1 mt-1">
@@ -136,9 +142,15 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
         <div className="border-t pt-1 mt-1">
           <div className="font-semibold text-amber-700">Aferição do Escuro:</div>
           {m.escFaltasQtd > 0 && <div className="pl-3">Faltas retroativas: <b>{m.escFaltasQtd}</b> → {fmt(m.descontoFaltasEscuro)}</div>}
+          {Array.isArray(m.escFaltasDias) && m.escFaltasDias.length > 0 && (
+            <div className="pl-6 text-[10px] text-muted-foreground">Dias: {m.escFaltasDias.join(', ')}</div>
+          )}
           {m.descontoVrFaltasEscuro > 0 && <div className="pl-3">+ VR retroativo: {fmt(m.descontoVrFaltasEscuro)}</div>}
           {m.descontoVtFaltasEscuro > 0 && <div className="pl-3">+ VT retroativo: {fmt(m.descontoVtFaltasEscuro)}</div>}
           {m.descontoAtrasosEscuro > 0 && <div className="pl-3">Atrasos retroativos: {fmt(m.descontoAtrasosEscuro)}</div>}
+          {Array.isArray(m.escAtrasosDias) && m.escAtrasosDias.length > 0 && (
+            <div className="pl-6 text-[10px] text-muted-foreground">Dias: {m.escAtrasosDias.join(', ')}</div>
+          )}
         </div>
       )}
       <div className="border-t pt-1 mt-1 font-semibold">Total Faltas: {fmt(calc.faltas)}</div>

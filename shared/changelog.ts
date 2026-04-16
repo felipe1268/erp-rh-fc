@@ -8509,4 +8509,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-17 01:25:00",
   },
+  {
+    version: 1198,
+    titulo: "Memorial de Faltas/Atrasos exibe dias considerados",
+    descricao: "O memorial de cálculo na coluna FALTAS agora lista as datas que estão sendo consideradas como falta e como atraso, tanto no mês corrente quanto na Aferição do Escuro. Facilita conferência pelo RH (Ex.: caso ACACIO LESCURA, 22 faltas retroativas com datas explícitas). Backend: query timecard_daily agrega ARRAY_AGG das datas; adjustments expõem escFaltasDias/escAtrasosDias. Frontend: tooltip mostra 'Dias: dd/mm/yyyy, ...'.",
+    tipo: 'melhoria',
+    modulos: 'Folha de Pagamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-04-16 14:30:00',
+  },
 ];

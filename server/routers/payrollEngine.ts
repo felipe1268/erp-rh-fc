@@ -2730,7 +2730,9 @@ export const payrollEngineRouter = router({
         SELECT "employeeId", 
           SUM("isFalta") as "totalFaltas",
           SUM("isAtraso") as "totalAtrasos",
-          SUM("minutosAtraso") as "totalMinutosAtraso"
+          SUM("minutosAtraso") as "totalMinutosAtraso",
+          ARRAY_AGG(CASE WHEN "isFalta" = 1 THEN to_char(data, 'DD/MM/YYYY') END ORDER BY data) FILTER (WHERE "isFalta" = 1) as "diasFalta",
+          ARRAY_AGG(CASE WHEN "isAtraso" = 1 THEN to_char(data, 'DD/MM/YYYY') || ' (' || "minutosAtraso" || ' min)' END ORDER BY data) FILTER (WHERE "isAtraso" = 1) as "diasAtraso"
         FROM timecard_daily 
         WHERE "companyId" = ${input.companyId} 
         AND "mesCompetencia" = ${input.mesReferencia}
@@ -2913,6 +2915,17 @@ export const payrollEngineRouter = router({
         let escAtrasosValor = 0;
         let acertoEscuroValor = 0;
         const acertoEscuroDetalhes = adjustments.map((a: any) => ({ data: a.data, tipo: a.tipo, valor: a.valorTotal, descricao: a.descricao }));
+        const fmtDataBR = (d: any) => {
+          if (!d) return '';
+          const dt = typeof d === 'string' ? new Date(d) : d;
+          if (isNaN(dt.getTime())) return String(d);
+          const dd = String(dt.getUTCDate()).padStart(2, '0');
+          const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+          const yy = dt.getUTCFullYear();
+          return `${dd}/${mm}/${yy}`;
+        };
+        const escFaltasDias = adjustments.filter((a: any) => a.tipo === 'falta').map((a: any) => fmtDataBR(a.data));
+        const escAtrasosDias = adjustments.filter((a: any) => a.tipo === 'atraso').map((a: any) => `${fmtDataBR(a.data)}${a.descricao ? ' (' + a.descricao + ')' : ''}`);
         for (const a of adjustments) {
           if (a.tipo === 'falta') {
             escFaltasValor += parseBRL(a.valorDesconto);
@@ -3032,6 +3045,10 @@ export const payrollEngineRouter = router({
             diasUteis,
             // Faltas
             faltasQtdMes, escFaltasQtd,
+            faltasMesDias: (faltaData?.diasFalta || []).filter((d: any) => d),
+            atrasosMesDias: (faltaData?.diasAtraso || []).filter((d: any) => d),
+            escFaltasDias,
+            escAtrasosDias,
             descontoFaltasMes: faltasQtdMes * valorHora * criteria.cargaHorariaDiaria,
             descontoFaltasEscuro: escFaltasValor,
             descontoVrFaltasMes: criteria.descontoVrFalta ? faltasQtdMes * vrDiario : 0,
