@@ -7,10 +7,11 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
 import { ModuleProvider } from "./contexts/ModuleContext";
 import { ModuleConfigProvider } from "./contexts/ModuleConfigContext";
-import { PermissionsProvider } from "./contexts/PermissionsContext";
+import { PermissionsProvider, usePermissions } from "./contexts/PermissionsContext";
 import { lazy, Suspense, ComponentType } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "./_core/hooks/useAuth";
+import DashboardLayout from "./components/DashboardLayout";
 
 function MasterOnlyGuard({ component: Component }: { component: ComponentType }) {
   const { user } = useAuth();
@@ -20,6 +21,34 @@ function MasterOnlyGuard({ component: Component }: { component: ComponentType })
     setLocation("/");
     return null;
   }
+  return <Component />;
+}
+
+function RouteGuard({ component: Component, route }: { component: ComponentType; route: string }) {
+  const { isAdminMaster, hasGroup, groupCanAccessRoute, isLoading } = usePermissions();
+
+  if (isLoading) {
+    return <PageLoader />;
+  }
+
+  const canAccess = isAdminMaster || !hasGroup || groupCanAccessRoute(route);
+
+  if (!canAccess) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
+          <div className="bg-red-50 p-4 rounded-full mb-4">
+            <ShieldAlert className="h-10 w-10 text-red-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Acesso Restrito</h1>
+          <p className="text-slate-600 max-w-md">
+            Você não tem permissão para acessar esta página.
+          </p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return <Component />;
 }
 
@@ -272,7 +301,7 @@ function Router() {
         <Route path={"/login"} component={Login} />
         {/* Hub de Módulos - Tela Inicial */}
         <Route path={"/"} component={ModuleHub} />
-        {/* Painéis por Módulo */}
+        {/* Painéis por Módulo (possuem checagem interna de permissão por widget) */}
         <Route path={"/painel"} component={Home} />
         <Route path={"/painel/rh"} component={PainelRH} />
         <Route path={"/painel/sst"} component={PainelSST} />
@@ -280,200 +309,199 @@ function Router() {
         <Route path={"/painel/juridico-trabalhista"} component={PainelTrabalhista} />
         <Route path={"/painel/tributario"} component={PainelTributario} />
         <Route path={"/painel/civil"} component={PainelCivil} />
-        <Route path={"/empresas"} component={Empresas} />
-        <Route path={"/colaboradores"} component={Colaboradores} />
-        <Route path={"/clientes"} component={Clientes} />
-        <Route path={"/obras"} component={Obras} />
-        <Route path={"/obras/efetivo"} component={ObraEfetivo} />
-        <Route path={"/setores"} component={Setores} />
-        <Route path={"/funcoes"} component={Funcoes} />
-        <Route path={"/contas-bancarias"} component={ContasBancarias} />
-        <Route path={"/relogios-ponto"} component={RelogiosPonto} />
-        <Route path={"/convencoes-coletivas"} component={ConvencoesColetivas} />
-        <Route path={"/processos-trabalhistas"} component={ProcessosTrabalhistas} />
-        <Route path={"/processos-tributarios"} component={ProcessosTributarios} />
-        <Route path={"/processos-civis"} component={ProcessosCivis} />
-        <Route path={"/epis"} component={Epis} />
+        <Route path={"/empresas"} component={() => <RouteGuard component={Empresas} route="/empresas" />} />
+        <Route path={"/colaboradores"} component={() => <RouteGuard component={Colaboradores} route="/colaboradores" />} />
+        <Route path={"/clientes"} component={() => <RouteGuard component={Clientes} route="/empresas" />} />
+        <Route path={"/obras"} component={() => <RouteGuard component={Obras} route="/obras" />} />
+        <Route path={"/obras/efetivo"} component={() => <RouteGuard component={ObraEfetivo} route="/obras/efetivo" />} />
+        <Route path={"/setores"} component={() => <RouteGuard component={Setores} route="/setores" />} />
+        <Route path={"/funcoes"} component={() => <RouteGuard component={Funcoes} route="/funcoes" />} />
+        <Route path={"/contas-bancarias"} component={() => <RouteGuard component={ContasBancarias} route="/contas-bancarias" />} />
+        <Route path={"/relogios-ponto"} component={() => <RouteGuard component={RelogiosPonto} route="/relogios-ponto" />} />
+        <Route path={"/convencoes-coletivas"} component={() => <RouteGuard component={ConvencoesColetivas} route="/convencoes-coletivas" />} />
+        <Route path={"/processos-trabalhistas"} component={() => <RouteGuard component={ProcessosTrabalhistas} route="/processos-trabalhistas" />} />
+        <Route path={"/processos-tributarios"} component={() => <RouteGuard component={ProcessosTributarios} route="/processos-tributarios" />} />
+        <Route path={"/processos-civis"} component={() => <RouteGuard component={ProcessosCivis} route="/processos-civis" />} />
+        <Route path={"/epis"} component={() => <RouteGuard component={Epis} route="/epis" />} />
         <Route path={"/usuarios"} component={() => <MasterOnlyGuard component={Usuarios} />} />
         <Route path={"/grupos-usuarios"} component={() => <MasterOnlyGuard component={GruposUsuarios} />} />
         <Route path={"/auditoria"} component={() => <MasterOnlyGuard component={Auditoria} />} />
         <Route path={"/admin/telemetria"} component={() => <MasterOnlyGuard component={Telemetria} />} />
-        <Route path={"/fechamento-ponto"} component={FechamentoPonto} />
-        <Route path={"/espelho-ponto"} component={EspelhoPonto} />
-        <Route path={"/folha-pagamento"} component={FolhaPagamento} />
-        <Route path={"/gestao-competencias"} component={PayrollCompetencias} />
-        <Route path={"/solicitacao-mdo"} component={SolicitacaoMDO} />
-        <Route path={"/controle-documentos"} component={ControleDocumentos} />
-        <Route path={"/vale-alimentacao"} component={ValeAlimentacao} />
+        <Route path={"/fechamento-ponto"} component={() => <RouteGuard component={FechamentoPonto} route="/fechamento-ponto" />} />
+        <Route path={"/espelho-ponto"} component={() => <RouteGuard component={EspelhoPonto} route="/espelho-ponto" />} />
+        <Route path={"/folha-pagamento"} component={() => <RouteGuard component={FolhaPagamento} route="/folha-pagamento" />} />
+        <Route path={"/gestao-competencias"} component={() => <RouteGuard component={PayrollCompetencias} route="/folha-pagamento" />} />
+        <Route path={"/solicitacao-mdo"} component={() => <RouteGuard component={SolicitacaoMDO} route="/solicitacao-mdo" />} />
+        <Route path={"/controle-documentos"} component={() => <RouteGuard component={ControleDocumentos} route="/controle-documentos" />} />
+        <Route path={"/vale-alimentacao"} component={() => <RouteGuard component={ValeAlimentacao} route="/vale-alimentacao" />} />
         <Route path={"/configuracoes"} component={() => <MasterOnlyGuard component={Configuracoes} />} />
-        <Route path={"/migracao"} component={Migration} />
+        <Route path={"/migracao"} component={() => <RouteGuard component={Migration} route="/colaboradores" />} />
         <Route path={"/lixeira"} component={() => <MasterOnlyGuard component={Lixeira} />} />
-        <Route path={"/aviso-previo"} component={AvisoPrevio} />
-        <Route path={"/pedido-demissao"} component={PedidoDemissao} />
-        <Route path={"/ferias"} component={Ferias} />
-        <Route path={"/cipa"} component={CipaCompleta} />
-        <Route path={"/modulo-pj"} component={ModuloPJ} />
-        <Route path={"/contrato-pj/:id"} component={ContratoPJView} />
-        <Route path={"/contrato-pj/:contractId/aditivo/:aditivoId"} component={AditivoPJView} />
-        <Route path={"/revisoes"} component={Revisoes} />
-        <Route path={"/solicitacao-he"} component={SolicitacaoHE} />
-        <Route path={"/banco-horas"} component={BancoHoras} />
-        <Route path="/financeiro" component={FinanceiroDashboard} />
-        <Route path="/financeiro/lancamentos" component={FinanceiroLancamentos} />
-        <Route path="/financeiro/receitas" component={FinanceiroReceitas} />
-        <Route path="/financeiro/contas-a-pagar" component={FinanceiroContasAPagar} />
-        <Route path="/financeiro/contas-a-receber" component={FinanceiroContasAReceber} />
-        <Route path="/financeiro/dre" component={FinanceiroDRE} />
-        <Route path="/financeiro/fluxo-de-caixa" component={FinanceiroFluxoCaixa} />
-        <Route path="/financeiro/obrigacoes-fiscais" component={FinanceiroObrigacoesFiscais} />
-        <Route path="/financeiro/plano-de-contas" component={FinanceiroPlanoDeConta} />
-        <Route path="/financeiro/centros-de-custo" component={FinanceiroCentrosCusto} />
-        <Route path="/financeiro/configuracoes" component={FinanceiroConfiguracoes} />
-        <Route path="/financeiro/conciliacao" component={FinanceiroConciliacao} />
-        <Route path="/financeiro/recorrentes" component={FinanceiroRecorrentes} />
-        <Route path={"/apontamentos-campo"} component={ApontamentosCampo} />
-        <Route path={"/feriados"} component={Feriados} />
-        <Route path={"/dissidio"} component={Dissidio} />
-        <Route path={"/pj-medicoes"} component={PJMedicoes} />
-        <Route path="/habilidades" component={Habilidades} />
-        <Route path="/habilidades/importacao" component={ImportacaoHabilidades} />
-        <Route path="/relatorios/habilidades-obra" component={RelatorioHabilidadesObra} />
+        <Route path={"/aviso-previo"} component={() => <RouteGuard component={AvisoPrevio} route="/aviso-previo" />} />
+        <Route path={"/pedido-demissao"} component={() => <RouteGuard component={PedidoDemissao} route="/pedido-demissao" />} />
+        <Route path={"/ferias"} component={() => <RouteGuard component={Ferias} route="/ferias" />} />
+        <Route path={"/cipa"} component={() => <RouteGuard component={CipaCompleta} route="/cipa" />} />
+        <Route path={"/modulo-pj"} component={() => <RouteGuard component={ModuloPJ} route="/modulo-pj" />} />
+        <Route path={"/contrato-pj/:id"} component={() => <RouteGuard component={ContratoPJView} route="/modulo-pj" />} />
+        <Route path={"/contrato-pj/:contractId/aditivo/:aditivoId"} component={() => <RouteGuard component={AditivoPJView} route="/modulo-pj" />} />
+        <Route path={"/revisoes"} component={() => <RouteGuard component={Revisoes} route="/colaboradores" />} />
+        <Route path={"/solicitacao-he"} component={() => <RouteGuard component={SolicitacaoHE} route="/solicitacao-he" />} />
+        <Route path={"/banco-horas"} component={() => <RouteGuard component={BancoHoras} route="/banco-horas" />} />
+        <Route path="/financeiro" component={() => <RouteGuard component={FinanceiroDashboard} route="/financeiro" />} />
+        <Route path="/financeiro/lancamentos" component={() => <RouteGuard component={FinanceiroLancamentos} route="/financeiro/lancamentos" />} />
+        <Route path="/financeiro/receitas" component={() => <RouteGuard component={FinanceiroReceitas} route="/financeiro/lancamentos" />} />
+        <Route path="/financeiro/contas-a-pagar" component={() => <RouteGuard component={FinanceiroContasAPagar} route="/financeiro/contas-a-pagar" />} />
+        <Route path="/financeiro/contas-a-receber" component={() => <RouteGuard component={FinanceiroContasAReceber} route="/financeiro/contas-a-receber" />} />
+        <Route path="/financeiro/dre" component={() => <RouteGuard component={FinanceiroDRE} route="/financeiro/dre" />} />
+        <Route path="/financeiro/fluxo-de-caixa" component={() => <RouteGuard component={FinanceiroFluxoCaixa} route="/financeiro/fluxo-de-caixa" />} />
+        <Route path="/financeiro/obrigacoes-fiscais" component={() => <RouteGuard component={FinanceiroObrigacoesFiscais} route="/financeiro/obrigacoes-fiscais" />} />
+        <Route path="/financeiro/plano-de-contas" component={() => <RouteGuard component={FinanceiroPlanoDeConta} route="/financeiro/plano-de-contas" />} />
+        <Route path="/financeiro/centros-de-custo" component={() => <RouteGuard component={FinanceiroCentrosCusto} route="/financeiro/centros-de-custo" />} />
+        <Route path="/financeiro/configuracoes" component={() => <RouteGuard component={FinanceiroConfiguracoes} route="/financeiro/lancamentos" />} />
+        <Route path="/financeiro/conciliacao" component={() => <RouteGuard component={FinanceiroConciliacao} route="/financeiro/conciliacao" />} />
+        <Route path="/financeiro/recorrentes" component={() => <RouteGuard component={FinanceiroRecorrentes} route="/financeiro/recorrentes" />} />
+        <Route path={"/apontamentos-campo"} component={() => <RouteGuard component={ApontamentosCampo} route="/apontamentos-campo" />} />
+        <Route path={"/feriados"} component={() => <RouteGuard component={Feriados} route="/feriados" />} />
+        <Route path={"/dissidio"} component={() => <RouteGuard component={Dissidio} route="/dissidio" />} />
+        <Route path={"/pj-medicoes"} component={() => <RouteGuard component={PJMedicoes} route="/pj-medicoes" />} />
+        <Route path="/habilidades" component={() => <RouteGuard component={Habilidades} route="/habilidades" />} />
+        <Route path="/habilidades/importacao" component={() => <RouteGuard component={ImportacaoHabilidades} route="/habilidades/importacao" />} />
+        <Route path="/relatorios/habilidades-obra" component={() => <RouteGuard component={RelatorioHabilidadesObra} route="/habilidades" />} />
         {/* Avaliação de Desempenho */}
-        <Route path={"/avaliacao-desempenho"} component={AvaliacaoDesempenho} />
+        <Route path={"/avaliacao-desempenho"} component={() => <RouteGuard component={AvaliacaoDesempenho} route="/avaliacao-desempenho" />} />
         {/* Biblioteca de Conhecimento */}
-        <Route path={"/ajuda"} component={BibliotecaConhecimento} />
+        <Route path={"/ajuda"} component={() => <RouteGuard component={BibliotecaConhecimento} route="/colaboradores" />} />
         {/* Relatórios */}
-        <Route path={"/relatorios/raio-x"} component={RaioXPage} />
-        <Route path={"/relatorios/ponto"} component={RelatorioPonto} />
-        <Route path={"/relatorios/folha"} component={RelatorioFolha} />
-        <Route path={"/relatorios/divergencias"} component={RelatorioDivergencias} />
-        <Route path={"/relatorios/custo-obra"} component={RelatorioCustoObra} />
+        <Route path={"/relatorios/raio-x"} component={() => <RouteGuard component={RaioXPage} route="/relatorios/raio-x" />} />
+        <Route path={"/relatorios/ponto"} component={() => <RouteGuard component={RelatorioPonto} route="/relatorios/ponto" />} />
+        <Route path={"/relatorios/folha"} component={() => <RouteGuard component={RelatorioFolha} route="/relatorios/folha" />} />
+        <Route path={"/relatorios/divergencias"} component={() => <RouteGuard component={RelatorioDivergencias} route="/relatorios/divergencias" />} />
+        <Route path={"/relatorios/custo-obra"} component={() => <RouteGuard component={RelatorioCustoObra} route="/relatorios/custo-obra" />} />
         {/* Dashboards */}
-        <Route path={"/dashboards"} component={DashboardIndex} />
-        <Route path={"/dashboards/funcionarios"} component={DashFuncionarios} />
-        <Route path={"/dashboards/cartao-ponto"} component={DashCartaoPonto} />
-        <Route path={"/dashboards/folha-pagamento"} component={DashFolhaPagamento} />
-        <Route path={"/dashboards/horas-extras"} component={DashHorasExtras} />
-        <Route path={"/dashboards/epis"} component={DashEpis} />
-        <Route path={"/dashboards/juridico"} component={DashJuridico} />
-        <Route path={"/dashboards/juridico-geral"} component={DashJuridicoGeral} />
-        <Route path={"/dashboards/tributario"} component={DashTributario} />
-        <Route path={"/dashboards/civil"} component={DashCivil} />
-        <Route path={"/dashboards/aviso-previo"} component={DashAvisoPrevio} />
-        <Route path={"/dashboards/ferias"} component={DashFerias} />
-        <Route path={"/dashboards/efetivo-obra"} component={DashEfetivoObra} />
-        <Route path={"/dashboards/visao-panoramica"} component={VisaoPanoramica} />
-        <Route path={"/dashboards/perfil-tempo-casa"} component={DashPerfilTempoCasa} />
-        <Route path={"/dashboards/controle-documentos"} component={DashControleDocumentos} />
-        <Route path={"/dashboards/competencias"} component={DashCompetencias} />
-        <Route path={"/dashboards/apontamentos"} component={DashApontamentos} />
-        <Route path={"/dashboards/habilidades"} component={DashHabilidades} />
+        <Route path={"/dashboards"} component={() => <RouteGuard component={DashboardIndex} route="/dashboards" />} />
+        <Route path={"/dashboards/funcionarios"} component={() => <RouteGuard component={DashFuncionarios} route="/dashboards/funcionarios" />} />
+        <Route path={"/dashboards/cartao-ponto"} component={() => <RouteGuard component={DashCartaoPonto} route="/dashboards/cartao-ponto" />} />
+        <Route path={"/dashboards/folha-pagamento"} component={() => <RouteGuard component={DashFolhaPagamento} route="/dashboards/folha-pagamento" />} />
+        <Route path={"/dashboards/horas-extras"} component={() => <RouteGuard component={DashHorasExtras} route="/dashboards/horas-extras" />} />
+        <Route path={"/dashboards/epis"} component={() => <RouteGuard component={DashEpis} route="/dashboards/epis" />} />
+        <Route path={"/dashboards/juridico"} component={() => <RouteGuard component={DashJuridico} route="/dashboards/juridico" />} />
+        <Route path={"/dashboards/juridico-geral"} component={() => <RouteGuard component={DashJuridicoGeral} route="/dashboards/juridico" />} />
+        <Route path={"/dashboards/tributario"} component={() => <RouteGuard component={DashTributario} route="/dashboards/tributario" />} />
+        <Route path={"/dashboards/civil"} component={() => <RouteGuard component={DashCivil} route="/dashboards/civil" />} />
+        <Route path={"/dashboards/aviso-previo"} component={() => <RouteGuard component={DashAvisoPrevio} route="/dashboards/aviso-previo" />} />
+        <Route path={"/dashboards/ferias"} component={() => <RouteGuard component={DashFerias} route="/dashboards/ferias" />} />
+        <Route path={"/dashboards/efetivo-obra"} component={() => <RouteGuard component={DashEfetivoObra} route="/dashboards/efetivo-obra" />} />
+        <Route path={"/dashboards/visao-panoramica"} component={() => <RouteGuard component={VisaoPanoramica} route="/dashboards" />} />
+        <Route path={"/dashboards/perfil-tempo-casa"} component={() => <RouteGuard component={DashPerfilTempoCasa} route="/dashboards/perfil-tempo-casa" />} />
+        <Route path={"/dashboards/controle-documentos"} component={() => <RouteGuard component={DashControleDocumentos} route="/dashboards/controle-documentos" />} />
+        <Route path={"/dashboards/competencias"} component={() => <RouteGuard component={DashCompetencias} route="/dashboards" />} />
+        <Route path={"/dashboards/apontamentos"} component={() => <RouteGuard component={DashApontamentos} route="/dashboards/apontamentos" />} />
+        <Route path={"/dashboards/habilidades"} component={() => <RouteGuard component={DashHabilidades} route="/dashboards/habilidades" />} />
         {/* Terceiros */}
-        <Route path="/terceiros" component={PainelTerceiros} />
-        <Route path="/terceiros/empresas">{() => { window.location.href = "/compras/fornecedores"; return null; }}</Route>
-        <Route path="/terceiros/funcionarios" component={FuncionariosTerceiros} />
-        <Route path="/terceiros/obrigacoes-mensais" component={ObrigacoesMensais} />
-        <Route path="/terceiros/obrigacoes" component={ObrigacoesMensais} />
-        <Route path="/terceiros/conformidade" component={PainelConformidade} />
-        <Route path="/terceiros/alertas" component={AlertasCobrancas} />
-        <Route path="/terceiros/aprovacao" component={AprovacaoPortal} />
-        <Route path="/terceiros/portal" component={PortalTerceiro} />
-        <Route path="/terceiros/crachas" component={Crachas} />
-        <Route path="/crachas" component={Crachas} />
-        <Route path="/terceiros/validacao-ia" component={ValidacaoIA} />
-        <Route path="/terceiros/contratos" component={ContratosList} />
-        <Route path="/terceiros/contratos/template" component={ContratoTemplate} />
-        <Route path="/terceiros/contratos/novo" component={ContratoNovo} />
-        <Route path="/terceiros/contratos/:id" component={ContratoDetalhe} />
-        <Route path="/terceiros/medicoes" component={MedicoesTerceiros} />
-        <Route path="/terceiros/previsao-caixa" component={PrevisaoCaixaTerceiros} />
-        <Route path="/terceiros/painel" component={PainelTerceiros} />
+        <Route path="/terceiros" component={() => <RouteGuard component={PainelTerceiros} route="/terceiros/painel" />} />
+        <Route path="/terceiros/empresas" component={() => <RouteGuard component={() => { window.location.href = "/compras/fornecedores"; return null; }} route="/terceiros/empresas" />} />
+        <Route path="/terceiros/funcionarios" component={() => <RouteGuard component={FuncionariosTerceiros} route="/terceiros/funcionarios" />} />
+        <Route path="/terceiros/obrigacoes-mensais" component={() => <RouteGuard component={ObrigacoesMensais} route="/terceiros/obrigacoes" />} />
+        <Route path="/terceiros/obrigacoes" component={() => <RouteGuard component={ObrigacoesMensais} route="/terceiros/obrigacoes" />} />
+        <Route path="/terceiros/conformidade" component={() => <RouteGuard component={PainelConformidade} route="/terceiros/conformidade" />} />
+        <Route path="/terceiros/alertas" component={() => <RouteGuard component={AlertasCobrancas} route="/terceiros/alertas" />} />
+        <Route path="/terceiros/aprovacao" component={() => <RouteGuard component={AprovacaoPortal} route="/terceiros/aprovacao" />} />
+        <Route path="/terceiros/portal" component={() => <RouteGuard component={PortalTerceiro} route="/terceiros/portal" />} />
+        <Route path="/terceiros/crachas" component={() => <RouteGuard component={Crachas} route="/terceiros/crachas" />} />
+        <Route path="/crachas" component={() => <RouteGuard component={Crachas} route="/crachas" />} />
+        <Route path="/terceiros/validacao-ia" component={() => <RouteGuard component={ValidacaoIA} route="/terceiros/validacao-ia" />} />
+        <Route path="/terceiros/contratos" component={() => <RouteGuard component={ContratosList} route="/terceiros/painel" />} />
+        <Route path="/terceiros/contratos/template" component={() => <RouteGuard component={ContratoTemplate} route="/terceiros/painel" />} />
+        <Route path="/terceiros/contratos/novo" component={() => <RouteGuard component={ContratoNovo} route="/terceiros/painel" />} />
+        <Route path="/terceiros/contratos/:id" component={() => <RouteGuard component={ContratoDetalhe} route="/terceiros/painel" />} />
+        <Route path="/terceiros/medicoes" component={() => <RouteGuard component={MedicoesTerceiros} route="/terceiros/painel" />} />
+        <Route path="/terceiros/previsao-caixa" component={() => <RouteGuard component={PrevisaoCaixaTerceiros} route="/terceiros/painel" />} />
+        <Route path="/terceiros/painel" component={() => <RouteGuard component={PainelTerceiros} route="/terceiros/painel" />} />
         {/* Parceiros */}
-        <Route path="/parceiros" component={PainelParceiros} />
-        <Route path="/parceiros/cadastro" component={CadastroParceiros} />
-        <Route path="/parceiros/lancamentos" component={LancamentosParceiros} />
-        <Route path="/parceiros/guia-descontos" component={GuiaDescontos} />
-        <Route path="/parceiros/pagamentos" component={PagamentosParceiros} />
-        <Route path="/parceiros/aprovacoes" component={AprovacoesParceiros} />
-        <Route path="/parceiros/portal" component={PortalParceiro} />
-        <Route path="/parceiros/painel" component={PainelParceiros} />
+        <Route path="/parceiros" component={() => <RouteGuard component={PainelParceiros} route="/parceiros/cadastro" />} />
+        <Route path="/parceiros/cadastro" component={() => <RouteGuard component={CadastroParceiros} route="/parceiros/cadastro" />} />
+        <Route path="/parceiros/lancamentos" component={() => <RouteGuard component={LancamentosParceiros} route="/parceiros/lancamentos" />} />
+        <Route path="/parceiros/guia-descontos" component={() => <RouteGuard component={GuiaDescontos} route="/parceiros/guia-descontos" />} />
+        <Route path="/parceiros/pagamentos" component={() => <RouteGuard component={PagamentosParceiros} route="/parceiros/pagamentos" />} />
+        <Route path="/parceiros/aprovacoes" component={() => <RouteGuard component={AprovacoesParceiros} route="/parceiros/aprovacoes" />} />
+        <Route path="/parceiros/portal" component={() => <RouteGuard component={PortalParceiro} route="/parceiros/portal" />} />
+        <Route path="/parceiros/painel" component={() => <RouteGuard component={PainelParceiros} route="/parceiros/painel" />} />
         {/* Orçamento */}
-        <Route path="/orcamento/painel"           component={PainelOrcamento} />
-        <Route path="/orcamento/lista"            component={OrcamentoLista} />
-        <Route path="/orcamento/importar"          component={OrcamentoImportar} />
-        <Route path="/orcamento/biblioteca"       component={BibliotecaOrcamento} />
-        <Route path="/orcamento/composicoes"      component={BibliotecaOrcamento} />
-        <Route path="/orcamento/insumos"          component={BibliotecaOrcamento} />
-        <Route path="/orcamento/encargos"         component={BibliotecaOrcamento} />
-        <Route path="/orcamento/:id/print"        component={OrcamentoPrint} />
-        <Route path="/orcamento/:id/dash"         component={OrcamentoDashPage} />
-        <Route path="/orcamento/dash"             component={OrcamentoDashPage} />
-        <Route path="/orcamento/:id"              component={OrcamentoDetalhe} />
+        <Route path="/orcamento/painel"           component={() => <RouteGuard component={PainelOrcamento} route="/orcamento/painel" />} />
+        <Route path="/orcamento/lista"            component={() => <RouteGuard component={OrcamentoLista} route="/orcamento/lista" />} />
+        <Route path="/orcamento/importar"          component={() => <RouteGuard component={OrcamentoImportar} route="/orcamento/importar" />} />
+        <Route path="/orcamento/biblioteca"       component={() => <RouteGuard component={BibliotecaOrcamento} route="/orcamento/lista" />} />
+        <Route path="/orcamento/composicoes"      component={() => <RouteGuard component={BibliotecaOrcamento} route="/orcamento/lista" />} />
+        <Route path="/orcamento/insumos"          component={() => <RouteGuard component={BibliotecaOrcamento} route="/orcamento/lista" />} />
+        <Route path="/orcamento/encargos"         component={() => <RouteGuard component={BibliotecaOrcamento} route="/orcamento/lista" />} />
+        <Route path="/orcamento/:id/print"        component={() => <RouteGuard component={OrcamentoPrint} route="/orcamento/lista" />} />
+        <Route path="/orcamento/:id/dash"         component={() => <RouteGuard component={OrcamentoDashPage} route="/orcamento/lista" />} />
+        <Route path="/orcamento/dash"             component={() => <RouteGuard component={OrcamentoDashPage} route="/orcamento/lista" />} />
+        <Route path="/orcamento/:id"              component={() => <RouteGuard component={OrcamentoDetalhe} route="/orcamento/lista" />} />
         {/* Planejamento */}
-        <Route path="/planejamento"              component={PlanejamentoLista} />
-        <Route path="/planejamento/:id"          component={PlanejamentoDetalhe} />
+        <Route path="/planejamento"              component={() => <RouteGuard component={PlanejamentoLista} route="/planejamento" />} />
+        <Route path="/planejamento/:id"          component={() => <RouteGuard component={PlanejamentoDetalhe} route="/planejamento" />} />
         {/* Gestão de Documentos */}
-        <Route path="/gestao-documentos"           component={GestaoDocumentos} />
-        <Route path="/medicao"                   component={MedicaoContratos} />
-        <Route path="/medicao/:id"               component={MedicaoDetalhe} />
+        <Route path="/gestao-documentos"           component={() => <RouteGuard component={GestaoDocumentos} route="/gestao-documentos" />} />
+        <Route path="/medicao"                   component={() => <RouteGuard component={MedicaoContratos} route="/medicao" />} />
+        <Route path="/medicao/:id"               component={() => <RouteGuard component={MedicaoDetalhe} route="/medicao" />} />
         {/* Compras */}
-        <Route path="/almoxarifado/categorias"     component={AlmoxarifadoCategorias} />
-        <Route path="/almoxarifado/movimentacoes" component={AlmoxarifadoMovimentacoes} />
-        <Route path="/almoxarifado/inventario"    component={AlmoxarifadoInventario} />
-        <Route path="/almoxarifado"              component={AlmoxarifadoPage} />
-        <Route path="/compras/painel"            component={PainelCompras} />
-        <Route path="/compras/fornecedores"      component={Fornecedores} />
-        <Route path="/compras/almoxarifado"      component={Almoxarifado} />
-        <Route path="/compras/solicitacoes"      component={Solicitacoes} />
-        <Route path="/compras/cotacoes"          component={Cotacoes} />
-        <Route path="/compras/ordens"            component={Ordens} />
-        <Route path="/compras/emergencial"       component={ComprasEmergencial} />
-        <Route path="/compras/aprovacoes"        component={ComprasAprovacoes} />
-        <Route path="/compras/recebimentos"      component={ComprasRecebimentos} />
-
-        <Route path="/compras/realocacao"        component={ComprasRealocacao} />
-        <Route path="/compras/comissoes"         component={ComprasComissoes} />
-        <Route path="/compras/configuracoes"     component={ComprasConfiguracoes} />
-        <Route path="/compras/dashboard-obra"    component={DashboardObra} />
-        <Route path="/compras/painel-fd"         component={PainelFd} />
-        <Route path="/integrasign" component={IntegraSignDashboard} />
+        <Route path="/almoxarifado/categorias"     component={() => <RouteGuard component={AlmoxarifadoCategorias} route="/almoxarifado" />} />
+        <Route path="/almoxarifado/movimentacoes" component={() => <RouteGuard component={AlmoxarifadoMovimentacoes} route="/almoxarifado/movimentacoes" />} />
+        <Route path="/almoxarifado/inventario"    component={() => <RouteGuard component={AlmoxarifadoInventario} route="/almoxarifado/inventario" />} />
+        <Route path="/almoxarifado"              component={() => <RouteGuard component={AlmoxarifadoPage} route="/almoxarifado" />} />
+        <Route path="/compras/painel"            component={() => <RouteGuard component={PainelCompras} route="/compras/painel" />} />
+        <Route path="/compras/fornecedores"      component={() => <RouteGuard component={Fornecedores} route="/compras/fornecedores" />} />
+        <Route path="/compras/almoxarifado"      component={() => <RouteGuard component={Almoxarifado} route="/compras/painel" />} />
+        <Route path="/compras/solicitacoes"      component={() => <RouteGuard component={Solicitacoes} route="/compras/solicitacoes" />} />
+        <Route path="/compras/cotacoes"          component={() => <RouteGuard component={Cotacoes} route="/compras/cotacoes" />} />
+        <Route path="/compras/ordens"            component={() => <RouteGuard component={Ordens} route="/compras/ordens" />} />
+        <Route path="/compras/emergencial"       component={() => <RouteGuard component={ComprasEmergencial} route="/compras/emergencial" />} />
+        <Route path="/compras/aprovacoes"        component={() => <RouteGuard component={ComprasAprovacoes} route="/compras/aprovacoes" />} />
+        <Route path="/compras/recebimentos"      component={() => <RouteGuard component={ComprasRecebimentos} route="/compras/recebimentos" />} />
+        <Route path="/compras/realocacao"        component={() => <RouteGuard component={ComprasRealocacao} route="/compras/realocacao" />} />
+        <Route path="/compras/comissoes"         component={() => <RouteGuard component={ComprasComissoes} route="/compras/comissoes" />} />
+        <Route path="/compras/configuracoes"     component={() => <RouteGuard component={ComprasConfiguracoes} route="/compras/configuracoes" />} />
+        <Route path="/compras/dashboard-obra"    component={() => <RouteGuard component={DashboardObra} route="/compras/painel" />} />
+        <Route path="/compras/painel-fd"         component={() => <RouteGuard component={PainelFd} route="/compras/painel" />} />
+        <Route path="/integrasign" component={() => <RouteGuard component={IntegraSignDashboard} route="/compras/painel" />} />
         <Route path="/integrasign/assinar/:token" component={IntegraSignAssinar} />
         <Route path="/portal/cotacao/:token"     component={PortalCotacaoPage} />
         <Route path="/portal/servico/:token"    component={PortalServicoPage} />
-        <Route path="/compras/medicoes-servico" component={MedicoesServicoPage} />
-        <Route path="/compras/databook"          component={DatabookPage} />
+        <Route path="/compras/medicoes-servico" component={() => <RouteGuard component={MedicoesServicoPage} route="/compras/painel" />} />
+        <Route path="/compras/databook"          component={() => <RouteGuard component={DatabookPage} route="/compras/painel" />} />
         <Route path="/portal/oc-entrega/:token"  component={PortalOCEntregaPage} />
         {/* Frotas */}
-        <Route path="/frotas/painel" component={PainelFrotas} />
-        <Route path="/frotas/veiculos" component={FrotasVeiculos} />
-        <Route path="/frotas/manutencoes" component={FrotasManutencoes} />
-        <Route path="/frotas/combustivel" component={FrotasCombustivel} />
-        <Route path="/frotas/rastreamento" component={FrotasRastreamento} />
-        <Route path="/frotas/controle-km" component={FrotasControleKm} />
-        <Route path="/frotas/multas" component={FrotasMultas} />
-        <Route path="/frotas/ipva" component={FrotasIpva} />
-        <Route path="/frotas/licenciamento" component={FrotasLicenciamento} />
-        <Route path="/frotas/seguros" component={FrotasSeguros} />
-        <Route path="/frotas/pedagios" component={FrotasPedagios} />
-        <Route path="/frotas/analitico" component={FrotasAnalitico} />
-        <Route path="/frotas/manutencoes-dashboard" component={ManutencoesDashboard} />
-        <Route path="/frotas/precos-combustivel" component={PrecosCombustivel} />
-        <Route path="/frotas/raio-x" component={FrotasRaioX} />
-        <Route path="/frotas/checklist" component={FrotasChecklist} />
+        <Route path="/frotas/painel" component={() => <RouteGuard component={PainelFrotas} route="/frotas/painel" />} />
+        <Route path="/frotas/veiculos" component={() => <RouteGuard component={FrotasVeiculos} route="/frotas/veiculos" />} />
+        <Route path="/frotas/manutencoes" component={() => <RouteGuard component={FrotasManutencoes} route="/frotas/manutencoes" />} />
+        <Route path="/frotas/combustivel" component={() => <RouteGuard component={FrotasCombustivel} route="/frotas/combustivel" />} />
+        <Route path="/frotas/rastreamento" component={() => <RouteGuard component={FrotasRastreamento} route="/frotas/rastreamento" />} />
+        <Route path="/frotas/controle-km" component={() => <RouteGuard component={FrotasControleKm} route="/frotas/painel" />} />
+        <Route path="/frotas/multas" component={() => <RouteGuard component={FrotasMultas} route="/frotas/multas" />} />
+        <Route path="/frotas/ipva" component={() => <RouteGuard component={FrotasIpva} route="/frotas/ipva" />} />
+        <Route path="/frotas/licenciamento" component={() => <RouteGuard component={FrotasLicenciamento} route="/frotas/licenciamento" />} />
+        <Route path="/frotas/seguros" component={() => <RouteGuard component={FrotasSeguros} route="/frotas/seguros" />} />
+        <Route path="/frotas/pedagios" component={() => <RouteGuard component={FrotasPedagios} route="/frotas/painel" />} />
+        <Route path="/frotas/analitico" component={() => <RouteGuard component={FrotasAnalitico} route="/frotas/analitico" />} />
+        <Route path="/frotas/manutencoes-dashboard" component={() => <RouteGuard component={ManutencoesDashboard} route="/frotas/manutencoes" />} />
+        <Route path="/frotas/precos-combustivel" component={() => <RouteGuard component={PrecosCombustivel} route="/frotas/combustivel" />} />
+        <Route path="/frotas/raio-x" component={() => <RouteGuard component={FrotasRaioX} route="/frotas/painel" />} />
+        <Route path="/frotas/checklist" component={() => <RouteGuard component={FrotasChecklist} route="/frotas/painel" />} />
         {/* Operacional */}
-        <Route path="/operacional/painel" component={PainelOperacional} />
-        <Route path="/operacional/rdo" component={RDOPage} />
-        <Route path="/operacional/checklists" component={ChecklistsPage} />
-        <Route path="/operacional/concretagem" component={ConcratagemPage} />
-        <Route path="/operacional/nc" component={NaoConformidadesPage} />
-        <Route path="/operacional/fotos" component={RegistroFotograficoPage} />
-        <Route path="/operacional/liberacao-servicos" component={LiberacaoServicosPage} />
-        <Route path="/operacional/diario-obra" component={DiarioObraPage} />
-        <Route path="/operacional/ensaios" component={EnsaiosPage} />
+        <Route path="/operacional/painel" component={() => <RouteGuard component={PainelOperacional} route="/operacional/painel" />} />
+        <Route path="/operacional/rdo" component={() => <RouteGuard component={RDOPage} route="/operacional/rdo" />} />
+        <Route path="/operacional/checklists" component={() => <RouteGuard component={ChecklistsPage} route="/operacional/checklists" />} />
+        <Route path="/operacional/concretagem" component={() => <RouteGuard component={ConcratagemPage} route="/operacional/concretagem" />} />
+        <Route path="/operacional/nc" component={() => <RouteGuard component={NaoConformidadesPage} route="/operacional/nc" />} />
+        <Route path="/operacional/fotos" component={() => <RouteGuard component={RegistroFotograficoPage} route="/operacional/fotos" />} />
+        <Route path="/operacional/liberacao-servicos" component={() => <RouteGuard component={LiberacaoServicosPage} route="/operacional/painel" />} />
+        <Route path="/operacional/diario-obra" component={() => <RouteGuard component={DiarioObraPage} route="/operacional/painel" />} />
+        <Route path="/operacional/ensaios" component={() => <RouteGuard component={EnsaiosPage} route="/operacional/painel" />} />
         {/* Integrações */}
-        <Route path="/integracoes/mas-controle"  component={MasControle} />
+        <Route path="/integracoes/mas-controle"  component={() => <RouteGuard component={MasControle} route="/colaboradores" />} />
         {/* Sprint 6 - IA */}
-        <Route path="/comparativo-convencoes" component={ComparativoConvencoes} />
+        <Route path="/comparativo-convencoes" component={() => <RouteGuard component={ComparativoConvencoes} route="/comparativo-convencoes" />} />
         <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
         {/* Portal Externo (Terceiros/Parceiros) */}
         <Route path="/portal/login" component={PortalLogin} />
@@ -485,7 +513,7 @@ function Router() {
         <Route path="/verificar/pj/:id" component={VerificarAptidao} />
         <Route path="/verificar/terceiro/:id" component={VerificarAptidao} />
         {/* Importação de Dados */}
-                  <Route path="/import-data" component={ImportData} />
+        <Route path="/import-data" component={() => <RouteGuard component={ImportData} route="/colaboradores" />} />
         <Route path={"404"} component={NotFound} />
         <Route component={NotFound} />
       </Switch>
