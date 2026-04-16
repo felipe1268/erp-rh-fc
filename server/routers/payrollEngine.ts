@@ -1933,7 +1933,9 @@ export const payrollEngineRouter = router({
         }
       }
 
-      const empList = [...empListAtivos, ...desligadosNoMes];
+      const empList = [...empListAtivos, ...desligadosNoMes].sort((a: any, b: any) =>
+        (a.nomeCompleto || '').localeCompare(b.nomeCompleto || '', 'pt-BR', { sensitivity: 'base' })
+      );
 
       const excluidos = await db.select({
         id: employees.id,
@@ -2950,7 +2952,8 @@ export const payrollEngineRouter = router({
           funcao: r.funcao || null,
           valorBruto: parseFloat(r.valorTotalVale) || 0,
           valorLiquido: parseFloat(r.valorLiquidoVale) || 0,
-        }));
+        }))
+        .sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
       // Soma pelo Líquido para coerência com a UI (cada item exibe valorBruto, total exibe a soma do bruto)
       const totalValeForaDaFolhaBruto = valeForaDaFolha.reduce((s: number, r: any) => s + r.valorBruto, 0);
       const totalValeForaDaFolhaLiquido = valeForaDaFolha.reduce((s: number, r: any) => s + r.valorLiquido, 0);

@@ -23,6 +23,8 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmtNum } from "@/lib/formatters";
 import AlertaDivergenciaFolha from "@/components/AlertaDivergenciaFolha";
 
@@ -83,6 +85,8 @@ export default function FolhaPagamento() {
   const [uploading, setUploading] = useState<"vale" | "pagamento" | "decimo_terceiro_1" | "decimo_terceiro_2" | null>(null);
   const [showConferencia, setShowConferencia] = useState(false);
   const [pagamentoSubView, setPagamentoSubView] = useState<"geral" | "por_banco">("geral");
+  const [pagamentoSearch, setPagamentoSearch] = useState("");
+  const [pagamentoFuncao, setPagamentoFuncao] = useState<string>("__all__");
 
   // Views
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -3251,6 +3255,47 @@ export default function FolhaPagamento() {
             </Button>
           </div>
 
+          {pagamentoSubView === "geral" && (() => {
+            const allFuncs = (pagamentoResult.funcionarios || []) as any[];
+            const funcoesUnicas = Array.from(new Set(
+              allFuncs.map((f: any) => (f.funcao || '').trim()).filter(Boolean)
+            )).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+            return (
+              <div className="flex flex-col md:flex-row gap-2 mb-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nome..."
+                    value={pagamentoSearch}
+                    onChange={(e) => setPagamentoSearch(e.target.value)}
+                    className="pl-8 h-9 text-xs"
+                  />
+                </div>
+                <Select value={pagamentoFuncao} onValueChange={setPagamentoFuncao}>
+                  <SelectTrigger className="md:w-72 h-9 text-xs">
+                    <SelectValue placeholder="Filtrar por função" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Todas as funções ({funcoesUnicas.length})</SelectItem>
+                    {funcoesUnicas.map((f) => (
+                      <SelectItem key={f} value={f}>{f}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(pagamentoSearch || pagamentoFuncao !== "__all__") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setPagamentoSearch(""); setPagamentoFuncao("__all__"); }}
+                    className="h-9 text-xs"
+                  >
+                    Limpar
+                  </Button>
+                )}
+              </div>
+            );
+          })()}
+
           {pagamentoSubView === "por_banco" ? (() => {
             const funcs = (pagamentoResult.funcionarios || []) as any[];
             const byBank: Record<string, any[]> = {};
@@ -3424,7 +3469,22 @@ export default function FolhaPagamento() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pagamentoResult.funcionarios?.map((f: any, i: number) => {
+                    {(() => {
+                      const term = pagamentoSearch.trim().toLowerCase();
+                      const funcaoFilter = pagamentoFuncao;
+                      const filtered = (pagamentoResult.funcionarios || []).filter((f: any) => {
+                        if (term && !(f.nome || '').toLowerCase().includes(term)) return false;
+                        if (funcaoFilter !== "__all__" && (f.funcao || '').trim() !== funcaoFilter) return false;
+                        return true;
+                      });
+                      if (filtered.length === 0) {
+                        return (
+                          <tr><td colSpan={15} className="py-6 text-center text-xs text-muted-foreground">
+                            Nenhum funcionário encontrado com os filtros aplicados.
+                          </td></tr>
+                        );
+                      }
+                      return filtered.map((f: any, i: number) => {
                       const vtVal = f.vtValor || 0;
                       const vaDesc = f.descontoVaTotal || 0;
                       const descFaltas = (f.descontoFaltas || 0) + (f.descontoAtrasos || 0);
@@ -3453,7 +3513,8 @@ export default function FolhaPagamento() {
                           <td className="text-right py-2 px-2 text-[10px] text-muted-foreground">{formatBRL(f.descontoFgts)}</td>
                         </tr>
                       );
-                    })}
+                      });
+                    })()}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold text-xs">

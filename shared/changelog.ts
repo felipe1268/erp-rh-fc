@@ -8383,4 +8383,18 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-16 18:30:00",
   },
+  {
+    version: 1190,
+    titulo: "Folha de Pagamento: filtros de busca por nome e por função na aba Pagamento",
+    descricao:
+      "Adicionados filtros na visão Geral da aba Pagamento: campo de busca por nome do funcionário " +
+      "(case-insensitive, busca parcial) e dropdown de filtro por função (com contagem total e ordenação " +
+      "alfabética em pt-BR). Botão 'Limpar' aparece quando algum filtro está ativo. " +
+      "Filtros aplicam-se apenas à visualização Geral; a visão Por Banco mantém o comportamento original. " +
+      "Quando nenhum funcionário corresponde aos filtros, exibe mensagem amigável.",
+    tipo: "feature",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-16 19:00:00",
+  },
 ];
