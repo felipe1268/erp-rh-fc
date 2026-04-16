@@ -874,12 +874,20 @@ export const payrollEngineRouter = router({
         )
       `);
 
+      // Janela do "escuro" a aferir = dia_corte+1 .. último dia do mês anterior
+      const escuroInicio = `${prevParsed.year}-${String(prevParsed.month).padStart(2, "0")}-${String(diaCorte + 1).padStart(2, "0")}`;
+      const escuroFim = `${prevParsed.year}-${String(prevParsed.month).padStart(2, "0")}-${String(prevLastDay).padStart(2, "0")}`;
+
       // Buscar registros escuro + já decididos (preservados do reset) — excluir PJ/Sócio
+      // IMPORTANTE: amarrar td.data >= escuroInicio para não puxar dias do início da
+      // competência anterior (ex.: 15/01 quando o escuro real é 16/01-31/01).
       const escuroRecords = ((await db.execute(sql`
         SELECT td.* FROM timecard_daily td
         JOIN employees e ON e.id = td."employeeId"
         WHERE td."companyId" IN (${afericaoCidsSql}) 
         AND td."mesCompetencia" = ${prevMes}
+        AND td.data >= ${escuroInicio}
+        AND td.data <= ${escuroFim}
         AND (td."statusDia" = 'escuro' OR (td."statusAnterior" = 'escuro' AND td."statusDia" IN ('pendente', 'pendente_decisao', 'aferido')))
         AND COALESCE(e."tipoContrato",'CLT') NOT IN ('PJ','Socio')
         ORDER BY td."employeeId", td.data
@@ -893,10 +901,6 @@ export const payrollEngineRouter = router({
         }
         return { totalAferidos: 0, divergencias: 0, message: "Nenhum registro 'no escuro' encontrado no mês anterior. Competência avançada." };
       }
-
-      // Get actual time_records for the escuro period
-      const escuroInicio = `${prevParsed.year}-${String(prevParsed.month).padStart(2, "0")}-${String(diaCorte + 1).padStart(2, "0")}`;
-      const escuroFim = `${prevParsed.year}-${String(prevParsed.month).padStart(2, "0")}-${String(prevLastDay).padStart(2, "0")}`;
 
       const actualRecords = await db.select().from(timeRecords).where(
         and(

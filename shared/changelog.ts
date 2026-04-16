@@ -8478,4 +8478,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-17 00:50:00",
   },
+  {
+    version: 1196,
+    titulo: "Aferir Escuro: filtro de data adicionado à query de registros 'escuro'",
+    descricao:
+      "Bug: a query de timecard_daily que carrega os registros para aferir filtrava só por " +
+      "mesCompetencia + statusDia, sem amarrar a data. Resultado: dias do INÍCIO da competência " +
+      "anterior (ex.: 15/01) eram puxados como divergência mesmo estando fora da janela real do " +
+      "escuro (16/01–31/01). Adicionado filtro `td.data BETWEEN escuroInicio AND escuroFim` na " +
+      "query de escuroRecords (server/routers/payrollEngine.ts realizarAfericao). Os registros " +
+      "actualRecords já usavam essa janela, então agora ambos os lados da comparação operam " +
+      "exatamente sobre os mesmos dias.",
+    tipo: "correcao",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-17 01:10:00",
+  },
 ];
