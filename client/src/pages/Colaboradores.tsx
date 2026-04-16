@@ -2241,6 +2241,23 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                           <Label className="text-xs font-medium text-muted-foreground">{form.pensaoTipo === 'percentual' ? 'Percentual (%)' : 'Valor (R$)'}</Label>
                           <Input value={form.pensaoValor ?? ""} onChange={e => set("pensaoValor", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
                         </div>
+                        {form.pensaoTipo === 'percentual' && (
+                          <div>
+                            <Label className="text-xs font-medium text-muted-foreground">Base do Percentual</Label>
+                            <Select value={form.pensaoBase || "salario_bruto"} onValueChange={v => set("pensaoBase", v)}>
+                              <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="salario_bruto">Salário Bruto do mês (inclui HE/Ad. Noturno)</SelectItem>
+                                <SelectItem value="salario_minimo">Salário Mínimo Vigente</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p className="text-[11px] text-muted-foreground mt-1">
+                              {form.pensaoBase === 'salario_minimo'
+                                ? 'Calcula sobre o salário mínimo (valor fixo, atualizado anualmente)'
+                                : 'Calcula sobre o bruto real do mês (varia conforme HE/faltas)'}
+                            </p>
+                          </div>
+                        )}
                         <div>
                           <Label className="text-xs font-medium text-muted-foreground">Nº Processo Judicial</Label>
                           <Input value={form.pensaoProcesso ?? ""} onChange={e => set("pensaoProcesso", e.target.value)} className="bg-input mt-1" />
