@@ -1136,9 +1136,53 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                       </div>
                     )}
                     <div className="border-t-2 border-green-300 mt-3 pt-3 flex justify-between text-lg font-bold text-green-700">
-                      <span>TOTAL RESCISÃO:</span>
+                      <span>TOTAL BRUTO RESCISÃO:</span>
                       <span>{formatMoeda(prev.total)}</span>
                     </div>
+
+                    {/* Descontos Legais e da Folha */}
+                    {parseFloat(prev.totalDescontos || '0') > 0 && (
+                      <div className="mt-3 pt-2 border-t border-red-200">
+                        <p className="text-[10px] font-bold text-red-500 uppercase mb-1">Descontos Legais e da Folha</p>
+                        <div className="text-xs space-y-0.5">
+                          {parseFloat(prev.descontoINSS || '0') > 0 && (
+                            <div className="flex justify-between text-red-700"><span>INSS (saldo + 13º):</span><span>– {formatMoeda(prev.descontoINSS)}</span></div>
+                          )}
+                          {parseFloat(prev.descontoIRRF || '0') > 0 && (
+                            <div className="flex justify-between text-red-700"><span>IRRF (saldo + 13º):</span><span>– {formatMoeda(prev.descontoIRRF)}</span></div>
+                          )}
+                          {parseFloat(prev.descontoPensao || '0') > 0 && (
+                            <div className="flex justify-between text-red-700"><span>Pensão Alimentícia:</span><span>– {formatMoeda(prev.descontoPensao)}</span></div>
+                          )}
+                          {parseFloat(prev.descontoSindical || '0') > 0 && (
+                            <div className="flex justify-between text-red-700"><span>Contribuição Sindical:</span><span>– {formatMoeda(prev.descontoSindical)}</span></div>
+                          )}
+                          {parseFloat(prev.descontoFaltasAtrasos || '0') > 0 && (
+                            <div className="flex justify-between text-red-700"><span>Faltas / Atrasos do mês:</span><span>– {formatMoeda(prev.descontoFaltasAtrasos)}</span></div>
+                          )}
+                          {parseFloat(prev.descontoConvenios || '0') > 0 && (
+                            <div className="flex justify-between text-red-700"><span>Convênios:</span><span>– {formatMoeda(prev.descontoConvenios)}</span></div>
+                          )}
+                          {parseFloat(prev.descontoEpis || '0') > 0 && (
+                            <div className="flex justify-between text-red-700"><span>EPIs:</span><span>– {formatMoeda(prev.descontoEpis)}</span></div>
+                          )}
+                          {parseFloat(prev.descontoVales || '0') > 0 && (
+                            <div className="flex justify-between text-red-700"><span>Vales / Adiantamentos:</span><span>– {formatMoeda(prev.descontoVales)}</span></div>
+                          )}
+                          {parseFloat(prev.descontoOutros || '0') > 0 && (
+                            <div className="flex justify-between text-red-700"><span>Outros (RH):</span><span>– {formatMoeda(prev.descontoOutros)}</span></div>
+                          )}
+                          <div className="flex justify-between font-semibold text-red-700 pt-1 border-t border-red-100">
+                            <span>Subtotal Descontos:</span><span>– {formatMoeda(prev.totalDescontos)}</span>
+                          </div>
+                        </div>
+                        <div className="border-t-2 border-emerald-400 mt-2 pt-2 flex justify-between text-base font-bold text-emerald-700">
+                          <span>TOTAL LÍQUIDO A PAGAR:</span>
+                          <span>{formatMoeda(prev.totalLiquido || prev.total)}</span>
+                        </div>
+                      </div>
+                    )}
+
                     {prev.dataLimitePagamento && (
                       <p className="text-[10px] text-red-500 mt-1 text-right">Prazo pagamento: {formatDate(prev.dataLimitePagamento)} (Art. 477 §6º CLT)</p>
                     )}
@@ -1369,7 +1413,21 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
           : `<tr style="color:#888"><td>Multa 40% FGTS</td><td>-</td><td style="text-align:right">${pdfData.previsaoRescisao.multaFGTS || '0,00'}</td></tr>`
         }
         ${parseFloat(pdfData.previsaoRescisao.descontoAvisoNaoCumprido || '0') > 0 ? '<tr style="background:#fff3f3;color:#c00"><td><strong>(–) Desconto Aviso não cumprido</strong></td><td>Art. 487 §2º CLT — 30 dias</td><td style="text-align:right"><strong>– ' + pdfData.previsaoRescisao.descontoAvisoNaoCumprido + '</strong></td></tr>' : ''}
-        <tr class="total-row"><td colspan="2"><strong>TOTAL RESCISÃO</strong></td><td style="text-align:right"><strong>${pdfData.previsaoRescisao.total || pdfData.valorEstimadoTotal || '0,00'}</strong></td></tr>
+        <tr class="total-row"><td colspan="2"><strong>TOTAL BRUTO RESCISÃO</strong></td><td style="text-align:right"><strong>${pdfData.previsaoRescisao.total || pdfData.valorEstimadoTotal || '0,00'}</strong></td></tr>
+        ${parseFloat(pdfData.previsaoRescisao.totalDescontos || '0') > 0 ? `
+        <tr><td colspan="3" style="background:#fff3f3;font-size:9px;font-weight:bold;text-transform:uppercase;color:#c00">Descontos Legais e da Folha</td></tr>
+        ${parseFloat(pdfData.previsaoRescisao.descontoINSS || '0') > 0 ? '<tr style="color:#c00"><td>INSS</td><td>Saldo + 13º</td><td style="text-align:right">– ' + pdfData.previsaoRescisao.descontoINSS + '</td></tr>' : ''}
+        ${parseFloat(pdfData.previsaoRescisao.descontoIRRF || '0') > 0 ? '<tr style="color:#c00"><td>IRRF</td><td>Saldo + 13º</td><td style="text-align:right">– ' + pdfData.previsaoRescisao.descontoIRRF + '</td></tr>' : ''}
+        ${parseFloat(pdfData.previsaoRescisao.descontoPensao || '0') > 0 ? '<tr style="color:#c00"><td>Pensão Alimentícia</td><td>-</td><td style="text-align:right">– ' + pdfData.previsaoRescisao.descontoPensao + '</td></tr>' : ''}
+        ${parseFloat(pdfData.previsaoRescisao.descontoSindical || '0') > 0 ? '<tr style="color:#c00"><td>Contribuição Sindical</td><td>-</td><td style="text-align:right">– ' + pdfData.previsaoRescisao.descontoSindical + '</td></tr>' : ''}
+        ${parseFloat(pdfData.previsaoRescisao.descontoFaltasAtrasos || '0') > 0 ? '<tr style="color:#c00"><td>Faltas / Atrasos</td><td>Mês corrente</td><td style="text-align:right">– ' + pdfData.previsaoRescisao.descontoFaltasAtrasos + '</td></tr>' : ''}
+        ${parseFloat(pdfData.previsaoRescisao.descontoConvenios || '0') > 0 ? '<tr style="color:#c00"><td>Convênios</td><td>Aprovados</td><td style="text-align:right">– ' + pdfData.previsaoRescisao.descontoConvenios + '</td></tr>' : ''}
+        ${parseFloat(pdfData.previsaoRescisao.descontoEpis || '0') > 0 ? '<tr style="color:#c00"><td>EPIs</td><td>Aprovados</td><td style="text-align:right">– ' + pdfData.previsaoRescisao.descontoEpis + '</td></tr>' : ''}
+        ${parseFloat(pdfData.previsaoRescisao.descontoVales || '0') > 0 ? '<tr style="color:#c00"><td>Vales / Adiantamentos</td><td>-</td><td style="text-align:right">– ' + pdfData.previsaoRescisao.descontoVales + '</td></tr>' : ''}
+        ${parseFloat(pdfData.previsaoRescisao.descontoOutros || '0') > 0 ? '<tr style="color:#c00"><td>Outros (RH)</td><td>Aprovados</td><td style="text-align:right">– ' + pdfData.previsaoRescisao.descontoOutros + '</td></tr>' : ''}
+        <tr style="color:#c00;font-weight:bold;border-top:1px solid #c00"><td>Subtotal Descontos</td><td>-</td><td style="text-align:right">– ${pdfData.previsaoRescisao.totalDescontos}</td></tr>
+        <tr class="total-row" style="background:#e6f7ec"><td colspan="2"><strong>TOTAL LÍQUIDO A PAGAR</strong></td><td style="text-align:right"><strong>${pdfData.previsaoRescisao.totalLiquido || pdfData.previsaoRescisao.total || '0,00'}</strong></td></tr>
+        ` : ''}
       </tbody>
     </table>
     ${pdfData.previsaoRescisao.dataLimitePagamento ? '<p style="font-size:9px;color:#c00;margin-top:4px;text-align:right">Prazo de pagamento: ' + pdfData.previsaoRescisao.dataLimitePagamento.split('-').reverse().join('/') + ' (Art. 477 §6º CLT)</p>' : ''}
@@ -1951,20 +2009,87 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     </div>
                   )}
 
-                  {/* Seção de Descontos */}
+                  {/* Seção de Descontos Legais e da Folha (INSS, IRRF, Pensão, Sindical, etc) */}
+                  {calculoPreview.previsaoRescisao && parseFloat(calculoPreview.previsaoRescisao.totalDescontos || '0') > 0 && (
+                    <div className="bg-white rounded-lg border border-red-200 p-4 mt-4">
+                      <p className="text-xs font-bold text-red-500 uppercase tracking-wide mb-3">Descontos Legais e da Folha</p>
+                      <div className="space-y-0 text-sm">
+                        {parseFloat(calculoPreview.previsaoRescisao.descontoINSS || '0') > 0 && (
+                          <div className="flex justify-between py-1.5 border-b border-red-50">
+                            <span className="text-red-700">INSS (sobre saldo + 13º)</span>
+                            <span className="font-semibold text-red-700">– {formatMoeda(calculoPreview.previsaoRescisao.descontoINSS)}</span>
+                          </div>
+                        )}
+                        {parseFloat(calculoPreview.previsaoRescisao.descontoIRRF || '0') > 0 && (
+                          <div className="flex justify-between py-1.5 border-b border-red-50">
+                            <span className="text-red-700">IRRF (sobre saldo + 13º)</span>
+                            <span className="font-semibold text-red-700">– {formatMoeda(calculoPreview.previsaoRescisao.descontoIRRF)}</span>
+                          </div>
+                        )}
+                        {parseFloat(calculoPreview.previsaoRescisao.descontoPensao || '0') > 0 && (
+                          <div className="flex justify-between py-1.5 border-b border-red-50">
+                            <span className="text-red-700">Pensão Alimentícia</span>
+                            <span className="font-semibold text-red-700">– {formatMoeda(calculoPreview.previsaoRescisao.descontoPensao)}</span>
+                          </div>
+                        )}
+                        {parseFloat(calculoPreview.previsaoRescisao.descontoSindical || '0') > 0 && (
+                          <div className="flex justify-between py-1.5 border-b border-red-50">
+                            <span className="text-red-700">Contribuição Sindical</span>
+                            <span className="font-semibold text-red-700">– {formatMoeda(calculoPreview.previsaoRescisao.descontoSindical)}</span>
+                          </div>
+                        )}
+                        {parseFloat(calculoPreview.previsaoRescisao.descontoFaltasAtrasos || '0') > 0 && (
+                          <div className="flex justify-between py-1.5 border-b border-red-50">
+                            <span className="text-red-700">Faltas / Atrasos do mês</span>
+                            <span className="font-semibold text-red-700">– {formatMoeda(calculoPreview.previsaoRescisao.descontoFaltasAtrasos)}</span>
+                          </div>
+                        )}
+                        {parseFloat(calculoPreview.previsaoRescisao.descontoConvenios || '0') > 0 && (
+                          <div className="flex justify-between py-1.5 border-b border-red-50">
+                            <span className="text-red-700">Convênios (aprovados)</span>
+                            <span className="font-semibold text-red-700">– {formatMoeda(calculoPreview.previsaoRescisao.descontoConvenios)}</span>
+                          </div>
+                        )}
+                        {parseFloat(calculoPreview.previsaoRescisao.descontoEpis || '0') > 0 && (
+                          <div className="flex justify-between py-1.5 border-b border-red-50">
+                            <span className="text-red-700">EPIs (aprovados)</span>
+                            <span className="font-semibold text-red-700">– {formatMoeda(calculoPreview.previsaoRescisao.descontoEpis)}</span>
+                          </div>
+                        )}
+                        {parseFloat(calculoPreview.previsaoRescisao.descontoVales || '0') > 0 && (
+                          <div className="flex justify-between py-1.5 border-b border-red-50">
+                            <span className="text-red-700">Vales / Adiantamentos</span>
+                            <span className="font-semibold text-red-700">– {formatMoeda(calculoPreview.previsaoRescisao.descontoVales)}</span>
+                          </div>
+                        )}
+                        {parseFloat(calculoPreview.previsaoRescisao.descontoOutros || '0') > 0 && (
+                          <div className="flex justify-between py-1.5 border-b border-red-50">
+                            <span className="text-red-700">Outros (aprovados RH)</span>
+                            <span className="font-semibold text-red-700">– {formatMoeda(calculoPreview.previsaoRescisao.descontoOutros)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between py-2 mt-1 border-t border-red-200">
+                          <span className="text-sm font-bold text-red-700">Subtotal Descontos Legais</span>
+                          <span className="font-bold text-sm text-red-700">– {formatMoeda(calculoPreview.previsaoRescisao.totalDescontos)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Seção de Descontos avulsos (legado: adiantamentos antigos, EPIs pendentes, ponto) */}
                   {calculoPreview.descontos && calculoPreview.descontos.length > 0 && (
                     <div className="bg-white rounded-lg border border-red-200 p-4 mt-4">
-                      <p className="text-xs font-bold text-red-500 uppercase tracking-wide mb-3">Descontos</p>
+                      <p className="text-xs font-bold text-red-500 uppercase tracking-wide mb-3">Outros Descontos Avulsos</p>
                       <div className="space-y-0">
                         {calculoPreview.descontos.map((d: any, i: number) => (
                           <div key={i} className="flex justify-between py-2 border-b border-red-50">
                             <span className="text-sm text-red-700">{d.descricao}</span>
-                            <span className="font-semibold text-sm text-red-700">- {formatMoeda(d.valor)}</span>
+                            <span className="font-semibold text-sm text-red-700">– {formatMoeda(d.valor)}</span>
                           </div>
                         ))}
                         <div className="flex justify-between py-2 mt-1 border-t border-red-200">
-                          <span className="text-sm font-bold text-red-700">Total Descontos</span>
-                          <span className="font-bold text-sm text-red-700">- {formatMoeda(calculoPreview.totalDescontos)}</span>
+                          <span className="text-sm font-bold text-red-700">Subtotal Avulsos</span>
+                          <span className="font-bold text-sm text-red-700">– {formatMoeda(calculoPreview.totalDescontos)}</span>
                         </div>
                       </div>
                     </div>
@@ -1975,9 +2100,9 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     <div className="flex justify-between items-center">
                       <div>
                         <span className="text-lg font-bold text-white">TOTAL LÍQUIDO RESCISÃO</span>
-                        <p className="text-[10px] text-green-200">Verbas {calculoPreview.descontos?.length > 0 ? '- Descontos' : ''}</p>
+                        <p className="text-[10px] text-green-200">Verbas Brutas – Descontos Legais – Outros</p>
                       </div>
-                      <span className="text-3xl font-bold text-white">{formatMoeda(calculoPreview.totalLiquido || calculoPreview.previsaoRescisao.total)}</span>
+                      <span className="text-3xl font-bold text-white">{formatMoeda(calculoPreview.totalLiquido || calculoPreview.previsaoRescisao.totalLiquido || calculoPreview.previsaoRescisao.total)}</span>
                     </div>
                     {calculoPreview.previsaoRescisao?.dataLimitePagamento && (
                       <p className="text-[10px] text-green-200 mt-2 text-right">Prazo pagamento: {formatDate(calculoPreview.previsaoRescisao.dataLimitePagamento)} (Art. 477 §6º CLT)</p>

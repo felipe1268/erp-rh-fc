@@ -19,9 +19,134 @@ import {
   calcularMesesFeriasProporcionais,
   calcularFeriasVencidas,
   calcularRescisaoCompleta,
+  calcularDescontosRescisao,
+  type DescontosRescisaoContext,
+  type DescontosRescisaoResult,
 } from "../utils/rescisaoCalc";
 import { corrigirPontoFuncionario } from "../utils/pontoCorrecaoAuto";
 import { storagePut } from "../storage";
+
+/**
+ * Constrói o contexto de descontos da rescisão para um único empregado.
+ *
+ * Lê do banco (filtros já alinhados com o engine de folha):
+ * - Pensão alimentícia + dependentes + sindical: cadastro do empregado
+ * - Salário mínimo: system_criteria
+ * - Faltas/atrasos: timecard_daily do mês de competência
+ * - Convênios: lancamentos_parceiros aprovados no mês
+ * - EPIs: epi_discount_alerts aprovados no mês
+ * - Vales: payroll_advances calculados no mês
+ * - Outros: payroll_adjustments tipo='outros' aprovados no mês
+ *
+ * `mesRescisao` no formato YYYY-MM (mês de competência da rescisão).
+ */
+async function buildDescontosContextRescisao(
+  db: any,
+  emp: any,
+  mesRescisao: string,
+): Promise<DescontosRescisaoContext> {
+  const ctx: DescontosRescisaoContext = {
+    numDependentes: Number(emp?.numDependentes || 0),
+    contribuicaoSindical: parseBRL(emp?.contribuicaoSindical),
+    pensaoConfig: emp?.pensaoAlimenticia
+      ? {
+          ativa: true,
+          tipo: (emp.pensaoTipo as any) || "valor_fixo",
+          valor: parseBRL(emp.pensaoValor),
+          percentual: parseFloat(String(emp.pensaoPercentual || "0").replace(",", ".")) || 0,
+          base: (emp.pensaoBase as any) || "bruto",
+        }
+      : null,
+    salarioMinimo: 0,
+    faltasAtrasosValor: 0,
+    conveniosValor: 0,
+    episValor: 0,
+    valesValor: 0,
+    outrosDescontosValor: 0,
+  };
+
+  // Salário mínimo vigente
+  try {
+    const r = ((await db.execute(sql`
+      SELECT valor FROM system_criteria
+      WHERE "companyId" = ${emp.companyId} AND chave = 'salario_minimo_vigente'
+      LIMIT 1
+    `)) as any).rows || [];
+    ctx.salarioMinimo = parseBRL(r[0]?.valor) || 1621;
+  } catch {
+    ctx.salarioMinimo = 1621;
+  }
+
+  // Faltas + Atrasos do mês (timecard_daily)
+  try {
+    const r = ((await db.execute(sql`
+      SELECT COALESCE(SUM(CAST("valorDesconto" AS DECIMAL(15,2))), 0) AS total
+      FROM timecard_daily
+      WHERE "employeeId" = ${emp.id}
+        AND "companyId" = ${emp.companyId}
+        AND "mesCompetencia" = ${mesRescisao}
+        AND "statusDia" = 'registrado'
+        AND ("isFalta" = 1 OR "isAtraso" = 1)
+    `)) as any).rows || [];
+    ctx.faltasAtrasosValor = parseFloat(String(r[0]?.total || "0")) || 0;
+  } catch { /* fallback 0 */ }
+
+  // Convênios aprovados
+  try {
+    const r = ((await db.execute(sql`
+      SELECT COALESCE(SUM(CAST(valor AS DECIMAL(15,2))), 0) AS total
+      FROM lancamentos_parceiros
+      WHERE "employeeId" = ${emp.id}
+        AND "companyId" = ${emp.companyId}
+        AND competencia_desconto = ${mesRescisao}
+        AND status = 'aprovado'
+    `)) as any).rows || [];
+    ctx.conveniosValor = parseFloat(String(r[0]?.total || "0")) || 0;
+  } catch { /* fallback 0 */ }
+
+  // EPIs aprovados
+  try {
+    const r = ((await db.execute(sql`
+      SELECT COALESCE(SUM(CAST(valor_total AS DECIMAL(15,2))), 0) AS total
+      FROM epi_discount_alerts
+      WHERE "employeeId" = ${emp.id}
+        AND "companyId" = ${emp.companyId}
+        AND mes_referencia = ${mesRescisao}
+        AND status = 'aprovado'
+    `)) as any).rows || [];
+    ctx.episValor = parseFloat(String(r[0]?.total || "0")) || 0;
+  } catch { /* fallback 0 */ }
+
+  // Vales/adiantamentos
+  try {
+    const r = ((await db.execute(sql`
+      SELECT COALESCE(SUM(CAST("valorTotalVale" AS DECIMAL(15,2))), 0) AS total
+      FROM payroll_advances
+      WHERE "employeeId" = ${emp.id}
+        AND "companyId" = ${emp.companyId}
+        AND "mesReferencia" = ${mesRescisao}
+        AND status = 'calculado'
+    `)) as any).rows || [];
+    ctx.valesValor = parseFloat(String(r[0]?.total || "0")) || 0;
+  } catch { /* fallback 0 */ }
+
+  // Outros ajustes aprovados pelo RH
+  try {
+    const r = ((await db.execute(sql`
+      SELECT COALESCE(SUM(CAST("valorDesconto" AS DECIMAL(15,2))), 0) AS total
+      FROM payroll_adjustments
+      WHERE "employeeId" = ${emp.id}
+        AND "companyId" = ${emp.companyId}
+        AND "mesDesconto" = ${mesRescisao}
+        AND tipo = 'outros'
+        AND "aprovadoRh" = true
+        AND status IN ('pendente','aplicado')
+    `)) as any).rows || [];
+    ctx.outrosDescontosValor = parseFloat(String(r[0]?.total || "0")) || 0;
+  } catch { /* fallback 0 */ }
+
+  return ctx;
+}
 
 /** Conta domingos em um mês (ano, mês 1-12) */
 function contarDomingos(ano: number, mes: number): number {
@@ -382,14 +507,22 @@ export const avisoPrevioFeriasRouter = router({
                 previsao.total = (parseFloat(previsao.total) - multaAntiga + multaReal).toFixed(2);
               }
             }
-            
+
+            // Descontos legais e da folha (INSS, IRRF, pensão, sindical, faltas, convênios, EPIs, vales, outros)
+            const mesRescisaoView = (dataFimParaCalculo || row.dataFim || '').substring(0, 7);
+            let descontosLegaisView: DescontosRescisaoResult | null = null;
+            try {
+              const descontosCtx = await buildDescontosContextRescisao(db, emp, mesRescisaoView);
+              descontosLegaisView = calcularDescontosRescisao(previsao, descontosCtx);
+            } catch (e) { /* fallback: previsão sem bloco de descontos */ }
+
             // Retornar com previsão recalculada (incluir dataAdmissao para cálculo de tempo de serviço no frontend)
             return {
               ...row,
               employeeName: emp.nomeCompleto || 'Funcionário',
               employeeCpf: emp.cpf || '-',
               employeeCargo: emp.cargo || emp.funcao || '-',
-              previsaoRescisao: JSON.stringify({ ...previsao, dataAdmissao }),
+              previsaoRescisao: JSON.stringify({ ...previsao, ...(descontosLegaisView || {}), dataAdmissao }),
             };
           }
         } catch (e) {
@@ -587,10 +720,16 @@ export const avisoPrevioFeriasRouter = router({
           periodosVencidosOverride: periodosVencidosReal,
           descontarAvisoNaoCumprido: input.descontarAvisoNaoCumprido,
         });
-        
-        // Total líquido = verbas - descontos
-        const totalVerbas = parseFloat(previsao.total);
-        const totalLiquido = totalVerbas - totalDescontos;
+
+        // Descontos legais e da folha (INSS, IRRF, pensão, sindical, faltas, convênios, EPIs, vales, outros)
+        const mesRescisao = dataFimAviso.substring(0, 7);
+        const descontosCtx = await buildDescontosContextRescisao(db, emp, mesRescisao);
+        const descontosLegais = calcularDescontosRescisao(previsao, descontosCtx);
+        const previsaoComDescontos = { ...previsao, ...descontosLegais };
+
+        // Total líquido inclui descontos legais + descontos avulsos legados
+        const totalDescontosLegais = parseFloat(descontosLegais.totalDescontos);
+        const totalLiquido = parseFloat(descontosLegais.totalLiquido) - totalDescontos;
         
         return {
           anosServico,
@@ -602,11 +741,13 @@ export const avisoPrevioFeriasRouter = router({
           dataInicioAviso: isEmpregadoIndenizado ? dataDesligamento : calcularDataInicioAviso(dataDesligamento),
           dataFimAviso,
           dataFimEstimada: dataFimAviso,
-          previsaoRescisao: previsao,
+          previsaoRescisao: previsaoComDescontos,
           vrConfigNome,
           vrExtra,
           descontos: descontos.map(d => ({ ...d, valor: d.valor.toFixed(2) })),
           totalDescontos: totalDescontos.toFixed(2),
+          totalDescontosLegais: totalDescontosLegais.toFixed(2),
+          totalDescontosGeral: (totalDescontosLegais + totalDescontos).toFixed(2),
           totalLiquido: totalLiquido.toFixed(2),
           funcionario: {
             nome: emp.nomeCompleto,

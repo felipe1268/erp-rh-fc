@@ -2919,8 +2919,7 @@ export const payrollEngineRouter = router({
       const convenioMap = new Map<number, number>();
       for (const r of convenioBatchRows) convenioMap.set(Number(r.employee_id), parseFloat(r.totalConvenio || '0'));
 
-      // PRE-FETCH: Adjustments do mês de desconto (outros) — para filtrar aprovação RH
-      // Pensão NÃO vem mais de adjustments (agora é calculada dinâmica do cadastro + bruto do mês)
+      // PRE-FETCH: Adjustments do mês de desconto (outros + pensão) — sujeitos à aprovação RH (Rev. 1203)
       const adjBatchRows = ((await db.execute(sql`
         SELECT "employeeId", tipo, "valorDesconto", "aprovadoRh", id, descricao, data
         FROM payroll_adjustments
@@ -2928,7 +2927,7 @@ export const payrollEngineRouter = router({
           AND "employeeId" IN (${empIdsSql})
           AND "mesDesconto" = ${input.mesReferencia}
           AND status IN ('pendente','aplicado')
-          AND tipo = 'outros'
+          AND tipo IN ('outros','pensao')
       `)) as any).rows || [];
       const adjustmentsByEmp = new Map<number, any[]>();
       for (const r of adjBatchRows) {
@@ -3047,21 +3046,12 @@ export const payrollEngineRouter = router({
         const descontoFaltas  = descontoFaltasBase + dsrFaltaValorAplicado;
         const descontoAtrasos = descontoAtrasosBase;
 
-        // PENSÃO ALIMENTÍCIA: calculada dinamicamente do cadastro do funcionário
-        // Base configurável: bruto do mês (incl. HE/adicionais) OU salário mínimo vigente
-        let descontoPensao = 0;
-        if (emp.pensaoAlimenticia) {
-          if (emp.pensaoTipo === 'percentual') {
-            const perc = parseBRL(emp.pensaoPercentual) / 100;
-            const heValor = heMap.get(emp.id) || 0;
-            const brutoDoMes = salarioBruto + heValor; // base dinâmica do mês (incl. HE aprovada/paga)
-            const basePensao = emp.pensaoBase === 'salario_minimo' ? salarioMinimoVigente : brutoDoMes;
-            descontoPensao = basePensao * perc;
-          } else {
-            // valor_fixo mensal
-            descontoPensao = parseBRL(emp.pensaoValor);
-          }
-        }
+        // PENSÃO ALIMENTÍCIA: vem de payroll_adjustments tipo='pensao' aprovados pelo RH (Rev. 1203)
+        // Geração mensal automática via gerarPensoesMes; aprovação via aprovarAdjustmentRh.
+        const pensaoAdjs = (adjustmentsByEmp.get(emp.id) || []).filter(
+          (a: any) => a.tipo === 'pensao' && a.aprovadoRh === true
+        );
+        const descontoPensao = pensaoAdjs.reduce((s: number, a: any) => s + parseBRL(a.valorDesconto), 0);
 
         const vaValor = vaLancamento;
         const vrValorMensal = vrDiario * diasUteis;
@@ -5021,9 +5011,12 @@ Responda EXATAMENTE no formato JSON abaixo:`;
   // Lista lançamentos pendentes de aprovação RH (pensão, outros, EPI, convênio)
   listarPendenciasAprovacaoRh: protectedProcedure
     .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const userCompanyId = Number((ctx as any)?.user?.companyId);
+      if (!userCompanyId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
+      if (Number(input.companyId) !== userCompanyId) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para ver pendências de outra empresa" });
       const adjs = ((await db.execute(sql`
         SELECT pa.id, pa."employeeId", pa.tipo, pa.descricao, pa."valorDesconto", pa.data,
                pa."aprovadoRh", pa."aprovadoRhEm", pa."aprovadoRhMotivo",
@@ -5058,8 +5051,8 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       return { adjustments: adjs, epi, convenios: conv };
     }),
 
-  // Aprova/reprova lançamento (outros/EPI/convênio). Pensão NÃO passa por aqui — é
-  // automática baseada no cadastro (Rev. 1205). Aprovador vem de ctx.user (evita IDOR).
+  // Aprova/reprova lançamento (outros/pensão/EPI/convênio). Aprovador vem de ctx.user (evita IDOR).
+  // Rev. 1203: pensão volta a passar por aprovação RH via payroll_adjustments tipo='pensao'.
   aprovarAdjustmentRh: protectedProcedure
     .input(z.object({ adjustmentId: z.number(), aprovado: z.boolean(), motivo: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
@@ -5074,7 +5067,6 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       `)) as any).rows || [];
       if (chk.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
       if (Number(chk[0].companyId) !== userCompanyId) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para aprovar lançamento de outra empresa" });
-      if (chk[0].tipo === 'pensao') throw new TRPCError({ code: "BAD_REQUEST", message: "Pensão é calculada automática do cadastro (Rev. 1205) — não aprove aqui" });
       await db.execute(sql`
         UPDATE payroll_adjustments
         SET "aprovadoRh" = ${input.aprovado},
@@ -5136,18 +5128,91 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       return { ok: true };
     }),
 
-  // DEPRECATED (Rev. 1205): pensão agora é calculada dinamicamente no simularPagamento.
-  // Endpoint mantido como no-op para compatibilidade — retorna total da folha sem criar nada.
+  // Gera adjustments mensais de pensão alimentícia (tipo='pensao') aguardando aprovação RH (Rev. 1203).
+  // Para cada empregado com pensaoAlimenticia=true: calcula valor (valor_fixo OU percentual sobre base bruto/SM)
+  // e cria 1 lançamento aprovadoRh=false. Idempotente: ignora empregados que já tenham pensão criada no mês.
   gerarPensoesMes: protectedProcedure
     .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const emps = ((await db.execute(sql`
-        SELECT COUNT(*)::int AS total FROM employees
-        WHERE "companyId" = ${input.companyId} AND "pensaoAlimenticia" = TRUE
+      const userCompanyId = Number((ctx as any)?.user?.companyId);
+      if (!userCompanyId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
+      if (Number(input.companyId) !== userCompanyId) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para gerar pensões de outra empresa" });
+
+      // Salário mínimo vigente (system_criteria — chave/valor, igual ao simularPagamento)
+      const smRows = ((await db.execute(sql`
+        SELECT valor FROM system_criteria
+        WHERE "companyId" = ${input.companyId} AND chave = 'salario_minimo_vigente'
+        LIMIT 1
       `)) as any).rows || [];
-      return { criados: 0, total: Number(emps[0]?.total || 0), deprecated: true, motivo: 'Pensão é calculada dinamicamente a cada simulação (Rev. 1205)' };
+      const salarioMinimo = parseBRL(smRows[0]?.valor) || 1621;
+
+      // Idempotência sob concorrência: índice único parcial + ON CONFLICT DO NOTHING
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS padj_pensao_unique_mes
+        ON payroll_adjustments ("companyId", "employeeId", "mesDesconto")
+        WHERE tipo = 'pensao'
+      `);
+
+      // Empregados com pensão ativa (status segue convenção capitalizada do domínio)
+      const emps = ((await db.execute(sql`
+        SELECT id, "salarioBase", "pensaoTipo", "pensaoValor", "pensaoPercentual", "pensaoBase"
+        FROM employees
+        WHERE "companyId" = ${input.companyId}
+          AND "pensaoAlimenticia" = 1
+          AND "deletedAt" IS NULL
+          AND status IN ('Ativo', 'Ferias')
+      `)) as any).rows || [];
+
+      // Mês destes adjustments (tanto origem quanto desconto = mês corrente)
+      const dataLancamento = `${input.mesReferencia}-01`;
+      let criados = 0;
+      let pulados = 0;
+
+      for (const e of emps) {
+        // Idempotência: já existe pensão para este empregado no mês?
+        const existente = ((await db.execute(sql`
+          SELECT id FROM payroll_adjustments
+          WHERE "companyId" = ${input.companyId}
+            AND "employeeId" = ${Number(e.id)}
+            AND tipo = 'pensao'
+            AND "mesDesconto" = ${input.mesReferencia}
+          LIMIT 1
+        `)) as any).rows || [];
+        if (existente.length > 0) { pulados++; continue; }
+
+        // Calcula valor da pensão
+        let valor = 0;
+        let descricao = 'Pensão alimentícia';
+        if (e.pensaoTipo === 'percentual') {
+          const perc = (parseBRL(e.pensaoPercentual) || 0) / 100;
+          const base = e.pensaoBase === 'salario_minimo' ? salarioMinimo : parseBRL(e.salarioBase);
+          valor = base * perc;
+          descricao = `Pensão ${(perc * 100).toFixed(2)}% sobre ${e.pensaoBase === 'salario_minimo' ? 'salário mínimo' : 'salário bruto'}`;
+        } else {
+          valor = parseBRL(e.pensaoValor) || 0;
+          descricao = 'Pensão alimentícia (valor fixo)';
+        }
+
+        if (valor <= 0) { pulados++; continue; }
+
+        const ins = (await db.execute(sql`
+          INSERT INTO payroll_adjustments
+            ("companyId", "employeeId", "mesOrigem", "mesDesconto", data, tipo, descricao,
+             "valorDesconto", "valorTotal", status, "aprovadoRh")
+          VALUES
+            (${input.companyId}, ${Number(e.id)}, ${input.mesReferencia}, ${input.mesReferencia},
+             ${dataLancamento}, 'pensao', ${descricao},
+             ${valor.toFixed(2)}, ${valor.toFixed(2)}, 'pendente', false)
+          ON CONFLICT ("companyId", "employeeId", "mesDesconto") WHERE tipo = 'pensao' DO NOTHING
+          RETURNING id
+        `)) as any;
+        if ((ins.rowCount ?? ins.rows?.length ?? 0) > 0) criados++;
+        else pulados++;
+      }
+
+      return { criados, pulados, total: emps.length };
     }),
 
   listarContasBancariasEmpresa: protectedProcedure
