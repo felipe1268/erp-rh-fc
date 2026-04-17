@@ -234,6 +234,46 @@ async function startServer() {
           END $$
         `);
         console.log("[ColFix] Bloco principal de ALTER TABLE OK");
+
+        // ─── Backfill: nomes de criadores em documentos de compras ──────────
+        // Preenche `criado_por_nome` em SCs/Cotações/OCs antigas onde só
+        // há `criado_por_id`, usando users.name. Idempotente.
+        try {
+          const scFix = await db.execute(sql`
+            UPDATE compras_solicitacoes s
+            SET criado_por_nome = u.name
+            FROM users u
+            WHERE s.criado_por_id = u.id
+              AND (s.criado_por_nome IS NULL OR s.criado_por_nome = '')
+              AND u.name IS NOT NULL AND u.name <> ''
+          `);
+          const cotFix = await db.execute(sql`
+            UPDATE compras_cotacoes c
+            SET criado_por_nome = u.name
+            FROM users u
+            WHERE c.criado_por_id = u.id
+              AND (c.criado_por_nome IS NULL OR c.criado_por_nome = '')
+              AND u.name IS NOT NULL AND u.name <> ''
+          `);
+          const ocFix = await db.execute(sql`
+            UPDATE compras_ordens o
+            SET criado_por_nome = u.name
+            FROM users u
+            WHERE o.criado_por_id = u.id
+              AND (o.criado_por_nome IS NULL OR o.criado_por_nome = '')
+              AND u.name IS NOT NULL AND u.name <> ''
+          `);
+          const scN = (scFix as any).rowCount ?? 0;
+          const cotN = (cotFix as any).rowCount ?? 0;
+          const ocN = (ocFix as any).rowCount ?? 0;
+          if (scN + cotN + ocN > 0) {
+            console.log(`[ColFix] Backfill nomes compras: SC=${scN}, Cot=${cotN}, OC=${ocN}`);
+          } else {
+            console.log("[ColFix] Backfill nomes compras OK (nada a corrigir)");
+          }
+        } catch (err) {
+          console.warn("[ColFix] Backfill nomes compras falhou (não-fatal):", (err as Error).message);
+        }
         await db.execute(sql`CREATE TABLE IF NOT EXISTS pj_documentos (
           id SERIAL NOT NULL,
           company_id INTEGER NOT NULL,
