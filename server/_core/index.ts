@@ -290,6 +290,44 @@ async function startServer() {
           console.error("[ColFix] Falha ao recalcular ciclos de ponto_consolidacao:", e?.message || e);
         }
 
+        // ─── Auto-resolver inconsistências batida_impar órfãs (Rev. 1230) ────
+        // Quando um registro de ponto é corrigido (vinculação manual,
+        // edição de batidas, etc.), o time_record passa a ter número par
+        // de batidas, mas a inconsistência antiga continua "pendente".
+        // Aqui reconciliamos: se o registro atual tem nº par de batidas
+        // (contado pelos campos entrada1..saida3), marcamos a
+        // inconsistência como "ajustado" automaticamente.
+        try {
+          const r2 = await sql.unsafe(`
+            WITH curr AS (
+              SELECT ti.id AS inc_id,
+                (CASE WHEN COALESCE(tr.entrada1,'')<>'' THEN 1 ELSE 0 END
+               + CASE WHEN COALESCE(tr.saida1,'')<>'' THEN 1 ELSE 0 END
+               + CASE WHEN COALESCE(tr.entrada2,'')<>'' THEN 1 ELSE 0 END
+               + CASE WHEN COALESCE(tr.saida2,'')<>'' THEN 1 ELSE 0 END
+               + CASE WHEN COALESCE(tr.entrada3,'')<>'' THEN 1 ELSE 0 END
+               + CASE WHEN COALESCE(tr.saida3,'')<>'' THEN 1 ELSE 0 END) AS n
+              FROM time_inconsistencies ti
+              LEFT JOIN time_records tr
+                ON tr."employeeId"=ti."employeeId"
+               AND tr.data::date = ti.data::date
+              WHERE ti."tipoInconsistencia"='batida_impar'
+                AND ti.status='pendente'
+            )
+            UPDATE time_inconsistencies
+            SET status='ajustado',
+                "resolvidoPor"='Sistema (auto-reconcile)',
+                "resolvidoEm"=NOW(),
+                justificativa=COALESCE(NULLIF(justificativa,''),'') || ' [Auto-resolvido: registro corrigido posteriormente, batidas agora são pares.]',
+                "updatedAt"=NOW()
+            WHERE id IN (SELECT inc_id FROM curr WHERE n > 0 AND n % 2 = 0)
+          `);
+          const n2 = (r2 as any).rowCount ?? 0;
+          if (n2 > 0) console.log(`[ColFix] inconsistências batida_impar auto-resolvidas: ${n2}`);
+        } catch (e: any) {
+          console.warn("[ColFix] Falha auto-reconcile batida_impar (não-fatal):", e?.message || e);
+        }
+
         // ─── Backfill: nomes de criadores em documentos de compras ──────────
         // Preenche `criado_por_nome` em SCs/Cotações/OCs antigas onde só
         // há `criado_por_id`, usando users.name. Idempotente.
