@@ -241,19 +241,51 @@ async function startServer() {
         `);
         console.log("[ColFix] Bloco principal de ALTER TABLE OK");
 
-        // Índice + backfill do ciclo da folha em ponto_consolidacao (Task #29)
+        // Índice + backfill do ciclo da folha em ponto_consolidacao (Task #29 / #38)
+        // O ciclo correto vai do (diaCorte+1) do mês anterior até o (diaCorte) do mês.
+        // diaCorte é lido por empresa em `system_criteria.ponto_dia_corte` (default 15, máx 28).
+        // ATENÇÃO: a Rev. 1221 backfilou erroneamente como mês calendário (01→último dia),
+        // bloqueando o "escuro" (dias após o corte). Aqui recalculamos qualquer linha que
+        // ainda esteja com o range incorreto (= mês inteiro) ou NULL.
         try {
           await db.execute(sql`
             CREATE INDEX IF NOT EXISTS "ponto_consolidacao_ciclo"
               ON "ponto_consolidacao" ("companyId", "data_inicio_ciclo", "data_fim_ciclo")
           `);
-          await db.execute(sql`
-            UPDATE "ponto_consolidacao"
-               SET "data_inicio_ciclo" = (("mesReferencia" || '-01')::date),
-                   "data_fim_ciclo"    = (date_trunc('month', ("mesReferencia" || '-01')::date) + interval '1 month - 1 day')::date
-             WHERE "data_inicio_ciclo" IS NULL OR "data_fim_ciclo" IS NULL
+          const r = await db.execute(sql`
+            UPDATE "ponto_consolidacao" pc
+               SET "data_inicio_ciclo" = (
+                     to_date(pc."mesReferencia" || '-01','YYYY-MM-DD')
+                       - interval '1 month'
+                       + (LEAST(28, GREATEST(1, COALESCE(
+                             (SELECT NULLIF(regexp_replace(sc.valor,'[^0-9]','','g'),'')::int
+                              FROM system_criteria sc
+                              WHERE sc."companyId" = pc."companyId" AND sc.chave = 'ponto_dia_corte'
+                              LIMIT 1), 15)
+                         )) || ' day')::interval
+                       + interval '1 day'
+                   )::date,
+                   "data_fim_ciclo" = (
+                     to_date(pc."mesReferencia" || '-01','YYYY-MM-DD')
+                       + ((LEAST(28, GREATEST(1, COALESCE(
+                             (SELECT NULLIF(regexp_replace(sc.valor,'[^0-9]','','g'),'')::int
+                              FROM system_criteria sc
+                              WHERE sc."companyId" = pc."companyId" AND sc.chave = 'ponto_dia_corte'
+                              LIMIT 1), 15)
+                         )) - 1) || ' day')::interval
+                   )::date
+             WHERE "data_inicio_ciclo" IS NULL
+                OR "data_fim_ciclo"    IS NULL
+                OR (
+                     "data_inicio_ciclo" = (pc."mesReferencia" || '-01')::date
+                 AND "data_fim_ciclo"    = (date_trunc('month', (pc."mesReferencia" || '-01')::date) + interval '1 month - 1 day')::date
+                )
           `);
-        } catch {}
+          const n = (r as any).rowCount ?? 0;
+          if (n > 0) console.log(`[ColFix] ponto_consolidacao: ${n} ciclos recalculados (corte por empresa)`);
+        } catch (e: any) {
+          console.error("[ColFix] Falha ao recalcular ciclos de ponto_consolidacao:", e?.message || e);
+        }
 
         // ─── Backfill: nomes de criadores em documentos de compras ──────────
         // Preenche `criado_por_nome` em SCs/Cotações/OCs antigas onde só
