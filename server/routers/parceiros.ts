@@ -201,22 +201,57 @@ export const parceirosRouter = router({
 
     create: protectedProcedure
       .input(z.object({
-        parceiroId: z.number(),
+        parceiroId: z.number().optional(),
+        parceiroConveniadoId: z.number().optional(),
         companyId: z.number(),
         employeeId: z.number(),
-        employeeNome: z.string(),
+        employeeNome: z.string().nullish(),
         dataCompra: z.string(),
-        descricaoItens: z.string().optional(),
-        valor: z.string(),
-        competenciaDesconto: z.string().optional(),
-      }))
+        descricaoItens: z.string().nullish(),
+        valor: z.union([z.string(), z.number()]),
+        competenciaDesconto: z.string().nullish(),
+      }).passthrough())
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
-        const [result] = await db.insert(lancamentosParceiros).values({
-          ...input,
-          lancadoPor: ctx.user?.name || "Sistema",
-        } as any);
-        return { id: result[0].id };
+        const parceiroId = input.parceiroId ?? input.parceiroConveniadoId;
+        if (!parceiroId) throw new Error("Parceiro é obrigatório");
+
+        // Sanitiza valor (aceita "129,51", "1.500,00", "129.51", 129.51)
+        const rawV = String(input.valor ?? "").trim();
+        const normV = rawV.includes(",")
+          ? rawV.replace(/\./g, "").replace(",", ".")
+          : rawV;
+        const valorNum = Number(normV);
+        if (!Number.isFinite(valorNum) || valorNum <= 0) {
+          throw new Error("Valor inválido");
+        }
+
+        // Resolve nome do colaborador se não enviado
+        let employeeNome = input.employeeNome ?? "";
+        if (!employeeNome) {
+          const [emp] = await db
+            .select({ nome: employees.nomeCompleto })
+            .from(employees)
+            .where(eq(employees.id, input.employeeId));
+          employeeNome = emp?.nome ?? "";
+        }
+        if (!employeeNome) throw new Error("Colaborador não encontrado");
+
+        const [row] = await db
+          .insert(lancamentosParceiros)
+          .values({
+            parceiroId,
+            companyId: input.companyId,
+            employeeId: input.employeeId,
+            employeeNome,
+            dataCompra: input.dataCompra,
+            descricaoItens: input.descricaoItens ?? null,
+            valor: String(valorNum),
+            competenciaDesconto: input.competenciaDesconto ?? null,
+            lancadoPor: ctx.user?.name || "Sistema",
+          } as any)
+          .returning({ id: lancamentosParceiros.id });
+        return { id: row.id };
       }),
 
     aprovar: protectedProcedure

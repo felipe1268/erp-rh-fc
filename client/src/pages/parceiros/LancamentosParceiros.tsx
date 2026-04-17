@@ -39,9 +39,18 @@ export default function LancamentosParceiros() {
     { companyId: companyId ?? 0 },
     { enabled: !!companyId }
   );
-  const createMut = trpc.parceiros.lancamentos.create.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Lançamento registrado!"); } });
-  const aprovarMut = trpc.parceiros.lancamentos.aprovar.useMutation({ onSuccess: () => { refetch(); toast.success("Lançamento atualizado!"); } });
-  const uploadMut = trpc.parceiros.lancamentos.uploadComprovante.useMutation({ onSuccess: () => { refetch(); toast.success("Comprovante enviado!"); } });
+  const createMut = trpc.parceiros.lancamentos.create.useMutation({
+    onSuccess: () => { refetch(); setShowForm(false); toast.success("Lançamento registrado!"); },
+    onError: (e) => toast.error(`Erro ao registrar: ${e.message}`),
+  });
+  const aprovarMut = trpc.parceiros.lancamentos.aprovar.useMutation({
+    onSuccess: () => { refetch(); toast.success("Lançamento atualizado!"); },
+    onError: (e) => toast.error(`Erro: ${e.message}`),
+  });
+  const uploadMut = trpc.parceiros.lancamentos.uploadComprovante.useMutation({
+    onSuccess: () => { refetch(); toast.success("Comprovante enviado!"); },
+    onError: (e) => toast.error(`Erro: ${e.message}`),
+  });
 
   const filtered = useMemo(() => {
     let list = lancamentos;
