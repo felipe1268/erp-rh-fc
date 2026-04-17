@@ -5040,12 +5040,19 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         ORDER BY e."nomeCompleto"
       `)) as any).rows || [];
       const conv = ((await db.execute(sql`
-        SELECT lp.id, lp."employeeId", lp.valor, lp.status, lp.descricao,
+        SELECT lp.id, lp."employeeId", lp.valor, lp.status,
+               COALESCE(lp.descricao_itens, p.razao_social, 'Compra em parceiro') AS descricao,
+               lp.data_compra, lp.competencia_desconto,
                e."nomeCompleto", e."codigoInterno", e.funcao
         FROM lancamentos_parceiros lp
         JOIN employees e ON e.id = lp."employeeId"
+        LEFT JOIN parceiros_conveniados p ON p.id = lp."parceiroId"
         WHERE lp."companyId" = ${input.companyId}
-          AND lp.competencia_desconto = ${input.mesReferencia}
+          AND (
+            lp.competencia_desconto = ${input.mesReferencia}
+            OR (lp.competencia_desconto IS NULL
+                AND TO_CHAR(lp.data_compra, 'YYYY-MM') = ${input.mesReferencia})
+          )
         ORDER BY e."nomeCompleto"
       `)) as any).rows || [];
       return { adjustments: adjs, epi, convenios: conv };
