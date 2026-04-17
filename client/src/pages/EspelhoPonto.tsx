@@ -30,12 +30,20 @@ function minsToHHMM(m: number, fallback = "—"): string {
 }
 
 function defaultPeriodo() {
+  // Período padrão: começa no dia 16 do mês anterior (início do ciclo da
+  // competência em curso) e termina no ÚLTIMO dia do mês atual. Cobre tanto o
+  // ciclo de folha (16→15) quanto os dias do "escuro" (16→fim) que serão
+  // fechados na competência seguinte. Isso evita que inconsistências do
+  // escuro fiquem ocultas no espelho individual.
   const n = new Date();
   const pm = n.getMonth() === 0 ? 11 : n.getMonth() - 1;
   const py = n.getMonth() === 0 ? n.getFullYear() - 1 : n.getFullYear();
+  const ano = n.getFullYear();
+  const mes = n.getMonth() + 1;
+  const ultimoDia = new Date(ano, mes, 0).getDate();
   return {
     inicio: `${py}-${String(pm + 1).padStart(2, "0")}-16`,
-    fim: `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-15`,
+    fim: `${ano}-${String(mes).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`,
   };
 }
 
