@@ -5052,6 +5052,9 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const prevMM = mm === 1 ? 12 : mm - 1;
       const cycleStart = `${prevYY}-${String(prevMM).padStart(2, "0")}-16`;
       const cycleEnd   = `${yy}-${String(mm).padStart(2, "0")}-15`;
+      // Rev. 1215: cada lançamento aparece em UMA única competência (mesmo ciclo do ponto).
+      // - Se `competencia_desconto` está preenchido → respeita o explícito (parcelamento etc).
+      // - Caso contrário → deriva pelo ciclo de fechamento (16/N-1 a 15/N → competência N).
       const conv = ((await db.execute(sql`
         SELECT lp.id, lp."employeeId", lp.valor, lp.status,
                COALESCE(lp.descricao_itens, p.razao_social, 'Compra em parceiro') AS descricao,
@@ -5062,9 +5065,11 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         LEFT JOIN parceiros_conveniados p ON p.id = lp."parceiroId"
         WHERE lp."companyId" = ${input.companyId}
           AND (
-            lp.competencia_desconto = ${input.mesReferencia}
-            OR (lp.data_compra::date >= ${cycleStart}::date
-                AND lp.data_compra::date <= ${cycleEnd}::date)
+            (lp.competencia_desconto IS NOT NULL
+              AND lp.competencia_desconto = ${input.mesReferencia})
+            OR (lp.competencia_desconto IS NULL
+              AND lp.data_compra::date >= ${cycleStart}::date
+              AND lp.data_compra::date <= ${cycleEnd}::date)
           )
         ORDER BY e."nomeCompleto"
       `)) as any).rows || [];
