@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock, Wallet, CheckCircle, PackageSearch, HardHat } from "lucide-react";
+import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock, Wallet, CheckCircle, PackageSearch, HardHat, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -69,6 +69,13 @@ export default function ComprasRealocacao() {
       { companyId, obraId: obraIdNum },
       { enabled: !!companyId }
     );
+
+  const { data: economiasData, isLoading: loadingEconomias } =
+    trpc.compras.listarEconomiasOC.useQuery(
+      { companyId, obraId: obraIdNum },
+      { enabled: !!companyId }
+    );
+  const economias = economiasData ?? [];
 
   // ── Mutations ──────────────────────────────────────────────────────
   const criarMut = trpc.purchase.criarRealocacao.useMutation({
@@ -257,6 +264,14 @@ export default function ComprasRealocacao() {
             <TabsTrigger value="risco" className="gap-2">
               <ShieldAlert className="h-4 w-4" /> Reserva de Risco (DI-08)
             </TabsTrigger>
+            <TabsTrigger value="economia" className="gap-2">
+              <PackageSearch className="h-4 w-4" /> Economia em Compras
+              {economias.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 text-[10px] font-bold">
+                  {economias.length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           {/* ── ABA 1: REALOCAÇÃO DE VERBA ─── */}
@@ -420,6 +435,114 @@ export default function ComprasRealocacao() {
                           </TableCell>
                         </TableRow>
                       ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── ABA 3: ECONOMIA EM COMPRAS ─── */}
+          <TabsContent value="economia" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="border-teal-200 bg-teal-50">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <PackageSearch className="h-7 w-7 text-teal-600" />
+                    <div>
+                      <p className="text-xl font-bold text-teal-700">{economias.length}</p>
+                      <p className="text-xs text-teal-600">OCs com economia</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-emerald-200 bg-emerald-50">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-7 w-7 text-emerald-600" />
+                    <div>
+                      <p className="text-base font-bold text-emerald-700">
+                        {fmt(economias.reduce((s: number, e: any) => s + Number(e.sobra), 0))}
+                      </p>
+                      <p className="text-xs text-emerald-600">Total de economia gerada</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-blue-200 bg-blue-50">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <Wallet className="h-7 w-7 text-blue-600" />
+                    <div>
+                      <p className="text-base font-bold text-blue-700">
+                        {fmt(economias.reduce((s: number, e: any) => s + Number(e.totalMeta), 0))}
+                      </p>
+                      <p className="text-xs text-blue-600">Total orçado (meta)</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  Origem da Economia — OCs aprovadas abaixo da meta
+                  {obraAtual && <span className="ml-2 text-sm font-normal text-gray-500">— {obraAtual.nome}</span>}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingEconomias ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
+                ) : economias.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <PackageSearch className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                    <p>Nenhuma OC com economia identificada{obraAtual ? ` para ${obraAtual.nome}` : ""}.</p>
+                    <p className="text-xs mt-1">A economia aparece quando uma Ordem de Compra é aprovada com preço inferior à meta orçamentária do item.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>OC</TableHead>
+                        <TableHead>Obra</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Itens</TableHead>
+                        <TableHead className="text-right">Meta orçada</TableHead>
+                        <TableHead className="text-right">Comprado</TableHead>
+                        <TableHead className="text-right">Economia</TableHead>
+                        <TableHead className="text-right">%</TableHead>
+                        <TableHead>Data</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {economias.map((e: any) => {
+                        const pct = Number(e.totalMeta) > 0 ? (Number(e.sobra) / Number(e.totalMeta)) * 100 : 0;
+                        return (
+                          <TableRow key={e.id}>
+                            <TableCell className="font-mono text-xs">
+                              <span className="font-semibold text-blue-700 inline-flex items-center gap-1">
+                                <FileText className="h-3 w-3" />
+                                {e.numeroOc || `#${e.id}`}
+                              </span>
+                            </TableCell>
+                            <TableCell className="max-w-[200px] truncate">{e.obraNome || "—"}</TableCell>
+                            <TableCell>
+                              <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 capitalize">
+                                {String(e.status || "").replace(/_/g, " ")}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-gray-500">{e.qtdItensComMeta}</TableCell>
+                            <TableCell className="text-right font-medium text-blue-700">{fmt(Number(e.totalMeta))}</TableCell>
+                            <TableCell className="text-right text-gray-700">{fmt(Number(e.totalComprado))}</TableCell>
+                            <TableCell className="text-right font-bold text-teal-700">{fmt(Number(e.sobra))}</TableCell>
+                            <TableCell className="text-right text-xs text-emerald-600 font-semibold">{pct.toFixed(1)}%</TableCell>
+                            <TableCell className="text-xs text-gray-500">
+                              {e.criadoEm ? format(new Date(e.criadoEm), "dd/MM/yy", { locale: ptBR }) : "—"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 )}

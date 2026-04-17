@@ -4122,6 +4122,142 @@ Retorne APENAS um JSON válido neste formato:
       }));
     }),
 
+  // ── Lista detalhada das OCs que geraram economia (sobra positiva) ──
+  // Usado na tela de Realocação para mostrar a origem da "Economia em Compras"
+  listarEconomiasOC: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+
+      const ocsConds: any[] = [
+        eq(comprasOrdens.companyId, input.companyId),
+        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida", "aguardando_aprovacao_extra"]),
+      ];
+      if (input.obraId) ocsConds.push(eq(comprasOrdens.obraId, input.obraId));
+
+      const ocs = await db.select({
+        id: comprasOrdens.id,
+        numeroOc: comprasOrdens.numeroOc,
+        obraId: comprasOrdens.obraId,
+        status: comprasOrdens.status,
+        criadoEm: comprasOrdens.criadoEm,
+      }).from(comprasOrdens).where(and(...ocsConds));
+
+      if (ocs.length === 0) return [];
+
+      const ocItens = await db.select().from(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ocs.map(o => o.id)));
+      const scItemIds = ocItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
+      let scItens: { id: number; orcamentoItemId: number | null; precoMeta: string | null; insumoCodigo: string | null; solicitacaoId: number }[] = [];
+      if (scItemIds.length > 0) {
+        scItens = await db.select({
+          id: comprasSolicitacoesItens.id,
+          orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
+          precoMeta: comprasSolicitacoesItens.precoMeta,
+          insumoCodigo: comprasSolicitacoesItens.insumoCodigo,
+          solicitacaoId: comprasSolicitacoesItens.solicitacaoId,
+        }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
+      }
+      const orcIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
+      let metas: { id: number; metaUnitTotal: string | null }[] = [];
+      if (orcIds.length > 0) {
+        metas = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal })
+          .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIds));
+      }
+      const scToOrc: Record<number, number> = {};
+      const scToPrecoMeta: Record<number, number> = {};
+      const scToInsumoCodigo: Record<number, string> = {};
+      for (const s of scItens) {
+        if (s.orcamentoItemId) scToOrc[s.id] = s.orcamentoItemId;
+        if (n(s.precoMeta) > 0) scToPrecoMeta[s.id] = n(s.precoMeta);
+        if (s.insumoCodigo) scToInsumoCodigo[s.id] = s.insumoCodigo;
+      }
+      const orcToMetaUnit: Record<number, number> = {};
+      for (const m of metas) orcToMetaUnit[m.id] = n(m.metaUnitTotal);
+
+      // Lookup de preço por insumo (para itens sem orçamentoItemId/precoMeta) — espelha lógica de getSaldosRealocacaoGeral
+      const needInsumoLookup = scItens.filter(s => !s.orcamentoItemId && n(s.precoMeta) <= 0 && s.insumoCodigo);
+      const insumoPricePerObra: Record<number, Record<string, number>> = {};
+      if (needInsumoLookup.length > 0) {
+        const obraIds = [...new Set(ocs.map(o => o.obraId).filter(Boolean) as number[])];
+        for (const obraId of obraIds) {
+          const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+            .from(orcamentos)
+            .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, obraId), isNull(orcamentos.deletedAt)))
+            .orderBy(desc(orcamentos.createdAt)).limit(1);
+          if (!orc) continue;
+          const orcItems = await db.select({ servicoCodigo: orcamentoItens.servicoCodigo })
+            .from(orcamentoItens).where(and(eq(orcamentoItens.orcamentoId, orc.id), eq(orcamentoItens.companyId, input.companyId)));
+          const svcCods = [...new Set(orcItems.filter(it => it.servicoCodigo).map(it => it.servicoCodigo!))];
+          if (!svcCods.length) continue;
+          const allInsumos = await db.select({
+            insumoCodigo: composicaoInsumos.insumoCodigo,
+            precoUnitario: composicaoInsumos.precoUnitario,
+            alocacaoMat: composicaoInsumos.alocacaoMat,
+          }).from(composicaoInsumos)
+            .where(and(eq(composicaoInsumos.companyId, Number(orc.companyId)), inArray(composicaoInsumos.composicaoCodigo, svcCods)));
+          const matOnly = allInsumos.filter(i => n(i.alocacaoMat) > 0);
+          const obraMap: Record<string, number> = {};
+          for (const ins of matOnly) {
+            if (ins.insumoCodigo && n(ins.precoUnitario) > 0) obraMap[ins.insumoCodigo] = n(ins.precoUnitario);
+          }
+          insumoPricePerObra[obraId] = obraMap;
+        }
+      }
+
+      const ocToObra: Record<number, number> = {};
+      for (const oc of ocs) if (oc.obraId) ocToObra[oc.id] = oc.obraId;
+
+      const ocTotalComprado: Record<number, number> = {};
+      const ocTotalMeta: Record<number, number> = {};
+      const ocQtdItens: Record<number, number> = {};
+      for (const it of ocItens) {
+        const ocId = it.ordemId;
+        if (!it.solicitacaoItemId) continue;
+        const orcId = scToOrc[it.solicitacaoItemId];
+        let metaUnit = orcId ? (orcToMetaUnit[orcId] ?? 0) : 0;
+        if (metaUnit === 0) metaUnit = scToPrecoMeta[it.solicitacaoItemId] ?? 0;
+        if (metaUnit === 0) {
+          const ic = scToInsumoCodigo[it.solicitacaoItemId];
+          const obraId = ocToObra[ocId];
+          if (ic && obraId) metaUnit = insumoPricePerObra[obraId]?.[ic] ?? 0;
+        }
+        if (metaUnit === 0) continue;
+        const qty = n(it.quantidade);
+        ocTotalComprado[ocId] = (ocTotalComprado[ocId] ?? 0) + n(it.precoUnitario) * qty;
+        ocTotalMeta[ocId]     = (ocTotalMeta[ocId]     ?? 0) + metaUnit * qty;
+        ocQtdItens[ocId]      = (ocQtdItens[ocId]      ?? 0) + 1;
+      }
+
+      // Enriquecer com nomes de obra
+      const obraIds = [...new Set(ocs.map(o => o.obraId).filter(Boolean) as number[])];
+      const obrasRows = obraIds.length > 0
+        ? await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.id, obraIds))
+        : [];
+      const obraMap = new Map(obrasRows.map(o => [o.id, o.nome]));
+
+      const result = ocs.map(oc => {
+        const totalMeta = ocTotalMeta[oc.id] ?? 0;
+        const totalComprado = ocTotalComprado[oc.id] ?? 0;
+        const sobra = totalMeta - totalComprado;
+        return {
+          id: oc.id,
+          numeroOc: oc.numeroOc,
+          obraId: oc.obraId,
+          obraNome: oc.obraId ? obraMap.get(oc.obraId) ?? null : null,
+          status: oc.status,
+          criadoEm: oc.criadoEm,
+          totalMeta,
+          totalComprado,
+          sobra,
+          qtdItensComMeta: ocQtdItens[oc.id] ?? 0,
+        };
+      })
+      .filter(r => r.sobra > 0.01)
+      .sort((a, b) => b.sobra - a.sobra);
+
+      return result;
+    }),
+
   solicitarAutorizacaoCompra: protectedProcedure
     .input(z.object({
       companyId: z.number(),
