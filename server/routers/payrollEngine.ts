@@ -5014,9 +5014,13 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const userCompanyId = Number((ctx as any)?.user?.companyId);
-      if (!userCompanyId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
-      if (Number(input.companyId) !== userCompanyId) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para ver pendências de outra empresa" });
+      const userId = Number((ctx as any)?.user?.id);
+      if (!userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
+      // Multi-tenant: valida acesso à empresa via user_companies (Rev. 1214)
+      const accessChk = ((await db.execute(sql`
+        SELECT 1 FROM user_companies WHERE "userId" = ${userId} AND "companyId" = ${Number(input.companyId)} LIMIT 1
+      `)) as any).rows || [];
+      if (accessChk.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para ver pendências dessa empresa" });
       const adjs = ((await db.execute(sql`
         SELECT pa.id, pa."employeeId", pa.tipo, pa.descricao, pa."valorDesconto", pa.data,
                pa."aprovadoRh", pa."aprovadoRhEm", pa."aprovadoRhMotivo",
@@ -5074,15 +5078,18 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const userCompanyId = Number((ctx as any)?.user?.companyId);
       const userId = Number((ctx as any)?.user?.id);
-      if (!userCompanyId || !userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
-      // Valida ownership (tenant isolation)
+      if (!userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
+      // Valida ownership (tenant isolation) via user_companies (Rev. 1214)
       const chk = ((await db.execute(sql`
         SELECT "companyId", tipo FROM payroll_adjustments WHERE id = ${input.adjustmentId} LIMIT 1
       `)) as any).rows || [];
       if (chk.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
-      if (Number(chk[0].companyId) !== userCompanyId) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para aprovar lançamento de outra empresa" });
+      const targetCompanyId = Number(chk[0].companyId);
+      const accessChk = ((await db.execute(sql`
+        SELECT 1 FROM user_companies WHERE "userId" = ${userId} AND "companyId" = ${targetCompanyId} LIMIT 1
+      `)) as any).rows || [];
+      if (accessChk.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para aprovar lançamento dessa empresa" });
       await db.execute(sql`
         UPDATE payroll_adjustments
         SET "aprovadoRh" = ${input.aprovado},
@@ -5090,7 +5097,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
             "aprovadoRhEm" = NOW(),
             "aprovadoRhMotivo" = ${input.motivo || null},
             "updatedAt" = NOW()
-        WHERE id = ${input.adjustmentId} AND "companyId" = ${userCompanyId}
+        WHERE id = ${input.adjustmentId} AND "companyId" = ${targetCompanyId}
       `);
       return { ok: true };
     }),
@@ -5101,12 +5108,13 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const userCompanyId = Number((ctx as any)?.user?.companyId);
       const userId = Number((ctx as any)?.user?.id);
-      if (!userCompanyId || !userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
+      if (!userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
       const chk = ((await db.execute(sql`SELECT "companyId" FROM epi_discount_alerts WHERE id = ${input.epiAlertId} LIMIT 1`)) as any).rows || [];
       if (chk.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Cobrança não encontrada" });
-      if (Number(chk[0].companyId) !== userCompanyId) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      const targetCompanyId = Number(chk[0].companyId);
+      const accessChk = ((await db.execute(sql`SELECT 1 FROM user_companies WHERE "userId" = ${userId} AND "companyId" = ${targetCompanyId} LIMIT 1`)) as any).rows || [];
+      if (accessChk.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
       await db.execute(sql`
         UPDATE epi_discount_alerts
         SET status = ${input.aprovado ? 'aprovado' : 'rejeitado'},
@@ -5114,7 +5122,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
             data_validacao = NOW(),
             justificativa = ${input.justificativa || null},
             "updatedAt" = NOW()
-        WHERE id = ${input.epiAlertId} AND "companyId" = ${userCompanyId}
+        WHERE id = ${input.epiAlertId} AND "companyId" = ${targetCompanyId}
       `);
       return { ok: true };
     }),
@@ -5125,12 +5133,13 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const userCompanyId = Number((ctx as any)?.user?.companyId);
       const userId = Number((ctx as any)?.user?.id);
-      if (!userCompanyId || !userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
+      if (!userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
       const chk = ((await db.execute(sql`SELECT "companyId" FROM lancamentos_parceiros WHERE id = ${input.lancamentoId} LIMIT 1`)) as any).rows || [];
       if (chk.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
-      if (Number(chk[0].companyId) !== userCompanyId) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      const targetCompanyId = Number(chk[0].companyId);
+      const accessChk = ((await db.execute(sql`SELECT 1 FROM user_companies WHERE "userId" = ${userId} AND "companyId" = ${targetCompanyId} LIMIT 1`)) as any).rows || [];
+      if (accessChk.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
       await db.execute(sql`
         UPDATE lancamentos_parceiros
         SET status = ${input.aprovado ? 'aprovado' : 'rejeitado'},
@@ -5139,7 +5148,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
             motivo_rejeicao = ${input.aprovado ? null : (input.motivo || null)},
             comentario_admin = ${input.motivo || null},
             updated_at = NOW()
-        WHERE id = ${input.lancamentoId} AND "companyId" = ${userCompanyId}
+        WHERE id = ${input.lancamentoId} AND "companyId" = ${targetCompanyId}
       `);
       return { ok: true };
     }),
@@ -5152,9 +5161,10 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const userCompanyId = Number((ctx as any)?.user?.companyId);
-      if (!userCompanyId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
-      if (Number(input.companyId) !== userCompanyId) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para gerar pensões de outra empresa" });
+      const userId = Number((ctx as any)?.user?.id);
+      if (!userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não autenticado" });
+      const accessChk = ((await db.execute(sql`SELECT 1 FROM user_companies WHERE "userId" = ${userId} AND "companyId" = ${Number(input.companyId)} LIMIT 1`)) as any).rows || [];
+      if (accessChk.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para gerar pensões dessa empresa" });
 
       // Salário mínimo vigente (system_criteria — chave/valor, igual ao simularPagamento)
       const smRows = ((await db.execute(sql`
