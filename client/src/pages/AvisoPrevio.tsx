@@ -1368,6 +1368,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
           ? '<tr style="color:#c00"><td>Multa 40% FGTS</td><td>-</td><td style="text-align:right">Não se aplica</td></tr><tr style="color:#c00"><td>Saque FGTS</td><td>-</td><td style="text-align:right">Sem direito</td></tr><tr style="color:#c00"><td>Seguro-Desemprego</td><td>-</td><td style="text-align:right">Sem direito</td></tr>'
           : `<tr style="color:#888"><td>Multa 40% FGTS</td><td>-</td><td style="text-align:right">${pdfData.previsaoRescisao.multaFGTS || '0,00'}</td></tr>`
         }
+        ${parseFloat(pdfData.previsaoRescisao.descontoAvisoNaoCumprido || '0') > 0 ? '<tr style="background:#fff3f3;color:#c00"><td><strong>(–) Desconto Aviso não cumprido</strong></td><td>Art. 487 §2º CLT — 30 dias</td><td style="text-align:right"><strong>– ' + pdfData.previsaoRescisao.descontoAvisoNaoCumprido + '</strong></td></tr>' : ''}
         <tr class="total-row"><td colspan="2"><strong>TOTAL RESCISÃO</strong></td><td style="text-align:right"><strong>${pdfData.previsaoRescisao.total || pdfData.valorEstimadoTotal || '0,00'}</strong></td></tr>
       </tbody>
     </table>
