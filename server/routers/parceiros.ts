@@ -6,6 +6,7 @@ import {
   lancamentosParceiros,
   pagamentosParceiros,
   employees,
+  systemCriteria,
 } from "../../drizzle/schema";
 import { eq, and, or, desc, sql, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -196,11 +197,75 @@ export const parceirosRouter = router({
         const db = (await getDb())!;
         const conditions: any[] = [companyFilter(lancamentosParceiros.companyId, input)];
         if (input.parceiroId) conditions.push(eq(lancamentosParceiros.parceiroId, input.parceiroId));
-        if (input.competencia) conditions.push(eq(lancamentosParceiros.competenciaDesconto, input.competencia));
+
+        // Quando a tela de Aprovações RH envia `competencia`, o filtro deve ser
+        // pelo CICLO DA FOLHA (dia seguinte ao corte do mês anterior até o dia
+        // de corte do mês selecionado), e NÃO por igualdade do varchar
+        // `competenciaDesconto`. Isso evita esconder lançamentos legados/com
+        // competência nula ou divergente.
+        let cycleStart: string | null = null;
+        let cycleEnd: string | null = null;
+        if (input.competencia && !input.dataInicio && !input.dataFim) {
+          // Lê dia de corte do ponto da empresa (default 15). Para evitar
+          // ambiguidade quando o request abrange múltiplas empresas, usa
+          // o `companyId` primário (a tela de Aprovações RH sempre envia um).
+          let diaCorte = 15;
+          try {
+            if (input.companyId && input.companyId > 0) {
+              const rows = await db
+                .select({ valor: systemCriteria.valor })
+                .from(systemCriteria)
+                .where(and(
+                  eq(systemCriteria.companyId, input.companyId),
+                  eq(systemCriteria.chave, "ponto_dia_corte"),
+                ));
+              const v = rows[0]?.valor;
+              const parsed = v != null ? parseInt(String(v), 10) : NaN;
+              if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 28) diaCorte = parsed;
+            }
+          } catch (e) {
+            console.warn("[parceiros.lancamentos.list] falha ao ler ponto_dia_corte; usando default 15", e);
+          }
+          const [yyStr, mmStr] = String(input.competencia).split("-");
+          const yy = Number(yyStr); const mm = Number(mmStr);
+          if (Number.isFinite(yy) && Number.isFinite(mm)) {
+            const prevYY = mm === 1 ? yy - 1 : yy;
+            const prevMM = mm === 1 ? 12 : mm - 1;
+            const startDay = diaCorte + 1;
+            cycleStart = `${prevYY}-${String(prevMM).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
+            cycleEnd = `${yy}-${String(mm).padStart(2, "0")}-${String(diaCorte).padStart(2, "0")}`;
+            conditions.push(gte(lancamentosParceiros.dataCompra, cycleStart));
+            conditions.push(lte(lancamentosParceiros.dataCompra, cycleEnd));
+          }
+        }
+
         if (input.dataInicio) conditions.push(gte(lancamentosParceiros.dataCompra, input.dataInicio));
         if (input.dataFim) conditions.push(lte(lancamentosParceiros.dataCompra, input.dataFim));
         if (input.status) conditions.push(eq(lancamentosParceiros.status, input.status));
-        return db.select().from(lancamentosParceiros).where(and(...conditions)).orderBy(desc(lancamentosParceiros.createdAt));
+        const rows = await db.select().from(lancamentosParceiros).where(and(...conditions)).orderBy(desc(lancamentosParceiros.createdAt));
+
+        // Backfill leve: quando filtramos por ciclo, sane `competenciaDesconto`
+        // dos registros em que estiver nulo/divergente. Idempotente: só
+        // atualiza quando o valor calculado difere do valor gravado.
+        if (input.competencia && cycleStart && cycleEnd) {
+          const expected = String(input.competencia);
+          const toFix = rows.filter((r: any) => (r.competenciaDesconto ?? "") !== expected);
+          if (toFix.length > 0) {
+            const ids = toFix.map((r: any) => r.id as number);
+            try {
+              await db
+                .update(lancamentosParceiros)
+                .set({ competenciaDesconto: expected })
+                .where(inArray(lancamentosParceiros.id, ids));
+              for (const r of toFix as any[]) r.competenciaDesconto = expected;
+            } catch (e) {
+              // não falha a leitura por causa de saneamento
+              console.warn("[parceiros.lancamentos.list] backfill de competenciaDesconto falhou", e);
+            }
+          }
+        }
+
+        return rows;
       }),
 
     create: protectedProcedure

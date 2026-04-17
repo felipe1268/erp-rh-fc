@@ -34,15 +34,23 @@ export default function AprovacoesParceiros() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
 
+  const utils = trpc.useUtils();
   const { data: lancamentos, isLoading, refetch } = trpc.parceiros.lancamentos.list.useQuery(
     {
       companyId: companyId ?? 0,
-      status: filtroStatus === "todos" ? undefined : filtroStatus,
+      // status NÃO é enviado: queremos a lista completa do ciclo para alimentar
+      // os 4 cards (Pendentes/Aprovados/Rejeitados/Valor Pendente). O filtro
+      // de status é aplicado em memória abaixo, mantendo os contadores corretos.
       parceiroId: filtroParceiroId !== "todos" ? parseInt(filtroParceiroId) : undefined,
       competencia: competencia || undefined,
     },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
+
+  const invalidarTudo = () => {
+    utils.parceiros.lancamentos.list.invalidate();
+    utils.parceiros.painel.invalidate();
+  };
 
   const { data: parceirosData } = trpc.parceiros.cadastro.list.useQuery(
     { companyId: companyId ?? 0 },
@@ -50,12 +58,12 @@ export default function AprovacoesParceiros() {
   );
 
   const aprovarMutation = trpc.parceiros.lancamentos.aprovar.useMutation({
-    onSuccess: () => { toast.success("Lançamento processado com sucesso"); refetch(); setSelectedLancamento(null); setMotivoRejeicao(""); },
+    onSuccess: () => { toast.success("Lançamento processado com sucesso"); invalidarTudo(); setSelectedLancamento(null); setMotivoRejeicao(""); },
     onError: () => toast.error("Erro ao processar lançamento"),
   });
 
   const cancelarMutation = trpc.parceiros.lancamentos.cancelarAprovacao.useMutation({
-    onSuccess: () => { toast.success("Status cancelado - lançamento voltou para pendente"); refetch(); setCancelarLancamento(null); setComentarioCancelar(""); },
+    onSuccess: () => { toast.success("Status cancelado - lançamento voltou para pendente"); invalidarTudo(); setCancelarLancamento(null); setComentarioCancelar(""); },
     onError: () => toast.error("Erro ao cancelar status"),
   });
 
@@ -64,6 +72,9 @@ export default function AprovacoesParceiros() {
   const lancamentosFiltrados = useMemo(() => {
     if (!lancamentos) return [];
     let filtered = lancamentos as any[];
+    if (filtroStatus !== "todos") {
+      filtered = filtered.filter((l: any) => l.status === filtroStatus);
+    }
     if (search) {
       filtered = filtered.filter((l: any) =>
         l.employeeNome?.toLowerCase().includes(search.toLowerCase()) ||
@@ -71,7 +82,7 @@ export default function AprovacoesParceiros() {
       );
     }
     return filtered;
-  }, [lancamentos, search]);
+  }, [lancamentos, search, filtroStatus]);
 
   const getParceiroNome = (parceiroId: number) => {
     const p = parceiros.find((p: any) => p.id === parceiroId);
