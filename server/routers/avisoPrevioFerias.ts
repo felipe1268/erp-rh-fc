@@ -190,6 +190,7 @@ export const avisoPrevioFeriasRouter = router({
           acrescimosAcerto: terminationNotices.acrescimosAcerto,
           acrescimosAcertoDesc: terminationNotices.acrescimosAcertoDesc,
           novoEmpregoAtivo: terminationNotices.novoEmpregoAtivo,
+          descontarAvisoNaoCumprido: terminationNotices.descontarAvisoNaoCumprido,
           novoEmpregoComunicadoEm: terminationNotices.novoEmpregoComunicadoEm,
           novoEmpregoCartaUrl: terminationNotices.novoEmpregoCartaUrl,
           motivoCancelamento: terminationNotices.motivoCancelamento,
@@ -262,6 +263,7 @@ export const avisoPrevioFeriasRouter = router({
                 vrDiario: 0,
                 diasTrabalhadosMes,
                 periodosVencidosOverride: periodosVencidosRealList,
+                descontarAvisoNaoCumprido: !!(r as any).descontarAvisoNaoCumprido,
               });
               valorRecalculado = previsao.total;
             }
@@ -351,6 +353,7 @@ export const avisoPrevioFeriasRouter = router({
               periodosVencidosOverride: periodosVencidosRealById,
               mediaInsalubridade: parseFloat(String((row as any).mediaInsalubridade || '0').replace(',', '.')) || 0,
               mediaHorasExtras: parseFloat(String((row as any).mediaHorasExtras || '0').replace(',', '.')) || 0,
+              descontarAvisoNaoCumprido: !!(row as any).descontarAvisoNaoCumprido,
             });
 
             // Súmula 276: zerar aviso prévio indenizado e recalcular data limite
@@ -416,6 +419,7 @@ export const avisoPrevioFeriasRouter = router({
         tipo: z.string(),
         dataDesligamento: z.string(), // último dia trabalhado (obrigatório)
         diasTrabalhadosOverride: z.number().optional(),
+        descontarAvisoNaoCumprido: z.boolean().optional(),
       }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
@@ -581,6 +585,7 @@ export const avisoPrevioFeriasRouter = router({
           vrDiario,
           diasTrabalhadosMes,
           periodosVencidosOverride: periodosVencidosReal,
+          descontarAvisoNaoCumprido: input.descontarAvisoNaoCumprido,
         });
         
         // Total líquido = verbas - descontos
@@ -930,6 +935,7 @@ export const avisoPrevioFeriasRouter = router({
         observacoes: z.string().optional(),
         vrDiario: z.number().optional(),
         diasTrabalhados: z.number().optional(),
+        descontarAvisoNaoCumprido: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
@@ -986,9 +992,11 @@ export const avisoPrevioFeriasRouter = router({
           vrDiario: input.vrDiario ?? 0,
           diasTrabalhadosMes,
           periodosVencidosOverride: periodosVencidosRealCreate,
+          descontarAvisoNaoCumprido: input.descontarAvisoNaoCumprido,
         });
         
         const [result] = await db.insert(terminationNotices).values({
+          descontarAvisoNaoCumprido: input.descontarAvisoNaoCumprido ? 1 : 0,
           companyId: input.companyId,
           employeeId: input.employeeId,
           tipo: input.tipo,
@@ -1057,6 +1065,7 @@ export const avisoPrevioFeriasRouter = router({
         observacoes: z.string().optional(),
         diasTrabalhados: z.number().optional(),
         recalcular: z.boolean().optional(),
+        descontarAvisoNaoCumprido: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
@@ -1125,6 +1134,9 @@ export const avisoPrevioFeriasRouter = router({
             periodosVencidosRealUpd = Number(vpUpd[0]?.total ?? 0);
           } catch { /* fallback */ }
 
+          const descontarAvisoFlag = input.descontarAvisoNaoCumprido !== undefined
+            ? input.descontarAvisoNaoCumprido
+            : !!aviso.descontarAvisoNaoCumprido;
           const previsao = calcularRescisaoCompleta({
             salarioBase,
             dataAdmissao,
@@ -1134,6 +1146,7 @@ export const avisoPrevioFeriasRouter = router({
             vrDiario: 0,
             diasTrabalhadosMes,
             periodosVencidosOverride: periodosVencidosRealUpd,
+            descontarAvisoNaoCumprido: descontarAvisoFlag,
           });
 
           updateData.tipo = tipo;
@@ -1144,6 +1157,9 @@ export const avisoPrevioFeriasRouter = router({
           updateData.salarioBase = salarioBase.toFixed(2);
           updateData.previsaoRescisao = JSON.stringify(previsao);
           updateData.valorEstimadoTotal = previsao.total;
+          updateData.descontarAvisoNaoCumprido = descontarAvisoFlag ? 1 : 0;
+        } else if (input.descontarAvisoNaoCumprido !== undefined) {
+          updateData.descontarAvisoNaoCumprido = input.descontarAvisoNaoCumprido ? 1 : 0;
         }
 
         await db.update(terminationNotices).set(updateData).where(eq(terminationNotices.id, id));
@@ -1226,6 +1242,7 @@ export const avisoPrevioFeriasRouter = router({
               vrDiario: 0,
               diasTrabalhadosMes,
               periodosVencidosOverride: periodosVencidosRealRec,
+              descontarAvisoNaoCumprido: !!(aviso as any).descontarAvisoNaoCumprido,
             });
 
             await db.update(terminationNotices).set({

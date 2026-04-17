@@ -263,7 +263,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const [calculoLoading, setCalculoLoading] = useState(false);
   const calcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const executarCalculo = useCallback(async (empId: number, tipo: string, dataDeslig: string, diasOverride?: string) => {
+  const executarCalculo = useCallback(async (empId: number, tipo: string, dataDeslig: string, diasOverride?: string, descontarAviso?: boolean) => {
     setCalculoLoading(true);
     try {
       const result = await (utils as any).avisoPrevio.avisoPrevio.calcular.fetch({
@@ -271,6 +271,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
         tipo,
         dataDesligamento: dataDeslig,
         diasTrabalhadosOverride: diasOverride ? Number(diasOverride) : undefined,
+        descontarAvisoNaoCumprido: descontarAviso,
       });
       setCalculoPreview(result);
     } catch (e: any) {
@@ -290,10 +291,10 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     }
     // Debounce de 500ms para evitar chamadas excessivas
     calcTimerRef.current = setTimeout(() => {
-      executarCalculo(form.employeeId, form.tipo, form.dataDesligamento, form.diasTrabalhadosOverride);
+      executarCalculo(form.employeeId, form.tipo, form.dataDesligamento, form.diasTrabalhadosOverride, form.descontarAvisoNaoCumprido);
     }, 500);
     return () => { if (calcTimerRef.current) clearTimeout(calcTimerRef.current); };
-  }, [form.employeeId, form.tipo, form.dataDesligamento, form.diasTrabalhadosOverride, executarCalculo]);
+  }, [form.employeeId, form.tipo, form.dataDesligamento, form.diasTrabalhadosOverride, form.descontarAvisoNaoCumprido, executarCalculo]);
 
   // Filtered list
   const filtered = useMemo(() => {
@@ -365,6 +366,8 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
         reducaoJornada: isPedidoDemissao ? "nenhuma" : (form.reducaoJornada || "nenhuma"),
         observacoes: form.observacoes,
         diasTrabalhados: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
+        descontarAvisoNaoCumprido: !!form.descontarAvisoNaoCumprido,
+        recalcular: true,
       });
       setShowDialog(false);
       setEditingItem(null);
@@ -378,6 +381,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
         reducaoJornada: isPedidoDemissao ? "nenhuma" : (form.reducaoJornada || "nenhuma"),
         observacoes: form.observacoes,
         diasTrabalhados: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
+        descontarAvisoNaoCumprido: !!form.descontarAvisoNaoCumprido,
       });
     }
   };
@@ -396,6 +400,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
       reducaoJornada: item.reducaoJornada || "nenhuma",
       observacoes: item.observacoes || "",
       diasTrabalhadosOverride: "",
+      descontarAvisoNaoCumprido: !!item.descontarAvisoNaoCumprido,
     });
     setCalculoPreview(null);
     setShowDialog(true);
@@ -909,8 +914,10 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                       <span className="text-xs text-slate-400">Cumprimento do Aviso</span>
                       {selectedItem.tipo === 'empregado_trabalhado' ? (
                         <p className="font-medium text-blue-600">Cumprindo os 30 dias</p>
+                      ) : selectedItem.descontarAvisoNaoCumprido ? (
+                        <p className="font-medium text-red-600">Não cumpriu — desconto APLICADO (Art. 487 §2º)</p>
                       ) : (
-                        <p className="font-medium text-red-600">Não cumpriu — desconto aplicável (Art. 487 §2º)</p>
+                        <p className="font-medium text-amber-700">Não cumpriu — desconto NÃO aplicado (decisão da empresa)</p>
                       )}
                     </div>
                     <div>
@@ -1120,6 +1127,14 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                         </div>
                       )}
                     </div>
+                    {parseFloat(prev.descontoAvisoNaoCumprido || '0') > 0 && (
+                      <div className="flex justify-between py-1 mt-2 px-2 bg-red-50 border border-red-200 rounded">
+                        <span className="text-red-600 text-sm">
+                          <strong>(–)</strong> Desconto Aviso não cumprido (Art. 487 §2º — 30 dias):
+                        </span>
+                        <span className="font-semibold text-red-700">– {formatMoeda(prev.descontoAvisoNaoCumprido)}</span>
+                      </div>
+                    )}
                     <div className="border-t-2 border-green-300 mt-3 pt-3 flex justify-between text-lg font-bold text-green-700">
                       <span>TOTAL RESCISÃO:</span>
                       <span>{formatMoeda(prev.total)}</span>
@@ -1592,9 +1607,25 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                       </Select>
                     )}
                     {isPedidoDemissao && form.tipo === 'empregado_indenizado' && (
-                      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
-                        <strong>Art. 487 §2º CLT:</strong> Se o empregado não cumprir o aviso prévio, o empregador tem o direito de descontar os salários correspondentes ao prazo de 30 dias do acerto rescisório.
-                      </div>
+                      <>
+                        <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+                          <strong>Art. 487 §2º CLT:</strong> Se o empregado não cumprir o aviso prévio, o empregador tem o direito de descontar os salários correspondentes ao prazo de 30 dias do acerto rescisório.
+                        </div>
+                        <div className="mt-2 p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-start justify-between gap-3">
+                          <div className="text-xs text-amber-900 flex-1">
+                            <p className="font-semibold mb-0.5">A empresa irá aplicar o desconto do aviso?</p>
+                            <p className="text-[11px] text-amber-800">
+                              {form.descontarAvisoNaoCumprido
+                                ? "SIM — será descontado 1 salário cheio (30 dias) do acerto rescisório."
+                                : "NÃO — empresa abre mão do desconto. O acerto será calculado sem dedução do aviso."}
+                            </p>
+                          </div>
+                          <Switch
+                            checked={!!form.descontarAvisoNaoCumprido}
+                            onCheckedChange={(v) => { setForm({ ...form, descontarAvisoNaoCumprido: v }); }}
+                          />
+                        </div>
+                      </>
                     )}
                     {isPedidoDemissao && form.tipo === 'empregado_trabalhado' && (
                       <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
@@ -1897,6 +1928,16 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           </div>
                         )}
                       </div>
+
+                      {/* Desconto Aviso Não Cumprido (Art. 487 §2º) */}
+                      {parseFloat(calculoPreview.previsaoRescisao.descontoAvisoNaoCumprido || '0') > 0 && (
+                        <div className="flex justify-between py-2 mt-2 px-2 bg-red-50 border border-red-200 rounded">
+                          <span className="text-sm text-red-700">
+                            <strong>(–)</strong> Desconto Aviso não cumprido (Art. 487 §2º — 30 dias)
+                          </span>
+                          <span className="font-semibold text-sm text-red-700">– {formatMoeda(calculoPreview.previsaoRescisao.descontoAvisoNaoCumprido)}</span>
+                        </div>
+                      )}
 
                       {/* Total Verbas */}
                       <div className="mt-4 pt-3 border-t-2 border-green-300 flex justify-between items-center">

@@ -120,8 +120,13 @@ export function calcularRescisaoCompleta(params: {
   periodosVencidosOverride?: number;
   mediaInsalubridade?: number;
   mediaHorasExtras?: number;
+  /** Art. 487 §2º — quando empregado pede demissão e NÃO cumpre o aviso, o
+   * empregador pode descontar do acerto o valor de até 30 dias de salário.
+   * Se true, aplica o desconto. Default: false (empresa abre mão do desconto). */
+  descontarAvisoNaoCumprido?: boolean;
 }) {
   const { salarioBase, dataAdmissao, dataDesligamento, tipo, vrDiario, diasTrabalhadosMes } = params;
+  const descontarAvisoNaoCumprido = !!params.descontarAvisoNaoCumprido;
   const mediaInsalubridade = params.mediaInsalubridade || 0;
   const mediaHorasExtras = params.mediaHorasExtras || 0;
   const totalMediasAdicionais = mediaInsalubridade + mediaHorasExtras;
@@ -179,7 +184,13 @@ export function calcularRescisaoCompleta(params: {
   // 8. Multa 40% FGTS
   const multaFGTS = tipo.includes('empregador') ? fgtsEstimado * 0.4 : 0;
 
-  const total = saldoSalario + totalFerias + feriasVencidas + decimoTerceiroProporcional + avisoPrevioIndenizado + vrProporcional + multaFGTS;
+  // 9. Desconto Art. 487 §2º CLT — empregado pediu demissão e não cumpriu o aviso.
+  // Empregador pode descontar do acerto o valor do aviso não cumprido (1 salário cheio).
+  // Aplicado apenas se a empresa optar (descontarAvisoNaoCumprido=true) e tipo='empregado_indenizado'.
+  const podeDescontarAviso = tipo === 'empregado_indenizado' && descontarAvisoNaoCumprido;
+  const descontoAvisoNaoCumprido = podeDescontarAviso ? salarioBase : 0;
+
+  const total = saldoSalario + totalFerias + feriasVencidas + decimoTerceiroProporcional + avisoPrevioIndenizado + vrProporcional + multaFGTS - descontoAvisoNaoCumprido;
 
   return {
     salarioBase: salarioBase.toFixed(2),
@@ -204,6 +215,8 @@ export function calcularRescisaoCompleta(params: {
     vrDiario: vrDiario.toFixed(2),
     fgtsEstimado: fgtsEstimado.toFixed(2),
     multaFGTS: multaFGTS.toFixed(2),
+    descontoAvisoNaoCumprido: descontoAvisoNaoCumprido.toFixed(2),
+    descontarAvisoNaoCumprido: podeDescontarAviso,
     total: total.toFixed(2),
     mesesTotais,
     dataRefCalculo: dataSaida,
