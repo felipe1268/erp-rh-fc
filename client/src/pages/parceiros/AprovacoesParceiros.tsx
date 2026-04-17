@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
   CheckCircle, XCircle, AlertTriangle, Search, Clock, Eye,
@@ -289,10 +290,20 @@ export default function AprovacoesParceiros() {
             <p>Nenhum lançamento encontrado</p>
           </div>
         ) : (
+          <TooltipProvider delayDuration={150}>
           <div className="space-y-3">
-            {lancamentosFiltrados.map((lancamento: any) => (
+            {lancamentosFiltrados.map((lancamento: any) => {
+              const foraDoCiclo = !!cicloInfo?.cycleStart && !!cicloInfo?.cycleEnd
+                && !dataDentroDoCiclo(lancamento?.dataCompra, cicloInfo.cycleStart, cicloInfo.cycleEnd);
+              const cycleLabel = cicloInfo?.cycleStart && cicloInfo?.cycleEnd
+                ? `${formatIsoBR(cicloInfo.cycleStart)} a ${formatIsoBR(cicloInfo.cycleEnd)}`
+                : formatCompetenciaLabel(competencia);
+              return (
               <div key={lancamento.id}
+                data-fora-ciclo={foraDoCiclo ? "true" : undefined}
                 className={`bg-card border rounded-lg p-4 transition-all hover:shadow-md ${
+                  foraDoCiclo ? "ring-1 ring-amber-300 bg-amber-50/40 " : ""
+                }${
                   lancamento.status === "pendente" ? "border-l-4 border-l-yellow-400" :
                   lancamento.status === "aprovado" ? "border-l-4 border-l-green-400" :
                   "border-l-4 border-l-red-400"
@@ -307,13 +318,32 @@ export default function AprovacoesParceiros() {
                       } className={`text-xs ${lancamento.status === "aprovado" ? "bg-green-100 text-green-700 border-green-200" : ""}`}>
                         {lancamento.status === "pendente" ? "Pendente" : lancamento.status === "aprovado" ? "Aprovado" : "Rejeitado"}
                       </Badge>
+                      {foraDoCiclo && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge
+                              variant="outline"
+                              className="text-xs border-amber-300 bg-amber-100 text-amber-800 flex items-center gap-1 cursor-help"
+                              data-testid={`badge-fora-ciclo-${lancamento.id}`}
+                            >
+                              <AlertTriangle className="w-3 h-3" /> Fora do ciclo
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            <p className="text-xs">
+                              Data da compra ({lancamento.dataCompra ? new Date(lancamento.dataCompra).toLocaleDateString("pt-BR") : ""})
+                              {" "}não pertence ao ciclo de {formatCompetenciaLabel(competencia)} ({cycleLabel}).
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                       <span className="text-lg font-bold text-purple-600">{formatCurrency(lancamento.valor)}</span>
                     </div>
                     <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Store className="w-3.5 h-3.5" /> {getParceiroNome(lancamento.parceiroId)}
                       </span>
-                      <span className="flex items-center gap-1">
+                      <span className={`flex items-center gap-1 ${foraDoCiclo ? "text-amber-700 font-medium" : ""}`}>
                         <Calendar className="w-3.5 h-3.5" /> {lancamento.dataCompra ? new Date(lancamento.dataCompra).toLocaleDateString("pt-BR") : ""}
                       </span>
                       {lancamento.competenciaDesconto && (
@@ -376,8 +406,10 @@ export default function AprovacoesParceiros() {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
+          </TooltipProvider>
         )}
 
         {/* Rejeição Dialog */}
