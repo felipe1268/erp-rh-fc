@@ -298,7 +298,7 @@ async function startServer() {
         // (contado pelos campos entrada1..saida3), marcamos a
         // inconsistência como "ajustado" automaticamente.
         try {
-          const r2 = await sql.unsafe(`
+          const r2 = await db.execute(sql`
             WITH curr AS (
               SELECT ti.id AS inc_id,
                 (CASE WHEN COALESCE(tr.entrada1,'')<>'' THEN 1 ELSE 0 END
