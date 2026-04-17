@@ -726,14 +726,12 @@ function processRecords(
         });
       }
 
-      if (isMissingPunch && !isOddPunches) {
-        inconsistencies.push({
-          companyId, employeeId: emp.id, obraId, mesReferencia, data,
-          tipoInconsistencia: "falta_batida" as const,
-          descricao: `Apenas ${filtered.length} batida(s) - esperado 4 (entrada, saída intervalo, retorno, saída)`,
-          status: "pendente" as const,
-        });
-      }
+      // Regra (Rev. 1229): NÃO gerar inconsistência "falta_batida" para
+      // pares de batidas (2). O funcionário pode legitimamente ter
+      // trabalhado meio período. Apenas batidas ímpares são tratadas como
+      // inconsistência. A variável isMissingPunch fica disponível caso
+      // futuramente queiramos um aviso visual sem bloqueio.
+      void isMissingPunch;
     }
   }
 
@@ -3542,15 +3540,8 @@ export const fechamentoPontoRouter = router({
             descricao: `${numBatidas} batida(s) registrada(s) - número ímpar indica falta de entrada ou saída`,
             status: "pendente" as const,
           });
-        } else if (numBatidas < 4 && numBatidas > 0) {
-          newInconsistencies.push({
-            companyId: input.companyId, employeeId: input.employeeId, obraId: rec.obraId,
-            mesReferencia: rec.mesReferencia, data: rec.data,
-            tipoInconsistencia: "falta_batida" as const,
-            descricao: `Apenas ${numBatidas} batida(s) - esperado 4 (entrada, saída intervalo, retorno, saída)`,
-            status: "pendente" as const,
-          });
         }
+        // Rev. 1229: 2 batidas pares são consideradas válidas (meio período).
       }
 
       // Antes de inserir: remover registros DIXI existentes para os mesmos (employeeId, obraId, data)
