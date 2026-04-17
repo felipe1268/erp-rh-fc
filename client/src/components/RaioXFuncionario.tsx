@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
+import { formatCPF, formatMoeda as _formatMoeda, fmtNum } from "@/lib/formatters";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import { nowBrasilia, todayBrasilia } from "@/lib/dateUtils";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -37,7 +38,7 @@ function parseBRNumber(val: string | null | undefined): number {
   return parseFloat(s) || 0;
 }
 
-function formatSalario(val: string | null | undefined): string {
+function _formatSalario(val: string | null | undefined): string {
   if (!val) return "-";
   const num = parseBRNumber(val);
   if (isNaN(num) || num === 0) return "-";
@@ -115,6 +116,18 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const { selectedCompany } = useCompany();
+  const { isSensitiveHidden } = usePermissions();
+  // LGPD: ocultar valores monetários para usuários sem permissão de salários (RH)
+  const hideSalary =
+    isSensitiveHidden("rh-dp", "salarios") ||
+    isSensitiveHidden("financeiro", "salarios") ||
+    isSensitiveHidden("juridico", "salarios") ||
+    isSensitiveHidden("juridico-trabalhista", "salarios");
+  const SALARY_MASK = "•••••";
+  const formatSalario = (val: string | null | undefined): string =>
+    hideSalary ? SALARY_MASK : _formatSalario(val);
+  const formatMoeda = (val: any): string =>
+    hideSalary ? SALARY_MASK : _formatMoeda(val);
   const [activeTab, setActiveTab] = useState("timeline");
   const { data: raioX, isLoading } = trpc.docs.raioX.useQuery(
     { employeeId: employeeId! },
@@ -377,7 +390,10 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
       html += `<div class="section"><div class="section-title">\u{1F4C8} Hist\u00F3rico Funcional (${historicoFuncional.length})</div><table><thead><tr><th>Data</th><th>Tipo</th><th>Valor Anterior</th><th>Valor Novo</th><th>Descri\u00E7\u00E3o</th></tr></thead><tbody>`;
       const tipoLabel: Record<string, string> = { Admissao: "Admiss\u00E3o", Promocao: "Promo\u00E7\u00E3o", Transferencia: "Transfer\u00EAncia", Mudanca_Funcao: "Mudan\u00E7a de Fun\u00E7\u00E3o", Mudanca_Setor: "Mudan\u00E7a de Setor", Mudanca_Salario: "Altera\u00E7\u00E3o Salarial", Afastamento: "Afastamento", Retorno: "Retorno", Ferias: "F\u00E9rias", Desligamento: "Desligamento", Outros: "Outros" };
       historicoFuncional.forEach((h: any) => {
-        html += `<tr><td>${formatDate(h.dataEvento)}</td><td><span class="badge badge-blue">${tipoLabel[h.tipo] || h.tipo}</span></td><td>${h.valorAnterior || "-"}</td><td style="font-weight:600">${h.valorNovo || "-"}</td><td>${h.descricao || "-"}</td></tr>`;
+        const _maskHist = hideSalary && h.tipo === "Mudanca_Salario";
+        const _vAnt = _maskHist ? SALARY_MASK : (h.valorAnterior || "-");
+        const _vNov = _maskHist ? SALARY_MASK : (h.valorNovo || "-");
+        html += `<tr><td>${formatDate(h.dataEvento)}</td><td><span class="badge badge-blue">${tipoLabel[h.tipo] || h.tipo}</span></td><td>${_vAnt}</td><td style="font-weight:600">${_vNov}</td><td>${h.descricao || "-"}</td></tr>`;
       });
       html += `</tbody></table></div>`;
     }
@@ -1462,7 +1478,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         </div>
                         <p className="text-xs text-red-600">
                           Este colaborador possui {((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').length} desconto(s) de EPI pendente(s) de validação pelo DP.
-                          Valor total: {((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          Valor total: {hideSalary ? SALARY_MASK : ((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
                       </div>
                     )}
@@ -1499,7 +1515,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                 <td className="p-3">{formatDate(e.dataDevolucao)}</td>
                                 <td className="p-3">
                                   <span className={isMauUso ? 'text-red-600 font-semibold' : ''}>{e.motivo || "Entrega regular"}</span>
-                                  {isMauUso && e.valorCobranca && <span className="ml-1 text-xs text-red-500">({parseFloat(e.valorCobranca).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</span>}
+                                  {isMauUso && e.valorCobranca && <span className="ml-1 text-xs text-red-500">({hideSalary ? SALARY_MASK : parseFloat(e.valorCobranca).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</span>}
                                 </td>
                                 <td className="p-3 text-center">
                                   {hasLink ? (
@@ -1536,17 +1552,17 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
                           <p className="text-2xl font-bold text-amber-700">{fmtNum(pendentes.length)}</p>
                           <p className="text-xs text-amber-600 font-medium">Pendentes</p>
-                          <p className="text-xs text-amber-500 mt-1">{pendentes.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                          <p className="text-xs text-amber-500 mt-1">{hideSalary ? SALARY_MASK : pendentes.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                           <p className="text-2xl font-bold text-green-700">{fmtNum(confirmados.length)}</p>
                           <p className="text-xs text-green-600 font-medium">Confirmados</p>
-                          <p className="text-xs text-green-500 mt-1">{confirmados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                          <p className="text-xs text-green-500 mt-1">{hideSalary ? SALARY_MASK : confirmados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
                           <p className="text-2xl font-bold text-gray-500">{fmtNum(cancelados.length)}</p>
                           <p className="text-xs text-gray-500 font-medium">Cancelados</p>
-                          <p className="text-xs text-gray-400 mt-1">{cancelados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                          <p className="text-xs text-gray-400 mt-1">{hideSalary ? SALARY_MASK : cancelados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
                       </div>
                       {/* Tabela */}
@@ -1568,8 +1584,8 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                 <td className="p-3 font-medium text-xs">{a.epiNome || "-"}{a.ca ? ` (CA: ${a.ca})` : ''}</td>
                                 <td className="p-3 text-xs">{motivoLabel(a.motivoCobranca)}</td>
                                 <td className="p-3 text-right font-mono text-xs">{a.quantidade}</td>
-                                <td className="p-3 text-right font-mono text-xs">{parseFloat(a.valorUnitario || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                <td className={`p-3 text-right font-mono font-bold ${a.status === 'cancelado' ? 'text-gray-400 line-through' : 'text-red-600'}`}>{parseFloat(a.valorTotal || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                <td className="p-3 text-right font-mono text-xs">{hideSalary ? SALARY_MASK : parseFloat(a.valorUnitario || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                <td className={`p-3 text-right font-mono font-bold ${a.status === 'cancelado' ? 'text-gray-400 line-through' : 'text-red-600'}`}>{hideSalary ? SALARY_MASK : parseFloat(a.valorTotal || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                                 <td className="p-3 text-xs">{a.mesReferencia || "-"}</td>
                                 <td className="p-3 text-center">
                                   <Badge variant={a.status === 'pendente' ? 'secondary' : a.status === 'confirmado' ? 'destructive' : 'outline'}
@@ -1582,7 +1598,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                     <div className="flex items-center justify-center gap-1">
                                       <button
                                         onClick={() => {
-                                          if (confirm('Confirmar desconto de ' + parseFloat(a.valorTotal || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) + ' na folha do colaborador?')) {
+                                          if (confirm('Confirmar desconto de ' + (hideSalary ? SALARY_MASK : parseFloat(a.valorTotal || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })) + ' na folha do colaborador?')) {
                                             fetch('/api/trpc/epis.validateDiscount', {
                                               method: 'POST',
                                               headers: { 'Content-Type': 'application/json' },
@@ -1750,8 +1766,8 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                             <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30">
                               <td className="p-3 font-medium">{formatDate(h.dataEvento)}</td>
                               <td className="p-3"><Badge variant={h.tipo === "Promocao" || h.tipo === "Mudanca_Salario" ? "default" : h.tipo === "Desligamento" ? "destructive" : "secondary"}>{tipoLabel[h.tipo] || h.tipo}</Badge></td>
-                              <td className="p-3 text-muted-foreground">{h.valorAnterior || "-"}</td>
-                              <td className="p-3 font-semibold">{h.valorNovo || "-"}</td>
+                              <td className="p-3 text-muted-foreground">{hideSalary && h.tipo === "Mudanca_Salario" ? SALARY_MASK : (h.valorAnterior || "-")}</td>
+                              <td className="p-3 font-semibold">{hideSalary && h.tipo === "Mudanca_Salario" ? SALARY_MASK : (h.valorNovo || "-")}</td>
                               <td className="p-3 max-w-[300px]">{h.descricao || "-"}</td>
                             </tr>
                           );
