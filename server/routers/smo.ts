@@ -271,7 +271,47 @@ export const smoRouter = router({
       const conds: any[] = [companyFilter(obras.companyId, input), isNull(obras.deletedAt), eq(obras.isActive, 1)];
       const isMasterOrAdmin = ctx.user.role === "admin_master" || ctx.user.role === "admin";
       if (!isMasterOrAdmin) {
-        conds.push(eq(obras.responsavelId, ctx.user.id));
+        // Buscar lista de obras permitidas (allowed_obra_ids do user)
+        let allowedObraIds: number[] | null = null;
+        try {
+          const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
+          const userRows = (userResult as any).rows || (userResult as any) || [];
+          const raw = userRows[0]?.allowed_obra_ids;
+          if (raw) {
+            const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              allowedObraIds = parsed.map((x: any) => Number(x)).filter((n: any) => Number.isFinite(n));
+            }
+          }
+        } catch {}
+
+        // Também aceitar obras onde o usuário é responsável — comparando via employees.id (não users.id)
+        let responsavelObraIds: number[] = [];
+        try {
+          // user.id da tabela users vs obras.responsavelId que aponta para employees.id
+          // Ligação: employees pode ter um campo que aponta para o user (ou pelo email/nome)
+          // Estratégia simples: buscar employees com mesmo email do usuário
+          const userEmailRes = await db.execute(sql`SELECT email FROM users WHERE id = ${ctx.user.id}`);
+          const userEmailRows = (userEmailRes as any).rows || (userEmailRes as any) || [];
+          const email = userEmailRows[0]?.email;
+          if (email) {
+            const empRes = await db.execute(sql`SELECT id FROM employees WHERE LOWER(email) = LOWER(${email}) AND "deletedAt" IS NULL`);
+            const empRows = (empRes as any).rows || (empRes as any) || [];
+            const empIds = empRows.map((r: any) => Number(r.id)).filter(Number.isFinite);
+            if (empIds.length > 0) {
+              const obrasRes = await db.execute(sql`SELECT id FROM obras WHERE "responsavelId" = ANY(${empIds}) AND "deletedAt" IS NULL`);
+              const obrasRows = (obrasRes as any).rows || (obrasRes as any) || [];
+              responsavelObraIds = obrasRows.map((r: any) => Number(r.id)).filter(Number.isFinite);
+            }
+          }
+        } catch {}
+
+        const finalAllowed = new Set<number>([...(allowedObraIds ?? []), ...responsavelObraIds]);
+        if (finalAllowed.size === 0) {
+          // Sem permissões → retornar vazio
+          return [];
+        }
+        conds.push(inArray(obras.id, Array.from(finalAllowed)));
       }
       const rows = await db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo, responsavel: obras.responsavel })
         .from(obras)
