@@ -69,11 +69,14 @@ function parseBRLNum(val: string | number | null | undefined): number {
 
 type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo" | "auditoria_folha" | "aprovacoes_rh";
 
-type CampoDesconto = 'vale' | 'inss' | 'vt' | 'va' | 'faltas' | 'outros' | 'convenio';
+type CampoDesconto = 'vale' | 'inss' | 'ir' | 'faltas' | 'atrasos' | 'sindicato' | 'pensao' | 'vt' | 'convenio' | 'epi' | 'outros';
 
 const CAMPO_LABELS: Record<CampoDesconto, string> = {
-  vale: 'Vale (Adiantamento)', inss: 'INSS', vt: 'Vale-Transporte (VT)', va: 'Vale-Alimentação (VA)',
-  faltas: 'Faltas / Atrasos', outros: 'Outros (Pensão / Seguro / Aferição)', convenio: 'Convênio',
+  vale: 'Vale (Adiantamento)', inss: 'INSS', ir: 'IRRF',
+  faltas: 'Faltas', atrasos: 'Atrasos',
+  sindicato: 'Contribuição Sindical', pensao: 'Pensão Alimentícia',
+  vt: 'Vale-Transporte (VT)', convenio: 'Convênio', epi: 'EPIs',
+  outros: 'Outros (VA / Seguro Vida / Acerto Escuro)',
 };
 
 function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
@@ -3792,7 +3795,7 @@ export default function FolhaPagamento() {
                       <th className="text-left py-2.5 px-2 sticky left-0 bg-gray-50 z-10 font-semibold text-gray-700" rowSpan={2}>Funcionário</th>
                       <th className="text-left py-2.5 px-2 font-semibold text-gray-700" rowSpan={2}>Função</th>
                       <th className="text-center py-1.5 px-1 font-semibold text-green-700 border-l border-green-200 bg-green-50/50" colSpan={3}>Proventos</th>
-                      <th className="text-center py-1.5 px-1 font-semibold text-red-700 border-l border-red-200 bg-red-50/30" colSpan={8}>Descontos</th>
+                      <th className="text-center py-1.5 px-1 font-semibold text-red-700 border-l border-red-200 bg-red-50/30" colSpan={12}>Descontos</th>
                       <th className="text-center py-1.5 px-1 font-semibold text-[#1B2A4A] border-l border-blue-200 bg-blue-50/50" colSpan={2}>Resultado</th>
                     </tr>
                     <tr className="bg-gray-50/80 border-b-2 border-gray-200 text-[10px] text-gray-500 uppercase tracking-wider">
@@ -3801,11 +3804,15 @@ export default function FolhaPagamento() {
                       <th className="text-right py-1.5 px-2 bg-green-50/30 font-bold text-green-700">Total</th>
                       <th className="text-right py-1.5 px-2 border-l border-red-200 bg-orange-50/30">Vale</th>
                       <th className="text-right py-1.5 px-2 bg-red-50/20">INSS</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/20">VT</th>
-                      <th className="text-right py-1.5 px-2 bg-red-50/20">VA</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/20">IR</th>
                       <th className="text-right py-1.5 px-2 bg-red-50/20">Faltas</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/20">Atrasos</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/20">Sindicato</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/20">Pensão</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/20">VT</th>
+                      <th className="text-right py-1.5 px-2 bg-purple-50/30">Convênios</th>
+                      <th className="text-right py-1.5 px-2 bg-red-50/20">EPIs</th>
                       <th className="text-right py-1.5 px-2 bg-red-50/20">Outros</th>
-                      <th className="text-right py-1.5 px-2 bg-purple-50/30">Conv.</th>
                       <th className="text-right py-1.5 px-2 bg-red-50/30 font-bold text-red-700">Total</th>
                       <th className="text-right py-1.5 px-2 border-l border-blue-200 bg-blue-50/30 font-bold text-[#1B2A4A]">Líquido</th>
                       <th className="text-right py-1.5 px-2 bg-gray-50/50 text-[9px]">FGTS</th>
@@ -3824,28 +3831,38 @@ export default function FolhaPagamento() {
                       );
                       if (filtered.length === 0) {
                         return (
-                          <tr><td colSpan={15} className="py-6 text-center text-xs text-muted-foreground">
+                          <tr><td colSpan={19} className="py-6 text-center text-xs text-muted-foreground">
                             Nenhum funcionário encontrado com os filtros aplicados.
                           </td></tr>
                         );
                       }
                       return filtered.map((f: any, i: number) => {
                       const manuais = f.descontosManuais || {};
-                      const vtVal = f.vtValor || 0;
-                      const vaDesc = f.descontoVaTotal || 0;
-                      const pensao = f.descontoPensao || 0;
-                      const seguro = f.seguroVidaValor || 0;
-                      const acertoEsc = f.acertoEscuroValor || 0;
-                      const convenio = f.descontoConvenio || 0;
-                      const descFaltasCalc = (f.descontoFaltas || 0) + (f.descontoAtrasos || 0) + (f.descontoVrFaltas || 0) + (f.descontoVtFaltas || 0);
-                      const outrosCalc = pensao + seguro + acertoEsc;
-                      const valVale = manuais.vale != null ? Number(manuais.vale) : (f.descontoAdiantamento || 0);
-                      const valInss = manuais.inss != null ? Number(manuais.inss) : (f.descontoInss || 0);
-                      const valVt = manuais.vt != null ? Number(manuais.vt) : vtVal;
-                      const valVa = manuais.va != null ? Number(manuais.va) : vaDesc;
-                      const valFaltas = manuais.faltas != null ? Number(manuais.faltas) : descFaltasCalc;
-                      const valOutros = manuais.outros != null ? Number(manuais.outros) : outrosCalc;
-                      const valConv = manuais.convenio != null ? Number(manuais.convenio) : convenio;
+                      // Bases calculadas para 11 categorias (Rev. 1217)
+                      const calcVale = f.descontoAdiantamento || 0;
+                      const calcInss = f.descontoInss || 0;
+                      const calcIr = f.descontoIrrf || 0;
+                      const calcFaltas = (f.descontoFaltas || 0) + (f.descontoVrFaltas || 0) + (f.descontoVtFaltas || 0);
+                      const calcAtrasos = f.descontoAtrasos || 0;
+                      const calcSindicato = f.descontoSindicato || 0;
+                      const calcPensao = f.descontoPensao || 0;
+                      const calcVt = f.vtValor || 0;
+                      const calcConv = f.descontoConvenio || 0;
+                      const calcEpi = f.descontoEpi || 0;
+                      const calcOutros = (f.descontoOutros != null)
+                        ? f.descontoOutros
+                        : ((f.seguroVidaValor || 0) + (f.acertoEscuroValor || 0) + (f.descontoVaTotal || 0));
+                      const valVale = manuais.vale != null ? Number(manuais.vale) : calcVale;
+                      const valInss = manuais.inss != null ? Number(manuais.inss) : calcInss;
+                      const valIr = manuais.ir != null ? Number(manuais.ir) : calcIr;
+                      const valFaltas = manuais.faltas != null ? Number(manuais.faltas) : calcFaltas;
+                      const valAtrasos = manuais.atrasos != null ? Number(manuais.atrasos) : calcAtrasos;
+                      const valSindicato = manuais.sindicato != null ? Number(manuais.sindicato) : calcSindicato;
+                      const valPensao = manuais.pensao != null ? Number(manuais.pensao) : calcPensao;
+                      const valVt = manuais.vt != null ? Number(manuais.vt) : calcVt;
+                      const valConv = manuais.convenio != null ? Number(manuais.convenio) : calcConv;
+                      const valEpi = manuais.epi != null ? Number(manuais.epi) : calcEpi;
+                      const valOutros = manuais.outros != null ? Number(manuais.outros) : calcOutros;
                       const onSaveCell = (campo: CampoDesconto, valorNovo: number | null, motivo?: string) =>
                         editarDescontoMut.mutate({
                           companyId, mesReferencia: mesAno,
@@ -3861,11 +3878,15 @@ export default function FolhaPagamento() {
                           <td className="text-right py-2 px-2 font-semibold text-green-800">{formatBRL(f.totalProventos)}</td>
                           <DescontoCell f={f} campo="vale" valor={valVale} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="border-l border-red-100 text-orange-600 text-right" />
                           <DescontoCell f={f} campo="inss" valor={valInss} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
-                          <DescontoCell f={f} campo="vt" valor={valVt} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
-                          <DescontoCell f={f} campo="va" valor={valVa} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
+                          <DescontoCell f={f} campo="ir" valor={valIr} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
                           <DescontoCell f={f} campo="faltas" valor={valFaltas} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
-                          <DescontoCell f={f} campo="outros" valor={valOutros} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
+                          <DescontoCell f={f} campo="atrasos" valor={valAtrasos} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
+                          <DescontoCell f={f} campo="sindicato" valor={valSindicato} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
+                          <DescontoCell f={f} campo="pensao" valor={valPensao} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
+                          <DescontoCell f={f} campo="vt" valor={valVt} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
                           <DescontoCell f={f} campo="convenio" valor={valConv} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-purple-700 text-right" />
+                          <DescontoCell f={f} campo="epi" valor={valEpi} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
+                          <DescontoCell f={f} campo="outros" valor={valOutros} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
                           <td className="text-right py-2 px-2 font-semibold text-red-700">{formatBRL(f.totalDescontos)}</td>
                           <td className="text-right py-2 px-2 border-l border-blue-100 font-bold text-[#1B2A4A]">{formatBRL(f.salarioLiquido)}</td>
                           <td className="text-right py-2 px-2 text-[10px] text-muted-foreground">{formatBRL(f.descontoFgts)}</td>
@@ -3888,20 +3909,28 @@ export default function FolhaPagamento() {
                           (pagamentoResult.funcionarios || []).reduce((s: number, f: any) => s + eff(f, campo, getCalc(f)), 0);
                         const totVale = sum('vale', (f) => f.descontoAdiantamento || 0);
                         const totInss = sum('inss', (f) => f.descontoInss || 0);
+                        const totIr = sum('ir', (f) => f.descontoIrrf || 0);
+                        const totFaltas = sum('faltas', (f) => (f.descontoFaltas || 0) + (f.descontoVrFaltas || 0) + (f.descontoVtFaltas || 0));
+                        const totAtrasos = sum('atrasos', (f) => f.descontoAtrasos || 0);
+                        const totSindicato = sum('sindicato', (f) => f.descontoSindicato || 0);
+                        const totPensao = sum('pensao', (f) => f.descontoPensao || 0);
                         const totVt = sum('vt', (f) => f.vtValor || 0);
-                        const totVa = sum('va', (f) => f.descontoVaTotal || 0);
-                        const totFaltas = sum('faltas', (f) => (f.descontoFaltas || 0) + (f.descontoAtrasos || 0) + (f.descontoVrFaltas || 0) + (f.descontoVtFaltas || 0));
-                        const totOutros = sum('outros', (f) => (f.descontoPensao || 0) + (f.seguroVidaValor || 0) + (f.acertoEscuroValor || 0));
                         const totConv = sum('convenio', (f) => f.descontoConvenio || 0);
+                        const totEpi = sum('epi', (f) => f.descontoEpi || 0);
+                        const totOutros = sum('outros', (f) => (f.descontoOutros != null) ? Number(f.descontoOutros) : ((f.seguroVidaValor || 0) + (f.acertoEscuroValor || 0) + (f.descontoVaTotal || 0)));
                         return (
                           <>
                             <td className="text-right py-3 px-2 border-l border-red-200 text-orange-600">{formatBRL(totVale)}</td>
                             <td className="text-right py-3 px-2 text-red-600">{formatBRL(totInss)}</td>
-                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totVt)}</td>
-                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totVa)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totIr)}</td>
                             <td className="text-right py-3 px-2 text-red-600">{formatBRL(totFaltas)}</td>
-                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totOutros)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totAtrasos)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totSindicato)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totPensao)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totVt)}</td>
                             <td className="text-right py-3 px-2 text-purple-700">{formatBRL(totConv)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totEpi)}</td>
+                            <td className="text-right py-3 px-2 text-red-600">{formatBRL(totOutros)}</td>
                           </>
                         );
                       })()}

@@ -3106,29 +3106,45 @@ export const payrollEngineRouter = router({
 
         const descontoConvenio = convenioMap.get(emp.id) || 0;
 
-        // Valores calculados (originais) — usados como referência para overrides
+        // Rev. 1217: 11 categorias separadas de desconto, cada uma overridable.
+        // Cada categoria entra como uma coluna na UI; total = soma dessas 11.
+        // VA agora faz parte de "Outros" (junto com seguro vida, acerto escuro, outros manuais).
         const calcVale = descontoAdiantamento;
         const calcInss = inssValor;
+        const calcIr = irrfValor;
+        const calcFaltas = descontoFaltas + descontoVrFaltas + descontoVtFaltas; // sem atrasos
+        const calcAtrasos = descontoAtrasos;
+        const calcSindicato = sindicatoValor;
+        const calcPensao = descontoPensao;
         const calcVt = vtValorMensal;
-        const calcVa = descontoVaTotal;
-        const calcFaltas = descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVtFaltas;
-        const calcOutros = seguroVidaValor + acertoEscuroValor + outrosManuaisValor;
         const calcConvenio = descontoConvenio;
+        const calcEpi = descontoEpi;
+        const calcOutros = seguroVidaValor + acertoEscuroValor + outrosManuaisValor + descontoVaTotal;
 
         // Aplica overrides manuais (se mantidos)
         const ovr = overridesMap.get(emp.id);
-        const ovrManuais: any = ovr?.manuais || {};
-        const ovrHist: any = ovr?.historico || {};
+        const ovrManuais: any = { ...(ovr?.manuais || {}) };
+        const ovrHist: any = { ...(ovr?.historico || {}) };
+        // Compat legado (Rev. 1217): chave antiga 'va' agora compõe 'outros'.
+        if (ovrManuais.va != null) {
+          if (ovrManuais.outros == null) ovrManuais.outros = Number(ovrManuais.va);
+          delete ovrManuais.va;
+          if (ovrHist.va) { delete ovrHist.va; }
+        }
         const finalVale = ovrManuais.vale != null ? Number(ovrManuais.vale) : calcVale;
         const finalInss = ovrManuais.inss != null ? Number(ovrManuais.inss) : calcInss;
-        const finalVt = ovrManuais.vt != null ? Number(ovrManuais.vt) : calcVt;
-        const finalVa = ovrManuais.va != null ? Number(ovrManuais.va) : calcVa;
+        const finalIr = ovrManuais.ir != null ? Number(ovrManuais.ir) : calcIr;
         const finalFaltas = ovrManuais.faltas != null ? Number(ovrManuais.faltas) : calcFaltas;
-        const finalOutros = ovrManuais.outros != null ? Number(ovrManuais.outros) : calcOutros;
+        const finalAtrasos = ovrManuais.atrasos != null ? Number(ovrManuais.atrasos) : calcAtrasos;
+        const finalSindicato = ovrManuais.sindicato != null ? Number(ovrManuais.sindicato) : calcSindicato;
+        const finalPensao = ovrManuais.pensao != null ? Number(ovrManuais.pensao) : calcPensao;
+        const finalVt = ovrManuais.vt != null ? Number(ovrManuais.vt) : calcVt;
         const finalConvenio = ovrManuais.convenio != null ? Number(ovrManuais.convenio) : calcConvenio;
+        const finalEpi = ovrManuais.epi != null ? Number(ovrManuais.epi) : calcEpi;
+        const finalOutros = ovrManuais.outros != null ? Number(ovrManuais.outros) : calcOutros;
 
-        const totalDescontos = finalVale + finalInss + finalVt + finalVa + finalFaltas + finalOutros + finalConvenio
-                              + descontoPensao + irrfValor + sindicatoValor + descontoEpi;
+        const totalDescontos = finalVale + finalInss + finalIr + finalFaltas + finalAtrasos
+                              + finalSindicato + finalPensao + finalVt + finalConvenio + finalEpi + finalOutros;
         const salarioLiquido = totalProventos - totalDescontos;
 
         const manuaisJsonStr = Object.keys(ovrManuais).length > 0 ? JSON.stringify(ovrManuais) : null;
@@ -3136,9 +3152,9 @@ export const payrollEngineRouter = router({
 
         paymentInsertRows.push(sql`(${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis},
           ${formatMoney(salarioBruto)}, ${formatMoney(valorHE)}, ${formatMoney(totalProventos)},
-          ${formatMoney(finalVale)}, ${formatMoney(descontoFaltas)}, ${faltasQtd}, ${formatMoney(descontoAtrasos)}, ${atrasosMinutos},
-          ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(descontoPensao)}, ${formatMoney(finalInss)}, ${formatMoney(fgtsValor)}, ${formatMoney(finalOutros)},
-          ${formatMoney(finalConvenio)}, ${formatMoney(irrfValor)}, ${formatMoney(sindicatoValor)}, ${formatMoney(descontoEpi)},
+          ${formatMoney(finalVale)}, ${formatMoney(descontoFaltas)}, ${faltasQtd}, ${formatMoney(finalAtrasos)}, ${atrasosMinutos},
+          ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(finalPensao)}, ${formatMoney(finalInss)}, ${formatMoney(fgtsValor)}, ${formatMoney(finalOutros)},
+          ${formatMoney(finalConvenio)}, ${formatMoney(finalIr)}, ${formatMoney(finalSindicato)}, ${formatMoney(finalEpi)},
           ${formatMoney(totalDescontos)}, ${formatMoney(acertoEscuroValor)}, ${JSON.stringify(acertoEscuroDetalhes)}, ${formatMoney(salarioLiquido)},
           'simulado', ${dataPagamentoPrevista}, ${manuaisJsonStr}, ${histJsonStr})`);
 
@@ -3149,19 +3165,21 @@ export const payrollEngineRouter = router({
         results.push({
           employeeId: emp.id, nome: emp.nomeCompleto, funcao: emp.funcao, codigoInterno: emp.codigoInterno,
           salarioBruto, valorHE, totalProventos,
-          // Valores finais (com overrides aplicados) — usados na tabela
-          descontoAdiantamento: finalVale, descontoInss: finalInss,
-          descontoFaltas, faltasQtd, descontoAtrasos, atrasosMinutos,
-          descontoVrFaltas, descontoVtFaltas, descontoVaTotal: finalVa, descontoPensao,
+          // Valores finais (com overrides aplicados) — usados na tabela (11 categorias)
+          descontoAdiantamento: finalVale, descontoInss: finalInss, descontoIrrf: finalIr,
+          descontoFaltas, faltasQtd, descontoAtrasos: finalAtrasos, atrasosMinutos,
+          descontoVrFaltas, descontoVtFaltas, descontoVaTotal,
+          descontoPensao: finalPensao, descontoSindicato: finalSindicato, descontoEpi: finalEpi,
           descontoFgts: fgtsValor, acertoEscuroValor, descontoConvenio: finalConvenio,
-          descontoIrrf: irrfValor, descontoSindicato: sindicatoValor, descontoEpi,
           descontoOutros: finalOutros,
           totalDescontos, salarioLiquido, dataPagamentoPrevista, vaValor,
           vtValor: finalVt, vtDiario, vrValor: vrValorMensal, vrDiario, seguroVidaValor, rateioPorObra,
-          // Memorial de cálculo (valores originais antes de overrides)
+          // Memorial de cálculo (valores originais antes de overrides) — 11 chaves alinhadas com a UI
           calculadoOriginal: {
-            vale: calcVale, inss: calcInss, vt: calcVt, va: calcVa,
-            faltas: calcFaltas, outros: calcOutros, convenio: calcConvenio,
+            vale: calcVale, inss: calcInss, ir: calcIr,
+            faltas: calcFaltas, atrasos: calcAtrasos,
+            sindicato: calcSindicato, pensao: calcPensao,
+            vt: calcVt, convenio: calcConvenio, epi: calcEpi, outros: calcOutros,
           },
           memorialCalculo: {
             valorHora: parseBRL(emp.valorHora || '0'),
@@ -3293,7 +3311,7 @@ export const payrollEngineRouter = router({
       companyId: z.number(),
       mesReferencia: z.string(),
       employeeId: z.number(),
-      campo: z.enum(['vale', 'inss', 'vt', 'va', 'faltas', 'outros', 'convenio']),
+      campo: z.enum(['vale', 'inss', 'ir', 'faltas', 'atrasos', 'sindicato', 'pensao', 'vt', 'convenio', 'epi', 'outros']),
       valorNovo: z.number().nullable(), // null = reverter ao calculado
       motivo: z.string().optional(),
     }))
@@ -3325,13 +3343,6 @@ export const payrollEngineRouter = router({
       const historico = { ...(f.descontosManuaisHistorico || {}) };
       const calc = f.calculadoOriginal || {};
 
-      // Mapeamento campo → field na funcionario
-      const camposCampo: Record<string, string> = {
-        vale: 'descontoAdiantamento', inss: 'descontoInss', vt: 'vtValor',
-        va: 'descontoVaTotal', faltas: 'descontoFaltas', outros: 'acertoEscuroValor',
-        convenio: 'descontoConvenio',
-      };
-
       const userName = ctx.user?.name || ctx.user?.email || 'Sistema';
       const agora = new Date().toISOString();
 
@@ -3360,30 +3371,37 @@ export const payrollEngineRouter = router({
         }
       }
 
-      // Recalcula valores finais e total para esta linha
+      // Rev. 1217: 11 categorias separadas. Total = soma das 11.
       const finalVale = manuais.vale != null ? Number(manuais.vale) : Number(calc.vale || 0);
       const finalInss = manuais.inss != null ? Number(manuais.inss) : Number(calc.inss || 0);
-      const finalVt = manuais.vt != null ? Number(manuais.vt) : Number(calc.vt || 0);
-      const finalVa = manuais.va != null ? Number(manuais.va) : Number(calc.va || 0);
+      const finalIr = manuais.ir != null ? Number(manuais.ir) : Number(calc.ir || 0);
       const finalFaltas = manuais.faltas != null ? Number(manuais.faltas) : Number(calc.faltas || 0);
-      const finalOutros = manuais.outros != null ? Number(manuais.outros) : Number(calc.outros || 0);
+      const finalAtrasos = manuais.atrasos != null ? Number(manuais.atrasos) : Number(calc.atrasos || 0);
+      const finalSindicato = manuais.sindicato != null ? Number(manuais.sindicato) : Number(calc.sindicato || 0);
+      const finalPensao = manuais.pensao != null ? Number(manuais.pensao) : Number(calc.pensao || 0);
+      const finalVt = manuais.vt != null ? Number(manuais.vt) : Number(calc.vt || 0);
       const finalConvenio = manuais.convenio != null ? Number(manuais.convenio) : Number(calc.convenio || 0);
+      const finalEpi = manuais.epi != null ? Number(manuais.epi) : Number(calc.epi || 0);
+      const finalOutros = manuais.outros != null ? Number(manuais.outros) : Number(calc.outros || 0);
 
-      const totalDescontos = finalVale + finalInss + finalVt + finalVa + finalFaltas + finalOutros + finalConvenio;
+      const totalDescontos = finalVale + finalInss + finalIr + finalFaltas + finalAtrasos
+                            + finalSindicato + finalPensao + finalVt + finalConvenio + finalEpi + finalOutros;
       const totalProventos = Number(f.totalProventos || 0);
       const salarioLiquido = totalProventos - totalDescontos;
 
-      // Atualiza objeto funcionario no payload
+      // Atualiza objeto funcionario no payload (mantém colunas concretas em sincronia para a UI)
       funcionarios[idx] = {
         ...f,
         descontoAdiantamento: finalVale,
         descontoInss: finalInss,
+        descontoIrrf: finalIr,
+        descontoAtrasos: finalAtrasos,
+        descontoSindicato: finalSindicato,
+        descontoPensao: finalPensao,
         vtValor: finalVt,
-        descontoVaTotal: finalVa,
-        // FALTAS é exibido como descontoFaltas+descontoAtrasos+descontoVrFaltas+descontoVtFaltas;
-        // armazenamos o override em campo derivado para a UI usar quando manuais.faltas != null
         descontoConvenio: finalConvenio,
-        // OUTROS exibido como descontoPensao+seguroVidaValor+acertoEscuroValor; mesma lógica
+        descontoEpi: finalEpi,
+        descontoOutros: finalOutros,
         totalDescontos,
         salarioLiquido,
         descontosManuais: manuais,
