@@ -7680,15 +7680,34 @@ Retorne APENAS um JSON válido neste formato:
       periodoInicio: z.string().optional(),
       periodoFim: z.string().optional(),
       statusFiltro: z.string().optional(),
+      statusObra: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
 
+      const obraConditions: any[] = [
+        eq(obras.companyId, input.companyId),
+        eq(obras.isActive, 1),
+      ];
+      const so = (input.statusObra || "").toLowerCase();
+      if (so && so !== "todas") {
+        const map: Record<string, string> = {
+          ativas: "Em_Andamento",
+          em_andamento: "Em_Andamento",
+          planejamento: "Planejamento",
+          paralisadas: "Paralisada",
+          paralisada: "Paralisada",
+          concluidas: "Concluida",
+          concluida: "Concluida",
+          canceladas: "Cancelada",
+          cancelada: "Cancelada",
+        };
+        const target = map[so];
+        if (target) obraConditions.push(eq(obras.status, target));
+      }
+
       const obrasAtivas = await db.select().from(obras)
-        .where(and(
-          eq(obras.companyId, input.companyId),
-          eq(obras.isActive, 1),
-        ))
+        .where(and(...obraConditions))
         .orderBy(asc(obras.nome));
 
       const result = await Promise.all(obrasAtivas.map(async (obra) => {

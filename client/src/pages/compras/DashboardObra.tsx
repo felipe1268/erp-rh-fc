@@ -299,6 +299,7 @@ export default function DashboardObra() {
 
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("todos");
+  const [statusObra, setStatusObra] = useState<string>("ativas");
   const [periodoInicio, setPeriodoInicio] = useState("");
   const [periodoFim, setPeriodoFim] = useState("");
   const [drillDown, setDrillDown] = useState<any>(null);
@@ -309,6 +310,7 @@ export default function DashboardObra() {
       periodoInicio: periodoInicio || undefined,
       periodoFim: periodoFim || undefined,
       statusFiltro: statusFiltro !== "todos" ? statusFiltro : undefined,
+      statusObra: statusObra || undefined,
     },
     { enabled: companyId > 0 }
   );
@@ -434,24 +436,39 @@ export default function DashboardObra() {
             />
           </div>
 
+          <Select value={statusObra} onValueChange={setStatusObra}>
+            <SelectTrigger className="h-8 w-44 text-xs">
+              <Building2 className="h-3 w-3 mr-1" />
+              <SelectValue placeholder="Situação da obra" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ativas">Ativas (Em andamento)</SelectItem>
+              <SelectItem value="planejamento">Em planejamento</SelectItem>
+              <SelectItem value="paralisadas">Paralisadas</SelectItem>
+              <SelectItem value="concluidas">Concluídas</SelectItem>
+              <SelectItem value="canceladas">Canceladas</SelectItem>
+              <SelectItem value="todas">Todas as situações</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select value={statusFiltro} onValueChange={setStatusFiltro}>
             <SelectTrigger className="h-8 w-44 text-xs">
               <Filter className="h-3 w-3 mr-1" />
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder="Filtro extra" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="todos">Todas as obras</SelectItem>
+              <SelectItem value="todos">Sem filtro extra</SelectItem>
               <SelectItem value="alerta">Com alerta de saldo</SelectItem>
               <SelectItem value="com_orcamento">Com orçamento</SelectItem>
               <SelectItem value="sem_orcamento">Sem orçamento</SelectItem>
             </SelectContent>
           </Select>
 
-          {(busca || periodoInicio || periodoFim || statusFiltro !== "todos") && (
+          {(busca || periodoInicio || periodoFim || statusFiltro !== "todos" || statusObra !== "ativas") && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { setBusca(""); setPeriodoInicio(""); setPeriodoFim(""); setStatusFiltro("todos"); }}
+              onClick={() => { setBusca(""); setPeriodoInicio(""); setPeriodoFim(""); setStatusFiltro("todos"); setStatusObra("ativas"); }}
               className="h-8 text-xs text-gray-500"
             >
               <X className="h-3 w-3 mr-1" /> Limpar
