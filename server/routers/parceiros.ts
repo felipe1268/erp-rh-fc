@@ -512,9 +512,47 @@ export const parceirosRouter = router({
         .where(and(companyFilter(parceirosConveniados.companyId, input), isNull(parceirosConveniados.deletedAt)));
 
       const now = new Date();
-      const competenciaAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const yy = now.getFullYear();
+      const mm = now.getMonth() + 1;
+      const competenciaAtual = `${yy}-${String(mm).padStart(2, "0")}`;
+
+      // Lê dia de corte do ponto da empresa (default 15) para calcular o
+      // ciclo da folha do mês corrente. Mesma regra usada em
+      // `lancamentos.list` e em Aprovações RH (task #30): janela vai do dia
+      // seguinte ao corte do mês anterior até o dia de corte do mês atual.
+      let diaCorte = 15;
+      try {
+        if (input.companyId && input.companyId > 0) {
+          const rows = await db
+            .select({ valor: systemCriteria.valor })
+            .from(systemCriteria)
+            .where(and(
+              eq(systemCriteria.companyId, input.companyId),
+              eq(systemCriteria.chave, "ponto_dia_corte"),
+            ));
+          const v = rows[0]?.valor;
+          const parsed = v != null ? parseInt(String(v), 10) : NaN;
+          if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 28) diaCorte = parsed;
+        }
+      } catch (e) {
+        console.warn("[parceiros.painel] falha ao ler ponto_dia_corte; usando default 15", e);
+      }
+      const prevYY = mm === 1 ? yy - 1 : yy;
+      const prevMM = mm === 1 ? 12 : mm - 1;
+      const startDay = diaCorte + 1;
+      const cycleStart = `${prevYY}-${String(prevMM).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
+      const cycleEnd   = `${yy}-${String(mm).padStart(2, "0")}-${String(diaCorte).padStart(2, "0")}`;
+
+      // Conta por ciclo (dataCompra entre cycleStart e cycleEnd) — mesma
+      // regra usada por `lancamentos.list` e na tela de Aprovações RH.
+      // Assim os contadores batem com aquela tela e cobrem lançamentos
+      // legados/com `competenciaDesconto` nulo ou divergente.
       const lancamentos = await db.select().from(lancamentosParceiros)
-        .where(and(companyFilter(lancamentosParceiros.companyId, input), eq(lancamentosParceiros.competenciaDesconto, competenciaAtual)));
+        .where(and(
+          companyFilter(lancamentosParceiros.companyId, input),
+          gte(lancamentosParceiros.dataCompra, cycleStart),
+          lte(lancamentosParceiros.dataCompra, cycleEnd),
+        ));
 
       const pagamentos = await db.select().from(pagamentosParceiros)
         .where(and(companyFilter(pagamentosParceiros.companyId, input), eq(pagamentosParceiros.competencia, competenciaAtual)));
