@@ -3588,9 +3588,9 @@ Retorne APENAS um JSON válido neste formato:
           }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
         }
         const orcIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
-        let metas: { id: number; metaUnitTotal: string | null }[] = [];
+        let metas: { id: number; metaUnitTotal: string | null; unidade: string | null }[] = [];
         if (orcIds.length > 0) {
-          metas = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal })
+          metas = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal, unidade: orcamentoItens.unidade })
             .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIds));
         }
         const scToOrc: Record<number, number> = {};
@@ -3602,9 +3602,21 @@ Retorne APENAS um JSON válido neste formato:
           if (s.insumoCodigo) scToInsumoCodigo[s.id] = s.insumoCodigo;
         }
         const orcToMetaUnit: Record<number, number> = {};
-        for (const m of metas) orcToMetaUnit[m.id] = n(m.metaUnitTotal);
+        const orcToUnidade: Record<number, string> = {};
+        for (const m of metas) {
+          orcToMetaUnit[m.id] = n(m.metaUnitTotal);
+          if (m.unidade) orcToUnidade[m.id] = String(m.unidade).toLowerCase().trim();
+        }
+        // Contagem: quantos itens de SC apontam para o mesmo orcamento_item_id?
+        // Se >1 → metaUnitTotal NÃO representa preço unitário do insumo (é verba agregada)
+        const orcToScCount: Record<number, number> = {};
+        for (const s of scItens) {
+          if (s.orcamentoItemId) orcToScCount[s.orcamentoItemId] = (orcToScCount[s.orcamentoItemId] ?? 0) + 1;
+        }
+        // Unidades agregadas — não usar metaUnitTotal como preço unitário do insumo
+        const UNID_AGREGADA = new Set(["vb", "verba", "gl", "global", "cj", "conjunto", "und. global"]);
 
-        const needInsumoLookup = scItens.filter(s => !s.orcamentoItemId && n(s.precoMeta) <= 0 && s.insumoCodigo);
+        const needInsumoLookup = scItens.filter(s => n(s.precoMeta) <= 0 && s.insumoCodigo);
         const insumoPricePerObra: Record<number, Record<string, number>> = {};
         if (needInsumoLookup.length > 0) {
           const obraIds = [...new Set(ocs.map(o => o.obraId).filter(Boolean) as number[])];
@@ -3642,13 +3654,25 @@ Retorne APENAS um JSON válido neste formato:
         for (const it of ocItens) {
           const ocId = it.ordemId;
           if (!it.solicitacaoItemId) continue;
-          const orcId = scToOrc[it.solicitacaoItemId];
-          let metaUnit = orcId ? (orcToMetaUnit[orcId] ?? 0) : 0;
-          if (metaUnit === 0) metaUnit = scToPrecoMeta[it.solicitacaoItemId] ?? 0;
+          // PRIORIDADE 1: precoMeta da própria SC (definido pelo solicitante) — mais confiável
+          let metaUnit = scToPrecoMeta[it.solicitacaoItemId] ?? 0;
+          // PRIORIDADE 2: lookup pelo insumo_codigo na composição (preço real do insumo)
           if (metaUnit === 0) {
             const ic = scToInsumoCodigo[it.solicitacaoItemId];
             const obraId = ocToObra[ocId];
             if (ic && obraId) metaUnit = insumoPricePerObra[obraId]?.[ic] ?? 0;
+          }
+          // PRIORIDADE 3: metaUnitTotal do orçamento — APENAS se NÃO for verba agregada
+          if (metaUnit === 0) {
+            const orcId = scToOrc[it.solicitacaoItemId];
+            if (orcId) {
+              const unid = orcToUnidade[orcId] ?? "";
+              const isAgregada = UNID_AGREGADA.has(unid);
+              const compartilhado = (orcToScCount[orcId] ?? 0) > 1;
+              if (!isAgregada && !compartilhado) {
+                metaUnit = orcToMetaUnit[orcId] ?? 0;
+              }
+            }
           }
           if (metaUnit === 0) continue;
           const qty = n(it.quantidade);
@@ -4158,9 +4182,9 @@ Retorne APENAS um JSON válido neste formato:
         }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
       }
       const orcIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
-      let metas: { id: number; metaUnitTotal: string | null }[] = [];
+      let metas: { id: number; metaUnitTotal: string | null; unidade: string | null }[] = [];
       if (orcIds.length > 0) {
-        metas = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal })
+        metas = await db.select({ id: orcamentoItens.id, metaUnitTotal: orcamentoItens.metaUnitTotal, unidade: orcamentoItens.unidade })
           .from(orcamentoItens).where(inArray(orcamentoItens.id, orcIds));
       }
       const scToOrc: Record<number, number> = {};
@@ -4172,10 +4196,20 @@ Retorne APENAS um JSON válido neste formato:
         if (s.insumoCodigo) scToInsumoCodigo[s.id] = s.insumoCodigo;
       }
       const orcToMetaUnit: Record<number, number> = {};
-      for (const m of metas) orcToMetaUnit[m.id] = n(m.metaUnitTotal);
+      const orcToUnidade: Record<number, string> = {};
+      for (const m of metas) {
+        orcToMetaUnit[m.id] = n(m.metaUnitTotal);
+        if (m.unidade) orcToUnidade[m.id] = String(m.unidade).toLowerCase().trim();
+      }
+      // Contagem: quantos itens de SC apontam para o mesmo orcamento_item_id?
+      const orcToScCount: Record<number, number> = {};
+      for (const s of scItens) {
+        if (s.orcamentoItemId) orcToScCount[s.orcamentoItemId] = (orcToScCount[s.orcamentoItemId] ?? 0) + 1;
+      }
+      const UNID_AGREGADA = new Set(["vb", "verba", "gl", "global", "cj", "conjunto", "und. global"]);
 
-      // Lookup de preço por insumo (para itens sem orçamentoItemId/precoMeta) — espelha lógica de getSaldosRealocacaoGeral
-      const needInsumoLookup = scItens.filter(s => !s.orcamentoItemId && n(s.precoMeta) <= 0 && s.insumoCodigo);
+      // Lookup de preço por insumo (para itens com insumoCodigo, independente de ter orcamentoItemId)
+      const needInsumoLookup = scItens.filter(s => n(s.precoMeta) <= 0 && s.insumoCodigo);
       const insumoPricePerObra: Record<number, Record<string, number>> = {};
       if (needInsumoLookup.length > 0) {
         const obraIds = [...new Set(ocs.map(o => o.obraId).filter(Boolean) as number[])];
@@ -4213,13 +4247,25 @@ Retorne APENAS um JSON válido neste formato:
       for (const it of ocItens) {
         const ocId = it.ordemId;
         if (!it.solicitacaoItemId) continue;
-        const orcId = scToOrc[it.solicitacaoItemId];
-        let metaUnit = orcId ? (orcToMetaUnit[orcId] ?? 0) : 0;
-        if (metaUnit === 0) metaUnit = scToPrecoMeta[it.solicitacaoItemId] ?? 0;
+        // PRIORIDADE 1: precoMeta da própria SC (definido pelo solicitante) — mais confiável
+        let metaUnit = scToPrecoMeta[it.solicitacaoItemId] ?? 0;
+        // PRIORIDADE 2: lookup pelo insumo_codigo na composição (preço real do insumo)
         if (metaUnit === 0) {
           const ic = scToInsumoCodigo[it.solicitacaoItemId];
           const obraId = ocToObra[ocId];
           if (ic && obraId) metaUnit = insumoPricePerObra[obraId]?.[ic] ?? 0;
+        }
+        // PRIORIDADE 3: metaUnitTotal do orçamento — APENAS se NÃO for verba agregada/compartilhada
+        if (metaUnit === 0) {
+          const orcId = scToOrc[it.solicitacaoItemId];
+          if (orcId) {
+            const unid = orcToUnidade[orcId] ?? "";
+            const isAgregada = UNID_AGREGADA.has(unid);
+            const compartilhado = (orcToScCount[orcId] ?? 0) > 1;
+            if (!isAgregada && !compartilhado) {
+              metaUnit = orcToMetaUnit[orcId] ?? 0;
+            }
+          }
         }
         if (metaUnit === 0) continue;
         const qty = n(it.quantidade);
