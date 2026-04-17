@@ -245,8 +245,10 @@ async function startServer() {
         // O ciclo correto vai do (diaCorte+1) do mês anterior até o (diaCorte) do mês.
         // diaCorte é lido por empresa em `system_criteria.ponto_dia_corte` (default 15, máx 28).
         // ATENÇÃO: a Rev. 1221 backfilou erroneamente como mês calendário (01→último dia),
-        // bloqueando o "escuro" (dias após o corte). Aqui recalculamos qualquer linha que
-        // ainda esteja com o range incorreto (= mês inteiro) ou NULL.
+        // bloqueando o "escuro" (dias após o corte). Uma tentativa anterior (#38 v1)
+        // ficou off-by-one (inicio = diaCorte+2 do mês anterior). Aqui recomputamos
+        // sempre que o range gravado divergir do esperado, corrigindo NULL, mês inteiro
+        // antigo e o off-by-one.
         try {
           await db.execute(sql`
             CREATE INDEX IF NOT EXISTS "ponto_consolidacao_ciclo"
@@ -254,32 +256,33 @@ async function startServer() {
           `);
           const r = await db.execute(sql`
             UPDATE "ponto_consolidacao" pc
-               SET "data_inicio_ciclo" = (
-                     to_date(pc."mesReferencia" || '-01','YYYY-MM-DD')
-                       - interval '1 month'
-                       + (LEAST(28, GREATEST(1, COALESCE(
-                             (SELECT NULLIF(regexp_replace(sc.valor,'[^0-9]','','g'),'')::int
-                              FROM system_criteria sc
-                              WHERE sc."companyId" = pc."companyId" AND sc.chave = 'ponto_dia_corte'
-                              LIMIT 1), 15)
-                         )) || ' day')::interval
-                       + interval '1 day'
-                   )::date,
-                   "data_fim_ciclo" = (
-                     to_date(pc."mesReferencia" || '-01','YYYY-MM-DD')
-                       + ((LEAST(28, GREATEST(1, COALESCE(
-                             (SELECT NULLIF(regexp_replace(sc.valor,'[^0-9]','','g'),'')::int
-                              FROM system_criteria sc
-                              WHERE sc."companyId" = pc."companyId" AND sc.chave = 'ponto_dia_corte'
-                              LIMIT 1), 15)
-                         )) - 1) || ' day')::interval
-                   )::date
-             WHERE "data_inicio_ciclo" IS NULL
-                OR "data_fim_ciclo"    IS NULL
-                OR (
-                     "data_inicio_ciclo" = (pc."mesReferencia" || '-01')::date
-                 AND "data_fim_ciclo"    = (date_trunc('month', (pc."mesReferencia" || '-01')::date) + interval '1 month - 1 day')::date
-                )
+               SET "data_inicio_ciclo" = calc.expected_inicio,
+                   "data_fim_ciclo"    = calc.expected_fim
+              FROM (
+                SELECT pc2.id,
+                       (to_date(pc2."mesReferencia" || '-01','YYYY-MM-DD')
+                          - interval '1 month'
+                          + (COALESCE(dc.dia_corte, 15) || ' day')::interval
+                       )::date AS expected_inicio,
+                       (to_date(pc2."mesReferencia" || '-01','YYYY-MM-DD')
+                          + ((COALESCE(dc.dia_corte, 15) - 1) || ' day')::interval
+                       )::date AS expected_fim
+                  FROM "ponto_consolidacao" pc2
+                  LEFT JOIN LATERAL (
+                    SELECT LEAST(28, GREATEST(1,
+                             NULLIF(regexp_replace(sc.valor,'[^0-9]','','g'),'')::int
+                           )) AS dia_corte
+                      FROM system_criteria sc
+                     WHERE sc."companyId" = pc2."companyId"
+                       AND sc.chave = 'ponto_dia_corte'
+                     LIMIT 1
+                  ) dc ON true
+              ) calc
+             WHERE pc.id = calc.id
+               AND (
+                     pc."data_inicio_ciclo" IS DISTINCT FROM calc.expected_inicio
+                  OR pc."data_fim_ciclo"    IS DISTINCT FROM calc.expected_fim
+               )
           `);
           const n = (r as any).rowCount ?? 0;
           if (n > 0) console.log(`[ColFix] ponto_consolidacao: ${n} ciclos recalculados (corte por empresa)`);
