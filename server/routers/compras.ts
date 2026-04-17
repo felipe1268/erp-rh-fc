@@ -7692,19 +7692,21 @@ Retorne APENAS um JSON válido neste formato:
       ];
       const so = (input.statusObra || "").toLowerCase();
       if (so && so !== "todas") {
-        const map: Record<string, string> = {
-          ativas: "Em_Andamento",
-          em_andamento: "Em_Andamento",
-          planejamento: "Planejamento",
-          paralisadas: "Paralisada",
-          paralisada: "Paralisada",
-          concluidas: "Concluida",
-          concluida: "Concluida",
-          canceladas: "Cancelada",
-          cancelada: "Cancelada",
+        // Aceita variações ("Em_Andamento" / "Em Andamento" / minúsculas) que
+        // existem no banco por entradas legadas e importações.
+        const map: Record<string, string[]> = {
+          ativas:        ["Em_Andamento", "Em Andamento", "em_andamento", "Ativa", "Ativo"],
+          em_andamento:  ["Em_Andamento", "Em Andamento", "em_andamento"],
+          planejamento:  ["Planejamento", "planejamento"],
+          paralisadas:   ["Paralisada", "Paralisado", "paralisada"],
+          paralisada:    ["Paralisada", "Paralisado", "paralisada"],
+          concluidas:    ["Concluida", "Concluída", "concluida", "Finalizada"],
+          concluida:     ["Concluida", "Concluída", "concluida", "Finalizada"],
+          canceladas:    ["Cancelada", "cancelada"],
+          cancelada:     ["Cancelada", "cancelada"],
         };
-        const target = map[so];
-        if (target) obraConditions.push(eq(obras.status, target));
+        const targets = map[so];
+        if (targets && targets.length) obraConditions.push(inArray(obras.status, targets));
       }
 
       const obrasAtivas = await db.select().from(obras)
