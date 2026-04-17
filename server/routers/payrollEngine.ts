@@ -876,8 +876,11 @@ export const payrollEngineRouter = router({
         AND status NOT IN ('pendente', 'cancelado', 'aplicado')
       `);
 
-      // Resetar todos os registros da aferição anterior, EXCETO os que correspondem
-      // a payroll_adjustments já decididos (pendente/cancelado/aplicado)
+      // Resetar todos os registros da aferição anterior, EXCETO os que:
+      //   (a) correspondem a payroll_adjustments já decididos (pendente/cancelado/aplicado);
+      //   (b) foram tratados manualmente (origemRegistro manual/ajuste_manual);
+      //   (c) tiveram resolução manual aplicada (resolucaoTipo NOT NULL).
+      // Esses casos representam validações manuais que devem ser respeitadas.
       await db.execute(sql`
         UPDATE timecard_daily td SET 
           "statusDia" = 'escuro',
@@ -892,6 +895,8 @@ export const payrollEngineRouter = router({
         WHERE td."companyId" IN (${afericaoCidsSql}) 
         AND td."mesCompetencia" = ${prevMes}
         AND (td."statusAnterior" = 'escuro' OR td."statusDia" IN ('escuro', 'pendente', 'pendente_decisao', 'aferido'))
+        AND td."origemRegistro" NOT IN ('manual', 'ajuste_manual', 'ajusteManual')
+        AND td."resolucaoTipo" IS NULL
         AND NOT EXISTS (
           SELECT 1 FROM payroll_adjustments pa 
           WHERE pa."timecardDailyId" = td.id 
@@ -909,6 +914,10 @@ export const payrollEngineRouter = router({
       // Buscar registros escuro + já decididos (preservados do reset) — excluir PJ/Sócio
       // IMPORTANTE: amarrar td.data >= escuroInicio para não puxar dias do início da
       // competência anterior (ex.: 15/01 quando o escuro real é 16/01-31/01).
+      // Excluir linhas tratadas manualmente que NÃO possuem ajuste decidido:
+      // essas representam validações manuais que devem permanecer intocadas pela re-aferição.
+      // Linhas com ajuste decidido (pendente/cancelado/aplicado) ainda entram no loop para
+      // que o branch `jaDecidido` preserve a classificação original no relatório.
       const escuroRecords = ((await db.execute(sql`
         SELECT td.* FROM timecard_daily td
         JOIN employees e ON e.id = td."employeeId"
@@ -918,6 +927,16 @@ export const payrollEngineRouter = router({
         AND td.data <= ${escuroFim}
         AND (td."statusDia" = 'escuro' OR (td."statusAnterior" = 'escuro' AND td."statusDia" IN ('pendente', 'pendente_decisao', 'aferido')))
         AND COALESCE(e."tipoContrato",'CLT') NOT IN ('PJ','Socio')
+        AND (
+          (td."origemRegistro" NOT IN ('manual', 'ajuste_manual', 'ajusteManual') AND td."resolucaoTipo" IS NULL)
+          OR EXISTS (
+            SELECT 1 FROM payroll_adjustments pa
+            WHERE pa."timecardDailyId" = td.id
+            AND pa."mesOrigem" = ${prevMes}
+            AND pa."mesDesconto" = ${input.mesReferencia}
+            AND pa.status IN ('pendente', 'cancelado', 'aplicado')
+          )
+        )
         ORDER BY td."employeeId", td.data
       `)) as any).rows || [];
       if (!escuroRecords || (escuroRecords as any[]).length === 0) {
@@ -1049,6 +1068,22 @@ export const payrollEngineRouter = router({
         jaDecididoMap.set(adjKey, adj);
         if (adj.status === 'cancelado') continue;
         jaDecididosList.push(adj);
+      }
+
+      // Defensive dedup set: any (companyId,employeeId,data,tipo,mesOrigem,mesDesconto)
+      // tuple already in payroll_adjustments must NOT be re-inserted, regardless of status.
+      // Protects against concurrent re-aferição or stale rows the DELETE step kept.
+      const existingAdjRows = ((await db.execute(sql`
+        SELECT "employeeId", data, tipo
+        FROM payroll_adjustments
+        WHERE "companyId" IN (${afericaoCidsSql})
+        AND "mesOrigem" = ${prevMes}
+        AND "mesDesconto" = ${input.mesReferencia}
+        AND tipo IN ('falta', 'atraso', 'sem_registro')
+      `)) as any).rows || [];
+      const existingAdjKeys = new Set<string>();
+      for (const r of existingAdjRows) {
+        existingAdjKeys.add(`${r.employeeId}|${normalizeDate(r.data)}|${r.tipo}`);
       }
 
       let totalAferidos = 0;
@@ -1232,9 +1267,13 @@ export const payrollEngineRouter = router({
             const totalDesc = valorFalta + parseBRL(vrDesconto) + parseBRL(vtDesconto);
 
             const esc = (s: string) => s.replace(/'/g, "''");
-            adjustmentInserts.push(
-              `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'falta', '${esc(`Falta dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`)}', '${formatMoney(valorFalta)}', '${vrDesconto}', '${vtDesconto}', '${formatMoney(totalDesc)}', ${escuro.id}, 'pendente')`
-            );
+            const dedupKeyFalta = `${escuro.employeeId}|${escuro.data}|falta`;
+            if (!existingAdjKeys.has(dedupKeyFalta)) {
+              adjustmentInserts.push(
+                `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'falta', '${esc(`Falta dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`)}', '${formatMoney(valorFalta)}', '${vrDesconto}', '${vtDesconto}', '${formatMoney(totalDesc)}', ${escuro.id}, 'pendente')`
+              );
+              existingAdjKeys.add(dedupKeyFalta);
+            }
 
             divergenciasList.push({
               employeeId: escuro.employeeId,
@@ -1290,9 +1329,13 @@ export const payrollEngineRouter = router({
                 const valorAtraso = valorMinuto * atraso;
 
                 const esc = (s: string) => s.replace(/'/g, "''");
-                adjustmentInserts.push(
-                  `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'atraso', '${esc(`Atraso ${minutesToHHMM(atraso)} dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`)}', '${formatMoney(valorAtraso)}', '0', '0', '${formatMoney(valorAtraso)}', ${escuro.id}, 'pendente')`
-                );
+                const dedupKeyAtraso = `${escuro.employeeId}|${escuro.data}|atraso`;
+                if (!existingAdjKeys.has(dedupKeyAtraso)) {
+                  adjustmentInserts.push(
+                    `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'atraso', '${esc(`Atraso ${minutesToHHMM(atraso)} dia ${escuro.data} - Aferição do período no escuro de ${prevMes}`)}', '${formatMoney(valorAtraso)}', '0', '0', '${formatMoney(valorAtraso)}', ${escuro.id}, 'pendente')`
+                  );
+                  existingAdjKeys.add(dedupKeyAtraso);
+                }
 
                 divergenciasList.push({
                   employeeId: escuro.employeeId,
@@ -1361,9 +1404,13 @@ export const payrollEngineRouter = router({
           const totalDescSR = valorFaltaSR + parseBRL(vrDescontoSR) + parseBRL(vtDescontoSR);
 
           const esc = (s: string) => s.replace(/'/g, "''");
-          adjustmentInserts.push(
-            `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'falta', '${esc(`Falta dia ${escuro.data} — Sem registro no DIXI. Aferição do período no escuro de ${prevMes}`)}', '${formatMoney(valorFaltaSR)}', '${vrDescontoSR}', '${vtDescontoSR}', '${formatMoney(totalDescSR)}', ${escuro.id}, 'pendente')`
-          );
+          const dedupKeyFaltaSR = `${escuro.employeeId}|${escuro.data}|falta`;
+          if (!existingAdjKeys.has(dedupKeyFaltaSR)) {
+            adjustmentInserts.push(
+              `(${input.companyId}, ${escuro.employeeId}, '${esc(prevMes)}', '${esc(input.mesReferencia)}', '${esc(escuro.data)}', 'falta', '${esc(`Falta dia ${escuro.data} — Sem registro no DIXI. Aferição do período no escuro de ${prevMes}`)}', '${formatMoney(valorFaltaSR)}', '${vrDescontoSR}', '${vtDescontoSR}', '${formatMoney(totalDescSR)}', ${escuro.id}, 'pendente')`
+            );
+            existingAdjKeys.add(dedupKeyFaltaSR);
+          }
 
           divergenciasList.push({
             employeeId: escuro.employeeId,

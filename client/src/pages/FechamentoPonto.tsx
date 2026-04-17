@@ -737,7 +737,20 @@ export default function FechamentoPonto() {
     { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "simulador_horistas" }
   );
 
-  const isConsolidado = consolidacaoStatus.data?.consolidado === true;
+  const consolidacaoData = consolidacaoStatus.data;
+  const isParcial = consolidacaoData?.parcial === true;
+  // "isConsolidado" no contexto da UI = mês inteiro travado (não apenas o ciclo).
+  // Quando há consolidação parcial, dias escuros ainda devem ser editáveis.
+  const isConsolidado = consolidacaoData?.consolidado === true && !isParcial;
+  const cicloInicio: string | null = consolidacaoData?.dataInicioCiclo ?? null;
+  const cicloFim: string | null = consolidacaoData?.dataFimCiclo ?? null;
+  // True quando uma data específica está dentro do ciclo consolidado (e portanto bloqueada).
+  const isDateLocked = (data?: string | null): boolean => {
+    if (consolidacaoData?.consolidado !== true) return false;
+    if (!data) return isConsolidado;
+    if (!cicloInicio || !cicloFim) return isConsolidado;
+    return data >= cicloInicio && data <= cicloFim;
+  };
 
   // ===== MUTATIONS =====
   const previewMut = trpc.fechamentoPonto.previewDixi.useMutation();
@@ -1233,6 +1246,7 @@ export default function FechamentoPonto() {
   const getMonthColor = (mes: number) => {
     const status = getMonthStatus(mes);
     if (status === "consolidado") return "bg-green-500 text-white hover:bg-green-600 border-green-600";
+    if (status === "parcial") return "bg-yellow-400 text-yellow-900 hover:bg-yellow-500 border-yellow-500";
     if (status === "aberto") return "bg-blue-500 text-white hover:bg-blue-600 border-blue-600";
     return "bg-gray-200 text-gray-500 hover:bg-gray-300 border-gray-300";
   };
@@ -1292,6 +1306,7 @@ export default function FechamentoPonto() {
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-blue-500" /> Com lançamento</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-yellow-400" /> Parcial (ciclo)</div>
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-green-500" /> Consolidado</div>
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-gray-200" /> Sem dados</div>
             </div>
@@ -1319,6 +1334,9 @@ export default function FechamentoPonto() {
                   {status === "consolidado" && (
                     <Lock className="h-3 w-3 absolute top-0.5 right-0.5 text-white/80" />
                   )}
+                  {status === "parcial" && (
+                    <Lock className="h-3 w-3 absolute top-0.5 right-0.5 text-yellow-900/80" />
+                  )}
                   {info?.consolidadoPor && status === "consolidado" && (
                     <div className="absolute -bottom-0.5 left-0 right-0 text-[8px] text-white/70 truncate px-0.5">
                       {info.consolidadoPor.split(" ")[0]}
@@ -1340,6 +1358,14 @@ export default function FechamentoPonto() {
                 <Lock className="h-3 w-3 mr-1" /> Consolidado
               </Badge>
             )}
+            {isParcial && (
+              <Badge
+                className="bg-yellow-100 text-yellow-800 text-xs ml-1"
+                title={cicloInicio && cicloFim ? `Ciclo bloqueado: ${cicloInicio} a ${cicloFim}` : "Consolidação parcial"}
+              >
+                <Lock className="h-3 w-3 mr-1" /> Parcial — ciclo {cicloInicio?.slice(8,10)}/{cicloInicio?.slice(5,7)} a {cicloFim?.slice(8,10)}/{cicloFim?.slice(5,7)}
+              </Badge>
+            )}
           </div>
 
           {!isConsolidado && (
@@ -1359,9 +1385,10 @@ export default function FechamentoPonto() {
               <Lock className="h-4 w-4 mr-2" /> Consolidar Mês
             </Button>
           )}
-          {isConsolidado && isAdmin && (
+          {/* Permitir Desconsolidar tanto para mês totalmente consolidado quanto parcial */}
+          {consolidacaoData?.consolidado === true && isAdmin && (
             <Button variant="outline" className="text-amber-700 border-amber-300 hover:bg-amber-50" onClick={() => setShowDesconsolidarDialog(true)}>
-              <Unlock className="h-4 w-4 mr-2" /> Desconsolidar
+              <Unlock className="h-4 w-4 mr-2" /> {isParcial ? "Desconsolidar Ciclo" : "Desconsolidar"}
             </Button>
           )}
 
@@ -3225,7 +3252,7 @@ export default function FechamentoPonto() {
                                           variant="destructive"
                                           className="text-xs cursor-pointer hover:opacity-80 transition-opacity"
                                           onClick={() => {
-                                            if (isConsolidado) return;
+                                            if (isDateLocked(rec.data)) return;
                                             setQuickFixRec(rec);
                                             setQuickFixData({
                                               entrada1: rec.entrada1 || "",

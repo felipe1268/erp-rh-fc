@@ -663,6 +663,11 @@ export const folhaPagamentoRouter = router({
           sinteticoUploadId: decimoTerceiro2.sinteticoUploadId,
         } : null,
         pontoConsolidado: pontoConsolidado.length > 0 && pontoConsolidado[0].status === "consolidado",
+        pontoConsolidacaoStatus: pontoConsolidado.length > 0 ? pontoConsolidado[0].status : "aberto",
+        pontoConsolidacaoCiclo: pontoConsolidado.length > 0 ? {
+          dataInicioCiclo: pontoConsolidado[0].dataInicioCiclo ?? null,
+          dataFimCiclo: pontoConsolidado[0].dataFimCiclo ?? null,
+        } : null,
         uploads: uploads.map(u => ({
           id: u.id,
           category: u.category,

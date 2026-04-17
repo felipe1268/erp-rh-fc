@@ -19,6 +19,87 @@ function lastDayOfMonth(mesRef: string): string {
   return `${mesRef}-${String(lastDay).padStart(2, "0")}`;
 }
 
+// ============================================================
+// CYCLE / DIA-CORTE HELPERS
+// ============================================================
+// Returns the company's `ponto_dia_corte` (1..28). Falls back to 15.
+async function getDiaCorte(db: any, companyId: number): Promise<number> {
+  try {
+    const rows = ((await db.execute(sql`
+      SELECT valor FROM system_criteria WHERE "companyId" = ${companyId} AND chave = 'ponto_dia_corte' LIMIT 1
+    `)) as any).rows || [];
+    if (rows.length === 0) return 15;
+    const raw = String(rows[0].valor || '').replace(/[^0-9]/g, '');
+    const n = parseInt(raw || '15', 10);
+    if (!Number.isFinite(n)) return 15;
+    return Math.min(28, Math.max(1, n));
+  } catch { return 15; }
+}
+
+// Cycle range for a given competência YYYY-MM:
+//   - dataInicioCiclo = day after diaCorte of prevMonth (rolls over to currentMonth/01
+//     when prevMonth has fewer than diaCorte+1 days — e.g. Feb with diaCorte=28).
+//   - dataFimCiclo    = (currentMonth, day = diaCorte). diaCorte is capped at 28
+//     by getDiaCorte so this day always exists.
+// "Escuro" = (currentMonth, day = diaCorte+1) → last day of month → belongs to NEXT competência.
+function computeCicloRange(mesRef: string, diaCorte: number): { dataInicioCiclo: string; dataFimCiclo: string } {
+  const [y, m] = mesRef.split("-").map(Number);
+  const prevY = m === 1 ? y - 1 : y;
+  const prevM = m === 1 ? 12 : m - 1;
+  // Use JS Date with UTC and rollover to safely add 1 day to (prevYear, prevMonth, diaCorte).
+  const inicioDate = new Date(Date.UTC(prevY, prevM - 1, diaCorte));
+  inicioDate.setUTCDate(inicioDate.getUTCDate() + 1);
+  const fimDate = new Date(Date.UTC(y, m - 1, diaCorte));
+  const toIso = (d: Date) => d.toISOString().slice(0, 10);
+  return { dataInicioCiclo: toIso(inicioDate), dataFimCiclo: toIso(fimDate) };
+}
+
+// Checks whether a *specific* date is within any consolidated cycle for the given company(ies).
+// Used by all single-record write endpoints to enforce per-date locking instead of full-month locking.
+async function isDateLocked(db: any, input: { companyId: number; companyIds?: number[] }, data: string): Promise<{ locked: boolean; mesReferencia?: string }> {
+  const cids = resolveCompanyIds(input);
+  const cidsSql = sql.join(cids.map(id => sql`${id}`), sql`,`);
+  const rows = ((await db.execute(sql`
+    SELECT "mesReferencia" FROM ponto_consolidacao
+    WHERE "companyId" IN (${cidsSql})
+      AND status = 'consolidado'
+      AND "data_inicio_ciclo" IS NOT NULL AND "data_fim_ciclo" IS NOT NULL
+      AND ${data}::date BETWEEN "data_inicio_ciclo" AND "data_fim_ciclo"
+    LIMIT 1
+  `)) as any).rows || [];
+  if (rows.length === 0) return { locked: false };
+  return { locked: true, mesReferencia: rows[0].mesReferencia };
+}
+
+// Throws if the given date falls inside a consolidated cycle.
+async function assertDateNotLocked(db: any, input: { companyId: number; companyIds?: number[] }, data: string): Promise<void> {
+  const { locked, mesReferencia } = await isDateLocked(db, input, data);
+  if (locked) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: `Dia ${data} pertence ao ciclo consolidado de ${mesReferencia}. Desconsolide antes de alterar.`,
+    });
+  }
+}
+
+// Returns the list of locked date ranges that intersect [from, to] (inclusive).
+async function getLockedRangesInWindow(db: any, input: { companyId: number; companyIds?: number[] }, from: string, to: string): Promise<Array<{ mesReferencia: string; dataInicioCiclo: string; dataFimCiclo: string }>> {
+  const cids = resolveCompanyIds(input);
+  const cidsSql = sql.join(cids.map(id => sql`${id}`), sql`,`);
+  const rows = ((await db.execute(sql`
+    SELECT "mesReferencia",
+           "data_inicio_ciclo"::text AS "dataInicioCiclo",
+           "data_fim_ciclo"::text AS "dataFimCiclo"
+    FROM ponto_consolidacao
+    WHERE "companyId" IN (${cidsSql})
+      AND status = 'consolidado'
+      AND "data_inicio_ciclo" IS NOT NULL AND "data_fim_ciclo" IS NOT NULL
+      AND "data_fim_ciclo" >= ${from}::date
+      AND "data_inicio_ciclo" <= ${to}::date
+  `)) as any).rows || [];
+  return rows as any[];
+}
+
 function diffMinutes(start: string, end: string): number {
   const [h1, m1] = start.split(":").map(Number);
   const [h2, m2] = end.split(":").map(Number);
@@ -1042,50 +1123,71 @@ export const fechamentoPontoRouter = router({
           if (recs.length === 0) continue;
           mesesAfetados.add(mesRef);
 
+          // Aplicar lock por DIA: se um ciclo consolidado (de qualquer competência)
+          // intersecta o mês importado, não podemos apagar nem inserir registros
+          // para essas datas — eles pertencem ao período já fechado/pago.
+          const mesStart = `${mesRef}-01`;
+          const mesEnd = lastDayOfMonth(mesRef);
+          const lockedRanges = await getLockedRangesInWindow(db, input, mesStart, mesEnd);
+          const isDateInLocked = (d: string): boolean => {
+            for (const r of lockedRanges) {
+              if (d >= r.dataInicioCiclo && d <= r.dataFimCiclo) return true;
+            }
+            return false;
+          };
+
           if (isSelective && selectedSet) {
             const selIds = input.selectedEmployeeIds!;
             for (let i = 0; i < selIds.length; i += 50) {
               const batch = selIds.slice(i, i + 50);
-              await db.delete(timeRecords).where(
-                and(
-                  companyFilter(timeRecords.companyId, input),
-                  eq(timeRecords.mesReferencia, mesRef),
-                  eq(timeRecords.obraId, obraId!),
-                  eq(timeRecords.fonte, "dixi"),
-                  inArray(timeRecords.employeeId, batch),
-                )
-              );
-              await db.delete(timeInconsistencies).where(
-                and(
-                  companyFilter(timeInconsistencies.companyId, input),
-                  eq(timeInconsistencies.mesReferencia, mesRef),
-                  eq(timeInconsistencies.obraId, obraId!),
-                  inArray(timeInconsistencies.employeeId, batch),
-                )
-              );
-            }
-          } else {
-            await db.delete(timeRecords).where(
-              and(
+              const baseConds = [
                 companyFilter(timeRecords.companyId, input),
                 eq(timeRecords.mesReferencia, mesRef),
                 eq(timeRecords.obraId, obraId!),
                 eq(timeRecords.fonte, "dixi"),
-              )
-            );
-            await db.delete(timeInconsistencies).where(
-              and(
+                inArray(timeRecords.employeeId, batch),
+              ];
+              for (const r of lockedRanges) {
+                baseConds.push(sql`NOT (${timeRecords.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
+              }
+              await db.delete(timeRecords).where(and(...baseConds));
+              const incConds = [
                 companyFilter(timeInconsistencies.companyId, input),
                 eq(timeInconsistencies.mesReferencia, mesRef),
                 eq(timeInconsistencies.obraId, obraId!),
-              )
-            );
+                inArray(timeInconsistencies.employeeId, batch),
+              ];
+              for (const r of lockedRanges) {
+                incConds.push(sql`NOT (${timeInconsistencies.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
+              }
+              await db.delete(timeInconsistencies).where(and(...incConds));
+            }
+          } else {
+            const baseConds = [
+              companyFilter(timeRecords.companyId, input),
+              eq(timeRecords.mesReferencia, mesRef),
+              eq(timeRecords.obraId, obraId!),
+              eq(timeRecords.fonte, "dixi"),
+            ];
+            for (const r of lockedRanges) {
+              baseConds.push(sql`NOT (${timeRecords.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
+            }
+            await db.delete(timeRecords).where(and(...baseConds));
+            const incConds = [
+              companyFilter(timeInconsistencies.companyId, input),
+              eq(timeInconsistencies.mesReferencia, mesRef),
+              eq(timeInconsistencies.obraId, obraId!),
+            ];
+            for (const r of lockedRanges) {
+              incConds.push(sql`NOT (${timeInconsistencies.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
+            }
+            await db.delete(timeInconsistencies).where(and(...incConds));
           }
 
           // Filtrar registros DIXI onde já existe lançamento manual para o mesmo funcionário/dia
-          let recsParaInserir = recs;
-          if (recs.length > 0) {
-            const empIds = [...new Set(recs.map((r: any) => r.employeeId))];
+          let recsParaInserir = recs.filter((r: any) => !isDateInLocked(String(r.data)));
+          if (recsParaInserir.length > 0) {
+            const empIds = [...new Set(recsParaInserir.map((r: any) => r.employeeId))];
             const manuaisExistentes = await db.execute(sql`
               SELECT "employeeId", data FROM time_records
               WHERE "companyId" = ${input.companyId}
@@ -1094,7 +1196,7 @@ export const fechamentoPontoRouter = router({
                 AND data BETWEEN ${`${mesRef}-01`} AND ${lastDayOfMonth(mesRef)}
             `);
             const manualSet = new Set((manuaisExistentes.rows as any[]).map((r: any) => `${r.employeeId}|${r.data}`));
-            recsParaInserir = recs.filter((r: any) => !manualSet.has(`${r.employeeId}|${r.data}`));
+            recsParaInserir = recsParaInserir.filter((r: any) => !manualSet.has(`${r.employeeId}|${r.data}`));
           }
           // Insert time records in batches
           if (recsParaInserir.length > 0) {
@@ -1107,7 +1209,8 @@ export const fechamentoPontoRouter = router({
           }
 
           const allMonthIncons = inconsByMes[mesRef] || [];
-          const monthIncons = selectedSet ? allMonthIncons.filter((i: any) => selectedSet.has(i.employeeId)) : allMonthIncons;
+          const monthIncons = (selectedSet ? allMonthIncons.filter((i: any) => selectedSet.has(i.employeeId)) : allMonthIncons)
+            .filter((i: any) => !isDateInLocked(String(i.data)));
           if (monthIncons.length > 0) {
             const batchSize = 50;
             for (let i = 0; i < monthIncons.length; i += batchSize) {
@@ -1477,6 +1580,13 @@ export const fechamentoPontoRouter = router({
       const userName = input.resolvidoPor || ctx.user?.name || "RH";
       const hoje = new Date().toISOString().split("T")[0];
 
+      // Per-day lock: refuse if the inconsistency's date is inside a consolidated cycle.
+      const [incLock] = await db.select({ data: timeInconsistencies.data, companyId: timeInconsistencies.companyId })
+        .from(timeInconsistencies).where(eq(timeInconsistencies.id, input.id)).limit(1);
+      if (incLock?.data) {
+        await assertDateNotLocked(db, { companyId: incLock.companyId }, String(incLock.data));
+      }
+
       // Se for advertência, criar registro no módulo de warnings
       let warningId: number | null = null;
       if (input.status === "advertencia") {
@@ -1567,6 +1677,9 @@ export const fechamentoPontoRouter = router({
           message: `O dia ${input.data} está dentro de um período de férias do funcionário. Não é permitido lançar ponto neste dia.`,
         });
       }
+
+      // Per-day lock: refuse if data is inside a consolidated cycle.
+      await assertDateNotLocked(db, input, input.data);
 
       let totalMinutes = 0;
       if (input.entrada1 && input.saida1) totalMinutes += diffMinutes(input.entrada1, input.saida1);
@@ -1780,16 +1893,26 @@ export const fechamentoPontoRouter = router({
     .mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new Error("Apenas administradores podem limpar a base de dados");
       const db = (await getDb())!;
+      // Não apaga dados em datas dentro de ciclos consolidados.
+      const mesStart = `${input.mesReferencia}-01`;
+      const mesEnd = lastDayOfMonth(input.mesReferencia);
+      const lockedRanges = await getLockedRangesInWindow(db, input, mesStart, mesEnd);
+      const notLockedClause = lockedRanges.length > 0
+        ? sql.join(lockedRanges.map(r => sql`NOT (data >= ${r.dataInicioCiclo} AND data <= ${r.dataFimCiclo})`), sql` AND `)
+        : sql`TRUE`;
       if (input.tipo === "tudo" || input.tipo === "registros") {
-        await db.delete(timeRecords).where(and(companyFilter(timeRecords.companyId, input), eq(timeRecords.mesReferencia, input.mesReferencia)));
+        await db.delete(timeRecords).where(and(companyFilter(timeRecords.companyId, input), eq(timeRecords.mesReferencia, input.mesReferencia), notLockedClause));
       }
       if (input.tipo === "tudo" || input.tipo === "inconsistencias") {
-        await db.delete(timeInconsistencies).where(and(companyFilter(timeInconsistencies.companyId, input), eq(timeInconsistencies.mesReferencia, input.mesReferencia)));
+        await db.delete(timeInconsistencies).where(and(companyFilter(timeInconsistencies.companyId, input), eq(timeInconsistencies.mesReferencia, input.mesReferencia), notLockedClause));
       }
       if (input.tipo === "tudo" || input.tipo === "rateio") {
-        await db.delete(obraHorasRateio).where(and(companyFilter(obraHorasRateio.companyId, input), eq(obraHorasRateio.mesAno, input.mesReferencia)));
+        // Rateio é por mês inteiro — só permite quando não há ciclos consolidados sobrepondo o mês.
+        if (lockedRanges.length === 0) {
+          await db.delete(obraHorasRateio).where(and(companyFilter(obraHorasRateio.companyId, input), eq(obraHorasRateio.mesAno, input.mesReferencia)));
+        }
       }
-      return { success: true };
+      return { success: true, lockedRanges };
     }),
 
   clearByPeriod: protectedProcedure
@@ -1801,6 +1924,10 @@ export const fechamentoPontoRouter = router({
     .mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new Error("Apenas administradores podem limpar a base de dados");
       const db = (await getDb())!;
+      const lockedRanges = await getLockedRangesInWindow(db, input, input.dataInicio, input.dataFim);
+      const notLockedClause = lockedRanges.length > 0
+        ? sql.join(lockedRanges.map(r => sql`NOT (data >= ${r.dataInicioCiclo} AND data <= ${r.dataFimCiclo})`), sql` AND `)
+        : sql`TRUE`;
       let deletedRecords = 0;
       let deletedInconsistencias = 0;
       if (input.tipo === "tudo" || input.tipo === "registros") {
@@ -1808,6 +1935,7 @@ export const fechamentoPontoRouter = router({
           companyFilter(timeRecords.companyId, input),
           sql`${timeRecords.data} >= ${input.dataInicio}`,
           sql`${timeRecords.data} <= ${input.dataFim}`,
+          notLockedClause,
         )).returning({ id: timeRecords.id });
         deletedRecords = res.length;
       }
@@ -1816,10 +1944,11 @@ export const fechamentoPontoRouter = router({
           companyFilter(timeInconsistencies.companyId, input),
           sql`${timeInconsistencies.data} >= ${input.dataInicio}`,
           sql`${timeInconsistencies.data} <= ${input.dataFim}`,
+          notLockedClause,
         )).returning({ id: timeInconsistencies.id });
         deletedInconsistencias = res.length;
       }
-      return { success: true, deletedRecords, deletedInconsistencias };
+      return { success: true, deletedRecords, deletedInconsistencias, lockedRanges };
     }),
 
   // ===================== VERIFICAÇÃO DE DUPLICIDADE =====================
@@ -1918,7 +2047,7 @@ export const fechamentoPontoRouter = router({
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const meses: Record<string, { status: 'vazio' | 'aberto' | 'consolidado'; totalRegistros: number; consolidadoPor?: string; consolidadoEm?: string }> = {};
+      const meses: Record<string, { status: 'vazio' | 'aberto' | 'consolidado' | 'parcial'; totalRegistros: number; consolidadoPor?: string; consolidadoEm?: string; dataInicioCiclo?: string; dataFimCiclo?: string }> = {};
       for (let m = 1; m <= 12; m++) {
         const mesRef = `${input.ano}-${String(m).padStart(2, '0')}`;
         meses[mesRef] = { status: 'vazio', totalRegistros: 0 };
@@ -1940,7 +2069,7 @@ export const fechamentoPontoRouter = router({
           meses[mesKey].totalRegistros = Number(mc.count);
         }
       }
-      // Check consolidation status
+      // Check consolidation status — distinguish "consolidado" vs "parcial".
       const consolidacoes = await db.select().from(pontoConsolidacao)
         .where(and(
           companyFilter(pontoConsolidacao.companyId, input),
@@ -1948,9 +2077,13 @@ export const fechamentoPontoRouter = router({
         ));
       for (const c of consolidacoes) {
         if (meses[c.mesReferencia] && c.status === 'consolidado') {
-          meses[c.mesReferencia].status = 'consolidado';
+          const fim = c.dataFimCiclo as string | null;
+          const isParcial = !!fim && fim < lastDayOfMonth(c.mesReferencia);
+          meses[c.mesReferencia].status = isParcial ? 'parcial' : 'consolidado';
           meses[c.mesReferencia].consolidadoPor = c.consolidadoPor || undefined;
           meses[c.mesReferencia].consolidadoEm = c.consolidadoEm || undefined;
+          meses[c.mesReferencia].dataInicioCiclo = (c.dataInicioCiclo as string | null) || undefined;
+          meses[c.mesReferencia].dataFimCiclo = fim || undefined;
         }
       }
       return meses;
@@ -1962,18 +2095,24 @@ export const fechamentoPontoRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      // Check if there are pending inconsistencies
+      // Compute payroll cycle range based on the company's diaCorte.
+      // Only inconsistencies INSIDE this cycle range block consolidation —
+      // dark days (after diaCorte of the current month) belong to the next competência.
+      const diaCorte = await getDiaCorte(db, input.companyId);
+      const { dataInicioCiclo, dataFimCiclo } = computeCicloRange(input.mesReferencia, diaCorte);
+
       const [pendingIncons] = await db.select({ count: sql<number>`COUNT(*)` })
         .from(timeInconsistencies)
         .where(and(
           companyFilter(timeInconsistencies.companyId, input),
-          eq(timeInconsistencies.mesReferencia, input.mesReferencia),
           eq(timeInconsistencies.status, 'pendente'),
+          sql`${timeInconsistencies.data} >= ${dataInicioCiclo}`,
+          sql`${timeInconsistencies.data} <= ${dataFimCiclo}`,
         ));
       if (Number(pendingIncons?.count || 0) > 0) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: `Existem ${pendingIncons?.count} inconsistências pendentes. Resolva todas antes de consolidar o mês.`,
+          message: `Existem ${pendingIncons?.count} inconsistências pendentes no ciclo ${dataInicioCiclo} → ${dataFimCiclo}. Resolva todas antes de consolidar.`,
         });
       }
       // Check if already consolidated
@@ -1986,6 +2125,8 @@ export const fechamentoPontoRouter = router({
       if (existing.length > 0) {
         await db.update(pontoConsolidacao).set({
           status: 'consolidado',
+          dataInicioCiclo,
+          dataFimCiclo,
           consolidadoPor: ctx.user?.name || 'RH',
           consolidadoEm: now,
           observacoes: input.observacoes || null,
@@ -1994,6 +2135,8 @@ export const fechamentoPontoRouter = router({
         await db.insert(pontoConsolidacao).values({
           companyId: input.companyId,
           mesReferencia: input.mesReferencia,
+          dataInicioCiclo,
+          dataFimCiclo,
           status: 'consolidado',
           consolidadoPor: ctx.user?.name || 'RH',
           consolidadoEm: now,
@@ -2250,8 +2393,11 @@ export const fechamentoPontoRouter = router({
       }
       const db = (await getDb())!;
       const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      // When desconsolidando, also clear the cycle range so guards no longer match.
       await db.update(pontoConsolidacao).set({
         status: 'aberto',
+        dataInicioCiclo: null,
+        dataFimCiclo: null,
         desconsolidadoPor: ctx.user?.name || 'Admin',
         desconsolidadoEm: now,
       }).where(and(
@@ -2271,9 +2417,17 @@ export const fechamentoPontoRouter = router({
           companyFilter(pontoConsolidacao.companyId, input),
           eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
         )).limit(1);
-      if (rows.length === 0) return { consolidado: false };
+      if (rows.length === 0) return { consolidado: false, parcial: false };
+      const consolidado = rows[0].status === 'consolidado';
+      const dataInicioCiclo = rows[0].dataInicioCiclo as string | null;
+      const dataFimCiclo = rows[0].dataFimCiclo as string | null;
+      // "Parcial": cycle is closed but the dark days (after cycle end) of the calendar month are still open.
+      const parcial = consolidado && !!dataFimCiclo && dataFimCiclo < lastDayOfMonth(input.mesReferencia);
       return {
-        consolidado: rows[0].status === 'consolidado',
+        consolidado,
+        parcial,
+        dataInicioCiclo,
+        dataFimCiclo,
         consolidadoPor: rows[0].consolidadoPor,
         consolidadoEm: rows[0].consolidadoEm,
         desconsolidadoPor: rows[0].desconsolidadoPor,
@@ -2589,17 +2743,8 @@ export const fechamentoPontoRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
 
-      // Verificar consolidação
-      const mesRef = input.data.substring(0, 7);
-      const consolidacao = await db.select().from(pontoConsolidacao)
-        .where(and(
-          companyFilter(pontoConsolidacao.companyId, input),
-          eq(pontoConsolidacao.mesReferencia, mesRef),
-          eq(pontoConsolidacao.status, "consolidado"),
-        )).limit(1);
-      if (consolidacao.length > 0) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Mês consolidado. Não é possível alterar registros.' });
-      }
+      // Per-day lock: only the consolidated cycle range is locked, not the calendar month.
+      await assertDateNotLocked(db, input, input.data);
 
       const resolvidoPor = ctx.user?.name || "RH";
 
@@ -2756,18 +2901,7 @@ export const fechamentoPontoRouter = router({
       const userName = ctx.user?.name || "RH";
       const hoje = new Date().toISOString().split("T")[0];
 
-      // Verificar consolidação
-      const consolidacao = await db.select().from(pontoConsolidacao)
-        .where(and(
-          companyFilter(pontoConsolidacao.companyId, input),
-          eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
-          eq(pontoConsolidacao.status, "consolidado"),
-        )).limit(1);
-      if (consolidacao.length > 0) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Mês consolidado.' });
-      }
-
-      // Buscar todas as inconsistências pendentes deste tipo
+      // Buscar inconsistências pendentes deste tipo, EXCLUINDO datas dentro de um ciclo consolidado.
       const pendentes = await db.select().from(timeInconsistencies)
         .where(and(
           companyFilter(timeInconsistencies.companyId, input),
@@ -2778,7 +2912,12 @@ export const fechamentoPontoRouter = router({
 
       if (pendentes.length === 0) return { success: true, resolved: 0 };
 
-      const ids = pendentes.map(p => p.id);
+      const lockedRanges = await getLockedRangesInWindow(db, input, `${input.mesReferencia}-01`, lastDayOfMonth(input.mesReferencia));
+      const isLocked = (data: string) => lockedRanges.some(r => data >= r.dataInicioCiclo && data <= r.dataFimCiclo);
+      const editaveis = pendentes.filter(p => !p.data || !isLocked(String(p.data)));
+      if (editaveis.length === 0) return { success: true, resolved: 0, skipped: pendentes.length };
+
+      const ids = editaveis.map(p => p.id);
       await db.update(timeInconsistencies)
         .set({
           status: input.status,
@@ -2802,18 +2941,7 @@ export const fechamentoPontoRouter = router({
       const userName = ctx.user?.name || "RH";
       const hoje = new Date().toISOString().split("T")[0];
 
-      // Verificar consolidação
-      const consolidacao = await db.select().from(pontoConsolidacao)
-        .where(and(
-          companyFilter(pontoConsolidacao.companyId, input),
-          eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
-          eq(pontoConsolidacao.status, "consolidado"),
-        )).limit(1);
-      if (consolidacao.length > 0) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Mês consolidado.' });
-      }
-
-      // Resolver TODAS as inconsistências pendentes
+      // Resolver inconsistências pendentes EXCETO as que caem em ciclos consolidados.
       const pendentes = await db.select().from(timeInconsistencies)
         .where(and(
           companyFilter(timeInconsistencies.companyId, input),
@@ -2823,7 +2951,12 @@ export const fechamentoPontoRouter = router({
 
       if (pendentes.length === 0) return { success: true, resolved: 0 };
 
-      const ids = pendentes.map(p => p.id);
+      const lockedRanges = await getLockedRangesInWindow(db, input, `${input.mesReferencia}-01`, lastDayOfMonth(input.mesReferencia));
+      const isLocked = (data: string) => lockedRanges.some(r => data >= r.dataInicioCiclo && data <= r.dataFimCiclo);
+      const editaveis = pendentes.filter(p => !p.data || !isLocked(String(p.data)));
+      if (editaveis.length === 0) return { success: true, resolved: 0, skipped: pendentes.length };
+
+      const ids = editaveis.map(p => p.id);
       await db.update(timeInconsistencies)
         .set({
           status: input.status,
@@ -2850,6 +2983,20 @@ export const fechamentoPontoRouter = router({
 
       if (input.ids.length === 0) return { success: true, resolved: 0 };
 
+      // Per-date lock: filter out IDs whose data falls inside a consolidated cycle.
+      const rows = await db.select({ id: timeInconsistencies.id, data: timeInconsistencies.data, companyId: timeInconsistencies.companyId })
+        .from(timeInconsistencies)
+        .where(inArray(timeInconsistencies.id, input.ids));
+      const editableIds: number[] = [];
+      let skipped = 0;
+      for (const r of rows) {
+        if (!r.data) { editableIds.push(r.id); continue; }
+        const { locked } = await isDateLocked(db, { companyId: r.companyId }, String(r.data));
+        if (locked) skipped++;
+        else editableIds.push(r.id);
+      }
+      if (editableIds.length === 0) return { success: true, resolved: 0, skipped };
+
       await db.update(timeInconsistencies)
         .set({
           status: input.status,
@@ -2858,11 +3005,11 @@ export const fechamentoPontoRouter = router({
           resolvidoEm: hoje,
         })
         .where(and(
-          inArray(timeInconsistencies.id, input.ids),
+          inArray(timeInconsistencies.id, editableIds),
           eq(timeInconsistencies.status, "pendente"),
         ));
 
-      return { success: true, resolved: input.ids.length };
+      return { success: true, resolved: editableIds.length, skipped };
     }),
 
   // ===================== RESOLVER TODOS OS CONFLITOS DE OBRA =====================
@@ -2875,20 +3022,12 @@ export const fechamentoPontoRouter = router({
       const db = (await getDb())!;
       const resolvidoPor = ctx.user?.name || "RH";
 
-      // Verificar consolidação
-      const consolidacao = await db.select().from(pontoConsolidacao)
-        .where(and(
-          companyFilter(pontoConsolidacao.companyId, input),
-          eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
-          eq(pontoConsolidacao.status, "consolidado"),
-        )).limit(1);
-      if (consolidacao.length > 0) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Mês consolidado.' });
-      }
-
-      // Buscar todos os registros do mês com conflitos (funcionários com 2+ obras no mesmo dia)
+      // Buscar registros do mês com conflitos. Datas dentro de um ciclo consolidado
+      // são puladas (registradas em skippedLocked).
       const mesStart = `${input.mesReferencia}-01`;
       const mesEnd = lastDayOfMonth(input.mesReferencia);
+      const lockedRanges = await getLockedRangesInWindow(db, input, mesStart, mesEnd);
+      const isLocked = (data: string) => lockedRanges.some(r => data >= r.dataInicioCiclo && data <= r.dataFimCiclo);
       const allRecs = await db.select({
         employeeId: timeRecords.employeeId,
         data: timeRecords.data,
@@ -2935,7 +3074,9 @@ export const fechamentoPontoRouter = router({
         return false;
       };
 
+      let skippedLocked = 0;
       for (const c of conflitos) {
+        if (c.data && isLocked(String(c.data))) { skippedLocked++; continue; }
         // Buscar registros completos
         const registros = await db.select().from(timeRecords).where(and(
           companyFilter(timeRecords.companyId, input),
@@ -2974,13 +3115,15 @@ export const fechamentoPontoRouter = router({
         resolved++;
       }
 
-      return { 
-        success: true, 
-        resolved, 
+      const lockedSuffix = skippedLocked > 0 ? ` ${skippedLocked} dia(s) pulado(s) por estar(em) em ciclo consolidado.` : '';
+      return {
+        success: true,
+        resolved,
         skippedOverlaps,
-        message: skippedOverlaps.length > 0 
-          ? `${resolved} conflito(s) resolvido(s) com rateio proporcional. ${skippedOverlaps.length} conflito(s) com SOBREPOSIÇÃO DE HORÁRIOS precisam ser resolvidos manualmente (o funcionário não pode estar em 2 obras ao mesmo tempo).`
-          : `${resolved} conflito(s) resolvido(s) com rateio proporcional.`
+        skippedLocked,
+        message: skippedOverlaps.length > 0
+          ? `${resolved} conflito(s) resolvido(s) com rateio proporcional. ${skippedOverlaps.length} conflito(s) com SOBREPOSIÇÃO DE HORÁRIOS precisam ser resolvidos manualmente (o funcionário não pode estar em 2 obras ao mesmo tempo).${lockedSuffix}`
+          : `${resolved} conflito(s) resolvido(s) com rateio proporcional.${lockedSuffix}`
       };
     }),
 
@@ -2997,18 +3140,10 @@ export const fechamentoPontoRouter = router({
       const db = (await getDb())!;
       const resolvidoPor = ctx.user?.name || "RH";
 
-      const consolidacao = await db.select().from(pontoConsolidacao)
-        .where(and(
-          companyFilter(pontoConsolidacao.companyId, input),
-          eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
-          eq(pontoConsolidacao.status, "consolidado"),
-        )).limit(1);
-      if (consolidacao.length > 0) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Mês consolidado.' });
-      }
-
       const mesStart = `${input.mesReferencia}-01`;
       const mesEnd = lastDayOfMonth(input.mesReferencia);
+      const lockedRanges = await getLockedRangesInWindow(db, input, mesStart, mesEnd);
+      const isLocked = (data: string) => lockedRanges.some(r => data >= r.dataInicioCiclo && data <= r.dataFimCiclo);
 
       // Buscar todos os registros do mês com campos necessários
       const allRecs = await db.execute(sql`
@@ -3045,10 +3180,13 @@ export const fechamentoPontoRouter = router({
       };
 
       let resolved = 0;
+      let skippedLocked = 0;
       const idsParaExcluir: number[] = [];
 
       for (const [, recs] of Object.entries(grupos)) {
         if (recs.length < 2) continue; // Só processa duplicatas
+        const dataGrupo = recs[0]?.data ? String(recs[0].data) : null;
+        if (dataGrupo && isLocked(dataGrupo)) { skippedLocked++; continue; }
 
         // Ordenar: prioridade 1 = manual (ajusteManual=1), prioridade 2 = mais horas
         const sorted = [...recs].sort((a, b) => {
@@ -3076,11 +3214,13 @@ export const fechamentoPontoRouter = router({
         `);
       }
 
+      const lockedSuffix = skippedLocked > 0 ? ` ${skippedLocked} grupo(s) ignorado(s) por estar(em) em ciclo consolidado.` : '';
       return {
         success: true,
         resolved,
         excluidos: idsParaExcluir.length,
-        message: `${resolved} grupo(s) de duplicatas resolvido(s). ${idsParaExcluir.length} registro(s) duplicado(s) excluído(s). Em cada caso foi mantido o registro com mais horas ou o ajuste manual.`,
+        skippedLocked,
+        message: `${resolved} grupo(s) de duplicatas resolvido(s). ${idsParaExcluir.length} registro(s) duplicado(s) excluído(s). Em cada caso foi mantido o registro com mais horas ou o ajuste manual.${lockedSuffix}`,
       };
     }),
 
@@ -3258,11 +3398,27 @@ export const fechamentoPontoRouter = router({
         (criteria as any)[c.chave] = parseFloat(String(c.valor));
       }
 
+      // Per-day lock: descobrir intervalos de ciclos consolidados que abrangem as datas pendentes.
+      const datasPendentes = pendingRecords.map(r => String(r.data)).filter(Boolean);
+      const minData = datasPendentes.length > 0 ? datasPendentes.reduce((a, b) => a < b ? a : b) : null;
+      const maxData = datasPendentes.length > 0 ? datasPendentes.reduce((a, b) => a > b ? a : b) : null;
+      const lockedRanges = (minData && maxData)
+        ? await getLockedRangesInWindow(db, input, minData, maxData)
+        : [];
+      const isLocked = (data: string) => lockedRanges.some(r => data >= r.dataInicioCiclo && data <= r.dataFimCiclo);
+      const lockedRecordIds: number[] = [];
+
       // Converter registros não identificados em timeRecords reais
       const newTimeRecords: any[] = [];
       const newInconsistencies: any[] = [];
-      
+      const processedRecordIds: number[] = [];
+
       for (const rec of pendingRecords) {
+        if (rec.data && isLocked(String(rec.data))) {
+          lockedRecordIds.push(rec.id);
+          continue;
+        }
+        processedRecordIds.push(rec.id);
         const entrada1 = rec.entrada1 || "";
         const saida1 = rec.saida1 || "";
         const entrada2 = rec.entrada2 || "";
@@ -3405,13 +3561,15 @@ export const fechamentoPontoRouter = router({
         }
       }
 
-      // Marcar registros como vinculados
-      await db.update(unmatchedDixiRecords).set({
-        status: 'vinculado',
-        linkedEmployeeId: input.employeeId,
-        resolvidoPor: ctx.user?.name || 'sistema',
-        resolvidoEm: new Date().toISOString(),
-      }).where(and(...conditions));
+      // Marcar registros como vinculados — somente os que não estavam em ciclos consolidados.
+      if (processedRecordIds.length > 0) {
+        await db.update(unmatchedDixiRecords).set({
+          status: 'vinculado',
+          linkedEmployeeId: input.employeeId,
+          resolvidoPor: ctx.user?.name || 'sistema',
+          resolvidoEm: new Date().toISOString(),
+        }).where(inArray(unmatchedDixiRecords.id, processedRecordIds));
+      }
 
       // ===== SALVAR NA MEMÓRIA DE VINCULAÇÃO DIXI =====
       // Verifica se já existe um mapeamento para este nome
@@ -3444,7 +3602,8 @@ export const fechamentoPontoRouter = router({
 
       return {
         success: true,
-        recordsLinked: pendingRecords.length,
+        recordsLinked: processedRecordIds.length,
+        recordsLockedSkipped: lockedRecordIds.length,
         employeeName: emp.nomeCompleto,
         inconsistenciesCreated: newInconsistencies.length,
       };
@@ -3466,13 +3625,28 @@ export const fechamentoPontoRouter = router({
         conditions.push(eq(unmatchedDixiRecords.mesReferencia, input.mesReferencia));
       }
       
-      const result = await db.update(unmatchedDixiRecords).set({
-        status: 'descartado',
-        resolvidoPor: ctx.user?.name || 'sistema',
-        resolvidoEm: new Date().toISOString(),
-      }).where(and(...conditions));
+      // Per-day lock: descartar somente registros fora dos ciclos consolidados.
+      const pending = await db.select({ id: unmatchedDixiRecords.id, data: unmatchedDixiRecords.data })
+        .from(unmatchedDixiRecords).where(and(...conditions));
+      const datas = pending.map(p => String(p.data)).filter(Boolean);
+      const minD = datas.length > 0 ? datas.reduce((a, b) => a < b ? a : b) : null;
+      const maxD = datas.length > 0 ? datas.reduce((a, b) => a > b ? a : b) : null;
+      const lockedRanges = (minD && maxD) ? await getLockedRangesInWindow(db, input, minD, maxD) : [];
+      const isLocked = (data: string) => lockedRanges.some(r => data >= r.dataInicioCiclo && data <= r.dataFimCiclo);
+      const idsToDiscard = pending.filter(p => !p.data || !isLocked(String(p.data))).map(p => p.id);
+      const skippedLocked = pending.length - idsToDiscard.length;
 
-      return { success: true, discarded: (result as any)[0]?.affectedRows || 0 };
+      let discarded = 0;
+      if (idsToDiscard.length > 0) {
+        const result = await db.update(unmatchedDixiRecords).set({
+          status: 'descartado',
+          resolvidoPor: ctx.user?.name || 'sistema',
+          resolvidoEm: new Date().toISOString(),
+        }).where(inArray(unmatchedDixiRecords.id, idsToDiscard));
+        discarded = (result as any)[0]?.affectedRows || idsToDiscard.length;
+      }
+
+      return { success: true, discarded, skippedLocked };
     }),
 
   // ============================================================
@@ -3947,14 +4121,20 @@ export const fechamentoPontoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const result = await db.execute(sql`
+      // Per-day lock: não apaga datas dentro de ciclos consolidados.
+      const lockedRanges = await getLockedRangesInWindow(db!, { companyId: input.companyId }, input.dataInicio, input.dataFim);
+      const notLockedClause = lockedRanges.length > 0
+        ? sql.join(lockedRanges.map(r => sql`NOT (data >= ${r.dataInicioCiclo} AND data <= ${r.dataFimCiclo})`), sql` AND `)
+        : sql`TRUE`;
+      const result = await db!.execute(sql`
         DELETE FROM time_records
         WHERE company_id = ${input.companyId}
           AND employee_id = ${input.employeeId}
           AND data BETWEEN ${input.dataInicio} AND ${input.dataFim}
+          AND ${notLockedClause}
       `);
       const deleted = Number((result as any).rowCount ?? 0);
-      console.log(`[LimparPonto] Removidos ${deleted} registros de ponto — emp=${input.employeeId} de ${input.dataInicio} a ${input.dataFim}`);
-      return { deleted };
+      console.log(`[LimparPonto] Removidos ${deleted} registros de ponto — emp=${input.employeeId} de ${input.dataInicio} a ${input.dataFim} (lockedRanges=${lockedRanges.length})`);
+      return { deleted, lockedRangesSkipped: lockedRanges.length };
     }),
 });

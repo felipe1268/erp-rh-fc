@@ -155,6 +155,20 @@
       "when": 1774115887075,
       "tag": "0021_long_dragon_man",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1776033254000,
+      "tag": "0022_epi_performance_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1776700000000,
+      "tag": "0023_ponto_consolidacao_ciclo",
+      "breakpoints": true
     }
   ]
 }

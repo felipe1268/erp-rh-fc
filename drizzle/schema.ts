@@ -2393,6 +2393,8 @@ export const pontoConsolidacao = pgTable("ponto_consolidacao", {
         id: serial().notNull(),
         companyId: integer().notNull(),
         mesReferencia: varchar({ length: 7 }).notNull(),
+        dataInicioCiclo: date("data_inicio_ciclo", { mode: "string" }),
+        dataFimCiclo: date("data_fim_ciclo", { mode: "string" }),
         status: text().default('aberto').notNull(),
         consolidadoPor: varchar({ length: 255 }),
         consolidadoEm: timestamp({ mode: 'string' }),
@@ -2404,6 +2406,7 @@ export const pontoConsolidacao = pgTable("ponto_consolidacao", {
 },
 (table) => [
         index("ponto_consolidacao_company_mes").on(table.companyId, table.mesReferencia),
+        index("ponto_consolidacao_ciclo").on(table.companyId, table.dataInicioCiclo, table.dataFimCiclo),
 ]);
 
 export const pontoDescontos = pgTable("ponto_descontos", {
