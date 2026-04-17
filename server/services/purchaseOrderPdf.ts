@@ -5,9 +5,12 @@ import { getDb } from "../db";
 import {
   comprasOrdens,
   comprasOrdensItens,
+  comprasSolicitacoes,
+  comprasCotacoes,
   fornecedores,
   companies,
   obras,
+  users,
 } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
@@ -17,6 +20,19 @@ type ComprasOrdemItem = InferSelectModel<typeof comprasOrdensItens>;
 type Fornecedor = InferSelectModel<typeof fornecedores>;
 type Company = InferSelectModel<typeof companies>;
 type Obra = InferSelectModel<typeof obras>;
+
+interface SolicitacaoVinculada {
+  numeroSc: string | null;
+  solicitanteNome: string | null;
+  aprovadorNome: string | null;
+  aprovadoEm: string | null;
+}
+
+interface CotacaoVinculada {
+  numeroCotacao: string | null;
+  cotadorNome: string | null;
+  criadoEm: string | null;
+}
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -37,6 +53,9 @@ export interface OCData {
   fornecedor: Fornecedor | null;
   company: Company | null;
   obra: Obra | null;
+  aprovadorOcNome: string | null;
+  solicitacao: SolicitacaoVinculada | null;
+  cotacao: CotacaoVinculada | null;
 }
 
 export async function fetchOCData(ocId: number): Promise<OCData> {
@@ -75,7 +94,67 @@ export async function fetchOCData(ocId: number): Promise<OCData> {
     obra = o ?? null;
   }
 
-  return { oc, itens, fornecedor, company: company ?? null, obra };
+  // Nome de quem aprovou a OC
+  let aprovadorOcNome: string | null = null;
+  if (oc.aprovadorId) {
+    const [u] = await db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, oc.aprovadorId));
+    aprovadorOcNome = u?.name ?? null;
+  }
+
+  // Solicitação de Compra vinculada (solicitante + aprovador da SC)
+  let solicitacao: SolicitacaoVinculada | null = null;
+  if (oc.solicitacaoId) {
+    const [sc] = await db
+      .select()
+      .from(comprasSolicitacoes)
+      .where(eq(comprasSolicitacoes.id, oc.solicitacaoId));
+    if (sc) {
+      let scAprovadorNome: string | null = null;
+      if (sc.aprovadorId) {
+        const [u2] = await db
+          .select({ name: users.name })
+          .from(users)
+          .where(eq(users.id, sc.aprovadorId));
+        scAprovadorNome = u2?.name ?? null;
+      }
+      solicitacao = {
+        numeroSc: sc.numeroSc ?? null,
+        solicitanteNome: sc.criadoPorNome ?? null,
+        aprovadorNome: scAprovadorNome,
+        aprovadoEm: sc.aprovadoEm ?? null,
+      };
+    }
+  }
+
+  // Cotação vinculada (quem cotou)
+  let cotacao: CotacaoVinculada | null = null;
+  if (oc.cotacaoId) {
+    const [cot] = await db
+      .select()
+      .from(comprasCotacoes)
+      .where(eq(comprasCotacoes.id, oc.cotacaoId));
+    if (cot) {
+      cotacao = {
+        numeroCotacao: cot.numeroCotacao ?? null,
+        cotadorNome: cot.criadoPorNome ?? null,
+        criadoEm: cot.criadoEm ?? null,
+      };
+    }
+  }
+
+  return {
+    oc,
+    itens,
+    fornecedor,
+    company: company ?? null,
+    obra,
+    aprovadorOcNome,
+    solicitacao,
+    cotacao,
+  };
 }
 
 function resolveLogoSource(logoUrl: string | null | undefined): string | Buffer | null {
@@ -95,7 +174,7 @@ function resolveLogoSource(logoUrl: string | null | undefined): string | Buffer 
 }
 
 export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
-  const { oc, itens, fornecedor, company, obra } = data;
+  const { oc, itens, fornecedor, company, obra, aprovadorOcNome, solicitacao, cotacao } = data;
   const doc = new PDFDocument({ size: "A4", margin: 40 });
 
   const pageW = doc.page.width;
@@ -445,17 +524,96 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  // ASSINATURAS + RODAPÉ (tudo junto, sem posição absoluta)
+  // RASTREABILIDADE / AUDITORIA
   // ══════════════════════════════════════════════════════════════════════
-  y += 120;
+  y = checkPage(80, y);
+  y += 6;
+  y = sectionTitle("Rastreabilidade do Pedido", y);
+
+  const fmtDateTime = (s: string | null | undefined): string => {
+    if (!s) return "—";
+    try {
+      const d = new Date(s);
+      return `${d.toLocaleDateString("pt-BR")} ${d.toLocaleTimeString("pt-BR")}`;
+    } catch { return s; }
+  };
+
+  const auditLinhas: Array<{ rotulo: string; valor: string }> = [];
+  if (solicitacao) {
+    auditLinhas.push({
+      rotulo: `Solicitação ${solicitacao.numeroSc || ""}`.trim() + " — criada por",
+      valor: solicitacao.solicitanteNome || "—",
+    });
+    auditLinhas.push({
+      rotulo: "Solicitação aprovada por",
+      valor: solicitacao.aprovadorNome
+        ? `${solicitacao.aprovadorNome}${solicitacao.aprovadoEm ? "  ·  " + fmtDateTime(solicitacao.aprovadoEm) : ""}`
+        : "—",
+    });
+  }
+  if (cotacao) {
+    auditLinhas.push({
+      rotulo: `Cotação ${cotacao.numeroCotacao || ""}`.trim() + " — registrada por",
+      valor: `${cotacao.cotadorNome || "—"}${cotacao.criadoEm ? "  ·  " + fmtDateTime(cotacao.criadoEm) : ""}`,
+    });
+  }
+  auditLinhas.push({
+    rotulo: `OC ${oc.numeroOc} — emitida por`,
+    valor: `${oc.criadoPorNome || "—"}  ·  ${fmtDateTime(oc.criadoEm)}`,
+  });
+  auditLinhas.push({
+    rotulo: "OC aprovada por",
+    valor: aprovadorOcNome
+      ? `${aprovadorOcNome}  ·  ${oc.aprovacaoStatus || ""}`.trim()
+      : (oc.aprovacaoStatus === "aprovada" || oc.aprovacaoStatus === "aprovado"
+          ? "Aprovada (responsável não registrado)"
+          : "—"),
+  });
+  if (oc.aprovacaoExtraAdminNome) {
+    auditLinhas.push({
+      rotulo: "Aprovação extra (admin)",
+      valor: `${oc.aprovacaoExtraAdminNome}  ·  ${fmtDateTime(oc.aprovacaoExtraEm)}`,
+    });
+  }
+
+  doc.font("Helvetica").fontSize(8).fillColor(dark);
+  for (const linha of auditLinhas) {
+    const rotuloTxt = linha.rotulo + ": ";
+    const valorTxt = linha.valor;
+    doc.font("Helvetica-Bold").fontSize(8);
+    const rotW = doc.widthOfString(rotuloTxt);
+    doc.font("Helvetica").fontSize(8);
+    const linhaH = Math.max(
+      11,
+      doc.heightOfString(valorTxt, { width: cW - rotW }) + 1
+    );
+    y = checkPage(linhaH + 2, y);
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(dark)
+       .text(rotuloTxt, mL, y, { continued: true })
+       .font("Helvetica").text(valorTxt, { width: cW - rotW });
+    y += linhaH;
+  }
+  y += 4;
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ASSINATURAS + RODAPÉ
+  // ══════════════════════════════════════════════════════════════════════
+  y = checkPage(60, y);
+  y += 30;
   const sigW = (cW - 60) / 2;
+  // Linha de assinatura — Responsável pela Compra
   doc.strokeColor(dark).lineWidth(0.5).moveTo(mL, y).lineTo(mL + sigW, y).stroke();
-  doc.font("Helvetica").fontSize(7.5).fillColor(dark)
-    .text("Responsável pela Compra", mL, y + 4, { width: sigW, align: "center" });
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(dark)
+    .text((oc as any).criadoPorNome || "—", mL, y + 3, { width: sigW, align: "center" });
+  doc.font("Helvetica").fontSize(7).fillColor(midGray)
+    .text("Responsável pela Compra", mL, y + 14, { width: sigW, align: "center" });
+  // Linha de assinatura — Aprovação
   doc.strokeColor(dark).lineWidth(0.5).moveTo(pageW - mR - sigW, y).lineTo(pageW - mR, y).stroke();
-  doc.font("Helvetica").fontSize(7.5).fillColor(dark)
-    .text("Aprovação", pageW - mR - sigW, y + 4, { width: sigW, align: "center" });
-  y += 18;
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(dark)
+    .text(aprovadorOcNome || "—", pageW - mR - sigW, y + 3, { width: sigW, align: "center" });
+  doc.font("Helvetica").fontSize(7).fillColor(midGray)
+    .text("Aprovação", pageW - mR - sigW, y + 14, { width: sigW, align: "center" });
+  y += 28;
   drawHLine(y, borderColor, 0.3);
   y += 3;
   doc.font("Helvetica").fontSize(6).fillColor(midGray)
