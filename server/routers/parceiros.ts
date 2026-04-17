@@ -247,7 +247,10 @@ export const parceirosRouter = router({
             dataCompra: input.dataCompra,
             descricaoItens: input.descricaoItens ?? null,
             valor: String(valorNum),
-            competenciaDesconto: input.competenciaDesconto ?? null,
+            // Se não informada, deriva de dataCompra (YYYY-MM)
+            competenciaDesconto:
+              input.competenciaDesconto ??
+              (input.dataCompra ? input.dataCompra.slice(0, 7) : null),
             lancadoPor: ctx.user?.name || "Sistema",
           } as any)
           .returning({ id: lancamentosParceiros.id });

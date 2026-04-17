@@ -54,16 +54,16 @@ export default function LancamentosParceiros() {
 
   const filtered = useMemo(() => {
     let list = lancamentos;
-    if (filterStatus !== "all") list = list.filter((l: any) => l.statusLancamento === filterStatus);
+    if (filterStatus !== "all") list = list.filter((l: any) => l.status === filterStatus);
     return list;
   }, [lancamentos, filterStatus]);
 
   const totalAprovado = useMemo(() => {
-    return lancamentos.filter((l: any) => l.statusLancamento === "aprovado").reduce((acc: number, l: any) => acc + parseFloat(l.valor || "0"), 0);
+    return lancamentos.filter((l: any) => l.status === "aprovado").reduce((acc: number, l: any) => acc + parseFloat(l.valor || "0"), 0);
   }, [lancamentos]);
 
   const totalPendente = useMemo(() => {
-    return lancamentos.filter((l: any) => l.statusLancamento === "pendente").reduce((acc: number, l: any) => acc + parseFloat(l.valor || "0"), 0);
+    return lancamentos.filter((l: any) => l.status === "pendente").reduce((acc: number, l: any) => acc + parseFloat(l.valor || "0"), 0);
   }, [lancamentos]);
 
   const openNew = () => {
@@ -198,7 +198,7 @@ export default function LancamentosParceiros() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-foreground">{getColaboradorNome(l.employeeId)}</h3>
-                      {statusBadge(l.statusLancamento)}
+                      {statusBadge(l.status)}
                     </div>
                     <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
                       <span className="flex items-center gap-0.5"><Store className="h-3 w-3" />{getParceiroNome(l.parceiroConveniadoId)}</span>
@@ -216,7 +216,7 @@ export default function LancamentosParceiros() {
                     <Button size="sm" variant="outline" onClick={() => handleUpload(l.id)}>
                       <Upload className="h-3.5 w-3.5 mr-1" /> Comprovante
                     </Button>
-                    {l.statusLancamento === "pendente" && (
+                    {l.status === "pendente" && (
                       <>
                         <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => aprovarMut.mutate({ id: l.id, aprovado: true })}>
                           <CheckCircle className="h-3.5 w-3.5 mr-1" /> Aprovar
