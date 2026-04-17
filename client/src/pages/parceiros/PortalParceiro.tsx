@@ -17,6 +17,28 @@ import {
   Shield, Key, Pencil, Trash2, AlertTriangle
 } from "lucide-react";
 
+// Calcula a competência do desconto a partir da data da compra.
+// Regra (mesma do servidor em `parceiros.lancamentos.create`):
+//   dia <= 15 → competência = mês da compra
+//   dia >= 16 → competência = mês seguinte
+function calcCompetenciaDesconto(dataCompra?: string | null): string | null {
+  if (!dataCompra) return null;
+  const m = dataCompra.slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  let y = Number(m[1]);
+  let mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (!y || !mo || !d || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  // Valida data civil real (rejeita 2026-02-31 etc.)
+  const probe = new Date(Date.UTC(y, mo - 1, d));
+  if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d) return null;
+  if (d >= 16) {
+    mo += 1;
+    if (mo > 12) { mo = 1; y += 1; }
+  }
+  return `${String(mo).padStart(2, "0")}/${y}`;
+}
+
 export default function PortalParceiro() {
   const { user } = useAuth();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
@@ -339,6 +361,15 @@ export default function PortalParceiro() {
                   <div>
                     <label className="text-sm font-medium mb-1 block">Data da Compra *</label>
                     <Input type="date" value={novoLancamento.dataCompra} onChange={(e) => setNovoLancamento({ ...novoLancamento, dataCompra: e.target.value })} />
+                    {(() => {
+                      const comp = calcCompetenciaDesconto(novoLancamento.dataCompra);
+                      if (!comp) return null;
+                      return (
+                        <p className="text-xs text-muted-foreground mt-1" data-testid="text-competencia-desconto">
+                          Competência do desconto: <span className="font-medium text-foreground">{comp}</span>
+                        </p>
+                      );
+                    })()}
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-1 block">Valor (R$) *</label>
@@ -459,6 +490,15 @@ export default function PortalParceiro() {
                 <div>
                   <label className="text-sm font-medium mb-1 block">Data da Compra</label>
                   <Input type="date" value={editLancamento.dataCompra?.split("T")[0] || ""} onChange={(e) => setEditLancamento({ ...editLancamento, dataCompra: e.target.value })} />
+                  {(() => {
+                    const comp = calcCompetenciaDesconto(editLancamento.dataCompra?.split("T")[0]);
+                    if (!comp) return null;
+                    return (
+                      <p className="text-xs text-muted-foreground mt-1" data-testid="text-competencia-desconto-edit">
+                        Competência do desconto: <span className="font-medium text-foreground">{comp}</span>
+                      </p>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">Valor (R$)</label>

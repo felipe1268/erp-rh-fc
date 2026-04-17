@@ -12,6 +12,28 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Receipt, Plus, Search, CheckCircle, XCircle, Clock, Upload, FileText, Eye, Store } from "lucide-react";
 
+// Calcula a competência do desconto a partir da data da compra.
+// Regra (mesma do servidor em `parceiros.lancamentos.create`):
+//   dia <= 15 → competência = mês da compra
+//   dia >= 16 → competência = mês seguinte
+function calcCompetenciaDesconto(dataCompra?: string | null): string | null {
+  if (!dataCompra) return null;
+  const m = dataCompra.slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  let y = Number(m[1]);
+  let mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (!y || !mo || !d || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  // Valida data civil real (rejeita 2026-02-31 etc.)
+  const probe = new Date(Date.UTC(y, mo - 1, d));
+  if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d) return null;
+  if (d >= 16) {
+    mo += 1;
+    if (mo > 12) { mo = 1; y += 1; }
+  }
+  return `${String(mo).padStart(2, "0")}/${y}`;
+}
+
 // Período padrão estilo folha: dia 16 do mês anterior até dia 15 do mês atual
 function periodoPadrao() {
   const hoje = new Date();
@@ -296,7 +318,19 @@ export default function LancamentosParceiros() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Data da Compra</Label><Input type="date" value={form.dataCompra || ""} onChange={(e) => setForm({ ...form, dataCompra: e.target.value })} /></div>
+              <div>
+                <Label>Data da Compra</Label>
+                <Input type="date" value={form.dataCompra || ""} onChange={(e) => setForm({ ...form, dataCompra: e.target.value })} />
+                {(() => {
+                  const comp = calcCompetenciaDesconto(form.dataCompra);
+                  if (!comp) return null;
+                  return (
+                    <p className="text-xs text-muted-foreground mt-1" data-testid="text-competencia-desconto">
+                      Competência do desconto: <span className="font-medium text-foreground">{comp}</span>
+                    </p>
+                  );
+                })()}
+              </div>
               <div><Label>Valor (R$) *</Label><Input type="number" step="0.01" value={form.valor || ""} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="0.00" /></div>
             </div>
             <div><Label>Descrição dos Itens</Label><Textarea value={form.descricaoItens || ""} onChange={(e) => setForm({ ...form, descricaoItens: e.target.value })} rows={3} placeholder="Descreva os itens comprados..." /></div>
