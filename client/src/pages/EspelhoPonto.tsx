@@ -73,8 +73,11 @@ function nextDay(d: string): string {
   return dt.toISOString().slice(0, 10);
 }
 
-function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>, dataDesligamento?: string | null): DayStatus {
-  if (dataDesligamento && dateStr >= nextDay(dataDesligamento)) return "desligado";
+function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>, dataDesligamento?: string | null, empStatus?: string | null): DayStatus {
+  // Só marca como "desligado" se o status atual do cadastro for Desligado E a data
+  // for posterior ao desligamento. Isso evita que uma dataDesligamentoEfetiva
+  // residual (de um desligamento cancelado) mascare dias de funcionário Ativo.
+  if (empStatus === "Desligado" && dataDesligamento && dateStr >= nextDay(dataDesligamento)) return "desligado";
   const { dow, isSun, isSat } = dayInfo(dateStr);
   if (isSun) return "domingo";
   if (isSat) return "sabado";
@@ -502,7 +505,9 @@ export default function EspelhoPonto() {
     [queryParams]
   );
 
-  const dataDesligamento: string | null = empData?.dataDesligamentoEfetiva ?? null;
+  const empStatus: string | null = empData?.status ?? null;
+  const dataDesligamento: string | null =
+    empStatus === "Desligado" ? (empData?.dataDesligamentoEfetiva ?? null) : null;
 
   const summary = useMemo(() => {
     let trabalhados = 0, diasFalta = 0, diasFerias = 0, totalHEMins = 0, totalAtrasoMins = 0, totalTrabMins = 0;
@@ -809,7 +814,7 @@ export default function EspelhoPonto() {
               {allDays.map((dateStr) => {
                 const { name, num, monthNum, isSun, isSat } = dayInfo(dateStr);
                 const rec = recordMap[dateStr] || null;
-                const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento);
+                const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento, empStatus);
                 const cfg = STATUS_STYLE[s];
                 const isFerias = s === "ferias";
                 const isWeekend = isSun || isSat;
