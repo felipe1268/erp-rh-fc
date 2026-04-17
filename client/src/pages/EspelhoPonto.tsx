@@ -816,7 +816,13 @@ export default function EspelhoPonto() {
                 const rec = recordMap[dateStr] || null;
                 const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento, empStatus);
                 const cfg = STATUS_STYLE[s];
+                // Dia em férias só bloqueia edição quando NÃO há registro. Se existe
+                // batida (ainda que ímpar), permitimos editar para corrigir/excluir —
+                // isso acontece quando a catraca registrou algo por engano e precisa
+                // ser limpo mesmo estando em férias.
                 const isFerias = s === "ferias";
+                const hasRec = !!rec;
+                const blockEdit = isFerias && !hasRec;
                 const isWeekend = isSun || isSat;
                 const heM = rec ? parseHHMM(rec.horasExtras) : 0;
                 const atrasM = rec ? parseHHMM(rec.atrasos) : 0;
@@ -852,17 +858,17 @@ export default function EspelhoPonto() {
                       </div>
                     </div>
 
-                    {/* Entrada 1 — clicável (bloqueado em férias) */}
-                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${isFerias ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !isFerias && openEdit(dateStr, rec)}>{isFerias ? <span className="text-teal-300 text-xs">—</span> : T(rec?.entrada1)}</div>
+                    {/* Entrada 1 — clicável (bloqueado em férias sem registro) */}
+                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${blockEdit ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !blockEdit && openEdit(dateStr, rec)}>{isFerias && !hasRec ? <span className="text-teal-300 text-xs">—</span> : T(rec?.entrada1)}</div>
                     {/* Saída 1 — clicável */}
-                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${isFerias ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !isFerias && openEdit(dateStr, rec)}>{isFerias ? <span className="text-teal-300 text-xs">—</span> : T(rec?.saida1)}</div>
+                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${blockEdit ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !blockEdit && openEdit(dateStr, rec)}>{isFerias && !hasRec ? <span className="text-teal-300 text-xs">—</span> : T(rec?.saida1)}</div>
                     {/* Entrada 2 — clicável */}
-                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${isFerias ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !isFerias && openEdit(dateStr, rec)}>{isFerias ? <span className="text-teal-300 text-xs">—</span> : T(rec?.entrada2)}</div>
+                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${blockEdit ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !blockEdit && openEdit(dateStr, rec)}>{isFerias && !hasRec ? <span className="text-teal-300 text-xs">—</span> : T(rec?.entrada2)}</div>
                     {/* Saída 2 — clicável */}
-                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${isFerias ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !isFerias && openEdit(dateStr, rec)}>{isFerias ? <span className="text-teal-300 text-xs">—</span> : T(rec?.saida2)}</div>
+                    <div className={`px-2 py-3 text-center no-print rounded transition-colors ${blockEdit ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !blockEdit && openEdit(dateStr, rec)}>{isFerias && !hasRec ? <span className="text-teal-300 text-xs">—</span> : T(rec?.saida2)}</div>
                     {/* Turno 3 — só mostra se algum dia do período tem 3º turno */}
                     {hasThirdShift && (
-                      <div className={`px-2 py-3 text-center no-print rounded transition-colors ${isFerias ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !isFerias && openEdit(dateStr, rec)}>
+                      <div className={`px-2 py-3 text-center no-print rounded transition-colors ${blockEdit ? "cursor-default" : "cursor-pointer hover:bg-blue-50/60"}`} onClick={() => !blockEdit && openEdit(dateStr, rec)}>
                         {rec?.entrada3 || rec?.saida3
                           ? <span className="font-mono text-sm text-slate-600">{rec?.entrada3 || "—"} / {rec?.saida3 || "—"}</span>
                           : <span className="text-slate-200 text-base">—</span>}
@@ -927,13 +933,13 @@ export default function EspelhoPonto() {
                         : <span className="text-xs text-slate-300">{isWeekend ? cfg.label : ""}</span>}
                     </div>
 
-                    {/* Editar — oculto na impressão, bloqueado em férias */}
+                    {/* Editar — oculto na impressão, bloqueado em férias sem registro */}
                     <div className="px-1 py-3 flex items-center justify-center no-print">
                       <button
-                        onClick={() => !isFerias && openEdit(dateStr, rec)}
-                        disabled={isFerias}
-                        className={`p-1.5 rounded-md transition-colors ${isFerias ? "cursor-not-allowed opacity-30 text-teal-400" : "hover:bg-blue-50 text-slate-300 hover:text-blue-600"}`}
-                        title={isFerias ? "Funcionário em férias — edição bloqueada" : "Editar horários deste dia"}
+                        onClick={() => !blockEdit && openEdit(dateStr, rec)}
+                        disabled={blockEdit}
+                        className={`p-1.5 rounded-md transition-colors ${blockEdit ? "cursor-not-allowed opacity-30 text-teal-400" : "hover:bg-blue-50 text-slate-300 hover:text-blue-600"}`}
+                        title={blockEdit ? "Funcionário em férias — edição bloqueada" : (isFerias && hasRec ? "Corrigir batida registrada durante férias" : "Editar horários deste dia")}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
