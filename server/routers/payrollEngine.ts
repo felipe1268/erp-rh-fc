@@ -5039,6 +5039,15 @@ Responda EXATAMENTE no formato JSON abaixo:`;
           AND ed.mes_referencia = ${input.mesReferencia}
         ORDER BY e."nomeCompleto"
       `)) as any).rows || [];
+      // Janela de ponto: dia 16 do mês anterior até dia 15 do mês de competência.
+      // Ex.: competência 2026-03 → 2026-02-16 a 2026-03-15.
+      const [yyStr, mmStr] = String(input.mesReferencia).split("-");
+      const yy = Number(yyStr);
+      const mm = Number(mmStr);
+      const prevYY = mm === 1 ? yy - 1 : yy;
+      const prevMM = mm === 1 ? 12 : mm - 1;
+      const cycleStart = `${prevYY}-${String(prevMM).padStart(2, "0")}-16`;
+      const cycleEnd   = `${yy}-${String(mm).padStart(2, "0")}-15`;
       const conv = ((await db.execute(sql`
         SELECT lp.id, lp."employeeId", lp.valor, lp.status,
                COALESCE(lp.descricao_itens, p.razao_social, 'Compra em parceiro') AS descricao,
@@ -5050,8 +5059,8 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         WHERE lp."companyId" = ${input.companyId}
           AND (
             lp.competencia_desconto = ${input.mesReferencia}
-            OR (lp.competencia_desconto IS NULL
-                AND TO_CHAR(lp.data_compra, 'YYYY-MM') = ${input.mesReferencia})
+            OR (lp.data_compra::date >= ${cycleStart}::date
+                AND lp.data_compra::date <= ${cycleEnd}::date)
           )
         ORDER BY e."nomeCompleto"
       `)) as any).rows || [];

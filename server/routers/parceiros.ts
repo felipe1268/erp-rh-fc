@@ -7,7 +7,7 @@ import {
   pagamentosParceiros,
   employees,
 } from "../../drizzle/schema";
-import { eq, and, desc, sql, isNull, inArray, gte, lte } from "drizzle-orm";
+import { eq, and, or, desc, sql, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 
@@ -251,10 +251,17 @@ export const parceirosRouter = router({
             dataCompra: input.dataCompra,
             descricaoItens: input.descricaoItens ?? null,
             valor: String(valorNum),
-            // Se não informada, deriva de dataCompra (YYYY-MM)
+            // Se não informada, deriva de dataCompra usando o ciclo do ponto:
+            // dia <= 15 → competência = mês da compra
+            // dia >= 16 → competência = mês seguinte
             competenciaDesconto:
               input.competenciaDesconto ??
-              (input.dataCompra ? input.dataCompra.slice(0, 7) : null),
+              (input.dataCompra ? (() => {
+                const [yS, mS, dS] = input.dataCompra.slice(0, 10).split("-");
+                let y = Number(yS); let m = Number(mS); const d = Number(dS);
+                if (d >= 16) { m += 1; if (m > 12) { m = 1; y += 1; } }
+                return `${y}-${String(m).padStart(2, "0")}`;
+              })() : null),
             lancadoPor: ctx.user?.name || "Sistema",
           } as any)
           .returning({ id: lancamentosParceiros.id });
@@ -344,11 +351,24 @@ export const parceirosRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), competencia: z.string() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
+      // Janela de ponto: dia 16 do mês anterior até dia 15 do mês de competência.
+      const [yyStr, mmStr] = String(input.competencia).split("-");
+      const yy = Number(yyStr); const mm = Number(mmStr);
+      const prevYY = mm === 1 ? yy - 1 : yy;
+      const prevMM = mm === 1 ? 12 : mm - 1;
+      const cycleStart = `${prevYY}-${String(prevMM).padStart(2, "0")}-16`;
+      const cycleEnd   = `${yy}-${String(mm).padStart(2, "0")}-15`;
       const lancamentos = await db.select().from(lancamentosParceiros)
         .where(and(
           companyFilter(lancamentosParceiros.companyId, input),
-          eq(lancamentosParceiros.competenciaDesconto, input.competencia),
           eq(lancamentosParceiros.status, "aprovado"),
+          or(
+            eq(lancamentosParceiros.competenciaDesconto, input.competencia),
+            and(
+              gte(lancamentosParceiros.dataCompra, cycleStart),
+              lte(lancamentosParceiros.dataCompra, cycleEnd),
+            )!,
+          )!,
         ))
         .orderBy(lancamentosParceiros.employeeNome);
 
