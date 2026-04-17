@@ -234,10 +234,26 @@ async function startServer() {
             ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_inss NUMERIC(6,3) DEFAULT 0;
             ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_irrf NUMERIC(6,3) DEFAULT 0;
             ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_outras_retencoes NUMERIC(6,3) DEFAULT 0;
+            ALTER TABLE ponto_consolidacao ADD COLUMN IF NOT EXISTS data_inicio_ciclo DATE;
+            ALTER TABLE ponto_consolidacao ADD COLUMN IF NOT EXISTS data_fim_ciclo DATE;
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$
         `);
         console.log("[ColFix] Bloco principal de ALTER TABLE OK");
+
+        // Índice + backfill do ciclo da folha em ponto_consolidacao (Task #29)
+        try {
+          await db.execute(sql`
+            CREATE INDEX IF NOT EXISTS "ponto_consolidacao_ciclo"
+              ON "ponto_consolidacao" ("companyId", "data_inicio_ciclo", "data_fim_ciclo")
+          `);
+          await db.execute(sql`
+            UPDATE "ponto_consolidacao"
+               SET "data_inicio_ciclo" = (("mesReferencia" || '-01')::date),
+                   "data_fim_ciclo"    = (date_trunc('month', ("mesReferencia" || '-01')::date) + interval '1 month - 1 day')::date
+             WHERE "data_inicio_ciclo" IS NULL OR "data_fim_ciclo" IS NULL
+          `);
+        } catch {}
 
         // ─── Backfill: nomes de criadores em documentos de compras ──────────
         // Preenche `criado_por_nome` em SCs/Cotações/OCs antigas onde só
