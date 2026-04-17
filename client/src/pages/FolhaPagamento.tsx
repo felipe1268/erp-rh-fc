@@ -3839,6 +3839,9 @@ export default function FolhaPagamento() {
                       return filtered.map((f: any, i: number) => {
                       const manuais = f.descontosManuais || {};
                       // Bases calculadas para 11 categorias (Rev. 1217)
+                      // Detecta payload legado (Rev. ≤ 1216): calculadoOriginal antigo só tinha 7 chaves (sem 'ir').
+                      // Em legado, VA era coluna separada — folding em "outros" para a soma horizontal fechar com o Total.
+                      const isLegacy = !f.calculadoOriginal || f.calculadoOriginal.ir === undefined;
                       const calcVale = f.descontoAdiantamento || 0;
                       const calcInss = f.descontoInss || 0;
                       const calcIr = f.descontoIrrf || 0;
@@ -3849,9 +3852,11 @@ export default function FolhaPagamento() {
                       const calcVt = f.vtValor || 0;
                       const calcConv = f.descontoConvenio || 0;
                       const calcEpi = f.descontoEpi || 0;
-                      const calcOutros = (f.descontoOutros != null)
-                        ? f.descontoOutros
-                        : ((f.seguroVidaValor || 0) + (f.acertoEscuroValor || 0) + (f.descontoVaTotal || 0));
+                      const calcOutros = isLegacy
+                        ? ((f.descontoOutros || 0) + (f.descontoVaTotal || 0))
+                        : ((f.descontoOutros != null)
+                            ? f.descontoOutros
+                            : ((f.seguroVidaValor || 0) + (f.acertoEscuroValor || 0) + (f.descontoVaTotal || 0)));
                       const valVale = manuais.vale != null ? Number(manuais.vale) : calcVale;
                       const valInss = manuais.inss != null ? Number(manuais.inss) : calcInss;
                       const valIr = manuais.ir != null ? Number(manuais.ir) : calcIr;
@@ -3917,7 +3922,11 @@ export default function FolhaPagamento() {
                         const totVt = sum('vt', (f) => f.vtValor || 0);
                         const totConv = sum('convenio', (f) => f.descontoConvenio || 0);
                         const totEpi = sum('epi', (f) => f.descontoEpi || 0);
-                        const totOutros = sum('outros', (f) => (f.descontoOutros != null) ? Number(f.descontoOutros) : ((f.seguroVidaValor || 0) + (f.acertoEscuroValor || 0) + (f.descontoVaTotal || 0)));
+                        const totOutros = sum('outros', (f) => {
+                          const isLegacy = !f.calculadoOriginal || f.calculadoOriginal.ir === undefined;
+                          if (isLegacy) return (Number(f.descontoOutros) || 0) + (Number(f.descontoVaTotal) || 0);
+                          return (f.descontoOutros != null) ? Number(f.descontoOutros) : ((f.seguroVidaValor || 0) + (f.acertoEscuroValor || 0) + (f.descontoVaTotal || 0));
+                        });
                         return (
                           <>
                             <td className="text-right py-3 px-2 border-l border-red-200 text-orange-600">{formatBRL(totVale)}</td>
