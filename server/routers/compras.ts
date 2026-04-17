@@ -7688,6 +7688,7 @@ Retorne APENAS um JSON válido neste formato:
       const obraConditions: any[] = [
         eq(obras.companyId, input.companyId),
         eq(obras.isActive, 1),
+        isNull(obras.deletedAt),
       ];
       const so = (input.statusObra || "").toLowerCase();
       if (so && so !== "todas") {
