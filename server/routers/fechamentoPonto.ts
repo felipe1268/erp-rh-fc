@@ -2448,6 +2448,15 @@ export const fechamentoPontoRouter = router({
       };
     }),
 
+  // Verifica se uma data específica está dentro de um ciclo consolidado.
+  // Usado pelo Espelho de Ponto para avisar antes da edição.
+  isDateLocked: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), data: z.string() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      return await isDateLocked(db, input, input.data);
+    }),
+
   // ===================== CONFLITOS OBRA/DIA =====================
   getConflitosObraDia: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),

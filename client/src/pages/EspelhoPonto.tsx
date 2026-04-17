@@ -132,15 +132,26 @@ interface EditDialogProps {
   record: any | null;
   employeeId: number;
   companyId: number;
+  companyIds?: number[];
+  isAdminMaster: boolean;
   onSaved: () => void;
 }
 
-function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onSaved }: EditDialogProps) {
+function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, companyIds, isAdminMaster, onSaved }: EditDialogProps) {
   const { name, num, monthNum, month, year, dow } = dayInfo(dateStr);
   const mesReferencia = `${year}-${monthNum}`;
 
   const isApontamento = record?.fonte === "apontamento" || record?.fonte === "dixi+apontamento";
   const [timeLocked, setTimeLocked] = useState(isApontamento);
+
+  // Verifica se o dia está em um ciclo consolidado (bloqueia edição)
+  const lockedQ = trpc.fechamentoPonto.isDateLocked.useQuery(
+    { companyId, companyIds, data: dateStr },
+    { enabled: open && !!dateStr && (companyId > 0 || (companyIds?.length ?? 0) > 0) }
+  );
+  const cycleLocked = lockedQ.data?.locked === true;
+  const cycleMesRef = lockedQ.data?.mesReferencia;
+  const checkingLock = lockedQ.isLoading;
 
   const [form, setForm] = useState<EditForm>({
     entrada1: record?.entrada1 || "",
@@ -179,6 +190,10 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
   });
 
   function handleSave() {
+    if (cycleLocked) {
+      toast.error(`Dia ${dateStr} pertence ao ciclo consolidado${cycleMesRef ? ` de ${cycleMesRef}` : ""}. Desconsolide antes de alterar.`);
+      return;
+    }
     saveMut.mutate({
       companyId,
       employeeId,
@@ -289,13 +304,34 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
         </DialogHeader>
 
         <div className="space-y-4 py-1">
-          {/* Info note */}
-          <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-            <Info className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
-            <span>Esta edição será gravada como <strong>ajuste manual</strong> e sincronizada com o Fechamento de Ponto, substituindo o registro original.</span>
-          </div>
+          {/* Aviso de ciclo consolidado — bloqueia edição */}
+          {cycleLocked && (
+            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800">
+              <Lock className="h-4 w-4 mt-0.5 shrink-0 text-red-600" />
+              <div className="space-y-1">
+                <p className="font-semibold">Dia em ciclo consolidado{cycleMesRef ? ` (${cycleMesRef})` : ""} — edição bloqueada.</p>
+                {isAdminMaster ? (
+                  <p>
+                    Para alterar este dia, vá em <strong>Fechamento de Ponto</strong>, abra o mês <strong>{cycleMesRef || mesReferencia}</strong> e use <strong>Desconsolidar Ciclo</strong>. Depois retorne aqui para registrar o ajuste.
+                  </p>
+                ) : (
+                  <p>
+                    Solicite ao <strong>Admin Master</strong> que desconsolide o ciclo de <strong>{cycleMesRef || mesReferencia}</strong> em Fechamento de Ponto antes de ajustar este dia.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
-          {isApontamento && (
+          {/* Info note */}
+          {!cycleLocked && (
+            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+              <Info className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+              <span>Esta edição será gravada como <strong>ajuste manual</strong> e sincronizada com o Fechamento de Ponto, substituindo o registro original.</span>
+            </div>
+          )}
+
+          {isApontamento && !cycleLocked && (
             <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
               <div className="flex items-center gap-2 text-xs text-slate-600">
                 {timeLocked ? <Lock className="h-3.5 w-3.5 text-slate-400" /> : <Unlock className="h-3.5 w-3.5 text-amber-600" />}
@@ -315,8 +351,8 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 1</p>
             <div className="grid grid-cols-2 gap-3">
-              <TimeInput label="Entrada" field="entrada1" disabled={timeLocked} />
-              <TimeInput label="Saída"   field="saida1" disabled={timeLocked} />
+              <TimeInput label="Entrada" field="entrada1" disabled={timeLocked || cycleLocked} />
+              <TimeInput label="Saída"   field="saida1" disabled={timeLocked || cycleLocked} />
             </div>
           </div>
 
@@ -324,8 +360,8 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 2 <span className="font-normal normal-case">(intervalo)</span></p>
             <div className="grid grid-cols-2 gap-3">
-              <TimeInput label="Entrada" field="entrada2" disabled={timeLocked} />
-              <TimeInput label="Saída"   field="saida2" disabled={timeLocked} />
+              <TimeInput label="Entrada" field="entrada2" disabled={timeLocked || cycleLocked} />
+              <TimeInput label="Saída"   field="saida2" disabled={timeLocked || cycleLocked} />
             </div>
           </div>
 
@@ -333,8 +369,8 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 3 <span className="font-normal normal-case">(opcional)</span></p>
             <div className="grid grid-cols-2 gap-3">
-              <TimeInput label="Entrada" field="entrada3" disabled={timeLocked} />
-              <TimeInput label="Saída"   field="saida3" disabled={timeLocked} />
+              <TimeInput label="Entrada" field="entrada3" disabled={timeLocked || cycleLocked} />
+              <TimeInput label="Saída"   field="saida3" disabled={timeLocked || cycleLocked} />
             </div>
           </div>
 
@@ -345,8 +381,9 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
               type="text"
               value={form.motivoAjuste}
               onChange={f("motivoAjuste")}
+              disabled={cycleLocked}
               placeholder="Ex: Correção de batida, esquecimento de registro..."
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+              className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 ${cycleLocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`}
             />
           </div>
 
@@ -356,9 +393,10 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
             <textarea
               value={form.justificativa}
               onChange={f("justificativa")}
+              disabled={cycleLocked}
               rows={5}
               placeholder="Justificativa adicional..."
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 resize-y"
+              className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 resize-y ${cycleLocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`}
             />
           </div>
         </div>
@@ -367,8 +405,17 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, onS
           <Button variant="outline" onClick={onClose} className="flex-1">
             <X className="h-4 w-4 mr-1.5" /> Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={saveMut.isPending} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white">
-            {saveMut.isPending ? <><RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />Salvando…</> : <><Save className="h-4 w-4 mr-1.5" />Salvar Ajuste</>}
+          <Button
+            onClick={handleSave}
+            disabled={saveMut.isPending || cycleLocked || checkingLock}
+            className="flex-1 bg-slate-800 hover:bg-slate-700 text-white disabled:opacity-60 disabled:cursor-not-allowed"
+            title={cycleLocked ? "Dia em ciclo consolidado — desconsolide antes de alterar" : undefined}
+          >
+            {saveMut.isPending
+              ? <><RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />Salvando…</>
+              : cycleLocked
+                ? <><Lock className="h-4 w-4 mr-1.5" />Bloqueado</>
+                : <><Save className="h-4 w-4 mr-1.5" />Salvar Ajuste</>}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -590,6 +637,8 @@ export default function EspelhoPonto() {
           record={editRecord}
           employeeId={employeeId!}
           companyId={queryCompanyId || companyId}
+          companyIds={isConstrutoras ? companyIds : undefined}
+          isAdminMaster={isAdminMaster}
           onSaved={handleEditSaved}
         />
       )}
