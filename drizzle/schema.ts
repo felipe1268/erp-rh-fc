@@ -5449,6 +5449,7 @@ export const comprasSolicitacoes = pgTable("compras_solicitacoes", {
   status:           varchar({ length: 30 }).notNull().default("rascunho"),
   aprovacaoStatus:  varchar("aprovacao_status", { length: 30 }).default("aguardando"),
   aprovadorId:      integer("aprovador_id"),
+  aprovadorNome:    varchar("aprovador_nome", { length: 255 }),
   aprovadoEm:       timestamp("aprovado_em", { mode: "string" }),
   tipo:             varchar({ length: 20 }).default("material"),
   incluirEquipamentos: boolean("incluir_equipamentos").default(false),
@@ -5514,6 +5515,9 @@ export const comprasCotacoes = pgTable("compras_cotacoes", {
   fdBdiItemId:      integer("fd_bdi_item_id"),
   criadoPorId:      integer("criado_por_id"),
   criadoPorNome:    varchar("criado_por_nome", { length: 255 }),
+  aprovadoPorId:    integer("aprovado_por_id"),
+  aprovadoPorNome:  varchar("aprovado_por_nome", { length: 255 }),
+  aprovadoEm:       timestamp("aprovado_em", { mode: "string" }),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 
@@ -5610,6 +5614,8 @@ export const comprasOrdens = pgTable("compras_ordens", {
   status:             varchar({ length: 30 }).notNull().default("pendente"),
   aprovacaoStatus:    varchar("aprovacao_status", { length: 30 }).default("aguardando"),
   aprovadorId:        integer("aprovador_id"),
+  aprovadorNome:      varchar("aprovador_nome", { length: 255 }),
+  aprovadoEm:         timestamp("aprovado_em", { mode: "string" }),
   subtotal:           numeric({ precision: 14, scale: 2 }).default("0"),
   frete:              numeric({ precision: 14, scale: 2 }).default("0"),
   freteTipo:          varchar("frete_tipo", { length: 10 }).default("cif"),

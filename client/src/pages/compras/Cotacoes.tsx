@@ -2504,6 +2504,41 @@ export default function Cotacoes() {
                     <FornecedorContatoCard contato={(detalheFullscreen as { fornecedorContato?: FornecedorContatoData | null }).fornecedorContato} />
                   )}
 
+                  {/* Rastreabilidade / Auditoria */}
+                  {(() => {
+                    const d: any = detalheFullscreen;
+                    const fmtDT = (v: any) => v ? new Date(v).toLocaleString("pt-BR") : "—";
+                    const sc = d.scInfo;
+                    return (
+                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Rastreabilidade</h2>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5">
+                          <div>
+                            <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Solicitação criada por</p>
+                            <p className="text-sm font-medium text-gray-900">{sc?.criadoPorNome || "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Solicitação aprovada por</p>
+                            <p className="text-sm font-medium text-gray-900">{sc?.aprovadorNome || "—"}</p>
+                            <p className="text-xs text-gray-500">{sc?.aprovadoEm ? fmtDT(sc.aprovadoEm) : ""}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Cotação registrada por</p>
+                            <p className="text-sm font-medium text-gray-900">{d.criadoPorNome || "—"}</p>
+                            <p className="text-xs text-gray-500">{fmtDT(d.criadoEm)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Cotação aprovada por</p>
+                            <p className="text-sm font-medium text-gray-900">{d.aprovadoPorNome || "—"}</p>
+                            <p className="text-xs text-gray-500">{d.aprovadoEm ? fmtDT(d.aprovadoEm) : ""}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                     <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
                       <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Itens</h2>

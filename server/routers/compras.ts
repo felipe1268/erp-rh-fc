@@ -1946,14 +1946,17 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   aprovarSolicitacao: protectedProcedure
     .input(z.object({ id: z.number(), aprovacaoStatus: z.string(), aprovadorId: z.number().optional(), aprovadorNome: z.string().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const aprovId = input.aprovadorId ?? ctx.user?.id ?? null;
+      const aprovNome = input.aprovadorNome || ctx.user?.name || ctx.user?.email || null;
       await db.update(comprasSolicitacoes).set({
         aprovacaoStatus: input.aprovacaoStatus,
-        aprovadorId: input.aprovadorId ?? null,
+        aprovadorId: aprovId,
+        aprovadorNome: aprovNome,
         aprovadoEm: input.aprovacaoStatus !== "aguardando" ? new Date().toISOString() : null,
         atualizadoEm: new Date().toISOString(),
-      }).where(eq(comprasSolicitacoes.id, input.id));
+      } as any).where(eq(comprasSolicitacoes.id, input.id));
 
       let cotacaoCriada: any = null;
 
@@ -2234,6 +2237,26 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id));
 
+      // Rastreabilidade: SC vinculada
+      let scInfo: { numeroSc: string | null; criadoPorNome: string | null; aprovadorNome: string | null; aprovadoEm: string | null } | null = null;
+      if (cot.solicitacaoId) {
+        const [sc] = await db.select({
+          numeroSc: comprasSolicitacoes.numeroSc,
+          criadoPorNome: comprasSolicitacoes.criadoPorNome,
+          aprovadorNome: comprasSolicitacoes.aprovadorNome,
+          aprovadorId: comprasSolicitacoes.aprovadorId,
+          aprovadoEm: comprasSolicitacoes.aprovadoEm,
+        }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+        if (sc) {
+          let aprovNome = sc.aprovadorNome;
+          if (!aprovNome && sc.aprovadorId) {
+            const [u] = await db.select({ nome: users.name }).from(users).where(eq(users.id, sc.aprovadorId));
+            aprovNome = u?.nome ?? null;
+          }
+          scInfo = { numeroSc: sc.numeroSc, criadoPorNome: sc.criadoPorNome, aprovadorNome: aprovNome, aprovadoEm: sc.aprovadoEm };
+        }
+      }
+
       let fornecedorContato: { contatoNome: string | null; telefone: string | null; contatoCelular: string | null; contatoEmail: string | null; email: string | null; nomeFantasia: string | null; razaoSocial: string | null } | null = null;
       if (cot.fornecedorId) {
         const [f] = await db.select({
@@ -2269,11 +2292,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
               total:         r.total         ?? it.total,
             };
           });
-          return { ...cot, itens: itensEnriquecidos, fornecedorContato };
+          return { ...cot, itens: itensEnriquecidos, fornecedorContato, scInfo };
         }
       }
 
-      return { ...cot, itens, fornecedorContato };
+      return { ...cot, itens, fornecedorContato, scInfo };
     }),
 
   criarCotacao: protectedProcedure
@@ -2389,9 +2412,14 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   aprovarCotacao: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      await db.update(comprasCotacoes).set({ status: "aprovada" }).where(eq(comprasCotacoes.id, input.id));
+      await db.update(comprasCotacoes).set({
+        status: "aprovada",
+        aprovadoPorId: ctx.user?.id ?? null,
+        aprovadoPorNome: ctx.user?.name || ctx.user?.email || null,
+        aprovadoEm: new Date().toISOString(),
+      } as any).where(eq(comprasCotacoes.id, input.id));
       return { ok: true };
     }),
 
@@ -4267,7 +4295,46 @@ Retorne APENAS um JSON válido neste formato:
           proximaEntregaProgramada = pendentes[0].dataEntrega;
         }
       }
-      return { ...oc, itens, fornecedor, proximaEntregaProgramada };
+      // Rastreabilidade: cotação + SC vinculadas
+      let cotInfo: { numeroCotacao: string | null; criadoPorNome: string | null; aprovadoPorNome: string | null; aprovadoEm: string | null } | null = null;
+      let scInfo: { numeroSc: string | null; criadoPorNome: string | null; aprovadorNome: string | null; aprovadoEm: string | null } | null = null;
+      if (oc.cotacaoId) {
+        const [cot] = await db.select({
+          numeroCotacao: comprasCotacoes.numeroCotacao,
+          criadoPorNome: comprasCotacoes.criadoPorNome,
+          aprovadoPorNome: comprasCotacoes.aprovadoPorNome,
+          aprovadoEm: comprasCotacoes.aprovadoEm,
+          solicitacaoId: comprasCotacoes.solicitacaoId,
+        }).from(comprasCotacoes).where(eq(comprasCotacoes.id, oc.cotacaoId));
+        if (cot) {
+          cotInfo = { numeroCotacao: cot.numeroCotacao, criadoPorNome: cot.criadoPorNome, aprovadoPorNome: cot.aprovadoPorNome, aprovadoEm: cot.aprovadoEm };
+          if (cot.solicitacaoId) {
+            const [sc] = await db.select({
+              numeroSc: comprasSolicitacoes.numeroSc,
+              criadoPorNome: comprasSolicitacoes.criadoPorNome,
+              aprovadorNome: comprasSolicitacoes.aprovadorNome,
+              aprovadorId: comprasSolicitacoes.aprovadorId,
+              aprovadoEm: comprasSolicitacoes.aprovadoEm,
+            }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+            if (sc) {
+              let aprovNome = sc.aprovadorNome;
+              if (!aprovNome && sc.aprovadorId) {
+                const [u] = await db.select({ nome: users.name }).from(users).where(eq(users.id, sc.aprovadorId));
+                aprovNome = u?.nome ?? null;
+              }
+              scInfo = { numeroSc: sc.numeroSc, criadoPorNome: sc.criadoPorNome, aprovadorNome: aprovNome, aprovadoEm: sc.aprovadoEm };
+            }
+          }
+        }
+      }
+      // Aprovador da OC (resolve nome se só temos id)
+      let ocAprovadorNome: string | null = (oc as any).aprovadorNome ?? null;
+      if (!ocAprovadorNome && oc.aprovadorId) {
+        const [u] = await db.select({ nome: users.name }).from(users).where(eq(users.id, oc.aprovadorId));
+        ocAprovadorNome = u?.nome ?? null;
+      }
+
+      return { ...oc, itens, fornecedor, proximaEntregaProgramada, cotInfo, scInfo, aprovadorNome: ocAprovadorNome };
     }),
 
   autorizarCompraSemVerba: protectedProcedure
@@ -4564,7 +4631,12 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
-      await db.update(comprasCotacoes).set({ status: "aprovada" }).where(eq(comprasCotacoes.id, input.cotacaoId));
+      await db.update(comprasCotacoes).set({
+        status: "aprovada",
+        aprovadoPorId: ctx.user?.id ?? input.userId ?? null,
+        aprovadoPorNome: ctx.user?.name || ctx.user?.email || input.userName || null,
+        aprovadoEm: new Date().toISOString(),
+      } as any).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (cot.solicitacaoId) {
         await db.update(comprasSolicitacoes).set({ status: "aprovado", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
       }
@@ -4897,11 +4969,17 @@ Retorne APENAS um JSON válido neste formato:
         throw new TRPCError({ code: "FORBIDDEN", message: "Esta OC requer aprovação de administrador (compra extra-orçamento). Use o fluxo de aprovação com senha admin." });
       }
 
+      const isAprovacao = input.status === "aprovada";
       await db.update(comprasOrdens).set({
         status: input.status,
         dataEntregaReal: input.dataEntregaReal,
         atualizadoEm: new Date().toISOString(),
-      }).where(eq(comprasOrdens.id, input.id));
+        ...(isAprovacao ? {
+          aprovadorId: ctx.user?.id ?? null,
+          aprovadorNome: ctx.user?.name || ctx.user?.email || null,
+          aprovadoEm: new Date().toISOString(),
+        } : {}),
+      } as any).where(eq(comprasOrdens.id, input.id));
 
       // ── Integração financeira ─────────────────────────────────────────
       if (input.status === "aprovada" || input.status === "entregue" || input.status === "entregue_parcial") {
