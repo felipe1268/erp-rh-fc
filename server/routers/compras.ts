@@ -7051,26 +7051,53 @@ Retorne APENAS um JSON válido neste formato:
       const etapas: TimelineEtapa[] = [];
       let prevDate: string | null = null;
 
+      const idsNeeded = new Set<number>();
+      if (sc?.criadoPorId) idsNeeded.add(sc.criadoPorId);
+      if (sc?.solicitanteId) idsNeeded.add(sc.solicitanteId);
+      if (sc?.aprovadorId) idsNeeded.add(sc.aprovadorId);
+      if (cot?.criadoPorId) idsNeeded.add(cot.criadoPorId);
+      if (cot?.aprovadoPorId) idsNeeded.add(cot.aprovadoPorId);
+      if (oc?.criadoPorId) idsNeeded.add(oc.criadoPorId);
+      if (oc?.aprovadorId) idsNeeded.add(oc.aprovadorId);
+      if (oc?.aprovacaoExtraAdminId) idsNeeded.add(oc.aprovacaoExtraAdminId);
+      const userMap = new Map<number, string>();
+      if (idsNeeded.size > 0) {
+        const ids = Array.from(idsNeeded);
+        const rows = await db.select({ id: users.id, name: users.name })
+          .from(users).where(inArray(users.id, ids));
+        for (const r of rows) userMap.set(r.id, r.name || `#${r.id}`);
+      }
+      const nameOf = (id: number | null | undefined, fallback?: string | null): string | null => {
+        if (fallback && fallback.trim()) return fallback;
+        if (id && userMap.has(id)) return userMap.get(id)!;
+        return null;
+      };
+      const por = (nome: string | null) => (nome ? `por ${nome}` : null);
+      const merge = (...parts: (string | null | undefined)[]) =>
+        parts.filter(Boolean).join(" • ") || null;
+
       if (sc) {
+        const scCriadoPor = nameOf(sc.criadoPorId ?? sc.solicitanteId, sc.criadoPorNome);
         etapas.push({
           key: "sc_criada",
           label: "SC Criada",
           status: "concluida",
           data: sc.criadoEm,
           tempoDesdeAnterior: null,
-          detalhe: sc.numeroSc ? `#${sc.numeroSc}` : null,
+          detalhe: merge(sc.numeroSc ? `#${sc.numeroSc}` : null, por(scCriadoPor)),
         });
         prevDate = sc.criadoEm;
 
         if (sc.aprovacaoStatus === "aprovada" && sc.aprovadoEm) {
           const dias = daysBetween(prevDate, sc.aprovadoEm);
+          const scAprovPor = nameOf(sc.aprovadorId, sc.aprovadorNome);
           etapas.push({
             key: "sc_aprovada",
             label: "SC Aprovada",
             status: "concluida",
             data: sc.aprovadoEm,
             tempoDesdeAnterior: dias,
-            detalhe: null,
+            detalhe: por(scAprovPor),
           });
           prevDate = sc.aprovadoEm;
         } else if (!cot) {
@@ -7087,18 +7114,21 @@ Retorne APENAS um JSON válido neste formato:
 
       if (cot) {
         const dias = daysBetween(prevDate, cot.criadoEm);
+        const cotCriadoPor = nameOf(cot.criadoPorId, cot.criadoPorNome);
         etapas.push({
           key: "cotacao_aberta",
           label: "Cotação Aberta",
           status: "concluida",
           data: cot.criadoEm,
           tempoDesdeAnterior: dias,
-          detalhe: cot.numeroCotacao ? `#${cot.numeroCotacao}` : null,
+          detalhe: merge(cot.numeroCotacao ? `#${cot.numeroCotacao}` : null, por(cotCriadoPor)),
         });
         prevDate = cot.criadoEm;
 
+        const cotAprovPor = nameOf(cot.aprovadoPorId, cot.aprovadoPorNome);
+
         if (oc) {
-          const approvalDate = oc.criadoEm;
+          const approvalDate = cot.aprovadoEm || oc.criadoEm;
           const diasAprov = daysBetween(prevDate, approvalDate);
           etapas.push({
             key: "cotacao_aprovada",
@@ -7106,7 +7136,7 @@ Retorne APENAS um JSON válido neste formato:
             status: "concluida",
             data: approvalDate,
             tempoDesdeAnterior: diasAprov,
-            detalhe: cot.fornecedorId ? "Fornecedor selecionado" : null,
+            detalhe: merge(cot.fornecedorId ? "Fornecedor selecionado" : null, por(cotAprovPor)),
           });
           prevDate = approvalDate;
         } else if (cot.status === "aprovada" || cot.status === "encerrada") {
@@ -7114,9 +7144,9 @@ Retorne APENAS um JSON válido neste formato:
             key: "cotacao_aprovada",
             label: "Cotação Aprovada",
             status: "concluida",
-            data: null,
-            tempoDesdeAnterior: null,
-            detalhe: cot.fornecedorId ? "Fornecedor selecionado" : "Aguardando emissão de OC",
+            data: cot.aprovadoEm,
+            tempoDesdeAnterior: cot.aprovadoEm ? daysBetween(prevDate, cot.aprovadoEm) : null,
+            detalhe: merge(cot.fornecedorId ? "Fornecedor selecionado" : "Aguardando emissão de OC", por(cotAprovPor)),
           });
         } else if (cot.status === "recusada" || cot.status === "cancelada") {
           etapas.push({
@@ -7184,15 +7214,42 @@ Retorne APENAS um JSON válido neste formato:
       if (oc) {
         const hasTerceiroContrato = !!(oc as any).contratoTerceiroId || !!(cot as any)?.contratoTerceiroId;
         const dias = daysBetween(prevDate, oc.criadoEm);
+        const ocCriadoPor = nameOf(oc.criadoPorId, oc.criadoPorNome);
         etapas.push({
           key: "oc_emitida",
           label: hasTerceiroContrato ? "OS Emitida" : "OC Emitida",
           status: "concluida",
           data: oc.criadoEm,
           tempoDesdeAnterior: dias,
-          detalhe: oc.numeroOc ? `#${oc.numeroOc}` : null,
+          detalhe: merge(oc.numeroOc ? `#${oc.numeroOc}` : null, por(ocCriadoPor)),
         });
         prevDate = oc.criadoEm;
+
+        if (oc.aprovacaoStatus === "aprovada" && oc.aprovadoEm) {
+          const ocAprovPor = nameOf(oc.aprovadorId, oc.aprovadorNome);
+          etapas.push({
+            key: "oc_aprovada",
+            label: "OC Aprovada",
+            status: "concluida",
+            data: oc.aprovadoEm,
+            tempoDesdeAnterior: daysBetween(prevDate, oc.aprovadoEm),
+            detalhe: por(ocAprovPor),
+          });
+          prevDate = oc.aprovadoEm;
+        }
+
+        if (oc.aprovacaoExtraEm && oc.aprovacaoExtraAdminId) {
+          const extraPor = nameOf(oc.aprovacaoExtraAdminId, oc.aprovacaoExtraAdminNome);
+          etapas.push({
+            key: "oc_aprovacao_extra",
+            label: "Aprovação Extra (Admin)",
+            status: "concluida",
+            data: oc.aprovacaoExtraEm,
+            tempoDesdeAnterior: daysBetween(prevDate, oc.aprovacaoExtraEm),
+            detalhe: merge(por(extraPor), oc.aprovacaoExtraJustificativa || oc.aprovacaoExtraMotivo || null),
+          });
+          prevDate = oc.aprovacaoExtraEm;
+        }
 
         if (hasTerceiroContrato) {
           etapas.push({
