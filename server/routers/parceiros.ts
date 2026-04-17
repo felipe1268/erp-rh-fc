@@ -7,7 +7,7 @@ import {
   pagamentosParceiros,
   employees,
 } from "../../drizzle/schema";
-import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 
@@ -188,6 +188,8 @@ export const parceirosRouter = router({
     list: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), parceiroId: z.number().optional(),
         competencia: z.string().optional(),
+        dataInicio: z.string().optional(),
+        dataFim: z.string().optional(),
         status: z.enum(["pendente", "aprovado", "rejeitado"]).optional(),
       }))
       .query(async ({ input }) => {
@@ -195,6 +197,8 @@ export const parceirosRouter = router({
         const conditions: any[] = [companyFilter(lancamentosParceiros.companyId, input)];
         if (input.parceiroId) conditions.push(eq(lancamentosParceiros.parceiroId, input.parceiroId));
         if (input.competencia) conditions.push(eq(lancamentosParceiros.competenciaDesconto, input.competencia));
+        if (input.dataInicio) conditions.push(gte(lancamentosParceiros.dataCompra, input.dataInicio));
+        if (input.dataFim) conditions.push(lte(lancamentosParceiros.dataCompra, input.dataFim));
         if (input.status) conditions.push(eq(lancamentosParceiros.status, input.status));
         return db.select().from(lancamentosParceiros).where(and(...conditions)).orderBy(desc(lancamentosParceiros.createdAt));
       }),

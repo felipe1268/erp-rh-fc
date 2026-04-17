@@ -12,23 +12,44 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Receipt, Plus, Search, CheckCircle, XCircle, Clock, Upload, FileText, Eye, Store } from "lucide-react";
 
-const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+// Período padrão estilo folha: dia 16 do mês anterior até dia 15 do mês atual
+function periodoPadrao() {
+  const hoje = new Date();
+  const dia = hoje.getDate();
+  // Se hoje <= 15, o ciclo vigente é do dia 16 do penúltimo mês ao dia 15 do mês atual.
+  // Se hoje >= 16, o ciclo vigente é do dia 16 do mês atual ao dia 15 do próximo mês.
+  let inicio: Date, fim: Date;
+  if (dia <= 15) {
+    inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 16);
+    fim = new Date(hoje.getFullYear(), hoje.getMonth(), 15);
+  } else {
+    inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 16);
+    fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 15);
+  }
+  const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return { inicio: fmt(inicio), fim: fmt(fim) };
+}
+
+function formatBR(iso: string) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y.slice(2)}`;
+}
 
 export default function LancamentosParceiros() {
   const { user } = useAuth();
   const { selectedCompanyId: selCompId } = useCompany();
   const companyId = selCompId ? parseInt(selCompId) : undefined;
-  const now = new Date();
-  const [ano, setAno] = useState(now.getFullYear());
-  const [mes, setMes] = useState(now.getMonth() + 1);
+  const padrao = periodoPadrao();
+  const [dataInicio, setDataInicio] = useState(padrao.inicio);
+  const [dataFim, setDataFim] = useState(padrao.fim);
   const [filterParceiro, setFilterParceiro] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>({});
-  const competencia = `${ano}-${String(mes).padStart(2, "0")}`;
 
   const { data: lancamentos = [], refetch } = trpc.parceiros.lancamentos.list.useQuery(
-    { companyId: companyId ?? 0, competencia, parceiroId: filterParceiro !== "all" ? parseInt(filterParceiro) : undefined },
+    { companyId: companyId ?? 0, dataInicio, dataFim, parceiroId: filterParceiro !== "all" ? parseInt(filterParceiro) : undefined },
     { enabled: !!companyId }
   );
   const { data: parceiros = [] } = trpc.parceiros.cadastro.list.useQuery(
@@ -128,7 +149,7 @@ export default function LancamentosParceiros() {
             </div>
             <div>
               <h1 className="text-xl font-bold">Lançamentos</h1>
-              <p className="text-sm text-muted-foreground">{lancamentos.length} lançamento(s) em {MESES[mes - 1]}/{ano}</p>
+              <p className="text-sm text-muted-foreground">{lancamentos.length} lançamento(s) — período {formatBR(dataInicio)} a {formatBR(dataFim)}</p>
             </div>
           </div>
           <Button onClick={openNew} className="bg-purple-500 hover:bg-purple-600">
@@ -137,15 +158,23 @@ export default function LancamentosParceiros() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-3">
-          <Select value={String(mes)} onValueChange={(v) => setMes(parseInt(v))}>
-            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-            <SelectContent>{MESES.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={String(ano)} onValueChange={(v) => setAno(parseInt(v))}>
-            <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-            <SelectContent>{[2024, 2025, 2026, 2027].map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}</SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">De</Label>
+            <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="w-40" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">Até</Label>
+            <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-40" />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => { const p = periodoPadrao(); setDataInicio(p.inicio); setDataFim(p.fim); }}
+          >
+            Período atual (16 a 15)
+          </Button>
           <Select value={filterParceiro} onValueChange={setFilterParceiro}>
             <SelectTrigger className="w-56"><SelectValue placeholder="Parceiro" /></SelectTrigger>
             <SelectContent>
