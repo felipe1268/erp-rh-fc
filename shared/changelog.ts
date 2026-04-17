@@ -8590,4 +8590,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-17 00:30:00",
   },
+  {
+    version: 1213,
+    titulo: "Dashboard Compras por Obra — colunas de aprovação ausentes no banco",
+    descricao: "Dashboard de Compras por Obra retornava vazio (zero obras) porque a query SELECT * de compras_ordens incluía a coluna aprovador_nome (definida no schema) que NÃO existia no banco — toda a query falhava com 'column aprovador_nome does not exist' e o tRPC devolvia erro silencioso, fazendo o front mostrar 'Nenhuma obra ativa encontrada'. Mesmo problema em compras_cotacoes (faltavam aprovado_por_id, aprovado_por_nome, aprovado_em — quebrava o job automático checkCotacoesVencendo). ALTER TABLE aplicado direto no Neon adicionando as colunas. Drizzle agora consegue executar as queries e o dashboard exibe corretamente as 11 obras Em Andamento da FC ENGENHARIA PROJETOS E OBRAS.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-17 00:55:00",
+  },
 ];
