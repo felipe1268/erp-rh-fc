@@ -8581,4 +8581,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-16 18:00:00",
   },
+  {
+    version: 1212,
+    titulo: "Auditoria de banco — runtime 100% Neon, drizzle.config alinhado",
+    descricao: "Auditoria linha por linha de todo uso de banco no código. Confirmado que o runtime do servidor (server/db.ts via ENV.databaseUrl em server/_core/env.ts) usa exclusivamente NEON_DATABASE_URL — nenhum router, serviço ou utilitário do diretório server/ cria conexão com DATABASE_URL. O cliente React não acessa banco direto (tudo via tRPC). Único ajuste: drizzle.config.ts (usado por pnpm db:push) lia DATABASE_URL e podia aplicar migrations no banco errado — agora prioriza NEON_DATABASE_URL com fallback. Scripts .mjs/.cjs avulsos de import/seed continuam usando DATABASE_URL apenas onde foram historicamente criados para banco local; não rodam no app em produção.",
+    tipo: "seguranca",
+    modulos: "Infraestrutura",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-17 00:30:00",
+  },
 ];
