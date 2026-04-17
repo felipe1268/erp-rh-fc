@@ -251,17 +251,16 @@ export const parceirosRouter = router({
             dataCompra: input.dataCompra,
             descricaoItens: input.descricaoItens ?? null,
             valor: String(valorNum),
-            // Se não informada, deriva de dataCompra usando o ciclo do ponto:
-            // dia <= 15 → competência = mês da compra
-            // dia >= 16 → competência = mês seguinte
-            competenciaDesconto:
-              input.competenciaDesconto ??
-              (input.dataCompra ? (() => {
-                const [yS, mS, dS] = input.dataCompra.slice(0, 10).split("-");
-                let y = Number(yS); let m = Number(mS); const d = Number(dS);
-                if (d >= 16) { m += 1; if (m > 12) { m = 1; y += 1; } }
-                return `${y}-${String(m).padStart(2, "0")}`;
-              })() : null),
+            // Rev. 1216: a competência é regra de negócio do RH (ciclo de fechamento de ponto)
+            // e NÃO pode ser definida pelo cliente. Sempre derivada de dataCompra:
+            //   dia <= 15 → competência = mês da compra
+            //   dia >= 16 → competência = mês seguinte
+            competenciaDesconto: (input.dataCompra ? (() => {
+              const [yS, mS, dS] = input.dataCompra.slice(0, 10).split("-");
+              let y = Number(yS); let m = Number(mS); const d = Number(dS);
+              if (d >= 16) { m += 1; if (m > 12) { m = 1; y += 1; } }
+              return `${y}-${String(m).padStart(2, "0")}`;
+            })() : null),
             lancadoPor: ctx.user?.name || "Sistema",
           } as any)
           .returning({ id: lancamentosParceiros.id });
