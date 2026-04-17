@@ -12,6 +12,44 @@ import { eq, and, or, desc, sql, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 
+// Lê o `ponto_dia_corte` configurado para a empresa (1..28). Default 15.
+// Centralizado para que tela de Aprovações RH e validações de ciclo usem
+// a MESMA fonte de verdade do filtro de listagem.
+async function getDiaCorteParaEmpresa(db: any, companyId: number | null | undefined): Promise<number> {
+  let diaCorte = 15;
+  try {
+    if (companyId && companyId > 0) {
+      const rows = await db
+        .select({ valor: systemCriteria.valor })
+        .from(systemCriteria)
+        .where(and(
+          eq(systemCriteria.companyId, companyId),
+          eq(systemCriteria.chave, "ponto_dia_corte"),
+        ));
+      const v = rows[0]?.valor;
+      const parsed = v != null ? parseInt(String(v), 10) : NaN;
+      if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 28) diaCorte = parsed;
+    }
+  } catch (e) {
+    console.warn("[parceiros] falha ao ler ponto_dia_corte; usando default 15", e);
+  }
+  return diaCorte;
+}
+
+// Calcula a janela do ciclo (cycleStart..cycleEnd) da competência YYYY-MM
+// para um dado `diaCorte`. Retorna null quando entrada inválida.
+function computeCycleRangeForCompetencia(competencia: string, diaCorte: number): { cycleStart: string; cycleEnd: string } | null {
+  const [yyStr, mmStr] = String(competencia).split("-");
+  const yy = Number(yyStr); const mm = Number(mmStr);
+  if (!Number.isFinite(yy) || !Number.isFinite(mm)) return null;
+  const prevYY = mm === 1 ? yy - 1 : yy;
+  const prevMM = mm === 1 ? 12 : mm - 1;
+  const startDay = diaCorte + 1;
+  const cycleStart = `${prevYY}-${String(prevMM).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
+  const cycleEnd = `${yy}-${String(mm).padStart(2, "0")}-${String(diaCorte).padStart(2, "0")}`;
+  return { cycleStart, cycleEnd };
+}
+
 // Sanitiza payload do parceiro: converte vírgula decimal para ponto e
 // transforma strings vazias em null nos campos numéricos.
 function sanitizeParceiroPayload<T extends Record<string, any>>(input: T): T {
@@ -206,34 +244,13 @@ export const parceirosRouter = router({
         let cycleStart: string | null = null;
         let cycleEnd: string | null = null;
         if (input.competencia && !input.dataInicio && !input.dataFim) {
-          // Lê dia de corte do ponto da empresa (default 15). Para evitar
-          // ambiguidade quando o request abrange múltiplas empresas, usa
-          // o `companyId` primário (a tela de Aprovações RH sempre envia um).
-          let diaCorte = 15;
-          try {
-            if (input.companyId && input.companyId > 0) {
-              const rows = await db
-                .select({ valor: systemCriteria.valor })
-                .from(systemCriteria)
-                .where(and(
-                  eq(systemCriteria.companyId, input.companyId),
-                  eq(systemCriteria.chave, "ponto_dia_corte"),
-                ));
-              const v = rows[0]?.valor;
-              const parsed = v != null ? parseInt(String(v), 10) : NaN;
-              if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 28) diaCorte = parsed;
-            }
-          } catch (e) {
-            console.warn("[parceiros.lancamentos.list] falha ao ler ponto_dia_corte; usando default 15", e);
-          }
-          const [yyStr, mmStr] = String(input.competencia).split("-");
-          const yy = Number(yyStr); const mm = Number(mmStr);
-          if (Number.isFinite(yy) && Number.isFinite(mm)) {
-            const prevYY = mm === 1 ? yy - 1 : yy;
-            const prevMM = mm === 1 ? 12 : mm - 1;
-            const startDay = diaCorte + 1;
-            cycleStart = `${prevYY}-${String(prevMM).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
-            cycleEnd = `${yy}-${String(mm).padStart(2, "0")}-${String(diaCorte).padStart(2, "0")}`;
+          // Para evitar ambiguidade quando o request abrange múltiplas
+          // empresas, usa o `companyId` primário (Aprovações RH sempre envia um).
+          const diaCorte = await getDiaCorteParaEmpresa(db, input.companyId);
+          const range = computeCycleRangeForCompetencia(String(input.competencia), diaCorte);
+          if (range) {
+            cycleStart = range.cycleStart;
+            cycleEnd = range.cycleEnd;
             conditions.push(gte(lancamentosParceiros.dataCompra, cycleStart));
             conditions.push(lte(lancamentosParceiros.dataCompra, cycleEnd));
           }
@@ -332,17 +349,69 @@ export const parceirosRouter = router({
         return { id: row.id };
       }),
 
+    // Retorna a janela do ciclo (cycleStart, cycleEnd) e o `diaCorte`
+    // efetivo da empresa para a competência informada. Fonte de verdade
+    // usada pela tela de Aprovações RH para alertar sobre lançamentos
+    // cuja `dataCompra` não pertence ao ciclo selecionado.
+    cicloInfo: protectedProcedure
+      .input(z.object({ companyId: z.number(), competencia: z.string() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const diaCorte = await getDiaCorteParaEmpresa(db, input.companyId);
+        const range = computeCycleRangeForCompetencia(input.competencia, diaCorte);
+        return {
+          competencia: input.competencia,
+          diaCorte,
+          cycleStart: range?.cycleStart ?? null,
+          cycleEnd: range?.cycleEnd ?? null,
+        };
+      }),
+
     aprovar: protectedProcedure
-      .input(z.object({ id: z.number(), aprovado: z.boolean(), motivoRejeicao: z.string().optional(), comentarioAdmin: z.string().optional() }))
+      .input(z.object({
+        id: z.number(),
+        aprovado: z.boolean(),
+        motivoRejeicao: z.string().optional(),
+        comentarioAdmin: z.string().optional(),
+        // Quando informado, o servidor valida se a `dataCompra` pertence
+        // ao ciclo dessa competência (usando `ponto_dia_corte` da empresa).
+        // Caso esteja fora, complementa o `comentarioAdmin` com um aviso
+        // padrão — defesa em profundidade contra clientes desatualizados.
+        competenciaSelecionada: z.string().optional(),
+      }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
+        let comentarioAdmin = input.comentarioAdmin || undefined;
+
+        if (input.aprovado && input.competenciaSelecionada) {
+          try {
+            const [lanc] = await db
+              .select({ dataCompra: lancamentosParceiros.dataCompra, companyId: lancamentosParceiros.companyId })
+              .from(lancamentosParceiros)
+              .where(eq(lancamentosParceiros.id, input.id));
+            if (lanc?.dataCompra) {
+              const diaCorte = await getDiaCorteParaEmpresa(db, lanc.companyId);
+              const range = computeCycleRangeForCompetencia(input.competenciaSelecionada, diaCorte);
+              const dataIso = String(lanc.dataCompra).slice(0, 10);
+              if (range && (dataIso < range.cycleStart || dataIso > range.cycleEnd)) {
+                const aviso = `Aprovação fora do ciclo: dataCompra ${dataIso} não pertence ao ciclo ${input.competenciaSelecionada} (${range.cycleStart}..${range.cycleEnd}, dia de corte ${diaCorte}).`;
+                comentarioAdmin = comentarioAdmin && comentarioAdmin.includes("fora do ciclo")
+                  ? comentarioAdmin
+                  : (comentarioAdmin ? `${aviso} ${comentarioAdmin}` : aviso);
+              }
+            }
+          } catch (e) {
+            console.warn("[parceiros.lancamentos.aprovar] falha ao validar ciclo; prosseguindo sem aviso", e);
+          }
+        }
+
         const updateData: any = {
           status: input.aprovado ? "aprovado" : "rejeitado",
           aprovadoPor: ctx.user?.name || "Sistema",
           aprovadoEm: new Date().toISOString(),
         };
         if (!input.aprovado && input.motivoRejeicao) updateData.motivoRejeicao = input.motivoRejeicao;
-        if (input.comentarioAdmin) updateData.comentarioAdmin = input.comentarioAdmin;
+        if (comentarioAdmin) updateData.comentarioAdmin = comentarioAdmin;
         await db.update(lancamentosParceiros).set(updateData).where(eq(lancamentosParceiros.id, input.id));
         return { success: true };
       }),
@@ -520,28 +589,10 @@ export const parceirosRouter = router({
       // ciclo da folha do mês corrente. Mesma regra usada em
       // `lancamentos.list` e em Aprovações RH (task #30): janela vai do dia
       // seguinte ao corte do mês anterior até o dia de corte do mês atual.
-      let diaCorte = 15;
-      try {
-        if (input.companyId && input.companyId > 0) {
-          const rows = await db
-            .select({ valor: systemCriteria.valor })
-            .from(systemCriteria)
-            .where(and(
-              eq(systemCriteria.companyId, input.companyId),
-              eq(systemCriteria.chave, "ponto_dia_corte"),
-            ));
-          const v = rows[0]?.valor;
-          const parsed = v != null ? parseInt(String(v), 10) : NaN;
-          if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 28) diaCorte = parsed;
-        }
-      } catch (e) {
-        console.warn("[parceiros.painel] falha ao ler ponto_dia_corte; usando default 15", e);
-      }
-      const prevYY = mm === 1 ? yy - 1 : yy;
-      const prevMM = mm === 1 ? 12 : mm - 1;
-      const startDay = diaCorte + 1;
-      const cycleStart = `${prevYY}-${String(prevMM).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
-      const cycleEnd   = `${yy}-${String(mm).padStart(2, "0")}-${String(diaCorte).padStart(2, "0")}`;
+      const diaCorte = await getDiaCorteParaEmpresa(db, input.companyId);
+      const range = computeCycleRangeForCompetencia(competenciaAtual, diaCorte)!;
+      const cycleStart = range.cycleStart;
+      const cycleEnd = range.cycleEnd;
 
       // Conta por ciclo (dataCompra entre cycleStart e cycleEnd) — mesma
       // regra usada por `lancamentos.list` e na tela de Aprovações RH.

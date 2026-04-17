@@ -9,13 +9,39 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   CheckCircle, XCircle, AlertTriangle, Search, Clock, Eye,
   ThumbsUp, ThumbsDown, Receipt, DollarSign, User, Calendar,
   Store, Filter, FileText, ShoppingCart, RotateCcw, MessageSquare
 } from "lucide-react";
+
+// Verifica se uma `dataCompra` (YYYY-MM-DD ou ISO) pertence ao intervalo
+// [cycleStart, cycleEnd] do ciclo retornado pelo backend.
+function dataDentroDoCiclo(
+  dataCompra: string | null | undefined,
+  cycleStart: string | null | undefined,
+  cycleEnd: string | null | undefined,
+): boolean {
+  if (!dataCompra || !cycleStart || !cycleEnd) return true;
+  const iso = String(dataCompra).slice(0, 10);
+  return iso >= cycleStart && iso <= cycleEnd;
+}
+
+function formatIsoBR(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const [y, m, d] = String(iso).slice(0, 10).split("-");
+  if (!y || !m || !d) return iso || "";
+  return `${d}/${m}/${y}`;
+}
+
+function formatCompetenciaLabel(comp?: string | null): string {
+  if (!comp) return "";
+  const [y, m] = comp.split("-");
+  if (!y || !m) return comp;
+  return `${m}/${y}`;
+}
 
 export default function AprovacoesParceiros() {
   const { user } = useAuth();
@@ -29,6 +55,8 @@ export default function AprovacoesParceiros() {
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [cancelarLancamento, setCancelarLancamento] = useState<any>(null);
   const [comentarioCancelar, setComentarioCancelar] = useState("");
+  const [foraCicloLancamento, setForaCicloLancamento] = useState<any>(null);
+  const [foraCicloComentario, setForaCicloComentario] = useState("");
   const [competencia, setCompetencia] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -57,8 +85,27 @@ export default function AprovacoesParceiros() {
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
+  // Janela do ciclo (cycleStart..cycleEnd) e dia de corte da empresa
+  // calculados pelo backend — mesma fonte de verdade do filtro de listagem.
+  const { data: cicloInfo, isLoading: cicloInfoLoading } = trpc.parceiros.lancamentos.cicloInfo.useQuery(
+    { companyId: companyId ?? 0, competencia },
+    { enabled: companyId > 0 && !!competencia }
+  );
+
+  // Quando a competência está definida mas a janela do ciclo ainda não chegou,
+  // desabilita o botão "Aprovar" para garantir que o aviso de fora-do-ciclo
+  // seja sempre apresentado antes da aprovação.
+  const aprovarBloqueadoPorCiclo = !!competencia && companyId > 0 && cicloInfoLoading;
+
   const aprovarMutation = trpc.parceiros.lancamentos.aprovar.useMutation({
-    onSuccess: () => { toast.success("Lançamento processado com sucesso"); invalidarTudo(); setSelectedLancamento(null); setMotivoRejeicao(""); },
+    onSuccess: () => {
+      toast.success("Lançamento processado com sucesso");
+      invalidarTudo();
+      setSelectedLancamento(null);
+      setMotivoRejeicao("");
+      setForaCicloLancamento(null);
+      setForaCicloComentario("");
+    },
     onError: () => toast.error("Erro ao processar lançamento"),
   });
 
@@ -97,7 +144,43 @@ export default function AprovacoesParceiros() {
     : 0;
 
   const handleAprovar = (id: number, comentario?: string) => {
-    aprovarMutation.mutate({ id, aprovado: true, comentarioAdmin: comentario || undefined });
+    aprovarMutation.mutate({
+      id,
+      aprovado: true,
+      comentarioAdmin: comentario || undefined,
+      competenciaSelecionada: competencia || undefined,
+    });
+  };
+
+  // Verifica se a dataCompra do lançamento pertence ao ciclo (cycleStart..cycleEnd)
+  // calculado pelo backend para a competência selecionada (usando o
+  // `ponto_dia_corte` configurado na empresa). Se estiver fora, abre diálogo
+  // de confirmação. Caso `cicloInfo` ainda não esteja carregado, aprova direto.
+  const tentarAprovar = (lancamento: any) => {
+    if (!competencia || !cicloInfo?.cycleStart || !cicloInfo?.cycleEnd) {
+      handleAprovar(lancamento.id);
+      return;
+    }
+    if (!dataDentroDoCiclo(lancamento?.dataCompra, cicloInfo.cycleStart, cicloInfo.cycleEnd)) {
+      setForaCicloLancamento(lancamento);
+      setForaCicloComentario("");
+      return;
+    }
+    handleAprovar(lancamento.id);
+  };
+
+  const confirmarAprovarForaCiclo = () => {
+    if (!foraCicloLancamento) return;
+    const dataStr = foraCicloLancamento.dataCompra
+      ? new Date(foraCicloLancamento.dataCompra).toLocaleDateString("pt-BR")
+      : "";
+    const cycleLabel = cicloInfo?.cycleStart && cicloInfo?.cycleEnd
+      ? `${formatIsoBR(cicloInfo.cycleStart)} a ${formatIsoBR(cicloInfo.cycleEnd)}`
+      : formatCompetenciaLabel(competencia);
+    const baseAviso = `Aprovação fora do ciclo: dataCompra ${dataStr} fora do ciclo ${formatCompetenciaLabel(competencia)} (${cycleLabel}).`;
+    const extra = foraCicloComentario.trim();
+    const comentario = extra ? `${baseAviso} ${extra}` : baseAviso;
+    handleAprovar(foraCicloLancamento.id, comentario);
   };
 
   const handleRejeitar = (id: number) => {
@@ -270,7 +353,13 @@ export default function AprovacoesParceiros() {
                     )}
                     {lancamento.status === "pendente" && (
                       <>
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleAprovar(lancamento.id)} disabled={aprovarMutation.isPending}>
+                        <Button
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={() => tentarAprovar(lancamento)}
+                          disabled={aprovarMutation.isPending || aprovarBloqueadoPorCiclo}
+                          title={aprovarBloqueadoPorCiclo ? "Carregando ciclo da competência..." : undefined}
+                        >
                           <ThumbsUp className="w-4 h-4 mr-1" /> Aprovar
                         </Button>
                         <Button size="sm" variant="destructive" onClick={() => { setSelectedLancamento(lancamento); setMotivoRejeicao(""); }}>
@@ -351,6 +440,69 @@ export default function AprovacoesParceiros() {
             </div>
           )}
         </FullScreenDialog>
+
+        {/* Aviso de aprovação fora do ciclo */}
+        <Dialog open={!!foraCicloLancamento} onOpenChange={(o) => { if (!o) { setForaCicloLancamento(null); setForaCicloComentario(""); } }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-600">
+                <AlertTriangle className="w-5 h-5" />
+                Lançamento fora do ciclo selecionado
+              </DialogTitle>
+              <DialogDescription>
+                A data da compra deste lançamento não pertence ao mesmo ciclo da competência selecionada.
+              </DialogDescription>
+            </DialogHeader>
+            {foraCicloLancamento && (
+              <div className="space-y-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm space-y-1">
+                  <p><strong>Colaborador:</strong> {foraCicloLancamento.employeeNome}</p>
+                  <p><strong>Valor:</strong> {formatCurrency(foraCicloLancamento.valor)}</p>
+                  <p>
+                    <strong>Data da Compra:</strong>{" "}
+                    {foraCicloLancamento.dataCompra ? new Date(foraCicloLancamento.dataCompra).toLocaleDateString("pt-BR") : ""}
+                  </p>
+                  <p>
+                    <strong>Ciclo selecionado:</strong> {formatCompetenciaLabel(competencia)}
+                    {cicloInfo?.cycleStart && cicloInfo?.cycleEnd && (
+                      <> ({formatIsoBR(cicloInfo.cycleStart)} a {formatIsoBR(cicloInfo.cycleEnd)})</>
+                    )}
+                  </p>
+                  {cicloInfo?.diaCorte != null && (
+                    <p className="text-xs text-amber-700">
+                      Dia de corte da empresa: {cicloInfo.diaCorte}
+                    </p>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Verifique se a data da compra foi digitada corretamente. Você pode confirmar a aprovação mesmo assim — o motivo será registrado no comentário do administrador.
+                </p>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Comentário adicional (opcional)</label>
+                  <Textarea
+                    value={foraCicloComentario}
+                    onChange={(e) => setForaCicloComentario(e.target.value)}
+                    placeholder="Ex.: Aprovado a pedido do gestor para incluir nesta competência."
+                    rows={3}
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setForaCicloLancamento(null); setForaCicloComentario(""); }}>
+                Cancelar
+              </Button>
+              <Button
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                disabled={aprovarMutation.isPending}
+                onClick={confirmarAprovarForaCiclo}
+              >
+                <ThumbsUp className="w-4 h-4 mr-1" />
+                {aprovarMutation.isPending ? "Processando..." : "Aprovar mesmo assim"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Cancelar Aprovação/Rejeição Dialog */}
         <Dialog open={!!cancelarLancamento} onOpenChange={(o) => { if (!o) { setCancelarLancamento(null); setComentarioCancelar(""); } }}>
