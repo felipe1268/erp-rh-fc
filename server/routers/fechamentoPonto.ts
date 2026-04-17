@@ -2077,13 +2077,14 @@ export const fechamentoPontoRouter = router({
         ));
       for (const c of consolidacoes) {
         if (meses[c.mesReferencia] && c.status === 'consolidado') {
-          const fim = c.dataFimCiclo as string | null;
-          const isParcial = !!fim && fim < lastDayOfMonth(c.mesReferencia);
-          meses[c.mesReferencia].status = isParcial ? 'parcial' : 'consolidado';
+          // No modelo de ciclo de folha (corte 15), o ciclo SEMPRE termina antes do
+          // último dia do mês — o "escuro" pertence à competência seguinte. Portanto
+          // nunca chamamos esse caso de "parcial": é o ciclo completo daquele mês.
+          meses[c.mesReferencia].status = 'consolidado';
           meses[c.mesReferencia].consolidadoPor = c.consolidadoPor || undefined;
           meses[c.mesReferencia].consolidadoEm = c.consolidadoEm || undefined;
           meses[c.mesReferencia].dataInicioCiclo = (c.dataInicioCiclo as string | null) || undefined;
-          meses[c.mesReferencia].dataFimCiclo = fim || undefined;
+          meses[c.mesReferencia].dataFimCiclo = (c.dataFimCiclo as string | null) || undefined;
         }
       }
       return meses;
@@ -2101,6 +2102,10 @@ export const fechamentoPontoRouter = router({
       const diaCorte = await getDiaCorte(db, input.companyId);
       const { dataInicioCiclo, dataFimCiclo } = computeCicloRange(input.mesReferencia, diaCorte);
 
+      // Ignora pendências cuja `mesReferencia` já tenha um pontoConsolidacao
+      // consolidado e diferente do mês que está sendo (re)consolidado agora.
+      // Isso evita que pendências herdadas do antigo modelo (mês calendário)
+      // bloqueiem re-consolidações no novo modelo de ciclo de folha.
       const [pendingIncons] = await db.select({ count: sql<number>`COUNT(*)` })
         .from(timeInconsistencies)
         .where(and(
@@ -2108,6 +2113,13 @@ export const fechamentoPontoRouter = router({
           eq(timeInconsistencies.status, 'pendente'),
           sql`${timeInconsistencies.data} >= ${dataInicioCiclo}`,
           sql`${timeInconsistencies.data} <= ${dataFimCiclo}`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM ponto_consolidacao pc
+             WHERE pc."companyId" = ${timeInconsistencies.companyId}
+               AND pc."mesReferencia" = ${timeInconsistencies.mesReferencia}
+               AND pc.status = 'consolidado'
+               AND pc."mesReferencia" <> ${input.mesReferencia}
+          )`,
         ));
       if (Number(pendingIncons?.count || 0) > 0) {
         throw new TRPCError({
@@ -2421,8 +2433,9 @@ export const fechamentoPontoRouter = router({
       const consolidado = rows[0].status === 'consolidado';
       const dataInicioCiclo = rows[0].dataInicioCiclo as string | null;
       const dataFimCiclo = rows[0].dataFimCiclo as string | null;
-      // "Parcial": cycle is closed but the dark days (after cycle end) of the calendar month are still open.
-      const parcial = consolidado && !!dataFimCiclo && dataFimCiclo < lastDayOfMonth(input.mesReferencia);
+      // No modelo de ciclo de folha, "parcial" não existe — o escuro pertence à
+      // próxima competência. Mantemos o campo no retorno por compatibilidade.
+      const parcial = false;
       return {
         consolidado,
         parcial,
