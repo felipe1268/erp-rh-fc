@@ -116,13 +116,15 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const { selectedCompany } = useCompany();
-  const { isSensitiveHidden } = usePermissions();
-  // LGPD: ocultar valores monetários para usuários sem permissão de salários (RH)
-  const hideSalary =
-    isSensitiveHidden("rh-dp", "salarios") ||
-    isSensitiveHidden("financeiro", "salarios") ||
-    isSensitiveHidden("juridico", "salarios") ||
-    isSensitiveHidden("juridico-trabalhista", "salarios");
+  const { isSensitiveHidden, canAccessModule, isAdminMaster } = usePermissions();
+  // LGPD: ocultar valores monetários por padrão. Só revela se for admin master OU
+  // se o usuário tiver acesso ao módulo rh-dp E a flag "salarios" NÃO estiver
+  // marcada como sensível (white-list). Acesso ao Raio-X via módulo "relatorios"
+  // sozinho não libera valores remuneratórios.
+  const hideSalary = !(
+    isAdminMaster ||
+    (canAccessModule("rh-dp") && !isSensitiveHidden("rh-dp", "salarios"))
+  );
   const SALARY_MASK = "•••••";
   const formatSalario = (val: string | null | undefined): string =>
     hideSalary ? SALARY_MASK : _formatSalario(val);
