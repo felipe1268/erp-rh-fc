@@ -11,6 +11,31 @@ import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 
+// Sanitiza payload do parceiro: converte vírgula decimal para ponto e
+// transforma strings vazias em null nos campos numéricos.
+function sanitizeParceiroPayload<T extends Record<string, any>>(input: T): T {
+  const out: any = { ...input };
+  // Campo NUMERIC no Postgres — Drizzle envia como string
+  if (out.limiteMensalPorColaborador !== undefined) {
+    const v = String(out.limiteMensalPorColaborador ?? "").trim();
+    if (v === "") {
+      out.limiteMensalPorColaborador = null;
+    } else {
+      // Aceita "150,00", "1.500,00", "1500.00", "150"
+      const normalized = v.includes(",")
+        ? v.replace(/\./g, "").replace(",", ".")
+        : v;
+      const num = Number(normalized);
+      out.limiteMensalPorColaborador = Number.isFinite(num) ? String(num) : null;
+    }
+  }
+  // Inteiros opcionais que podem vir como string vazia do form
+  for (const k of ["diaFechamento", "prazoPagamento"] as const) {
+    if (out[k] === "" || out[k] === undefined) out[k] = null;
+  }
+  return out;
+}
+
 export const parceirosRouter = router({
   // ============================================================
   // PARCEIROS CONVENIADOS
@@ -70,10 +95,11 @@ export const parceirosRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
+        const data = sanitizeParceiroPayload(input);
         const [row] = await db
           .insert(parceirosConveniados)
           .values({
-            ...input,
+            ...data,
             createdBy: ctx.user?.name || "Sistema",
           } as any)
           .returning({ id: parceirosConveniados.id });
@@ -123,7 +149,8 @@ export const parceirosRouter = router({
       }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
-        const { id, ...data } = input;
+        const { id, ...rest } = input;
+        const data = sanitizeParceiroPayload(rest);
         await db.update(parceirosConveniados).set(data as any).where(eq(parceirosConveniados.id, id));
         return { success: true };
       }),
