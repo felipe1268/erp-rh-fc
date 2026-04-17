@@ -1670,10 +1670,25 @@ export const fechamentoPontoRouter = router({
         inRange(input.data, f.periodo3Inicio, f.periodo3Fim)
       );
       if (emFerias) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `O dia ${input.data} está dentro de um período de férias do funcionário. Não é permitido lançar ponto neste dia.`,
-        });
+        // Rev. 1231: durante férias, só bloquear LANÇAMENTO inédito.
+        // Se já existe registro do dia (ex.: batida indevida da catraca),
+        // permitir EDIÇÃO/correção manual — caso contrário o usuário fica
+        // sem como zerar/ajustar batidas espúrias durante o período.
+        const jaExiste = await db.select({ id: timeRecords.id })
+          .from(timeRecords)
+          .where(and(
+            companyFilter(timeRecords.companyId, input),
+            eq(timeRecords.employeeId, input.employeeId),
+            eq(timeRecords.data, input.data),
+          ))
+          .limit(1);
+        if (jaExiste.length === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `O dia ${input.data} está dentro de um período de férias do funcionário. Não é permitido lançar ponto neste dia.`,
+          });
+        }
+        // Existe registro: segue o fluxo normal (será sobrescrito como ajusteManual).
       }
 
       // Per-day lock: refuse if data is inside a consolidated cycle.
