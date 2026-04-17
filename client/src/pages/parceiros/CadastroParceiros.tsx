@@ -36,10 +36,22 @@ export default function CadastroParceiros() {
     { companyId: companyId ?? 0 },
     { enabled: !!companyId }
   );
-  const createMut = trpc.parceiros.cadastro.create.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Parceiro cadastrado!"); } });
-  const updateMut = trpc.parceiros.cadastro.update.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Parceiro atualizado!"); } });
-  const deleteMut = trpc.parceiros.cadastro.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Parceiro excluído!"); } });
-  const uploadMut = trpc.parceiros.cadastro.uploadDoc.useMutation({ onSuccess: () => { refetch(); toast.success("Documento enviado!"); } });
+  const createMut = trpc.parceiros.cadastro.create.useMutation({
+    onSuccess: () => { refetch(); setShowForm(false); toast.success("Parceiro cadastrado!"); },
+    onError: (e) => toast.error(`Erro ao cadastrar: ${e.message}`),
+  });
+  const updateMut = trpc.parceiros.cadastro.update.useMutation({
+    onSuccess: () => { refetch(); setShowForm(false); toast.success("Parceiro atualizado!"); },
+    onError: (e) => toast.error(`Erro ao atualizar: ${e.message}`),
+  });
+  const deleteMut = trpc.parceiros.cadastro.delete.useMutation({
+    onSuccess: () => { refetch(); toast.success("Parceiro excluído!"); },
+    onError: (e) => toast.error(`Erro ao excluir: ${e.message}`),
+  });
+  const uploadMut = trpc.parceiros.cadastro.uploadDoc.useMutation({
+    onSuccess: () => { refetch(); toast.success("Documento enviado!"); },
+    onError: (e) => toast.error(`Erro ao enviar documento: ${e.message}`),
+  });
 
   // ========== BUSCA AUTOMÁTICA CNPJ ==========
   const [cnpjLoading, setCnpjLoading] = useState(false);

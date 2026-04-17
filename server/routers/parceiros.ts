@@ -70,11 +70,14 @@ export const parceirosRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
-        const [result] = await db.insert(parceirosConveniados).values({
-          ...input,
-          createdBy: ctx.user?.name || "Sistema",
-        } as any);
-        return { id: result[0].id };
+        const [row] = await db
+          .insert(parceirosConveniados)
+          .values({
+            ...input,
+            createdBy: ctx.user?.name || "Sistema",
+          } as any)
+          .returning({ id: parceirosConveniados.id });
+        return { id: row.id };
       }),
 
     update: protectedProcedure
