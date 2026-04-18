@@ -3007,3 +3007,125 @@ export function invalidateObrasCache(companyId: number) {
 export function invalidateCompaniesCache() {
   cache.invalidate("companies:all");
 }
+
+// ============================================================================
+// LIXEIRA CENTRAL — captura snapshots de hard deletes para restauração
+// ============================================================================
+
+/**
+ * Registra uma entrada na lixeira central antes de um hard delete.
+ * Salva o snapshot completo do registro (e filhos opcionais) em JSON.
+ */
+export async function recordTrashEntry(params: {
+  entityType: string;
+  entityId: number;
+  companyId?: number | null;
+  obraId?: number | null;
+  parentEntity?: string | null;
+  parentId?: number | null;
+  label: string;
+  snapshot: any;
+  deletedBy?: string | null;
+  deletedByUserId?: number | null;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  const { sql } = await import("drizzle-orm");
+  await db.execute(sql`
+    INSERT INTO recycle_bin (entity_type, entity_id, company_id, obra_id, parent_entity, parent_id, label, snapshot, deleted_by, deleted_by_user_id)
+    VALUES (
+      ${params.entityType},
+      ${params.entityId},
+      ${params.companyId ?? null},
+      ${params.obraId ?? null},
+      ${params.parentEntity ?? null},
+      ${params.parentId ?? null},
+      ${params.label},
+      ${JSON.stringify(params.snapshot)}::json,
+      ${params.deletedBy ?? null},
+      ${params.deletedByUserId ?? null}
+    )
+  `);
+}
+
+/**
+ * Captura o snapshot de uma linha pelo id antes de deletar.
+ * Retorna o registro encontrado (ou null) para que o caller possa salvar via recordTrashEntry.
+ */
+export async function captureRowSnapshot(tableName: string, id: number): Promise<any | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const { sql } = await import("drizzle-orm");
+  const r = await db.execute(sql.raw(`SELECT * FROM "${tableName}" WHERE id = ${Number(id)} LIMIT 1`));
+  const rows = (r as any)?.rows ?? r ?? [];
+  return rows[0] ?? null;
+}
+
+/** Lista entradas ativas (não restauradas) da lixeira central, com filtro de empresa. */
+export async function listTrashEntries(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { sql } = await import("drizzle-orm");
+  const r = await db.execute(sql`
+    SELECT id, entity_type AS "entityType", entity_id AS "entityId", company_id AS "companyId",
+           obra_id AS "obraId", parent_entity AS "parentEntity", parent_id AS "parentId",
+           label, deleted_by AS "deletedBy", deleted_by_user_id AS "deletedByUserId",
+           deleted_at AS "deletedAt", snapshot
+    FROM recycle_bin
+    WHERE restored_at IS NULL AND (company_id = ${companyId} OR company_id IS NULL)
+    ORDER BY deleted_at DESC
+  `);
+  return ((r as any)?.rows ?? r ?? []) as any[];
+}
+
+/** Marca entrada da lixeira como restaurada (soft delete da própria entry). */
+export async function markTrashEntryRestored(trashEntryId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const { sql } = await import("drizzle-orm");
+  await db.execute(sql`UPDATE recycle_bin SET restored_at = NOW() WHERE id = ${trashEntryId}`);
+}
+
+/** Remove entrada da lixeira (exclusão definitiva do snapshot). */
+export async function deleteTrashEntry(trashEntryId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const { sql } = await import("drizzle-orm");
+  await db.execute(sql`DELETE FROM recycle_bin WHERE id = ${trashEntryId}`);
+}
+
+/** Lê uma entrada específica da lixeira pelo id. */
+export async function getTrashEntry(trashEntryId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const { sql } = await import("drizzle-orm");
+  const r = await db.execute(sql`SELECT * FROM recycle_bin WHERE id = ${trashEntryId} LIMIT 1`);
+  const rows = (r as any)?.rows ?? r ?? [];
+  return rows[0] ?? null;
+}
+
+/**
+ * Re-insere o snapshot na tabela original (para restaurar hard-deletes).
+ * Mantém o id original. Falha silenciosa se já existir (conflito de PK).
+ */
+export async function reinsertSnapshot(tableName: string, snapshot: Record<string, any>) {
+  const db = await getDb();
+  if (!db) return;
+  const { sql } = await import("drizzle-orm");
+  const cols = Object.keys(snapshot);
+  if (cols.length === 0) return;
+  const colList = cols.map(c => `"${c}"`).join(", ");
+  const valList = cols.map((_, i) => `$${i + 1}`).join(", ");
+  const values = cols.map(c => snapshot[c]);
+  // pg-style direct query: drizzle-orm sql.raw com placeholders não suporta bind nativamente,
+  // então serializamos os valores como literais SQL seguros.
+  const literals = values.map(v => {
+    if (v === null || v === undefined) return "NULL";
+    if (typeof v === "number") return String(v);
+    if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+    if (v instanceof Date) return `'${v.toISOString()}'`;
+    if (typeof v === "object") return `'${JSON.stringify(v).replace(/'/g, "''")}'::json`;
+    return `'${String(v).replace(/'/g, "''")}'`;
+  }).join(", ");
+  await db.execute(sql.raw(`INSERT INTO "${tableName}" (${colList}) VALUES (${literals}) ON CONFLICT (id) DO NOTHING`));
+}

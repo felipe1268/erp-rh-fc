@@ -1,5 +1,5 @@
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb, createAuditLog, getEffectiveAllowedObraIds, userCanAccessObra } from "../db";
+import { getDb, createAuditLog, getEffectiveAllowedObraIds, userCanAccessObra, recordTrashEntry, captureRowSnapshot } from "../db";
 import {
   heSolicitacoes, heSolicitacaoFuncionarios, heSolicitacaoAtividades, heSolicitacaoConfirmacoes,
   employees, obras, terminationNotices,
@@ -516,6 +516,27 @@ export const heSolicitacoesRouter = router({
     // Buscar a solicitação
     const [sol] = await db.select().from(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+
+    // Capturar snapshot completo (pai + filhos) antes do delete
+    const funcsRows = await db.select().from(heSolicitacaoFuncionarios).where(eq(heSolicitacaoFuncionarios.solicitacaoId, input.id));
+    const atividadesResult = await db.execute(sql`SELECT * FROM he_solicitacao_atividades WHERE solicitacao_id = ${input.id}`);
+    const atividadesRows = ((atividadesResult as any)?.rows ?? atividadesResult ?? []) as any[];
+    await recordTrashEntry({
+      entityType: "heSolicitacao",
+      entityId: input.id,
+      companyId: sol.companyId,
+      obraId: (sol as any).obraId ?? null,
+      label: `Solicitação HE #${input.id}`,
+      snapshot: {
+        __main: sol,
+        __children: [
+          ...funcsRows.map((r: any) => ({ entityType: "heSolicitacaoFuncionario", row: r })),
+          ...atividadesRows.map((r: any) => ({ entityType: "heSolicitacaoAtividade", row: r })),
+        ],
+      },
+      deletedBy: ctx.user.name ?? null,
+      deletedByUserId: ctx.user.id,
+    });
 
     // Excluir funcionários vinculados e atividades vinculadas primeiro
     await db.delete(heSolicitacaoFuncionarios).where(eq(heSolicitacaoFuncionarios.solicitacaoId, input.id));

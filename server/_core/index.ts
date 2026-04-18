@@ -420,6 +420,27 @@ async function startServer() {
             "criadoEm" TIMESTAMP DEFAULT now() NOT NULL
           )
         `);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS recycle_bin (
+            id SERIAL PRIMARY KEY,
+            entity_type VARCHAR(80) NOT NULL,
+            entity_id INTEGER NOT NULL,
+            company_id INTEGER,
+            obra_id INTEGER,
+            parent_entity VARCHAR(80),
+            parent_id INTEGER,
+            label TEXT NOT NULL,
+            snapshot JSON NOT NULL,
+            deleted_by VARCHAR(255),
+            deleted_by_user_id INTEGER,
+            deleted_at TIMESTAMP DEFAULT NOW(),
+            restored_at TIMESTAMP
+          )
+        `);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_recycle_company ON recycle_bin(company_id)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_recycle_entity ON recycle_bin(entity_type, entity_id)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_recycle_deleted_at ON recycle_bin(deleted_at)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_recycle_restored ON recycle_bin(restored_at)`);
         console.log("[ColFix] CREATE TABLEs OK");
         const hoje = new Date().toISOString().split('T')[0];
         const vencResult = await db.execute(sql`

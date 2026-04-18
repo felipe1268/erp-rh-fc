@@ -36,6 +36,22 @@ const ENTITY_LABELS: Record<string, string> = {
   documentTemplate: "Modelo de Documento",
   epiDelivery: "Entrega de EPI",
   user: "Usuário",
+  heSolicitacao: "Solicitação de Hora Extra",
+  heSolicitacaoFuncionario: "HE — Funcionário",
+  heSolicitacaoAtividade: "HE — Atividade",
+  rdoRelatorio: "RDO (Relatório)",
+  rdoMaoObra: "RDO — Mão de Obra",
+  rdoEquipamento: "RDO — Equipamento",
+  rdoAtividade: "RDO — Atividade",
+  rdoMaterial: "RDO — Material",
+  rdoFoto: "RDO — Foto",
+  rdoOcorrencia: "RDO — Ocorrência",
+  rdoComentario: "RDO — Comentário",
+  comprasSolicitacao: "Solicitação de Compra",
+  comprasSolicitacaoItem: "Item de Solicitação",
+  comprasCotacao: "Cotação",
+  almoxarifadoItem: "Item de Almoxarifado",
+  almoxarifadoMovimentacao: "Movimentação de Almoxarifado",
 };
 
 const ENTITY_COLORS: Record<string, string> = {
@@ -53,6 +69,22 @@ const ENTITY_COLORS: Record<string, string> = {
   documentTemplate: "bg-slate-500/20 text-slate-400 border-slate-500/30",
   epiDelivery: "bg-lime-500/20 text-lime-400 border-lime-500/30",
   user: "bg-rose-500/20 text-rose-400 border-rose-500/30",
+  heSolicitacao: "bg-violet-500/20 text-violet-400 border-violet-500/30",
+  heSolicitacaoFuncionario: "bg-violet-500/20 text-violet-400 border-violet-500/30",
+  heSolicitacaoAtividade: "bg-violet-500/20 text-violet-400 border-violet-500/30",
+  rdoRelatorio: "bg-sky-500/20 text-sky-400 border-sky-500/30",
+  rdoMaoObra: "bg-sky-500/20 text-sky-400 border-sky-500/30",
+  rdoEquipamento: "bg-sky-500/20 text-sky-400 border-sky-500/30",
+  rdoAtividade: "bg-sky-500/20 text-sky-400 border-sky-500/30",
+  rdoMaterial: "bg-sky-500/20 text-sky-400 border-sky-500/30",
+  rdoFoto: "bg-sky-500/20 text-sky-400 border-sky-500/30",
+  rdoOcorrencia: "bg-sky-500/20 text-sky-400 border-sky-500/30",
+  rdoComentario: "bg-sky-500/20 text-sky-400 border-sky-500/30",
+  comprasSolicitacao: "bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30",
+  comprasSolicitacaoItem: "bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30",
+  comprasCotacao: "bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30",
+  almoxarifadoItem: "bg-green-500/20 text-green-400 border-green-500/30",
+  almoxarifadoMovimentacao: "bg-green-500/20 text-green-400 border-green-500/30",
 };
 
 function formatDate(d: any) {
@@ -152,7 +184,7 @@ function LixeiraContent() {
     const toRestore = filteredItems.filter((i: any) => selectedItems.has(`${i.entity}-${i.id}`));
     for (const item of toRestore) {
       try {
-        await restoreMutation.mutateAsync({ id: item.id, entity: item.entity, companyId: companyIdNum });
+        await restoreMutation.mutateAsync({ id: item.id, entity: item.entity, companyId: companyIdNum, fromCentralBin: !!item.fromCentralBin });
       } catch {}
     }
     setSelectedItems(new Set());
@@ -341,7 +373,7 @@ function LixeiraContent() {
             <AlertDialogAction
               onClick={() => {
                 if (confirmRestore) {
-                  restoreMutation.mutate({ id: confirmRestore.id, entity: confirmRestore.entity, companyId: companyIdNum });
+                  restoreMutation.mutate({ id: confirmRestore.id, entity: confirmRestore.entity, companyId: companyIdNum, fromCentralBin: !!confirmRestore.fromCentralBin });
                 }
               }}
               className="bg-emerald-600 hover:bg-emerald-700"
@@ -371,7 +403,7 @@ function LixeiraContent() {
             <AlertDialogAction
               onClick={() => {
                 if (confirmDelete) {
-                  permanentDeleteMutation.mutate({ id: confirmDelete.id, entity: confirmDelete.entity, companyId: companyIdNum });
+                  permanentDeleteMutation.mutate({ id: confirmDelete.id, entity: confirmDelete.entity, companyId: companyIdNum, fromCentralBin: !!confirmDelete.fromCentralBin });
                 }
               }}
               className="bg-red-600 hover:bg-red-700"

@@ -38,6 +38,7 @@ import {
   getGroupPermissions, setGroupPermissions, getGroupMembers, getUserGroupMemberships,
   addUserToGroup, removeUserFromGroup, setUserGroups, getUserEffectiveGroupPermissions,
   getEffectiveAllowedObraIds,
+  listTrashEntries, getTrashEntry, markTrashEntryRestored, deleteTrashEntry, reinsertSnapshot,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
@@ -2354,18 +2355,73 @@ export const appRouter = router({
       const delUsers = await db.select().from(users).where(isNotNull(users.deletedAt));
       delUsers.forEach((u: any) => items.push({ id: u.id, entity: 'user', label: u.name || u.email, deletedAt: u.deletedAt, deletedBy: u.deletedBy }));
 
+      // Lixeira central (snapshots de hard deletes)
+      const trashRows = await listTrashEntries(input.companyId);
+      trashRows.forEach((t: any) => items.push({
+        id: t.id,
+        trashEntryId: t.id,
+        entity: t.entityType,
+        label: t.label,
+        deletedAt: t.deletedAt,
+        deletedBy: t.deletedBy,
+        fromCentralBin: true,
+        parentEntity: t.parentEntity,
+        parentId: t.parentId,
+      }));
+
       // Ordenar por data de exclusão (mais recente primeiro)
       items.sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
       return items;
     }),
 
     // Restaurar item da lixeira
-    restore: protectedProcedure.input(z.object({ id: z.number(), entity: z.string(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
-      const { getDb } = await import("./db");
+    restore: protectedProcedure.input(z.object({ id: z.number(), entity: z.string(), companyId: z.number(), fromCentralBin: z.boolean().optional() })).mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { sql: sqlFn } = await import("drizzle-orm");
 
+      // Caso 1: entrada vinda da lixeira central (recycle_bin) — re-INSERT do snapshot
+      if (input.fromCentralBin) {
+        const entry = await getTrashEntry(input.id);
+        if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Entrada da lixeira não encontrada" });
+        const snap = typeof entry.snapshot === "string" ? JSON.parse(entry.snapshot) : entry.snapshot;
+        const tableMap: Record<string, string> = {
+          heSolicitacao: "he_solicitacoes",
+          heSolicitacaoFuncionario: "he_solicitacao_funcionarios",
+          heSolicitacaoAtividade: "he_solicitacao_atividades",
+          rdoRelatorio: "diario_obra_relatorios",
+          rdoMaoObra: "diario_obra_mao_obra",
+          rdoEquipamento: "diario_obra_equipamentos",
+          rdoAtividade: "diario_obra_atividades",
+          rdoMaterial: "diario_obra_materiais",
+          rdoFoto: "diario_obra_fotos",
+          rdoOcorrencia: "diario_obra_ocorrencias",
+          rdoComentario: "diario_obra_comentarios",
+          comprasSolicitacao: "compras_solicitacoes",
+          comprasSolicitacaoItem: "compras_solicitacoes_itens",
+          comprasCotacao: "compras_cotacoes",
+          almoxarifadoItem: "almoxarifado_itens",
+          almoxarifadoMovimentacao: "almoxarifado_movimentacoes",
+        };
+        const tname = tableMap[entry.entityType];
+        if (!tname) throw new TRPCError({ code: "BAD_REQUEST", message: `Tipo de entidade '${entry.entityType}' não suportado para restauração` });
+
+        // Restaura também filhos se o snapshot for um pacote { __main, __children }
+        if (snap && typeof snap === "object" && snap.__main && Array.isArray(snap.__children)) {
+          await reinsertSnapshot(tname, snap.__main);
+          for (const child of snap.__children) {
+            const childTable = tableMap[child.entityType];
+            if (childTable) await reinsertSnapshot(childTable, child.row);
+          }
+        } else {
+          await reinsertSnapshot(tname, snap);
+        }
+        await markTrashEntryRestored(input.id);
+        await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "RESTORE", module: "lixeira", entityType: entry.entityType, entityId: entry.entityId, details: `Item restaurado da lixeira central: ${entry.label}` });
+        return { success: true };
+      }
+
+      // Caso 2: soft-delete clássico (deletedAt = NULL)
       const entityMap: Record<string, string> = {
         company: 'companies',
         employee: 'employees',
@@ -2382,21 +2438,24 @@ export const appRouter = router({
         epiDelivery: 'epi_deliveries',
         user: 'users',
       };
-
       const tableName = entityMap[input.entity];
       if (!tableName) throw new TRPCError({ code: "BAD_REQUEST", message: "Entidade inválida" });
-
       await db.execute(sqlFn.raw(`UPDATE "${tableName}" SET "deletedAt" = NULL, "deletedBy" = NULL, "deletedByUserId" = NULL WHERE id = ${input.id}`));
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "RESTORE", module: "lixeira", entityType: input.entity, entityId: input.id, details: `Item restaurado da lixeira: ${input.entity} #${input.id}` });
       return { success: true };
     }),
 
     // Exclusão permanente
-    permanentDelete: protectedProcedure.input(z.object({ id: z.number(), entity: z.string(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
-      const { getDb } = await import("./db");
+    permanentDelete: protectedProcedure.input(z.object({ id: z.number(), entity: z.string(), companyId: z.number(), fromCentralBin: z.boolean().optional() })).mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { sql: sqlFn } = await import("drizzle-orm");
+
+      if (input.fromCentralBin) {
+        await deleteTrashEntry(input.id);
+        await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "PERMANENT_DELETE", module: "lixeira", entityType: input.entity, entityId: input.id, details: `Snapshot da lixeira central excluído permanentemente: ${input.entity} #${input.id}` });
+        return { success: true };
+      }
 
       const entityMap: Record<string, string> = {
         company: 'companies',
@@ -2414,10 +2473,8 @@ export const appRouter = router({
         epiDelivery: 'epi_deliveries',
         user: 'users',
       };
-
       const tableName = entityMap[input.entity];
       if (!tableName) throw new TRPCError({ code: "BAD_REQUEST", message: "Entidade inválida" });
-
       await db.execute(sqlFn.raw(`DELETE FROM "${tableName}" WHERE id = ${input.id}`));
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "PERMANENT_DELETE", module: "lixeira", entityType: input.entity, entityId: input.id, details: `Item excluído permanentemente: ${input.entity} #${input.id}` });
       return { success: true };

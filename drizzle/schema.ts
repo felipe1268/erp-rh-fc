@@ -7361,3 +7361,23 @@ export const disciplinaCorrecoes = pgTable("disciplina_correcoes", {
 }, (t) => [
   index("idx_disc_corr_company").on(t.companyId),
 ]);
+
+export const recycleBin = pgTable("recycle_bin", {
+  id:               serial().primaryKey(),
+  entityType:       varchar("entity_type", { length: 80 }).notNull(),
+  entityId:         integer("entity_id").notNull(),
+  companyId:        integer("company_id"),
+  obraId:           integer("obra_id"),
+  parentEntity:     varchar("parent_entity", { length: 80 }),
+  parentId:         integer("parent_id"),
+  label:            text("label").notNull(),
+  snapshot:         json("snapshot").notNull(),
+  deletedBy:        varchar("deleted_by", { length: 255 }),
+  deletedByUserId:  integer("deleted_by_user_id"),
+  deletedAt:        timestamp("deleted_at", { mode: "string" }).defaultNow(),
+  restoredAt:       timestamp("restored_at", { mode: "string" }),
+}, (t) => [
+  index("idx_recycle_company").on(t.companyId),
+  index("idx_recycle_entity").on(t.entityType, t.entityId),
+  index("idx_recycle_deleted_at").on(t.deletedAt),
+]);

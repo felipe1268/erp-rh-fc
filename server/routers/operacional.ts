@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb, getEffectiveAllowedObraIds, userCanAccessObra } from "../db";
+import { getDb, getEffectiveAllowedObraIds, userCanAccessObra, recordTrashEntry } from "../db";
 import { sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
@@ -50,6 +50,27 @@ async function assertRdoImportadoChildObraAccess(ctx: any, childTable: string, c
   if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, Number(own[0].obra_id)))) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este relatório" });
   }
+}
+
+// Captura snapshot de um filho de RDO antes de hard delete e grava na lixeira central.
+async function snapshotRdoChild(ctx: any, childTable: string, entityType: string, childId: number, companyId: number, label: string) {
+  const db = await getDb();
+  const cid = Number(childId);
+  const r = await db.execute(sql.raw(`SELECT * FROM ${childTable} WHERE id = ${cid} LIMIT 1`));
+  const row = ((r as any)?.rows ?? r ?? [])[0];
+  if (!row) return;
+  await recordTrashEntry({
+    entityType,
+    entityId: cid,
+    companyId,
+    obraId: null,
+    parentEntity: childTable.startsWith("diario_obra_") ? "rdoRelatorioImportado" : "rdoRelatorio",
+    parentId: Number(row.rdo_id ?? row.relatorio_id ?? 0) || null,
+    label,
+    snapshot: row,
+    deletedBy: ctx.user.name ?? null,
+    deletedByUserId: ctx.user.id,
+  });
 }
 
 export const operacionalRouter = router({
@@ -532,6 +553,7 @@ export const operacionalRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await assertRdoChildObraAccess(ctx, "rdo_mao_obra", input.id, input.companyId);
+      await snapshotRdoChild(ctx, "rdo_mao_obra", "rdoMaoObra", input.id, input.companyId, `RDO Mão de Obra #${input.id}`);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM rdo_mao_obra WHERE id = ${input.id}
@@ -563,6 +585,7 @@ export const operacionalRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await assertRdoChildObraAccess(ctx, "rdo_atividades", input.id, input.companyId);
+      await snapshotRdoChild(ctx, "rdo_atividades", "rdoAtividade", input.id, input.companyId, `RDO Atividade #${input.id}`);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM rdo_atividades WHERE id = ${input.id}
@@ -594,6 +617,7 @@ export const operacionalRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await assertRdoChildObraAccess(ctx, "rdo_equipamentos", input.id, input.companyId);
+      await snapshotRdoChild(ctx, "rdo_equipamentos", "rdoEquipamento", input.id, input.companyId, `RDO Equipamento #${input.id}`);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM rdo_equipamentos WHERE id = ${input.id}
@@ -627,6 +651,7 @@ export const operacionalRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await assertRdoChildObraAccess(ctx, "rdo_materiais", input.id, input.companyId);
+      await snapshotRdoChild(ctx, "rdo_materiais", "rdoMaterial", input.id, input.companyId, `RDO Material #${input.id}`);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM rdo_materiais WHERE id = ${input.id}
@@ -658,6 +683,7 @@ export const operacionalRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await assertRdoChildObraAccess(ctx, "rdo_fotos", input.id, input.companyId);
+      await snapshotRdoChild(ctx, "rdo_fotos", "rdoFoto", input.id, input.companyId, `RDO Foto #${input.id}`);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM rdo_fotos WHERE id = ${input.id}
@@ -749,6 +775,7 @@ export const operacionalRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await assertRdoImportadoChildObraAccess(ctx, "diario_obra_mao_obra", input.id, input.companyId);
+      await snapshotRdoChild(ctx, "diario_obra_mao_obra", "rdoMaoObra", input.id, input.companyId, `RDO Mão de Obra (importado) #${input.id}`);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_mao_obra WHERE id = ${input.id}
@@ -781,6 +808,7 @@ export const operacionalRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await assertRdoImportadoChildObraAccess(ctx, "diario_obra_atividades", input.id, input.companyId);
+      await snapshotRdoChild(ctx, "diario_obra_atividades", "rdoAtividade", input.id, input.companyId, `RDO Atividade (importada) #${input.id}`);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_atividades WHERE id = ${input.id}
@@ -813,6 +841,7 @@ export const operacionalRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await assertRdoImportadoChildObraAccess(ctx, "diario_obra_equipamentos", input.id, input.companyId);
+      await snapshotRdoChild(ctx, "diario_obra_equipamentos", "rdoEquipamento", input.id, input.companyId, `RDO Equipamento (importado) #${input.id}`);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_equipamentos WHERE id = ${input.id}
@@ -843,6 +872,7 @@ export const operacionalRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await assertRdoImportadoChildObraAccess(ctx, "diario_obra_ocorrencias", input.id, input.companyId);
+      await snapshotRdoChild(ctx, "diario_obra_ocorrencias", "rdoOcorrencia", input.id, input.companyId, `RDO Ocorrência (importada) #${input.id}`);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_ocorrencias WHERE id = ${input.id}
@@ -872,6 +902,7 @@ export const operacionalRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await assertRdoImportadoChildObraAccess(ctx, "diario_obra_comentarios", input.id, input.companyId);
+      await snapshotRdoChild(ctx, "diario_obra_comentarios", "rdoComentario", input.id, input.companyId, `RDO Comentário (importado) #${input.id}`);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_comentarios WHERE id = ${input.id}
@@ -905,6 +936,7 @@ export const operacionalRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await assertRdoImportadoChildObraAccess(ctx, "diario_obra_materiais", input.id, input.companyId);
+      await snapshotRdoChild(ctx, "diario_obra_materiais", "rdoMaterial", input.id, input.companyId, `RDO Material (importado) #${input.id}`);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_materiais WHERE id = ${input.id}
