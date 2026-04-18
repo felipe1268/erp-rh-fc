@@ -2290,7 +2290,22 @@ export default function FechamentoPonto() {
                                               <CheckCircle className="h-4 w-4" />
                                             </Button>
                                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-purple-600 hover:bg-purple-50" title="Corrigir"
-                                              onClick={(e) => { e.stopPropagation(); setManualData({ employeeId: inc.employeeId || 0, obraId: inc.obraId || 0, data: inc.data || "", entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: `Correção: ${inc.descricao}` }); setShowManualDialog(true); }}>
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const recs = (item.dayRecords || []) as any[];
+                                                const rec = recs.find((r: any) => r.obraId === inc.obraId) || recs[0] || {};
+                                                setManualData({
+                                                  employeeId: inc.employeeId || 0,
+                                                  obraId: inc.obraId || rec.obraId || 0,
+                                                  data: inc.data || "",
+                                                  entrada1: rec.entrada1 || "",
+                                                  saida1: rec.saida1 || "",
+                                                  entrada2: rec.entrada2 || "",
+                                                  saida2: rec.saida2 || "",
+                                                  justificativa: `Correção: ${inc.descricao}`,
+                                                });
+                                                setShowManualDialog(true);
+                                              }}>
                                               <PenLine className="h-4 w-4" />
                                             </Button>
                                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600 hover:bg-red-50" title="Gerar Advertência (abre Controle de Documentos)"
@@ -2422,11 +2437,20 @@ export default function FechamentoPonto() {
                                                     className="border-2 border-purple-200 bg-purple-50 rounded-lg p-3 text-left hover:border-purple-400 hover:bg-purple-100 transition-all"
                                                     onClick={(e) => {
                                                       e.stopPropagation();
-                                                      setManualData({
-                                                        employeeId: inc.employeeId || 0, obraId: inc.obraId || 0,
-                                                        data: inc.data || "", entrada1: "", saida1: "", entrada2: "", saida2: "",
-                                                        justificativa: `Correção: ${inc.descricao}`,
-                                                      });
+                                                      {
+                                                        const recs = (item.dayRecords || []) as any[];
+                                                        const rec = recs.find((r: any) => r.obraId === inc.obraId) || recs[0] || {};
+                                                        setManualData({
+                                                          employeeId: inc.employeeId || 0,
+                                                          obraId: inc.obraId || rec.obraId || 0,
+                                                          data: inc.data || "",
+                                                          entrada1: rec.entrada1 || "",
+                                                          saida1: rec.saida1 || "",
+                                                          entrada2: rec.entrada2 || "",
+                                                          saida2: rec.saida2 || "",
+                                                          justificativa: `Correção: ${inc.descricao}`,
+                                                        });
+                                                      }
                                                       setShowManualDialog(true);
                                                     }}
                                                   >
