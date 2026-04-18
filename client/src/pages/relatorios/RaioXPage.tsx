@@ -45,18 +45,19 @@ const STATUS_AVATAR_COLORS: Record<string, string> = {
 export default function RaioXPage() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { isAdminMaster, isModuleAdmin } = usePermissions();
-  // Blacklist é dado sensível: só RH (admin do módulo rh-dp) e Admin Master.
-  const canSeeBlacklist = isAdminMaster || isModuleAdmin("rh-dp");
+  // Blacklist e Reclusos são dados sensíveis: só RH (admin do módulo rh-dp) e Admin Master.
+  const canSeeRestricted = isAdminMaster || isModuleAdmin("rh-dp");
+  const RESTRICTED_STATUSES = ["Lista_Negra", "Recluso"];
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
 
-  // Lista de status visíveis: oculta Blacklist se o usuário não é RH/Admin Master.
+  // Lista de status visíveis: oculta Blacklist e Reclusos se o usuário não é RH/Admin Master.
   const visibleStatusOptions = useMemo(
-    () => STATUS_OPTIONS.filter(o => o.value !== "Lista_Negra" || canSeeBlacklist),
-    [canSeeBlacklist]
+    () => STATUS_OPTIONS.filter(o => !RESTRICTED_STATUSES.includes(o.value) || canSeeRestricted),
+    [canSeeRestricted]
   );
 
   const { data: allEmployeesRaw = [] } = trpc.employees.list.useQuery(
@@ -70,11 +71,11 @@ export default function RaioXPage() {
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
-  // Funcionários visíveis: remove Blacklist quando não autorizado (mesmo no "Todos").
+  // Funcionários visíveis: remove Blacklist e Reclusos quando não autorizado (mesmo no "Todos").
   const allEmployees = useMemo(() => {
     const list = (allEmployeesRaw as any[]) ?? [];
-    return canSeeBlacklist ? list : list.filter((e: any) => e.status !== "Lista_Negra");
-  }, [allEmployeesRaw, canSeeBlacklist]);
+    return canSeeRestricted ? list : list.filter((e: any) => !RESTRICTED_STATUSES.includes(e.status));
+  }, [allEmployeesRaw, canSeeRestricted]);
 
   // IDs de funcionários com aviso prévio em andamento
   const avisoPrevioEmployeeIds = useMemo(() => {
