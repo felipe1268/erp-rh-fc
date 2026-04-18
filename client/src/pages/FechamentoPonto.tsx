@@ -723,6 +723,7 @@ export default function FechamentoPonto() {
   const monthStatuses = trpc.fechamentoPonto.getMonthStatuses.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 || companyIds.length > 0 });
   const consolidacaoStatus = trpc.fechamentoPonto.getConsolidacaoStatus.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const conflitos = trpc.fechamentoPonto.getConflitosObraDia.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const atestadosMes = trpc.pontoDescontos.atestadosMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const unmatchedData = trpc.fechamentoPonto.getUnmatchedRecords.useQuery(
     { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 }
   );
