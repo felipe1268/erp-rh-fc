@@ -5,6 +5,31 @@ import { fieldNotes, employees, obras, timeRecords } from "../../drizzle/schema"
 import { eq, and, desc, sql, isNull, asc, gte, lte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { notifyOwner } from "../_core/notification";
+import { getEffectiveAllowedObraIds } from "../db";
+import { TRPCError } from "@trpc/server";
+
+/**
+ * Garante que o usuário tem acesso à obra associada a um apontamento.
+ * Para admin/admin_master (helper retorna null) é sempre permitido.
+ * Apontamentos sem obraId só passam para usuários sem restrição.
+ */
+async function assertObraAccessForFieldNote(db: any, fieldNoteId: number, userId: number, role?: string | null) {
+  const allowed = await getEffectiveAllowedObraIds(userId, role);
+  if (allowed === null) return;
+  const [row] = await db.select({ obraId: fieldNotes.obraId }).from(fieldNotes).where(eq(fieldNotes.id, fieldNoteId));
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Apontamento não encontrado" });
+  if (row.obraId == null || !allowed.includes(row.obraId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra deste apontamento" });
+  }
+}
+
+/** Constrói trecho SQL para restringir queries de stats à lista de obras permitidas. */
+async function obrasFilterSql(userId: number, role: string | null | undefined, columnExpr: ReturnType<typeof sql>) {
+  const allowed = await getEffectiveAllowedObraIds(userId, role);
+  if (allowed === null) return null;
+  if (allowed.length === 0) return { empty: true as const };
+  return { empty: false as const, clause: sql` AND ${columnExpr} = ANY(${allowed})` };
+}
 
 const tipoOcorrenciaEnum = z.enum(['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'insubordinacao', 'acidente', 'atestado_medico', 'desvio_conduta', 'elogio', 'outro']);
 const prioridadeEnum = z.enum(['baixa', 'media', 'alta', 'urgente']);
@@ -20,7 +45,7 @@ export const fieldNotesRouter = router({
       dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const conds: any[] = [companyFilter(fieldNotes.companyId, input), isNull(fieldNotes.deletedAt)];
       if (input.status) conds.push(eq(fieldNotes.status, input.status));
@@ -29,6 +54,14 @@ export const fieldNotesRouter = router({
       if (input.tipoOcorrencia) conds.push(eq(fieldNotes.tipoOcorrencia, input.tipoOcorrencia));
       if (input.dataInicio) conds.push(gte(fieldNotes.data, input.dataInicio));
       if (input.dataFim) conds.push(lte(fieldNotes.data, input.dataFim));
+
+      // Filtro por obras permitidas (data-row level). null => sem restrição.
+      // Apontamento sem obraId só é mostrado a admin/admin_master (allowed === null).
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conds.push(inArray(fieldNotes.obraId, allowed));
+      }
 
       const rows = await db.select({
         id: fieldNotes.id,
@@ -232,9 +265,10 @@ export const fieldNotesRouter = router({
       obraId: z.number().optional(),
       data: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const { id, ...data } = input;
+      await assertObraAccessForFieldNote(db, id, ctx.user.id, ctx.user.role);
       await db.update(fieldNotes).set(data).where(eq(fieldNotes.id, id));
       return { success: true };
     }),
@@ -252,6 +286,7 @@ export const fieldNotesRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await assertObraAccessForFieldNote(db, input.id, ctx.user.id, ctx.user.role);
       const resolvidoPor = ctx.user?.name || ctx.user?.email || "RH";
 
       const [note] = await db.select().from(fieldNotes).where(eq(fieldNotes.id, input.id));
@@ -424,8 +459,11 @@ export const fieldNotesRouter = router({
 
   stats: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const obrasFilter = await obrasFilterSql(ctx.user.id, ctx.user.role, sql`"obraId"`);
+      if (obrasFilter?.empty) return { pendente: 0, em_analise: 0, resolvido: 0, arquivado: 0, urgentes: 0, altas: 0, total: 0 };
+      const obrasClause = obrasFilter?.clause ?? sql``;
       const rows = ((await db.execute(sql`
         SELECT 
           status,
@@ -433,7 +471,7 @@ export const fieldNotesRouter = router({
           SUM(CASE WHEN prioridade = 'urgente' THEN 1 ELSE 0 END) as urgentes,
           SUM(CASE WHEN prioridade = 'alta' THEN 1 ELSE 0 END) as altas
         FROM field_notes
-        WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL
+        WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL ${obrasClause}
         GROUP BY status
       `)) as any).rows || [];
 
@@ -453,8 +491,11 @@ export const fieldNotesRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const obrasFilter = await obrasFilterSql(ctx.user.id, ctx.user.role, sql`fn."obraId"`);
+      if (obrasFilter?.empty) return [];
+      const obrasClause = obrasFilter?.clause ?? sql``;
       const dataConds: any[] = [];
       if (input.dataInicio) dataConds.push(sql`fn.data >= ${input.dataInicio}`);
       if (input.dataFim) dataConds.push(sql`fn.data <= ${input.dataFim}`);
@@ -466,7 +507,7 @@ export const fieldNotesRouter = router({
           SUM(CASE WHEN fn.status = 'resolvido' THEN 1 ELSE 0 END) as resolvidos
         FROM field_notes fn
         LEFT JOIN obras o ON fn."obraId" = o.id
-        WHERE fn."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND fn."deletedAt" IS NULL ${extraWhere}
+        WHERE fn."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND fn."deletedAt" IS NULL ${extraWhere} ${obrasClause}
         GROUP BY fn."obraId", o.nome
         ORDER BY total DESC
       `)) as any).rows || [];
@@ -476,8 +517,11 @@ export const fieldNotesRouter = router({
   statsPorMes: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const obrasFilter = await obrasFilterSql(ctx.user.id, ctx.user.role, sql`"obraId"`);
+      if (obrasFilter?.empty) return [];
+      const obrasClause = obrasFilter?.clause ?? sql``;
       const ano = input.ano || new Date().getFullYear();
       const rows = ((await db.execute(sql`
         SELECT TO_CHAR(data, 'YYYY-MM') as mes, COUNT(*) as total,
@@ -485,7 +529,7 @@ export const fieldNotesRouter = router({
           SUM(CASE WHEN status = 'pendente' THEN 1 ELSE 0 END) as pendentes
         FROM field_notes
         WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL
-          AND EXTRACT(YEAR FROM data) = ${ano}
+          AND EXTRACT(YEAR FROM data) = ${ano} ${obrasClause}
         GROUP BY TO_CHAR(data, 'YYYY-MM')
         ORDER BY mes ASC
       `)) as any).rows || [];
@@ -496,8 +540,13 @@ export const fieldNotesRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const obrasFilter = await obrasFilterSql(ctx.user.id, ctx.user.role, sql`"obraId"`);
+      if (obrasFilter?.empty) {
+        return { total: 0, resolvidos: 0, pendentes: 0, emAnalise: 0, arquivados: 0, urgentes: 0, altas: 0, taxaResolucao: 0, tempoMedioResolucaoHoras: 0 };
+      }
+      const obrasClause = obrasFilter?.clause ?? sql``;
       const dataConds: any[] = [];
       if (input.dataInicio) dataConds.push(sql`data >= ${input.dataInicio}`);
       if (input.dataFim) dataConds.push(sql`data <= ${input.dataFim}`);
@@ -514,7 +563,7 @@ export const fieldNotesRouter = router({
           SUM(CASE WHEN prioridade = 'alta' THEN 1 ELSE 0 END) as altas,
           AVG(CASE WHEN "resolvidoEm" IS NOT NULL THEN EXTRACT(EPOCH FROM ("resolvidoEm" - "createdAt")) / 3600 END) as "tempoMedioResolucaoHoras"
         FROM field_notes
-        WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL ${extraWhere}
+        WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL ${extraWhere} ${obrasClause}
       `)) as any).rows || [];
       const r = (rows as any[])[0] || {};
       return {
@@ -534,8 +583,11 @@ export const fieldNotesRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const obrasFilter = await obrasFilterSql(ctx.user.id, ctx.user.role, sql`"obraId"`);
+      if (obrasFilter?.empty) return [];
+      const obrasClause = obrasFilter?.clause ?? sql``;
       const dataConds = [];
       if (input.dataInicio) dataConds.push(sql`data >= ${input.dataInicio}`);
       if (input.dataFim) dataConds.push(sql`data <= ${input.dataFim}`);
@@ -544,7 +596,7 @@ export const fieldNotesRouter = router({
       const rows = ((await db.execute(sql`
         SELECT "tipoOcorrencia", COUNT(*) as total
         FROM field_notes
-        WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL ${extraWhere}
+        WHERE "companyId" = ${input.companyId} AND "deletedAt" IS NULL ${extraWhere} ${obrasClause}
         GROUP BY "tipoOcorrencia"
         ORDER BY total DESC
       `)) as any).rows || [];

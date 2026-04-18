@@ -217,6 +217,81 @@ export async function getUserPermissions(userId: number) {
   return db.select().from(userPermissions).where(eq(userPermissions.userId, userId));
 }
 
+/**
+ * Retorna a lista de IDs de obras às quais o usuário tem acesso (data-row level).
+ *
+ * Regra:
+ * - `null` => sem restrição (vê tudo). Aplica-se a `admin_master` e ao role `admin`.
+ * - `number[]` => união de:
+ *      a) `users.allowed_obra_ids` (JSON salvo via tela de gestão de usuários);
+ *      b) obras onde o usuário é responsável (via `employees.email = users.email`
+ *         e `obras.responsavelId = employees.id`).
+ *   Lista vazia (`[]`) significa: nenhuma obra liberada — o usuário não vê nada
+ *   que dependa de obra.
+ *
+ * Esta é a fonte da verdade do filtro por obra; routers tRPC devem chamar este
+ * helper para aplicar o filtro de forma consistente.
+ */
+export async function getEffectiveAllowedObraIds(
+  userId: number,
+  role?: string | null,
+): Promise<number[] | null> {
+  if (role === "admin_master" || role === "admin") return null;
+  const db = await getDb();
+  if (!db) return [];
+  const set = new Set<number>();
+  try {
+    const r = await db.execute(sql`SELECT allowed_obra_ids, email FROM users WHERE id = ${userId}`);
+    const rows: any[] = (r as any)?.rows ?? (r as any) ?? [];
+    const raw = rows[0]?.allowed_obra_ids;
+    if (raw) {
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed)) {
+        for (const v of parsed) {
+          const n = Number(v);
+          if (Number.isFinite(n)) set.add(n);
+        }
+      }
+    }
+    const email = rows[0]?.email;
+    if (email) {
+      const empRes = await db.execute(sql`SELECT id FROM employees WHERE LOWER(email) = LOWER(${email}) AND "deletedAt" IS NULL`);
+      const empRows: any[] = (empRes as any)?.rows ?? (empRes as any) ?? [];
+      const empIds = empRows.map((e: any) => Number(e.id)).filter(Number.isFinite);
+      if (empIds.length > 0) {
+        const obrasRes = await db.execute(sql`SELECT id FROM obras WHERE "responsavelId" = ANY(${empIds}) AND "deletedAt" IS NULL`);
+        const obrasRows: any[] = (obrasRes as any)?.rows ?? (obrasRes as any) ?? [];
+        for (const o of obrasRows) {
+          const n = Number(o.id);
+          if (Number.isFinite(n)) set.add(n);
+        }
+      }
+    }
+  } catch {}
+  return Array.from(set);
+}
+
+/**
+ * Resolve o `employees.id` correspondente ao usuário logado, via match por email.
+ * Retorna `null` se o usuário não tem employee correspondente.
+ */
+export async function getCurrentUserEmployeeId(userId: number): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const r = await db.execute(sql`SELECT email FROM users WHERE id = ${userId}`);
+    const rows: any[] = (r as any)?.rows ?? (r as any) ?? [];
+    const email = rows[0]?.email;
+    if (!email) return null;
+    const empRes = await db.execute(sql`SELECT id FROM employees WHERE LOWER(email) = LOWER(${email}) AND "deletedAt" IS NULL LIMIT 1`);
+    const empRows: any[] = (empRes as any)?.rows ?? (empRes as any) ?? [];
+    const id = empRows[0]?.id;
+    return id != null ? Number(id) : null;
+  } catch {
+    return null;
+  }
+}
+
 // Listar permissões de um usuário para um módulo específico
 export async function getUserModulePermissions(userId: number, moduleId: string) {
   const db = await getDb();

@@ -1050,7 +1050,7 @@ export default function SolicitacaoMDO() {
                       <Send className="h-4 w-4" /> Enviar para Aprovação
                     </Button>
                   )}
-                  {(["rascunho", "rejeitada"].includes(d.status) || isAdmin) && (
+                  {(d as any).canEdit && (
                     <Button variant="ghost" className="text-red-600 gap-2" onClick={() => { if (confirm(`Excluir a solicitação SMO-${String(d.id).padStart(4, "0")}?`)) deleteMut.mutate({ id: d.id, companyId, companyIds }); }}>
                       <Trash2 className="h-4 w-4" /> Excluir
                     </Button>

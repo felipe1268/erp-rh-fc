@@ -1611,21 +1611,9 @@ export const appRouter = router({
         return { isAdminMaster: true, permissions: [], groupPermissions: null, moduleAccess: {} as Record<string, string>, allowedObraIds: null as number[] | null };
       }
       const perms = await getUserPermissions(ctx.user.id);
-      // Lê obras liberadas para o usuário (users.allowed_obra_ids JSON). Lista vazia => sem acesso.
-      let allowedObraIds: number[] = [];
-      try {
-        const { getDb } = await import("./db");
-        const _db = await getDb();
-        if (_db) {
-          const r = await _db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
-          const rows: any[] = (r as any)?.rows ?? (r as any) ?? [];
-          const raw = rows[0]?.allowed_obra_ids;
-          if (raw) {
-            const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-            if (Array.isArray(parsed)) allowedObraIds = parsed.map((n: any) => Number(n)).filter((n) => Number.isFinite(n));
-          }
-        }
-      } catch {}
+      // Obras liberadas (helper centralizado): null => sem restrição (role=admin); array => obras permitidas (vazio = nenhuma).
+      const { getEffectiveAllowedObraIds } = await import("./db");
+      const allowedObraIds = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
       // Buscar permissões de grupo do usuário
       const groupPerms = await getUserEffectiveGroupPermissions(ctx.user.id);
       // moduleAccess: prioridade = grupo (novo sistema) > individual > legado

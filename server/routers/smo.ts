@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getEffectiveAllowedObraIds, getCurrentUserEmployeeId } from "../db";
 import { eq, and, sql, isNull, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 import {
@@ -194,6 +194,34 @@ async function assertOwnership(db: any, id: number, ctx: { companyId: number; co
   if (!allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
 }
 
+/**
+ * Verifica se o usuário pode editar/excluir uma SMO.
+ * Regras:
+ *  - admin_master e role=admin: sempre podem.
+ *  - Criador (employees.id == solicitanteId, via email): pode SOMENTE enquanto
+ *    NENHUMA das três aprovações (coord/rh/diretoria) tiver sido registrada.
+ *  - Demais usuários: bloqueados.
+ */
+async function assertCanEditOrDelete(db: any, id: number, user: { id: number; role?: string | null }) {
+  const [row] = await db.select({
+    solicitanteId: smoSolicitacoes.solicitanteId,
+    aprovadoPorCoord: smoSolicitacoes.aprovadoPorCoord,
+    aprovadoPorRh: smoSolicitacoes.aprovadoPorRh,
+    aprovadoPorDiretoria: smoSolicitacoes.aprovadoPorDiretoria,
+  }).from(smoSolicitacoes).where(eq(smoSolicitacoes.id, id));
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+  if (user.role === "admin_master" || user.role === "admin") return;
+  const myEmployeeId = await getCurrentUserEmployeeId(user.id);
+  const isCreator = myEmployeeId != null && myEmployeeId === row.solicitanteId;
+  if (!isCreator) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o criador, RH ou Admin podem alterar esta solicitação." });
+  }
+  const jaAprovado = !!row.aprovadoPorCoord || !!row.aprovadoPorRh || !!row.aprovadoPorDiretoria;
+  if (jaAprovado) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Solicitação já aprovada — não pode mais ser alterada pelo criador." });
+  }
+}
+
 async function assertObraAccess(db: any, obraId: number, ctx: { companyId: number; companyIds?: number[] }) {
   const [obra] = await db.select({ companyId: obras.companyId })
     .from(obras).where(eq(obras.id, obraId));
@@ -212,11 +240,22 @@ export const smoRouter = router({
       status: z.string().optional(),
       obraId: z.number().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const conds: any[] = [companyFilter(smoSolicitacoes.companyId, input), isNull(smoSolicitacoes.deletedAt)];
       if (input.status) conds.push(eq(smoSolicitacoes.status, input.status));
       if (input.obraId) conds.push(eq(smoSolicitacoes.obraId, input.obraId));
+
+      // Filtro por obras permitidas (data-row level). null => sem restrição.
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conds.push(inArray(smoSolicitacoes.obraId, allowed));
+      }
+
+      // Pré-computa identidade do usuário p/ marcar canEdit por linha.
+      const isMasterOrAdmin = ctx.user.role === "admin_master" || ctx.user.role === "admin";
+      const myEmployeeId = isMasterOrAdmin ? null : await getCurrentUserEmployeeId(ctx.user.id);
 
       return await withRetry('list', async () => {
         const rows = await db.select({
@@ -238,11 +277,22 @@ export const smoRouter = router({
           }
         }
 
-        return rows.map(r => ({
-          ...r.solicitacao,
-          obraNome: r.obraNome,
-          atividades: eapMap[r.solicitacao.id] || [],
-        }));
+        return rows.map(r => {
+          const s = r.solicitacao;
+          let canEdit = false;
+          if (isMasterOrAdmin) {
+            canEdit = true;
+          } else if (myEmployeeId != null && myEmployeeId === s.solicitanteId) {
+            // Criador só pode editar enquanto NENHUMA aprovação existir.
+            canEdit = !s.aprovadoPorCoord && !s.aprovadoPorRh && !s.aprovadoPorDiretoria;
+          }
+          return {
+            ...s,
+            obraNome: r.obraNome,
+            atividades: eapMap[s.id] || [],
+            canEdit,
+          };
+        });
       });
     }),
 
@@ -269,49 +319,11 @@ export const smoRouter = router({
     .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const conds: any[] = [companyFilter(obras.companyId, input), isNull(obras.deletedAt), eq(obras.isActive, 1)];
-      const isMasterOrAdmin = ctx.user.role === "admin_master" || ctx.user.role === "admin";
-      if (!isMasterOrAdmin) {
-        // Buscar lista de obras permitidas (allowed_obra_ids do user)
-        let allowedObraIds: number[] | null = null;
-        try {
-          const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
-          const userRows = (userResult as any).rows || (userResult as any) || [];
-          const raw = userRows[0]?.allowed_obra_ids;
-          if (raw) {
-            const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              allowedObraIds = parsed.map((x: any) => Number(x)).filter((n: any) => Number.isFinite(n));
-            }
-          }
-        } catch {}
-
-        // Também aceitar obras onde o usuário é responsável — comparando via employees.id (não users.id)
-        let responsavelObraIds: number[] = [];
-        try {
-          // user.id da tabela users vs obras.responsavelId que aponta para employees.id
-          // Ligação: employees pode ter um campo que aponta para o user (ou pelo email/nome)
-          // Estratégia simples: buscar employees com mesmo email do usuário
-          const userEmailRes = await db.execute(sql`SELECT email FROM users WHERE id = ${ctx.user.id}`);
-          const userEmailRows = (userEmailRes as any).rows || (userEmailRes as any) || [];
-          const email = userEmailRows[0]?.email;
-          if (email) {
-            const empRes = await db.execute(sql`SELECT id FROM employees WHERE LOWER(email) = LOWER(${email}) AND "deletedAt" IS NULL`);
-            const empRows = (empRes as any).rows || (empRes as any) || [];
-            const empIds = empRows.map((r: any) => Number(r.id)).filter(Number.isFinite);
-            if (empIds.length > 0) {
-              const obrasRes = await db.execute(sql`SELECT id FROM obras WHERE "responsavelId" = ANY(${empIds}) AND "deletedAt" IS NULL`);
-              const obrasRows = (obrasRes as any).rows || (obrasRes as any) || [];
-              responsavelObraIds = obrasRows.map((r: any) => Number(r.id)).filter(Number.isFinite);
-            }
-          }
-        } catch {}
-
-        const finalAllowed = new Set<number>([...(allowedObraIds ?? []), ...responsavelObraIds]);
-        if (finalAllowed.size === 0) {
-          // Sem permissões → retornar vazio
-          return [];
-        }
-        conds.push(inArray(obras.id, Array.from(finalAllowed)));
+      // Filtro centralizado: null => admin_master/admin (vê tudo); array vazio => sem acesso.
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conds.push(inArray(obras.id, allowed));
       }
       const rows = await db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo, responsavel: obras.responsavel })
         .from(obras)
@@ -976,10 +988,11 @@ export const smoRouter = router({
         nomeAtividade: z.string().optional(),
       })).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const { id, companyId, companyIds, atividades, ...data } = input;
       await assertOwnership(db, id, { companyId, companyIds });
+      await assertCanEditOrDelete(db, id, ctx.user);
       await db.update(smoSolicitacoes).set({ ...data, atualizadoEm: new Date().toISOString() } as any).where(eq(smoSolicitacoes.id, id));
 
       if (atividades !== undefined) {
@@ -1080,9 +1093,10 @@ export const smoRouter = router({
 
   delete: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       await assertOwnership(db, input.id, input);
+      await assertCanEditOrDelete(db, input.id, ctx.user);
       await db.update(smoSolicitacoes).set({ deletedAt: new Date().toISOString() }).where(eq(smoSolicitacoes.id, input.id));
       return { success: true };
     }),
