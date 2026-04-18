@@ -37,6 +37,7 @@ import {
   listUserGroups, getUserGroupById, createUserGroup, updateUserGroup, deleteUserGroup,
   getGroupPermissions, setGroupPermissions, getGroupMembers, getUserGroupMemberships,
   addUserToGroup, removeUserFromGroup, setUserGroups, getUserEffectiveGroupPermissions,
+  getEffectiveAllowedObraIds,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
@@ -1087,7 +1088,15 @@ export const appRouter = router({
       }
       return getObras(input.companyId);
     }),
-    listActive: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getObrasByCompanyActive(input.companyId, input.companyIds)),
+    listActive: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
+      const isAdmin = ctx.user.role === 'admin' || ctx.user.role === 'admin_master';
+      if (isAdmin) return getObrasByCompanyActive(input.companyId, input.companyIds);
+      const allObras = await getObrasByCompanyActive(input.companyId, input.companyIds);
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id);
+      if (allowed === null) return allObras;
+      const allowedSet = new Set(allowed);
+      return (allObras as any[]).filter((o: any) => allowedSet.has(Number(o.id)));
+    }),
     listForAlmoxarifado: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
       const isAdmin = ctx.user.role === 'admin' || ctx.user.role === 'admin_master';
       if (isAdmin) return getObrasByCompanyActive(input.companyId, input.companyIds);
