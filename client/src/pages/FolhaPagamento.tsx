@@ -5118,8 +5118,8 @@ export default function FolhaPagamento() {
           const afericaoConsolidada = !!(pd as any)?.afericaoConsolidadoEm;
           const pagamentoConsolidado = !!(pd as any)?.pagamentoConsolidadoEm;
 
-          const step1Ready = pontoOk;
-          const step2Ready = pontoOk;
+          const step1Ready = true;
+          const step2Ready = true;
           const step3Ready = pontoOk;
           const step4Ready = valeOk;
 
