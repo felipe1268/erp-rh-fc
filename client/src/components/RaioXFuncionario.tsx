@@ -117,19 +117,33 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const { user } = useAuth();
   const { selectedCompany } = useCompany();
   const { isSensitiveHidden, canAccessModule, isAdminMaster } = usePermissions();
-  // LGPD: ocultar valores monetários por padrão. Só revela se for admin master OU
-  // se o usuário tiver acesso ao módulo rh-dp E a flag "salarios" NÃO estiver
-  // marcada como sensível (white-list). Acesso ao Raio-X via módulo "relatorios"
-  // sozinho não libera valores remuneratórios.
-  const hideSalary = !(
-    isAdminMaster ||
-    (canAccessModule("rh-dp") && !isSensitiveHidden("rh-dp", "salarios"))
-  );
+  // LGPD: regra geral (white-list por flag).
+  // Cada flag (salarios, dados_pessoais, documentos_rh) é avaliada separadamente.
+  // Só revela quando: admin master OU (tem acesso ao rh-dp E a flag NÃO está marcada).
+  // Acesso ao Raio-X via "relatorios" sozinho NÃO libera nenhuma das flags.
+  const canSeeFlag = (flag: string) =>
+    isAdminMaster || (canAccessModule("rh-dp") && !isSensitiveHidden("rh-dp", flag));
+  const hideSalary   = !canSeeFlag("salarios");
+  const hidePersonal = !canSeeFlag("dados_pessoais");
+  const hideDocs     = !canSeeFlag("documentos_rh");
   const SALARY_MASK = "•••••";
+  const PII_MASK    = "•••••";
   const formatSalario = (val: string | null | undefined): string =>
     hideSalary ? SALARY_MASK : _formatSalario(val);
   const formatMoeda = (val: any): string =>
     hideSalary ? SALARY_MASK : _formatMoeda(val);
+  // Máscaras LGPD para dados pessoais
+  const maskPII      = (val: any): string => hidePersonal ? PII_MASK : (val ?? "-");
+  const formatCPFSafe = (val: string | null | undefined): string =>
+    hidePersonal ? PII_MASK : formatCPF(val || "");
+  const formatDateSafe = (val: string | null | undefined): string =>
+    hidePersonal ? PII_MASK : formatDate(val);
+  const calcIdadeSafe = (val: string | null | undefined): string =>
+    hidePersonal ? PII_MASK : calcIdade(val);
+  const calcDiasAniversarioSafe = (val: string | null | undefined) =>
+    hidePersonal
+      ? { aniversario: PII_MASK, diasFaltando: -1, texto: PII_MASK }
+      : calcDiasAniversario(val);
   const [activeTab, setActiveTab] = useState("timeline");
   const { data: raioX, isLoading } = trpc.docs.raioX.useQuery(
     { employeeId: employeeId! },
@@ -257,7 +271,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
 
     // HEADER COM LOGO
     const statusColor = emp?.status === 'Ativo' ? 'background:#dcfce7;color:#166534' : emp?.status === 'Desligado' ? 'background:#fef2f2;color:#991b1b' : emp?.status === 'Ferias' ? 'background:#dbeafe;color:#1e40af' : emp?.status === 'Afastado' ? 'background:#fefce8;color:#854d0e' : 'background:#f3f4f6;color:#374151';
-    html += `<div class="logo-bar"><img src="${logoUrl}" alt="Logo" /><div class="title"><h1>RAIO-X DO FUNCION\u00C1RIO</h1><p>${nomeEmpresa.toUpperCase()}${cnpjEmpresa ? ' — CNPJ: ' + cnpjEmpresa : ''}</p></div><div class="info-right"><p>CPF: ${formatCPF(emp?.cpf || "")}</p><p>Status: ${emp?.status || "-"}</p>${(emp as any)?.codigoInterno ? `<p>C\u00F3d: ${(emp as any).codigoInterno}</p>` : ''}<p>${dataEmissao}</p></div></div>`;
+    html += `<div class="logo-bar"><img src="${logoUrl}" alt="Logo" /><div class="title"><h1>RAIO-X DO FUNCION\u00C1RIO</h1><p>${nomeEmpresa.toUpperCase()}${cnpjEmpresa ? ' — CNPJ: ' + cnpjEmpresa : ''}</p></div><div class="info-right"><p>CPF: ${formatCPFSafe(emp?.cpf)}</p><p>Status: ${emp?.status || "-"}</p>${(emp as any)?.codigoInterno ? `<p>C\u00F3d: ${(emp as any).codigoInterno}</p>` : ''}<p>${dataEmissao}</p></div></div>`;
     html += `<div class="emp-name-bar">${emp?.fotoUrl ? `<img src="${emp.fotoUrl}" alt="Foto" style="width:60px;height:60px;object-fit:cover;object-position:top;border-radius:50%;border:3px solid #1B2A4A;box-shadow:0 2px 8px rgba(0,0,0,0.15);margin-right:12px;" />` : ''}<h2>${emp?.nomeCompleto || "-"}</h2><span class="status-badge" style="${statusColor}">${emp?.status || "-"}</span></div>`;
 
     // DADOS PESSOAIS
@@ -269,18 +283,18 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
       ["Tempo de Empresa", calcTempoEmpresa(emp?.dataAdmissao)],
       ["Sal\u00E1rio Base", formatSalario(emp?.salarioBase)],
       ["Valor/Hora", formatSalario(emp?.valorHora)],
-      ["Nascimento", formatDate(emp?.dataNascimento)],
-      ["Idade", calcIdade(emp?.dataNascimento)],
-      ["Sexo", emp?.sexo === "M" ? "Masculino" : emp?.sexo === "F" ? "Feminino" : emp?.sexo || "-"],
-      ["Estado Civil", emp?.estadoCivil?.replace(/_/g, " ") || "-"],
-      ["RG", emp?.rg || "-"],
-      ["CTPS", emp?.ctps || "-"],
-      ["PIS", emp?.pis || "-"],
-      ["Telefone", emp?.telefone || emp?.celular || "-"],
-      ["E-mail", emp?.email || "-"],
+      ["Nascimento", formatDateSafe(emp?.dataNascimento)],
+      ["Idade", calcIdadeSafe(emp?.dataNascimento)],
+      ["Sexo", hidePersonal ? PII_MASK : (emp?.sexo === "M" ? "Masculino" : emp?.sexo === "F" ? "Feminino" : emp?.sexo || "-")],
+      ["Estado Civil", hidePersonal ? PII_MASK : (emp?.estadoCivil?.replace(/_/g, " ") || "-")],
+      ["RG", maskPII(emp?.rg)],
+      ["CTPS", maskPII(emp?.ctps)],
+      ["PIS", maskPII(emp?.pis)],
+      ["Telefone", maskPII(emp?.telefone || emp?.celular)],
+      ["E-mail", maskPII(emp?.email)],
       ["Contrato", emp?.tipoContrato || "-"],
-      ["Banco", emp?.bancoNome || emp?.banco || "-"],
-      ["Ag\u00EAncia/Conta", `${emp?.agencia || "-"} / ${emp?.conta || "-"}`],
+      ["Banco", maskPII(emp?.bancoNome || emp?.banco)],
+      ["Ag\u00EAncia/Conta", hidePersonal ? PII_MASK : `${emp?.agencia || "-"} / ${emp?.conta || "-"}`],
     ];
     campos.forEach(([label, value]) => { html += `<div class="info-item"><strong>${label}:</strong> ${value}</div>`; });
     html += `</div>`;
@@ -304,7 +318,12 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
         html += `<div class="info-item" style="margin-top:4px"><strong>Jornada:</strong> ${jt}</div>`;
       }
     }
-    if (emp?.logradouro) html += `<div class="info-item" style="margin-top:2px"><strong>Endere\u00E7o:</strong> ${emp.logradouro}${emp.numero ? `, ${emp.numero}` : ""}${emp.complemento ? ` - ${emp.complemento}` : ""}${emp.bairro ? `, ${emp.bairro}` : ""}${emp.cidade ? ` - ${emp.cidade}` : ""}${emp.estado ? `/${emp.estado}` : ""}${emp.cep ? ` - CEP: ${emp.cep}` : ""}</div>`;
+    if (emp?.logradouro) {
+      const enderecoStr = hidePersonal
+        ? PII_MASK
+        : `${emp.logradouro}${emp.numero ? `, ${emp.numero}` : ""}${emp.complemento ? ` - ${emp.complemento}` : ""}${emp.bairro ? `, ${emp.bairro}` : ""}${emp.cidade ? ` - ${emp.cidade}` : ""}${emp.estado ? `/${emp.estado}` : ""}${emp.cep ? ` - CEP: ${emp.cep}` : ""}`;
+      html += `<div class="info-item" style="margin-top:2px"><strong>Endere\u00E7o:</strong> ${enderecoStr}</div>`;
+    }
     if (emp?.dataDemissao) html += `<div class="info-item" style="color:#dc2626;margin-top:4px"><strong>Desligado em:</strong> ${formatDate(emp.dataDemissao)}</div>`;
     html += `</div>`;
 
@@ -519,7 +538,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
     const css = `@page{size:A4 portrait;margin:12mm 15mm 20mm 15mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}a{color:inherit!important}}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a1a;line-height:1.4}.logo-bar{background:#1B2A4A;padding:14px 20px;display:flex;align-items:center;gap:16px;margin-bottom:16px;border-radius:6px}.logo-bar img{height:50px;object-fit:contain}.logo-bar .title{color:white;flex:1}.logo-bar .title h1{font-size:16px;font-weight:bold;letter-spacing:1.5px;margin-bottom:2px}.logo-bar .title p{font-size:10px;opacity:0.85}.logo-bar .info-right{color:white;text-align:right;font-size:9px;opacity:0.9}.logo-bar .info-right p{margin-bottom:2px}.emp-bar{background:#f0f4f8;border-left:4px solid #1B2A4A;padding:10px 16px;margin-bottom:14px;border-radius:0 4px 4px 0;display:flex;justify-content:space-between;align-items:center}.emp-bar h2{font-size:15px;font-weight:700;color:#1B2A4A}.emp-bar .sub{font-size:10px;color:#4b5563;margin-top:2px}.section{margin-bottom:14px;page-break-inside:avoid}.section-title{font-size:12px;font-weight:700;color:#1B2A4A;border-bottom:2px solid #2d4a7a;padding-bottom:3px;margin-bottom:6px}.notice{background:#fffbeb;border:1px solid #fde68a;border-radius:4px;padding:8px 12px;font-size:9px;color:#78350f;margin-bottom:12px}table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:4px}th{background:#e8edf4;color:#1B2A4A;font-weight:600;text-align:left;padding:4px 6px;border:1px solid #d1d9e6}td{padding:4px 6px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:600}.bg{background:#dcfce7;color:#166534}.br{background:#fef2f2;color:#991b1b}.by{background:#fefce8;color:#854d0e}.link{color:#1d4ed8;text-decoration:underline}.footer{margin-top:20px;border-top:1px solid #e5e7eb;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#6b7280}`;
     let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>SST - ${emp?.nomeCompleto || ""}</title><style>${css}</style></head><body>`;
     html += `<div class="logo-bar"><img src="${logoUrl}" alt="Logo" /><div class="title"><h1>DOCUMENTOS SST — ASOs &amp; TREINAMENTOS</h1><p>${nomeEmpresa.toUpperCase()}${cnpjEmpresa ? ' — CNPJ: ' + cnpjEmpresa : ''}</p></div><div class="info-right"><p>Emitido em: ${dataEmissao}</p><p>Emitido por: ${userName}</p></div></div>`;
-    html += `<div class="emp-bar"><div><h2>${emp?.nomeCompleto || "-"}</h2><div class="sub">Função: ${emp?.funcao || emp?.cargo || "-"} | CPF: ${formatCPF(emp?.cpf || "")} | Admissão: ${formatDate(emp?.dataAdmissao)}</div></div></div>`;
+    html += `<div class="emp-bar"><div><h2>${emp?.nomeCompleto || "-"}</h2><div class="sub">Função: ${emp?.funcao || emp?.cargo || "-"} | CPF: ${formatCPFSafe(emp?.cpf)} | Admissão: ${formatDate(emp?.dataAdmissao)}</div></div></div>`;
     html += `<div class="notice">⚠️ Este documento é de uso confidencial. Os links abaixo levam aos arquivos originais anexados no sistema. Para imprimir com acesso completo, abra cada link em um navegador conectado à internet.</div>`;
     html += `<div class="section"><div class="section-title">🩺 ASOs (${asos.length})</div>`;
     if (asos.length === 0) {
@@ -571,7 +590,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
           </div>
           <div className="min-w-0">
             <h1 className="text-sm sm:text-xl font-bold tracking-tight">RAIO-X DO FUNCIONÁRIO</h1>
-            {emp && <p className="text-xs sm:text-sm text-white/80 truncate">{emp.nomeCompleto} — CPF: {formatCPF(emp.cpf)}</p>}
+            {emp && <p className="text-xs sm:text-sm text-white/80 truncate">{emp.nomeCompleto} — CPF: {formatCPFSafe(emp.cpf)}</p>}
           </div>
         </div>
         <div className="flex items-center gap-1 sm:gap-2 ml-auto sm:ml-0">
@@ -651,21 +670,21 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-4 sm:gap-x-8 gap-y-2 sm:gap-y-3">
                     {(() => {
-                      const anivInfo = calcDiasAniversario(emp.dataNascimento);
+                      const anivInfo = calcDiasAniversarioSafe(emp.dataNascimento);
                       const tempoEmp = calcTempoEmpresa(emp.dataAdmissao);
                       return [
-                        { icon: CreditCard, label: "CPF", value: formatCPF(emp.cpf) },
-                        emp.rg ? { icon: CreditCard, label: "RG", value: emp.rg } : null,
+                        { icon: CreditCard, label: "CPF", value: formatCPFSafe(emp.cpf) },
+                        emp.rg ? { icon: CreditCard, label: "RG", value: maskPII(emp.rg) } : null,
                         emp.funcao ? { icon: Briefcase, label: "Função", value: emp.funcao } : null,
                         funcaoDetalhes?.cbo ? { icon: FileText, label: "CBO", value: funcaoDetalhes.cbo } : null,
                         emp.setor ? { icon: Building2, label: "Setor", value: emp.setor } : null,
-                        emp.telefone ? { icon: Phone, label: "Telefone", value: emp.telefone } : null,
+                        emp.telefone ? { icon: Phone, label: "Telefone", value: maskPII(emp.telefone) } : null,
                         emp.dataAdmissao ? { icon: Calendar, label: "Admissão", value: formatDate(emp.dataAdmissao) } : null,
                         emp.dataAdmissao ? { icon: Timer, label: "Tempo de Empresa", value: tempoEmp } : null,
                         emp.salarioBase ? { icon: DollarSign, label: "Salário", value: formatSalario(emp.salarioBase) } : null,
                         emp.valorHora ? { icon: Clock, label: "Valor/Hora", value: formatSalario(emp.valorHora) } : null,
-                        emp.dataNascimento ? { icon: User, label: "Idade", value: calcIdade(emp.dataNascimento) } : null,
-                        emp.dataNascimento ? { icon: Gift, label: "Aniversário", value: `${anivInfo.aniversario} (${anivInfo.texto})` } : null,
+                        emp.dataNascimento ? { icon: User, label: "Idade", value: calcIdadeSafe(emp.dataNascimento) } : null,
+                        emp.dataNascimento ? { icon: Gift, label: "Aniversário", value: hidePersonal ? PII_MASK : `${anivInfo.aniversario} (${anivInfo.texto})` } : null,
                         emp.obraAtualNome ? { icon: HardHat, label: "Obra Principal", value: emp.obraAtualNome } : null,
                       ].filter(Boolean);
                     })().map((item: any, idx) => (
@@ -678,7 +697,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   {emp.logradouro && (
                     <div className="flex items-center gap-2 text-sm text-blue-600 mt-3">
                       <MapPin className="h-4 w-4 shrink-0" />
-                      <span>{emp.logradouro}{emp.bairro ? `, ${emp.bairro}` : ""}{emp.cidade ? ` - ${emp.cidade}` : ""}{emp.estado ? `/${emp.estado}` : ""}</span>
+                      <span>{hidePersonal ? PII_MASK : `${emp.logradouro}${emp.bairro ? `, ${emp.bairro}` : ""}${emp.cidade ? ` - ${emp.cidade}` : ""}${emp.estado ? `/${emp.estado}` : ""}`}</span>
                     </div>
                   )}
                   {emp.dataDemissao && <p className="text-sm text-red-600 mt-2 font-medium">Desligado em: {formatDate(emp.dataDemissao)}</p>}

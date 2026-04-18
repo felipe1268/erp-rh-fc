@@ -52,7 +52,11 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "dissidio",            label: "Dissídio e Feriados",                  actions: ["view","create","edit"] },
       { id: "convencoes_coletivas", label: "Convenções Coletivas",                actions: ["view","create","edit","delete"] },
       { id: "comparativo",         label: "Comparativo de Convenções",            actions: ["view"] },
-      { id: "relatorios",          label: "Relatórios RH (Raio-X, Ponto, Folha, Divergências)", actions: ["view"] },
+      { id: "relatorios_raiox",        label: "Relatório: Raio-X do Funcionário",     actions: ["view"] },
+      { id: "relatorios_ponto",        label: "Relatório: Ponto / Cartão de Ponto",   actions: ["view"] },
+      { id: "relatorios_folha",        label: "Relatório: Folha de Pagamento",        actions: ["view"] },
+      { id: "relatorios_divergencias", label: "Relatório: Divergências",              actions: ["view"] },
+      { id: "relatorios_custo_obra",   label: "Relatório: Custo por Obra",            actions: ["view"] },
       { id: "dashboards",          label: "Dashboards RH",                        actions: ["view"] },
     ],
     sensitiveFlags: [
@@ -356,11 +360,11 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/feriados":                        "dissidio",
     "/dissidio":                        "dissidio",
     "/comparativo-convencoes":          "comparativo",
-    "/relatorios/raio-x":               "relatorios",
-    "/relatorios/ponto":                "relatorios",
-    "/relatorios/folha":                "relatorios",
-    "/relatorios/divergencias":         "relatorios",
-    "/relatorios/custo-obra":           "relatorios",
+    "/relatorios/raio-x":               "relatorios_raiox",
+    "/relatorios/ponto":                "relatorios_ponto",
+    "/relatorios/folha":                "relatorios_folha",
+    "/relatorios/divergencias":         "relatorios_divergencias",
+    "/relatorios/custo-obra":           "relatorios_custo_obra",
     "/dashboards":                      "dashboards",
     "/dashboards/funcionarios":         "dashboards",
     "/dashboards/cartao-ponto":         "dashboards",
@@ -563,9 +567,22 @@ export function normalizeModulePerm(moduleId: string, raw: unknown): ModulePerm 
   }
   if (typeof raw === "object" && raw !== null) {
     const obj = raw as Partial<ModulePerm>;
+    let pages = obj.pages ?? defaultPagesForLevel(moduleId, (obj.level as "admin" | "viewer") ?? "admin");
+    // Shim retrocompatível: usuários que tinham a página agregada "relatorios"
+    // (rh-dp) ganham automaticamente as 5 páginas separadas que a substituíram.
+    if (moduleId === "rh-dp" && pages && (pages as any).relatorios) {
+      const old = (pages as any).relatorios as PagePerms;
+      const expand = ["relatorios_raiox","relatorios_ponto","relatorios_folha","relatorios_divergencias","relatorios_custo_obra"];
+      pages = { ...pages };
+      for (const id of expand) {
+        if (!(id in pages)) {
+          (pages as any)[id] = { view: !!old.view, create: false, edit: false, delete: false };
+        }
+      }
+    }
     return {
       level:           obj.level ?? "admin",
-      pages:           obj.pages ?? defaultPagesForLevel(moduleId, (obj.level as "admin" | "viewer") ?? "admin"),
+      pages,
       sensitiveHidden: obj.sensitiveHidden ?? [],
     };
   }
