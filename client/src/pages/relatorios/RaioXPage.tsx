@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { formatCPF } from "@/lib/formatters";
 import { Search, UserSearch, Users, UserCheck, UserX, Clock, Shield, Ban, AlertTriangle, Palmtree, FileWarning } from "lucide-react";
 import { removeAccents } from "@/lib/searchUtils";
+import { usePermissions } from "@/contexts/PermissionsContext";
 
 const STATUS_OPTIONS = [
   { value: "Todos", label: "Todos", icon: Users, color: "bg-gray-100 text-gray-700 border-gray-300", activeColor: "bg-gray-700 text-white border-gray-700" },
@@ -43,13 +44,22 @@ const STATUS_AVATAR_COLORS: Record<string, string> = {
 
 export default function RaioXPage() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const { isAdminMaster, isModuleAdmin } = usePermissions();
+  // Blacklist é dado sensível: só RH (admin do módulo rh-dp) e Admin Master.
+  const canSeeBlacklist = isAdminMaster || isModuleAdmin("rh-dp");
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
 
-  const { data: allEmployees = [] } = trpc.employees.list.useQuery(
+  // Lista de status visíveis: oculta Blacklist se o usuário não é RH/Admin Master.
+  const visibleStatusOptions = useMemo(
+    () => STATUS_OPTIONS.filter(o => o.value !== "Lista_Negra" || canSeeBlacklist),
+    [canSeeBlacklist]
+  );
+
+  const { data: allEmployeesRaw = [] } = trpc.employees.list.useQuery(
     { companyId: isConstrutoras ? (companyIds[0] || 0) : companyId, companyIds: isConstrutoras ? companyIds : undefined },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
@@ -59,6 +69,12 @@ export default function RaioXPage() {
     { companyId: isConstrutoras ? (companyIds[0] || 0) : companyId },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
+
+  // Funcionários visíveis: remove Blacklist quando não autorizado (mesmo no "Todos").
+  const allEmployees = useMemo(() => {
+    const list = (allEmployeesRaw as any[]) ?? [];
+    return canSeeBlacklist ? list : list.filter((e: any) => e.status !== "Lista_Negra");
+  }, [allEmployeesRaw, canSeeBlacklist]);
 
   // IDs de funcionários com aviso prévio em andamento
   const avisoPrevioEmployeeIds = useMemo(() => {
@@ -123,7 +139,7 @@ export default function RaioXPage() {
 
         {/* Filtros por Status */}
         <div className="flex flex-wrap gap-2">
-          {STATUS_OPTIONS.map((opt) => {
+          {visibleStatusOptions.map((opt) => {
             const Icon = opt.icon;
             const count = statusCounts[opt.value] || 0;
             const isActive = statusFilter === opt.value;
@@ -161,7 +177,7 @@ export default function RaioXPage() {
         {/* Contador de resultados */}
         <div className="text-sm text-muted-foreground">
           {filtered.length} colaborador{filtered.length !== 1 ? "es" : ""} encontrado{filtered.length !== 1 ? "s" : ""}
-          {statusFilter !== "Todos" ? ` com status "${STATUS_OPTIONS.find(o => o.value === statusFilter)?.label}"` : ""}
+          {statusFilter !== "Todos" ? ` com status "${visibleStatusOptions.find(o => o.value === statusFilter)?.label ?? statusFilter}"` : ""}
         </div>
 
         {/* Lista de funcionários */}
