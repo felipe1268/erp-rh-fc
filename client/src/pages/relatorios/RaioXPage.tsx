@@ -44,9 +44,12 @@ const STATUS_AVATAR_COLORS: Record<string, string> = {
 
 export default function RaioXPage() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const { isAdminMaster, isModuleAdmin } = usePermissions();
-  // Blacklist e Reclusos são dados sensíveis: só RH (admin do módulo rh-dp) e Admin Master.
-  const canSeeRestricted = isAdminMaster || isModuleAdmin("rh-dp");
+  const { isAdminMaster, isModuleAdmin, canAccessObra } = usePermissions();
+  // RH (admin do módulo rh-dp) e Admin Master enxergam tudo.
+  // Demais usuários: só veem funcionários alocados nas obras liberadas (users.allowed_obra_ids).
+  const isRhOrAdmin = isAdminMaster || isModuleAdmin("rh-dp");
+  // Blacklist e Reclusos são dados sensíveis: mesma regra do RH/Admin.
+  const canSeeRestricted = isRhOrAdmin;
   const RESTRICTED_STATUSES = ["Lista_Negra", "Recluso"];
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
@@ -71,11 +74,20 @@ export default function RaioXPage() {
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
-  // Funcionários visíveis: remove Blacklist e Reclusos quando não autorizado (mesmo no "Todos").
+  // Funcionários visíveis:
+  // 1) Remove Blacklist/Reclusos quando não autorizado (mesmo no "Todos").
+  // 2) Para usuários que NÃO são RH/Admin Master, filtra por obra liberada
+  //    (obraAtualId ∈ allowed_obra_ids). Funcionário sem obra atual fica oculto.
   const allEmployees = useMemo(() => {
-    const list = (allEmployeesRaw as any[]) ?? [];
-    return canSeeRestricted ? list : list.filter((e: any) => !RESTRICTED_STATUSES.includes(e.status));
-  }, [allEmployeesRaw, canSeeRestricted]);
+    let list = ((allEmployeesRaw as any[]) ?? []);
+    if (!canSeeRestricted) {
+      list = list.filter((e: any) => !RESTRICTED_STATUSES.includes(e.status));
+    }
+    if (!isRhOrAdmin) {
+      list = list.filter((e: any) => canAccessObra(e.obraAtualId));
+    }
+    return list;
+  }, [allEmployeesRaw, canSeeRestricted, isRhOrAdmin, canAccessObra]);
 
   // IDs de funcionários com aviso prévio em andamento
   const avisoPrevioEmployeeIds = useMemo(() => {

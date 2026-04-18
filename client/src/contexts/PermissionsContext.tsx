@@ -30,6 +30,12 @@ interface GroupPermissions {
 interface PermissionsContextType {
   isAdminMaster: boolean;
   isLoading: boolean;
+  // ── Acesso por obra (data-row level) ──
+  // null  => sem restrição (Admin Master)
+  // []    => nenhuma obra liberada (não vê nada baseado em obra)
+  // [..]  => apenas obras desta lista
+  allowedObraIds: number[] | null;
+  canAccessObra: (obraId: number | null | undefined) => boolean;
   // ── Acesso por módulo (novo sistema) ──
   moduleAccess: Record<string, unknown>;
   canAccessModule: (moduleId: ActiveModuleId | string) => boolean;
@@ -62,6 +68,8 @@ interface PermissionsContextType {
 const PermissionsContext = createContext<PermissionsContextType>({
   isAdminMaster: false,
   isLoading: true,
+  allowedObraIds: null,
+  canAccessObra: () => false,
   moduleAccess: {},
   canAccessModule: () => false,
   isModuleAdmin: () => false,
@@ -96,6 +104,15 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const permissions = data?.permissions ?? [];
   const groupPermissions = (data?.groupPermissions as GroupPermissions | null | undefined) ?? null;
   const rawModuleAccess = (data?.moduleAccess ?? {}) as Record<string, unknown>;
+  // null = sem restrição (admin master); array = obras liberadas (vazio = nada)
+  const allowedObraIds: number[] | null = isAdminMaster
+    ? null
+    : (Array.isArray((data as any)?.allowedObraIds) ? ((data as any).allowedObraIds as number[]) : []);
+  const canAccessObra = (obraId: number | null | undefined): boolean => {
+    if (allowedObraIds === null) return true;
+    if (obraId == null) return false;
+    return allowedObraIds.includes(Number(obraId));
+  };
 
   // Flag: o grupo do usuário tem permissões no novo sistema (module_access)
   const groupHasNewSystem = rawModuleAccess.__groupHasNewSystem === true;
@@ -468,6 +485,8 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       value={{
         isAdminMaster,
         isLoading,
+        allowedObraIds,
+        canAccessObra,
         moduleAccess: rawModuleAccess,
         canAccessModule,
         isModuleAdmin,

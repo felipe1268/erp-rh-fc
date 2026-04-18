@@ -1606,11 +1606,26 @@ export const appRouter = router({
     }),
     // Obter permissões do usuário logado (para sidebar/frontend)
     getMyPermissions: protectedProcedure.query(async ({ ctx }) => {
-      // Admin Master tem acesso total
+      // Admin Master tem acesso total (allowedObraIds = null => sem restrição)
       if (ctx.user.role === 'admin_master') {
-        return { isAdminMaster: true, permissions: [], groupPermissions: null, moduleAccess: {} as Record<string, string> };
+        return { isAdminMaster: true, permissions: [], groupPermissions: null, moduleAccess: {} as Record<string, string>, allowedObraIds: null as number[] | null };
       }
       const perms = await getUserPermissions(ctx.user.id);
+      // Lê obras liberadas para o usuário (users.allowed_obra_ids JSON). Lista vazia => sem acesso.
+      let allowedObraIds: number[] = [];
+      try {
+        const { getDb } = await import("./db");
+        const _db = await getDb();
+        if (_db) {
+          const r = await _db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
+          const rows: any[] = (r as any)?.rows ?? (r as any) ?? [];
+          const raw = rows[0]?.allowed_obra_ids;
+          if (raw) {
+            const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+            if (Array.isArray(parsed)) allowedObraIds = parsed.map((n: any) => Number(n)).filter((n) => Number.isFinite(n));
+          }
+        }
+      } catch {}
       // Buscar permissões de grupo do usuário
       const groupPerms = await getUserEffectiveGroupPermissions(ctx.user.id);
       // moduleAccess: prioridade = grupo (novo sistema) > individual > legado
@@ -1649,6 +1664,7 @@ export const appRouter = router({
       return {
         isAdminMaster: false,
         moduleAccess,
+        allowedObraIds,
         permissions: perms.map((p: any) => ({ moduleId: p.moduleId, featureKey: p.featureKey, canAccess: !!p.canAccess })),
         groupPermissions: groupPerms.groups.length > 0 ? {
           groups: groupPerms.groups,
