@@ -660,7 +660,7 @@ export default function FechamentoPonto() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [manualData, setManualData] = useState({
-    employeeId: 0, obraId: 0, data: "", entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: "",
+    employeeId: 0, obraId: 0, data: "", entrada1: "", saida1: "", entrada2: "", saida2: "", entrada3: "", saida3: "", justificativa: "",
   });
   const [manualEmpPopoverOpen, setManualEmpPopoverOpen] = useState(false);
   const [manualDays, setManualDays] = useState<Array<{id: string; data: string; entrada1: string; saida1: string; entrada2: string; saida2: string; entrada3: string; saida3: string; feriado?: boolean}>>([]);
@@ -783,7 +783,7 @@ export default function FechamentoPonto() {
   useEffect(() => {
     if (showManualDialog) {
       if (manualData.data) {
-        setManualDays([{ id: String(Date.now()), data: manualData.data, entrada1: manualData.entrada1 || "", saida1: manualData.saida1 || "", entrada2: manualData.entrada2 || "", saida2: manualData.saida2 || "" }]);
+        setManualDays([{ id: String(Date.now()), data: manualData.data, entrada1: manualData.entrada1 || "", saida1: manualData.saida1 || "", entrada2: manualData.entrada2 || "", saida2: manualData.saida2 || "", entrada3: (manualData as any).entrada3 || "", saida3: (manualData as any).saida3 || "" }]);
       } else {
         setManualDays([]);
       }
@@ -2302,6 +2302,8 @@ export default function FechamentoPonto() {
                                                   saida1: rec.saida1 || "",
                                                   entrada2: rec.entrada2 || "",
                                                   saida2: rec.saida2 || "",
+                                                  entrada3: rec.entrada3 || "",
+                                                  saida3: rec.saida3 || "",
                                                   justificativa: `Correção: ${inc.descricao}`,
                                                 });
                                                 setShowManualDialog(true);
@@ -2448,6 +2450,8 @@ export default function FechamentoPonto() {
                                                           saida1: rec.saida1 || "",
                                                           entrada2: rec.entrada2 || "",
                                                           saida2: rec.saida2 || "",
+                                                          entrada3: rec.entrada3 || "",
+                                                          saida3: rec.saida3 || "",
                                                           justificativa: `Correção: ${inc.descricao}`,
                                                         });
                                                       }
