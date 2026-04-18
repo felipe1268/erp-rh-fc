@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { getDb, getEffectiveAllowedObraIds, userCanAccessObra } from "../db";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { buscarFotoParaItem } from "../_core/autoFoto";
 import {
   almoxarifadoItens,
@@ -203,7 +203,7 @@ export const warehouseRouter = router({
         data: z.string().optional(), // YYYY-MM-DD
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -213,6 +213,12 @@ export const warehouseRouter = router({
       if (input.itemId) conditions.push(eq(almoxarifadoMovimentacoes.itemId, input.itemId));
       if (input.tipo) conditions.push(eq(almoxarifadoMovimentacoes.tipo, input.tipo));
       if (input.data) conditions.push(sql`DATE(${almoxarifadoMovimentacoes.criadoEm}) = ${input.data}::date`);
+
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conditions.push(inArray(almoxarifadoMovimentacoes.obraId, allowed));
+      }
 
       const movs = await db
         .select({
@@ -339,7 +345,7 @@ export const warehouseRouter = router({
   // Listar todos empréstimos em aberto
   listOpenLoans: protectedProcedure
     .input(z.object({ companyId: z.number(), data: z.string().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -350,6 +356,12 @@ export const warehouseRouter = router({
       } else {
         // sem filtro de data: mostra só os abertos
         conditions.push(eq(warehouseLoans.status, "emprestado"));
+      }
+      // Filtro centralizado por obras permitidas. Empréstimos sem obra só para admin.
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conditions.push(inArray(warehouseLoans.obraId, allowed));
       }
 
       return db
@@ -362,7 +374,7 @@ export const warehouseRouter = router({
   // Devolver item
   returnLoanById: protectedProcedure
     .input(z.object({ loanId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -370,6 +382,9 @@ export const warehouseRouter = router({
         .select()
         .from(warehouseLoans)
         .where(eq(warehouseLoans.id, input.loanId));
+      if (loan && !(await userCanAccessObra(ctx.user.id, ctx.user.role, loan.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este empréstimo" });
+      }
       if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Empréstimo não encontrado" });
 
       const hoje = new Date().toISOString().split("T")[0];
@@ -403,6 +418,9 @@ export const warehouseRouter = router({
         .from(warehouseLoans)
         .where(eq(warehouseLoans.id, input.loanId));
       if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, loan.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este empréstimo" });
+      }
 
       await db
         .update(warehouseLoans)

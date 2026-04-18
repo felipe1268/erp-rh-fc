@@ -1,5 +1,5 @@
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb, createAuditLog } from "../db";
+import { getDb, createAuditLog, getEffectiveAllowedObraIds, userCanAccessObra } from "../db";
 import {
   heSolicitacoes, heSolicitacaoFuncionarios, heSolicitacaoAtividades, heSolicitacaoConfirmacoes,
   employees, obras, terminationNotices,
@@ -26,6 +26,13 @@ export const heSolicitacoesRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    // Guard: não-admin só pode criar solicitação em obra liberada para ele.
+    // Quando `obraId` vier omitido (undefined), `userCanAccessObra(null)` retorna
+    // false para não-admin — impede criação fora do escopo de obra.
+    if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId ?? null))) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra" });
+    }
 
     // === VALIDAÇÃO: bloquear funcionários desligados/inativos ===
     const empsCheck = await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, status: employees.status })
@@ -101,7 +108,7 @@ export const heSolicitacoesRouter = router({
   // ===================== LISTAR SOLICITAÇÕES =====================
   list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.enum(["pendente", "aprovada", "rejeitada", "cancelada", "todas"]).optional(),
     mesReferencia: z.string().optional(), // YYYY-MM
-  })).query(async ({ input }) => {
+  })).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) return [];
 
@@ -111,6 +118,13 @@ export const heSolicitacoesRouter = router({
     }
     if (input.mesReferencia) {
       conditions.push(sql`${heSolicitacoes.dataSolicitacao} LIKE ${input.mesReferencia + '%'}`);
+    }
+
+    // Filtro centralizado por obras permitidas. Solicitações sem obra só para admin.
+    const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+    if (allowed !== null) {
+      if (allowed.length === 0) return [];
+      conditions.push(inArray(heSolicitacoes.obraId, allowed));
     }
 
     const rows = await db.select().from(heSolicitacoes)
@@ -156,12 +170,15 @@ export const heSolicitacoesRouter = router({
   // ===================== DETALHES DE UMA SOLICITAÇÃO =====================
   getById: protectedProcedure.input(z.object({
     id: z.number(),
-  })).query(async ({ input }) => {
+  })).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
     const [sol] = await db.select().from(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+    if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, sol.obraId))) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta solicitação" });
+    }
 
     const funcs = await db.select({
       id: heSolicitacaoFuncionarios.id,
@@ -415,6 +432,9 @@ export const heSolicitacoesRouter = router({
 
     const [sol] = await db.select().from(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+    if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, sol.obraId))) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta solicitação" });
+    }
     if (sol.status !== "pendente") {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Só é possível cancelar solicitações pendentes" });
     }

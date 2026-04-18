@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb, getCompaniesForUser } from "../db";
+import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds } from "../db";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
 import { getTipoPagamentoInfo } from "../../shared/paymentConditions";
 import { normalizarTexto } from "../../shared/textNormalization";
@@ -928,7 +928,7 @@ export const comprasRouter = router({
       categoria:          z.string().optional(),
       apenasAbaixoMinimo: z.boolean().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
 
       const conditions: any[] = [
@@ -940,6 +940,13 @@ export const comprasRouter = router({
         conditions.push(sql`${almoxarifadoItens.obraId} IS NULL`);
       } else if (input.obraId !== undefined) {
         conditions.push(eq(almoxarifadoItens.obraId, input.obraId));
+      }
+
+      // Filtro centralizado por obras permitidas. null => sem restrição.
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conditions.push(inArray(almoxarifadoItens.obraId, allowed));
       }
 
       const rows = await db.select().from(almoxarifadoItens)

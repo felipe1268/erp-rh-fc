@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getEffectiveAllowedObraIds, userCanAccessObra } from "../db";
 import { eq, and, desc, asc, sql, gte, lte, inArray } from "drizzle-orm";
 import { resolveCompanyIds } from "../companyHelper";
 import {
@@ -480,9 +480,11 @@ export const frotasRouter = router({
 
   listVehicles: protectedProcedure
     .input(z.object({ companyId: z.number(), status: z.string().optional(), tipo: z.string().optional(), obraId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null && allowed.length === 0) return [];
       let q = sql`SELECT v.*, o.nome as obra_nome, e."nomeCompleto" as motorista_nome
         FROM vehicles v
         LEFT JOIN obras o ON o.id = v.obra_id
@@ -491,6 +493,8 @@ export const frotasRouter = router({
       if (input.status) q = sql`${q} AND v."statusVeiculo" = ${input.status}`;
       if (input.tipo) q = sql`${q} AND v."tipoVeiculo" = ${input.tipo}`;
       if (input.obraId) q = sql`${q} AND v.obra_id = ${input.obraId}`;
+      // Filtro centralizado por obras permitidas. Veículos sem obra (obra_id NULL) só para admin.
+      if (allowed !== null) q = sql`${q} AND v.obra_id = ANY(${allowed})`;
       q = sql`${q} ORDER BY v."createdAt" DESC`;
       const res = await db.execute(q);
       return (res as any).rows || [];
@@ -498,7 +502,7 @@ export const frotasRouter = router({
 
   getVehicle: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
       const res = await db.execute(sql`
@@ -508,7 +512,12 @@ export const frotasRouter = router({
         LEFT JOIN employees e ON e.id = v.motorista_id
         WHERE v.id = ${input.id} AND v."companyId" = ${input.companyId}
       `);
-      return (res as any).rows?.[0] || null;
+      const row = (res as any).rows?.[0] || null;
+      if (!row) return null;
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, row.obra_id))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este veículo" });
+      }
+      return row;
     }),
 
   getVehiclesPendingRegistration: protectedProcedure
@@ -667,9 +676,23 @@ export const frotasRouter = router({
       seguroVencimento: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
+      // Guard: precisa ter acesso à obra ATUAL do veículo e, se estiver
+      // mudando, à obra DESTINO também (impede mover veículo para obra alheia).
+      const cur = await db.execute(sql`SELECT obra_id FROM vehicles WHERE id = ${input.id} AND "companyId" = ${input.companyId}`);
+      const curObra = ((cur as any).rows?.[0] || (cur as any)[0])?.obra_id ?? null;
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, curObra))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este veículo" });
+      }
+      // input.obraId === null significa "limpar obra"; userCanAccessObra
+      // retorna false para null (exceto admin), então não-admin não pode limpar.
+      if (input.obraId !== undefined && input.obraId !== curObra) {
+        if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra destino" });
+        }
+      }
       const { id, companyId, ...data } = input;
       const setFields: any = { ...data, updatedAt: new Date().toISOString() };
       await db.update(vehicles).set(setFields).where(and(eq(vehicles.id, id), eq(vehicles.companyId, companyId)));
@@ -721,8 +744,13 @@ export const frotasRouter = router({
 
   deleteVehicle: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const cur = await db.execute(sql`SELECT obra_id FROM vehicles WHERE id = ${input.id} AND "companyId" = ${input.companyId}`);
+      const obraId = ((cur as any).rows?.[0] || (cur as any)[0])?.obra_id ?? null;
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este veículo" });
+      }
       await db.update(vehicles).set({ statusVeiculo: "Inativo", updatedAt: new Date().toISOString() } as any)
         .where(and(eq(vehicles.id, input.id), eq(vehicles.companyId, input.companyId)));
       return { success: true };

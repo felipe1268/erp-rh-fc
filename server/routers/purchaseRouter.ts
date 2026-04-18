@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getEffectiveAllowedObraIds } from "../db";
 import { eq, and, desc, asc, or, sql, lte, inArray } from "drizzle-orm";
 import {
   fornecedores,
@@ -106,12 +106,17 @@ export const purchaseRouter = router({
       companyId: z.number(), obraId: z.number().optional(), status: z.string().optional(),
       emergencial: z.boolean().optional(), page: z.number().default(1), limit: z.number().default(50),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const conditions: any[] = [eq(purchaseRequests.companyId, input.companyId)];
       if (input.obraId) conditions.push(eq(purchaseRequests.obraId, input.obraId));
       if (input.status) conditions.push(eq(purchaseRequests.status, input.status));
       if (input.emergencial !== undefined) conditions.push(eq(purchaseRequests.emergencial, input.emergencial ? 1 : 0));
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conditions.push(inArray(purchaseRequests.obraId, allowed));
+      }
       const rows = await db.select().from(purchaseRequests)
         .where(and(...conditions)).orderBy(desc(purchaseRequests.createdAt))
         .limit(input.limit).offset((input.page - 1) * input.limit);
@@ -293,12 +298,17 @@ export const purchaseRouter = router({
       companyId: z.number(), obraId: z.number().optional(), status: z.string().optional(),
       supplierId: z.number().optional(), page: z.number().default(1), limit: z.number().default(50),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const conditions: any[] = [eq(purchaseOrders.companyId, input.companyId)];
       if (input.obraId) conditions.push(eq(purchaseOrders.obraId, input.obraId));
       if (input.status) conditions.push(eq(purchaseOrders.status, input.status));
       if (input.supplierId) conditions.push(eq(purchaseOrders.supplierId, input.supplierId));
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conditions.push(inArray(purchaseOrders.obraId, allowed));
+      }
       const rows = await db.select().from(purchaseOrders).where(and(...conditions))
         .orderBy(desc(purchaseOrders.createdAt)).limit(input.limit).offset((input.page - 1) * input.limit);
       const withItens = await Promise.all(rows.map(async (o: any) => {

@@ -272,6 +272,26 @@ export async function getEffectiveAllowedObraIds(
 }
 
 /**
+ * Verifica se o usuário tem acesso a uma obra específica (consulta o helper
+ * `getEffectiveAllowedObraIds` por baixo). admin/admin_master => true.
+ * obraId nulo/undefined => false (registros sem obra são restritos).
+ *
+ * Use nos handlers de mutations e get-by-id que recebem o id de um registro
+ * já existente; carregue o `obraId` do registro do banco e passe aqui.
+ * Routers devem lançar `TRPCError({code:'FORBIDDEN'})` quando isso retornar false.
+ */
+export async function userCanAccessObra(
+  userId: number,
+  role: string | null | undefined,
+  obraId: number | null | undefined,
+): Promise<boolean> {
+  const allowed = await getEffectiveAllowedObraIds(userId, role);
+  if (allowed === null) return true;
+  if (obraId == null) return false;
+  return allowed.includes(Number(obraId));
+}
+
+/**
  * Resolve o `employees.id` correspondente ao usuário logado, via match por email.
  * Retorna `null` se o usuário não tem employee correspondente.
  */

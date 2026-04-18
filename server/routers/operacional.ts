@@ -1,11 +1,55 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getEffectiveAllowedObraIds, userCanAccessObra } from "../db";
 import { sql } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
 
 function rows(result: any): any[] {
   return (result as any).rows ?? result ?? [];
+}
+
+// Guards locais: garantem que o usuário tem acesso à obra do RDO antes de
+// criar/editar/excluir filhos (mão de obra, atividades, etc.) por rdoId/relatorioId.
+async function assertRdoObraAccess(ctx: any, rdoId: number, companyId: number) {
+  const db = await getDb();
+  const own = rows(await db.execute(sql`SELECT obra_id FROM rdo_relatorios WHERE id = ${rdoId} AND company_id = ${companyId}`));
+  if (!own.length) throw new TRPCError({ code: "NOT_FOUND", message: "RDO não encontrado" });
+  if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, Number(own[0].obra_id)))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este RDO" });
+  }
+}
+async function assertRdoImportadoObraAccess(ctx: any, relatorioId: number, companyId: number) {
+  const db = await getDb();
+  const own = rows(await db.execute(sql`SELECT obra_id FROM diario_obra_relatorios WHERE id = ${relatorioId} AND company_id = ${companyId}`));
+  if (!own.length) throw new TRPCError({ code: "NOT_FOUND", message: "Relatório não encontrado" });
+  if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, Number(own[0].obra_id)))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este relatório" });
+  }
+}
+// Variante para mutations remover* que recebem o id do FILHO (rdo_atividades, etc).
+// childTable é injetado como literal SQL; childId/companyId são forçados a Number antes de virar SQL.
+async function assertRdoChildObraAccess(ctx: any, childTable: string, childId: number, companyId: number) {
+  const db = await getDb();
+  const cid = Number(childId), coid = Number(companyId);
+  const own = rows(await db.execute(sql.raw(
+    `SELECT r.obra_id FROM ${childTable} c JOIN rdo_relatorios r ON r.id = c.rdo_id WHERE c.id = ${cid} AND r.company_id = ${coid}`
+  )));
+  if (!own.length) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
+  if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, Number(own[0].obra_id)))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este RDO" });
+  }
+}
+async function assertRdoImportadoChildObraAccess(ctx: any, childTable: string, childId: number, companyId: number) {
+  const db = await getDb();
+  const cid = Number(childId), coid = Number(companyId);
+  const own = rows(await db.execute(sql.raw(
+    `SELECT r.obra_id FROM ${childTable} c JOIN diario_obra_relatorios r ON r.id = c.relatorio_id WHERE c.id = ${cid} AND r.company_id = ${coid}`
+  )));
+  if (!own.length) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
+  if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, Number(own[0].obra_id)))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este relatório" });
+  }
 }
 
 export const operacionalRouter = router({
@@ -173,8 +217,13 @@ export const operacionalRouter = router({
 
   listarRDOs: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number(), mes: z.string().optional(), fonte: z.enum(['principal', 'importado']).optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
+      // Bloqueia obras fora da lista permitida do usuário (admin/admin_master => sem restrição).
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null && !allowed.includes(input.obraId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra" });
+      }
       if (input.fonte === 'importado') {
         const conditions = [
           sql`company_id = ${input.companyId}`,
@@ -236,8 +285,15 @@ export const operacionalRouter = router({
 
   getRDO: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number(), fonte: z.enum(['principal', 'importado']).optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
+      // Guard de acesso à obra: descobre obra_id do RDO antes de retornar.
+      const tabela = input.fonte === 'importado' ? sql`diario_obra_relatorios` : sql`rdo_relatorios`;
+      const own = rows(await db.execute(sql`SELECT obra_id FROM ${tabela} WHERE id = ${input.id} AND company_id = ${input.companyId}`));
+      const obraId = own[0]?.obra_id ?? null;
+      if (obraId != null && !(await userCanAccessObra(ctx.user.id, ctx.user.role, Number(obraId)))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este RDO" });
+      }
       if (input.fonte === 'importado') {
         const relRows = rows(await db.execute(sql`
           SELECT id, obra_id, company_id, external_id, numero, data, status, responsavel_nome,
@@ -318,7 +374,10 @@ export const operacionalRouter = router({
       responsavelNome: z.string().optional(),
       responsavelId: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra" });
+      }
       const db = await getDb();
       const existingRows = rows(await db.execute(sql`
         SELECT id FROM rdo_relatorios WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId} AND data = ${input.data}
@@ -337,6 +396,9 @@ export const operacionalRouter = router({
       return { id: rdoId, jaExistia: false };
     }),
 
+  // NOTA: assertRDOAccess é um guard local que valida acesso à obra do RDO
+  // antes de qualquer mutation por id. Carrega obra_id do banco e delega para
+  // userCanAccessObra (helper centralizado em server/db.ts).
   atualizarRDO: protectedProcedure
     .input(z.object({
       id: z.number(),
@@ -354,8 +416,13 @@ export const operacionalRouter = router({
       ddsRealizado: z.boolean().optional(),
       ddsTema: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const own = rows(await db.execute(sql`SELECT obra_id FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
+      if (own.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "RDO não encontrado" });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, Number(own[0].obra_id)))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este RDO" });
+      }
       await db.execute(sql`
         UPDATE rdo_relatorios SET
           clima_manha = COALESCE(${input.climaManha ?? null}, clima_manha),
@@ -382,8 +449,13 @@ export const operacionalRouter = router({
       companyId: z.number(),
       responsavelNome: z.string(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const own = rows(await db.execute(sql`SELECT obra_id FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
+      if (own.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "RDO não encontrado" });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, Number(own[0].obra_id)))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este RDO" });
+      }
       await db.execute(sql`
         UPDATE rdo_relatorios SET
           status = 'finalizado',
@@ -397,10 +469,13 @@ export const operacionalRouter = router({
 
   deletarRDO: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const ownership = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
+      const ownership = rows(await db.execute(sql`SELECT id, obra_id FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
       if (ownership.length === 0) throw new Error("RDO não encontrado ou sem permissão");
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, Number(ownership[0].obra_id)))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este RDO" });
+      }
       await db.execute(sql`BEGIN`);
       try {
         await db.execute(sql`DELETE FROM rdo_fotos WHERE rdo_id = ${input.id}`);
@@ -419,8 +494,13 @@ export const operacionalRouter = router({
 
   reabrirRDO: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const own = rows(await db.execute(sql`SELECT obra_id FROM rdo_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
+      if (own.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "RDO não encontrado" });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, Number(own[0].obra_id)))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este RDO" });
+      }
       await db.execute(sql`
         UPDATE rdo_relatorios SET status = 'rascunho', updated_at = NOW()
         WHERE id = ${input.id} AND company_id = ${input.companyId} AND status = 'finalizado'
@@ -438,10 +518,9 @@ export const operacionalRouter = router({
       quantidade: z.number(),
       presente: z.boolean().default(true),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoObraAccess(ctx, input.rdoId, input.companyId);
       const db = await getDb();
-      const rdo = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.rdoId} AND company_id = ${input.companyId}`));
-      if (!rdo.length) throw new Error("RDO não encontrado");
       await db.execute(sql`
         INSERT INTO rdo_mao_obra (rdo_id, tipo, empresa_nome, funcao, quantidade, presente)
         VALUES (${input.rdoId}, ${input.tipo}, ${input.empresaNome || null}, ${input.funcao}, ${input.quantidade}, ${input.presente})
@@ -451,7 +530,8 @@ export const operacionalRouter = router({
 
   removerMaoObra: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoChildObraAccess(ctx, "rdo_mao_obra", input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM rdo_mao_obra WHERE id = ${input.id}
@@ -469,10 +549,9 @@ export const operacionalRouter = router({
       percentualAvanco: z.number().optional(),
       status: z.string().default("em_andamento"),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoObraAccess(ctx, input.rdoId, input.companyId);
       const db = await getDb();
-      const rdo = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.rdoId} AND company_id = ${input.companyId}`));
-      if (!rdo.length) throw new Error("RDO não encontrado");
       await db.execute(sql`
         INSERT INTO rdo_atividades (rdo_id, descricao, local, percentual_avanco, status)
         VALUES (${input.rdoId}, ${input.descricao}, ${input.local || null}, ${input.percentualAvanco || 0}, ${input.status})
@@ -482,7 +561,8 @@ export const operacionalRouter = router({
 
   removerAtividade: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoChildObraAccess(ctx, "rdo_atividades", input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM rdo_atividades WHERE id = ${input.id}
@@ -500,10 +580,9 @@ export const operacionalRouter = router({
       situacao: z.string().default("operando"),
       horasUso: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoObraAccess(ctx, input.rdoId, input.companyId);
       const db = await getDb();
-      const rdo = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.rdoId} AND company_id = ${input.companyId}`));
-      if (!rdo.length) throw new Error("RDO não encontrado");
       await db.execute(sql`
         INSERT INTO rdo_equipamentos (rdo_id, nome, tipo, situacao, horas_uso)
         VALUES (${input.rdoId}, ${input.nome}, ${input.tipo || null}, ${input.situacao}, ${input.horasUso || 0})
@@ -513,7 +592,8 @@ export const operacionalRouter = router({
 
   removerEquipamento: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoChildObraAccess(ctx, "rdo_equipamentos", input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM rdo_equipamentos WHERE id = ${input.id}
@@ -533,10 +613,9 @@ export const operacionalRouter = router({
       fornecedor: z.string().optional(),
       notaFiscal: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoObraAccess(ctx, input.rdoId, input.companyId);
       const db = await getDb();
-      const rdo = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.rdoId} AND company_id = ${input.companyId}`));
-      if (!rdo.length) throw new Error("RDO não encontrado");
       await db.execute(sql`
         INSERT INTO rdo_materiais (rdo_id, tipo, descricao, quantidade, unidade, fornecedor, nota_fiscal)
         VALUES (${input.rdoId}, ${input.tipo}, ${input.descricao}, ${input.quantidade || 0}, ${input.unidade || null}, ${input.fornecedor || null}, ${input.notaFiscal || null})
@@ -546,7 +625,8 @@ export const operacionalRouter = router({
 
   removerMaterial: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoChildObraAccess(ctx, "rdo_materiais", input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM rdo_materiais WHERE id = ${input.id}
@@ -564,10 +644,9 @@ export const operacionalRouter = router({
       disciplina: z.string().optional(),
       local: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoObraAccess(ctx, input.rdoId, input.companyId);
       const db = await getDb();
-      const rdo = rows(await db.execute(sql`SELECT id FROM rdo_relatorios WHERE id = ${input.rdoId} AND company_id = ${input.companyId}`));
-      if (!rdo.length) throw new Error("RDO não encontrado");
       await db.execute(sql`
         INSERT INTO rdo_fotos (rdo_id, foto_url, legenda, disciplina, local)
         VALUES (${input.rdoId}, ${input.fotoUrl}, ${input.legenda || null}, ${input.disciplina || null}, ${input.local || null})
@@ -577,7 +656,8 @@ export const operacionalRouter = router({
 
   removerFotoRDO: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoChildObraAccess(ctx, "rdo_fotos", input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM rdo_fotos WHERE id = ${input.id}
@@ -601,7 +681,8 @@ export const operacionalRouter = router({
       horasTrabalhadas: z.string().optional(),
       observacoes: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoObraAccess(ctx, input.id, input.companyId);
       const db = await getDb();
       const rel = rows(await db.execute(sql`SELECT status FROM diario_obra_relatorios WHERE id = ${input.id} AND company_id = ${input.companyId}`));
       if (!rel.length) throw new Error("Relatório não encontrado");
@@ -632,7 +713,8 @@ export const operacionalRouter = router({
       companyId: z.number(),
       status: z.enum(['aprovado', 'revisao', 'finalizado', 'rascunho']),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoObraAccess(ctx, input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         UPDATE diario_obra_relatorios SET status = ${input.status}, updated_at = NOW()
@@ -653,10 +735,9 @@ export const operacionalRouter = router({
       horaFim: z.string().optional(),
       horasTrabalhadas: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoObraAccess(ctx, input.relatorioId, input.companyId);
       const db = await getDb();
-      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
-      if (!rel.length) throw new Error("Relatório não encontrado");
       await db.execute(sql`
         INSERT INTO diario_obra_mao_obra (relatorio_id, nome, funcao, categoria, presente, hora_inicio, hora_fim, horas_trabalhadas)
         VALUES (${input.relatorioId}, ${input.nome}, ${input.funcao || null}, ${input.categoria || 'Direta'}, ${input.presente}, ${input.horaInicio || null}, ${input.horaFim || null}, ${input.horasTrabalhadas || null})
@@ -666,7 +747,8 @@ export const operacionalRouter = router({
 
   removerMaoObraImportado: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoChildObraAccess(ctx, "diario_obra_mao_obra", input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_mao_obra WHERE id = ${input.id}
@@ -685,10 +767,9 @@ export const operacionalRouter = router({
       percentualAvanco: z.number().optional(),
       observacao: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoObraAccess(ctx, input.relatorioId, input.companyId);
       const db = await getDb();
-      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
-      if (!rel.length) throw new Error("Relatório não encontrado");
       await db.execute(sql`
         INSERT INTO diario_obra_atividades (relatorio_id, descricao, item, etapa, percentual_avanco, observacao)
         VALUES (${input.relatorioId}, ${input.descricao}, ${input.item || null}, ${input.etapa || null}, ${input.percentualAvanco || 0}, ${input.observacao || null})
@@ -698,7 +779,8 @@ export const operacionalRouter = router({
 
   removerAtividadeImportado: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoChildObraAccess(ctx, "diario_obra_atividades", input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_atividades WHERE id = ${input.id}
@@ -717,10 +799,9 @@ export const operacionalRouter = router({
       situacao: z.string().optional(),
       observacao: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoObraAccess(ctx, input.relatorioId, input.companyId);
       const db = await getDb();
-      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
-      if (!rel.length) throw new Error("Relatório não encontrado");
       await db.execute(sql`
         INSERT INTO diario_obra_equipamentos (relatorio_id, nome, tipo, quantidade, situacao, observacao)
         VALUES (${input.relatorioId}, ${input.nome}, ${input.tipo || null}, ${input.quantidade}, ${input.situacao || 'operando'}, ${input.observacao || null})
@@ -730,7 +811,8 @@ export const operacionalRouter = router({
 
   removerEquipamentoImportado: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoChildObraAccess(ctx, "diario_obra_equipamentos", input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_equipamentos WHERE id = ${input.id}
@@ -747,10 +829,9 @@ export const operacionalRouter = router({
       tipo: z.string().optional(),
       providencia: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoObraAccess(ctx, input.relatorioId, input.companyId);
       const db = await getDb();
-      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
-      if (!rel.length) throw new Error("Relatório não encontrado");
       await db.execute(sql`
         INSERT INTO diario_obra_ocorrencias (relatorio_id, descricao, tipo, providencia)
         VALUES (${input.relatorioId}, ${input.descricao}, ${input.tipo || null}, ${input.providencia || null})
@@ -760,7 +841,8 @@ export const operacionalRouter = router({
 
   removerOcorrenciaImportado: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoChildObraAccess(ctx, "diario_obra_ocorrencias", input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_ocorrencias WHERE id = ${input.id}
@@ -776,10 +858,9 @@ export const operacionalRouter = router({
       texto: z.string(),
       autor: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoObraAccess(ctx, input.relatorioId, input.companyId);
       const db = await getDb();
-      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
-      if (!rel.length) throw new Error("Relatório não encontrado");
       await db.execute(sql`
         INSERT INTO diario_obra_comentarios (relatorio_id, texto, autor, data_hora)
         VALUES (${input.relatorioId}, ${input.texto}, ${input.autor || 'Usuário'}, NOW())
@@ -789,7 +870,8 @@ export const operacionalRouter = router({
 
   removerComentarioImportado: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoChildObraAccess(ctx, "diario_obra_comentarios", input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_comentarios WHERE id = ${input.id}
@@ -809,10 +891,9 @@ export const operacionalRouter = router({
       notaFiscal: z.string().optional(),
       fornecedor: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoObraAccess(ctx, input.relatorioId, input.companyId);
       const db = await getDb();
-      const rel = rows(await db.execute(sql`SELECT id FROM diario_obra_relatorios WHERE id = ${input.relatorioId} AND company_id = ${input.companyId}`));
-      if (!rel.length) throw new Error("Relatório não encontrado");
       await db.execute(sql`
         INSERT INTO diario_obra_materiais (relatorio_id, tipo, descricao, quantidade, unidade, nota_fiscal, fornecedor)
         VALUES (${input.relatorioId}, ${input.tipo}, ${input.descricao}, ${input.quantidade || 0}, ${input.unidade || null}, ${input.notaFiscal || null}, ${input.fornecedor || null})
@@ -822,7 +903,8 @@ export const operacionalRouter = router({
 
   removerMaterialImportado: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertRdoImportadoChildObraAccess(ctx, "diario_obra_materiais", input.id, input.companyId);
       const db = await getDb();
       await db.execute(sql`
         DELETE FROM diario_obra_materiais WHERE id = ${input.id}
@@ -1170,7 +1252,10 @@ export const operacionalRouter = router({
       local: z.string().optional(),
       pavimento: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra" });
+      }
       const db = await getDb();
       await db.execute(sql`
         INSERT INTO registro_fotografico (company_id, obra_id, data, foto_url, legenda, disciplina, local, pavimento)
