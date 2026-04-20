@@ -1652,7 +1652,29 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (!allowedIds.includes(sc.companyId)) throw new TRPCError({ code: "FORBIDDEN" });
 
       console.log("[getSolicitacao] step3: fetching itens");
-      const itens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+      const itensRaw = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
+
+      // Enrich items with parent EAP description (for insumos linked to an orcamento item)
+      const orcItemIds = [...new Set(itensRaw.map((i: any) => i.orcamentoItemId).filter(Boolean) as number[])];
+      const orcItensMap: Record<number, { descricao: string | null; eapCodigo: string | null }> = {};
+      if (orcItemIds.length > 0) {
+        try {
+          const orcRows = await db.select({
+            id: orcamentoItens.id,
+            descricao: orcamentoItens.descricao,
+            eapCodigo: orcamentoItens.eapCodigo,
+          }).from(orcamentoItens).where(inArray(orcamentoItens.id, orcItemIds));
+          for (const r of orcRows) orcItensMap[r.id] = { descricao: r.descricao, eapCodigo: r.eapCodigo };
+        } catch (e: any) { console.warn("[getSolicitacao] orcamentoItens enrichment failed:", e?.message); }
+      }
+      const itens = itensRaw.map((i: any) => {
+        const parent = i.orcamentoItemId ? orcItensMap[i.orcamentoItemId] : null;
+        return {
+          ...i,
+          parentEapDescricao: parent?.descricao || null,
+          parentEapCodigo: parent?.eapCodigo || i.eapCodigo || null,
+        };
+      });
 
       console.log("[getSolicitacao] step4: fetching nomes");
       let solicitanteNome: string | null = null;

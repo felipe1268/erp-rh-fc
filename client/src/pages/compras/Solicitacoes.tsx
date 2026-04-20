@@ -4529,12 +4529,16 @@ export default function Solicitacoes() {
                   const qtdTotal = parseFloat(it.quantidade);
                   const qtdAtend = parseFloat(it.quantidadeAtendida ?? "0");
                   const pct = qtdTotal > 0 ? Math.round((qtdAtend / qtdTotal) * 100) : 0;
-                  const parentEap = (detalhe.itens as any[]).find((p: any) =>
+                  const parentEapInline = (detalhe.itens as any[]).find((p: any) =>
                     p.id !== it.id &&
                     p.orcamentoItemId &&
                     p.orcamentoItemId === it.orcamentoItemId &&
                     (p.origemEap || (!p.insumoCodigo && p.eapCodigo))
                   );
+                  const parentEap = parentEapInline || (it.parentEapDescricao ? {
+                    descricao: it.parentEapDescricao,
+                    eapCodigo: it.parentEapCodigo || it.eapCodigo,
+                  } : null);
                   const isChildInsumo = !!it.insumoCodigo && !!it.orcamentoItemId && !!parentEap;
                   return (
                     <div key={it.id} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
