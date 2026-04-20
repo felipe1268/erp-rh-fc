@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1253,
+    titulo: "Fix real do botão Memorial de Cálculo de Hora Extra",
+    descricao: "A correção registrada na v1247 não teve efeito (aquele commit alterou apenas imagens em attached_assets/, sem mexer em código). A causa real do problema era que o componente Dialog do 'Memorial de Cálculo — Hora Extra' estava montado apenas dentro do bloco de visualização viewMode === 'alertas_afericao'. Como o botão fica na visão viewMode === 'he_modulo' (Folha de Pagamento → módulo HE), clicar nele atualizava o estado mas o Dialog nunca era renderizado na árvore React e nada acontecia. Agora o Dialog também é renderizado dentro da visão he_modulo, então o memorial abre normalmente ao clicar no ícone de documento roxo ao lado do valor R$ de qualquer funcionário.",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-20 12:00:00",
+  },
+  {
     version: 1009,
     titulo: "Financeiro Fase 1 — Dashboard Executivo, Recorrentes e Importação OFX/CSV",
     descricao: "Dashboard Financeiro executivo redesenhado com posição de caixa, saldo consolidado por conta bancária, KPIs do mês com variação vs anterior, evolução 30 dias, top despesas, resultado por obra, alertas de vencidos e atalhos rápidos. Novo módulo de Lançamentos Recorrentes (CRUD completo com geração automática, pausar/retomar, frequência configurável). Importação de extrato bancário via OFX/CSV com detecção de duplicatas e conciliação semi-automática integrada. Correção de colunas camelCase na tabela company_bank_accounts (companyId, tipoConta, apelido).",
