@@ -3964,6 +3964,34 @@ export default function Solicitacoes() {
                           onUnlink={() => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: undefined, eapCodigo: undefined, origemEap: false } : x))}
                         />
                       )}
+                      {linkedEap && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const novo: ItemForm = {
+                              descricao: "",
+                              unidade: "un",
+                              quantidade: "1",
+                              observacoes: "",
+                              orcamentoItemId: linkedEap.id,
+                              eapCodigo: linkedEap.eapCodigo,
+                            };
+                            setItens(prev => {
+                              const novos = [...prev];
+                              let insertAt = idx + 1;
+                              while (insertAt < novos.length && novos[insertAt].orcamentoItemId === linkedEap.id) {
+                                insertAt++;
+                              }
+                              novos.splice(insertAt, 0, novo);
+                              return novos;
+                            });
+                          }}
+                          className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded transition"
+                          title="Adicionar outro insumo vinculado ao mesmo item da EAP"
+                        >
+                          <Plus className="h-3 w-3" /> Adicionar outro insumo neste item EAP
+                        </button>
+                      )}
                       {it.descricao.trim().length >= 3 && (
                         <UltimaCompraCard companyId={companyId} descricao={it.descricao} />
                       )}
