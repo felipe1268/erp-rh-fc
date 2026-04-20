@@ -1025,6 +1025,7 @@ export default function Solicitacoes() {
   const [filtroObra, setFiltroObra] = useState("todas");
   const [filtroClassificacao, setFiltroClassificacao] = useState("todas");
   const [showNova, setShowNova] = useState(false);
+  const [confirmFecharNova, setConfirmFecharNova] = useState(false);
   const [showDisciplinas, setShowDisciplinas] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [abaScDetalhe, setAbaScDetalhe] = useState<"detalhes" | "cotacao" | "oc">("detalhes");
@@ -1413,6 +1414,29 @@ export default function Solicitacoes() {
       setBatchSaldo(map);
     }
   }, [batchSaldoQ.data]);
+
+  function isFormDirty(): boolean {
+    if (form.titulo.trim()) return true;
+    if (form.obraId) return true;
+    if (form.dataNecessidade) return true;
+    if (form.observacoes.trim()) return true;
+    if (form.vehicleId) return true;
+    if (pendingAnexos.length > 0) return true;
+    if (selectedEapIds.size > 0) return true;
+    if (itens.some(it => (it.descricao && it.descricao.trim()) || (it.quantidade && Number(it.quantidade) > 0))) return true;
+    return false;
+  }
+
+  function tentarFecharNova() {
+    if (isFormDirty()) {
+      setConfirmFecharNova(true);
+    } else {
+      setShowNova(false);
+      resetForm();
+      setEditingSc(null);
+      setEditingOriginalEapIds(new Set());
+    }
+  }
 
   function resetForm() {
     setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "", tipo: "material", incluirEquipamentos: false, vehicleId: "" });
@@ -2319,10 +2343,13 @@ export default function Solicitacoes() {
       </div>
 
       {/* ── Dialog Nova SC ─────────────────────────────────────────── */}
-      <Dialog open={showNova} onOpenChange={v => { setShowNova(v); if (!v) { resetForm(); setEditingSc(null); setEditingOriginalEapIds(new Set()); } }}>
+      <Dialog open={showNova} onOpenChange={v => { if (!v) { tentarFecharNova(); } else { setShowNova(true); } }}>
         <DialogContent
           className="border-gray-200 w-[96vw] max-w-[96vw] h-[94vh] max-h-[94vh] flex flex-col p-0 gap-0"
           style={{ background: '#ffffff', color: '#111827' }}
+          onPointerDownOutside={(e) => { if (isFormDirty()) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (isFormDirty()) e.preventDefault(); }}
+          onEscapeKeyDown={(e) => { if (isFormDirty()) { e.preventDefault(); setConfirmFecharNova(true); } }}
         >
           {/* Header fixo */}
           <DialogHeader className="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
@@ -3842,7 +3869,7 @@ export default function Solicitacoes() {
           {/* Rodapé fixo com botões */}
           <div className="px-5 py-3 border-t border-gray-100 bg-white shrink-0 flex gap-2">
               <button
-                onClick={() => { setShowNova(false); resetForm(); setEditingSc(null); setEditingOriginalEapIds(new Set()); }}
+                onClick={tentarFecharNova}
                 className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 font-medium transition"
               >
                 Cancelar
@@ -3859,6 +3886,37 @@ export default function Solicitacoes() {
       </Dialog>
 
       {/* ── Dialog Confirmação Sem Verba ────────────────────────── */}
+      <Dialog open={confirmFecharNova} onOpenChange={setConfirmFecharNova}>
+        <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold">Descartar solicitação?</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-gray-700 py-2">
+            Você preencheu informações nesta solicitação. Se fechar agora, todos os dados digitados serão perdidos.
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => setConfirmFecharNova(false)}
+              className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 font-medium"
+            >
+              Continuar editando
+            </button>
+            <button
+              onClick={() => {
+                setConfirmFecharNova(false);
+                setShowNova(false);
+                resetForm();
+                setEditingSc(null);
+                setEditingOriginalEapIds(new Set());
+              }}
+              className="flex-1 h-9 text-sm rounded-md bg-red-600 hover:bg-red-500 text-white font-semibold"
+            >
+              Descartar
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!showSemVerba} onOpenChange={v => { if (!v) setShowSemVerba(null); }}>
         <DialogContent className="border-red-200 max-w-lg" style={{ background: '#ffffff', color: '#111827' }}>
           <DialogHeader>
