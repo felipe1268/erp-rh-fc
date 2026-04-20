@@ -4611,8 +4611,18 @@ export default function FolhaPagamento() {
                                                     <button
                                                       type="button"
                                                       title="Memorial de cálculo"
-                                                      onClick={() => { setMemorialHePeriodId(p.id); setMemorialEmployeeId(Number(e.employeeId)); }}
-                                                      className="text-purple-400 hover:text-purple-700 transition-colors ml-0.5"
+                                                      onClick={(ev) => {
+                                                        ev.stopPropagation();
+                                                        const empId = Number(e.employeeId ?? e.employee_id ?? e.id);
+                                                        const perId = Number(p.id);
+                                                        if (!empId || !perId) {
+                                                          toast.error(`Não foi possível abrir o memorial: dados ausentes (período=${perId}, funcionário=${empId})`);
+                                                          return;
+                                                        }
+                                                        setMemorialHePeriodId(perId);
+                                                        setMemorialEmployeeId(empId);
+                                                      }}
+                                                      className="text-purple-400 hover:text-purple-700 transition-colors ml-0.5 cursor-pointer"
                                                     >
                                                       <FileText className="h-3.5 w-3.5" />
                                                     </button>
