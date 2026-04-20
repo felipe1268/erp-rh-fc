@@ -2494,7 +2494,7 @@ export default function Solicitacoes() {
               </label>
               <div className="relative" ref={obraRef}>
                 <input
-                  className="w-full h-8 px-3 text-sm border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                  className={`w-full h-8 ${form.obraId && !obraOpen ? "pr-16" : "pr-3"} pl-3 text-sm border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent cursor-pointer`}
                   placeholder={obrasQ.isLoading ? "Carregando obras..." : "Digite para buscar a obra..."}
                   value={obraOpen
                     ? obraSearch
@@ -2507,8 +2507,40 @@ export default function Solicitacoes() {
                       : ""
                   }
                   onFocus={() => { setObraOpen(true); setObraSearch(""); }}
+                  onClick={() => { setObraOpen(true); setObraSearch(""); }}
                   onChange={e => { setObraSearch(e.target.value); setObraOpen(true); }}
                 />
+                {form.obraId && !obraOpen && (
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    <button
+                      type="button"
+                      title="Trocar obra"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setObraOpen(true); setObraSearch(""); }}
+                      className="text-[10px] font-semibold text-amber-700 hover:text-amber-900 px-1.5 py-0.5 rounded hover:bg-amber-50"
+                    >
+                      Trocar
+                    </button>
+                    <button
+                      type="button"
+                      title="Limpar obra"
+                      onClick={(e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        const hadObra = !!form.obraId;
+                        setForm(p => ({ ...p, obraId: "" }));
+                        setObraSearch("");
+                        if (hadObra && !editingSc) {
+                          setSelectedEapIds(new Set());
+                          setItens([newItem()]);
+                          setEapExpanded(null); setEapQtdServico({}); setEapInsumos({}); setSaldoData({}); setBatchSaldo({}); setEapExtraDesbloqueado({}); setEapInsumoSel({}); setEapInsumoQtdManual({});
+                        }
+                        setObraOpen(true);
+                      }}
+                      className="text-gray-400 hover:text-red-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
                 {obraOpen && (
                   <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-52 overflow-y-auto">
                     <div
