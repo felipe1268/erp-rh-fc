@@ -2827,6 +2827,12 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       const orcItemToMetaMdo: Record<number, number> = {};
       const orcItemToMetaEquip: Record<number, number> = {};
       const orcItemToPath: Record<number, string> = {};
+      const orcItemToDescricao: Record<number, string> = {};
+      const orcItemToEapCodigo: Record<number, string> = {};
+      for (const o of orcItensData) {
+        orcItemToDescricao[o.id] = o.descricao ?? "";
+        orcItemToEapCodigo[o.id] = o.eapCodigo ?? "";
+      }
       for (const o of orcItensData) {
         const metaPerc = orcToMetaPerc[o.orcamentoId] ?? 0;
         const metaDireta = n(o.metaUnitTotal);
@@ -3054,7 +3060,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const composicaoInsumosList = svcCode ? (composicaoMap[svcCode] ?? []) : [];
         const compCode = svcCode ?? (trace?.composicaoCodigo ?? "");
         const compInfo = compCode ? svcCodeToCompInfo[compCode] : undefined;
-        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, metaQtd, eapPath, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: compCode, composicaoDescricao: compInfo?.descricao ?? "", composicaoUnidade: compInfo?.unidade ?? "", composicaoQtdOrcada: compInfo?.qtdOrcada ?? 0, composicaoMetaTotal: compInfo?.metaTotal ?? 0, composicaoEapCodigo: compInfo?.eapCodigo ?? "" };
+        const parentEapDescricao = orcId ? (orcItemToDescricao[orcId] ?? "") : "";
+        const parentEapCodigo = orcId ? (orcItemToEapCodigo[orcId] ?? trace?.eapCodigo ?? "") : (trace?.eapCodigo ?? "");
+        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, metaQtd, eapPath, parentEapDescricao, parentEapCodigo, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: compCode, composicaoDescricao: compInfo?.descricao ?? "", composicaoUnidade: compInfo?.unidade ?? "", composicaoQtdOrcada: compInfo?.qtdOrcada ?? 0, composicaoMetaTotal: compInfo?.metaTotal ?? 0, composicaoEapCodigo: compInfo?.eapCodigo ?? "" };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};

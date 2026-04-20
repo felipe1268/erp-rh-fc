@@ -3481,8 +3481,13 @@ export default function Cotacoes() {
                                             {it._groupCount} composições
                                           </span>
                                         )}
+                                        {!it._grouped && (it as any).parentEapDescricao && ((it as any).parentEapDescricao || "").trim() !== (it.descricao || "").trim() && (
+                                          <div className="text-[10px] text-violet-700 mt-0.5 leading-tight font-medium" title="Item da EAP ao qual esta solicitação está vinculada">
+                                            ↳ Item EAP{(it as any).parentEapCodigo ? ` ${(it as any).parentEapCodigo}` : ""}: {(it as any).parentEapDescricao}
+                                          </div>
+                                        )}
                                         {!it._grouped && it.eapPath && (
-                                          <div className="text-[10px] text-gray-400 mt-0.5 leading-tight">{it.eapPath}</div>
+                                          <div className="text-[10px] text-gray-400 mt-0.5 leading-tight" title="Etapa (caminho da EAP)">{it.eapPath}</div>
                                         )}
                                         {!it._grouped && (
                                           <RastreabilidadeTag
