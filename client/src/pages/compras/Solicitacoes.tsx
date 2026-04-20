@@ -65,14 +65,16 @@ const MOTIVOS_SEM_VERBA = [
 ];
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", observacoes: "" });
 
-function ManualEapLink({ eapItems, linkedEap, onLink, onUnlink }: {
+function ManualEapLink({ eapItems, linkedEap, onLink, onLinkMultiple, onUnlink }: {
   eapItems: any[];
   linkedEap: any | null;
   onLink: (eapItem: any) => void;
+  onLinkMultiple?: (eapItems: any[]) => void;
   onUnlink: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [busca, setBusca] = useState("");
+  const [picked, setPicked] = useState<Record<number, any>>({});
 
   if (linkedEap) {
     return (
@@ -92,10 +94,10 @@ function ManualEapLink({ eapItems, linkedEap, onLink, onUnlink }: {
     return (
       <button
         type="button"
-        onClick={() => { setOpen(true); setBusca(""); }}
+        onClick={() => { setOpen(true); setBusca(""); setPicked({}); }}
         className="flex items-center gap-1 px-2 py-1 text-[10px] text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition"
       >
-        <Link2 className="h-3 w-3" /> Vincular a item da EAP (opcional)
+        <Link2 className="h-3 w-3" /> Vincular a item(ns) da EAP (opcional)
       </button>
     );
   }
@@ -103,6 +105,18 @@ function ManualEapLink({ eapItems, linkedEap, onLink, onUnlink }: {
   const filtrados = eapItems.filter((e: any) =>
     !busca || stripAccents(`${e.eapCodigo} ${e.descricao}`.toLowerCase()).includes(stripAccents(busca.toLowerCase()))
   );
+  const pickedCount = Object.keys(picked).length;
+  const multiEnabled = !!onLinkMultiple;
+
+  function confirmarMulti() {
+    if (!onLinkMultiple) return;
+    const arr = Object.values(picked);
+    if (arr.length === 0) return;
+    onLinkMultiple(arr);
+    setOpen(false);
+    setPicked({});
+    setBusca("");
+  }
 
   return (
     <div className="border border-amber-200 rounded-lg bg-amber-50/50 overflow-hidden">
@@ -111,30 +125,74 @@ function ManualEapLink({ eapItems, linkedEap, onLink, onUnlink }: {
         <input
           autoFocus
           className="flex-1 text-[11px] bg-transparent outline-none text-gray-700 placeholder-gray-400"
-          placeholder="Buscar item da EAP..."
+          placeholder={multiEnabled ? "Buscar e marcar vários itens da EAP..." : "Buscar item da EAP..."}
           value={busca}
           onChange={e => setBusca(e.target.value)}
         />
-        <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600">
+        {multiEnabled && pickedCount > 0 && (
+          <button
+            type="button"
+            onClick={confirmarMulti}
+            className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-600 hover:bg-amber-500 text-white transition shrink-0"
+            title="Adicionar todos os itens marcados"
+          >
+            + Adicionar {pickedCount}
+          </button>
+        )}
+        <button type="button" onClick={() => { setOpen(false); setPicked({}); }} className="text-gray-400 hover:text-gray-600">
           <X className="h-3 w-3" />
         </button>
       </div>
-      <div className="max-h-32 overflow-y-auto divide-y divide-amber-100">
+      <div className="max-h-48 overflow-y-auto divide-y divide-amber-100">
         {filtrados.length === 0 ? (
           <div className="px-2 py-2 text-[10px] text-gray-400 text-center">Nenhum item encontrado</div>
-        ) : filtrados.slice(0, 50).map((e: any) => (
-          <button
-            key={e.id}
-            type="button"
-            onClick={() => { onLink(e); setOpen(false); }}
-            className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-amber-100 transition flex items-center gap-1.5"
-          >
-            <span className="font-bold text-amber-700 shrink-0">{e.eapCodigo}</span>
-            <span className="text-gray-700 truncate flex-1">{e.descricao}</span>
-            {e.unidade && <span className="text-gray-400 shrink-0">{e.unidade}</span>}
-          </button>
-        ))}
+        ) : filtrados.slice(0, 50).map((e: any) => {
+          const isPicked = !!picked[e.id];
+          return (
+            <div
+              key={e.id}
+              className={`w-full text-left px-2 py-1.5 text-[10px] hover:bg-amber-100 transition flex items-center gap-1.5 ${isPicked ? "bg-amber-100" : ""}`}
+            >
+              {multiEnabled && (
+                <input
+                  type="checkbox"
+                  checked={isPicked}
+                  onChange={ev => {
+                    setPicked(p => {
+                      const n = { ...p };
+                      if (ev.target.checked) n[e.id] = e;
+                      else delete n[e.id];
+                      return n;
+                    });
+                  }}
+                  className="h-3 w-3 accent-amber-600 cursor-pointer shrink-0"
+                  onClick={ev => ev.stopPropagation()}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => { onLink(e); setOpen(false); setPicked({}); }}
+                className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+                title="Clique para vincular este item (apenas)"
+              >
+                <span className="font-bold text-amber-700 shrink-0">{e.eapCodigo}</span>
+                <span className="text-gray-700 truncate flex-1">{e.descricao}</span>
+                {e.unidade && <span className="text-gray-400 shrink-0">{e.unidade}</span>}
+              </button>
+            </div>
+          );
+        })}
       </div>
+      {multiEnabled && (
+        <div className="px-2 py-1 bg-amber-50 border-t border-amber-100 text-[9px] text-amber-700 flex items-center justify-between gap-2">
+          <span>Marque vários para inserir todos de uma vez. Clicar no nome vincula só ele.</span>
+          {pickedCount > 0 && (
+            <button type="button" onClick={() => setPicked({})} className="text-amber-600 hover:text-amber-800 underline shrink-0">
+              limpar ({pickedCount})
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -3882,6 +3940,27 @@ export default function Solicitacoes() {
                           eapItems={eapLeafItems}
                           linkedEap={linkedEap}
                           onLink={(eapItem: any) => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: eapItem.id, eapCodigo: eapItem.eapCodigo } : x))}
+                          onLinkMultiple={(eapList: any[]) => {
+                            if (!eapList.length) return;
+                            const isRowEmpty = !it.descricao.trim() && !it.orcamentoItemId;
+                            const novosItens: ItemForm[] = eapList.map((e: any) => ({
+                              descricao: it.descricao.trim() && eapList.indexOf(e) === 0 ? it.descricao : (e.descricao || ""),
+                              unidade: e.unidade || it.unidade || "un",
+                              quantidade: it.quantidade || "1",
+                              observacoes: "",
+                              orcamentoItemId: e.id,
+                              eapCodigo: e.eapCodigo,
+                            }));
+                            setItens(prev => {
+                              const novos = [...prev];
+                              if (isRowEmpty) {
+                                novos.splice(idx, 1, ...novosItens);
+                              } else {
+                                novos.splice(idx + 1, 0, ...novosItens);
+                              }
+                              return novos;
+                            });
+                          }}
                           onUnlink={() => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: undefined, eapCodigo: undefined, origemEap: false } : x))}
                         />
                       )}
