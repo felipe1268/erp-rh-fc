@@ -3888,118 +3888,171 @@ export default function Solicitacoes() {
                 <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-3 text-center">
                   Selecione um serviço acima e informe a quantidade para gerar os itens automaticamente.
                 </div>
-              ) : (
-                <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
-                  {itens.map((it, idx) => {
-                    const eapItems = eapQ.data?.items ?? [];
-                    const eapLeafItems = eapItems.filter((e: any) => e.nivel >= 2 && e.tipo !== "grupo");
-                    const linkedEap = it.orcamentoItemId ? eapLeafItems.find((e: any) => e.id === it.orcamentoItemId) : null;
-                    return (
-                    <div key={idx} className="space-y-1">
-                      <div className={`p-2 rounded-lg border space-y-1.5 ${!it.orcamentoItemId && it.descricao.trim() ? "bg-orange-50/50 border-orange-200" : "bg-gray-50 border-gray-200"}`}>
-                        <div className="flex gap-2 items-center">
-                          <input
-                            className="flex-1 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
-                            placeholder="Descrição do item *"
-                            value={it.descricao}
-                            onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
-                            onBlur={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: normalizarTexto(e.target.value) } : x))}
-                          />
-                          <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
-                            <SelectTrigger className="w-16 h-7 text-xs border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
-                            <SelectContent className="bg-white border-gray-200">
-                              {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                          <input
-                            className="w-20 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-400"
-                            type="number" min="0.001" step="0.001" placeholder="Qtd"
-                            value={it.quantidade}
-                            onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
-                          />
-                          {itens.length > 1 && (
-                            <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
+              ) : (() => {
+                const eapItems = eapQ.data?.items ?? [];
+                const eapLeafItems = eapItems.filter((e: any) => e.nivel >= 2 && e.tipo !== "grupo");
+                // Agrupar itens consecutivos pelo orcamentoItemId. Itens sem vínculo são grupos solo.
+                type Grupo = { key: string; orcamentoItemId?: number; linkedEap: any | null; indices: number[] };
+                const grupos: Grupo[] = [];
+                itens.forEach((it, idx) => {
+                  if (it.orcamentoItemId) {
+                    const ultimo = grupos[grupos.length - 1];
+                    if (ultimo && ultimo.orcamentoItemId === it.orcamentoItemId) {
+                      ultimo.indices.push(idx);
+                      return;
+                    }
+                    const linkedEap = eapLeafItems.find((e: any) => e.id === it.orcamentoItemId) || null;
+                    grupos.push({ key: `eap-${it.orcamentoItemId}-${idx}`, orcamentoItemId: it.orcamentoItemId, linkedEap, indices: [idx] });
+                  } else {
+                    grupos.push({ key: `solo-${idx}`, linkedEap: null, indices: [idx] });
+                  }
+                });
+
+                const renderInsumoRow = (idx: number, isChild: boolean) => {
+                  const it = itens[idx];
+                  return (
+                    <div key={idx} className={`p-2 rounded-lg border space-y-1.5 ${!it.orcamentoItemId && it.descricao.trim() ? "bg-orange-50/50 border-orange-200" : isChild ? "bg-white border-emerald-100" : "bg-gray-50 border-gray-200"}`}>
+                      <div className="flex gap-2 items-center">
                         <input
-                          className="w-full h-7 px-2 text-xs rounded border border-gray-200 bg-white text-gray-700 placeholder-gray-400 outline-none focus:border-amber-400"
-                          placeholder="Especificação do produto (ex: marca, modelo, referência)"
-                          value={it.observacoes}
-                          onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, observacoes: e.target.value } : x))}
+                          className="flex-1 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
+                          placeholder={isChild ? "Descrição do insumo *" : "Descrição do item *"}
+                          value={it.descricao}
+                          onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
+                          onBlur={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: normalizarTexto(e.target.value) } : x))}
                         />
+                        <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
+                          <SelectTrigger className="w-16 h-7 text-xs border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-white border-gray-200">
+                            {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <input
+                          className="w-20 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-400"
+                          type="number" min="0.001" step="0.001" placeholder="Qtd"
+                          value={it.quantidade}
+                          onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
+                        />
+                        {itens.length > 1 && (
+                          <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500" title="Remover este insumo">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
-                      {!it.orcamentoItemId && it.descricao.trim() && (
-                        <div className="flex items-center gap-1 px-2 text-[9px] text-orange-600 font-medium">
-                          <AlertTriangle className="h-2.5 w-2.5" /> Item fora do orçamento — será necessário verba realocada para liberar OC/OS
-                        </div>
-                      )}
-                      {form.obraId && parseInt(form.obraId) > 0 && eapLeafItems.length > 0 && (
-                        <ManualEapLink
-                          eapItems={eapLeafItems}
-                          linkedEap={linkedEap}
-                          onLink={(eapItem: any) => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: eapItem.id, eapCodigo: eapItem.eapCodigo } : x))}
-                          onLinkMultiple={(eapList: any[]) => {
-                            if (!eapList.length) return;
-                            const isRowEmpty = !it.descricao.trim() && !it.orcamentoItemId;
-                            const novosItens: ItemForm[] = eapList.map((e: any) => ({
-                              descricao: it.descricao.trim() && eapList.indexOf(e) === 0 ? it.descricao : (e.descricao || ""),
-                              unidade: e.unidade || it.unidade || "un",
-                              quantidade: it.quantidade || "1",
-                              observacoes: "",
-                              orcamentoItemId: e.id,
-                              eapCodigo: e.eapCodigo,
-                            }));
-                            setItens(prev => {
-                              const novos = [...prev];
-                              if (isRowEmpty) {
-                                novos.splice(idx, 1, ...novosItens);
-                              } else {
-                                novos.splice(idx + 1, 0, ...novosItens);
-                              }
-                              return novos;
-                            });
-                          }}
-                          onUnlink={() => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: undefined, eapCodigo: undefined, origemEap: false } : x))}
-                        />
-                      )}
-                      {linkedEap && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const novo: ItemForm = {
-                              descricao: "",
-                              unidade: "un",
-                              quantidade: "1",
-                              observacoes: "",
-                              orcamentoItemId: linkedEap.id,
-                              eapCodigo: linkedEap.eapCodigo,
-                            };
-                            setItens(prev => {
-                              const novos = [...prev];
-                              let insertAt = idx + 1;
-                              while (insertAt < novos.length && novos[insertAt].orcamentoItemId === linkedEap.id) {
-                                insertAt++;
-                              }
-                              novos.splice(insertAt, 0, novo);
-                              return novos;
-                            });
-                          }}
-                          className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded transition"
-                          title="Adicionar outro insumo vinculado ao mesmo item da EAP"
-                        >
-                          <Plus className="h-3 w-3" /> Adicionar outro insumo neste item EAP
-                        </button>
-                      )}
+                      <input
+                        className="w-full h-7 px-2 text-xs rounded border border-gray-200 bg-white text-gray-700 placeholder-gray-400 outline-none focus:border-amber-400"
+                        placeholder="Especificação do produto (ex: marca, modelo, referência)"
+                        value={it.observacoes}
+                        onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, observacoes: e.target.value } : x))}
+                      />
                       {it.descricao.trim().length >= 3 && (
                         <UltimaCompraCard companyId={companyId} descricao={it.descricao} />
                       )}
                     </div>
-                    );
-                  })}
-                </div>
-              )}
+                  );
+                };
+
+                return (
+                  <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                    {grupos.map(g => {
+                      // GRUPO COM EAP VINCULADA — header único + lista de insumos
+                      if (g.linkedEap) {
+                        const ep = g.linkedEap;
+                        const firstIdx = g.indices[0];
+                        return (
+                          <div key={g.key} className="border border-emerald-200 rounded-lg bg-emerald-50/30 overflow-hidden">
+                            <div className="flex items-center gap-1.5 px-2 py-1.5 bg-emerald-50 border-b border-emerald-200 text-[11px]">
+                              <Link2 className="h-3 w-3 text-emerald-600 shrink-0" />
+                              <span className="text-emerald-800 font-medium truncate flex-1">
+                                Item EAP <span className="font-bold">{ep.eapCodigo}</span> — {ep.descricao}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 shrink-0">
+                                {g.indices.length} insumo{g.indices.length > 1 ? "s" : ""}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setItens(prev => prev.map(x => x.orcamentoItemId === ep.id ? { ...x, orcamentoItemId: undefined, eapCodigo: undefined, origemEap: false } : x));
+                                }}
+                                className="text-red-400 hover:text-red-600 shrink-0"
+                                title="Desvincular todos os insumos deste item EAP"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                            <div className="p-2 space-y-1.5">
+                              {g.indices.map(i => renderInsumoRow(i, true))}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const novo: ItemForm = {
+                                    descricao: "",
+                                    unidade: "un",
+                                    quantidade: "1",
+                                    observacoes: "",
+                                    orcamentoItemId: ep.id,
+                                    eapCodigo: ep.eapCodigo,
+                                  };
+                                  setItens(prev => {
+                                    const novos = [...prev];
+                                    const lastIdx = g.indices[g.indices.length - 1];
+                                    novos.splice(lastIdx + 1, 0, novo);
+                                    return novos;
+                                  });
+                                }}
+                                className="w-full inline-flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100 rounded border border-dashed border-emerald-300 transition"
+                              >
+                                <Plus className="h-3 w-3" /> Adicionar outro insumo neste item EAP
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+                      // GRUPO SOLO — sem EAP vinculada
+                      const idx = g.indices[0];
+                      const it = itens[idx];
+                      return (
+                        <div key={g.key} className="space-y-1">
+                          {renderInsumoRow(idx, false)}
+                          {!it.orcamentoItemId && it.descricao.trim() && (
+                            <div className="flex items-center gap-1 px-2 text-[9px] text-orange-600 font-medium">
+                              <AlertTriangle className="h-2.5 w-2.5" /> Item fora do orçamento — será necessário verba realocada para liberar OC/OS
+                            </div>
+                          )}
+                          {form.obraId && parseInt(form.obraId) > 0 && eapLeafItems.length > 0 && (
+                            <ManualEapLink
+                              eapItems={eapLeafItems}
+                              linkedEap={null}
+                              onLink={(eapItem: any) => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: eapItem.id, eapCodigo: eapItem.eapCodigo } : x))}
+                              onLinkMultiple={(eapList: any[]) => {
+                                if (!eapList.length) return;
+                                const isRowEmpty = !it.descricao.trim() && !it.orcamentoItemId;
+                                const novosItens: ItemForm[] = eapList.map((e: any) => ({
+                                  descricao: it.descricao.trim() && eapList.indexOf(e) === 0 ? it.descricao : (e.descricao || ""),
+                                  unidade: e.unidade || it.unidade || "un",
+                                  quantidade: it.quantidade || "1",
+                                  observacoes: "",
+                                  orcamentoItemId: e.id,
+                                  eapCodigo: e.eapCodigo,
+                                }));
+                                setItens(prev => {
+                                  const novos = [...prev];
+                                  if (isRowEmpty) {
+                                    novos.splice(idx, 1, ...novosItens);
+                                  } else {
+                                    novos.splice(idx + 1, 0, ...novosItens);
+                                  }
+                                  return novos;
+                                });
+                              }}
+                              onUnlink={() => {}}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
 
           </div>{/* fim space-y-3 */}
