@@ -3926,25 +3926,35 @@ export default function Solicitacoes() {
           <div className="text-sm text-gray-700 py-2">
             Você preencheu informações nesta solicitação. Se fechar agora, todos os dados digitados serão perdidos.
           </div>
-          <div className="flex gap-2 pt-2">
+          <div className="flex flex-col gap-2 pt-2">
             <button
-              onClick={() => setConfirmFecharNova(false)}
-              className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 font-medium"
+              onClick={() => { setConfirmFecharNova(false); handleSalvar(); }}
+              disabled={criar.isPending || editar.isPending || uploadingImagem}
+              className="w-full h-9 text-sm rounded-md bg-amber-600 hover:bg-amber-500 text-white font-semibold disabled:opacity-60 flex items-center justify-center gap-2"
             >
-              Continuar editando
+              {(criar.isPending || editar.isPending || uploadingImagem) ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {editingSc ? "Salvar Alterações" : "Salvar Solicitação"}
             </button>
-            <button
-              onClick={() => {
-                setConfirmFecharNova(false);
-                setShowNova(false);
-                resetForm();
-                setEditingSc(null);
-                setEditingOriginalEapIds(new Set());
-              }}
-              className="flex-1 h-9 text-sm rounded-md bg-red-600 hover:bg-red-500 text-white font-semibold"
-            >
-              Descartar
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmFecharNova(false)}
+                className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 font-medium"
+              >
+                Continuar editando
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmFecharNova(false);
+                  setShowNova(false);
+                  resetForm();
+                  setEditingSc(null);
+                  setEditingOriginalEapIds(new Set());
+                }}
+                className="flex-1 h-9 text-sm rounded-md bg-red-600 hover:bg-red-500 text-white font-semibold"
+              >
+                Descartar
+              </button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
