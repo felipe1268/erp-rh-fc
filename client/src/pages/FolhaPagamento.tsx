@@ -866,6 +866,7 @@ export default function FolhaPagamento() {
       setHeCalcResult(data);
       setHeViewPeriodId(data.hePeriodId);
       hePeriods.refetch();
+      heDetalhe.refetch();
     },
     onError: (err) => toast.error(`Erro ao calcular HE: ${err.message}`),
   });
