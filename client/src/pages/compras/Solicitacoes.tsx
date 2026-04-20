@@ -4529,11 +4529,26 @@ export default function Solicitacoes() {
                   const qtdTotal = parseFloat(it.quantidade);
                   const qtdAtend = parseFloat(it.quantidadeAtendida ?? "0");
                   const pct = qtdTotal > 0 ? Math.round((qtdAtend / qtdTotal) * 100) : 0;
+                  const parentEap = (detalhe.itens as any[]).find((p: any) =>
+                    p.id !== it.id &&
+                    p.orcamentoItemId &&
+                    p.orcamentoItemId === it.orcamentoItemId &&
+                    (p.origemEap || (!p.insumoCodigo && p.eapCodigo))
+                  );
+                  const isChildInsumo = !!it.insumoCodigo && !!it.orcamentoItemId && !!parentEap;
                   return (
                     <div key={it.id} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-gray-900 text-sm font-medium">{it.descricao}</p>
+                          {isChildInsumo && (
+                            <p className="text-[11px] text-blue-700 mt-0.5 flex items-center gap-1">
+                              <span className="text-gray-400">↳</span>
+                              <span className="font-medium">Vinculado a:</span>
+                              {parentEap.eapCodigo && <span className="text-gray-500">[{parentEap.eapCodigo}]</span>}
+                              <span>{parentEap.descricao}</span>
+                            </p>
+                          )}
                           {it.observacoes && (
                             <p className="text-gray-500 text-xs italic">{it.observacoes}</p>
                           )}
