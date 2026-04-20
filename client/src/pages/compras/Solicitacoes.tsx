@@ -4539,7 +4539,9 @@ export default function Solicitacoes() {
                     descricao: it.parentEapDescricao,
                     eapCodigo: it.parentEapCodigo || it.eapCodigo,
                   } : null);
-                  const isChildInsumo = !!it.insumoCodigo && !!it.orcamentoItemId && !!parentEap;
+                  const isChildInsumo = !!it.orcamentoItemId && !!parentEap && (
+                    !!it.insumoCodigo || (parentEap.descricao && parentEap.descricao.trim() !== (it.descricao || "").trim())
+                  );
                   return (
                     <div key={it.id} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
                       <div className="flex items-start justify-between gap-3">

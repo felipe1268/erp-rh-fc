@@ -1667,8 +1667,47 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           for (const r of orcRows) orcItensMap[r.id] = { descricao: r.descricao, eapCodigo: r.eapCodigo };
         } catch (e: any) { console.warn("[getSolicitacao] orcamentoItens enrichment failed:", e?.message); }
       }
+
+      // Fallback: for items without orcamentoItemId but with eapCodigo, lookup by (companyId, obraId, eapCodigo)
+      const eapCodigosFallback = [...new Set(
+        itensRaw
+          .filter((i: any) => !i.orcamentoItemId && i.eapCodigo)
+          .map((i: any) => i.eapCodigo as string)
+      )];
+      const eapByCodigoMap: Record<string, { descricao: string | null; eapCodigo: string }> = {};
+      if (eapCodigosFallback.length > 0 && sc.obraId) {
+        try {
+          const orcsObra = await db.select({ id: orcamentos.id })
+            .from(orcamentos)
+            .where(and(
+              eq(orcamentos.companyId, sc.companyId),
+              eq(orcamentos.obraId, sc.obraId),
+              isNull(orcamentos.deletedAt),
+            ));
+          if (orcsObra.length > 0) {
+            const orcIds = orcsObra.map(o => o.id);
+            const eapRows = await db.select({
+              descricao: orcamentoItens.descricao,
+              eapCodigo: orcamentoItens.eapCodigo,
+            })
+              .from(orcamentoItens)
+              .where(and(
+                inArray(orcamentoItens.orcamentoId, orcIds),
+                inArray(orcamentoItens.eapCodigo, eapCodigosFallback),
+              ));
+            for (const r of eapRows) {
+              if (r.eapCodigo && !eapByCodigoMap[r.eapCodigo]) {
+                eapByCodigoMap[r.eapCodigo] = { descricao: r.descricao, eapCodigo: r.eapCodigo };
+              }
+            }
+          }
+        } catch (e: any) { console.warn("[getSolicitacao] eapCodigo fallback failed:", e?.message); }
+      }
+
       const itens = itensRaw.map((i: any) => {
-        const parent = i.orcamentoItemId ? orcItensMap[i.orcamentoItemId] : null;
+        const parentById = i.orcamentoItemId ? orcItensMap[i.orcamentoItemId] : null;
+        const parentByCodigo = !parentById && i.eapCodigo ? eapByCodigoMap[i.eapCodigo] : null;
+        const parent = parentById || parentByCodigo;
         return {
           ...i,
           parentEapDescricao: parent?.descricao || null,
