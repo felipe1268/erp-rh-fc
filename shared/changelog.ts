@@ -8608,4 +8608,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-17 00:55:00",
   },
+  {
+    version: 1264,
+    titulo: "Rescisão — Férias vencidas agora consideram período aquisitivo completo (não o concessivo)",
+    descricao: "Bug crítico corrigido: a contagem de férias vencidas no cálculo de aviso prévio/rescisão filtrava por 'periodoConcessivoFim < dataDesligamento', ou seja, só pagava férias cujo prazo legal para gozo (concessivo, 12 meses após o aquisitivo) já havia expirado. Isso excluía períodos aquisitivos COMPLETOS mas ainda dentro do prazo concessivo — exemplo: Mateus Brito tinha aquisitivo 03/11/2024→02/11/2025 (completo) com concessivo até 02/11/2026 (status 'A Vencer'), e a rescisão simulada não incluía essas férias. Conforme CLT Art. 146, todo período aquisitivo completo não gozado é direito adquirido e deve ser pago na rescisão, independentemente do prazo concessivo. Filtro alterado em 7 pontos do avisoPrevioFerias.ts (preview, calcular, comparativo, create, update, recalcularTodos e batch dashboard) para usar 'periodoAquisitivoFim < dataDesligamento'.",
+    tipo: "bugfix",
+    modulos: "Aviso Prévio, Rescisão, Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-21 12:00:00",
+  },
 ];

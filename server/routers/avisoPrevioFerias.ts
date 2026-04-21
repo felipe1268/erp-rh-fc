@@ -375,8 +375,8 @@ export const avisoPrevioFeriasRouter = router({
                 LEFT JOIN vacation_periods vp
                   ON vp."employeeId" = p.emp_id
                   AND vp.status NOT IN ('concluida', 'cancelada', 'em_gozo')
-                  AND vp."periodoConcessivoFim" IS NOT NULL
-                  AND vp."periodoConcessivoFim" < p.data_fim
+                  AND vp."periodoAquisitivoFim" IS NOT NULL
+                  AND vp."periodoAquisitivoFim" < p.data_fim
                   AND vp."deletedAt" IS NULL
                 GROUP BY p.emp_id, p.data_fim
               `)) as any).rows || [];
@@ -482,8 +482,8 @@ export const avisoPrevioFeriasRouter = router({
                 SELECT COUNT(*)::int AS total FROM vacation_periods
                 WHERE "employeeId" = ${row.employeeId}
                   AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-                  AND "periodoConcessivoFim" IS NOT NULL
-                  AND "periodoConcessivoFim" < ${dataFimParaCalculo}
+                  AND "periodoAquisitivoFim" IS NOT NULL
+                  AND "periodoAquisitivoFim" < ${dataFimParaCalculo}
                   AND "deletedAt" IS NULL
               `)) as any).rows || [];
               periodosVencidosRealById = Number(vpById[0]?.total ?? 0);
@@ -732,8 +732,8 @@ export const avisoPrevioFeriasRouter = router({
             SELECT COUNT(*)::int AS total FROM vacation_periods
             WHERE "employeeId" = ${input.employeeId}
               AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-              AND "periodoConcessivoFim" IS NOT NULL
-              AND "periodoConcessivoFim" < ${dataFimAviso}
+              AND "periodoAquisitivoFim" IS NOT NULL
+              AND "periodoAquisitivoFim" < ${dataFimAviso}
               AND "deletedAt" IS NULL
           `)) as any).rows || [];
           periodosVencidosReal = Number(vpRows[0]?.total ?? 0);
@@ -887,8 +887,8 @@ export const avisoPrevioFeriasRouter = router({
             SELECT COUNT(*)::int AS total FROM vacation_periods
             WHERE "employeeId" = ${input.employeeId}
               AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-              AND "periodoConcessivoFim" IS NOT NULL
-              AND "periodoConcessivoFim" < ${input.dataDesligamento}
+              AND "periodoAquisitivoFim" IS NOT NULL
+              AND "periodoAquisitivoFim" < ${input.dataDesligamento}
               AND "deletedAt" IS NULL
           `)) as any).rows || [];
           periodosVencidosRealComp = Number(vpRowsComp[0]?.total ?? 0);
@@ -1161,8 +1161,8 @@ export const avisoPrevioFeriasRouter = router({
             SELECT COUNT(*)::int AS total FROM vacation_periods
             WHERE "employeeId" = ${input.employeeId}
               AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-              AND "periodoConcessivoFim" IS NOT NULL
-              AND "periodoConcessivoFim" < ${dataFim}
+              AND "periodoAquisitivoFim" IS NOT NULL
+              AND "periodoAquisitivoFim" < ${dataFim}
               AND "deletedAt" IS NULL
           `)) as any).rows || [];
           periodosVencidosRealCreate = Number(vpCr[0]?.total ?? 0);
@@ -1323,8 +1323,8 @@ export const avisoPrevioFeriasRouter = router({
               SELECT COUNT(*)::int AS total FROM vacation_periods
               WHERE "employeeId" = ${aviso.employeeId}
                 AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-                AND "periodoConcessivoFim" IS NOT NULL
-                AND "periodoConcessivoFim" < ${dataFim}
+                AND "periodoAquisitivoFim" IS NOT NULL
+                AND "periodoAquisitivoFim" < ${dataFim}
                 AND "deletedAt" IS NULL
             `)) as any).rows || [];
             periodosVencidosRealUpd = Number(vpUpd[0]?.total ?? 0);
@@ -1433,8 +1433,8 @@ export const avisoPrevioFeriasRouter = router({
                 SELECT COUNT(*)::int AS total FROM vacation_periods
                 WHERE "employeeId" = ${aviso.employeeId}
                   AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-                  AND "periodoConcessivoFim" IS NOT NULL
-                  AND "periodoConcessivoFim" < ${dataFim}
+                  AND "periodoAquisitivoFim" IS NOT NULL
+                  AND "periodoAquisitivoFim" < ${dataFim}
                   AND "deletedAt" IS NULL
               `)) as any).rows || [];
               periodosVencidosRealRec = Number(vpRec[0]?.total ?? 0);
