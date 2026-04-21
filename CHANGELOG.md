@@ -1,5 +1,8 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1260 — 21/04/2026
+- **Correção crítica no parseBRL**: valores como "1.230" (sem centavos) eram interpretados como 1,23 em vez de 1.230,00, causando rescisões complementares com valores absurdamente baixos. Heurística adicionada distingue separador de milhar (3 dígitos após o ponto) de decimal (1, 2 ou 4+ dígitos).
+
 ## Revisão 1259 — 21/04/2026
 - **Rescisão Complementar (uso interno)** para funcionários com complemento salarial "por fora":
   - Card violeta ao lado da rescisão oficial mostrando verbas calculadas SOMENTE sobre o complemento (saldo, férias prop. + 1/3, férias vencidas, 13º prop., aviso indenizado).
