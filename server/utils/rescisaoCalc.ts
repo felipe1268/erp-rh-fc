@@ -345,7 +345,9 @@ export function calcularRescisaoCompleta(params: {
   const periodosVencidos = params.periodosVencidosOverride !== undefined
     ? params.periodosVencidosOverride
     : Math.max(0, calcularFeriasVencidas(dataAdmissao, dataProjecao) - 1);
-  const feriasVencidas = periodosVencidos > 0 ? (baseFerias13 + baseFerias13 / 3) * periodosVencidos : 0;
+  const feriasVencidasBase = periodosVencidos > 0 ? baseFerias13 * periodosVencidos : 0;
+  const feriasVencidasTerco = feriasVencidasBase / 3;
+  const feriasVencidas = feriasVencidasBase + feriasVencidasTerco;
 
   // 4. 13º proporcional — usa data real (não projeção fim-de-mês) para regra dos 15 dias
   const meses13o = calcularMeses13o(dataAdmissao, dataFimAviso);
@@ -393,6 +395,8 @@ export function calcularRescisaoCompleta(params: {
     tercoConstitucional: tercoConstitucional.toFixed(2),
     totalFerias: totalFerias.toFixed(2),
     feriasVencidas: feriasVencidas.toFixed(2),
+    feriasVencidasBase: feriasVencidasBase.toFixed(2),
+    feriasVencidasTerco: feriasVencidasTerco.toFixed(2),
     periodosVencidos,
     decimoTerceiroProporcional: decimoTerceiroProporcional.toFixed(2),
     avisoPrevioIndenizado: avisoPrevioIndenizado.toFixed(2),
@@ -469,7 +473,9 @@ export function calcularRescisaoComplementar(params: {
   const periodosVencidos = params.periodosVencidosOverride !== undefined
     ? params.periodosVencidosOverride
     : Math.max(0, calcularFeriasVencidas(dataAdmissao, dataProjecao) - 1);
-  const feriasVencidas = periodosVencidos > 0 ? (valorComplemento + valorComplemento / 3) * periodosVencidos : 0;
+  const feriasVencidasBase = periodosVencidos > 0 ? valorComplemento * periodosVencidos : 0;
+  const feriasVencidasTerco = feriasVencidasBase / 3;
+  const feriasVencidas = feriasVencidasBase + feriasVencidasTerco;
 
   // 4. 13º Proporcional
   const meses13o = calcularMeses13o(dataAdmissao, dataFimAviso);
@@ -502,6 +508,8 @@ export function calcularRescisaoComplementar(params: {
     tercoConstitucional: tercoConstitucional.toFixed(2),
     totalFerias: totalFerias.toFixed(2),
     feriasVencidas: feriasVencidas.toFixed(2),
+    feriasVencidasBase: feriasVencidasBase.toFixed(2),
+    feriasVencidasTerco: feriasVencidasTerco.toFixed(2),
     decimoTerceiroProporcional: decimoTerceiroProporcional.toFixed(2),
     avisoPrevioIndenizado: avisoPrevioIndenizado.toFixed(2),
     total: total.toFixed(2),

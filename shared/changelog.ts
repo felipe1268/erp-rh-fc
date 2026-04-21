@@ -8617,4 +8617,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-21 12:00:00",
   },
+  {
+    version: 1265,
+    titulo: "Rescisão — Férias Vencidas exibem detalhamento de base + 1/3 (igual às proporcionais)",
+    descricao: "Engine de cálculo (rescisaoCalc.ts) agora retorna feriasVencidasBase e feriasVencidasTerco separadamente, tanto na rescisão oficial quanto na complementar. Frontend AvisoPrevio exibe a linha 'Férias Vencidas + 1/3' com sublinha detalhando 'Férias: R$ X + 1/3: R$ Y', no mesmo padrão visual já usado nas Férias Proporcionais.",
+    tipo: "melhoria",
+    modulos: "Aviso Prévio, Rescisão",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-21 12:30:00",
+  },
 ];

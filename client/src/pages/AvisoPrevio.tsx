@@ -2073,13 +2073,18 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
 
                         {/* Férias Vencidas (se houver) */}
                         {parseFloat(calculoPreview.previsaoRescisao.feriasVencidas) > 0 && (
-                          <div className="flex justify-between py-2 border-b border-gray-100 bg-red-50">
-                            <div>
-                              <span className="text-sm text-red-700 font-medium">Férias Vencidas</span>
-                              <span className="text-[10px] text-red-400 ml-2">({calculoPreview.previsaoRescisao.periodosVencidos} período(s))</span>
+                          <>
+                            <div className="flex justify-between py-2 border-b border-gray-100 bg-red-50">
+                              <div>
+                                <span className="text-sm text-red-700 font-medium">Férias Vencidas + 1/3</span>
+                                <span className="text-[10px] text-red-400 ml-2">({calculoPreview.previsaoRescisao.periodosVencidos} período(s))</span>
+                              </div>
+                              <span className="font-semibold text-sm text-red-700">{formatMoeda(calculoPreview.previsaoRescisao.feriasVencidas)}</span>
                             </div>
-                            <span className="font-semibold text-sm text-red-700">{formatMoeda(calculoPreview.previsaoRescisao.feriasVencidas)}</span>
-                          </div>
+                            <div className="flex justify-between py-1 pl-6 border-b border-gray-50 bg-red-50/40">
+                              <span className="text-xs text-red-400">Férias: {formatMoeda(calculoPreview.previsaoRescisao.feriasVencidasBase ?? '0')} + 1/3: {formatMoeda(calculoPreview.previsaoRescisao.feriasVencidasTerco ?? '0')}</span>
+                            </div>
+                          </>
                         )}
 
                         {/* VR Proporcional */}
