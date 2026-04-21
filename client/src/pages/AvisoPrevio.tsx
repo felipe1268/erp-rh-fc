@@ -1242,6 +1242,33 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                 );
               })()}
 
+              {/* ===== TOTAL GERAL (Oficial + Complementar) ===== */}
+              {(selectedItem as any)?.previsaoRescisaoComplementar && (selectedItem as any)?.previsaoRescisao && (() => {
+                let pc: any = null;
+                let prev: any = null;
+                try { pc = JSON.parse((selectedItem as any).previsaoRescisaoComplementar); } catch { pc = null; }
+                try { prev = JSON.parse((selectedItem as any).previsaoRescisao); } catch { prev = null; }
+                if (!pc || !prev) return null;
+                const oficial = parseFloat(String(prev.totalLiquido || prev.total || '0'));
+                const complementar = parseFloat(String(pc.total || '0'));
+                const totalGeral = oficial + complementar;
+                return (
+                  <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-5 border-2 border-slate-700">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="text-lg font-bold text-white">TOTAL GERAL (Oficial + Complementar)</span>
+                        <p className="text-[10px] text-slate-300">Soma do TRCT oficial com o cálculo interno sobre o complemento</p>
+                      </div>
+                      <span className="text-3xl font-extrabold text-white">{formatMoeda(totalGeral.toFixed(2))}</span>
+                    </div>
+                    <div className="flex justify-end gap-4 mt-2 text-[10px] text-slate-300">
+                      <span>Oficial: {formatMoeda(oficial.toFixed(2))}</span>
+                      <span>Complementar: {formatMoeda(complementar.toFixed(2))}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* ===== MÉDIAS DE ADICIONAIS (INSALUBRIDADE / HE) ===== */}
               <div className="rounded-lg border border-violet-200 p-4 bg-violet-50/50">
                 <p className="text-xs font-bold uppercase text-violet-600 mb-1 flex items-center gap-1">
@@ -2136,52 +2163,6 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     </div>
                   )}
 
-                  {/* Card 2: Rescisão Complementar (uso interno) — preview */}
-                  {calculoPreview.previsaoRescisaoComplementar && (() => {
-                    const pc = calculoPreview.previsaoRescisaoComplementar;
-                    return (
-                      <div className="rounded-xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4 mt-4">
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div>
-                            <p className="text-[10px] font-bold uppercase text-violet-700 tracking-wider">USO INTERNO — não oficial</p>
-                            <h4 className="text-sm font-bold text-violet-900 mt-0.5">Rescisão Complementar (sobre valor "por fora")</h4>
-                            <p className="text-[10px] text-violet-700 mt-0.5">
-                              Calculada apenas sobre o complemento de {formatMoeda(pc.valorComplemento)}/mês — não inclui FGTS, multa 40%, VR ou médias. Não substitui o TRCT.
-                            </p>
-                          </div>
-                          <span className="text-xl font-extrabold text-violet-700 whitespace-nowrap">{formatMoeda(pc.total)}</span>
-                        </div>
-                        <div className="bg-white/60 rounded border border-violet-200 divide-y divide-violet-100 text-xs">
-                          {parseFloat(pc.saldoSalario || '0') > 0 && (
-                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Saldo de Salário ({pc.diasTrabalhadosMes || '?'}d)</span><span className="font-semibold text-violet-800">{formatMoeda(pc.saldoSalario)}</span></div>
-                          )}
-                          {parseFloat(pc.feriasProporcional || '0') > 0 && (
-                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Férias Proporcionais ({pc.mesesFerias}/12)</span><span className="font-semibold text-violet-800">{formatMoeda(pc.feriasProporcional)}</span></div>
-                          )}
-                          {parseFloat(pc.tercoConstitucional || '0') > 0 && (
-                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">1/3 Constitucional</span><span className="font-semibold text-violet-800">{formatMoeda(pc.tercoConstitucional)}</span></div>
-                          )}
-                          {parseFloat(pc.feriasVencidas || '0') > 0 && (
-                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Férias Vencidas{pc.periodosVencidos ? ` (${pc.periodosVencidos})` : ''}</span><span className="font-semibold text-violet-800">{formatMoeda(pc.feriasVencidas)}</span></div>
-                          )}
-                          {parseFloat(pc.tercoFeriasVencidas || '0') > 0 && (
-                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">1/3 Férias Vencidas</span><span className="font-semibold text-violet-800">{formatMoeda(pc.tercoFeriasVencidas)}</span></div>
-                          )}
-                          {parseFloat(pc.decimoTerceiroProporcional || '0') > 0 && (
-                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">13º Proporcional ({pc.meses13o}/12)</span><span className="font-semibold text-violet-800">{formatMoeda(pc.decimoTerceiroProporcional)}</span></div>
-                          )}
-                          {parseFloat(pc.avisoPrevioIndenizado || '0') > 0 && (
-                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Aviso Prévio Indenizado</span><span className="font-semibold text-violet-800">{formatMoeda(pc.avisoPrevioIndenizado)}</span></div>
-                          )}
-                          <div className="flex justify-between px-3 py-2 bg-violet-100 font-bold">
-                            <span className="text-violet-900">TOTAL COMPLEMENTAR</span>
-                            <span className="text-violet-900">{formatMoeda(pc.total)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
                   {/* Seção de Descontos Legais e da Folha (INSS, IRRF, Pensão, Sindical, etc) */}
                   {calculoPreview.previsaoRescisao && parseFloat(calculoPreview.previsaoRescisao.totalDescontos || '0') > 0 && (
                     <div className="bg-white rounded-lg border border-red-200 p-4 mt-4">
@@ -2268,12 +2249,12 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     </div>
                   )}
 
-                  {/* Total Líquido */}
+                  {/* Total Líquido (Card 1 — RESCISÃO OFICIAL) */}
                   <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg p-5 mt-4">
                     <div className="flex justify-between items-center">
                       <div>
                         <span className="text-lg font-bold text-white">TOTAL LÍQUIDO RESCISÃO</span>
-                        <p className="text-[10px] text-green-200">Verbas Brutas – Descontos Legais – Outros</p>
+                        <p className="text-[10px] text-green-200">Verbas Brutas – Descontos Legais – Outros (oficial)</p>
                       </div>
                       <span className="text-3xl font-bold text-white">{formatMoeda(calculoPreview.totalLiquido || calculoPreview.previsaoRescisao.totalLiquido || calculoPreview.previsaoRescisao.total)}</span>
                     </div>
@@ -2281,6 +2262,74 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                       <p className="text-[10px] text-green-200 mt-2 text-right">Prazo pagamento: {formatDate(calculoPreview.previsaoRescisao.dataLimitePagamento)} (Art. 477 §6º CLT)</p>
                     )}
                   </div>
+
+                  {/* Card 2: Rescisão Complementar (uso interno) — abaixo do total líquido oficial */}
+                  {calculoPreview.previsaoRescisaoComplementar && (() => {
+                    const pc = calculoPreview.previsaoRescisaoComplementar;
+                    return (
+                      <div className="rounded-xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4 mt-4">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-violet-700 tracking-wider">USO INTERNO — não oficial</p>
+                            <h4 className="text-sm font-bold text-violet-900 mt-0.5">Rescisão Complementar (sobre valor "por fora")</h4>
+                            <p className="text-[10px] text-violet-700 mt-0.5">
+                              Calculada apenas sobre o complemento de {formatMoeda(pc.valorComplemento)}/mês — não inclui FGTS, multa 40%, VR ou médias. Não substitui o TRCT.
+                            </p>
+                          </div>
+                          <span className="text-xl font-extrabold text-violet-700 whitespace-nowrap">{formatMoeda(pc.total)}</span>
+                        </div>
+                        <div className="bg-white/60 rounded border border-violet-200 divide-y divide-violet-100 text-xs">
+                          {parseFloat(pc.saldoSalario || '0') > 0 && (
+                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Saldo de Salário ({pc.diasTrabalhadosMes || '?'}d)</span><span className="font-semibold text-violet-800">{formatMoeda(pc.saldoSalario)}</span></div>
+                          )}
+                          {parseFloat(pc.feriasProporcional || '0') > 0 && (
+                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Férias Proporcionais ({pc.mesesFerias}/12)</span><span className="font-semibold text-violet-800">{formatMoeda(pc.feriasProporcional)}</span></div>
+                          )}
+                          {parseFloat(pc.tercoConstitucional || '0') > 0 && (
+                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">1/3 Constitucional</span><span className="font-semibold text-violet-800">{formatMoeda(pc.tercoConstitucional)}</span></div>
+                          )}
+                          {parseFloat(pc.feriasVencidas || '0') > 0 && (
+                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Férias Vencidas{pc.periodosVencidos ? ` (${pc.periodosVencidos})` : ''}</span><span className="font-semibold text-violet-800">{formatMoeda(pc.feriasVencidas)}</span></div>
+                          )}
+                          {parseFloat(pc.tercoFeriasVencidas || '0') > 0 && (
+                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">1/3 Férias Vencidas</span><span className="font-semibold text-violet-800">{formatMoeda(pc.tercoFeriasVencidas)}</span></div>
+                          )}
+                          {parseFloat(pc.decimoTerceiroProporcional || '0') > 0 && (
+                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">13º Proporcional ({pc.meses13o}/12)</span><span className="font-semibold text-violet-800">{formatMoeda(pc.decimoTerceiroProporcional)}</span></div>
+                          )}
+                          {parseFloat(pc.avisoPrevioIndenizado || '0') > 0 && (
+                            <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Aviso Prévio Indenizado</span><span className="font-semibold text-violet-800">{formatMoeda(pc.avisoPrevioIndenizado)}</span></div>
+                          )}
+                          <div className="flex justify-between px-3 py-2 bg-violet-100 font-bold">
+                            <span className="text-violet-900">TOTAL COMPLEMENTAR</span>
+                            <span className="text-violet-900">{formatMoeda(pc.total)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* TOTAL GERAL: oficial + complementar (só se houver complementar) */}
+                  {calculoPreview.previsaoRescisaoComplementar && (() => {
+                    const oficial = parseFloat(String(calculoPreview.totalLiquido || calculoPreview.previsaoRescisao?.totalLiquido || calculoPreview.previsaoRescisao?.total || '0'));
+                    const complementar = parseFloat(String(calculoPreview.previsaoRescisaoComplementar.total || '0'));
+                    const totalGeral = oficial + complementar;
+                    return (
+                      <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-5 mt-4 border-2 border-slate-700">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <span className="text-lg font-bold text-white">TOTAL GERAL (Oficial + Complementar)</span>
+                            <p className="text-[10px] text-slate-300">Soma do TRCT oficial com o cálculo interno sobre o complemento</p>
+                          </div>
+                          <span className="text-3xl font-extrabold text-white">{formatMoeda(totalGeral.toFixed(2))}</span>
+                        </div>
+                        <div className="flex justify-end gap-4 mt-2 text-[10px] text-slate-300">
+                          <span>Oficial: {formatMoeda(oficial.toFixed(2))}</span>
+                          <span>Complementar: {formatMoeda(complementar.toFixed(2))}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}

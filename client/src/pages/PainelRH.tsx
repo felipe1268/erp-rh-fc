@@ -1564,6 +1564,28 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
                 </div>
               )}
 
+              {/* TOTAL GERAL (Oficial + Complementar) — só aparece se houver complementar */}
+              {previsaoComplementar && (() => {
+                const oficial = parseFloat(String(previsao?.totalLiquido || previsao?.total || aviso?.valorEstimadoTotal || '0'));
+                const complementar = parseFloat(String(previsaoComplementar.total || '0'));
+                const totalGeral = oficial + complementar;
+                return (
+                  <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-5 border-2 border-slate-700">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="text-lg font-bold text-white">TOTAL GERAL (Oficial + Complementar)</span>
+                        <p className="text-[11px] text-slate-300">Soma do TRCT oficial com o cálculo interno sobre o complemento</p>
+                      </div>
+                      <span className="text-3xl font-extrabold text-white">R$ {fmt(totalGeral.toFixed(2))}</span>
+                    </div>
+                    <div className="flex justify-end gap-4 mt-2 text-[11px] text-slate-300">
+                      <span>Oficial: R$ {fmt(oficial.toFixed(2))}</span>
+                      <span>Complementar: R$ {fmt(complementar.toFixed(2))}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Botão para ir à página completa */}
               <div className="flex justify-end pt-2">
                 <Button variant="outline" size="default" onClick={() => { onClose(); window.location.href = '/aviso-previo'; }}>

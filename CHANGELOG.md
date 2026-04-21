@@ -1,5 +1,8 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1261 — 21/04/2026
+- **Reorganização visual da Rescisão Complementar**: card violeta movido para baixo do "TOTAL LÍQUIDO RESCISÃO" (oficial). Estrutura agora é: Card 1 (Rescisão Oficial: verbas + descontos legais + total líquido), Card 2 (Rescisão Complementar uso interno) e nova faixa preta **TOTAL GERAL (Oficial + Complementar)** somando os dois. Aplicado no preview do formulário (AvisoPrevio.tsx), na aba Detalhes do aviso e no Painel RH.
+
 ## Revisão 1260 — 21/04/2026
 - **Correção crítica no parseBRL**: valores como "1.230" (sem centavos) eram interpretados como 1,23 em vez de 1.230,00, causando rescisões complementares com valores absurdamente baixos. Heurística adicionada distingue separador de milhar (3 dígitos após o ponto) de decimal (1, 2 ou 4+ dígitos).
 
