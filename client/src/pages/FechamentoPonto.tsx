@@ -1369,14 +1369,24 @@ export default function FechamentoPonto() {
           </div>
 
           {!isConsolidado && (
-            <>
-              <Button onClick={() => { setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); setValidationResult(null); }} className="bg-[#1B2A4A] hover:bg-[#243660]">
-                <Upload className="h-4 w-4 mr-2" /> Upload DIXI
-              </Button>
-              <Button variant="outline" onClick={() => setShowManualDialog(true)}>
-                <PenLine className="h-4 w-4 mr-2" /> Lançamento Manual
-              </Button>
-            </>
+            <Button onClick={() => { setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); setValidationResult(null); }} className="bg-[#1B2A4A] hover:bg-[#243660]">
+              <Upload className="h-4 w-4 mr-2" /> Upload DIXI
+            </Button>
+          )}
+          {/* Lançamento Manual — sempre disponível quando o mês NÃO está consolidado.
+              Quando o mês ESTÁ consolidado (totalmente), liberamos para admins fazerem
+              ajustes em lote (ex.: completar o período pós-ciclo) sem precisar
+              desconsolidar e ir um por um pelo Espelho de Ponto. */}
+          {(!isConsolidado || isAdmin) && (
+            <Button
+              variant="outline"
+              onClick={() => setShowManualDialog(true)}
+              className={isConsolidado ? "border-amber-400 text-amber-700 hover:bg-amber-50" : ""}
+              title={isConsolidado ? "Mês consolidado — lançamento permitido apenas para admins, com registro de auditoria" : undefined}
+            >
+              <PenLine className="h-4 w-4 mr-2" />
+              {isConsolidado ? "Lançamento Manual (admin)" : "Lançamento Manual"}
+            </Button>
           )}
 
           {/* Consolidar / Desconsolidar */}
@@ -4232,8 +4242,16 @@ export default function FechamentoPonto() {
           <div className="w-full max-w-5xl">
             <div className="space-y-3">
               <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-1.5 text-xs text-purple-800">
-                Registros manuais ficam <strong>destacados</strong> e são rastreados. Você pode lançar vários dias de uma vez.
+                Registros manuais ficam <strong>destacados</strong> e são rastreados. Você pode lançar vários dias de uma vez — use <strong>"Preencher período"</strong> para gerar um intervalo de datas (ex.: 16/03 a 31/03) ao invés de adicionar dia a dia.
               </div>
+              {isConsolidado && (
+                <div className="bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Mês consolidado.</strong> Você está em modo administrador — os lançamentos serão aceitos apenas em datas <strong>fora de ciclos parciais bloqueados</strong>. Datas dentro de um ciclo consolidado por intervalo continuam protegidas e precisam ser desconsolidadas antes.
+                  </div>
+                </div>
+              )}
 
               {/* Colaborador (combobox com busca) + Obra */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
