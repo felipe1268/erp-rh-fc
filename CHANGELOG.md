@@ -1,5 +1,11 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1263 — 21/04/2026
+- **Botão "Recalcular Período" no Espelho de Ponto**: reaplica em lote a regra de cálculo (HE, atrasos e total trabalhado) em todos os dias do período exibido, sem alterar as batidas. Resolve o caso de dias importados pelo Dixi (especialmente os incompletos / com batidas ímpares) que ficaram com `atrasos = 0:00` por terem sido importados antes da lógica completa rodar — não é mais necessário abrir cada dia, clicar no lápis e salvar manualmente.
+  - Nova mutation `fechamentoPonto.recalcularPeriodo` (server) percorre os time_records do período, recomputa `horasTrabalhadas`, `horasExtras` e `atrasos` a partir das batidas existentes e usa a mesma fórmula do `manualEntry`.
+  - Respeita ciclos consolidados (não toca em datas dentro de período já fechado) e retorna estatísticas: `recalculados`, `pulados` (já corretos) e `lockedSkipped` (bloqueados).
+  - Botão azul "Recalcular Período" adicionado ao lado do "Limpar Ponto" no Espelho de Ponto. Ao concluir, exibe um toast com o resumo e recarrega a tabela.
+
 ## Revisão 1262 — 21/04/2026
 - **Correção crítica no módulo Horas Extras — desconto de atrasos no pagamento**: o cálculo do HE estava pagando o valor BRUTO (somente excedentes), ignorando os atrasos do mesmo período. O Espelho de Ponto já mostrava o saldo correto (HE − Atrasos), mas o pagamento ia para folha sem o desconto.
   - `computeHEForPeriod` (server/routers/horasExtras.ts) agora soma também os atrasos do período por funcionário e aplica netting: `HE_líquido = max(0, HE_bruto − Atrasos)`. Quando há desconto, o valor é rateado proporcionalmente entre HE de dias úteis (50%) e HE de fim de semana / domingo (100%).

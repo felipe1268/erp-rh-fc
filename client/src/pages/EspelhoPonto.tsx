@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Search, RefreshCw, User, ChevronDown, FileText,
-  Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info, AlertTriangle, Trash2, Lock, Unlock, ShieldAlert,
+  Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info, AlertTriangle, Trash2, Lock, Unlock, ShieldAlert, Calculator,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -608,6 +608,20 @@ export default function EspelhoPonto() {
     onError: (err) => toast.error(`Erro ao limpar ponto: ${err.message}`),
   });
 
+  const recalcMut = trpc.fechamentoPonto.recalcularPeriodo.useMutation({
+    onSuccess: (data) => {
+      const partes: string[] = [];
+      if (data.recalculados > 0) partes.push(`${data.recalculados} dia(s) atualizado(s)`);
+      if (data.pulados > 0)      partes.push(`${data.pulados} já corretos`);
+      if (data.lockedSkipped > 0) partes.push(`${data.lockedSkipped} bloqueados (ciclo consolidado)`);
+      const msg = partes.length > 0 ? partes.join(" • ") : "Nenhum dia precisou ser ajustado";
+      if (data.recalculados > 0) toast.success(msg);
+      else toast.info(msg);
+      espelhoQ.refetch();
+    },
+    onError: (err) => toast.error(`Erro ao recalcular: ${err.message}`),
+  });
+
   function handleSelectEmp(emp: any) { setEmployeeId(Number(emp.id)); setSearchQuery(""); setShowDropdown(false); }
   function handleBuscar() { if (!employeeId || !dataInicio || !dataFim) return; setQueryParams({ employeeId, dataInicio, dataFim }); }
   function handleEditSaved() { espelhoQ.refetch(); }
@@ -739,6 +753,29 @@ export default function EspelhoPonto() {
                 ? <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Buscando…</>
                 : <><Search className="h-3.5 w-3.5 mr-1.5" />Buscar</>}
             </Button>
+
+            {queryParams && (
+              <Button
+                variant="outline"
+                title="Reaplica a regra de cálculo (atrasos, HE e total) em todos os dias do período sem alterar as batidas. Útil para corrigir dias importados antes da lógica completa rodar."
+                onClick={() => {
+                  if (!queryParams) return;
+                  recalcMut.mutate({
+                    companyId: queryCompanyId,
+                    companyIds: isConstrutoras ? companyIds : undefined,
+                    employeeId: queryParams.employeeId,
+                    dataInicio: queryParams.dataInicio,
+                    dataFim: queryParams.dataFim,
+                  });
+                }}
+                disabled={recalcMut.isPending}
+                className="border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 rounded-lg px-4 h-9"
+              >
+                {recalcMut.isPending
+                  ? <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Recalculando…</>
+                  : <><Calculator className="h-3.5 w-3.5 mr-1.5" />Recalcular Período</>}
+              </Button>
+            )}
 
             {queryParams && (
               <Button variant="outline" onClick={() => { setLimparInicio(dataInicio); setLimparFim(dataFim); setLimparConfirmText(""); setShowLimpar(true); }}

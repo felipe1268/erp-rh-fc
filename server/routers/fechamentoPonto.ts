@@ -4140,6 +4140,117 @@ export const fechamentoPontoRouter = router({
       };
     }),
 
+  // Recalcula atrasos/HE/totalizadores de TODOS os time_records do período
+  // sem alterar as batidas brutas. Útil para reprocessar dias que foram
+  // importados pelo Dixi antes da lógica completa rodar (ex: dias com
+  // batidas ímpares cujo atraso ficou em "0:00").
+  recalcularPeriodo: protectedProcedure
+    .input(z.object({
+      companyId:  z.number(),
+      companyIds: z.array(z.number()).optional(),
+      employeeId: z.number(),
+      dataInicio: z.string(),
+      dataFim:    z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+
+      // Validação de escopo: o funcionário precisa pertencer a uma das empresas
+      // do contexto (companyId ou companyIds). Bloqueia IDOR via chamada direta.
+      const empCheck = await db.select({
+        id: employees.id,
+        companyId: employees.companyId,
+        jornadaTrabalho: employees.jornadaTrabalho,
+      }).from(employees).where(and(
+        eq(employees.id, input.employeeId),
+        companyFilter(employees.companyId, input),
+      )).limit(1);
+      if (empCheck.length === 0) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Funcionário não pertence à empresa informada ou você não tem permissão.",
+        });
+      }
+      const jornadaTrabalho = empCheck[0].jornadaTrabalho ?? null;
+      const empCompanyId = Number(empCheck[0].companyId);
+
+      // Não toca em datas dentro de ciclos consolidados (usa a empresa do funcionário)
+      const lockedRanges = await getLockedRangesInWindow(
+        db, { companyId: empCompanyId }, input.dataInicio, input.dataFim,
+      );
+      const isLocked = (d: string) =>
+        lockedRanges.some(r => d >= r.dataInicioCiclo && d <= r.dataFimCiclo);
+
+      const recs = await db.select().from(timeRecords)
+        .where(and(
+          companyFilter(timeRecords.companyId, input),
+          eq(timeRecords.employeeId, input.employeeId),
+          sql`${timeRecords.data} BETWEEN ${input.dataInicio} AND ${input.dataFim}`,
+        ));
+
+      let recalculados = 0;
+      let pulados = 0;
+      let lockedSkipped = 0;
+      const ajustes: Array<{ data: string; antes: { he: string; atraso: string; total: string }; depois: { he: string; atraso: string; total: string } }> = [];
+
+      for (const rec of recs) {
+        const dataStr = String(rec.data);
+        if (isLocked(dataStr)) { lockedSkipped++; continue; }
+
+        // Recalcula a partir das batidas existentes
+        let totalMinutes = 0;
+        if (rec.entrada1 && rec.saida1) totalMinutes += diffMinutes(rec.entrada1, rec.saida1);
+        if (rec.entrada2 && rec.saida2) totalMinutes += diffMinutes(rec.entrada2, rec.saida2);
+        if (rec.entrada3 && rec.saida3) totalMinutes += diffMinutes(rec.entrada3, rec.saida3);
+
+        const dow = new Date(dataStr + "T12:00:00Z").getUTCDay();
+        const isWeekendDay = dow === 0 || dow === 6;
+        const expectedMins = isWeekendDay ? 0 : getExpectedMinsFromJornada(jornadaTrabalho, dataStr);
+        const heMins = isWeekendDay
+          ? totalMinutes
+          : (expectedMins !== null ? Math.max(0, totalMinutes - expectedMins) : 0);
+        const atrasoMins = !isWeekendDay && expectedMins !== null && totalMinutes < expectedMins && totalMinutes > 0
+          ? Math.max(0, expectedMins - totalMinutes)
+          : 0;
+
+        const novoTotal  = minutesToHHMM(totalMinutes);
+        const novoHE     = minutesToHHMM(heMins);
+        const novoAtraso = atrasoMins > 0 ? minutesToHHMM(atrasoMins) : "0:00";
+
+        const mudou =
+          (rec.horasTrabalhadas || "0:00") !== novoTotal ||
+          (rec.horasExtras || "0:00")      !== novoHE ||
+          (rec.atrasos || "0:00")          !== novoAtraso;
+
+        if (!mudou) { pulados++; continue; }
+
+        ajustes.push({
+          data: dataStr,
+          antes:  { he: rec.horasExtras || "0:00", atraso: rec.atrasos || "0:00", total: rec.horasTrabalhadas || "0:00" },
+          depois: { he: novoHE, atraso: novoAtraso, total: novoTotal },
+        });
+
+        await db.update(timeRecords)
+          .set({
+            horasTrabalhadas: novoTotal,
+            horasExtras: novoHE,
+            atrasos: novoAtraso,
+          } as any)
+          .where(eq(timeRecords.id, rec.id));
+        recalculados++;
+      }
+
+      console.log(`[RecalcPonto] emp=${input.employeeId} ${input.dataInicio}→${input.dataFim}: ${recalculados} recalculados, ${pulados} sem alteração, ${lockedSkipped} bloqueados (ciclo consolidado), por ${ctx.user?.name || "RH"}`);
+
+      return {
+        recalculados,
+        pulados,
+        lockedSkipped,
+        totalAvaliados: recs.length,
+        ajustes: ajustes.slice(0, 50), // amostra para a UI mostrar
+      };
+    }),
+
   limparPontoPeriodo: protectedProcedure
     .input(z.object({
       companyId:  z.number(),
