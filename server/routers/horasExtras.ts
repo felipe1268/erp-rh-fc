@@ -62,45 +62,52 @@ async function computeHEForPeriod(
   dataFim: string,
   cargaHorariaDiaria: number
 ) {
-  // Agrupa por (employeeId, data) pegando o maior horasTrabalhadas — evita dupla contagem de importações
+  // Agrupa por (employeeId, data) pegando o maior horasTrabalhadas — evita dupla contagem de importações.
+  // Também traz `atrasos` para descontar do HE bruto antes do pagamento (saldo líquido).
   const trRaws = ((await db.execute(sql`
     SELECT DISTINCT ON (tr."employeeId", tr.data)
-           tr."employeeId", tr.data, tr."horasTrabalhadas", e."jornadaTrabalho",
-           e."nomeCompleto", e."valorHora", e."salarioBase", e."horasMensais"
+           tr."employeeId", tr.data, tr."horasTrabalhadas", tr.atrasos,
+           e."jornadaTrabalho", e."nomeCompleto", e."valorHora", e."salarioBase", e."horasMensais"
     FROM time_records tr
     JOIN employees e ON e.id = tr."employeeId"
     WHERE tr."companyId" = ${companyId}
       AND tr.data >= ${dataInicio}::date
       AND tr.data <= ${dataFim}::date
-      AND tr."horasTrabalhadas" IS NOT NULL
-      AND tr."horasTrabalhadas" != ''
-      AND tr."horasTrabalhadas" != '0:00'
+      AND (
+        (tr."horasTrabalhadas" IS NOT NULL AND tr."horasTrabalhadas" != '' AND tr."horasTrabalhadas" != '0:00')
+        OR (tr.atrasos IS NOT NULL AND tr.atrasos != '' AND tr.atrasos != '0:00')
+      )
     ORDER BY tr."employeeId", tr.data, tr."horasTrabalhadas" DESC
   `)) as any).rows || [];
 
-  const heUtilMap = new Map<number, number>();
-  const heFimMap  = new Map<number, number>();
-  const heMap     = new Map<number, number>();
-  const empMeta   = new Map<number, { nome: string; valorHora: number; salario: number }>();
+  // Maps brutos (antes do desconto de atrasos)
+  const heUtilGross = new Map<number, number>();
+  const heFimGross  = new Map<number, number>();
+  const heGross     = new Map<number, number>();
+  const atrasoMap   = new Map<number, number>();
+  const empMeta     = new Map<number, { nome: string; valorHora: number; salario: number }>();
 
   for (const r of trRaws) {
     const empId    = Number(r.employeeId);
-    const trabMins = parseTime(String(r.horasTrabalhadas)) || 0;
-    if (trabMins <= 0) continue;
+    const trabMins = parseTime(String(r.horasTrabalhadas || "0:00")) || 0;
+    const atrasoMins = parseTime(String(r.atrasos || "0:00")) || 0;
     const dateStr = r.data instanceof Date ? r.data.toISOString().slice(0, 10) : String(r.data).slice(0, 10);
     const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
 
-    const expectedMins = getExpectedMins(r.jornadaTrabalho, dateStr, cargaHorariaDiaria);
-    const heMins = Math.max(0, trabMins - expectedMins);
-    if (heMins <= 0) continue;
-
-    // Apenas domingo (0) → HE 100%. Sábado (6) e dias úteis → HE 60%
-    if (dow === 0) {
-      heFimMap.set(empId, (heFimMap.get(empId) || 0) + heMins);
-    } else {
-      heUtilMap.set(empId, (heUtilMap.get(empId) || 0) + heMins);
+    if (atrasoMins > 0) {
+      atrasoMap.set(empId, (atrasoMap.get(empId) || 0) + atrasoMins);
     }
-    heMap.set(empId, (heMap.get(empId) || 0) + heMins);
+
+    if (trabMins > 0) {
+      const expectedMins = getExpectedMins(r.jornadaTrabalho, dateStr, cargaHorariaDiaria);
+      const heMins = Math.max(0, trabMins - expectedMins);
+      if (heMins > 0) {
+        // Apenas domingo (0) → HE 100%. Sábado (6) e dias úteis → HE 60%
+        if (dow === 0) heFimGross.set(empId,  (heFimGross.get(empId)  || 0) + heMins);
+        else            heUtilGross.set(empId, (heUtilGross.get(empId) || 0) + heMins);
+        heGross.set(empId, (heGross.get(empId) || 0) + heMins);
+      }
+    }
 
     if (!empMeta.has(empId)) {
       const vhStr = r.valorHora || r.salarioBase || "0";
@@ -112,7 +119,56 @@ async function computeHEForPeriod(
     }
   }
 
-  return { heUtilMap, heFimMap, heMap, empMeta };
+  // ====================================================================
+  // NETTING: descontar atrasos do HE bruto, com rateio proporcional
+  // entre HE útil (sáb + dias úteis) e HE fim de semana (domingo).
+  // Lógica: o saldo a pagar é max(0, HE_total − Atrasos_total).
+  // Se o atraso zerar todo o HE, ambos os mapas ficam em 0.
+  // Se houver sobra de atraso (atraso > HE), a sobra é descontada como
+  // atraso normal na folha (não nos interessa aqui — o HE só pode ser ≥ 0).
+  // ====================================================================
+  const heUtilMap = new Map<number, number>();
+  const heFimMap  = new Map<number, number>();
+  const heMap     = new Map<number, number>();
+  const atrasoDescontadoMap = new Map<number, number>();
+
+  const allEmpIds = new Set<number>([...heGross.keys(), ...atrasoMap.keys()]);
+  for (const empId of allEmpIds) {
+    const grossUtil = heUtilGross.get(empId) || 0;
+    const grossFim  = heFimGross.get(empId)  || 0;
+    const gross     = grossUtil + grossFim;
+    const atraso    = atrasoMap.get(empId)   || 0;
+
+    if (gross <= 0) {
+      // sem HE: nada a pagar
+      continue;
+    }
+
+    const desconto = Math.min(gross, atraso);
+    const net = gross - desconto;
+    atrasoDescontadoMap.set(empId, desconto);
+
+    if (desconto === 0) {
+      heUtilMap.set(empId, grossUtil);
+      heFimMap.set(empId, grossFim);
+      heMap.set(empId, gross);
+    } else if (net === 0) {
+      // tudo descontado
+      heUtilMap.set(empId, 0);
+      heFimMap.set(empId, 0);
+      heMap.set(empId, 0);
+    } else {
+      // rateio proporcional
+      const ratio = net / gross;
+      const netUtil = Math.round(grossUtil * ratio);
+      const netFim  = Math.max(0, net - netUtil);
+      heUtilMap.set(empId, netUtil);
+      heFimMap.set(empId, netFim);
+      heMap.set(empId, netUtil + netFim);
+    }
+  }
+
+  return { heUtilMap, heFimMap, heMap, empMeta, heUtilGross, heFimGross, heGross, atrasoMap, atrasoDescontadoMap };
 }
 
 // ============================================================
@@ -177,29 +233,45 @@ export const horasExtrasRouter = router({
 
       const trRows = ((await db.execute(sql`
         SELECT DISTINCT ON (data)
-          data, "horasTrabalhadas", entrada1, saida1, entrada2, saida2, fonte
+          data, "horasTrabalhadas", atrasos, entrada1, saida1, entrada2, saida2, fonte
         FROM time_records
         WHERE "employeeId" = ${input.employeeId}
           AND "companyId" = ${Number(period.companyId)}
           AND data >= ${period.dataInicio}::date
           AND data <= ${period.dataFim}::date
-          AND "horasTrabalhadas" IS NOT NULL
-          AND "horasTrabalhadas" != ''
-          AND "horasTrabalhadas" != '0:00'
+          AND (
+            ("horasTrabalhadas" IS NOT NULL AND "horasTrabalhadas" != '' AND "horasTrabalhadas" != '0:00')
+            OR (atrasos IS NOT NULL AND atrasos != '' AND atrasos != '0:00')
+          )
         ORDER BY data, "horasTrabalhadas" DESC
       `)) as any).rows || [];
 
       const dias: any[] = [];
-      let totalHEUtilMins = 0;
-      let totalHEFimMins = 0;
+      const diasAtraso: any[] = [];
+      let totalHEUtilGrossMins = 0;
+      let totalHEFimGrossMins = 0;
+      let totalAtrasoMins = 0;
 
       for (const r of trRows) {
-        const trabMins = parseTime(String(r.horasTrabalhadas)) || 0;
-        if (trabMins <= 0) continue;
+        const trabMins = parseTime(String(r.horasTrabalhadas || "0:00")) || 0;
+        const atrasoMins = parseTime(String(r.atrasos || "0:00")) || 0;
         const dateStr = r.data instanceof Date ? r.data.toISOString().slice(0, 10) : String(r.data).slice(0, 10);
         const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
         const expectedMins = getExpectedMins(emp.jornadaTrabalho, dateStr, criteria.cargaHorariaDiaria);
-        const heMins = Math.max(0, trabMins - expectedMins);
+        const heMins = trabMins > 0 ? Math.max(0, trabMins - expectedMins) : 0;
+
+        if (atrasoMins > 0) {
+          totalAtrasoMins += atrasoMins;
+          diasAtraso.push({
+            data: dateStr,
+            diaSemana: ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][dow],
+            trabalhado: r.horasTrabalhadas || "0:00",
+            jornada: `${Math.floor(expectedMins / 60)}:${String(expectedMins % 60).padStart(2, "0")}`,
+            atrasoMins,
+            horarios: `${r.entrada1 || "--:--"}-${r.saida1 || "--:--"} ${r.entrada2 || "--:--"}-${r.saida2 || "--:--"}`,
+            fonte: r.fonte || "",
+          });
+        }
 
         if (heMins <= 0) continue;
 
@@ -208,8 +280,8 @@ export const horasExtrasRouter = router({
         const fator = 1 + percentual / 100;
         const valorDia = parseFloat(((heMins / 60) * valorHora * fator).toFixed(2));
 
-        if (isDomingo) totalHEFimMins += heMins;
-        else totalHEUtilMins += heMins;
+        if (isDomingo) totalHEFimGrossMins += heMins;
+        else totalHEUtilGrossMins += heMins;
 
         dias.push({
           data: dateStr,
@@ -225,7 +297,22 @@ export const horasExtrasRouter = router({
         });
       }
 
-      const totalHEMins = totalHEUtilMins + totalHEFimMins;
+      const totalHEGrossMins = totalHEUtilGrossMins + totalHEFimGrossMins;
+      // Netting: HE líquido = max(0, HE bruto - atrasos), com rateio proporcional
+      const descontoMins = Math.min(totalHEGrossMins, totalAtrasoMins);
+      const totalHENetMins = totalHEGrossMins - descontoMins;
+      let totalHEUtilMins = totalHEUtilGrossMins;
+      let totalHEFimMins = totalHEFimGrossMins;
+      if (descontoMins > 0 && totalHEGrossMins > 0) {
+        if (totalHENetMins === 0) {
+          totalHEUtilMins = 0;
+          totalHEFimMins = 0;
+        } else {
+          const ratio = totalHENetMins / totalHEGrossMins;
+          totalHEUtilMins = Math.round(totalHEUtilGrossMins * ratio);
+          totalHEFimMins = Math.max(0, totalHENetMins - totalHEUtilMins);
+        }
+      }
       const valorTotalUtil = parseFloat(((totalHEUtilMins / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100)).toFixed(2));
       const valorTotalFim = parseFloat(((totalHEFimMins / 60) * valorHora * (1 + criteria.hePercentualDomingo / 100)).toFixed(2));
 
@@ -237,9 +324,15 @@ export const horasExtrasRouter = router({
         cargaHorariaDiaria: criteria.cargaHorariaDiaria,
         periodo: `${period.dataInicio}`.slice(0, 10) + " a " + `${period.dataFim}`.slice(0, 10),
         dias,
+        diasAtraso,
+        totalHEUtilGrossMins,
+        totalHEFimGrossMins,
+        totalHEGrossMins,
+        totalAtrasoMins,
+        descontoAtrasoMins: descontoMins,
         totalHEUtilMins,
         totalHEFimMins,
-        totalHEMins,
+        totalHEMins: totalHENetMins,
         valorTotalUtil,
         valorTotalFim,
         valorTotal: parseFloat((valorTotalUtil + valorTotalFim).toFixed(2)),

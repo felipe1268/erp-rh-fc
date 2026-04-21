@@ -1,5 +1,11 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1262 — 21/04/2026
+- **Correção crítica no módulo Horas Extras — desconto de atrasos no pagamento**: o cálculo do HE estava pagando o valor BRUTO (somente excedentes), ignorando os atrasos do mesmo período. O Espelho de Ponto já mostrava o saldo correto (HE − Atrasos), mas o pagamento ia para folha sem o desconto.
+  - `computeHEForPeriod` (server/routers/horasExtras.ts) agora soma também os atrasos do período por funcionário e aplica netting: `HE_líquido = max(0, HE_bruto − Atrasos)`. Quando há desconto, o valor é rateado proporcionalmente entre HE de dias úteis (50%) e HE de fim de semana / domingo (100%).
+  - `memorialCalculo` retorna campos novos (`totalHEUtilGrossMins`, `totalHEFimGrossMins`, `totalHEGrossMins`, `totalAtrasoMins`, `descontoAtrasoMins`) com o detalhamento bruto × líquido e a lista `diasAtraso` para auditoria.
+  - Memorial detalhado da Folha de Pagamento (FolhaPagamento.tsx) agora exibe três linhas no rodapé quando há atrasos: **HE Bruto**, **(−) Atrasos descontados** (em âmbar) e **TOTAL LÍQUIDO** (consolidado). Quando não há atraso, mantém o layout antigo.
+
 ## Revisão 1261 — 21/04/2026
 - **Reorganização visual da Rescisão Complementar**: card violeta movido para baixo do "TOTAL LÍQUIDO RESCISÃO" (oficial). Estrutura agora é: Card 1 (Rescisão Oficial: verbas + descontos legais + total líquido), Card 2 (Rescisão Complementar uso interno) e nova faixa preta **TOTAL GERAL (Oficial + Complementar)** somando os dois. Aplicado no preview do formulário (AvisoPrevio.tsx), na aba Detalhes do aviso e no Painel RH.
 

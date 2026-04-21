@@ -3202,8 +3202,31 @@ export default function FolhaPagamento() {
                           ))}
                         </tbody>
                         <tfoot>
+                          {(m.descontoAtrasoMins ?? 0) > 0 ? (
+                            <>
+                              <tr className="border-t-2 border-gray-300 bg-gray-50 text-xs">
+                                <td colSpan={5} className="py-1.5 px-2 text-right">HE Bruto</td>
+                                <td className="py-1.5 px-2 text-right font-mono text-blue-700">{minsToHM(m.totalHEGrossMins ?? m.totalHEMins)}</td>
+                                <td colSpan={3} className="py-1.5 px-2 text-right text-[10px] font-mono text-muted-foreground">
+                                  {(m.totalHEUtilGrossMins ?? 0) > 0 && <span>Úteis: {minsToHM(m.totalHEUtilGrossMins)} </span>}
+                                  {(m.totalHEFimGrossMins ?? 0) > 0 && <span>Dom/Fer: {minsToHM(m.totalHEFimGrossMins)}</span>}
+                                </td>
+                                <td className="py-1.5 px-2 text-right" />
+                              </tr>
+                              <tr className="bg-amber-50 text-xs">
+                                <td colSpan={5} className="py-1.5 px-2 text-right text-amber-800" title={`Atrasos do período: ${minsToHM(m.totalAtrasoMins)} (descontados ${minsToHM(m.descontoAtrasoMins)} do HE)`}>
+                                  (−) Atrasos descontados
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono text-amber-800">−{minsToHM(m.descontoAtrasoMins)}</td>
+                                <td colSpan={3} className="py-1.5 px-2 text-right text-[10px] text-muted-foreground">
+                                  Atraso total: {minsToHM(m.totalAtrasoMins)}
+                                </td>
+                                <td className="py-1.5 px-2 text-right" />
+                              </tr>
+                            </>
+                          ) : null}
                           <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold">
-                            <td colSpan={5} className="py-2 px-2 text-right">TOTAL</td>
+                            <td colSpan={5} className="py-2 px-2 text-right">{(m.descontoAtrasoMins ?? 0) > 0 ? "TOTAL LÍQUIDO" : "TOTAL"}</td>
                             <td className="py-2 px-2 text-right font-mono text-blue-700">{minsToHM(m.totalHEMins)}</td>
                             <td colSpan={3} className="py-2 px-2 text-right text-xs font-mono text-muted-foreground">
                               {m.totalHEUtilMins > 0 && <span>Úteis: {minsToHM(m.totalHEUtilMins)} </span>}
@@ -5028,8 +5051,31 @@ export default function FolhaPagamento() {
                           ))}
                         </tbody>
                         <tfoot>
+                          {(m.descontoAtrasoMins ?? 0) > 0 ? (
+                            <>
+                              <tr className="border-t-2 border-gray-300 bg-gray-50 text-xs">
+                                <td colSpan={5} className="py-1.5 px-2 text-right">HE Bruto</td>
+                                <td className="py-1.5 px-2 text-right font-mono text-blue-700">{minsToHM(m.totalHEGrossMins ?? m.totalHEMins)}</td>
+                                <td colSpan={3} className="py-1.5 px-2 text-right text-[10px] font-mono text-muted-foreground">
+                                  {(m.totalHEUtilGrossMins ?? 0) > 0 && <span>Úteis: {minsToHM(m.totalHEUtilGrossMins)} </span>}
+                                  {(m.totalHEFimGrossMins ?? 0) > 0 && <span>Dom/Fer: {minsToHM(m.totalHEFimGrossMins)}</span>}
+                                </td>
+                                <td className="py-1.5 px-2 text-right" />
+                              </tr>
+                              <tr className="bg-amber-50 text-xs">
+                                <td colSpan={5} className="py-1.5 px-2 text-right text-amber-800" title={`Atrasos do período: ${minsToHM(m.totalAtrasoMins)} (descontados ${minsToHM(m.descontoAtrasoMins)} do HE)`}>
+                                  (−) Atrasos descontados
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono text-amber-800">−{minsToHM(m.descontoAtrasoMins)}</td>
+                                <td colSpan={3} className="py-1.5 px-2 text-right text-[10px] text-muted-foreground">
+                                  Atraso total: {minsToHM(m.totalAtrasoMins)}
+                                </td>
+                                <td className="py-1.5 px-2 text-right" />
+                              </tr>
+                            </>
+                          ) : null}
                           <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold">
-                            <td colSpan={5} className="py-2 px-2 text-right">TOTAL</td>
+                            <td colSpan={5} className="py-2 px-2 text-right">{(m.descontoAtrasoMins ?? 0) > 0 ? "TOTAL LÍQUIDO" : "TOTAL"}</td>
                             <td className="py-2 px-2 text-right font-mono text-blue-700">{minsToHM(m.totalHEMins)}</td>
                             <td colSpan={3} className="py-2 px-2 text-right text-xs font-mono text-muted-foreground">
                               {m.totalHEUtilMins > 0 && <span>Úteis: {minsToHM(m.totalHEUtilMins)} </span>}
