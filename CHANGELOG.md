@@ -1,5 +1,12 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1259 — 21/04/2026
+- **Rescisão Complementar (uso interno)** para funcionários com complemento salarial "por fora":
+  - Card violeta ao lado da rescisão oficial mostrando verbas calculadas SOMENTE sobre o complemento (saldo, férias prop. + 1/3, férias vencidas, 13º prop., aviso indenizado).
+  - Não inclui FGTS, multa 40%, VR nem médias de adicionais — não substitui o TRCT homologado.
+  - Botão "Imprimir Complementar (uso interno)" gera PDF separado com marca d'água "USO INTERNO" em violeta.
+  - Calculado/atualizado automaticamente em criação, edição, recálculo em massa e visualização.
+
 ## Revisão 26 — 20/02/2026
 - Cadastro de 131 funcionários reais da FC Engenharia
 - Controle de revisões do ERP (changelog + indicador de versão)

@@ -416,3 +416,96 @@ export function calcularRescisaoCompleta(params: {
     })(),
   };
 }
+
+/**
+ * RESCISÃO COMPLEMENTAR (uso interno, "por fora")
+ *
+ * Quando o funcionário recebe complemento salarial não-registrado, esta função
+ * calcula uma previsão paralela usando APENAS o valor do complemento como base.
+ * Não substitui a rescisão oficial — é um espelho para a empresa quitar o "extra".
+ *
+ * Diferenças vs. calcularRescisaoCompleta:
+ * - Base = somente o valor do complemento (ex.: R$ 1.230,00), NÃO a soma com salário base.
+ * - Não calcula FGTS nem multa 40% (não há recolhimento sobre o por-fora).
+ * - Não inclui VR (já contemplado na rescisão oficial).
+ * - Não soma médias de adicionais (insalubridade/HE).
+ * - Mantém os mesmos critérios de tempo (meses, dias, períodos vencidos) da oficial.
+ */
+export function calcularRescisaoComplementar(params: {
+  valorComplemento: number;
+  dataAdmissao: string;
+  dataDesligamento: string;
+  dataFimAviso?: string;
+  tipo: string;
+  diasTrabalhadosMes: number;
+  periodosVencidosOverride?: number;
+}) {
+  const { valorComplemento, dataAdmissao, dataDesligamento, tipo, diasTrabalhadosMes } = params;
+
+  if (!valorComplemento || valorComplemento <= 0) return null;
+
+  const dataFimAviso = params.dataFimAviso || dataDesligamento;
+  const dtFimAviso = new Date(dataFimAviso + 'T00:00:00');
+  const dtProjecao = new Date(dtFimAviso.getFullYear(), dtFimAviso.getMonth() + 1, 0);
+  const dataProjecao = dtProjecao.toISOString().split('T')[0];
+  const dataSaida = dataFimAviso;
+
+  const DIVISOR_CLT = 30;
+  const baseDia = valorComplemento / DIVISOR_CLT;
+  const anosServico = calcularAnosServico(dataAdmissao, dataSaida);
+  const diasAvisoTotal = calcularDiasAvisoTotal(anosServico);
+  const diasExtrasAviso = calcularDiasExtrasAviso(anosServico);
+
+  // 1. Saldo de Salário (proporcional aos dias trabalhados no mês)
+  const saldoSalario = baseDia * diasTrabalhadosMes;
+
+  // 2. Férias Proporcionais + 1/3
+  const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataProjecao);
+  const feriasProporcional = (valorComplemento * mesesFerias) / 12;
+  const tercoConstitucional = feriasProporcional / 3;
+  const totalFerias = feriasProporcional + tercoConstitucional;
+
+  // 3. Férias Vencidas + 1/3 (mesmo override do banco usado na oficial)
+  const periodosVencidos = params.periodosVencidosOverride !== undefined
+    ? params.periodosVencidosOverride
+    : Math.max(0, calcularFeriasVencidas(dataAdmissao, dataProjecao) - 1);
+  const feriasVencidas = periodosVencidos > 0 ? (valorComplemento + valorComplemento / 3) * periodosVencidos : 0;
+
+  // 4. 13º Proporcional
+  const meses13o = calcularMeses13o(dataAdmissao, dataFimAviso);
+  const decimoTerceiroProporcional = (valorComplemento * meses13o) / 12;
+
+  // 5. Aviso Prévio Indenizado (mesmo critério da oficial)
+  let avisoPrevioIndenizado = 0;
+  if (tipo === 'empregador_indenizado') {
+    avisoPrevioIndenizado = baseDia * diasAvisoTotal;
+  } else if (tipo === 'empregador_trabalhado') {
+    avisoPrevioIndenizado = baseDia * diasExtrasAviso;
+  }
+
+  // SEM FGTS, SEM multa 40%, SEM VR, SEM médias.
+  const total = saldoSalario + totalFerias + feriasVencidas + decimoTerceiroProporcional + avisoPrevioIndenizado;
+
+  return {
+    baseComplemento: valorComplemento.toFixed(2),
+    baseDia: baseDia.toFixed(2),
+    anosServico,
+    diasAvisoTotal,
+    diasExtrasAviso,
+    diasTrabalhadosMes,
+    mesesFerias,
+    meses13o,
+    periodosVencidos,
+    dataSaida,
+    saldoSalario: saldoSalario.toFixed(2),
+    feriasProporcional: feriasProporcional.toFixed(2),
+    tercoConstitucional: tercoConstitucional.toFixed(2),
+    totalFerias: totalFerias.toFixed(2),
+    feriasVencidas: feriasVencidas.toFixed(2),
+    decimoTerceiroProporcional: decimoTerceiroProporcional.toFixed(2),
+    avisoPrevioIndenizado: avisoPrevioIndenizado.toFixed(2),
+    total: total.toFixed(2),
+    dataProjecao,
+  };
+}
+

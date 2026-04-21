@@ -2797,6 +2797,10 @@ export const terminationNotices = pgTable("termination_notices", {
         reducaoJornada: text().default('nenhuma'),
         salarioBase: varchar({ length: 20 }),
         previsaoRescisao: text(),
+        // Rev. 1259 — Rescisão complementar (uso interno) calculada apenas
+        // sobre o complemento salarial "por fora". Null para funcionários
+        // sem complemento. Não substitui a rescisão oficial.
+        previsaoRescisaoComplementar: text(),
         valorEstimadoTotal: varchar({ length: 20 }),
         status: text().default('em_andamento').notNull(),
         // you can use { mode: 'date' }, if you want to have Date as type for this column

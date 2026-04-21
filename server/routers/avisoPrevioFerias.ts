@@ -19,6 +19,7 @@ import {
   calcularMesesFeriasProporcionais,
   calcularFeriasVencidas,
   calcularRescisaoCompleta,
+  calcularRescisaoComplementar,
   calcularDescontosRescisao,
   type DescontosRescisaoContext,
   type DescontosRescisaoResult,
@@ -256,6 +257,27 @@ function calcularPeriodosFerias(dataAdmissao: string) {
   }
   
   return periodos;
+}
+
+/**
+ * Helper: monta a previsão de rescisão complementar para o funcionário se ele
+ * tiver complemento salarial ("por fora") cadastrado. Retorna null caso contrário.
+ *
+ * Usa APENAS o valor do complemento como base — não soma com o salário base de
+ * registro. Não calcula FGTS/multa/VR/médias. Mesma janela temporal da oficial.
+ */
+function buildPrevisaoComplementar(emp: any, params: {
+  dataAdmissao: string;
+  dataDesligamento: string;
+  dataFimAviso: string;
+  tipo: string;
+  diasTrabalhadosMes: number;
+  periodosVencidosOverride?: number;
+}) {
+  if (!emp || !emp.recebeComplemento) return null;
+  const valorComplemento = parseBRL(emp.valorComplemento);
+  if (!valorComplemento || valorComplemento <= 0) return null;
+  return calcularRescisaoComplementar({ valorComplemento, ...params });
 }
 
 export const avisoPrevioFeriasRouter = router({
@@ -516,6 +538,16 @@ export const avisoPrevioFeriasRouter = router({
               descontosLegaisView = calcularDescontosRescisao(previsao, descontosCtx);
             } catch (e) { /* fallback: previsão sem bloco de descontos */ }
 
+            // Rescisão complementar (uso interno) — só para quem tem complemento.
+            const previsaoComplementarById = buildPrevisaoComplementar(emp, {
+              dataAdmissao,
+              dataDesligamento: row.dataInicio,
+              dataFimAviso: dataFimParaCalculo,
+              tipo: row.tipo,
+              diasTrabalhadosMes: diasTrabMes,
+              periodosVencidosOverride: periodosVencidosRealById,
+            });
+
             // Retornar com previsão recalculada (incluir dataAdmissao para cálculo de tempo de serviço no frontend)
             return {
               ...row,
@@ -523,6 +555,7 @@ export const avisoPrevioFeriasRouter = router({
               employeeCpf: emp.cpf || '-',
               employeeCargo: emp.cargo || emp.funcao || '-',
               previsaoRescisao: JSON.stringify({ ...previsao, ...(descontosLegaisView || {}), dataAdmissao }),
+              previsaoRescisaoComplementar: previsaoComplementarById ? JSON.stringify(previsaoComplementarById) : null,
             };
           }
         } catch (e) {
@@ -731,6 +764,16 @@ export const avisoPrevioFeriasRouter = router({
         const totalDescontosLegais = parseFloat(descontosLegais.totalDescontos);
         const totalLiquido = parseFloat(descontosLegais.totalLiquido) - totalDescontos;
         
+        // Rescisão complementar (uso interno) — só para quem tem complemento.
+        const previsaoComplementarSim = buildPrevisaoComplementar(emp, {
+          dataAdmissao,
+          dataDesligamento,
+          dataFimAviso,
+          tipo: input.tipo,
+          diasTrabalhadosMes,
+          periodosVencidosOverride: periodosVencidosReal,
+        });
+
         return {
           anosServico,
           diasAviso: isEmpregadoIndenizado ? 0 : diasAviso,
@@ -742,6 +785,7 @@ export const avisoPrevioFeriasRouter = router({
           dataFimAviso,
           dataFimEstimada: dataFimAviso,
           previsaoRescisao: previsaoComDescontos,
+          previsaoRescisaoComplementar: previsaoComplementarSim,
           vrConfigNome,
           vrExtra,
           descontos: descontos.map(d => ({ ...d, valor: d.valor.toFixed(2) })),
@@ -1135,7 +1179,17 @@ export const avisoPrevioFeriasRouter = router({
           periodosVencidosOverride: periodosVencidosRealCreate,
           descontarAvisoNaoCumprido: input.descontarAvisoNaoCumprido,
         });
-        
+
+        // Rescisão complementar (uso interno) — só para quem tem complemento.
+        const previsaoComplementarCreate = buildPrevisaoComplementar(emp, {
+          dataAdmissao,
+          dataDesligamento,
+          dataFimAviso: dataFim,
+          tipo: input.tipo,
+          diasTrabalhadosMes,
+          periodosVencidosOverride: periodosVencidosRealCreate,
+        });
+
         const [result] = await db.insert(terminationNotices).values({
           descontarAvisoNaoCumprido: input.descontarAvisoNaoCumprido ? 1 : 0,
           companyId: input.companyId,
@@ -1148,6 +1202,7 @@ export const avisoPrevioFeriasRouter = router({
           reducaoJornada: input.reducaoJornada,
           salarioBase: salarioBase.toFixed(2),
           previsaoRescisao: JSON.stringify(previsao),
+          previsaoRescisaoComplementar: previsaoComplementarCreate ? JSON.stringify(previsaoComplementarCreate) : null,
           valorEstimadoTotal: previsao.total,
           status: 'em_andamento',
           observacoes: input.observacoes || null,
@@ -1290,6 +1345,16 @@ export const avisoPrevioFeriasRouter = router({
             descontarAvisoNaoCumprido: descontarAvisoFlag,
           });
 
+          // Rescisão complementar (uso interno) — só para quem tem complemento.
+          const previsaoComplementarUpd = buildPrevisaoComplementar(emp, {
+            dataAdmissao,
+            dataDesligamento: dataDesligFinal,
+            dataFimAviso: dataFim,
+            tipo,
+            diasTrabalhadosMes,
+            periodosVencidosOverride: periodosVencidosRealUpd,
+          });
+
           updateData.tipo = tipo;
           updateData.dataInicio = dataInicioFinal;
           updateData.dataFim = dataFim;
@@ -1297,6 +1362,7 @@ export const avisoPrevioFeriasRouter = router({
           updateData.anosServico = anosServico;
           updateData.salarioBase = salarioBase.toFixed(2);
           updateData.previsaoRescisao = JSON.stringify(previsao);
+          updateData.previsaoRescisaoComplementar = previsaoComplementarUpd ? JSON.stringify(previsaoComplementarUpd) : null;
           updateData.valorEstimadoTotal = previsao.total;
           updateData.descontarAvisoNaoCumprido = descontarAvisoFlag ? 1 : 0;
         } else if (input.descontarAvisoNaoCumprido !== undefined) {
@@ -1386,12 +1452,23 @@ export const avisoPrevioFeriasRouter = router({
               descontarAvisoNaoCumprido: !!(aviso as any).descontarAvisoNaoCumprido,
             });
 
+            // Rescisão complementar (uso interno) — só para quem tem complemento.
+            const previsaoComplementarRec = buildPrevisaoComplementar(emp, {
+              dataAdmissao,
+              dataDesligamento: dataDesligFinal,
+              dataFimAviso: dataFim,
+              tipo,
+              diasTrabalhadosMes,
+              periodosVencidosOverride: periodosVencidosRealRec,
+            });
+
             await db.update(terminationNotices).set({
               diasAviso,
               anosServico,
               salarioBase: salarioBase.toFixed(2),
               dataFim,
               previsaoRescisao: JSON.stringify(previsao),
+              previsaoRescisaoComplementar: previsaoComplementarRec ? JSON.stringify(previsaoComplementarRec) : null,
               valorEstimadoTotal: previsao.total,
             }).where(eq(terminationNotices.id, aviso.id));
 

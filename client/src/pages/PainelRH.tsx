@@ -1158,6 +1158,10 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
     try { return JSON.parse(aviso.previsaoRescisao); } catch { return null; }
   })() : null;
 
+  const previsaoComplementar = (aviso as any)?.previsaoRescisaoComplementar ? (() => {
+    try { return JSON.parse((aviso as any).previsaoRescisaoComplementar); } catch { return null; }
+  })() : null;
+
   const tipoLabel = (t: string) => {
     if (t === 'empregador_trabalhado') return 'Empregador (Trabalhado)';
     if (t === 'empregador_indenizado') return 'Empregador (Indenizado)';
@@ -1512,6 +1516,53 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
                   </div>
                 )}
               </div>
+
+              {/* Card 2: Rescisão Complementar (uso interno) — só aparece se houver complemento */}
+              {previsaoComplementar && (
+                <div className="rounded-xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-5">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase text-violet-700 tracking-wider">USO INTERNO — não oficial</p>
+                      <h3 className="text-base font-bold text-violet-900 mt-1">Rescisão Complementar (sobre valor "por fora")</h3>
+                      <p className="text-[11px] text-violet-700 mt-1">
+                        Calculada apenas sobre o complemento salarial de R$ {fmt(previsaoComplementar.valorComplemento)} (não inclui FGTS, multa 40%, VR ou médias). Não substitui o TRCT oficial.
+                      </p>
+                    </div>
+                    <span className="text-2xl font-extrabold text-violet-700 whitespace-nowrap">R$ {fmt(previsaoComplementar.total)}</span>
+                  </div>
+                  <div className="border border-violet-200 rounded-lg overflow-hidden bg-white/60">
+                    <table className="w-full text-sm">
+                      <tbody>
+                        {parseFloat(previsaoComplementar.saldoSalario || '0') > 0 && (
+                          <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">Saldo de Salário ({previsaoComplementar.diasTrabalhadosMes || '?'}d)</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">R$ {fmt(previsaoComplementar.saldoSalario)}</td></tr>
+                        )}
+                        {parseFloat(previsaoComplementar.feriasProporcional || '0') > 0 && (
+                          <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">Férias Proporcionais ({previsaoComplementar.mesesFerias}/12)</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">R$ {fmt(previsaoComplementar.feriasProporcional)}</td></tr>
+                        )}
+                        {parseFloat(previsaoComplementar.tercoConstitucional || '0') > 0 && (
+                          <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">1/3 Constitucional</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">R$ {fmt(previsaoComplementar.tercoConstitucional)}</td></tr>
+                        )}
+                        {parseFloat(previsaoComplementar.feriasVencidas || '0') > 0 && (
+                          <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">Férias Vencidas{previsaoComplementar.periodosVencidos ? ` (${previsaoComplementar.periodosVencidos})` : ''}</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">R$ {fmt(previsaoComplementar.feriasVencidas)}</td></tr>
+                        )}
+                        {parseFloat(previsaoComplementar.tercoFeriasVencidas || '0') > 0 && (
+                          <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">1/3 Férias Vencidas</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">R$ {fmt(previsaoComplementar.tercoFeriasVencidas)}</td></tr>
+                        )}
+                        {parseFloat(previsaoComplementar.decimoTerceiroProporcional || '0') > 0 && (
+                          <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">13º Proporcional ({previsaoComplementar.meses13o}/12)</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">R$ {fmt(previsaoComplementar.decimoTerceiroProporcional)}</td></tr>
+                        )}
+                        {parseFloat(previsaoComplementar.avisoPrevioIndenizado || '0') > 0 && (
+                          <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">Aviso Prévio Indenizado</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">R$ {fmt(previsaoComplementar.avisoPrevioIndenizado)}</td></tr>
+                        )}
+                        <tr className="bg-violet-100 font-bold">
+                          <td className="px-3 py-2 text-violet-900">TOTAL COMPLEMENTAR</td>
+                          <td className="px-3 py-2 text-right text-violet-900 whitespace-nowrap">R$ {fmt(previsaoComplementar.total)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Botão para ir à página completa */}
               <div className="flex justify-end pt-2">

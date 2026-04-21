@@ -1190,6 +1190,58 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                 );
               })()}
 
+              {/* ===== CARD 2: RESCISÃO COMPLEMENTAR (USO INTERNO) ===== */}
+              {(selectedItem as any)?.previsaoRescisaoComplementar && (() => {
+                let pc: any = null;
+                try { pc = JSON.parse((selectedItem as any).previsaoRescisaoComplementar); } catch { pc = null; }
+                if (!pc) return null;
+                return (
+                  <div className="rounded-xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-5">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase text-violet-700 tracking-wider">USO INTERNO — não oficial</p>
+                        <h3 className="text-base font-bold text-violet-900 mt-1">Rescisão Complementar (sobre valor "por fora")</h3>
+                        <p className="text-[11px] text-violet-700 mt-1">
+                          Calculada apenas sobre o complemento salarial de {formatMoeda(pc.valorComplemento)} (não inclui FGTS, multa 40%, VR ou médias). Não substitui o TRCT oficial.
+                        </p>
+                      </div>
+                      <span className="text-2xl font-extrabold text-violet-700 whitespace-nowrap">{formatMoeda(pc.total)}</span>
+                    </div>
+                    <div className="border border-violet-200 rounded-lg overflow-hidden bg-white/60">
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {parseFloat(pc.saldoSalario || '0') > 0 && (
+                            <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">Saldo de Salário ({pc.diasTrabalhadosMes || '?'}d)</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">{formatMoeda(pc.saldoSalario)}</td></tr>
+                          )}
+                          {parseFloat(pc.feriasProporcional || '0') > 0 && (
+                            <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">Férias Proporcionais ({pc.mesesFerias}/12)</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">{formatMoeda(pc.feriasProporcional)}</td></tr>
+                          )}
+                          {parseFloat(pc.tercoConstitucional || '0') > 0 && (
+                            <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">1/3 Constitucional</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">{formatMoeda(pc.tercoConstitucional)}</td></tr>
+                          )}
+                          {parseFloat(pc.feriasVencidas || '0') > 0 && (
+                            <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">Férias Vencidas{pc.periodosVencidos ? ` (${pc.periodosVencidos})` : ''}</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">{formatMoeda(pc.feriasVencidas)}</td></tr>
+                          )}
+                          {parseFloat(pc.tercoFeriasVencidas || '0') > 0 && (
+                            <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">1/3 Férias Vencidas</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">{formatMoeda(pc.tercoFeriasVencidas)}</td></tr>
+                          )}
+                          {parseFloat(pc.decimoTerceiroProporcional || '0') > 0 && (
+                            <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">13º Proporcional ({pc.meses13o}/12)</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">{formatMoeda(pc.decimoTerceiroProporcional)}</td></tr>
+                          )}
+                          {parseFloat(pc.avisoPrevioIndenizado || '0') > 0 && (
+                            <tr className="border-b border-violet-100"><td className="px-3 py-2 text-violet-900">Aviso Prévio Indenizado</td><td className="px-3 py-2 text-right font-semibold text-violet-800 whitespace-nowrap">{formatMoeda(pc.avisoPrevioIndenizado)}</td></tr>
+                          )}
+                          <tr className="bg-violet-100 font-bold">
+                            <td className="px-3 py-2 text-violet-900">TOTAL COMPLEMENTAR</td>
+                            <td className="px-3 py-2 text-right text-violet-900 whitespace-nowrap">{formatMoeda(pc.total)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* ===== MÉDIAS DE ADICIONAIS (INSALUBRIDADE / HE) ===== */}
               <div className="rounded-lg border border-violet-200 p-4 bg-violet-50/50">
                 <p className="text-xs font-bold uppercase text-violet-600 mb-1 flex items-center gap-1">
@@ -1465,6 +1517,81 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                   <Printer className="h-4 w-4" />
                   Imprimir Detalhes
                 </Button>
+                {(selectedItem as any)?.previsaoRescisaoComplementar && (
+                  <Button
+                    variant="outline"
+                    className="gap-2 border-violet-300 text-violet-700 hover:bg-violet-50"
+                    onClick={() => {
+                      try {
+                        let pc: any = null;
+                        try { pc = JSON.parse((selectedItem as any).previsaoRescisaoComplementar); } catch {}
+                        if (!pc) { toast.error('Sem dados de complemento.'); return; }
+                        const w = window.open('', '_blank', 'width=800,height=1100');
+                        if (!w) { toast.error('Popup bloqueado. Permita popups.'); return; }
+                        const linha = (label: string, valor: any) =>
+                          parseFloat(valor || '0') > 0
+                            ? `<tr><td>${label}</td><td style="text-align:right">${formatMoeda(valor)}</td></tr>`
+                            : '';
+                        const nome = (selectedItem as any)?.employeeName || '-';
+                        const cpf = (selectedItem as any)?.employeeCpf || '-';
+                        const cargo = (selectedItem as any)?.employeeCargo || '-';
+                        w.document.write(`<!DOCTYPE html><html><head><title>USO INTERNO - Rescisão Complementar - ${nome}</title>
+<style>
+  @media print { body { margin: 0; } @page { margin: 15mm; size: A4; } .no-print { display: none; } }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #1a1a1a; padding: 24px; max-width: 720px; margin: 0 auto; }
+  .watermark { position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 80px; color: rgba(139, 92, 246, 0.12); font-weight: bold; pointer-events: none; z-index: -1; white-space: nowrap; }
+  .alerta { background: #fef3ff; border: 2px solid #a855f7; padding: 12px; border-radius: 8px; margin-bottom: 16px; color: #6b21a8; }
+  h1 { font-size: 16px; margin: 0 0 4px 0; color: #6b21a8; }
+  h2 { font-size: 12px; margin: 0 0 16px 0; font-weight: normal; color: #555; }
+  .info { background: #f9fafb; border: 1px solid #e5e7eb; padding: 10px; border-radius: 6px; margin-bottom: 12px; font-size: 11px; }
+  .info b { color: #111; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { border: 1px solid #d1d5db; padding: 6px 10px; font-size: 11px; }
+  th { background: #f3e8ff; text-transform: uppercase; font-size: 10px; color: #6b21a8; }
+  .total { background: #ede9fe; font-weight: bold; font-size: 13px; color: #581c87; }
+  .footer { margin-top: 28px; font-size: 9px; color: #888; border-top: 1px dashed #aaa; padding-top: 8px; }
+  .no-print { text-align: center; margin-bottom: 16px; }
+</style></head><body>
+<div class="watermark">USO INTERNO</div>
+<div class="no-print"><button onclick="window.print()" style="padding:8px 24px;font-size:14px;cursor:pointer;background:#7c3aed;color:white;border:none;border-radius:4px;">Imprimir / Salvar PDF</button></div>
+<div class="alerta">
+  <h1>USO INTERNO — NÃO OFICIAL</h1>
+  <h2>Rescisão Complementar (sobre valor "por fora") — Não substitui o TRCT homologado</h2>
+</div>
+<div class="info">
+  <div><b>Funcionário:</b> ${nome} &nbsp; | &nbsp; <b>CPF:</b> ${cpf} &nbsp; | &nbsp; <b>Cargo:</b> ${cargo}</div>
+  <div><b>Base de cálculo (complemento "por fora"):</b> ${formatMoeda(pc.valorComplemento)}/mês</div>
+  <div><b>Período:</b> Admissão ${pc.dataAdmissao ? pc.dataAdmissao.split('-').reverse().join('/') : '-'} &nbsp; → &nbsp; Desligamento ${pc.dataDesligamento ? pc.dataDesligamento.split('-').reverse().join('/') : '-'} &nbsp; (Fim aviso: ${pc.dataFimAviso ? pc.dataFimAviso.split('-').reverse().join('/') : '-'})</div>
+</div>
+<table>
+  <thead><tr><th>Verba</th><th style="text-align:right">Valor (R$)</th></tr></thead>
+  <tbody>
+    ${linha(`Saldo de Salário (${pc.diasTrabalhadosMes || '?'} dias)`, pc.saldoSalario)}
+    ${linha(`Férias Proporcionais (${pc.mesesFerias}/12)`, pc.feriasProporcional)}
+    ${linha('1/3 Constitucional (Férias Proporcionais)', pc.tercoConstitucional)}
+    ${linha(`Férias Vencidas${pc.periodosVencidos ? ` (${pc.periodosVencidos} per.)` : ''}`, pc.feriasVencidas)}
+    ${linha('1/3 Constitucional (Férias Vencidas)', pc.tercoFeriasVencidas)}
+    ${linha(`13º Proporcional (${pc.meses13o}/12)`, pc.decimoTerceiroProporcional)}
+    ${linha('Aviso Prévio Indenizado', pc.avisoPrevioIndenizado)}
+    <tr class="total"><td>TOTAL COMPLEMENTAR</td><td style="text-align:right">${formatMoeda(pc.total)}</td></tr>
+  </tbody>
+</table>
+<div class="footer">
+  <p><b>Observações:</b> Cálculo realizado SOMENTE sobre o complemento salarial pago "por fora" (R$ ${formatMoeda(pc.valorComplemento)}). Não inclui FGTS, multa de 40%, VR, médias de adicionais habituais nem descontos legais (INSS/IRRF). Documento de uso interno da empresa, sem valor legal.</p>
+  <p>Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} por ${user?.name || user?.username || '-'}.</p>
+</div>
+</body></html>`);
+                        w.document.close();
+                      } catch (err) {
+                        console.error(err);
+                        toast.error('Erro ao gerar PDF complementar');
+                      }
+                    }}
+                  >
+                    <FileText className="h-4 w-4" />
+                    Imprimir Complementar (uso interno)
+                  </Button>
+                )}
               </div>
             </div>
           </FullScreenDialog>
