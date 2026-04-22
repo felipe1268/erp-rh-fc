@@ -8635,4 +8635,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-21 13:00:00",
   },
+  {
+    version: 1267,
+    titulo: "Compras > Fornecedores — Acesso Restrito para usuários do grupo (rota não estava registrada como feature do módulo)",
+    descricao: "Bug crítico de permissão: usuários com perfil de grupo (não admin master) recebiam tela 'Acesso Restrito' ao acessar /compras/fornecedores. Causa raiz: a rota nunca foi declarada como feature do módulo 'compras' em shared/modules.ts (MODULE_DEFINITIONS). O RouteGuard, ao tentar identificar o módulo dono da rota via m.features.some(f => f.route === route), não encontrava match e retornava false por segurança — bloqueando todos os usuários que dependem do novo sistema de permissões granulares (module_access). Correção: adicionada a feature 'compras-fornecedores' (rota /compras/fornecedores, ícone Truck) na lista de features do módulo Compras. Agora o RouteGuard mapeia corretamente a rota → módulo compras → page 'fornecedores' (já existente em MODULE_PAGE_CONFIG e ROUTE_TO_PAGEID), respeitando a permissão view do grupo.",
+    tipo: "bugfix",
+    modulos: "Compras, Permissões",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-22 17:00:00",
+  },
 ];
