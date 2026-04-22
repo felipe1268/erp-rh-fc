@@ -8626,4 +8626,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-21 12:30:00",
   },
+  {
+    version: 1266,
+    titulo: "Rescisão Complementar — limpeza de rótulos no resumo (NÃO OFICIAL e 'sobre valor por fora' removidos)",
+    descricao: "Removidas as expressões 'NÃO OFICIAL' e '(sobre valor \"por fora\")' dos cabeçalhos do Card Roxo de Rescisão Complementar (resumo da rescisão e impressão para uso interno). Mantidos apenas 'USO INTERNO' e 'Rescisão Complementar'. Alterações em client/src/pages/AvisoPrevio.tsx (linhas 1202, 1203, 1585, 1586, 2278, 2279).",
+    tipo: "melhoria",
+    modulos: "Aviso Prévio, Rescisão",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-21 13:00:00",
+  },
 ];

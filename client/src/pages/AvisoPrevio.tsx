@@ -1199,8 +1199,8 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                   <div className="rounded-xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-5">
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div>
-                        <p className="text-xs font-bold uppercase text-violet-700 tracking-wider">USO INTERNO — não oficial</p>
-                        <h3 className="text-base font-bold text-violet-900 mt-1">Rescisão Complementar (sobre valor "por fora")</h3>
+                        <p className="text-xs font-bold uppercase text-violet-700 tracking-wider">USO INTERNO</p>
+                        <h3 className="text-base font-bold text-violet-900 mt-1">Rescisão Complementar</h3>
                         <p className="text-[11px] text-violet-700 mt-1">
                           Calculada apenas sobre o complemento salarial de {formatMoeda(pc.valorComplemento)} (não inclui FGTS, multa 40%, VR ou médias). Não substitui o TRCT oficial.
                         </p>
@@ -1582,8 +1582,8 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
 <div class="watermark">USO INTERNO</div>
 <div class="no-print"><button onclick="window.print()" style="padding:8px 24px;font-size:14px;cursor:pointer;background:#7c3aed;color:white;border:none;border-radius:4px;">Imprimir / Salvar PDF</button></div>
 <div class="alerta">
-  <h1>USO INTERNO — NÃO OFICIAL</h1>
-  <h2>Rescisão Complementar (sobre valor "por fora") — Não substitui o TRCT homologado</h2>
+  <h1>USO INTERNO</h1>
+  <h2>Rescisão Complementar — Não substitui o TRCT homologado</h2>
 </div>
 <div class="info">
   <div><b>Funcionário:</b> ${nome} &nbsp; | &nbsp; <b>CPF:</b> ${cpf} &nbsp; | &nbsp; <b>Cargo:</b> ${cargo}</div>
@@ -2275,8 +2275,8 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                       <div className="rounded-xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4 mt-4">
                         <div className="flex items-start justify-between gap-3 mb-3">
                           <div>
-                            <p className="text-[10px] font-bold uppercase text-violet-700 tracking-wider">USO INTERNO — não oficial</p>
-                            <h4 className="text-sm font-bold text-violet-900 mt-0.5">Rescisão Complementar (sobre valor "por fora")</h4>
+                            <p className="text-[10px] font-bold uppercase text-violet-700 tracking-wider">USO INTERNO</p>
+                            <h4 className="text-sm font-bold text-violet-900 mt-0.5">Rescisão Complementar</h4>
                             <p className="text-[10px] text-violet-700 mt-0.5">
                               Calculada apenas sobre o complemento de {formatMoeda(pc.valorComplemento)}/mês — não inclui FGTS, multa 40%, VR ou médias. Não substitui o TRCT.
                             </p>
