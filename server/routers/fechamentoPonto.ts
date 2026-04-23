@@ -4303,10 +4303,14 @@ export const fechamentoPontoRouter = router({
       }
       const cids = resolveCompanyIds(input);
 
-      // ----- 1) Funcionários ativos no período (filtrado por obra atual se informado)
+      // ----- 1) Funcionários ATIVOS CLT no período (mesmo critério do consolidarMes)
       const empConds: any[] = [
         inArray(employees.companyId, cids),
         isNull(employees.deletedAt),
+        // SOMENTE CLT — exclui Autônomos, PJ, Prestadores de Serviço
+        eq(employees.tipoContrato, 'CLT'),
+        // SOMENTE Ativos ou em Férias — exclui Demitido, Afastado, Recluso, Lista_Negra, Excluído
+        sql`${employees.status} IN ('Ativo', 'Ferias')`,
         // Admitido até dataFim
         sql`${employees.dataAdmissao} IS NULL OR ${employees.dataAdmissao} <= ${dataFim}`,
         // Não desligado antes do início (considera dataDemissao OU dataDesligamentoEfetiva)
@@ -4315,10 +4319,11 @@ export const fechamentoPontoRouter = router({
           OR COALESCE(${employees.dataDesligamentoEfetiva}, ${employees.dataDemissao}) >= ${dataInicio}
         )`,
       ];
-      const empList = await db.select({
+      const empListRaw = await db.select({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
         matricula: employees.matricula,
+        cpf: employees.cpf,
         cargo: employees.cargo,
         funcao: employees.funcao,
         setor: employees.setor,
@@ -4329,6 +4334,17 @@ export const fechamentoPontoRouter = router({
         status: employees.status,
         companyId: employees.companyId,
       }).from(employees).where(and(...empConds));
+
+      // ----- 1b) Deduplicação por (matrícula|cpf) — pega o registro com maior id (mais recente)
+      const dedup = new Map<string, typeof empListRaw[number]>();
+      for (const e of empListRaw) {
+        const key = (e.matricula || "").trim().toLowerCase()
+          || (e.cpf || "").replace(/\D/g, "")
+          || `id:${e.id}`;
+        const cur = dedup.get(key);
+        if (!cur || (e.id || 0) > (cur.id || 0)) dedup.set(key, e);
+      }
+      const empList = Array.from(dedup.values());
 
       if (empList.length === 0) {
         return { funcionarios: [], totais: { injustificadas: 0, justificadas: 0, dsrPerdido: 0, atrasos: 0, saidasAntecipadas: 0 } };
