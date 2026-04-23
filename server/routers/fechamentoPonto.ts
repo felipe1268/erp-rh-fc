@@ -4276,4 +4276,353 @@ export const fechamentoPontoRouter = router({
       console.log(`[LimparPonto] Removidos ${deleted} registros de ponto — emp=${input.employeeId} de ${input.dataInicio} a ${input.dataFim} (lockedRanges=${lockedRanges.length})`);
       return { deleted, lockedRangesSkipped: lockedRanges.length };
     }),
+
+  // ========================================================
+  // RELATÓRIO DE FALTAS / ATRASOS / SAÍDAS ANTECIPADAS
+  // ========================================================
+  // Para cada funcionário ativo no período, calcula:
+  //   - faltas injustificadas (dia útil sem batida e sem atestado/férias)
+  //   - faltas justificadas    (dia útil sem batida COM atestado/férias)
+  //   - dsr perdido            (1 falta injustificada na semana → 1 DSR perdido)
+  //   - atrasos                (entrada > tolerância)
+  //   - saídas antecipadas     (saída < jornada – tolerância)
+  //   - drill-down: lista de datas com motivo
+  getFaltasReport: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      dataInicio: z.string(), // YYYY-MM-DD
+      dataFim:    z.string(),
+      obraIds:    z.array(z.number()).optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const { dataInicio, dataFim } = input;
+      if (dataInicio > dataFim) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Data inicial maior que data final." });
+      }
+      const cids = resolveCompanyIds(input);
+
+      // ----- 1) Funcionários ativos no período (filtrado por obra atual se informado)
+      const empConds: any[] = [
+        inArray(employees.companyId, cids),
+        isNull(employees.deletedAt),
+        // Admitido até dataFim
+        sql`${employees.dataAdmissao} IS NULL OR ${employees.dataAdmissao} <= ${dataFim}`,
+        // Não desligado antes do início (considera dataDemissao OU dataDesligamentoEfetiva)
+        sql`(
+          (${employees.dataDemissao} IS NULL AND ${employees.dataDesligamentoEfetiva} IS NULL)
+          OR COALESCE(${employees.dataDesligamentoEfetiva}, ${employees.dataDemissao}) >= ${dataInicio}
+        )`,
+      ];
+      const empList = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+        matricula: employees.matricula,
+        cargo: employees.cargo,
+        funcao: employees.funcao,
+        setor: employees.setor,
+        dataAdmissao: employees.dataAdmissao,
+        dataDemissao: employees.dataDemissao,
+        dataDesligamentoEfetiva: employees.dataDesligamentoEfetiva,
+        jornadaTrabalho: employees.jornadaTrabalho,
+        status: employees.status,
+        companyId: employees.companyId,
+      }).from(employees).where(and(...empConds));
+
+      if (empList.length === 0) {
+        return { funcionarios: [], totais: { injustificadas: 0, justificadas: 0, dsrPerdido: 0, atrasos: 0, saidasAntecipadas: 0 } };
+      }
+
+      const empIds = empList.map(e => e.id);
+
+      // ----- 2) Filtro opcional por obra: pega só funcionários que tiveram registro/lotação na obra no período
+      let obraEmpIds: Set<number> | null = null;
+      if (input.obraIds && input.obraIds.length > 0) {
+        const recsObra = await db.select({ employeeId: timeRecords.employeeId })
+          .from(timeRecords)
+          .where(and(
+            inArray(timeRecords.companyId, cids),
+            between(timeRecords.data, dataInicio, dataFim),
+            inArray(timeRecords.obraId, input.obraIds),
+          ));
+        obraEmpIds = new Set(recsObra.map(r => r.employeeId).filter((x): x is number => x != null));
+      }
+
+      // ----- 3) Registros de ponto no período
+      const recs = await db.select({
+        employeeId: timeRecords.employeeId,
+        data: timeRecords.data,
+        entrada1: timeRecords.entrada1,
+        saida1: timeRecords.saida1,
+        entrada2: timeRecords.entrada2,
+        saida2: timeRecords.saida2,
+      }).from(timeRecords).where(and(
+        inArray(timeRecords.companyId, cids),
+        inArray(timeRecords.employeeId, empIds),
+        between(timeRecords.data, dataInicio, dataFim),
+      ));
+      const recsByEmpDay = new Map<string, typeof recs[number]>();
+      for (const r of recs) recsByEmpDay.set(`${r.employeeId}|${r.data}`, r);
+
+      // ----- 4) Atestados que cobrem dias do período
+      const ats = await db.select({
+        employeeId: atestados.employeeId,
+        dataEmissao: atestados.dataEmissao,
+        diasAfastamento: atestados.diasAfastamento,
+        dataRetorno: atestados.dataRetorno,
+        afastamentoTipo: atestados.afastamentoTipo,
+        tipo: atestados.tipo,
+      }).from(atestados).where(and(
+        inArray(atestados.companyId, cids),
+        inArray(atestados.employeeId, empIds),
+        isNull(atestados.deletedAt),
+        // overlap com período
+        sql`${atestados.dataEmissao} <= ${dataFim}`,
+      ));
+      // Set de dias cobertos por atestado: empId|YYYY-MM-DD → tipo
+      const atestSet = new Map<string, string>();
+      for (const a of ats) {
+        if ((a.afastamentoTipo || "dia") !== "dia") continue; // afastamento em horas não cobre dia inteiro
+        const start = a.dataEmissao;
+        let endStr: string;
+        if (a.dataRetorno) {
+          // dataRetorno = primeiro dia de volta ao trabalho → cobre até dia anterior
+          const rd = new Date(a.dataRetorno + "T12:00:00Z");
+          rd.setUTCDate(rd.getUTCDate() - 1);
+          endStr = rd.toISOString().slice(0, 10);
+        } else {
+          const dias = Math.max(1, a.diasAfastamento || 1);
+          const sd = new Date(start + "T12:00:00Z");
+          sd.setUTCDate(sd.getUTCDate() + dias - 1);
+          endStr = sd.toISOString().slice(0, 10);
+        }
+        const sd = new Date(start + "T12:00:00Z");
+        const ed = new Date(endStr + "T12:00:00Z");
+        for (let d = new Date(sd); d <= ed; d.setUTCDate(d.getUTCDate() + 1)) {
+          const ds = d.toISOString().slice(0, 10);
+          if (ds < dataInicio || ds > dataFim) continue;
+          atestSet.set(`${a.employeeId}|${ds}`, a.tipo || "Atestado");
+        }
+      }
+
+      // ----- 5) Férias gozadas no período (vacationPeriods)
+      const vacs = await db.select({
+        employeeId: vacationPeriods.employeeId,
+        dataInicio: vacationPeriods.dataInicio,
+        dataFim: vacationPeriods.dataFim,
+        periodo2Inicio: vacationPeriods.periodo2Inicio,
+        periodo2Fim: vacationPeriods.periodo2Fim,
+        periodo3Inicio: vacationPeriods.periodo3Inicio,
+        periodo3Fim: vacationPeriods.periodo3Fim,
+      }).from(vacationPeriods).where(and(
+        inArray(vacationPeriods.companyId, cids),
+        inArray(vacationPeriods.employeeId, empIds),
+      ));
+      const feriasSet = new Set<string>();
+      const addRange = (empId: number, ini?: string | null, fim?: string | null) => {
+        if (!ini || !fim) return;
+        const sd = new Date(ini + "T12:00:00Z");
+        const ed = new Date(fim + "T12:00:00Z");
+        for (let d = new Date(sd); d <= ed; d.setUTCDate(d.getUTCDate() + 1)) {
+          const ds = d.toISOString().slice(0, 10);
+          if (ds < dataInicio || ds > dataFim) continue;
+          feriasSet.add(`${empId}|${ds}`);
+        }
+      };
+      for (const v of vacs) {
+        addRange(v.employeeId, v.dataInicio, v.dataFim);
+        addRange(v.employeeId, v.periodo2Inicio, v.periodo2Fim);
+        addRange(v.employeeId, v.periodo3Inicio, v.periodo3Fim);
+      }
+
+      // ----- 6) Feriados (geral + por empresa)
+      const ferRows = await db.select({ data: feriados.data, recorrente: feriados.recorrente })
+        .from(feriados).where(and(
+          eq(feriados.ativo, 1),
+          or(isNull(feriados.companyId), inArray(feriados.companyId, cids)) as any,
+        ));
+      const feriadoSet = new Set<string>();
+      const yIni = parseInt(dataInicio.slice(0, 4), 10);
+      const yFim = parseInt(dataFim.slice(0, 4), 10);
+      for (const f of ferRows) {
+        if (f.recorrente === 1) {
+          for (let y = yIni; y <= yFim; y++) {
+            const md = String(f.data).slice(5);
+            const ds = `${y}-${md}`;
+            if (ds >= dataInicio && ds <= dataFim) feriadoSet.add(ds);
+          }
+        } else {
+          if (String(f.data) >= dataInicio && String(f.data) <= dataFim) feriadoSet.add(String(f.data));
+        }
+      }
+
+      // ----- 7) Critérios de tolerância (usa companyId principal)
+      const criteria = await getCriteriaMap(input.companyId);
+      const tolAtraso = criteria.pontoToleranciaAtraso;
+      const tolSaida  = criteria.pontoToleranciaSaida;
+      const sabadoTipo = criteria.jornadaSabadoTipo; // compensado, meio_periodo, normal, folga
+
+      // ----- Helper: é dia útil esperado para esse funcionário?
+      // Retorna { isWorkday, expectedEntrada, expectedSaida, expectedMins }
+      function getExpected(emp: typeof empList[number], dateStr: string) {
+        const dow = new Date(dateStr + "T12:00:00Z").getUTCDay(); // 0=dom..6=sab
+        if (dow === 0) return { isWorkday: false, entrada: null as string | null, saida: null as string | null, mins: 0 };
+        // Tenta jornada do funcionário
+        if (emp.jornadaTrabalho) {
+          try {
+            const parsed = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              const keys = ["dom","seg","ter","qua","qui","sex","sab"];
+              const day = parsed[keys[dow]];
+              if (!day || !day.entrada || !day.saida) {
+                return { isWorkday: false, entrada: null, saida: null, mins: 0 };
+              }
+              const toMins = (t: string) => { const [h,m] = t.split(":").map(Number); return (h||0)*60 + (m||0); };
+              let mins = toMins(day.saida) - toMins(day.entrada);
+              if (day.intervalo) {
+                const [ih, im] = String(day.intervalo).split(":").map(Number);
+                mins -= (ih || 0) * 60 + (im || 0);
+              }
+              return { isWorkday: true, entrada: day.entrada as string, saida: day.saida as string, mins: Math.max(0, mins) };
+            }
+          } catch {}
+        }
+        // Fallback: seg-sex sempre; sab depende do critério
+        if (dow === 6) {
+          if (sabadoTipo === "folga") return { isWorkday: false, entrada: null, saida: null, mins: 0 };
+        }
+        return { isWorkday: true, entrada: null, saida: null, mins: 0 };
+      }
+
+      // ----- 8) Itera funcionários × dias
+      type FaltaItem = { data: string; tipo: "injustificada" | "justificada" | "atraso" | "saida_antecipada"; descricao?: string; minutos?: number };
+      type EmpRow = {
+        employeeId: number;
+        nomeCompleto: string;
+        matricula: string | null;
+        cargo: string | null;
+        setor: string | null;
+        status: string;
+        injustificadas: number;
+        justificadas: number;
+        dsrPerdido: number;
+        atrasos: number;
+        saidasAntecipadas: number;
+        minutosAtraso: number;
+        minutosSaidaAntec: number;
+        detalhes: FaltaItem[];
+      };
+      const result: EmpRow[] = [];
+      const totais = { injustificadas: 0, justificadas: 0, dsrPerdido: 0, atrasos: 0, saidasAntecipadas: 0 };
+
+      const startD = new Date(dataInicio + "T12:00:00Z");
+      const endD = new Date(dataFim + "T12:00:00Z");
+
+      for (const emp of empList) {
+        if (obraEmpIds && !obraEmpIds.has(emp.id)) continue;
+
+        const empAdmissao = emp.dataAdmissao || dataInicio;
+        const empDeslig = emp.dataDesligamentoEfetiva || emp.dataDemissao || dataFim;
+
+        const row: EmpRow = {
+          employeeId: emp.id,
+          nomeCompleto: emp.nomeCompleto,
+          matricula: emp.matricula || null,
+          cargo: emp.cargo || emp.funcao || null,
+          setor: emp.setor || null,
+          status: emp.status || "Ativo",
+          injustificadas: 0,
+          justificadas: 0,
+          dsrPerdido: 0,
+          atrasos: 0,
+          saidasAntecipadas: 0,
+          minutosAtraso: 0,
+          minutosSaidaAntec: 0,
+          detalhes: [],
+        };
+
+        // Para DSR: por semana ISO (segunda-domingo). Marca semanas com falta injustificada.
+        const semanasComFaltaInj = new Set<string>();
+        // Para evitar contar DSR de semana cujo domingo está fora do período → só conta se domingo ∈ período.
+
+        for (let d = new Date(startD); d <= endD; d.setUTCDate(d.getUTCDate() + 1)) {
+          const ds = d.toISOString().slice(0, 10);
+          if (ds < empAdmissao || ds > empDeslig) continue;
+
+          if (feriadoSet.has(ds)) continue;
+          if (feriasSet.has(`${emp.id}|${ds}`)) continue;
+
+          const exp = getExpected(emp, ds);
+          if (!exp.isWorkday) continue;
+
+          const rec = recsByEmpDay.get(`${emp.id}|${ds}`);
+          const hasBatida = !!(rec && (rec.entrada1 || rec.entrada2 || rec.saida1 || rec.saida2));
+
+          if (!hasBatida) {
+            const atestTipo = atestSet.get(`${emp.id}|${ds}`);
+            if (atestTipo) {
+              row.justificadas++;
+              row.detalhes.push({ data: ds, tipo: "justificada", descricao: atestTipo });
+            } else {
+              row.injustificadas++;
+              row.detalhes.push({ data: ds, tipo: "injustificada" });
+              // Marca semana (segunda como referência)
+              const dd = new Date(ds + "T12:00:00Z");
+              const dow = dd.getUTCDay(); // 0=dom..6=sab
+              const offsetParaSegunda = dow === 0 ? -6 : 1 - dow;
+              const seg = new Date(dd);
+              seg.setUTCDate(seg.getUTCDate() + offsetParaSegunda);
+              semanasComFaltaInj.add(seg.toISOString().slice(0, 10));
+            }
+            continue;
+          }
+
+          // Tem batida → checa atraso e saída antecipada
+          if (exp.entrada && rec?.entrada1) {
+            const toMins = (t: string) => { const [h,m] = t.split(":").map(Number); return (h||0)*60 + (m||0); };
+            const atrasoMin = toMins(rec.entrada1) - toMins(exp.entrada);
+            if (atrasoMin > tolAtraso) {
+              row.atrasos++;
+              row.minutosAtraso += atrasoMin;
+              row.detalhes.push({ data: ds, tipo: "atraso", minutos: atrasoMin, descricao: `Entrou às ${rec.entrada1} (esperado ${exp.entrada})` });
+            }
+          }
+          if (exp.saida) {
+            // Última batida do dia
+            const ultima = rec?.saida2 || rec?.entrada2 || rec?.saida1 || null;
+            if (ultima) {
+              const toMins = (t: string) => { const [h,m] = t.split(":").map(Number); return (h||0)*60 + (m||0); };
+              const antecMin = toMins(exp.saida) - toMins(ultima);
+              if (antecMin > tolSaida) {
+                row.saidasAntecipadas++;
+                row.minutosSaidaAntec += antecMin;
+                row.detalhes.push({ data: ds, tipo: "saida_antecipada", minutos: antecMin, descricao: `Saiu às ${ultima} (esperado ${exp.saida})` });
+              }
+            }
+          }
+        }
+
+        // DSR perdido: número de semanas com pelo menos 1 falta injustificada
+        // (cada semana com falta injustificada → 1 DSR perdido — Lei 605/49)
+        row.dsrPerdido = semanasComFaltaInj.size;
+
+        // Ordena detalhes por data
+        row.detalhes.sort((a, b) => a.data.localeCompare(b.data));
+
+        if (row.injustificadas + row.justificadas + row.atrasos + row.saidasAntecipadas > 0) {
+          result.push(row);
+          totais.injustificadas += row.injustificadas;
+          totais.justificadas   += row.justificadas;
+          totais.dsrPerdido     += row.dsrPerdido;
+          totais.atrasos        += row.atrasos;
+          totais.saidasAntecipadas += row.saidasAntecipadas;
+        }
+      }
+
+      // Ordena por mais faltas injustificadas primeiro
+      result.sort((a, b) => (b.injustificadas - a.injustificadas) || (b.atrasos - a.atrasos) || a.nomeCompleto.localeCompare(b.nomeCompleto));
+
+      return { funcionarios: result, totais };
+    }),
 });

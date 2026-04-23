@@ -8644,4 +8644,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-22 17:00:00",
   },
+  {
+    version: 1268,
+    titulo: "Fechamento de Ponto — Nova caixinha 'Faltas / Atrasos' com relatório por período",
+    descricao: "Adicionada nova caixinha no painel de Fechamento de Ponto, ao lado das demais (Colaboradores, Registros, Inconsistências, Ajustes Manuais, Múltiplas Obras, Conflitos Obra/Dia). Ao clicar, abre modal com filtro de período (padrão 16 → 15 do mês de fechamento de folha) e filtro opcional por obra. O sistema calcula para cada funcionário ativo no período: (1) Faltas Injustificadas — dia útil sem batida e sem atestado/férias lançado; (2) Faltas Justificadas — dia útil sem batida COM atestado lançado; (3) DSR Perdido — semanas (seg-sáb) com pelo menos 1 falta injustificada (Lei 605/49); (4) Atrasos — entradas acima da tolerância configurada nos critérios da empresa; (5) Saídas Antecipadas — saídas antes do horário esperado da jornada. Domingos, feriados, férias gozadas (vacation_periods) e dias cobertos por atestado são automaticamente desconsiderados como faltas. Funcionários admitidos/demitidos no meio do período só contam dentro do intervalo de vínculo. Cada linha pode ser expandida para mostrar a lista das datas exatas com cada tipo de ocorrência (drill-down). Botões de exportação para PDF (impressão) e Excel (com aba de Resumo + aba de Detalhes). Backend: novo procedimento fechamentoPonto.getFaltasReport. Frontend: novo componente FaltasReportModal em client/src/pages/FechamentoPonto.tsx.",
+    tipo: "novo",
+    modulos: "Fechamento de Ponto, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-23 10:00:00",
+  },
 ];

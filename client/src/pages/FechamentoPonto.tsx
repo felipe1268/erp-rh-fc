@@ -21,7 +21,7 @@ import {
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, CheckCircle2, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
   ListChecks, Filter, ChevronDown, ChevronUp, Zap, ArrowRightLeft, ArrowRight, FileText, Copy,
-  ChevronsUpDown, Check, Plus, X, ClipboardList
+  ChevronsUpDown, Check, Plus, X, ClipboardList, UserX, CalendarX, Timer, LogOut
 } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -652,6 +652,19 @@ export default function FechamentoPonto() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterObra, setFilterObra] = useState<string>("all");
   const [cardFilter, setCardFilter] = useState<CardFilter>(null);
+  // ===== Modal de Relatório de Faltas =====
+  const [faltasModalOpen, setFaltasModalOpen] = useState(false);
+  const [faltasDataInicio, setFaltasDataInicio] = useState<string>(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth() - 1, 16).toISOString().slice(0, 10);
+  });
+  const [faltasDataFim, setFaltasDataFim] = useState<string>(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 15).toISOString().slice(0, 10);
+  });
+  const [faltasObraIds, setFaltasObraIds] = useState<number[]>([]);
+  const [faltasExpandedIds, setFaltasExpandedIds] = useState<Set<number>>(new Set());
+  const [faltasSearch, setFaltasSearch] = useState("");
   const [clearType, setClearType] = useState<string>("tudo");
   const [clearPeriodDe, setClearPeriodDe] = useState("");
   const [clearPeriodAte, setClearPeriodAte] = useState("");
@@ -1444,7 +1457,7 @@ export default function FechamentoPonto() {
         )}
 
         {/* ===== STATS CARDS ===== */}
-        <div className="grid gap-4 md:grid-cols-6">
+        <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-7">
           <Card className={`cursor-pointer hover:shadow-md transition-all ${cardFilter === "colaboradores" ? "ring-2 ring-blue-500 shadow-md" : ""}`}
             onClick={() => { setViewMode("resumo"); setCardFilter(cardFilter === "colaboradores" ? null : "colaboradores"); }}>
             <CardContent className="p-4">
@@ -1525,6 +1538,21 @@ export default function FechamentoPonto() {
                 <div>
                   <p className={`text-2xl font-bold ${conflitosCount > 0 ? "text-orange-600" : ""}`}>{fmtNum(conflitosCount)}</p>
                   <p className="text-xs text-muted-foreground">Conflitos Obra/Dia</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="cursor-pointer hover:shadow-md transition-all border-rose-200 bg-rose-50/30"
+            onClick={() => setFaltasModalOpen(true)}
+            data-testid="card-faltas">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-rose-100 flex items-center justify-center">
+                  <UserX className="h-5 w-5 text-rose-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-rose-600">Ver</p>
+                  <p className="text-xs text-muted-foreground">Faltas / Atrasos</p>
                 </div>
               </div>
             </CardContent>
@@ -5050,7 +5078,376 @@ export default function FechamentoPonto() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ===================== MODAL: RELATÓRIO DE FALTAS ===================== */}
+      <FaltasReportModal
+        open={faltasModalOpen}
+        onClose={() => setFaltasModalOpen(false)}
+        companyId={companyId}
+        companyIds={companyIds}
+        dataInicio={faltasDataInicio}
+        dataFim={faltasDataFim}
+        onChangeDataInicio={setFaltasDataInicio}
+        onChangeDataFim={setFaltasDataFim}
+        obraIds={faltasObraIds}
+        onChangeObraIds={setFaltasObraIds}
+        obrasList={(obrasList.data || []) as any[]}
+        expandedIds={faltasExpandedIds}
+        onToggleExpanded={(id) => {
+          const next = new Set(faltasExpandedIds);
+          if (next.has(id)) next.delete(id); else next.add(id);
+          setFaltasExpandedIds(next);
+        }}
+        search={faltasSearch}
+        onChangeSearch={setFaltasSearch}
+      />
+
           <PrintFooterLGPD />
     </DashboardLayout>
+  );
+}
+
+// ============================================================
+// MODAL: Relatório de Faltas / Atrasos / Saídas Antecipadas
+// ============================================================
+function FaltasReportModal(props: {
+  open: boolean;
+  onClose: () => void;
+  companyId: number;
+  companyIds: number[];
+  dataInicio: string;
+  dataFim: string;
+  onChangeDataInicio: (v: string) => void;
+  onChangeDataFim: (v: string) => void;
+  obraIds: number[];
+  onChangeObraIds: (ids: number[]) => void;
+  obrasList: Array<{ id: number; nome: string }>;
+  expandedIds: Set<number>;
+  onToggleExpanded: (id: number) => void;
+  search: string;
+  onChangeSearch: (s: string) => void;
+}) {
+  const { open, onClose, companyId, companyIds, dataInicio, dataFim, obraIds, obrasList, expandedIds, onToggleExpanded, search, onChangeSearch } = props;
+  const [obraPopoverOpen, setObraPopoverOpen] = useState(false);
+
+  const enabled = open && (companyId > 0 || companyIds.length > 0) && !!dataInicio && !!dataFim;
+  const report = trpc.fechamentoPonto.getFaltasReport.useQuery(
+    { companyId, companyIds, dataInicio, dataFim, obraIds: obraIds.length > 0 ? obraIds : undefined },
+    { enabled }
+  );
+
+  const filtered = useMemo(() => {
+    const list = report.data?.funcionarios || [];
+    if (!search.trim()) return list;
+    const q = removeAccents(search.trim().toLowerCase());
+    return list.filter((f: any) =>
+      removeAccents(String(f.nomeCompleto || "").toLowerCase()).includes(q)
+      || String(f.matricula || "").toLowerCase().includes(q)
+    );
+  }, [report.data, search]);
+
+  const totais = report.data?.totais;
+
+  function fmtBR(d: string) {
+    if (!d) return "-";
+    const [y, m, day] = d.split("-");
+    return `${day}/${m}/${y}`;
+  }
+  function fmtMin(min: number) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h === 0) return `${m}min`;
+    if (m === 0) return `${h}h`;
+    return `${h}h${String(m).padStart(2, "0")}`;
+  }
+
+  function toggleObra(id: number) {
+    if (obraIds.includes(id)) props.onChangeObraIds(obraIds.filter(x => x !== id));
+    else props.onChangeObraIds([...obraIds, id]);
+  }
+
+  function exportarPDF() {
+    const data = report.data;
+    if (!data) return;
+    const w = window.open("", "_blank");
+    if (!w) { toast.error("Bloqueador de popup ativo. Libere a janela para imprimir."); return; }
+    const periodo = `${fmtBR(dataInicio)} a ${fmtBR(dataFim)}`;
+    const obrasLabel = obraIds.length > 0
+      ? obraIds.map(id => obrasList.find(o => o.id === id)?.nome).filter(Boolean).join(", ")
+      : "Todas";
+    const rows = filtered.map((f: any) => `
+      <tr>
+        <td>${f.nomeCompleto}${f.matricula ? ` <span style="color:#888">(${f.matricula})</span>` : ""}</td>
+        <td>${f.cargo || "-"}</td>
+        <td style="text-align:center;color:#dc2626;font-weight:bold">${f.injustificadas}</td>
+        <td style="text-align:center;color:#0891b2">${f.justificadas}</td>
+        <td style="text-align:center;color:#7c3aed">${f.dsrPerdido}</td>
+        <td style="text-align:center;color:#ca8a04">${f.atrasos}${f.minutosAtraso ? ` <small>(${fmtMin(f.minutosAtraso)})</small>` : ""}</td>
+        <td style="text-align:center;color:#ea580c">${f.saidasAntecipadas}${f.minutosSaidaAntec ? ` <small>(${fmtMin(f.minutosSaidaAntec)})</small>` : ""}</td>
+      </tr>
+      ${(f.detalhes || []).length > 0 ? `<tr><td colspan="7" style="background:#fafafa;padding:8px;font-size:11px;color:#555">
+        ${f.detalhes.map((d: any) => {
+          const cor = d.tipo === "injustificada" ? "#dc2626" : d.tipo === "justificada" ? "#0891b2" : d.tipo === "atraso" ? "#ca8a04" : "#ea580c";
+          const tipoLbl = d.tipo === "injustificada" ? "Falta INJ" : d.tipo === "justificada" ? "Falta JUST" : d.tipo === "atraso" ? "Atraso" : "Saída Ant.";
+          return `<span style="display:inline-block;margin:2px 8px 2px 0;padding:2px 6px;border-left:3px solid ${cor}">
+            ${fmtBR(d.data)} — <strong style="color:${cor}">${tipoLbl}</strong>${d.descricao ? ` (${d.descricao})` : ""}${d.minutos ? ` · ${d.minutos}min` : ""}
+          </span>`;
+        }).join("")}
+      </td></tr>` : ""}
+    `).join("");
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório de Faltas — ${periodo}</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:24px;color:#111}
+        h1{font-size:18px;margin:0 0 4px}
+        .meta{color:#555;font-size:12px;margin-bottom:16px}
+        table{width:100%;border-collapse:collapse;font-size:12px}
+        th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}
+        th{background:#f5f5f5}
+        .totais{display:flex;gap:24px;font-size:13px;margin:12px 0;padding:10px;background:#f9f9f9;border-radius:6px}
+        .totais b{color:#111}
+        @media print {.no-print{display:none}}
+      </style></head><body>
+      <h1>Relatório de Faltas, Atrasos e Saídas Antecipadas</h1>
+      <div class="meta">Período: <b>${periodo}</b> · Obra(s): <b>${obrasLabel}</b> · Gerado em ${new Date().toLocaleString("pt-BR")}</div>
+      <div class="totais">
+        <span><b style="color:#dc2626">${totais?.injustificadas || 0}</b> Injustificadas</span>
+        <span><b style="color:#0891b2">${totais?.justificadas || 0}</b> Justificadas</span>
+        <span><b style="color:#7c3aed">${totais?.dsrPerdido || 0}</b> DSR Perdido</span>
+        <span><b style="color:#ca8a04">${totais?.atrasos || 0}</b> Atrasos</span>
+        <span><b style="color:#ea580c">${totais?.saidasAntecipadas || 0}</b> Saídas Antecipadas</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Funcionário</th><th>Cargo</th><th style="text-align:center">Injust.</th><th style="text-align:center">Just.</th>
+          <th style="text-align:center">DSR Perd.</th><th style="text-align:center">Atrasos</th><th style="text-align:center">Saída Ant.</th>
+        </tr></thead><tbody>${rows || `<tr><td colspan="7" style="text-align:center;color:#888;padding:24px">Nenhum registro encontrado.</td></tr>`}</tbody>
+      </table>
+      <button class="no-print" onclick="window.print()" style="margin-top:16px;padding:8px 16px;background:#0891b2;color:#fff;border:none;border-radius:4px;cursor:pointer">Imprimir / Salvar PDF</button>
+      </body></html>`);
+    w.document.close();
+  }
+
+  async function exportarExcel() {
+    const data = report.data;
+    if (!data) return;
+    const wb = (XLSX as any).utils.book_new();
+    const headerRows = [[
+      "Funcionário", "Matrícula", "Cargo", "Setor",
+      "Faltas Injustificadas", "Faltas Justificadas", "DSR Perdido",
+      "Qtd. Atrasos", "Min. Atrasos", "Qtd. Saídas Antec.", "Min. Saídas Antec.",
+    ]];
+    const bodyRows = filtered.map((f: any) => [
+      f.nomeCompleto, f.matricula || "", f.cargo || "", f.setor || "",
+      f.injustificadas, f.justificadas, f.dsrPerdido,
+      f.atrasos, f.minutosAtraso, f.saidasAntecipadas, f.minutosSaidaAntec,
+    ]);
+    const ws = (XLSX as any).utils.aoa_to_sheet([...headerRows, ...bodyRows]);
+    (XLSX as any).utils.book_append_sheet(wb, ws, "Resumo");
+
+    // Aba detalhes
+    const detRows: any[] = [["Funcionário", "Matrícula", "Data", "Tipo", "Descrição", "Minutos"]];
+    for (const f of filtered) {
+      for (const d of (f.detalhes || [])) {
+        const tipoLbl = d.tipo === "injustificada" ? "Falta Injustificada"
+          : d.tipo === "justificada" ? "Falta Justificada"
+          : d.tipo === "atraso" ? "Atraso"
+          : "Saída Antecipada";
+        detRows.push([f.nomeCompleto, f.matricula || "", d.data, tipoLbl, d.descricao || "", d.minutos || ""]);
+      }
+    }
+    const ws2 = (XLSX as any).utils.aoa_to_sheet(detRows);
+    (XLSX as any).utils.book_append_sheet(wb, ws2, "Detalhes");
+
+    const filename = `Faltas_${dataInicio}_a_${dataFim}.xlsx`;
+    (XLSX as any).writeFile(wb, filename);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-7xl max-h-[92vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserX className="h-5 w-5 text-rose-600" />
+            Relatório de Faltas, Atrasos e Saídas Antecipadas
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Filtros */}
+        <div className="grid gap-3 md:grid-cols-12 items-end mb-3">
+          <div className="md:col-span-3">
+            <Label className="text-xs">Período — Início</Label>
+            <Input type="date" value={dataInicio} onChange={(e) => props.onChangeDataInicio(e.target.value)} data-testid="input-faltas-inicio" />
+          </div>
+          <div className="md:col-span-3">
+            <Label className="text-xs">Período — Fim</Label>
+            <Input type="date" value={dataFim} onChange={(e) => props.onChangeDataFim(e.target.value)} data-testid="input-faltas-fim" />
+          </div>
+          <div className="md:col-span-3">
+            <Label className="text-xs">Obras (opcional)</Label>
+            <Popover open={obraPopoverOpen} onOpenChange={setObraPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-between font-normal" size="sm">
+                  {obraIds.length === 0 ? "Todas as obras" : `${obraIds.length} obra(s) selecionada(s)`}
+                  <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0">
+                <Command>
+                  <CommandInput placeholder="Buscar obra..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhuma obra.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem onSelect={() => props.onChangeObraIds([])}>
+                        <Check className={`mr-2 h-4 w-4 ${obraIds.length === 0 ? "opacity-100" : "opacity-0"}`} />
+                        Todas as obras
+                      </CommandItem>
+                      {obrasList.map((o: any) => (
+                        <CommandItem key={o.id} onSelect={() => toggleObra(o.id)}>
+                          <Check className={`mr-2 h-4 w-4 ${obraIds.includes(o.id) ? "opacity-100" : "opacity-0"}`} />
+                          {o.nome}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="md:col-span-3">
+            <Label className="text-xs">Buscar funcionário</Label>
+            <Input placeholder="Nome ou matrícula..." value={search} onChange={(e) => onChangeSearch(e.target.value)} data-testid="input-faltas-search" />
+          </div>
+        </div>
+
+        {/* Totais */}
+        {totais && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
+            <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-rose-700">{totais.injustificadas}</p>
+              <p className="text-xs text-rose-700">Faltas Injustificadas</p>
+            </div>
+            <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-cyan-700">{totais.justificadas}</p>
+              <p className="text-xs text-cyan-700">Faltas Justificadas</p>
+            </div>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-purple-700">{totais.dsrPerdido}</p>
+              <p className="text-xs text-purple-700">DSR Perdido</p>
+            </div>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-yellow-700">{totais.atrasos}</p>
+              <p className="text-xs text-yellow-700">Atrasos</p>
+            </div>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-orange-700">{totais.saidasAntecipadas}</p>
+              <p className="text-xs text-orange-700">Saídas Antecipadas</p>
+            </div>
+          </div>
+        )}
+
+        {/* Ações */}
+        <div className="flex justify-between items-center mb-2">
+          <p className="text-xs text-muted-foreground">
+            {report.isLoading ? "Calculando..." : `${filtered.length} funcionário(s) com ocorrências no período`}
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={exportarPDF} disabled={!report.data || filtered.length === 0} data-testid="btn-faltas-pdf">
+              <Printer className="h-4 w-4 mr-1" /> PDF / Imprimir
+            </Button>
+            <Button size="sm" variant="outline" onClick={exportarExcel} disabled={!report.data || filtered.length === 0} data-testid="btn-faltas-excel">
+              <FileDown className="h-4 w-4 mr-1" /> Excel
+            </Button>
+          </div>
+        </div>
+
+        {/* Tabela */}
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-100 text-xs">
+              <tr>
+                <th className="text-left p-2 w-8"></th>
+                <th className="text-left p-2">Funcionário</th>
+                <th className="text-left p-2 hidden md:table-cell">Cargo</th>
+                <th className="text-center p-2"><span title="Faltas injustificadas">Inj.</span></th>
+                <th className="text-center p-2"><span title="Faltas justificadas (com atestado)">Just.</span></th>
+                <th className="text-center p-2"><span title="DSR perdido (semanas com falta)">DSR</span></th>
+                <th className="text-center p-2"><span title="Atrasos">Atr.</span></th>
+                <th className="text-center p-2"><span title="Saídas antecipadas">Saí.Ant.</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.isLoading && (
+                <tr><td colSpan={8} className="text-center p-6 text-muted-foreground">Calculando relatório...</td></tr>
+              )}
+              {!report.isLoading && filtered.length === 0 && (
+                <tr><td colSpan={8} className="text-center p-6 text-muted-foreground">Nenhuma ocorrência no período selecionado.</td></tr>
+              )}
+              {filtered.map((f: any) => {
+                const isExp = expandedIds.has(f.employeeId);
+                return (
+                  <React.Fragment key={f.employeeId}>
+                    <tr className="border-t hover:bg-slate-50 cursor-pointer" onClick={() => onToggleExpanded(f.employeeId)} data-testid={`row-faltas-${f.employeeId}`}>
+                      <td className="p-2">{isExp ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</td>
+                      <td className="p-2 font-medium">
+                        {f.nomeCompleto}
+                        {f.matricula && <span className="text-xs text-muted-foreground ml-2">({f.matricula})</span>}
+                        {f.status && f.status !== "Ativo" && <Badge variant="outline" className="ml-2 text-xs">{f.status}</Badge>}
+                      </td>
+                      <td className="p-2 hidden md:table-cell text-xs text-muted-foreground">{f.cargo || "-"}</td>
+                      <td className="p-2 text-center font-bold text-rose-700">{f.injustificadas || ""}</td>
+                      <td className="p-2 text-center text-cyan-700">{f.justificadas || ""}</td>
+                      <td className="p-2 text-center text-purple-700">{f.dsrPerdido || ""}</td>
+                      <td className="p-2 text-center text-yellow-700">
+                        {f.atrasos || ""}{f.atrasos > 0 && <span className="text-xs text-muted-foreground"> ({fmtMin(f.minutosAtraso)})</span>}
+                      </td>
+                      <td className="p-2 text-center text-orange-700">
+                        {f.saidasAntecipadas || ""}{f.saidasAntecipadas > 0 && <span className="text-xs text-muted-foreground"> ({fmtMin(f.minutosSaidaAntec)})</span>}
+                      </td>
+                    </tr>
+                    {isExp && (
+                      <tr className="bg-slate-50">
+                        <td></td>
+                        <td colSpan={7} className="p-3">
+                          <div className="text-xs text-muted-foreground mb-2">Datas com ocorrência:</div>
+                          {(f.detalhes || []).length === 0 ? (
+                            <div className="text-xs text-muted-foreground italic">Sem detalhes.</div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {f.detalhes.map((d: any, idx: number) => {
+                                const cfg: any = {
+                                  injustificada: { color: "border-rose-400 bg-rose-50 text-rose-800", icon: <UserX className="h-3 w-3" />, label: "Falta Inj." },
+                                  justificada:   { color: "border-cyan-400 bg-cyan-50 text-cyan-800", icon: <CalendarX className="h-3 w-3" />, label: "Falta Just." },
+                                  atraso:        { color: "border-yellow-400 bg-yellow-50 text-yellow-800", icon: <Timer className="h-3 w-3" />, label: "Atraso" },
+                                  saida_antecipada: { color: "border-orange-400 bg-orange-50 text-orange-800", icon: <LogOut className="h-3 w-3" />, label: "Saída Ant." },
+                                };
+                                const c = cfg[d.tipo] || cfg.injustificada;
+                                return (
+                                  <div key={idx} className={`border-l-4 px-2 py-1 rounded text-xs ${c.color}`}>
+                                    <div className="flex items-center gap-1 font-medium">
+                                      {c.icon}
+                                      {fmtBR(d.data)} — {c.label}
+                                    </div>
+                                    {d.descricao && <div className="text-[11px] opacity-80 mt-0.5">{d.descricao}</div>}
+                                    {d.minutos ? <div className="text-[11px] opacity-80">{d.minutos} min</div> : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <DialogFooter className="mt-3">
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
