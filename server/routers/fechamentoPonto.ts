@@ -4302,6 +4302,7 @@ export const fechamentoPontoRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Data inicial maior que data final." });
       }
       const cids = resolveCompanyIds(input);
+      console.log('[FaltasReport] input=', JSON.stringify(input), 'cids=', JSON.stringify(cids));
 
       // ----- 1) Funcionários ATIVOS CLT no período (mesmo critério do consolidarMes)
       const empConds: any[] = [
