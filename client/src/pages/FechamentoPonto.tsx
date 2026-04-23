@@ -5130,10 +5130,10 @@ function FaltasReportModal(props: {
   const { open, onClose, companyId, companyIds, dataInicio, dataFim, obraIds, obrasList, expandedIds, onToggleExpanded, search, onChangeSearch } = props;
   const [obraPopoverOpen, setObraPopoverOpen] = useState(false);
 
-  const enabled = open && (companyId > 0 || companyIds.length > 0) && !!dataInicio && !!dataFim;
+  const enabled = open && companyId > 0 && !!dataInicio && !!dataFim;
   const report = trpc.fechamentoPonto.getFaltasReport.useQuery(
     { companyId, companyIds, dataInicio, dataFim, obraIds: obraIds.length > 0 ? obraIds : undefined },
-    { enabled }
+    { enabled, refetchOnMount: 'always', staleTime: 0 }
   );
 
   const filtered = useMemo(() => {
