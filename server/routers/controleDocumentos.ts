@@ -483,7 +483,7 @@ export const controleDocumentosRouter = router({
           clinica: input.clinica || null,
           observacoes: input.observacoes || null,
         }).returning();
-        return { success: true, id: Number(result[0].id) };
+        return { success: true, id: Number((result as any).id) };
       }),
 
     update: protectedProcedure
