@@ -8671,4 +8671,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-23 16:30:00",
   },
+  {
+    version: 1271,
+    titulo: "Notificações: bolinha vermelha no menu para HE/MO + Central de Alertas",
+    descricao: "Adicionado sistema de alerta visual no menu lateral (módulo RH/DP) para os itens 'Solicitação de Hora Extra' e 'Solicitação de Mão de Obra'. Quando há solicitações pendentes que o usuário ainda não visualizou, aparece uma bolinha vermelha pulsando com a quantidade. A bolinha é per-usuário: quando a Ana abre a página, some apenas para ela; a Isabela continua vendo até ela mesma abrir. Implementado com nova tabela 'notification_views' (PK userId+notificationKey, lastViewedAt) e dois endpoints novos no router de notifications: pendingRequestCounts (retorna heNovas/mdoNovas/heItems/mdoItems considerando última visualização do usuário) e markRequestsSeen (marca timestamp de visualização ao abrir a página). Adicionados também 2 novos itens na Central de Alertas da Home: 'Solicitação de HE' (lista todas pendentes com data/obra/motivo) e 'Solicitação MO' (lista funcao/quantidade/obra/etapa de aprovação — Aguarda Coordenador, Aguarda RH, Aguarda Diretoria — com prioridade urgente em vermelho).",
+    tipo: "novo",
+    modulos: "Menu, RH, Notificações, Central de Alertas, HE, SMO",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-23 17:30:00",
+  },
 ];

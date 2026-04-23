@@ -144,6 +144,17 @@ export default function SolicitacaoMDO() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Rev. 1271 — Marca as solicitações de MO como "vistas" pelo usuário
+  // assim que a página é aberta (faz sumir a bolinha vermelha do menu).
+  const utilsMdo = trpc.useUtils();
+  const markSeenMdoMut = trpc.notifications.markRequestsSeen.useMutation({
+    onSuccess: () => { utilsMdo.notifications.pendingRequestCounts.invalidate(); },
+  });
+  useEffect(() => {
+    markSeenMdoMut.mutate({ key: "mdo_solicitacao" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const list = trpc.smo.list.useQuery(
     { companyId, companyIds, status: filterStatus !== "all" ? filterStatus : undefined, obraId: filterObra !== "all" ? parseInt(filterObra) : undefined },
     { enabled: canAccess && companyId > 0, retry: 3, retryDelay: 1000 }

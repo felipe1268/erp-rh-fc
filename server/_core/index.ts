@@ -177,6 +177,12 @@ async function startServer() {
             ALTER TABLE module_config ADD COLUMN IF NOT EXISTS disabled_pages TEXT;
             ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT;
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "previsaoRescisaoComplementar" TEXT;
+            CREATE TABLE IF NOT EXISTS notification_views (
+              user_id INTEGER NOT NULL,
+              notification_key VARCHAR(100) NOT NULL,
+              last_viewed_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+              PRIMARY KEY (user_id, notification_key)
+            );
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsReal" VARCHAR(20);
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoManualmente" SMALLINT DEFAULT 0;
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoEm" TIMESTAMP WITHOUT TIME ZONE;

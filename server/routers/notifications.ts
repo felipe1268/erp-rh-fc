@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { notificationRecipients, notificationLogs, menuLabels, companies } from "../../drizzle/schema";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { notificationRecipients, notificationLogs, menuLabels, companies, notificationViews, heSolicitacoes, smoSolicitacoes, obras, employees } from "../../drizzle/schema";
+import { eq, and, desc, sql, inArray, isNull, gt } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { dispararNotificacao, gerarTextoNotificacao } from "../services/emailNotification";
 
@@ -242,6 +242,109 @@ export const notificationsRouter = router({
           companyFilter(menuLabels.companyId, input),
           eq(menuLabels.originalLabel, input.originalLabel),
         ));
+      return { success: true };
+    }),
+
+  // ============================================================
+  // BADGES DE SOLICITAÇÕES PENDENTES (HE / MO)
+  // Rev. 1271 — Bolinha vermelha por usuário no menu lateral.
+  // "Nova" = solicitação pendente cuja createdAt é POSTERIOR ao
+  // último lastViewedAt do usuário para a chave correspondente.
+  // Se nunca viu, considera todas pendentes como novas.
+  // ============================================================
+  pendingRequestCounts: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return { heNovas: 0, mdoNovas: 0, heItems: [], mdoItems: [] };
+
+      const userId = ctx.user.id;
+
+      // Busca lastViewedAt para as duas chaves
+      const views = await db.select()
+        .from(notificationViews)
+        .where(and(
+          eq(notificationViews.userId, userId),
+          inArray(notificationViews.notificationKey, ["he_solicitacao", "mdo_solicitacao"])
+        ));
+      const heLast = views.find(v => v.notificationKey === "he_solicitacao")?.lastViewedAt;
+      const mdoLast = views.find(v => v.notificationKey === "mdo_solicitacao")?.lastViewedAt;
+
+      // ── HE: TODAS as pendentes (para Central de Alertas) e quantas são "novas" para este usuário
+      const heAllRows = await db.select({
+        id: heSolicitacoes.id,
+        dataSolicitacao: heSolicitacoes.dataSolicitacao,
+        solicitadoPor: heSolicitacoes.solicitadoPor,
+        motivo: heSolicitacoes.motivo,
+        createdAt: heSolicitacoes.createdAt,
+        obraNome: obras.nome,
+      })
+        .from(heSolicitacoes)
+        .leftJoin(obras, eq(heSolicitacoes.obraId, obras.id))
+        .where(and(
+          companyFilter(heSolicitacoes.companyId, input),
+          eq(heSolicitacoes.status, "pendente"),
+        ))
+        .orderBy(desc(heSolicitacoes.createdAt));
+      const heNovasCount = heLast
+        ? heAllRows.filter(r => r.createdAt && r.createdAt > heLast).length
+        : heAllRows.length;
+
+      // ── MO (SMO): TODAS as pendentes (status enviada/aprovada_coord/aprovada_rh)
+      const mdoAllRows = await db.select({
+        id: smoSolicitacoes.id,
+        funcaoSolicitada: smoSolicitacoes.funcaoSolicitada,
+        quantidade: smoSolicitacoes.quantidade,
+        solicitanteNome: smoSolicitacoes.solicitanteNome,
+        prioridade: smoSolicitacoes.prioridade,
+        status: smoSolicitacoes.status,
+        criadoEm: smoSolicitacoes.criadoEm,
+        obraNome: obras.nome,
+      })
+        .from(smoSolicitacoes)
+        .leftJoin(obras, eq(smoSolicitacoes.obraId, obras.id))
+        .where(and(
+          companyFilter(smoSolicitacoes.companyId, input),
+          isNull(smoSolicitacoes.deletedAt),
+          inArray(smoSolicitacoes.status, ["enviada", "aprovada_coord", "aprovada_rh"]),
+        ))
+        .orderBy(desc(smoSolicitacoes.criadoEm));
+      const mdoNovasCount = mdoLast
+        ? mdoAllRows.filter(r => r.criadoEm && r.criadoEm > mdoLast).length
+        : mdoAllRows.length;
+
+      return {
+        heNovas: heNovasCount,
+        mdoNovas: mdoNovasCount,
+        heItems: heAllRows,
+        mdoItems: mdoAllRows,
+      };
+    }),
+
+  markRequestsSeen: protectedProcedure
+    .input(z.object({ key: z.enum(["he_solicitacao", "mdo_solicitacao"]) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+      const userId = ctx.user.id;
+      // Upsert manual: tenta UPDATE, se 0 linhas → INSERT
+      const updated = await db.update(notificationViews)
+        .set({ lastViewedAt: sql`NOW()` })
+        .where(and(
+          eq(notificationViews.userId, userId),
+          eq(notificationViews.notificationKey, input.key),
+        ))
+        .returning();
+      if (updated.length === 0) {
+        try {
+          await db.insert(notificationViews).values({
+            userId,
+            notificationKey: input.key,
+          });
+        } catch {
+          // race condition: outro insert paralelo, ignora
+        }
+      }
       return { success: true };
     }),
 });

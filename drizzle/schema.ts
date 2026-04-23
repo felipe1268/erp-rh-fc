@@ -1,4 +1,4 @@
-import { pgTable, pgSchema, AnyPgColumn, integer, serial, date, varchar, text, timestamp, smallint, index, numeric, json, boolean, real } from "drizzle-orm/pg-core"
+import { pgTable, pgSchema, AnyPgColumn, integer, serial, date, varchar, text, timestamp, smallint, index, numeric, json, boolean, real, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const accidents = pgTable("accidents", {
@@ -2039,6 +2039,17 @@ export const notificationRecipients = pgTable("notification_recipients", {
 (table) => [
         index("nr_company").on(table.companyId),
         index("nr_email").on(table.email),
+]);
+
+// Rev. 1271 — Tracking per-user "last seen" timestamp for badge dot notifications
+// (ex.: bolinha vermelha em "Solicitação de HE" / "Solicitação de MO" no menu).
+// PK composta (userId, notificationKey).
+export const notificationViews = pgTable("notification_views", {
+        userId: integer("user_id").notNull(),
+        notificationKey: varchar("notification_key", { length: 100 }).notNull(),
+        lastViewedAt: timestamp("last_viewed_at", { mode: 'string' }).defaultNow().notNull(),
+}, (t) => [
+        primaryKey({ columns: [t.userId, t.notificationKey] }),
 ]);
 
 export const obraFuncionarios = pgTable("obra_funcionarios", {

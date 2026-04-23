@@ -12,7 +12,7 @@ import {
   BarChart3, Landmark, Gavel, Cake, FileWarning, CalendarClock,
   ArrowUpRight, ArrowDownRight, TrendingUp, ShieldAlert, Activity,
   ChevronRight, HeartPulse, Briefcase, Scale, X, ExternalLink,
-  Printer, Plane, DollarSign, TreePalm, ClipboardCheck, UserPlus, Ban, RefreshCw, Award
+  Printer, Plane, DollarSign, TreePalm, ClipboardCheck, UserPlus, Ban, RefreshCw, Award, HardHat
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { nowBrasilia } from "@/lib/dateUtils";
@@ -72,6 +72,12 @@ export default function Home() {
   );
   const s = homeData?.stats;
 
+  // Rev. 1271 — Solicitações pendentes de HE/MO para a Central de Alertas
+  const requestsAlertsQ = trpc.notifications.pendingRequestCounts.useQuery(
+    { companyId: companyId || 0, companyIds },
+    { enabled: !!companyId || companyIds?.length > 0, refetchInterval: 60_000 }
+  );
+
   // Calcular total de alertas
   const totalAlertas = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0) + (s?.feriasAlerta ?? 0) + (s?.processosRiscoAlto ?? 0) + (s?.experienciasVencidas ?? 0) + (s?.experienciasUrgentes ?? 0);
 
@@ -104,6 +110,7 @@ export default function Home() {
             homeData={homeData}
             stats={s}
             navigate={navigate}
+            requestsData={requestsAlertsQ.data}
           />
         </div>
 
@@ -835,12 +842,14 @@ function AlertasDialog({
   homeData,
   stats,
   navigate,
+  requestsData,
 }: {
   open: boolean;
   onClose: () => void;
   homeData: any;
   stats: any;
   navigate: (path: string) => void;
+  requestsData?: { heNovas: number; mdoNovas: number; heItems: any[]; mdoItems: any[] };
 }) {
   const s = stats;
   const handlePrint = () => {
@@ -949,6 +958,49 @@ function AlertasDialog({
       })),
       action: () => { onClose(); navigate("/processos-trabalhistas"); },
       actionLabel: "Ver Processos",
+    },
+    // Rev. 1271 — Solicitações de HE pendentes
+    {
+      title: "Solicitação de HE",
+      icon: Clock,
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+      count: requestsData?.heItems?.length ?? 0,
+      items: (requestsData?.heItems ?? []).map((h: any) => ({
+        label: h.solicitadoPor || "Solicitante",
+        empStatus: undefined,
+        sublabel: `${h.obraNome || "Sem obra"} · ${h.dataSolicitacao || ""}`,
+        detail: (h.motivo || "").slice(0, 60) + ((h.motivo || "").length > 60 ? "..." : ""),
+        detailColor: "text-blue-700",
+      })),
+      action: () => { onClose(); navigate("/solicitacao-he"); },
+      actionLabel: "Ver Solicitações de HE",
+    },
+    // Rev. 1271 — Solicitações de Mão de Obra pendentes
+    {
+      title: "Solicitação MO",
+      icon: HardHat,
+      color: "text-indigo-600",
+      bgColor: "bg-indigo-50",
+      borderColor: "border-indigo-200",
+      count: requestsData?.mdoItems?.length ?? 0,
+      items: (requestsData?.mdoItems ?? []).map((m: any) => {
+        const stMap: Record<string, string> = {
+          enviada: "Aguarda Coordenador",
+          aprovada_coord: "Aguarda RH",
+          aprovada_rh: "Aguarda Diretoria",
+        };
+        return {
+          label: `${m.funcaoSolicitada} (${m.quantidade}x)`,
+          empStatus: undefined,
+          sublabel: `${m.obraNome || "Sem obra"} · solic.: ${m.solicitanteNome || "-"}`,
+          detail: stMap[m.status as string] || m.status,
+          detailColor: m.prioridade === "urgente" ? "text-red-600 font-bold" : "text-indigo-700",
+        };
+      }),
+      action: () => { onClose(); navigate("/solicitacao-mdo"); },
+      actionLabel: "Ver Solicitações de MO",
     },
   ].filter(g => g.count > 0);
 

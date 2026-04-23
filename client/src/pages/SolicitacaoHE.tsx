@@ -294,6 +294,16 @@ export default function SolicitacaoHE() {
 
   const utils = trpc.useUtils();
 
+  // Rev. 1271 — Marca as solicitações de HE como "vistas" pelo usuário
+  // assim que a página é aberta (faz sumir a bolinha vermelha do menu).
+  const markSeenMut = trpc.notifications.markRequestsSeen.useMutation({
+    onSuccess: () => { utils.notifications.pendingRequestCounts.invalidate(); },
+  });
+  useEffect(() => {
+    markSeenMut.mutate({ key: "he_solicitacao" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Mutations
   const createMut = trpc.heSolicitacoes.create.useMutation({
     onSuccess: () => {

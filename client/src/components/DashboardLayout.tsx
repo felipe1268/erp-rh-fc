@@ -812,6 +812,11 @@ function DashboardLayoutContent({
     { companyIds: badgeCompanyIds },
     { enabled: badgeCompanyIds.length > 0, refetchInterval: 30_000, staleTime: 15_000 }
   );
+  // Rev. 1271 — Bolinha vermelha para HE/MO solicitações novas (por usuário)
+  const requestsBadgeQ = trpc.notifications.pendingRequestCounts.useQuery(
+    { companyId: cId, companyIds: badgeCompanyIds },
+    { enabled: cId > 0 || badgeCompanyIds.length > 0, refetchInterval: 60_000, staleTime: 30_000 }
+  );
   const { activeModule, setActiveModule } = useModule();
   const { isModuleEnabled, isPageEnabled } = useModuleConfig();
   const hubToConfigKey: Record<string, string> = {
@@ -1232,6 +1237,23 @@ function DashboardLayoutContent({
       }
     }
 
+    // Rev. 1271 — Badges de solicitações HE/MO no módulo RH/DP
+    if (activeModule === "rh-dp" && requestsBadgeQ.data) {
+      const rb = requestsBadgeQ.data;
+      sections = sections.map(s => ({
+        ...s,
+        items: s.items.map(item => {
+          if (item.path === "/solicitacao-he" && rb.heNovas > 0) {
+            return { ...item, badge: rb.heNovas, badgePulse: true };
+          }
+          if (item.path === "/solicitacao-mdo" && rb.mdoNovas > 0) {
+            return { ...item, badge: rb.mdoNovas, badgePulse: true };
+          }
+          return item;
+        }),
+      }));
+    }
+
     if (activeModule === "compras" && comprasBadgeQ.data) {
       const bd = comprasBadgeQ.data;
       sections = sections.map(s => ({
@@ -1249,7 +1271,7 @@ function DashboardLayoutContent({
     }
 
     return sections.filter(s => s.items.length > 0);
-  }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, canViewPage, savedMenuConfig, comprasBadgeQ.data]);
+  }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, canViewPage, savedMenuConfig, comprasBadgeQ.data, requestsBadgeQ.data]);
 
   const orderedSections = useMemo(() => {
     const pinned   = effectiveSections.filter(s => s.title === PINNED_LAST);
