@@ -176,6 +176,7 @@ async function startServer() {
             ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_indireta BOOLEAN DEFAULT FALSE;
             ALTER TABLE module_config ADD COLUMN IF NOT EXISTS disabled_pages TEXT;
             ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT;
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "previsaoRescisaoComplementar" TEXT;
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsReal" VARCHAR(20);
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoManualmente" SMALLINT DEFAULT 0;
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "fgtsEditadoEm" TIMESTAMP WITHOUT TIME ZONE;
