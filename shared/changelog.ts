@@ -8662,4 +8662,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-23 15:00:00",
   },
+  {
+    version: 1270,
+    titulo: "Relatório de Faltas — Botão para abrir Espelho de Ponto do funcionário",
+    descricao: "Adicionada nova coluna 'Esp.' à direita da tabela do Relatório de Faltas/Atrasos/Saídas Antecipadas (Fechamento de Ponto). Cada linha do funcionário tem agora um botão de ícone (ExternalLink) que abre o Espelho de Ponto desse colaborador em nova aba do navegador, já com o mesmo período (data início e data fim) que está sendo computado no relatório. Para suportar isso, a página /espelho-ponto passou a aceitar dois novos parâmetros opcionais na URL: 'inicio' e 'fim' (formato YYYY-MM-DD). Quando ambos estão presentes junto com 'funcionario', o espelho usa essas datas direto, sem aplicar o cálculo padrão de fechamento de folha (16 → 15). O comportamento antigo (com parâmetro 'mes') continua funcionando normalmente para outras integrações.",
+    tipo: "novo",
+    modulos: "Fechamento de Ponto, Espelho de Ponto, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-23 16:30:00",
+  },
 ];

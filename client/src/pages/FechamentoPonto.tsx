@@ -5373,14 +5373,15 @@ function FaltasReportModal(props: {
                 <th className="text-center p-2"><span title="DSR perdido (semanas com falta)">DSR</span></th>
                 <th className="text-center p-2"><span title="Atrasos">Atr.</span></th>
                 <th className="text-center p-2"><span title="Saídas antecipadas">Saí.Ant.</span></th>
+                <th className="text-center p-2 w-10"><span title="Abrir Espelho de Ponto">Esp.</span></th>
               </tr>
             </thead>
             <tbody>
               {report.isLoading && (
-                <tr><td colSpan={8} className="text-center p-6 text-muted-foreground">Calculando relatório...</td></tr>
+                <tr><td colSpan={9} className="text-center p-6 text-muted-foreground">Calculando relatório...</td></tr>
               )}
               {!report.isLoading && filtered.length === 0 && (
-                <tr><td colSpan={8} className="text-center p-6 text-muted-foreground">Nenhuma ocorrência no período selecionado.</td></tr>
+                <tr><td colSpan={9} className="text-center p-6 text-muted-foreground">Nenhuma ocorrência no período selecionado.</td></tr>
               )}
               {filtered.map((f: any) => {
                 const isExp = expandedIds.has(f.employeeId);
@@ -5403,11 +5404,27 @@ function FaltasReportModal(props: {
                       <td className="p-2 text-center text-orange-700">
                         {f.saidasAntecipadas || ""}{f.saidasAntecipadas > 0 && <span className="text-xs text-muted-foreground"> ({fmtMin(f.minutosSaidaAntec)})</span>}
                       </td>
+                      <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          title="Abrir espelho de ponto deste funcionário no período"
+                          data-testid={`btn-espelho-${f.employeeId}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const url = `/espelho-ponto?funcionario=${f.employeeId}&inicio=${encodeURIComponent(dataInicio)}&fim=${encodeURIComponent(dataFim)}`;
+                            window.open(url, "_blank", "noopener,noreferrer");
+                          }}
+                        >
+                          <ExternalLink className="h-4 w-4 text-blue-600" />
+                        </Button>
+                      </td>
                     </tr>
                     {isExp && (
                       <tr className="bg-slate-50">
                         <td></td>
-                        <td colSpan={7} className="p-3">
+                        <td colSpan={8} className="p-3">
                           <div className="text-xs text-muted-foreground mb-2">Datas com ocorrência:</div>
                           {(f.detalhes || []).length === 0 ? (
                             <div className="text-xs text-muted-foreground italic">Sem detalhes.</div>

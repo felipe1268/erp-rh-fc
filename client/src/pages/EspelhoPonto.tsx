@@ -464,15 +464,22 @@ export default function EspelhoPonto() {
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
-    const empId = p.get("funcionario"), mes = p.get("mes");
-    if (empId && mes) {
+    const empId = p.get("funcionario");
+    const mes = p.get("mes");
+    const ini = p.get("inicio");
+    const fim = p.get("fim");
+    if (empId && ini && fim) {
+      const id = parseInt(empId);
+      setDataInicio(ini); setDataFim(fim); setEmployeeId(id);
+      setQueryParams({ employeeId: id, dataInicio: ini, dataFim: fim });
+    } else if (empId && mes) {
       const id = parseInt(empId);
       const [y, m] = mes.split("-").map(Number);
       const pm = m === 1 ? 12 : m - 1, py = m === 1 ? y - 1 : y;
       const inicio = `${py}-${String(pm).padStart(2,"0")}-16`;
-      const fim    = `${y}-${String(m).padStart(2,"0")}-15`;
-      setDataInicio(inicio); setDataFim(fim); setEmployeeId(id);
-      setQueryParams({ employeeId: id, dataInicio: inicio, dataFim: fim });
+      const fimD   = `${y}-${String(m).padStart(2,"0")}-15`;
+      setDataInicio(inicio); setDataFim(fimD); setEmployeeId(id);
+      setQueryParams({ employeeId: id, dataInicio: inicio, dataFim: fimD });
     }
   }, []);
 
