@@ -5263,15 +5263,15 @@ function FaltasReportModal(props: {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-7xl max-h-[92vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserX className="h-5 w-5 text-rose-600" />
-            Relatório de Faltas, Atrasos e Saídas Antecipadas
-          </DialogTitle>
-        </DialogHeader>
-
+    <FullScreenDialog
+      open={open}
+      onClose={onClose}
+      title="Relatório de Faltas, Atrasos e Saídas Antecipadas"
+      subtitle={`${fmtBR(dataInicio)} a ${fmtBR(dataFim)}`}
+      icon={<UserX className="h-5 w-5" />}
+      headerColor="bg-gradient-to-r from-rose-700 to-rose-900"
+      footer={<Button variant="outline" onClick={onClose}>Fechar</Button>}
+    >
         {/* Filtros */}
         <div className="grid gap-3 md:grid-cols-12 items-end mb-3">
           <div className="md:col-span-3">
@@ -5444,10 +5444,6 @@ function FaltasReportModal(props: {
           </table>
         </div>
 
-        <DialogFooter className="mt-3">
-          <Button variant="outline" onClick={onClose}>Fechar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </FullScreenDialog>
   );
 }
