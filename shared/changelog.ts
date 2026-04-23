@@ -8653,4 +8653,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-23 10:00:00",
   },
+  {
+    version: 1269,
+    titulo: "Fechamento de Ponto — Correção crítica no Relatório de Faltas (filtros ignorados)",
+    descricao: "Corrigido bug grave de precedência SQL no procedimento fechamentoPonto.getFaltasReport: faltavam parênteses na cláusula '(dataAdmissao IS NULL OR dataAdmissao <= ?)', fazendo com que a precedência natural de AND/OR no PostgreSQL transformasse a query em '(filtros) OR (dataAdmissao <= ? AND dataDemissao...)', anulando os filtros de companyId, deletedAt, tipoContrato e status. Isso fazia o relatório listar até 361 funcionários, incluindo PJs (Arthur), Sócios (Camila), funcionários soft-deleted (Renan Teste) e funcionários de TODAS as empresas (incluindo as Empresas Teste CRUD com 70+ cópias do João Carlos da Silva Teste). Após correção, o relatório retorna corretamente apenas os 92 funcionários CLT ativos da empresa selecionada (FC). Também ajustado modal para sempre re-buscar dados frescos ao abrir (refetchOnMount: 'always', staleTime: 0), evitando exibir resultados antigos do cache do React Query.",
+    tipo: "correcao",
+    modulos: "Fechamento de Ponto, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-23 15:00:00",
+  },
 ];

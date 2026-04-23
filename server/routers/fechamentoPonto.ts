@@ -4302,7 +4302,6 @@ export const fechamentoPontoRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Data inicial maior que data final." });
       }
       const cids = resolveCompanyIds(input);
-      console.log('[FaltasReport] input=', JSON.stringify(input), 'cids=', JSON.stringify(cids));
 
       // ----- 1) Funcionários ATIVOS CLT no período (mesmo critério do consolidarMes)
       const empConds: any[] = [
@@ -4313,7 +4312,7 @@ export const fechamentoPontoRouter = router({
         // SOMENTE Ativos ou em Férias — exclui Demitido, Afastado, Recluso, Lista_Negra, Excluído
         sql`${employees.status} IN ('Ativo', 'Ferias')`,
         // Admitido até dataFim
-        sql`${employees.dataAdmissao} IS NULL OR ${employees.dataAdmissao} <= ${dataFim}`,
+        sql`(${employees.dataAdmissao} IS NULL OR ${employees.dataAdmissao} <= ${dataFim})`,
         // Não desligado antes do início (considera dataDemissao OU dataDesligamentoEfetiva)
         sql`(
           (${employees.dataDemissao} IS NULL AND ${employees.dataDesligamentoEfetiva} IS NULL)
