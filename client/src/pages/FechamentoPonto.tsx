@@ -21,7 +21,7 @@ import {
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, CheckCircle2, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
   ListChecks, Filter, ChevronDown, ChevronUp, Zap, ArrowRightLeft, ArrowRight, FileText, Copy,
-  ChevronsUpDown, Check, Plus, X, ClipboardList, UserX, CalendarX, Timer, LogOut
+  ChevronsUpDown, Check, Plus, X, ClipboardList, UserX, CalendarX, Timer, LogOut, ExternalLink
 } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
