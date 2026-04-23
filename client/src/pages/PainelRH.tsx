@@ -72,6 +72,12 @@ export default function PainelRH() {
     { enabled: hasValidCompany }
   );
   const s = homeData?.stats;
+
+  // Rev. 1271 — Solicitações pendentes de HE/MO para a Central de Alertas
+  const requestsAlertsQ = trpc.notifications.pendingRequestCounts.useQuery(
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany, refetchInterval: 60_000 }
+  );
   const [kpiExpand, setKpiExpand] = useState<{ title: string; items: { nome: string; funcao?: string; extra?: string; urgencia?: string; status?: string | null }[] } | null>(null);
   const [aniversariosFullOpen, setAniversariosFullOpen] = useState(false);
   const [cardExpand, setCardExpand] = useState<string | null>(null);
@@ -106,6 +112,36 @@ export default function PainelRH() {
       alertasList.push({ id: `aviso-${a.id}`, tipo: 'aviso', titulo: `Aviso Prévio ${a.urgencia === 'vencido' ? 'VENCIDO' : 'Crítico'}`, nome: a.nome, empStatus: a.empStatus, descricao: `Tipo: ${a.tipo.replace(/_/g, ' ')}. ${a.diasRestantes <= 0 ? 'Prazo expirado!' : `${a.diasRestantes} dias restantes`}`, urgencia: 'critico', link: '/aviso-previo' });
     });
   }
+  // Rev. 1271 — Solicitações de Hora Extra pendentes
+  (requestsAlertsQ.data?.heItems ?? []).forEach((h: any) => {
+    const motivo = (h.motivo || "").trim();
+    alertasList.push({
+      id: `he-${h.id}`,
+      tipo: 'solicitacao_he',
+      titulo: 'Solicitação de Hora Extra',
+      nome: h.solicitadoPor || 'Solicitante',
+      descricao: `${h.obraNome || 'Sem obra'} · ${h.dataSolicitacao || ''}${motivo ? ` · ${motivo.slice(0, 80)}${motivo.length > 80 ? '...' : ''}` : ''}`,
+      urgencia: 'urgente',
+      link: '/solicitacao-he',
+    });
+  });
+  // Rev. 1271 — Solicitações de Mão de Obra pendentes
+  (requestsAlertsQ.data?.mdoItems ?? []).forEach((m: any) => {
+    const stMap: Record<string, string> = {
+      enviada: 'Aguarda Coordenador',
+      aprovada_coord: 'Aguarda RH',
+      aprovada_rh: 'Aguarda Diretoria',
+    };
+    alertasList.push({
+      id: `mdo-${m.id}`,
+      tipo: 'solicitacao_mo',
+      titulo: 'Solicitação de Mão de Obra',
+      nome: `${m.funcaoSolicitada} (${m.quantidade}x)`,
+      descricao: `${m.obraNome || 'Sem obra'} · solic.: ${m.solicitanteNome || '-'} · ${stMap[m.status as string] || m.status}`,
+      urgencia: m.prioridade === 'urgente' ? 'critico' : 'urgente',
+      link: '/solicitacao-mdo',
+    });
+  });
   // Ordenar por urgência
   const urgOrder: Record<string, number> = { critico: 0, urgente: 1, atencao: 2 };
   alertasList.sort((a, b) => (urgOrder[a.urgencia] ?? 3) - (urgOrder[b.urgencia] ?? 3));
@@ -1012,6 +1048,8 @@ export default function PainelRH() {
               <TabsTrigger value="ferias" className="flex-1 text-xs">Férias ({alertasList.filter(a => a.tipo === 'ferias').length})</TabsTrigger>
               <TabsTrigger value="experiencia" className="flex-1 text-xs">Experiência ({alertasList.filter(a => a.tipo === 'experiencia').length})</TabsTrigger>
               <TabsTrigger value="aviso" className="flex-1 text-xs">Avisos ({alertasList.filter(a => a.tipo === 'aviso').length})</TabsTrigger>
+              <TabsTrigger value="solicitacao_he" className="flex-1 text-xs">HE ({alertasList.filter(a => a.tipo === 'solicitacao_he').length})</TabsTrigger>
+              <TabsTrigger value="solicitacao_mo" className="flex-1 text-xs">MO ({alertasList.filter(a => a.tipo === 'solicitacao_mo').length})</TabsTrigger>
             </TabsList>
             <TabsContent value={alertaTab} className="mt-3">
               <ScrollArea className="h-[55vh]">
@@ -1040,6 +1078,8 @@ export default function PainelRH() {
                           {alerta.tipo === 'aso' ? <HeartPulse className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
                            alerta.tipo === 'ferias' ? <CalendarClock className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
                            alerta.tipo === 'experiencia' ? <ClipboardCheck className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
+                           alerta.tipo === 'solicitacao_he' ? <Clock className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : 'text-blue-600'}`} /> :
+                           alerta.tipo === 'solicitacao_mo' ? <Briefcase className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : 'text-indigo-600'}`} /> :
                            <FileText className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} />}
                         </div>
                         <div className="flex-1 min-w-0">
