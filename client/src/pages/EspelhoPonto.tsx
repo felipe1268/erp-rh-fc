@@ -13,8 +13,10 @@ import {
 import {
   Search, RefreshCw, User, ChevronDown, FileText,
   Clock, AlertCircle, CalendarOff, Pencil, Save, X, Info, AlertTriangle, Trash2, Lock, Unlock, ShieldAlert, Calculator,
+  PenLine,
 } from "lucide-react";
 import { toast } from "sonner";
+import ManualEntryDialog, { type ManualEntryInitialData } from "@/components/ponto/ManualEntryDialog";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -491,6 +493,10 @@ export default function EspelhoPonto() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [queryParams, setQueryParams] = useState<{ employeeId: number; dataInicio: string; dataFim: string } | null>(null);
 
+  // Manual entry dialog (período)
+  const [showManualDialog, setShowManualDialog] = useState(false);
+  const [manualSeed, setManualSeed] = useState<ManualEntryInitialData | undefined>(undefined);
+
   // Edit dialog state
   const [editDate, setEditDate] = useState<string | null>(null);
   const [editRecord, setEditRecord] = useState<any | null>(null);
@@ -837,7 +843,7 @@ export default function EspelhoPonto() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 mt-3">
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
             <span className="text-xs text-slate-400">Atalhos:</span>
             {([["Período 16→15","periodo"],["Mês atual","mes"],["Últimos 30 dias","30d"]] as const).map(([l,t]) => (
               <button key={t} onClick={() => setQuickPeriod(t as any)}
@@ -845,8 +851,39 @@ export default function EspelhoPonto() {
                 {l}
               </button>
             ))}
+            <div className="ml-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setManualSeed({
+                    employeeId: employeeId || 0,
+                    obraId: 0,
+                  });
+                  setShowManualDialog(true);
+                }}
+                className="border-purple-300 text-purple-700 hover:bg-purple-50 hover:text-purple-800 rounded-lg h-8 px-3 gap-1.5"
+                title="Lançar registros manuais para um intervalo de datas"
+              >
+                <PenLine className="h-3.5 w-3.5" />
+                Lançamento Manual
+              </Button>
+            </div>
           </div>
         </div>
+
+        {/* Manual Entry Dialog (modo período) */}
+        <ManualEntryDialog
+          open={showManualDialog}
+          onClose={() => setShowManualDialog(false)}
+          mode="periodo"
+          companyId={queryCompanyId || companyId}
+          companyIds={isConstrutoras ? companyIds : undefined}
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+          initialData={manualSeed}
+          onSaved={() => espelhoQ.refetch()}
+        />
 
         {/* ── EMPTY STATE ──────────────────────────────────────────── */}
         {!queryParams && (

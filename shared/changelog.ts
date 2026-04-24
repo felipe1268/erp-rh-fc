@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1273,
+    titulo: "Espelho de Ponto ganha botão 'Lançamento Manual' com período por intervalo de datas",
+    descricao: "Adicionado o botão 'Lançamento Manual' na barra de Atalhos do Espelho de Ponto, replicando o mesmo fluxo do Fechamento de Ponto. Diferença principal: o popover 'Preencher período' agora aceita um intervalo de datas completas (ex: 16/03/2026 a 15/04/2026) ao invés de apenas dias 1-31 dentro de um único mês — útil para fechamentos de quinzena que cruzam meses. As datas vêm pré-preenchidas com o período do filtro atual e podem ser editadas livremente; fins de semana entram sem horário e o intervalo é limitado a 366 dias por segurança. O dialog do Lançamento Manual foi extraído para um componente compartilhado (client/src/components/ponto/ManualEntryDialog.tsx) com modos 'mes' e 'periodo', eliminando duplicação de ~750 linhas de JSX entre as duas telas.",
+    tipo: "feature",
+    modulos: "Ponto",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-24 14:00:00",
+  },
+  {
     version: 1272,
     titulo: "Lançamento manual de Feriado/Atestado no Ponto agora persiste",
     descricao: "Corrigido bug crítico do lançamento manual de ponto em que o usuário marcava dias como Feriado no Fechamento de Ponto, mas a flag se perdia: o frontend não enviava o campo, o backend não aceitava e a tabela time_records não tinha onde guardar. Resultado: o dia ficava em branco no Fechamento, virava 'Falta' no Espelho de Ponto e não havia como reverter pelo modal 'Editar Ponto'. Agora: (1) nova coluna time_records.tipoDia (normal/feriado/atestado) sincronizada automaticamente; (2) backend manualEntry aceita tipoDia, zera batidas/horas e marca o dia como abonado; (3) Fechamento de Ponto envia o tipo ao salvar lançamento em lote e exibe badges 'Feriado'/'Atestado' na visão por obra; (4) Espelho de Ponto reconhece o tipo, deixa de classificar como 'Falta' e exclui o dia do total de faltas/trabalhados; (5) modal 'Editar Ponto' do Espelho ganhou seletor 'Tipo do dia' com botões Normal/Feriado/Atestado — ao escolher Feriado/Atestado os campos de horário desabilitam e ficam zerados.",
