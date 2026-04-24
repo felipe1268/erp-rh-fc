@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1274,
+    titulo: "Bolinha vermelha de Solicitação HE/MDO permanece até a aprovação",
+    descricao: "Antes, a 'bolinha vermelha' do menu lateral em 'Solicitação de Hora Extra' e 'Solicitação de Mão de Obra' sumia assim que cada usuário abria a tela, mesmo com solicitações ainda pendentes. Agora ela reflete o estado real do sistema: enquanto houver solicitação pendente (HE) ou em tramitação (MDO: enviada / aprovada pelo Coord / aprovada pelo RH), o alerta continua visível para todos os usuários. O badge só desaparece quando a solicitação é efetivamente aprovada (concluída) ou rejeitada.",
+    tipo: "bugfix",
+    modulos: "Operacional, RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-24 16:00:00",
+  },
+  {
     version: 1273,
     titulo: "Espelho de Ponto ganha botão 'Lançamento Manual' com período por intervalo de datas",
     descricao: "Adicionado o botão 'Lançamento Manual' na barra de Atalhos do Espelho de Ponto, replicando o mesmo fluxo do Fechamento de Ponto. Diferença principal: o popover 'Preencher período' agora aceita um intervalo de datas completas (ex: 16/03/2026 a 15/04/2026) ao invés de apenas dias 1-31 dentro de um único mês — útil para fechamentos de quinzena que cruzam meses. As datas vêm pré-preenchidas com o período do filtro atual e podem ser editadas livremente; fins de semana entram sem horário e o intervalo é limitado a 366 dias por segurança. O dialog do Lançamento Manual foi extraído para um componente compartilhado (client/src/components/ponto/ManualEntryDialog.tsx) com modos 'mes' e 'periodo', eliminando duplicação de ~750 linhas de JSX entre as duas telas.",

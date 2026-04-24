@@ -247,30 +247,20 @@ export const notificationsRouter = router({
 
   // ============================================================
   // BADGES DE SOLICITAÇÕES PENDENTES (HE / MO)
-  // Rev. 1271 — Bolinha vermelha por usuário no menu lateral.
-  // "Nova" = solicitação pendente cuja createdAt é POSTERIOR ao
-  // último lastViewedAt do usuário para a chave correspondente.
-  // Se nunca viu, considera todas pendentes como novas.
+  // Rev. 1274 — Bolinha vermelha agora reflete o estado REAL do
+  // sistema: enquanto a solicitação estiver pendente (HE) ou em
+  // tramitação (MO), o alerta permanece visível para todos os
+  // usuários. Não desaparece só porque o usuário visualizou —
+  // apenas some quando a solicitação for aprovada/rejeitada.
+  // (markRequestsSeen continua existindo mas não afeta a contagem.)
   // ============================================================
   pendingRequestCounts: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return { heNovas: 0, mdoNovas: 0, heItems: [], mdoItems: [] };
 
-      const userId = ctx.user.id;
-
-      // Busca lastViewedAt para as duas chaves
-      const views = await db.select()
-        .from(notificationViews)
-        .where(and(
-          eq(notificationViews.userId, userId),
-          inArray(notificationViews.notificationKey, ["he_solicitacao", "mdo_solicitacao"])
-        ));
-      const heLast = views.find(v => v.notificationKey === "he_solicitacao")?.lastViewedAt;
-      const mdoLast = views.find(v => v.notificationKey === "mdo_solicitacao")?.lastViewedAt;
-
-      // ── HE: TODAS as pendentes (para Central de Alertas) e quantas são "novas" para este usuário
+      // ── HE: TODAS as solicitações com status "pendente"
       const heAllRows = await db.select({
         id: heSolicitacoes.id,
         dataSolicitacao: heSolicitacoes.dataSolicitacao,
@@ -286,11 +276,8 @@ export const notificationsRouter = router({
           eq(heSolicitacoes.status, "pendente"),
         ))
         .orderBy(desc(heSolicitacoes.createdAt));
-      const heNovasCount = heLast
-        ? heAllRows.filter(r => r.createdAt && r.createdAt > heLast).length
-        : heAllRows.length;
 
-      // ── MO (SMO): TODAS as pendentes (status enviada/aprovada_coord/aprovada_rh)
+      // ── MO (SMO): TODAS em tramitação (enviada/aprovada_coord/aprovada_rh)
       const mdoAllRows = await db.select({
         id: smoSolicitacoes.id,
         funcaoSolicitada: smoSolicitacoes.funcaoSolicitada,
@@ -309,13 +296,10 @@ export const notificationsRouter = router({
           inArray(smoSolicitacoes.status, ["enviada", "aprovada_coord", "aprovada_rh"]),
         ))
         .orderBy(desc(smoSolicitacoes.criadoEm));
-      const mdoNovasCount = mdoLast
-        ? mdoAllRows.filter(r => r.criadoEm && r.criadoEm > mdoLast).length
-        : mdoAllRows.length;
 
       return {
-        heNovas: heNovasCount,
-        mdoNovas: mdoNovasCount,
+        heNovas: heAllRows.length,
+        mdoNovas: mdoAllRows.length,
         heItems: heAllRows,
         mdoItems: mdoAllRows,
       };
