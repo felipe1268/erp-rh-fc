@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1275,
+    titulo: "Adicionar usuário a um Grupo: dropdown agora mostra todos (com aviso de movimentação)",
+    descricao: "Corrigido bug em Permissões → Grupos onde o dropdown 'Adicionar usuário...' aparecia vazio quando todos os usuários do sistema já estavam alocados em algum grupo. Como o backend já implementa a regra '1 usuário = 1 grupo' (move automaticamente ao adicionar), o filtro do frontend que escondia esses usuários era desnecessário e bloqueava o caso comum de remanejamento. Agora: (1) o dropdown lista todos os usuários, exceto os que já são membros DESTE grupo; (2) usuários que estão em outro grupo aparecem com um badge âmbar 'está em <Grupo X> — será movido', deixando explícita a movimentação; (3) usuários sem grupo vêm primeiro na lista; (4) se realmente todos os usuários já forem membros do grupo selecionado, mostra a mensagem 'Todos os usuários já são membros deste grupo.' ao invés de um campo vazio sem explicação.",
+    tipo: "bugfix",
+    modulos: "Usuários, Permissões",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-24 17:00:00",
+  },
+  {
     version: 1274,
     titulo: "Bolinha vermelha de Solicitação HE/MDO permanece até a aprovação",
     descricao: "Antes, a 'bolinha vermelha' do menu lateral em 'Solicitação de Hora Extra' e 'Solicitação de Mão de Obra' sumia assim que cada usuário abria a tela, mesmo com solicitações ainda pendentes. Agora ela reflete o estado real do sistema: enquanto houver solicitação pendente (HE) ou em tramitação (MDO: enviada / aprovada pelo Coord / aprovada pelo RH), o alerta continua visível para todos os usuários. O badge só desaparece quando a solicitação é efetivamente aprovada (concluída) ou rejeitada.",

@@ -1006,12 +1006,45 @@ export default function Usuarios() {
                           <Select value={addMemberUserId} onValueChange={setAddMemberUserId}>
                             <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue placeholder="Adicionar usuário..." /></SelectTrigger>
                             <SelectContent>
-                              {allUsers.filter((u:any) =>
-                                // Mostra apenas usuários sem nenhum grupo ainda
-                                !userGroupIdMap[u.id]
-                              ).map((u:any)=>(
-                                <SelectItem key={u.id} value={String(u.id)}>{u.name||u.username}</SelectItem>
-                              ))}
+                              {(() => {
+                                // Excluir apenas quem já é membro DESTE grupo.
+                                // Usuários que já estão em outro grupo aparecem com aviso —
+                                // ao adicionar, o backend move automaticamente (1 grupo por usuário).
+                                const memberSet = new Set(groupMemberIds);
+                                const candidatos = allUsers.filter((u: any) => !memberSet.has(u.id));
+                                if (candidatos.length === 0) {
+                                  return (
+                                    <div className="px-2 py-3 text-xs text-muted-foreground text-center">
+                                      Todos os usuários já são membros deste grupo.
+                                    </div>
+                                  );
+                                }
+                                // Ordena: livres primeiro, depois os que estão em outro grupo
+                                const ordenados = [...candidatos].sort((a: any, b: any) => {
+                                  const aGid = userGroupIdMap[a.id] ? 1 : 0;
+                                  const bGid = userGroupIdMap[b.id] ? 1 : 0;
+                                  if (aGid !== bGid) return aGid - bGid;
+                                  return (a.name || a.username || "").localeCompare(b.name || b.username || "");
+                                });
+                                return ordenados.map((u: any) => {
+                                  const grupoAtualId = userGroupIdMap[u.id];
+                                  const grupoAtualNome = grupoAtualId
+                                    ? (allGroups as any[]).find((g) => g.id === grupoAtualId)?.nome
+                                    : null;
+                                  return (
+                                    <SelectItem key={u.id} value={String(u.id)}>
+                                      <span className="flex items-center gap-2">
+                                        <span>{u.name || u.username}</span>
+                                        {grupoAtualNome && (
+                                          <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                                            está em {grupoAtualNome} — será movido
+                                          </span>
+                                        )}
+                                      </span>
+                                    </SelectItem>
+                                  );
+                                });
+                              })()}
                             </SelectContent>
                           </Select>
                           <Button size="sm" className="h-8 gap-1 text-xs" variant="outline"
