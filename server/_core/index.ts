@@ -459,6 +459,23 @@ async function startServer() {
         const vencCount = (vencResult as any).rowCount || 0;
         if (vencCount > 0) console.log(`[ColFix] vacation_periods: ${vencCount} período(s) expirado(s)`);
         await db.execute(sql`UPDATE compras_cotacoes SET status = 'concluida' WHERE contrato_terceiro_id IS NOT NULL AND status = 'aprovada'`);
+        // Rev. 1276: etapa "Coordenação" removida do fluxo de SMO (Solicitação de Mão de Obra).
+        // Qualquer SMO que estava em "aprovada_coord" volta para "enviada" para entrar no
+        // novo fluxo (RH → Diretoria) sem ficar travada esperando um botão que não existe mais.
+        try {
+          const smoCoordResult = await db.execute(sql`
+            UPDATE smo_solicitacoes
+               SET status = 'enviada',
+                   aprovado_por_coord = NULL,
+                   aprovado_por_coord_em = NULL,
+                   atualizado_em = NOW()
+             WHERE status = 'aprovada_coord'
+          `);
+          const smoN = (smoCoordResult as any).rowCount || 0;
+          if (smoN > 0) console.log(`[ColFix] SMO: ${smoN} solicitação(ões) em 'aprovada_coord' migradas para 'enviada' (etapa Coord. removida)`);
+        } catch (err: any) {
+          console.warn("[ColFix] SMO migração aprovada_coord falhou (não-fatal):", err?.message || err);
+        }
         console.log("[ColFix] Startup migrations OK");
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });

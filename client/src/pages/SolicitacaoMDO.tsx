@@ -25,7 +25,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: any }> = {
   rascunho: { label: "Rascunho", color: "text-gray-600", bg: "bg-gray-100", icon: ClipboardList },
   enviada: { label: "Enviada", color: "text-blue-700", bg: "bg-blue-100", icon: Send },
-  aprovada_coord: { label: "Aprovada Coord.", color: "text-indigo-700", bg: "bg-indigo-100", icon: CheckCircle },
+  // Status legado mantido apenas para exibir registros antigos — não é mais gerado pelo fluxo atual.
+  aprovada_coord: { label: "Aprovada Coord. (legado)", color: "text-indigo-700", bg: "bg-indigo-100", icon: CheckCircle },
   aprovada_rh: { label: "Aprovada RH", color: "text-purple-700", bg: "bg-purple-100", icon: CheckCircle },
   aprovada_diretoria: { label: "Aprovada Diretoria", color: "text-emerald-700", bg: "bg-emerald-100", icon: CheckCircle },
   em_recrutamento: { label: "Em Recrutamento", color: "text-amber-700", bg: "bg-amber-100", icon: Users },
@@ -106,7 +107,8 @@ export default function SolicitacaoMDO() {
   const { isAdminMaster, hasGroup, groupCanAccessRoute, groupCanEdit } = usePermissions();
   const userRole = user?.role || "";
   const isAdmin = userRole === "admin" || userRole === "admin_master";
-  const canAprovarCoord = isAdmin || groupCanEdit("/smo");
+  // Etapa "Coordenação" foi removida do fluxo de aprovação em Rev. 1276.
+  // Mantido `canAprovarCoord` apenas para compatibilidade visual com dados legados (status="aprovada_coord").
   const canAprovarRH = isAdmin || groupCanEdit("/painel/rh");
   const canAprovarDiretoria = userRole === "admin_master";
   const [, navigate] = useLocation();
@@ -322,7 +324,9 @@ export default function SolicitacaoMDO() {
   const d = selectedDetail.data;
 
   function getProximaEtapa(status: string): string | null {
-    const flow: Record<string, string> = { enviada: "coord", aprovada_coord: "rh", aprovada_rh: "diretoria" };
+    // Fluxo Rev. 1276: Enviada → RH → Diretoria. (aprovada_coord é status legado;
+    // se aparecer em registro antigo, manda direto para RH.)
+    const flow: Record<string, string> = { enviada: "rh", aprovada_coord: "rh", aprovada_rh: "diretoria" };
     return flow[status] || null;
   }
 
@@ -378,7 +382,7 @@ export default function SolicitacaoMDO() {
             <div className="px-6 py-3 shrink-0">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <DashCard icon={ClipboardList} label="Total" value={dashQ.data.total} color="text-slate-700" bg="bg-white" />
-                <DashCard icon={Send} label="Pendentes" value={(dashQ.data.byStatus.enviada || 0) + (dashQ.data.byStatus.aprovada_coord || 0) + (dashQ.data.byStatus.aprovada_rh || 0)} color="text-blue-700" bg="bg-blue-50" />
+                <DashCard icon={Send} label="Pendentes" value={(dashQ.data.byStatus.enviada || 0) + (dashQ.data.byStatus.aprovada_rh || 0) + (dashQ.data.byStatus.aprovada_coord || 0)} color="text-blue-700" bg="bg-blue-50" />
                 <DashCard icon={Users} label="Em Recrutamento" value={dashQ.data.byStatus.em_recrutamento || 0} color="text-amber-700" bg="bg-amber-50" />
                 <DashCard icon={UserCheck} label="Concluídas" value={dashQ.data.byStatus.concluida || 0} color="text-green-700" bg="bg-green-50" />
                 <DashCard icon={DollarSign} label="Impacto Total" value={fmtMoney(dashQ.data.totalCusto)} color="text-purple-700" bg="bg-purple-50" isText />
@@ -1003,8 +1007,6 @@ export default function SolicitacaoMDO() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <ApprovalStep label="Enviada" done={d.status !== "rascunho"} date={d.criadoEm} by={d.solicitanteNome} />
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <ApprovalStep label="Coord." done={!!d.aprovadoPorCoord} date={d.aprovadoPorCoordEm} by={d.aprovadoPorCoord} />
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                     <ApprovalStep label="RH" done={!!d.aprovadoPorRh} date={d.aprovadoPorRhEm} by={d.aprovadoPorRh} />
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                     <ApprovalStep label="Diretoria" done={!!d.aprovadoPorDiretoria} date={d.aprovadoPorDiretoriaEm} by={d.aprovadoPorDiretoria} />
@@ -1024,12 +1026,8 @@ export default function SolicitacaoMDO() {
 
                 {/* Actions */}
                 <div className="flex flex-wrap gap-3">
-                  {d.status === "enviada" && canAprovarCoord && (
-                    <Button onClick={() => aprovarMut.mutate({ id: d.id, companyId, companyIds, etapa: "coord", aprovadorNome: user?.name || "Aprovador" })} disabled={aprovarMut.isPending} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
-                      <CheckCircle className="h-4 w-4" /> Aprovar (Coordenação)
-                    </Button>
-                  )}
-                  {d.status === "aprovada_coord" && canAprovarRH && (
+                  {/* Fluxo Rev. 1276: Enviada → RH → Diretoria. Etapa Coordenação removida. */}
+                  {(d.status === "enviada" || d.status === "aprovada_coord") && canAprovarRH && (
                     <Button onClick={() => aprovarMut.mutate({ id: d.id, companyId, companyIds, etapa: "rh", aprovadorNome: user?.name || "Aprovador" })} disabled={aprovarMut.isPending} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
                       <CheckCircle className="h-4 w-4" /> Aprovar (RH)
                     </Button>
@@ -1039,7 +1037,7 @@ export default function SolicitacaoMDO() {
                       <CheckCircle className="h-4 w-4" /> Aprovar (Diretoria)
                     </Button>
                   )}
-                  {["enviada", "aprovada_coord", "aprovada_rh"].includes(d.status) && (canAprovarCoord || canAprovarRH || canAprovarDiretoria) && (
+                  {["enviada", "aprovada_coord", "aprovada_rh"].includes(d.status) && (canAprovarRH || canAprovarDiretoria) && (
                     <Button variant="destructive" onClick={() => { setRejectingId(d.id); setShowRejectDialog(true); }} className="gap-2">
                       <XCircle className="h-4 w-4" /> Rejeitar
                     </Button>

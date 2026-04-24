@@ -277,7 +277,7 @@ export const notificationsRouter = router({
         ))
         .orderBy(desc(heSolicitacoes.createdAt));
 
-      // ── MO (SMO): TODAS em tramitação (enviada/aprovada_coord/aprovada_rh)
+      // ── MO (SMO): TODAS em tramitação (enviada/aprovada_rh)
       const mdoAllRows = await db.select({
         id: smoSolicitacoes.id,
         funcaoSolicitada: smoSolicitacoes.funcaoSolicitada,
@@ -293,7 +293,7 @@ export const notificationsRouter = router({
         .where(and(
           companyFilter(smoSolicitacoes.companyId, input),
           isNull(smoSolicitacoes.deletedAt),
-          inArray(smoSolicitacoes.status, ["enviada", "aprovada_coord", "aprovada_rh"]),
+          inArray(smoSolicitacoes.status, ["enviada", "aprovada_rh"]),
         ))
         .orderBy(desc(smoSolicitacoes.criadoEm));
 

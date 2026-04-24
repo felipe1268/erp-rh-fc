@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1276,
+    titulo: "Solicitação de Mão de Obra: etapa Coordenação removida (agora só RH e Diretoria)",
+    descricao: "O fluxo de aprovação de Solicitação de Mão de Obra (SMO) foi simplificado conforme solicitado. Antes era: Enviada → Coordenação → RH → Diretoria. Agora é: Enviada → RH → Diretoria. Mudanças: (1) o passo 'Coord.' não aparece mais na timeline 'Fluxo de Aprovação' nem na tela de detalhe da SMO; (2) o botão 'Aprovar (Coordenação)' foi removido — quando a solicitação está como 'Enviada', o RH já pode aprovar diretamente; (3) o filtro de pendências (badge vermelho do menu lateral e contagem do dashboard) ignora a etapa coord; (4) qualquer SMO que estava parada no status 'Aprovada Coord.' foi migrada automaticamente para 'Enviada' na inicialização do servidor, para entrar no novo fluxo sem ficar travada; (5) o status 'aprovada_coord' continua sendo aceito apenas como exibição legado em registros históricos, mas o sistema não gera mais novas aprovações nessa etapa.",
+    tipo: "melhoria",
+    modulos: "RH, Operacional",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-24 19:00:00",
+  },
+  {
     version: 1275,
     titulo: "Adicionar usuário a um Grupo: dropdown agora mostra todos (com aviso de movimentação)",
     descricao: "Corrigido bug em Permissões → Grupos onde o dropdown 'Adicionar usuário...' aparecia vazio quando todos os usuários do sistema já estavam alocados em algum grupo. Como o backend já implementa a regra '1 usuário = 1 grupo' (move automaticamente ao adicionar), o filtro do frontend que escondia esses usuários era desnecessário e bloqueava o caso comum de remanejamento. Agora: (1) o dropdown lista todos os usuários, exceto os que já são membros DESTE grupo; (2) usuários que estão em outro grupo aparecem com um badge âmbar 'está em <Grupo X> — será movido', deixando explícita a movimentação; (3) usuários sem grupo vêm primeiro na lista; (4) se realmente todos os usuários já forem membros do grupo selecionado, mostra a mensagem 'Todos os usuários já são membros deste grupo.' ao invés de um campo vazio sem explicação.",

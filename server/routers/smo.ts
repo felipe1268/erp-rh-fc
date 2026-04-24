@@ -1010,7 +1010,10 @@ export const smoRouter = router({
       id: z.number(),
       companyId: z.number(),
       companyIds: z.array(z.number()).optional(),
-      etapa: z.enum(["coord", "rh", "diretoria"]),
+      // Etapa "coord" removida em Rev. 1276 — fluxo agora é Enviada → RH → Diretoria.
+      // Aceita apenas "rh" e "diretoria"; valor "coord" legado é convertido para "rh" para
+      // compatibilidade com clientes antigos durante a transição.
+      etapa: z.enum(["coord", "rh", "diretoria"]).transform(v => (v === "coord" ? "rh" : v)),
       aprovadorNome: z.string(),
     }))
     .mutation(async ({ input }) => {
@@ -1018,12 +1021,10 @@ export const smoRouter = router({
       await assertOwnership(db, input.id, input);
       const agora = new Date().toISOString();
       const statusMap: Record<string, string> = {
-        coord: "aprovada_coord",
         rh: "aprovada_rh",
         diretoria: "aprovada_diretoria",
       };
       const colMap: Record<string, any> = {
-        coord: { aprovadoPorCoord: input.aprovadorNome, aprovadoPorCoordEm: agora, status: statusMap[input.etapa] },
         rh: { aprovadoPorRh: input.aprovadorNome, aprovadoPorRhEm: agora, status: statusMap[input.etapa] },
         diretoria: { aprovadoPorDiretoria: input.aprovadorNome, aprovadoPorDiretoriaEm: agora, status: statusMap[input.etapa] },
       };

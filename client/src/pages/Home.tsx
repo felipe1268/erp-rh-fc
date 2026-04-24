@@ -987,8 +987,8 @@ function AlertasDialog({
       count: requestsData?.mdoItems?.length ?? 0,
       items: (requestsData?.mdoItems ?? []).map((m: any) => {
         const stMap: Record<string, string> = {
-          enviada: "Aguarda Coordenador",
-          aprovada_coord: "Aguarda RH",
+          enviada: "Aguarda RH",
+          aprovada_coord: "Aguarda RH (legado)",
           aprovada_rh: "Aguarda Diretoria",
         };
         return {

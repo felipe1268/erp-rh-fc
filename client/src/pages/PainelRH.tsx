@@ -128,8 +128,8 @@ export default function PainelRH() {
   // Rev. 1271 — Solicitações de Mão de Obra pendentes
   (requestsAlertsQ.data?.mdoItems ?? []).forEach((m: any) => {
     const stMap: Record<string, string> = {
-      enviada: 'Aguarda Coordenador',
-      aprovada_coord: 'Aguarda RH',
+      enviada: 'Aguarda RH',
+      aprovada_coord: 'Aguarda RH (legado)',
       aprovada_rh: 'Aguarda Diretoria',
     };
     alertasList.push({
