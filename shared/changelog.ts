@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1272,
+    titulo: "Lançamento manual de Feriado/Atestado no Ponto agora persiste",
+    descricao: "Corrigido bug crítico do lançamento manual de ponto em que o usuário marcava dias como Feriado no Fechamento de Ponto, mas a flag se perdia: o frontend não enviava o campo, o backend não aceitava e a tabela time_records não tinha onde guardar. Resultado: o dia ficava em branco no Fechamento, virava 'Falta' no Espelho de Ponto e não havia como reverter pelo modal 'Editar Ponto'. Agora: (1) nova coluna time_records.tipoDia (normal/feriado/atestado) sincronizada automaticamente; (2) backend manualEntry aceita tipoDia, zera batidas/horas e marca o dia como abonado; (3) Fechamento de Ponto envia o tipo ao salvar lançamento em lote e exibe badges 'Feriado'/'Atestado' na visão por obra; (4) Espelho de Ponto reconhece o tipo, deixa de classificar como 'Falta' e exclui o dia do total de faltas/trabalhados; (5) modal 'Editar Ponto' do Espelho ganhou seletor 'Tipo do dia' com botões Normal/Feriado/Atestado — ao escolher Feriado/Atestado os campos de horário desabilitam e ficam zerados.",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento, Ponto",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-24 12:00:00",
+  },
+  {
     version: 1253,
     titulo: "Fix real do botão Memorial de Cálculo de Hora Extra",
     descricao: "A correção registrada na v1247 não teve efeito (aquele commit alterou apenas imagens em attached_assets/, sem mexer em código). A causa real do problema era que o componente Dialog do 'Memorial de Cálculo — Hora Extra' estava montado apenas dentro do bloco de visualização viewMode === 'alertas_afericao'. Como o botão fica na visão viewMode === 'he_modulo' (Folha de Pagamento → módulo HE), clicar nele atualizava o estado mas o Dialog nunca era renderizado na árvore React e nada acontecia. Agora o Dialog também é renderizado dentro da visão he_modulo, então o memorial abre normalmente ao clicar no ícone de documento roxo ao lado do valor R$ de qualquer funcionário.",

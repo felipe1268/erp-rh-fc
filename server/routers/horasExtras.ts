@@ -670,6 +670,7 @@ export const horasExtrasRouter = router({
           tr."entrada3", tr."saida3", tr."horasTrabalhadas", tr."horasExtras",
           tr."horasNoturnas", tr.faltas, tr.atrasos, tr.justificativa, tr.fonte,
           tr."ajusteManual", tr."ajustadoPor", tr."batidasBrutas", tr."obraId",
+          tr."tipoDia",
           o.nome as "obraNome"
         FROM time_records tr
         LEFT JOIN obras o ON tr."obraId" = o.id

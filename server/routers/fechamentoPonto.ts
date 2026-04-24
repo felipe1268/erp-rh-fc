@@ -1642,9 +1642,14 @@ export const fechamentoPontoRouter = router({
       saida3: z.string().optional(),
       justificativa: z.string().optional(),
       motivoAjuste: z.string().optional(),
+      tipoDia: z.enum(["normal", "feriado", "atestado"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      // Quando o dia é marcado como Feriado ou Atestado, zera batidas/horas
+      // automaticamente — o dia é abonado, não há jornada a contabilizar.
+      const tipoDia = input.tipoDia ?? "normal";
+      const isAbonado = tipoDia === "feriado" || tipoDia === "atestado";
 
       // Bloqueia lançamento em dia de férias
       const feriasAtivas = await db.select({
@@ -1695,9 +1700,11 @@ export const fechamentoPontoRouter = router({
       await assertDateNotLocked(db, input, input.data);
 
       let totalMinutes = 0;
-      if (input.entrada1 && input.saida1) totalMinutes += diffMinutes(input.entrada1, input.saida1);
-      if (input.entrada2 && input.saida2) totalMinutes += diffMinutes(input.entrada2, input.saida2);
-      if (input.entrada3 && input.saida3) totalMinutes += diffMinutes(input.entrada3, input.saida3);
+      if (!isAbonado) {
+        if (input.entrada1 && input.saida1) totalMinutes += diffMinutes(input.entrada1, input.saida1);
+        if (input.entrada2 && input.saida2) totalMinutes += diffMinutes(input.entrada2, input.saida2);
+        if (input.entrada3 && input.saida3) totalMinutes += diffMinutes(input.entrada3, input.saida3);
+      }
 
       // Fetch employee jornada to compute overtime correctly
       const empData = await db.select({ jornadaTrabalho: employees.jornadaTrabalho })
@@ -1707,8 +1714,9 @@ export const fechamentoPontoRouter = router({
       const isWeekendDay = dow === 0 || dow === 6;
       // Weekend: 100% das horas trabalhadas = hora extra
       const expectedMins = isWeekendDay ? 0 : getExpectedMinsFromJornada(jornadaTrabalho, input.data);
-      const heMins = isWeekendDay ? totalMinutes : (expectedMins !== null ? Math.max(0, totalMinutes - expectedMins) : 0);
-      const atrasoMins = !isWeekendDay && expectedMins !== null && totalMinutes < expectedMins && totalMinutes > 0
+      const heMins = isAbonado ? 0
+        : (isWeekendDay ? totalMinutes : (expectedMins !== null ? Math.max(0, totalMinutes - expectedMins) : 0));
+      const atrasoMins = !isAbonado && !isWeekendDay && expectedMins !== null && totalMinutes < expectedMins && totalMinutes > 0
         ? Math.max(0, expectedMins - totalMinutes)
         : 0;
 
@@ -1730,12 +1738,12 @@ export const fechamentoPontoRouter = router({
         obraId: input.obraId || null,
         mesReferencia: input.mesReferencia,
         data: input.data,
-        entrada1: input.entrada1 || null,
-        saida1: input.saida1 || null,
-        entrada2: input.entrada2 || null,
-        saida2: input.saida2 || null,
-        entrada3: input.entrada3 || null,
-        saida3: input.saida3 || null,
+        entrada1: isAbonado ? null : (input.entrada1 || null),
+        saida1:   isAbonado ? null : (input.saida1   || null),
+        entrada2: isAbonado ? null : (input.entrada2 || null),
+        saida2:   isAbonado ? null : (input.saida2   || null),
+        entrada3: isAbonado ? null : (input.entrada3 || null),
+        saida3:   isAbonado ? null : (input.saida3   || null),
         horasTrabalhadas: minutesToHHMM(totalMinutes),
         horasExtras: minutesToHHMM(heMins),
         horasNoturnas: "0:00",
@@ -1745,6 +1753,7 @@ export const fechamentoPontoRouter = router({
         ajusteManual: 1,
         ajustadoPor: ctx.user?.name || "RH",
         justificativa: justFinal || null,
+        tipoDia,
       };
 
       if (existing.length > 0) {

@@ -836,7 +836,7 @@ export default function FechamentoPonto() {
     let saved = 0; let errors = 0;
     for (const day of filled) {
       try {
-        await manualBatchMut.mutateAsync({ companyId, companyIds, employeeId: manualData.employeeId, obraId: manualData.obraId || undefined, mesReferencia: day.data.substring(0, 7), data: day.data, entrada1: day.entrada1 || undefined, saida1: day.saida1 || undefined, entrada2: day.entrada2 || undefined, saida2: day.saida2 || undefined, entrada3: day.entrada3 || undefined, saida3: day.saida3 || undefined, justificativa: manualData.justificativa || undefined });
+        await manualBatchMut.mutateAsync({ companyId, companyIds, employeeId: manualData.employeeId, obraId: manualData.obraId || undefined, mesReferencia: day.data.substring(0, 7), data: day.data, entrada1: day.entrada1 || undefined, saida1: day.saida1 || undefined, entrada2: day.entrada2 || undefined, saida2: day.saida2 || undefined, entrada3: day.entrada3 || undefined, saida3: day.saida3 || undefined, justificativa: manualData.justificativa || undefined, tipoDia: day.feriado ? "feriado" : "normal" });
         saved++;
       } catch { errors++; }
     }
@@ -3311,7 +3311,11 @@ export default function FechamentoPonto() {
                                       )}
                                     </td>
                                     <td className="p-2 text-center">
-                                      {hasConflict ? (
+                                      {rec.tipoDia === "feriado" ? (
+                                        <Badge className="text-xs bg-orange-500 text-white">Feriado</Badge>
+                                      ) : rec.tipoDia === "atestado" ? (
+                                        <Badge className="text-xs bg-purple-600 text-white">Atestado</Badge>
+                                      ) : hasConflict ? (
                                         <Badge className="text-xs bg-orange-600 text-white"><AlertCircle className="h-3 w-3 mr-1" /> Conflito</Badge>
                                       ) : hasIncons ? (
                                         <Badge

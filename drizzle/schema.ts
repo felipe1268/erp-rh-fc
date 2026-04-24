@@ -2897,6 +2897,7 @@ export const timeRecords = pgTable("time_records", {
         ajusteManual: smallint().default(0),
         ajustadoPor: varchar({ length: 255 }),
         batidasBrutas: json(),
+        tipoDia: varchar({ length: 20 }).default('normal'),
 });
 
 export const trainingDocuments = pgTable("training_documents", {

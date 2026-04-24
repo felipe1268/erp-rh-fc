@@ -73,7 +73,7 @@ function getBatidas(r: any): string[] {
   return [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3].filter(Boolean);
 }
 
-type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado" | "escuro" | "apontamento";
+type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado" | "escuro" | "apontamento" | "feriado" | "atestado";
 
 function nextDay(d: string): string {
   const dt = new Date(d + "T12:00:00Z");
@@ -86,6 +86,10 @@ function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string
   // for posterior ao desligamento. Isso evita que uma dataDesligamentoEfetiva
   // residual (de um desligamento cancelado) mascare dias de funcionário Ativo.
   if (empStatus === "Desligado" && dataDesligamento && dateStr >= nextDay(dataDesligamento)) return "desligado";
+  // Tipo do dia gravado pelo lançamento manual tem prioridade — abona o dia
+  // mesmo sem batidas, sem contar como falta.
+  if (rec?.tipoDia === "feriado") return "feriado";
+  if (rec?.tipoDia === "atestado") return "atestado";
   const { dow, isSun, isSat } = dayInfo(dateStr);
   if (isSun) return "domingo";
   if (isSat) return "sabado";
@@ -115,6 +119,8 @@ const STATUS_STYLE: Record<DayStatus, { row: string; badge: string; label: strin
   apontamento:{ row: "bg-amber-50/30",   badge: "bg-amber-100 text-amber-700",   label: "Apontamento" },
   desligado:  { row: "bg-gray-100/50",  badge: "bg-gray-200 text-gray-500",    label: "Desligado" },
   escuro:     { row: "bg-indigo-50/30", badge: "bg-indigo-100 text-indigo-600", label: "Pendente" },
+  feriado:    { row: "bg-orange-50/40", badge: "bg-orange-100 text-orange-700", label: "Feriado" },
+  atestado:   { row: "bg-purple-50/40", badge: "bg-purple-100 text-purple-700", label: "Atestado" },
 };
 
 function initials(name: string) {
@@ -131,6 +137,7 @@ interface EditForm {
   entrada3: string; saida3: string;
   justificativa: string;
   motivoAjuste: string;
+  tipoDia: "normal" | "feriado" | "atestado";
 }
 
 interface EditDialogProps {
@@ -170,6 +177,7 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
     saida3:   record?.saida3   || "",
     justificativa: record?.justificativa || "",
     motivoAjuste: "Correção manual",
+    tipoDia: (record?.tipoDia === "feriado" || record?.tipoDia === "atestado") ? record.tipoDia : "normal",
   });
 
   useEffect(() => {
@@ -183,6 +191,7 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
       saida3:   record?.saida3   || "",
       justificativa: record?.justificativa || "",
       motivoAjuste: "Correção manual",
+      tipoDia: (record?.tipoDia === "feriado" || record?.tipoDia === "atestado") ? record.tipoDia : "normal",
     });
   }, [dateStr, record]);
 
@@ -202,19 +211,21 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
       toast.error(`Dia ${dateStr} pertence ao ciclo consolidado${cycleMesRef ? ` de ${cycleMesRef}` : ""}. Desconsolide antes de alterar.`);
       return;
     }
+    const isAbonado = form.tipoDia === "feriado" || form.tipoDia === "atestado";
     saveMut.mutate({
       companyId,
       employeeId,
       mesReferencia,
       data: dateStr,
-      entrada1: form.entrada1 || undefined,
-      saida1:   form.saida1   || undefined,
-      entrada2: form.entrada2 || undefined,
-      saida2:   form.saida2   || undefined,
-      entrada3: form.entrada3 || undefined,
-      saida3:   form.saida3   || undefined,
+      entrada1: isAbonado ? undefined : (form.entrada1 || undefined),
+      saida1:   isAbonado ? undefined : (form.saida1   || undefined),
+      entrada2: isAbonado ? undefined : (form.entrada2 || undefined),
+      saida2:   isAbonado ? undefined : (form.saida2   || undefined),
+      entrada3: isAbonado ? undefined : (form.entrada3 || undefined),
+      saida3:   isAbonado ? undefined : (form.saida3   || undefined),
       justificativa: form.justificativa || undefined,
       motivoAjuste:  form.motivoAjuste  || undefined,
+      tipoDia: form.tipoDia,
     });
   }
 
@@ -355,12 +366,42 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
             </div>
           )}
 
+          {/* Tipo do dia — Normal | Feriado | Atestado */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Tipo do dia</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { v: "normal",   label: "Normal",   colorActive: "bg-slate-700 text-white border-slate-700",   colorIdle: "bg-white text-slate-700 border-slate-200 hover:bg-slate-50" },
+                { v: "feriado",  label: "Feriado",  colorActive: "bg-orange-500 text-white border-orange-500", colorIdle: "bg-white text-orange-700 border-orange-200 hover:bg-orange-50" },
+                { v: "atestado", label: "Atestado", colorActive: "bg-purple-600 text-white border-purple-600", colorIdle: "bg-white text-purple-700 border-purple-200 hover:bg-purple-50" },
+              ] as const).map(opt => {
+                const active = form.tipoDia === opt.v;
+                return (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    disabled={cycleLocked}
+                    onClick={() => setForm(prev => ({ ...prev, tipoDia: opt.v }))}
+                    className={`text-xs font-semibold rounded-lg px-2 py-2 border transition-colors ${active ? opt.colorActive : opt.colorIdle} ${cycleLocked ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            {form.tipoDia !== "normal" && (
+              <p className="text-[11px] text-slate-500 mt-1.5">
+                Dia abonado — as batidas serão zeradas e o dia não conta como falta nem trabalho.
+              </p>
+            )}
+          </div>
+
           {/* Turno 1 */}
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 1</p>
             <div className="grid grid-cols-2 gap-3">
-              <TimeInput label="Entrada" field="entrada1" disabled={timeLocked || cycleLocked} />
-              <TimeInput label="Saída"   field="saida1" disabled={timeLocked || cycleLocked} />
+              <TimeInput label="Entrada" field="entrada1" disabled={timeLocked || cycleLocked || form.tipoDia !== "normal"} />
+              <TimeInput label="Saída"   field="saida1"   disabled={timeLocked || cycleLocked || form.tipoDia !== "normal"} />
             </div>
           </div>
 
@@ -368,8 +409,8 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 2 <span className="font-normal normal-case">(intervalo)</span></p>
             <div className="grid grid-cols-2 gap-3">
-              <TimeInput label="Entrada" field="entrada2" disabled={timeLocked || cycleLocked} />
-              <TimeInput label="Saída"   field="saida2" disabled={timeLocked || cycleLocked} />
+              <TimeInput label="Entrada" field="entrada2" disabled={timeLocked || cycleLocked || form.tipoDia !== "normal"} />
+              <TimeInput label="Saída"   field="saida2"   disabled={timeLocked || cycleLocked || form.tipoDia !== "normal"} />
             </div>
           </div>
 
@@ -377,8 +418,8 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Turno 3 <span className="font-normal normal-case">(opcional)</span></p>
             <div className="grid grid-cols-2 gap-3">
-              <TimeInput label="Entrada" field="entrada3" disabled={timeLocked || cycleLocked} />
-              <TimeInput label="Saída"   field="saida3" disabled={timeLocked || cycleLocked} />
+              <TimeInput label="Entrada" field="entrada3" disabled={timeLocked || cycleLocked || form.tipoDia !== "normal"} />
+              <TimeInput label="Saída"   field="saida3"   disabled={timeLocked || cycleLocked || form.tipoDia !== "normal"} />
             </div>
           </div>
 
@@ -579,9 +620,13 @@ export default function EspelhoPonto() {
       const isWeekendDay = dow === 0 || dow === 6;
       const r = recordMap[d];
       const isFerias = feriasDatesSet.has(d);
-      if (r && !isFerias) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
+      const isAbonado = r?.tipoDia === "feriado" || r?.tipoDia === "atestado";
+      if (r && !isFerias && !isAbonado) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
       if (isWeekendDay) continue;
       if (isFerias) { diasFerias++; continue; }
+      // Dias abonados (feriado/atestado lançado manualmente) não contam falta
+      // nem trabalho — saem do cálculo de jornada útil.
+      if (isAbonado) continue;
       const today = new Date().toISOString().slice(0, 10);
       if (d > today) continue;
       if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") {
