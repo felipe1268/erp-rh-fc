@@ -179,12 +179,26 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
     onSuccess: () => terminationChecklistQ.refetch(),
   });
 
+  // Estado do lightbox da foto do colaborador (declarado antes do useEffect
+  // de ESC para evitar TDZ ao avaliar o array de dependências).
+  const [fotoAmpliada, setFotoAmpliada] = useState(false);
+
   useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Se o lightbox da foto estiver aberto, ESC fecha somente o lightbox
+      // (não o Raio-X inteiro).
+      if (fotoAmpliada) {
+        e.stopPropagation();
+        setFotoAmpliada(false);
+        return;
+      }
+      onClose();
+    };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
+  }, [open, onClose, fotoAmpliada]);
 
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
 
@@ -581,13 +595,21 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
           <Button variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/20 h-8 w-8 sm:h-9 sm:w-9 shrink-0">
             <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
-          <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full overflow-hidden bg-white/20 flex items-center justify-center shrink-0 border-2 border-white/40">
-            {emp?.fotoUrl ? (
+          {emp?.fotoUrl ? (
+            <button
+              type="button"
+              onClick={() => setFotoAmpliada(true)}
+              className="h-8 w-8 sm:h-10 sm:w-10 rounded-full overflow-hidden bg-white/20 flex items-center justify-center shrink-0 border-2 border-white/40 cursor-zoom-in hover:border-white transition-colors focus:outline-none focus:ring-2 focus:ring-white/70 p-0"
+              title="Ampliar foto"
+              aria-label="Ampliar foto do colaborador"
+            >
               <img src={emp.fotoUrl} alt="" className="w-full h-full object-cover object-top" />
-            ) : (
+            </button>
+          ) : (
+            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full overflow-hidden bg-white/20 flex items-center justify-center shrink-0 border-2 border-white/40">
               <User className="h-4 w-4 sm:h-6 sm:w-6" />
-            )}
-          </div>
+            </div>
+          )}
           <div className="min-w-0">
             <h1 className="text-sm sm:text-xl font-bold tracking-tight">RAIO-X DO FUNCIONÁRIO</h1>
             {emp && <p className="text-xs sm:text-sm text-white/80 truncate">{emp.nomeCompleto} — CPF: {formatCPFSafe(emp.cpf)}</p>}
@@ -650,13 +672,21 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               <div className="flex items-start gap-3 sm:gap-4">
                 {/* FOTO DO COLABORADOR */}
                 <div className="shrink-0">
-                  <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-full overflow-hidden border-4 border-blue-300 shadow-md bg-blue-100 flex items-center justify-center">
-                    {emp.fotoUrl ? (
-                      <img src={emp.fotoUrl} alt="Foto" className="w-full h-full object-cover object-top" />
-                    ) : (
+                  {emp.fotoUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => setFotoAmpliada(true)}
+                      className="w-16 h-16 sm:w-24 sm:h-24 rounded-full overflow-hidden border-4 border-blue-300 shadow-md bg-blue-100 flex items-center justify-center cursor-zoom-in hover:border-blue-500 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 p-0"
+                      title="Clique para ampliar a foto"
+                      aria-label="Ampliar foto do colaborador"
+                    >
+                      <img src={emp.fotoUrl} alt="Foto do colaborador" className="w-full h-full object-cover object-top" />
+                    </button>
+                  ) : (
+                    <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-full overflow-hidden border-4 border-blue-300 shadow-md bg-blue-100 flex items-center justify-center">
                       <span className="text-xl sm:text-3xl font-bold text-blue-400">{emp.nomeCompleto?.charAt(0)}{emp.nomeCompleto?.split(' ').pop()?.charAt(0)}</span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-4">
@@ -2554,6 +2584,39 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
         fileName={atestPreviewDoc?.name || null}
         title={atestPreviewDoc?.title}
       />
+
+      {/* LIGHTBOX DA FOTO DO COLABORADOR */}
+      {fotoAmpliada && emp?.fotoUrl && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/85 flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in duration-150"
+          onClick={() => setFotoAmpliada(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Foto ampliada do colaborador"
+        >
+          <button
+            type="button"
+            ref={(el) => { if (el) el.focus(); }}
+            onClick={(e) => { e.stopPropagation(); setFotoAmpliada(false); }}
+            className="absolute top-4 right-4 text-white bg-white/15 hover:bg-white/30 rounded-full h-10 w-10 flex items-center justify-center text-xl font-bold shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
+            aria-label="Fechar"
+            title="Fechar (ESC)"
+          >
+            ×
+          </button>
+          <div className="flex flex-col items-center gap-3 max-w-full max-h-full">
+            <img
+              src={emp.fotoUrl}
+              alt={emp.nomeCompleto || "Foto do colaborador"}
+              className="max-w-[92vw] max-h-[82vh] object-contain rounded-lg shadow-2xl bg-white"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="text-white text-sm sm:text-base text-center bg-black/40 px-3 py-1.5 rounded">
+              {emp.nomeCompleto}{emp.cpf ? ` — CPF: ${formatCPFSafe(emp.cpf)}` : ""}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

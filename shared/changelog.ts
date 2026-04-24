@@ -25,6 +25,24 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1280,
+    titulo: "Raio-X do Funcionário: lightbox da foto com tecla ESC e navegação por teclado",
+    descricao: "Refinamento do recurso de ampliar a foto do colaborador: a tecla ESC agora fecha somente a foto ampliada (antes fechava o Raio-X inteiro). As fotos clicáveis viraram botões de verdade, então é possível abrir a ampliação navegando pelo teclado (Tab + Enter), com indicador de foco visível. Ao abrir, o foco vai automaticamente para o botão de fechar (×), facilitando o uso por leitor de tela e por teclado.",
+    tipo: "melhoria",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-24 21:15:00",
+  },
+  {
+    version: 1279,
+    titulo: "Raio-X do Funcionário: ampliar foto do colaborador ao clicar",
+    descricao: "A foto do colaborador no Raio-X do Funcionário agora pode ser ampliada com um clique. Tanto a foto pequena no cabeçalho azul quanto a foto grande no card de dados pessoais ficaram clicáveis (cursor de zoom no hover). Ao clicar, abre uma visualização em tela cheia, em fundo escurecido, mostrando a foto no maior tamanho possível, com o nome e CPF do colaborador embaixo. É possível fechar clicando fora da imagem ou no botão × no canto superior direito. Quando o colaborador não tem foto cadastrada, o comportamento permanece o mesmo (sem ação ao clicar).",
+    tipo: "melhoria",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-24 21:00:00",
+  },
+  {
     version: 1278,
     titulo: "Geração de contrato do funcionário: corrigido erro 'expected number, received string'",
     descricao: "Corrigido erro ao clicar em 'Gerar Contrato' na ficha do colaborador (Raio-X), que retornava a mensagem técnica 'Invalid input: expected number, received string' no campo prazoExperienciaDias. O seletor de prazo do contrato de experiência ('30+30' ou '45+45') representa, na verdade, dois valores: dias de experiência inicial + dias de prorrogação. O frontend estava enviando a string combinada (por exemplo, '45+45') diretamente, mas o backend espera dois números separados (45 e 45). Agora o seletor é desmembrado corretamente antes do envio, gerando o contrato sem erro.",
