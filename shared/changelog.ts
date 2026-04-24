@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1278,
+    titulo: "Geração de contrato do funcionário: corrigido erro 'expected number, received string'",
+    descricao: "Corrigido erro ao clicar em 'Gerar Contrato' na ficha do colaborador (Raio-X), que retornava a mensagem técnica 'Invalid input: expected number, received string' no campo prazoExperienciaDias. O seletor de prazo do contrato de experiência ('30+30' ou '45+45') representa, na verdade, dois valores: dias de experiência inicial + dias de prorrogação. O frontend estava enviando a string combinada (por exemplo, '45+45') diretamente, mas o backend espera dois números separados (45 e 45). Agora o seletor é desmembrado corretamente antes do envio, gerando o contrato sem erro.",
+    tipo: "bugfix",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-24 20:30:00",
+  },
+  {
     version: 1277,
     titulo: "Apontamentos de Campo: bolinha vermelha de pendência no menu lateral",
     descricao: "O item 'Apontamentos de Campo' no menu lateral do módulo RH/DP agora exibe uma bolinha vermelha (badge) com o número de apontamentos ainda em tramitação, no mesmo padrão já usado em Solicitação de Hora Extra e Solicitação de Mão de Obra. O alerta aparece para todos os usuários que enxergam o item e só desaparece depois que o apontamento é efetivamente aprovado pelo RH (status 'resolvido' ou 'arquivado'). Apenas abrir a tela não zera o contador — ele reflete o estado real do sistema. A contagem é atualizada automaticamente a cada 60 segundos.",

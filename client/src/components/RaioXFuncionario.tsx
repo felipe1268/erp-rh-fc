@@ -2580,11 +2580,17 @@ function ContratosTab({ employeeId, companyId, empNome }: { employeeId: number; 
 
   const handleGerar = async () => {
     try {
+      // O seletor "30+30" / "45+45" representa (dias de experiência) + (dias de prorrogação).
+      // O backend espera dois números separados, não a string combinada.
+      const [diasExpStr, diasProrrStr] = prazoExp.split("+");
+      const diasExp = parseInt(diasExpStr, 10);
+      const diasProrr = parseInt(diasProrrStr, 10);
       const result = await gerarMutation.mutateAsync({
         companyId,
         employeeId,
         tipo,
-        prazoExperienciaDias: prazoExp,
+        prazoExperienciaDias: Number.isFinite(diasExp) ? diasExp : undefined,
+        prazoProrrogacaoDias: Number.isFinite(diasProrr) ? diasProrr : undefined,
       });
       setPreviewHtml(result.conteudoHtml);
       setDadosContrato(result.dados);
