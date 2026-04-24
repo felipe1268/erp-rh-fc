@@ -1249,6 +1249,11 @@ function DashboardLayoutContent({
           if (item.path === "/solicitacao-mdo" && rb.mdoNovas > 0) {
             return { ...item, badge: rb.mdoNovas, badgePulse: true };
           }
+          // Rev. 1277 — Bolinha vermelha para Apontamentos de Campo pendentes.
+          // Só some quando o apontamento é resolvido/arquivado pelo RH.
+          if (item.path === "/apontamentos-campo" && (rb as any).apontamentosNovas > 0) {
+            return { ...item, badge: (rb as any).apontamentosNovas, badgePulse: true };
+          }
           return item;
         }),
       }));

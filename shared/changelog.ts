@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1277,
+    titulo: "Apontamentos de Campo: bolinha vermelha de pendência no menu lateral",
+    descricao: "O item 'Apontamentos de Campo' no menu lateral do módulo RH/DP agora exibe uma bolinha vermelha (badge) com o número de apontamentos ainda em tramitação, no mesmo padrão já usado em Solicitação de Hora Extra e Solicitação de Mão de Obra. O alerta aparece para todos os usuários que enxergam o item e só desaparece depois que o apontamento é efetivamente aprovado pelo RH (status 'resolvido' ou 'arquivado'). Apenas abrir a tela não zera o contador — ele reflete o estado real do sistema. A contagem é atualizada automaticamente a cada 60 segundos.",
+    tipo: "melhoria",
+    modulos: "RH, Operacional",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-24 19:30:00",
+  },
+  {
     version: 1276,
     titulo: "Solicitação de Mão de Obra: etapa Coordenação removida (agora só RH e Diretoria)",
     descricao: "O fluxo de aprovação de Solicitação de Mão de Obra (SMO) foi simplificado conforme solicitado. Antes era: Enviada → Coordenação → RH → Diretoria. Agora é: Enviada → RH → Diretoria. Mudanças: (1) o passo 'Coord.' não aparece mais na timeline 'Fluxo de Aprovação' nem na tela de detalhe da SMO; (2) o botão 'Aprovar (Coordenação)' foi removido — quando a solicitação está como 'Enviada', o RH já pode aprovar diretamente; (3) o filtro de pendências (badge vermelho do menu lateral e contagem do dashboard) ignora a etapa coord; (4) qualquer SMO que estava parada no status 'Aprovada Coord.' foi migrada automaticamente para 'Enviada' na inicialização do servidor, para entrar no novo fluxo sem ficar travada; (5) o status 'aprovada_coord' continua sendo aceito apenas como exibição legado em registros históricos, mas o sistema não gera mais novas aprovações nessa etapa.",

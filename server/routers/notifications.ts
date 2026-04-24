@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { notificationRecipients, notificationLogs, menuLabels, companies, notificationViews, heSolicitacoes, smoSolicitacoes, obras, employees } from "../../drizzle/schema";
+import { notificationRecipients, notificationLogs, menuLabels, companies, notificationViews, heSolicitacoes, smoSolicitacoes, obras, employees, fieldNotes } from "../../drizzle/schema";
 import { eq, and, desc, sql, inArray, isNull, gt } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { dispararNotificacao, gerarTextoNotificacao } from "../services/emailNotification";
@@ -258,7 +258,7 @@ export const notificationsRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) return { heNovas: 0, mdoNovas: 0, heItems: [], mdoItems: [] };
+      if (!db) return { heNovas: 0, mdoNovas: 0, apontamentosNovas: 0, heItems: [], mdoItems: [], apontamentosItems: [] };
 
       // ── HE: TODAS as solicitações com status "pendente"
       const heAllRows = await db.select({
@@ -297,11 +297,36 @@ export const notificationsRouter = router({
         ))
         .orderBy(desc(smoSolicitacoes.criadoEm));
 
+      // ── Apontamentos de Campo (field_notes): TODOS os apontamentos
+      // ainda não aprovados/concluídos pelo RH. O alerta só some quando o
+      // apontamento é resolvido ou arquivado.
+      const apontAllRows = await db.select({
+        id: fieldNotes.id,
+        data: fieldNotes.data,
+        tipoOcorrencia: fieldNotes.tipoOcorrencia,
+        descricao: fieldNotes.descricao,
+        solicitanteNome: fieldNotes.solicitanteNome,
+        prioridade: fieldNotes.prioridade,
+        status: fieldNotes.status,
+        createdAt: fieldNotes.createdAt,
+        obraNome: obras.nome,
+      })
+        .from(fieldNotes)
+        .leftJoin(obras, eq(fieldNotes.obraId, obras.id))
+        .where(and(
+          companyFilter(fieldNotes.companyId, input),
+          isNull(fieldNotes.deletedAt),
+          inArray(fieldNotes.status, ["pendente", "em_analise"]),
+        ))
+        .orderBy(desc(fieldNotes.createdAt));
+
       return {
         heNovas: heAllRows.length,
         mdoNovas: mdoAllRows.length,
+        apontamentosNovas: apontAllRows.length,
         heItems: heAllRows,
         mdoItems: mdoAllRows,
+        apontamentosItems: apontAllRows,
       };
     }),
 
