@@ -2036,7 +2036,7 @@ export default function FechamentoPonto() {
                 {/* ===== MODAL DETALHADO DE RANKING ===== */}
                 {rankingModal && rankings && (
                   <Dialog open={true} onOpenChange={(open) => { if (!open) { setRankingModal(null); setRankingSearch(""); setRankingObraFilter("all"); } }}>
-                    <DialogContent resizable={false} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, width: "100vw", height: "100vh", maxWidth: "none", transform: "none", borderRadius: 0 }} className="flex flex-col p-0 gap-0 border-0">
+                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-[90vw] max-w-5xl h-[85vh]">
                       {/* Cabeçalho */}
                       <DialogHeader className="px-6 py-4 border-b shrink-0">
                         <div className="flex items-center justify-between">
