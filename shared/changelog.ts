@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1284,
+    titulo: "Colaboradores: badge duplo para Desligado + Blacklist",
+    descricao: "Na coluna Status da lista de colaboradores, quando um colaborador tem o campo listaNegra ativado mas seu status é 'Desligado' (não 'Lista_Negra'), agora aparecem dois badges juntos: o badge do status atual ('Desligado') e um badge adicional vermelho '⚑ Blacklist'. Isso esclarece que o colaborador está simultaneamente desligado E na lista negra — situação que ocorre quando alguém foi desligado e depois incluído na blacklist por outro caminho (importação, edição manual, ou fluxo antigo). Não é um bug: os campos status e listaNegra são independentes no banco e podem coexistir.",
+    tipo: "melhoria",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 10:45:00",
+  },
+  {
     version: 1283,
     titulo: "Colaboradores: função na sublinha do nome e dados de saída para Desligados",
     descricao: "Na lista de colaboradores, abaixo do nome agora também aparece a FUNÇÃO do colaborador (antes só ficava visível na coluna 'Função', escondida no celular). A linha ficou no formato: 'Função • Idade • Empresa: tempo'. Para colaboradores com status DESLIGADO, foi adicionada uma segunda linha em vermelho mostrando 'Saiu em DD/MM/AAAA (há X meses/anos)' e o tempo trabalhado é apresentado como 'Trabalhou: X anos e Y meses' (em vez de 'Empresa:'), considerando até a data efetiva do desligamento. Assim, ao filtrar por 'Desligados', dá para ver de cara: função, quanto tempo trabalhou, quando saiu e há quanto tempo foi a saída — sem precisar abrir cada ficha.",

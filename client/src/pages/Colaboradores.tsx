@@ -917,9 +917,16 @@ export default function Colaboradores() {
                       {calcTempoEmpresaTexto((emp as any).dataAdmissao, emp.status === "Desligado" ? (emp as any).dataDesligamentoEfetiva : undefined) || "-"}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs font-medium px-2.5 py-1 rounded ${statusColors[emp.status] ?? ""}`}>
-                        {statusLabels[emp.status] ?? emp.status}
-                      </span>
+                      <div className="flex flex-wrap gap-1 items-center">
+                        <span className={`text-xs font-medium px-2.5 py-1 rounded ${statusColors[emp.status] ?? ""}`}>
+                          {statusLabels[emp.status] ?? emp.status}
+                        </span>
+                        {(emp as any).listaNegra === 1 && emp.status !== "Lista_Negra" && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-300" title="Este colaborador também está na Lista Negra">
+                            ⚑ Blacklist
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
