@@ -269,9 +269,10 @@ export default function Colaboradores() {
       list = list.filter(e => e.status !== "Lista_Negra" && (e as any).listaNegra !== 1 && (e as any).listaNegra !== true);
     }
     if (skillEmployeeIds) list = list.filter(e => skillEmployeeIds.has(e.id));
-    if (statusFilter === "CLT") list = list.filter(e => (e as any).tipoContrato === "CLT");
-    if (statusFilter === "PJ") list = list.filter(e => (e as any).tipoContrato === "PJ");
-    if (statusFilter === "Socio") list = list.filter(e => (e as any).tipoContrato === "Socio");
+    const isInativo = (e: any) => e.status === "Desligado" || e.status === "Lista_Negra" || e.listaNegra === 1 || e.listaNegra === true;
+    if (statusFilter === "CLT") list = list.filter(e => (e as any).tipoContrato === "CLT" && !isInativo(e));
+    if (statusFilter === "PJ") list = list.filter(e => (e as any).tipoContrato === "PJ" && !isInativo(e));
+    if (statusFilter === "Socio") list = list.filter(e => (e as any).tipoContrato === "Socio" && !isInativo(e));
     if (statusFilter === "ListaNegra") list = list.filter(e => (e as any).listaNegra === 1 || (e as any).listaNegra === true);
     // Filtro "Desligado" mostra apenas desligamentos normais — exclui quem está na lista negra
     if (statusFilter === "Desligado") {

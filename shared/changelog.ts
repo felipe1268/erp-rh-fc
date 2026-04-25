@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1288,
+    titulo: "Colaboradores: filtros CLT, PJ e Sócio excluem desligados e blacklist",
+    descricao: "Os filtros de tipo de contrato (CLT, PJ, Sócio) agora mostram apenas colaboradores ativos na empresa — Ativo, Férias, Afastado, Licença, Recluso e similares. Colaboradores com status 'Desligado', 'Lista_Negra' ou com o campo listaNegra ativado são excluídos automaticamente desses filtros, pois possuem filtros próprios ('Desligados' e 'Blacklist'). Antes, ao clicar em 'CLT', apareciam misturados todos os colaboradores CLT independente de terem sido desligados ou não.",
+    tipo: "melhoria",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 11:45:00",
+  },
+  {
     version: 1287,
     titulo: "Colaboradores: data de saída e tempo trabalhado exibidos também para status Lista_Negra",
     descricao: "Corrigido bug onde colaboradores com status='Lista_Negra' não exibiam a linha 'Saiu em DD/MM/AAAA (há X meses)' nem usavam a data de desligamento para calcular o tempo trabalhado. A variável isDesligado foi renomeada para isSaiu e passou a incluir status='Lista_Negra' e listaNegra=1, além de status='Desligado'. Com isso: (1) linha vermelha 'Saiu em...' aparece para todos que saíram da empresa, independente de estarem ou não na blacklist; (2) prefixo 'Trabalhou:' usado corretamente; (3) coluna 'Tempo de Empresa' na tabela (visível em telas xl+) também usa a data efetiva de desligamento para calcular o tempo.",
