@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1283,
+    titulo: "Colaboradores: função na sublinha do nome e dados de saída para Desligados",
+    descricao: "Na lista de colaboradores, abaixo do nome agora também aparece a FUNÇÃO do colaborador (antes só ficava visível na coluna 'Função', escondida no celular). A linha ficou no formato: 'Função • Idade • Empresa: tempo'. Para colaboradores com status DESLIGADO, foi adicionada uma segunda linha em vermelho mostrando 'Saiu em DD/MM/AAAA (há X meses/anos)' e o tempo trabalhado é apresentado como 'Trabalhou: X anos e Y meses' (em vez de 'Empresa:'), considerando até a data efetiva do desligamento. Assim, ao filtrar por 'Desligados', dá para ver de cara: função, quanto tempo trabalhou, quando saiu e há quanto tempo foi a saída — sem precisar abrir cada ficha.",
+    tipo: "melhoria",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 10:15:00",
+  },
+  {
     version: 1282,
     titulo: "Colaboradores: tempo de empresa só usa data de desligamento quando o status é 'Desligado'",
     descricao: "Ajuste no cálculo do tempo de empresa exibido na lista de colaboradores: a data de desligamento agora só é considerada quando o status atual do colaborador é 'Desligado'. Se houver uma data de desligamento residual no banco em um colaborador que voltou a ser ativo (recontratação ou correção), o tempo de empresa volta a ser calculado normalmente até hoje, em vez de ficar 'congelado' na data de saída antiga.",

@@ -16,7 +16,7 @@ import { trpc } from "@/lib/trpc";
 import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 import { EMPLOYEE_STATUS, EMPLOYEE_STATUS_MANUAL } from "../../../shared/modules";
 import { normalizeCidadeInput } from "../../../shared/normalizeCidade";
@@ -139,6 +139,29 @@ function calcTempoEmpresaTexto(dataAdmissao: unknown, dataDesligamento?: unknown
   if (anos <= 0) return `${meses} ${meses === 1 ? "mês" : "meses"}`;
   if (meses <= 0) return `${anos} ano${anos !== 1 ? "s" : ""}`;
   return `${anos} ano${anos !== 1 ? "s" : ""} e ${meses} ${meses === 1 ? "mês" : "meses"}`;
+}
+
+// Há quanto tempo uma data ocorreu (ex.: "há 3 meses", "há 2 anos").
+function tempoDesdeTexto(data: unknown): string {
+  if (!data || typeof data !== "string") return "";
+  const m = data.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return "";
+  const inicio = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+  const hoje = new Date();
+  if (hoje < inicio) return "";
+  let anos = hoje.getFullYear() - inicio.getFullYear();
+  let meses = hoje.getMonth() - inicio.getMonth();
+  if (hoje.getDate() < inicio.getDate()) meses -= 1;
+  if (meses < 0) { anos -= 1; meses += 12; }
+  if (anos <= 0 && meses <= 0) {
+    const diffDias = Math.floor((hoje.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDias <= 0) return "hoje";
+    if (diffDias === 1) return "ontem";
+    return `há ${diffDias} dias`;
+  }
+  if (anos <= 0) return `há ${meses} ${meses === 1 ? "mês" : "meses"}`;
+  if (meses <= 0) return `há ${anos} ano${anos !== 1 ? "s" : ""}`;
+  return `há ${anos} ano${anos !== 1 ? "s" : ""} e ${meses} ${meses === 1 ? "mês" : "meses"}`;
 }
 
 function formatDate(val: unknown): string {
@@ -846,14 +869,29 @@ export default function Colaboradores() {
                         <div className="min-w-0">
                           <div className="font-medium text-blue-700 hover:underline truncate">{emp.nomeCompleto}</div>
                           {(() => {
+                            const isDesligado = emp.status === "Desligado";
                             const idade = calcIdadeAnos((emp as any).dataNascimento);
-                            const dataFim = emp.status === "Desligado" ? (emp as any).dataDesligamentoEfetiva : undefined;
+                            const dataFim = isDesligado ? (emp as any).dataDesligamentoEfetiva : undefined;
                             const tempo = calcTempoEmpresaTexto((emp as any).dataAdmissao, dataFim);
+                            const funcao = (emp as any).funcao;
                             const partes: string[] = [];
+                            if (funcao) partes.push(String(funcao));
                             if (idade !== null) partes.push(`${idade} anos`);
-                            if (tempo) partes.push(`Empresa: ${tempo}`);
-                            if (partes.length === 0) return null;
-                            return <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{partes.join(" • ")}</div>;
+                            if (tempo) partes.push(isDesligado ? `Trabalhou: ${tempo}` : `Empresa: ${tempo}`);
+                            const linha1 = partes.length > 0
+                              ? <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{partes.join(" • ")}</div>
+                              : null;
+                            let linha2: ReactNode = null;
+                            if (isDesligado && (emp as any).dataDesligamentoEfetiva) {
+                              const dt = formatDate((emp as any).dataDesligamentoEfetiva);
+                              const desde = tempoDesdeTexto((emp as any).dataDesligamentoEfetiva);
+                              linha2 = (
+                                <div className="text-[11px] text-red-600 mt-0.5 truncate">
+                                  Saiu em {dt}{desde ? ` (${desde})` : ""}
+                                </div>
+                              );
+                            }
+                            return <>{linha1}{linha2}</>;
                           })()}
                         </div>
                       </div>
