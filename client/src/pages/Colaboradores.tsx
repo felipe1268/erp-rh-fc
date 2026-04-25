@@ -878,20 +878,20 @@ export default function Colaboradores() {
                         <div className="min-w-0">
                           <div className="font-medium text-blue-700 hover:underline truncate">{emp.nomeCompleto}</div>
                           {(() => {
-                            const isDesligado = emp.status === "Desligado";
+                            const isSaiu = emp.status === "Desligado" || emp.status === "Lista_Negra" || (emp as any).listaNegra === 1 || (emp as any).listaNegra === true;
                             const idade = calcIdadeAnos((emp as any).dataNascimento);
-                            const dataFim = isDesligado ? (emp as any).dataDesligamentoEfetiva : undefined;
+                            const dataFim = isSaiu ? (emp as any).dataDesligamentoEfetiva : undefined;
                             const tempo = calcTempoEmpresaTexto((emp as any).dataAdmissao, dataFim);
                             const funcao = (emp as any).funcao;
                             const partes: string[] = [];
                             if (funcao) partes.push(String(funcao));
                             if (idade !== null) partes.push(`${idade} anos`);
-                            if (tempo) partes.push(isDesligado ? `Trabalhou: ${tempo}` : `Empresa: ${tempo}`);
+                            if (tempo) partes.push(isSaiu ? `Trabalhou: ${tempo}` : `Empresa: ${tempo}`);
                             const linha1 = partes.length > 0
                               ? <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{partes.join(" • ")}</div>
                               : null;
                             let linha2: ReactNode = null;
-                            if (isDesligado && (emp as any).dataDesligamentoEfetiva) {
+                            if (isSaiu && (emp as any).dataDesligamentoEfetiva) {
                               const dt = formatDate((emp as any).dataDesligamentoEfetiva);
                               const desde = tempoDesdeTexto((emp as any).dataDesligamentoEfetiva);
                               linha2 = (
@@ -923,7 +923,7 @@ export default function Colaboradores() {
                       })()}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden xl:table-cell whitespace-nowrap">
-                      {calcTempoEmpresaTexto((emp as any).dataAdmissao, emp.status === "Desligado" ? (emp as any).dataDesligamentoEfetiva : undefined) || "-"}
+                      {calcTempoEmpresaTexto((emp as any).dataAdmissao, (emp.status === "Desligado" || emp.status === "Lista_Negra" || (emp as any).listaNegra === 1) ? (emp as any).dataDesligamentoEfetiva : undefined) || "-"}
                     </td>
                     <td className="px-4 py-3">
                       {(() => {

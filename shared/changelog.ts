@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1287,
+    titulo: "Colaboradores: data de saída e tempo trabalhado exibidos também para status Lista_Negra",
+    descricao: "Corrigido bug onde colaboradores com status='Lista_Negra' não exibiam a linha 'Saiu em DD/MM/AAAA (há X meses)' nem usavam a data de desligamento para calcular o tempo trabalhado. A variável isDesligado foi renomeada para isSaiu e passou a incluir status='Lista_Negra' e listaNegra=1, além de status='Desligado'. Com isso: (1) linha vermelha 'Saiu em...' aparece para todos que saíram da empresa, independente de estarem ou não na blacklist; (2) prefixo 'Trabalhou:' usado corretamente; (3) coluna 'Tempo de Empresa' na tabela (visível em telas xl+) também usa a data efetiva de desligamento para calcular o tempo.",
+    tipo: "bugfix",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 11:30:00",
+  },
+  {
     version: 1286,
     titulo: "Colaboradores: badge Blacklist padronizado para todos na lista negra",
     descricao: "Corrigida inconsistência visual na coluna Status: colaboradores com status='Lista_Negra' exibiam texto puro 'Lista_Negra' (sem badge estilizado) porque a chave no dicionário estava errada, enquanto quem tinha status='Desligado'+listaNegra=1 exibia badges estilizados duplos. Agora ambos os casos renderizam exatamente o mesmo padrão visual: badge 'Desligado' (rosa) empilhado sobre badge '⚑ Blacklist' (vermelho com borda), garantindo uniformidade independente de como o colaborador entrou na lista negra.",
