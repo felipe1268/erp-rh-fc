@@ -1012,6 +1012,23 @@ export default function FechamentoPonto() {
     return { pontuais, atrasados, extras, faltosos, allPontuais, allAtrasados, allExtras, allFaltosos, fmtHM };
   }, [summary.data]);
 
+  // Dias úteis (Seg–Sáb) no ciclo de fechamento — usado para calcular % de presença
+  const diasUteisNoPeriodo = useMemo(() => {
+    if (!cicloInicio || !cicloFim) return null;
+    let count = 0;
+    const cur = new Date(cicloInicio + "T12:00:00Z");
+    const end = new Date(cicloFim + "T12:00:00Z");
+    while (cur <= end) {
+      const dow = cur.getUTCDay(); // 0=Dom, 6=Sáb
+      if (dow !== 0) count++; // conta Seg–Sáb (excluindo domingo)
+      cur.setUTCDate(cur.getUTCDate() + 1);
+    }
+    return count;
+  }, [cicloInicio, cicloFim]);
+
+  // Formata data YYYY-MM-DD para DD/MM/YYYY
+  const fmtPeriodo = (d: string | null) => d ? d.split("-").reverse().join("/") : "";
+
   // Dados filtrados para o modal de ranking
   const filteredRankingRows = useMemo(() => {
     if (!rankingModal || !rankings) return [];
@@ -2048,6 +2065,12 @@ export default function FechamentoPonto() {
                             {rankingModal === "faltosos"  && <><CalendarDays className="h-5 w-5 text-slate-600" /> Menos Dias Trabalhados</>}
                           </DialogTitle>
                           <span className="text-sm text-muted-foreground shrink-0">Referência: <strong>{mesAno?.replace("-", "/")}</strong></span>
+                          {cicloInicio && cicloFim && (
+                            <span className="text-xs text-muted-foreground bg-slate-100 border rounded px-2 py-0.5 shrink-0">
+                              Período: <strong>{fmtPeriodo(cicloInicio)}</strong> → <strong>{fmtPeriodo(cicloFim)}</strong>
+                              {diasUteisNoPeriodo && <span className="ml-1 text-slate-500">({diasUteisNoPeriodo} dias úteis Seg–Sáb)</span>}
+                            </span>
+                          )}
                           <div className="flex-1" />
                           <Button variant="outline" size="sm" onClick={handlePrintRanking} className="h-8 text-xs">
                             <Printer className="h-3.5 w-3.5 mr-1.5" /> Imprimir / PDF
@@ -2087,13 +2110,14 @@ export default function FechamentoPonto() {
                       {/* ── Legenda ── */}
                       <div className="shrink-0 px-6 py-2 border-b bg-blue-50/60 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-slate-600">
                         <span className="font-semibold text-blue-800 mr-1">Legenda:</span>
-                        <span><strong className="text-slate-800">Dias Trabalhados</strong> = quantidade de dias com registro de ponto no mês</span>
-                        <span><strong className="text-slate-800">H. Total</strong> = soma total das horas trabalhadas (entrada → saída)</span>
-                        {rankingModal === "pontuais"  && <span><strong className="text-green-800">Atraso Acum.</strong> = soma de todos os minutos de atraso no mês (zero = sempre pontual)</span>}
-                        {rankingModal === "atrasados" && <span><strong className="text-red-800">Atraso Acum.</strong> = soma total dos atrasos do mês em horas e minutos — quanto maior, pior</span>}
-                        {rankingModal === "extras"    && <><span><strong className="text-emerald-800">Total HE</strong> = horas trabalhadas além do horário contratado no mês</span><span><strong className="text-orange-800">Solicitação HE</strong> = se foi aberta (e aprovada) uma solicitação formal de hora extra</span></>}
-                        {rankingModal === "faltosos"  && <span><strong className="text-slate-800">Dias Trabalhados</strong> = colaboradores com menos dias de presença no mês — pode indicar faltas, afastamentos ou escala reduzida</span>}
-                        {rankingModal === "faltosos"  && <span><strong className="text-green-800">Justificada</strong> = possui atestado médico registrado no mês</span>}
+                        <span><strong className="text-slate-800">Dias Trabalhados</strong> = dias que o colaborador bateu ponto no período de fechamento (NÃO são dias úteis esperados)</span>
+                        <span><strong className="text-slate-800">% Presença</strong> = dias trabalhados ÷ dias úteis Seg–Sáb do período{diasUteisNoPeriodo ? ` (${diasUteisNoPeriodo} dias)` : ""} — indica se faltou muito ou não</span>
+                        <span><strong className="text-slate-800">H. Total</strong> = soma das horas trabalhadas (entrada → saída)</span>
+                        {rankingModal === "pontuais"  && <span><strong className="text-green-800">Atraso Acum.</strong> = soma de todos os minutos de atraso no período (zero = sempre pontual)</span>}
+                        {rankingModal === "atrasados" && <span><strong className="text-red-800">Atraso Acum.</strong> = soma total dos atrasos do período em h/min — quanto maior, pior</span>}
+                        {rankingModal === "extras"    && <><span><strong className="text-emerald-800">Total HE</strong> = horas trabalhadas além do contratado no período</span><span><strong className="text-orange-800">Solicitação HE</strong> = se foi aberta (e aprovada) uma solicitação formal de hora extra</span></>}
+                        {rankingModal === "faltosos"  && <span><strong className="text-red-800">Atenção:</strong> colaboradores com menos dias de presença no período — pode indicar faltas, afastamento ou escala reduzida</span>}
+                        {rankingModal === "faltosos"  && <span><strong className="text-green-800">Justificada</strong> = possui atestado médico registrado no período</span>}
                       </div>
 
                       {/* ── Tabela ── */}
@@ -2106,6 +2130,7 @@ export default function FechamentoPonto() {
                               <th className="px-3 py-2.5 font-semibold text-slate-600 text-left min-w-[130px]">Função</th>
                               <th className="px-3 py-2.5 font-semibold text-slate-600 text-left">Obra(s)</th>
                               <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-24">Dias Trabalhados</th>
+                              {diasUteisNoPeriodo && <th className="px-3 py-2.5 font-semibold text-indigo-700 text-center w-24">% Presença</th>}
                               <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-24">H. Total no Mês</th>
                               {rankingModal === "pontuais"  && <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-32">Atraso Acumulado</th>}
                               {rankingModal === "atrasados" && <th className="px-3 py-2.5 font-semibold text-red-600   text-center w-32">Atraso Acumulado</th>}
@@ -2145,6 +2170,11 @@ export default function FechamentoPonto() {
                                     ) : <span className="text-slate-400">—</span>}
                                   </td>
                                   <td className="px-3 py-2 text-center font-bold text-slate-700">{e.dias}</td>
+                                  {diasUteisNoPeriodo && (() => {
+                                    const pct = Math.round((e.dias / diasUteisNoPeriodo) * 100);
+                                    const cor = pct >= 90 ? "text-green-700 bg-green-50" : pct >= 70 ? "text-yellow-700 bg-yellow-50" : "text-red-700 bg-red-50";
+                                    return <td className="px-3 py-2 text-center"><span className={`inline-block px-2 py-0.5 rounded-full font-bold text-[11px] ${cor}`}>{pct}%</span></td>;
+                                  })()}
                                   <td className="px-3 py-2 text-center font-mono text-slate-600">{e.horasTrabahadasStr}</td>
                                   {rankingModal === "pontuais" && (
                                     <td className="px-3 py-2 text-center">
@@ -2187,7 +2217,8 @@ export default function FechamentoPonto() {
                       {filteredRankingRows.length > 0 && (
                         <div className="shrink-0 border-t bg-slate-50 px-6 py-2.5 flex items-center gap-6 text-xs text-slate-600">
                           <span className="font-semibold text-slate-800">{filteredRankingRows.length} colaboradores</span>
-                          <span>Média de dias: <strong>{Math.round(filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0) / filteredRankingRows.length)}</strong></span>
+                          <span>Média de dias: <strong>{Math.round(filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0) / filteredRankingRows.length)}</strong>{diasUteisNoPeriodo ? ` de ${diasUteisNoPeriodo} úteis` : ""}</span>
+                          {diasUteisNoPeriodo && <span className="text-indigo-700">Presença média: <strong>{Math.round((filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0) / filteredRankingRows.length / diasUteisNoPeriodo) * 100)}%</strong></span>}
                           <span>Total horas: <strong className="font-mono">{(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.horasTrab, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min`; })()}</strong></span>
                           {rankingModal === "pontuais" && <>
                             <span className="text-green-700">{filteredRankingRows.filter((e: any) => e.atrasos === 0).length} sem nenhum atraso</span>
