@@ -100,6 +100,47 @@ function formatJornada(val: unknown): string {
   return s;
 }
 
+function calcIdadeAnos(dataNascimento: unknown): number | null {
+  if (!dataNascimento || typeof dataNascimento !== "string") return null;
+  const m = dataNascimento.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const ano = parseInt(m[1], 10);
+  const mes = parseInt(m[2], 10);
+  const dia = parseInt(m[3], 10);
+  if (!ano || !mes || !dia) return null;
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - ano;
+  const mesHoje = hoje.getMonth() + 1;
+  const diaHoje = hoje.getDate();
+  if (mesHoje < mes || (mesHoje === mes && diaHoje < dia)) idade -= 1;
+  return idade >= 0 && idade < 130 ? idade : null;
+}
+
+function calcTempoEmpresaTexto(dataAdmissao: unknown, dataDesligamento?: unknown): string {
+  if (!dataAdmissao || typeof dataAdmissao !== "string") return "";
+  const m = dataAdmissao.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return "";
+  const inicio = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+  let fim = new Date();
+  if (dataDesligamento && typeof dataDesligamento === "string") {
+    const md = dataDesligamento.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (md) fim = new Date(parseInt(md[1], 10), parseInt(md[2], 10) - 1, parseInt(md[3], 10));
+  }
+  if (fim < inicio) return "";
+  let anos = fim.getFullYear() - inicio.getFullYear();
+  let meses = fim.getMonth() - inicio.getMonth();
+  if (fim.getDate() < inicio.getDate()) meses -= 1;
+  if (meses < 0) { anos -= 1; meses += 12; }
+  if (anos <= 0 && meses <= 0) {
+    const diffDias = Math.floor((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDias <= 0) return "Hoje";
+    return `${diffDias} dia${diffDias !== 1 ? "s" : ""}`;
+  }
+  if (anos <= 0) return `${meses} ${meses === 1 ? "mês" : "meses"}`;
+  if (meses <= 0) return `${anos} ano${anos !== 1 ? "s" : ""}`;
+  return `${anos} ano${anos !== 1 ? "s" : ""} e ${meses} ${meses === 1 ? "mês" : "meses"}`;
+}
+
 function formatDate(val: unknown): string {
   if (!val) return "-";
   if (val instanceof Date) return val.toLocaleDateString("pt-BR");
@@ -123,6 +164,7 @@ export default function Colaboradores() {
   });
   const [desligDe, setDesligDe] = useState("");
   const [desligAte, setDesligAte] = useState("");
+  const [idadeFilter, setIdadeFilter] = useState<string>("Todas");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -212,8 +254,21 @@ export default function Colaboradores() {
         return true;
       });
     }
+    if (idadeFilter && idadeFilter !== "Todas") {
+      list = list.filter(e => {
+        const idade = calcIdadeAnos((e as any).dataNascimento);
+        if (idade === null) return idadeFilter === "Sem data";
+        if (idadeFilter === "Sem data") return false;
+        if (idadeFilter === "60+") return idade >= 60;
+        const m = idadeFilter.match(/^(\d+)-(\d+)$/);
+        if (!m) return true;
+        const min = parseInt(m[1], 10);
+        const max = parseInt(m[2], 10);
+        return idade >= min && idade <= max;
+      });
+    }
     return list;
-  }, [employees, skillEmployeeIds, statusFilter, desligDe, desligAte]);
+  }, [employees, skillEmployeeIds, statusFilter, desligDe, desligAte, idadeFilter]);
 
   const createMut = trpc.employees.create.useMutation({
     onSuccess: (result: any) => {
@@ -699,6 +754,20 @@ export default function Colaboradores() {
               <SelectItem value="ListaNegra">Blacklist</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={idadeFilter} onValueChange={setIdadeFilter}>
+            <SelectTrigger className="w-full sm:w-36 bg-card border-border" title="Filtrar por faixa de idade">
+              <SelectValue placeholder="Idade" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Todas">Todas as idades</SelectItem>
+              <SelectItem value="18-30">18 a 30 anos</SelectItem>
+              <SelectItem value="31-40">31 a 40 anos</SelectItem>
+              <SelectItem value="41-50">41 a 50 anos</SelectItem>
+              <SelectItem value="51-60">51 a 60 anos</SelectItem>
+              <SelectItem value="60+">60 anos ou mais</SelectItem>
+              <SelectItem value="Sem data">Sem data de nasc.</SelectItem>
+            </SelectContent>
+          </Select>
           <SkillFilterDropdown value={skillFilter} onChange={setSkillFilter} companyId={queryCompanyId} companyIds={isConstrutoras ? queryCompanyIds : undefined} />
         </div>
         {statusFilter === "Desligado" && (
@@ -748,6 +817,8 @@ export default function Colaboradores() {
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground w-20">Tipo</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Função</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Setor</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell w-20">Idade</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell whitespace-nowrap">Tempo de Empresa</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Ações</th>
                 </tr>
@@ -772,7 +843,19 @@ export default function Colaboradores() {
                             <span className="text-xs font-bold text-blue-700">{emp.nomeCompleto?.charAt(0)}{emp.nomeCompleto?.split(' ').pop()?.charAt(0)}</span>
                           )}
                         </div>
-                        <span className="font-medium text-blue-700 hover:underline">{emp.nomeCompleto}</span>
+                        <div className="min-w-0">
+                          <div className="font-medium text-blue-700 hover:underline truncate">{emp.nomeCompleto}</div>
+                          {(() => {
+                            const idade = calcIdadeAnos((emp as any).dataNascimento);
+                            const dataFim = emp.status === "Desligado" ? (emp as any).dataDesligamentoEfetiva : undefined;
+                            const tempo = calcTempoEmpresaTexto((emp as any).dataAdmissao, dataFim);
+                            const partes: string[] = [];
+                            if (idade !== null) partes.push(`${idade} anos`);
+                            if (tempo) partes.push(`Empresa: ${tempo}`);
+                            if (partes.length === 0) return null;
+                            return <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{partes.join(" • ")}</div>;
+                          })()}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground min-w-[180px] whitespace-nowrap font-mono text-sm">{formatCPF(emp.cpf)}</td>
@@ -786,6 +869,15 @@ export default function Colaboradores() {
                       {emp.cargoConfianca ? <span className="ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-semibold rounded-full">Art.62</span> : null}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.setor ?? "-"}</td>
+                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
+                      {(() => {
+                        const idade = calcIdadeAnos((emp as any).dataNascimento);
+                        return idade !== null ? `${idade} anos` : "-";
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground hidden xl:table-cell whitespace-nowrap">
+                      {calcTempoEmpresaTexto((emp as any).dataAdmissao, emp.status === "Desligado" ? (emp as any).dataDesligamentoEfetiva : undefined) || "-"}
+                    </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium px-2.5 py-1 rounded ${statusColors[emp.status] ?? ""}`}>
                         {statusLabels[emp.status] ?? emp.status}

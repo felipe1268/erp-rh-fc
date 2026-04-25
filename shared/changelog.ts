@@ -25,6 +25,24 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1282,
+    titulo: "Colaboradores: tempo de empresa só usa data de desligamento quando o status é 'Desligado'",
+    descricao: "Ajuste no cálculo do tempo de empresa exibido na lista de colaboradores: a data de desligamento agora só é considerada quando o status atual do colaborador é 'Desligado'. Se houver uma data de desligamento residual no banco em um colaborador que voltou a ser ativo (recontratação ou correção), o tempo de empresa volta a ser calculado normalmente até hoje, em vez de ficar 'congelado' na data de saída antiga.",
+    tipo: "bugfix",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 09:45:00",
+  },
+  {
+    version: 1281,
+    titulo: "Colaboradores: idade e tempo de empresa na lista, com filtro por faixa etária",
+    descricao: "Na lista de colaboradores agora aparece, embaixo do nome, a idade do funcionário e há quanto tempo ele está na empresa (ex.: '38 anos • Empresa: 2 anos e 4 meses'). Em telas grandes (notebook/desktop), foram adicionadas duas colunas próprias 'Idade' e 'Tempo de Empresa'. Para colaboradores desligados, o tempo de empresa considera a data de desligamento (não conta tempo extra após a saída). Adicionado novo filtro de faixa etária ao lado do filtro de status: 'Todas as idades', '18 a 30 anos', '31 a 40 anos', '41 a 50 anos', '51 a 60 anos', '60 anos ou mais' e 'Sem data de nascimento' (para identificar cadastros incompletos). Os filtros se combinam: por exemplo, dá para listar apenas Ativos com idade entre 41 e 50 anos.",
+    tipo: "melhoria",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 09:30:00",
+  },
+  {
     version: 1280,
     titulo: "Raio-X do Funcionário: lightbox da foto com tecla ESC e navegação por teclado",
     descricao: "Refinamento do recurso de ampliar a foto do colaborador: a tecla ESC agora fecha somente a foto ampliada (antes fechava o Raio-X inteiro). As fotos clicáveis viraram botões de verdade, então é possível abrir a ampliação navegando pelo teclado (Tab + Enter), com indicador de foco visível. Ao abrir, o foco vai automaticamente para o botão de fechar (×), facilitando o uso por leitor de tela e por teclado.",
