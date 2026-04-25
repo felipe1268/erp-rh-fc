@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1290,
+    titulo: "Fechamento de Ponto: modais detalhados nos 4 cards de ranking com PDF, impressão e exportação",
+    descricao: "Cards 'Mais Pontuais', 'Mais Atrasados', 'Mais Horas Extras' e 'Menos Dias Trabalhados' passam a exibir contador de colaboradores e abrem modal completo ao clicar no título. Cada modal traz: tabela com TODOS os colaboradores da categoria (não apenas top 5), busca por nome/função, filtro por obra, rodapé com totais e médias. Dados específicos: Pontuais exibe tempo acumulado de atraso; Atrasados ordena por tempo total acumulado; Horas Extras cruza com solicitações de HE (✅ Aprovada / ⏳ Pendente / ❌ Rejeitada / ⚠️ Sem solicitação) com alerta visual em laranja para HE sem solicitação; Menos Dias Trabalhados cruza com atestados do mês (✅ Justificada / ❌ Não justificada). Dois botões por modal: 'Imprimir / PDF' abre nova janela com relatório formatado profissionalmente (cabeçalho, tabela completa, rodapé com data/hora e total) pronto para impressão ou salvar como PDF; 'Exportar CSV' faz download direto com nome automático (ex: mais-atrasados-2026-04.csv) com BOM UTF-8 para compatibilidade com Excel. Query de HE solicitações é lazy (só busca quando o modal de HE é aberto).",
+    tipo: "feature",
+    modulos: "Ponto",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 13:00:00",
+  },
+  {
     version: 1289,
     titulo: "Colaboradores: cards CLT e PJ contam todos os ativos, não só status=Ativo",
     descricao: "O contador dos cards CLT e PJ estava limitado a colaboradores com status='Ativo', ignorando os que estão de Férias, Afastados, Licença, Recluso, etc. Corrigido para excluir apenas Desligados e Blacklist — alinhado com o comportamento do filtro de lista. Agora CLT + PJ + Sócio soma o mesmo que o total de não-desligados.",
