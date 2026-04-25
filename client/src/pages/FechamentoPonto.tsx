@@ -2036,38 +2036,37 @@ export default function FechamentoPonto() {
                 {/* ===== MODAL DETALHADO DE RANKING ===== */}
                 {rankingModal && rankings && (
                   <Dialog open={true} onOpenChange={(open) => { if (!open) { setRankingModal(null); setRankingSearch(""); setRankingObraFilter("all"); } }}>
-                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-[90vw] max-w-5xl h-[85vh]">
-                      {/* Cabeçalho */}
-                      <DialogHeader className="px-6 py-4 border-b shrink-0">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                              {rankingModal === "pontuais" && <><CheckCircle className="h-5 w-5 text-green-600" /> Mais Pontuais</>}
-                              {rankingModal === "atrasados" && <><XCircle className="h-5 w-5 text-red-600" /> Mais Atrasados</>}
-                              {rankingModal === "extras" && <><Zap className="h-5 w-5 text-amber-600" /> Mais Horas Extras</>}
-                              {rankingModal === "faltosos" && <><CalendarDays className="h-5 w-5 text-slate-600" /> Menos Dias Trabalhados</>}
-                            </DialogTitle>
-                            <p className="text-sm text-muted-foreground mt-0.5">Referência: {mesAno?.replace("-", "/")}</p>
-                          </div>
-                          <div className="flex items-center gap-2 mr-8">
-                            <Button variant="outline" size="sm" onClick={handlePrintRanking}>
-                              <Printer className="h-4 w-4 mr-1.5" /> Imprimir / PDF
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={handleExportRankingCSV}>
-                              <FileDown className="h-4 w-4 mr-1.5" /> Exportar CSV
-                            </Button>
-                          </div>
+                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-[96vw] max-w-7xl h-[92vh]">
+
+                      {/* ── Cabeçalho ── */}
+                      <DialogHeader className="shrink-0 px-6 py-3 border-b bg-white">
+                        <div className="flex items-center gap-4">
+                          <DialogTitle className="text-lg font-bold flex items-center gap-2 shrink-0">
+                            {rankingModal === "pontuais"  && <><CheckCircle className="h-5 w-5 text-green-600" />  Mais Pontuais</>}
+                            {rankingModal === "atrasados" && <><XCircle    className="h-5 w-5 text-red-600" />     Mais Atrasados</>}
+                            {rankingModal === "extras"    && <><Zap         className="h-5 w-5 text-amber-600" />  Mais Horas Extras</>}
+                            {rankingModal === "faltosos"  && <><CalendarDays className="h-5 w-5 text-slate-600" /> Menos Dias Trabalhados</>}
+                          </DialogTitle>
+                          <span className="text-sm text-muted-foreground shrink-0">Referência: <strong>{mesAno?.replace("-", "/")}</strong></span>
+                          <div className="flex-1" />
+                          <Button variant="outline" size="sm" onClick={handlePrintRanking} className="h-8 text-xs">
+                            <Printer className="h-3.5 w-3.5 mr-1.5" /> Imprimir / PDF
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={handleExportRankingCSV} className="h-8 text-xs">
+                            <FileDown className="h-3.5 w-3.5 mr-1.5" /> Exportar CSV
+                          </Button>
+                          <div className="w-6" />
                         </div>
                       </DialogHeader>
 
-                      {/* Filtros */}
-                      <div className="flex flex-wrap items-center gap-3 px-6 py-3 border-b shrink-0 bg-muted/30">
-                        <div className="relative flex-1 min-w-[200px] max-w-sm">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input placeholder="Buscar por nome ou função..." value={rankingSearch} onChange={e => setRankingSearch(e.target.value)} className="pl-10 h-9 bg-white" />
+                      {/* ── Barra de filtros ── */}
+                      <div className="shrink-0 flex items-center gap-3 px-6 py-2.5 border-b bg-muted/20">
+                        <div className="relative w-72">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <Input placeholder="Buscar nome ou função..." value={rankingSearch} onChange={e => setRankingSearch(e.target.value)} className="pl-9 h-8 text-xs bg-white" />
                         </div>
                         <Select value={rankingObraFilter} onValueChange={setRankingObraFilter}>
-                          <SelectTrigger className="w-48 h-9 bg-white">
+                          <SelectTrigger className="w-52 h-8 text-xs bg-white">
                             <SelectValue placeholder="Todas as obras" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2078,37 +2077,28 @@ export default function FechamentoPonto() {
                           </SelectContent>
                         </Select>
                         {rankingModal === "extras" && heSolicitacoesMes.isLoading && (
-                          <span className="text-xs text-muted-foreground animate-pulse">Carregando solicitações de HE...</span>
+                          <span className="text-xs text-muted-foreground animate-pulse">Carregando HE...</span>
                         )}
-                        <div className="ml-auto text-sm text-muted-foreground">
-                          <span className="font-semibold text-foreground">{filteredRankingRows.length}</span> colaboradores
+                        <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="font-bold text-sm text-foreground">{filteredRankingRows.length}</span> colaboradores
                         </div>
                       </div>
 
-                      {/* Tabela */}
-                      <div className="flex-1 overflow-auto px-1">
-                        <table className="w-full text-sm">
-                          <thead className="sticky top-0 z-10">
-                            <tr className="border-b text-left bg-muted/90">
-                              <th className="p-3 font-semibold w-8">#</th>
-                              <th className="p-3 font-semibold">Nome</th>
-                              <th className="p-3 font-semibold">Função</th>
-                              <th className="p-3 font-semibold">Obra(s)</th>
-                              <th className="p-3 font-semibold text-center">Dias Trab.</th>
-                              <th className="p-3 font-semibold text-center">Total Horas</th>
-                              {rankingModal === "pontuais" && <>
-                                <th className="p-3 font-semibold text-center">Tempo Atraso</th>
-                              </>}
-                              {rankingModal === "atrasados" && <>
-                                <th className="p-3 font-semibold text-center">Tempo Acum. Atraso</th>
-                              </>}
-                              {rankingModal === "extras" && <>
-                                <th className="p-3 font-semibold text-center">Total HE</th>
-                                <th className="p-3 font-semibold text-center">Solicitação HE</th>
-                              </>}
-                              {rankingModal === "faltosos" && <>
-                                <th className="p-3 font-semibold text-center">Justificativa</th>
-                              </>}
+                      {/* ── Tabela ── */}
+                      <div className="flex-1 overflow-auto">
+                        <table className="w-full text-xs border-collapse">
+                          <thead className="sticky top-0 z-10 bg-slate-50 border-b-2 border-slate-200">
+                            <tr>
+                              <th className="px-3 py-2.5 font-semibold text-slate-600 w-9 text-center">#</th>
+                              <th className="px-3 py-2.5 font-semibold text-slate-600 text-left min-w-[180px]">Nome</th>
+                              <th className="px-3 py-2.5 font-semibold text-slate-600 text-left min-w-[130px]">Função</th>
+                              <th className="px-3 py-2.5 font-semibold text-slate-600 text-left">Obra(s)</th>
+                              <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-20">Dias</th>
+                              <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-20">H. Total</th>
+                              {rankingModal === "pontuais"  && <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-28">Atraso Acum.</th>}
+                              {rankingModal === "atrasados" && <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-28">Atraso Acum.</th>}
+                              {rankingModal === "extras"    && <><th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-20">Total HE</th><th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-36">Solicitação HE</th></>}
+                              {rankingModal === "faltosos"  && <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-36">Justificativa</th>}
                             </tr>
                           </thead>
                           <tbody>
@@ -2121,105 +2111,90 @@ export default function FechamentoPonto() {
                                 else if (heSols.some((s: any) => s.status === "rejeitada")) heStatus = "rejeitada";
                               }
                               const hasAtestado = rankingModal === "faltosos" && (atestadosMes.data || []).some((a: any) => a.employeeId === e.id);
+                              const rowBg = rankingModal === "extras" && heStatus === "sem" ? "bg-orange-50/70" : i % 2 === 0 ? "bg-white" : "bg-slate-50/50";
                               return (
-                                <tr key={e.id} className={`border-b last:border-0 hover:bg-muted/30 ${rankingModal === "extras" && heStatus === "sem" ? "bg-orange-50/60" : ""}`}>
-                                  <td className="p-3 text-muted-foreground font-mono text-xs text-center">{i + 1}</td>
-                                  <td className="p-3">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => { setRankingModal(null); openPontoDetalhe(e.id); }}>{e.nome}</button>
+                                <tr key={e.id} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${rowBg}`}>
+                                  <td className="px-3 py-2 text-slate-400 font-mono text-center">{i + 1}</td>
+                                  <td className="px-3 py-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <button className="font-semibold text-blue-700 hover:underline text-left leading-tight" onClick={() => { setRankingModal(null); openPontoDetalhe(e.id); }}>{e.nome}</button>
                                       <EmpStatusBadge status={e.status} />
                                     </div>
                                   </td>
-                                  <td className="p-3 text-muted-foreground text-xs">{e.funcao}</td>
-                                  <td className="p-3">
+                                  <td className="px-3 py-2 text-slate-500 leading-tight">{e.funcao}</td>
+                                  <td className="px-3 py-2">
                                     {(e.obraNomes || []).length > 0 ? (
                                       <div className="flex flex-wrap gap-1">
-                                        {e.obraNomes.map((nome: string, oi: number) => (
-                                          <Badge key={oi} variant="outline" className="text-xs">{nome}</Badge>
+                                        {e.obraNomes.slice(0, 2).map((nome: string, oi: number) => (
+                                          <span key={oi} className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-medium border border-slate-200 truncate max-w-[140px]" title={nome}>{nome}</span>
                                         ))}
+                                        {e.obraNomes.length > 2 && <span className="text-[11px] text-muted-foreground">+{e.obraNomes.length - 2}</span>}
                                       </div>
-                                    ) : <span className="text-xs text-muted-foreground">—</span>}
+                                    ) : <span className="text-slate-400">—</span>}
                                   </td>
-                                  <td className="p-3 text-center font-semibold">{e.dias}</td>
-                                  <td className="p-3 text-center font-mono text-xs">{e.horasTrabahadasStr}</td>
+                                  <td className="px-3 py-2 text-center font-bold text-slate-700">{e.dias}</td>
+                                  <td className="px-3 py-2 text-center font-mono text-slate-600">{e.horasTrabahadasStr}</td>
                                   {rankingModal === "pontuais" && (
-                                    <td className="p-3 text-center font-mono text-xs">
+                                    <td className="px-3 py-2 text-center">
                                       {e.atrasos === 0
-                                        ? <Badge className="bg-green-100 text-green-800 border-0 text-xs">Sem atraso</Badge>
-                                        : <span className="text-red-600 font-semibold">{e.atrasosStr}</span>}
+                                        ? <span className="inline-flex items-center gap-1 text-green-700 font-semibold"><CheckCircle className="h-3 w-3" /> Pontual</span>
+                                        : <span className="font-mono font-bold text-red-600">{e.atrasosStr}</span>}
                                     </td>
                                   )}
                                   {rankingModal === "atrasados" && (
-                                    <td className="p-3 text-center font-mono text-xs text-red-600 font-bold">{e.atrasosStr}</td>
+                                    <td className="px-3 py-2 text-center font-mono font-bold text-red-600">{e.atrasosStr}</td>
                                   )}
                                   {rankingModal === "extras" && <>
-                                    <td className="p-3 text-center font-mono text-xs text-green-700 font-bold">{e.horasExtrasStr}</td>
-                                    <td className="p-3 text-center">
-                                      {heStatus === "aprovada" && <Badge className="bg-green-100 text-green-800 border-0 text-xs">✅ Aprovada</Badge>}
-                                      {heStatus === "pendente" && <Badge className="bg-yellow-100 text-yellow-800 border-0 text-xs">⏳ Pendente</Badge>}
-                                      {heStatus === "rejeitada" && <Badge className="bg-red-100 text-red-800 border-0 text-xs">❌ Rejeitada</Badge>}
-                                      {heStatus === "sem" && !heSolicitacoesMes.isLoading && (
-                                        <Badge className="bg-orange-100 text-orange-800 border-0 text-xs">⚠️ Sem solicitação</Badge>
-                                      )}
-                                      {heStatus === "sem" && heSolicitacoesMes.isLoading && (
-                                        <span className="text-xs text-muted-foreground animate-pulse">—</span>
-                                      )}
+                                    <td className="px-3 py-2 text-center font-mono font-bold text-emerald-700">{e.horasExtrasStr}</td>
+                                    <td className="px-3 py-2 text-center">
+                                      {heStatus === "aprovada"  && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100  text-green-800  text-[11px] font-semibold">✅ Aprovada</span>}
+                                      {heStatus === "pendente"  && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-[11px] font-semibold">⏳ Pendente</span>}
+                                      {heStatus === "rejeitada" && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100    text-red-800    text-[11px] font-semibold">❌ Rejeitada</span>}
+                                      {heStatus === "sem" && !heSolicitacoesMes.isLoading && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 text-[11px] font-semibold">⚠️ Sem solicitação</span>}
+                                      {heStatus === "sem" && heSolicitacoesMes.isLoading  && <span className="text-slate-400">—</span>}
                                     </td>
                                   </>}
                                   {rankingModal === "faltosos" && (
-                                    <td className="p-3 text-center">
+                                    <td className="px-3 py-2 text-center">
                                       {hasAtestado
-                                        ? <Badge className="bg-green-100 text-green-800 border-0 text-xs">✅ Justificada</Badge>
-                                        : <Badge className="bg-red-100 text-red-800 border-0 text-xs">❌ Não justificada</Badge>}
+                                        ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-[11px] font-semibold">✅ Justificada</span>
+                                        : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100   text-red-800   text-[11px] font-semibold">❌ Não justificada</span>}
                                     </td>
                                   )}
                                 </tr>
                               );
                             })}
                             {filteredRankingRows.length === 0 && (
-                              <tr><td colSpan={9} className="p-10 text-center text-muted-foreground">Nenhum resultado encontrado</td></tr>
+                              <tr><td colSpan={10} className="py-16 text-center text-muted-foreground">Nenhum colaborador encontrado</td></tr>
                             )}
                           </tbody>
-                          {filteredRankingRows.length > 0 && (
-                            <tfoot>
-                              <tr className="border-t-2 bg-muted/60">
-                                <td colSpan={4} className="p-3 font-semibold text-xs text-muted-foreground">TOTAIS / MÉDIAS ({filteredRankingRows.length} colab.)</td>
-                                <td className="p-3 text-center font-semibold text-xs">
-                                  {Math.round(filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0) / filteredRankingRows.length)} dias (média)
-                                </td>
-                                <td className="p-3 text-center font-mono font-semibold text-xs">
-                                  {(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.horasTrab, 0); return `${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}`; })()} total
-                                </td>
-                                {rankingModal === "pontuais" && (
-                                  <td className="p-3 text-center text-xs font-semibold">
-                                    {filteredRankingRows.filter((e: any) => e.atrasos === 0).length} sem atraso /&nbsp;
-                                    {(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.atrasos, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min total`; })()}
-                                  </td>
-                                )}
-                                {rankingModal === "atrasados" && (
-                                  <td className="p-3 text-center font-mono font-semibold text-xs text-red-700">
-                                    {(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.atrasos, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min total`; })()}
-                                  </td>
-                                )}
-                                {rankingModal === "extras" && <>
-                                  <td className="p-3 text-center font-mono font-semibold text-xs text-green-700">
-                                    {(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.horasExtras, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min total`; })()}
-                                  </td>
-                                  <td className="p-3 text-center text-xs font-semibold text-orange-700">
-                                    {rankingModal === "extras" && !heSolicitacoesMes.isLoading ? `${filteredRankingRows.filter((e: any) => !(heSolicitacoesMes.data || []).some((sol: any) => sol.funcionarios?.some((f: any) => f.employeeId === e.id))).length} sem solicitação` : "—"}
-                                  </td>
-                                </>}
-                                {rankingModal === "faltosos" && (
-                                  <td className="p-3 text-center text-xs font-semibold">
-                                    {filteredRankingRows.filter((e: any) => (atestadosMes.data || []).some((a: any) => a.employeeId === e.id)).length} justificadas /&nbsp;
-                                    {filteredRankingRows.filter((e: any) => !(atestadosMes.data || []).some((a: any) => a.employeeId === e.id)).length} não justificadas
-                                  </td>
-                                )}
-                              </tr>
-                            </tfoot>
-                          )}
                         </table>
                       </div>
+
+                      {/* ── Rodapé de totais ── */}
+                      {filteredRankingRows.length > 0 && (
+                        <div className="shrink-0 border-t bg-slate-50 px-6 py-2.5 flex items-center gap-6 text-xs text-slate-600">
+                          <span className="font-semibold text-slate-800">{filteredRankingRows.length} colaboradores</span>
+                          <span>Média de dias: <strong>{Math.round(filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0) / filteredRankingRows.length)}</strong></span>
+                          <span>Total horas: <strong className="font-mono">{(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.horasTrab, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min`; })()}</strong></span>
+                          {rankingModal === "pontuais" && <>
+                            <span className="text-green-700">{filteredRankingRows.filter((e: any) => e.atrasos === 0).length} sem nenhum atraso</span>
+                            <span className="text-red-600">Total acum. atraso: <strong>{(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.atrasos, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min`; })()}</strong></span>
+                          </>}
+                          {rankingModal === "atrasados" && (
+                            <span className="text-red-600">Total acum. atraso: <strong>{(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.atrasos, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min`; })()}</strong></span>
+                          )}
+                          {rankingModal === "extras" && <>
+                            <span className="text-emerald-700">Total HE: <strong>{(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.horasExtras, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min`; })()}</strong></span>
+                            {!heSolicitacoesMes.isLoading && <span className="text-orange-700">{filteredRankingRows.filter((e: any) => !(heSolicitacoesMes.data || []).some((sol: any) => sol.funcionarios?.some((f: any) => f.employeeId === e.id))).length} sem solicitação</span>}
+                          </>}
+                          {rankingModal === "faltosos" && <>
+                            <span className="text-green-700">{filteredRankingRows.filter((e: any) => (atestadosMes.data || []).some((a: any) => a.employeeId === e.id)).length} justificadas</span>
+                            <span className="text-red-600">{filteredRankingRows.filter((e: any) => !(atestadosMes.data || []).some((a: any) => a.employeeId === e.id)).length} não justificadas</span>
+                          </>}
+                        </div>
+                      )}
+
                     </DialogContent>
                   </Dialog>
                 )}
