@@ -4650,4 +4650,55 @@ export const fechamentoPontoRouter = router({
 
       return { funcionarios: result, totais };
     }),
+
+  // Retorna os dias trabalhados (com batida de ponto) de um colaborador num período
+  getDiasEmployee: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      employeeId: z.number(),
+      dataInicio: z.string(), // YYYY-MM-DD
+      dataFim: z.string(),    // YYYY-MM-DD
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const cids = resolveCompanyIds(input);
+      const rows = await db.select({
+        data: timeRecords.data,
+        horasTrabalhadas: timeRecords.horasTrabalhadas,
+        obraId: timeRecords.obraId,
+      })
+        .from(timeRecords)
+        .where(and(
+          inArray(timeRecords.companyId, cids),
+          eq(timeRecords.employeeId, input.employeeId),
+          sql`${timeRecords.data} >= ${input.dataInicio}`,
+          sql`${timeRecords.data} <= ${input.dataFim}`,
+        ))
+        .orderBy(timeRecords.data);
+
+      // Agrupa por data (pode ter múltiplas obras no mesmo dia)
+      const byDate: Record<string, { horasTrabalhadas: string | null; obraIds: number[] }> = {};
+      for (const r of rows) {
+        if (!byDate[r.data]) byDate[r.data] = { horasTrabalhadas: r.horasTrabalhadas, obraIds: [] };
+        if (r.obraId) byDate[r.data].obraIds.push(r.obraId);
+      }
+
+      // Gera todos os dias do período
+      const all: { data: string; dow: number; trabalhado: boolean; horasTrabalhadas: string | null }[] = [];
+      const cur = new Date(input.dataInicio + "T12:00:00Z");
+      const end = new Date(input.dataFim + "T12:00:00Z");
+      while (cur <= end) {
+        const ds = cur.toISOString().slice(0, 10);
+        all.push({
+          data: ds,
+          dow: cur.getUTCDay(), // 0=Dom,1=Seg…6=Sáb
+          trabalhado: !!byDate[ds],
+          horasTrabalhadas: byDate[ds]?.horasTrabalhadas ?? null,
+        });
+        cur.setUTCDate(cur.getUTCDate() + 1);
+      }
+
+      return { dias: all, totalTrabalhados: Object.keys(byDate).length };
+    }),
 });

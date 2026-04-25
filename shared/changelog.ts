@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1291,
+    titulo: "Fechamento de Ponto: clique em Dias Trabalhados e % Presença abre calendário do colaborador",
+    descricao: "Nos modais de ranking, as colunas 'Dias Trabalhados' e '% Presença' agora são clicáveis. Ao clicar, abre um sub-modal com o calendário completo do período de fechamento para aquele colaborador: cada dia é classificado como ✅ Trabalhado (com horas registradas), ❌ Falta provável (dia útil sem batida), ou — Domingo. Resumo no topo mostra total trabalhado, faltas prováveis, domingos e % presença. Nota de rodapé explica que 'Falta provável' pode ser falta real, home office sem lançamento ou dado não importado. Novo endpoint backend fechamentoPonto.getDiasEmployee retorna todos os dias do período agrupados por data única (evita duplicatas de múltiplas obras). Também corrigido: % Presença usa dias corridos do período como denominador (não apenas Seg-Sáb), eliminando valores acima de 100% para quem não trabalha domingo. Alerta âmbar quando período ainda não encerrou.",
+    tipo: "feature",
+    modulos: "Ponto",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 15:00:00",
+  },
+  {
     version: 1290,
     titulo: "Fechamento de Ponto: modais detalhados nos 4 cards de ranking com PDF, impressão e exportação",
     descricao: "Cards 'Mais Pontuais', 'Mais Atrasados', 'Mais Horas Extras' e 'Menos Dias Trabalhados' passam a exibir contador de colaboradores e abrem modal completo ao clicar no título. Cada modal traz: tabela com TODOS os colaboradores da categoria (não apenas top 5), busca por nome/função, filtro por obra, rodapé com totais e médias. Dados específicos: Pontuais exibe tempo acumulado de atraso; Atrasados ordena por tempo total acumulado; Horas Extras cruza com solicitações de HE (✅ Aprovada / ⏳ Pendente / ❌ Rejeitada / ⚠️ Sem solicitação) com alerta visual em laranja para HE sem solicitação; Menos Dias Trabalhados cruza com atestados do mês (✅ Justificada / ❌ Não justificada). Dois botões por modal: 'Imprimir / PDF' abre nova janela com relatório formatado profissionalmente (cabeçalho, tabela completa, rodapé com data/hora e total) pronto para impressão ou salvar como PDF; 'Exportar CSV' faz download direto com nome automático (ex: mais-atrasados-2026-04.csv) com BOM UTF-8 para compatibilidade com Excel. Query de HE solicitações é lazy (só busca quando o modal de HE é aberto).",

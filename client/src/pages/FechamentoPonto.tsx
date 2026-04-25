@@ -696,6 +696,7 @@ export default function FechamentoPonto() {
   const [rankingModal, setRankingModal] = useState<"pontuais" | "atrasados" | "extras" | "faltosos" | null>(null);
   const [rankingSearch, setRankingSearch] = useState("");
   const [rankingObraFilter, setRankingObraFilter] = useState("all");
+  const [diasDetalhe, setDiasDetalhe] = useState<{ employeeId: number; nome: string } | null>(null);
   // Memória DIXI
   const [addMappingOpen, setAddMappingOpen] = useState(false);
   const [newMappingDixiName, setNewMappingDixiName] = useState("");
@@ -737,6 +738,10 @@ export default function FechamentoPonto() {
   const heSolicitacoesMes = trpc.heSolicitacoes.list.useQuery(
     { companyId, companyIds, mesReferencia: mesAno, status: "todas" },
     { enabled: rankingModal === "extras" && (companyId > 0 || companyIds.length > 0) }
+  );
+  const diasEmployeeQuery = trpc.fechamentoPonto.getDiasEmployee.useQuery(
+    { companyId, companyIds, employeeId: diasDetalhe?.employeeId ?? 0, dataInicio: periodoIni ?? "", dataFim: periodoFim ?? "" },
+    { enabled: !!diasDetalhe && !!periodoIni && !!periodoFim && (companyId > 0 || companyIds.length > 0) }
   );
   const unmatchedData = trpc.fechamentoPonto.getUnmatchedRecords.useQuery(
     { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 }
@@ -2189,11 +2194,13 @@ export default function FechamentoPonto() {
                                       </div>
                                     ) : <span className="text-slate-400">—</span>}
                                   </td>
-                                  <td className="px-3 py-2 text-center font-bold text-slate-700">{e.dias}</td>
+                                  <td className="px-3 py-2 text-center">
+                                    <button className="font-bold text-slate-700 hover:text-blue-700 hover:underline cursor-pointer" onClick={() => setDiasDetalhe({ employeeId: e.id, nome: e.nome })}>{e.dias}</button>
+                                  </td>
                                   {diasUteisNoPeriodo && (() => {
                                     const pct = Math.round((e.dias / diasUteisNoPeriodo) * 100);
                                     const cor = pct >= 90 ? "text-green-700 bg-green-50" : pct >= 70 ? "text-yellow-700 bg-yellow-50" : "text-red-700 bg-red-50";
-                                    return <td className="px-3 py-2 text-center"><span className={`inline-block px-2 py-0.5 rounded-full font-bold text-[11px] ${cor}`}>{pct}%</span></td>;
+                                    return <td className="px-3 py-2 text-center"><button className={`inline-block px-2 py-0.5 rounded-full font-bold text-[11px] hover:opacity-80 cursor-pointer ${cor}`} onClick={() => setDiasDetalhe({ employeeId: e.id, nome: e.nome })}>{pct}%</button></td>;
                                   })()}
                                   <td className="px-3 py-2 text-center font-mono text-slate-600">{e.horasTrabahadasStr}</td>
                                   {rankingModal === "pontuais" && (
@@ -2258,6 +2265,82 @@ export default function FechamentoPonto() {
                         </div>
                       )}
 
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {/* ===== SUB-MODAL: CALENDÁRIO DE DIAS DO COLABORADOR ===== */}
+                {diasDetalhe && (
+                  <Dialog open={true} onOpenChange={(open) => { if (!open) setDiasDetalhe(null); }}>
+                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-[700px] max-w-[95vw] max-h-[85vh]">
+                      <DialogHeader className="px-5 py-3 border-b shrink-0">
+                        <div className="flex items-center gap-3">
+                          <DialogTitle className="text-base font-bold flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4 text-indigo-600" />
+                            {diasDetalhe.nome}
+                          </DialogTitle>
+                          {periodoIni && periodoFim && (
+                            <span className="text-xs text-muted-foreground bg-slate-100 border rounded px-2 py-0.5">
+                              {fmtPeriodo(periodoIni)} → {fmtPeriodo(periodoFim)}
+                            </span>
+                          )}
+                          <div className="w-6" />
+                        </div>
+                      </DialogHeader>
+
+                      <div className="flex-1 overflow-auto px-5 py-4">
+                        {diasEmployeeQuery.isLoading && (
+                          <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
+                            <span className="animate-pulse">Carregando dias...</span>
+                          </div>
+                        )}
+                        {diasEmployeeQuery.data && (() => {
+                          const { dias, totalTrabalhados } = diasEmployeeQuery.data;
+                          const totalFaltas = dias.filter(d => d.dow !== 0 && !d.trabalhado).length;
+                          const totalDomingos = dias.filter(d => d.dow === 0).length;
+                          const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+                          return (
+                            <>
+                              {/* Resumo */}
+                              <div className="flex items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg border text-sm">
+                                <span className="flex items-center gap-1.5 text-green-700 font-semibold"><CheckCircle className="h-4 w-4" /> {totalTrabalhados} dias trabalhados</span>
+                                <span className="flex items-center gap-1.5 text-red-600 font-semibold"><XCircle className="h-4 w-4" /> {totalFaltas} faltas prováveis</span>
+                                <span className="flex items-center gap-1.5 text-slate-400"><span className="text-base">—</span> {totalDomingos} domingos</span>
+                                {diasUteisNoPeriodo && <span className="ml-auto text-indigo-700 font-semibold">{Math.min(100, Math.round((totalTrabalhados / diasUteisNoPeriodo) * 100))}% de presença</span>}
+                              </div>
+
+                              {/* Lista de dias */}
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                                {dias.map((d) => {
+                                  const [ano, mes, dia] = d.data.split("-");
+                                  const label = `${dia}/${mes} (${DIAS_SEMANA[d.dow]})`;
+                                  const isDom = d.dow === 0;
+                                  return (
+                                    <div key={d.data} className={`flex items-center justify-between py-1.5 px-2 rounded ${isDom ? "text-slate-400 bg-slate-50" : d.trabalhado ? "text-green-800 bg-green-50" : "text-red-700 bg-red-50"}`}>
+                                      <span className="font-medium">{label}</span>
+                                      <span className="flex items-center gap-1">
+                                        {isDom && <span>— Domingo</span>}
+                                        {!isDom && d.trabalhado && <>
+                                          <CheckCircle className="h-3 w-3 text-green-600" />
+                                          <span className="font-mono">{d.horasTrabalhadas ?? ""}</span>
+                                        </>}
+                                        {!isDom && !d.trabalhado && <>
+                                          <XCircle className="h-3 w-3 text-red-500" />
+                                          <span>Falta provável</span>
+                                        </>}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              <p className="text-[11px] text-muted-foreground mt-3 text-center">
+                                "Falta provável" = dia útil sem nenhuma batida de ponto registrada no sistema. Pode ser falta, home office sem lançamento, ou dado ainda não importado.
+                              </p>
+                            </>
+                          );
+                        })()}
+                      </div>
                     </DialogContent>
                   </Dialog>
                 )}
