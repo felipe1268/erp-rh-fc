@@ -1025,17 +1025,14 @@ export default function FechamentoPonto() {
     return { periodoIni: ini, periodoFim: fim };
   }, [cicloInicio, cicloFim, mesAno]);
 
-  // Dias úteis (Seg–Sáb) no ciclo de fechamento — usado para calcular % de presença
+  // Total de dias corridos no período (numerador = dias com ponto, denominador = dias corridos)
+  // Usamos dias corridos (e não só úteis) para evitar >100%: quem trabalha domingo também conta
   const diasUteisNoPeriodo = useMemo(() => {
     if (!periodoIni || !periodoFim) return null;
-    let count = 0;
-    const cur = new Date(periodoIni + "T12:00:00Z");
-    const end = new Date(periodoFim + "T12:00:00Z");
-    while (cur <= end) {
-      if (cur.getUTCDay() !== 0) count++; // Seg–Sáb, exclui domingo
-      cur.setUTCDate(cur.getUTCDate() + 1);
-    }
-    return count;
+    const ini = new Date(periodoIni + "T12:00:00Z");
+    const fim = new Date(periodoFim + "T12:00:00Z");
+    const diff = Math.round((fim.getTime() - ini.getTime()) / 86400000) + 1; // +1 inclusive
+    return diff > 0 ? diff : null;
   }, [periodoIni, periodoFim]);
 
   // Formata data YYYY-MM-DD para DD/MM/YYYY
@@ -2094,6 +2091,17 @@ export default function FechamentoPonto() {
                         </div>
                       </DialogHeader>
 
+                      {/* ── Alerta: período incompleto ── */}
+                      {periodoFim && new Date(periodoFim + "T23:59:59Z") > new Date() && (
+                        <div className="shrink-0 flex items-start gap-3 px-6 py-3 bg-amber-50 border-b-2 border-amber-300">
+                          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                          <div className="text-sm text-amber-900">
+                            <strong>Dados incompletos:</strong> o período de fechamento vai até <strong>{fmtPeriodo(periodoFim)}</strong> e ainda não chegou.
+                            Os números abaixo refletem apenas o que foi registrado até hoje — os dados finais só estarão disponíveis após o fechamento do período.
+                          </div>
+                        </div>
+                      )}
+
                       {/* ── Barra de filtros ── */}
                       <div className="shrink-0 flex items-center gap-3 px-6 py-2.5 border-b bg-muted/20">
                         <div className="relative w-72">
@@ -2123,7 +2131,7 @@ export default function FechamentoPonto() {
                       <div className="shrink-0 px-6 py-2 border-b bg-blue-50/60 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-slate-600">
                         <span className="font-semibold text-blue-800 mr-1">Legenda:</span>
                         <span><strong className="text-slate-800">Dias Trabalhados</strong> = dias que o colaborador bateu ponto no período de fechamento (NÃO são dias úteis esperados)</span>
-                        <span><strong className="text-slate-800">% Presença</strong> = dias trabalhados ÷ dias úteis Seg–Sáb do período{diasUteisNoPeriodo ? ` (${diasUteisNoPeriodo} dias)` : ""} — indica se faltou muito ou não</span>
+                        <span><strong className="text-slate-800">% Presença</strong> = dias com ponto ÷ dias corridos do período{diasUteisNoPeriodo ? ` (${diasUteisNoPeriodo} dias corridos)` : ""} — 100% = trabalhou todos os dias do período (incluindo domingos se aplicável)</span>
                         <span><strong className="text-slate-800">H. Total</strong> = soma das horas trabalhadas (entrada → saída)</span>
                         {rankingModal === "pontuais"  && <span><strong className="text-green-800">Atraso Acum.</strong> = soma de todos os minutos de atraso no período (zero = sempre pontual)</span>}
                         {rankingModal === "atrasados" && <span><strong className="text-red-800">Atraso Acum.</strong> = soma total dos atrasos do período em h/min — quanto maior, pior</span>}
