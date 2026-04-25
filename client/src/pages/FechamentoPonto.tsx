@@ -1012,19 +1012,31 @@ export default function FechamentoPonto() {
     return { pontuais, atrasados, extras, faltosos, allPontuais, allAtrasados, allExtras, allFaltosos, fmtHM };
   }, [summary.data]);
 
+  // Período efetivo do ciclo: usa datas do backend se disponíveis, senão calcula pelo mesAno (16/mês-ant → 15/mês-atual)
+  const { periodoIni, periodoFim } = useMemo(() => {
+    if (cicloInicio && cicloFim) return { periodoIni: cicloInicio, periodoFim: cicloFim };
+    if (!mesAno) return { periodoIni: null, periodoFim: null };
+    const [ano, mes] = mesAno.split("-").map(Number);
+    // mês anterior
+    const anoAnt = mes === 1 ? ano - 1 : ano;
+    const mesAnt = mes === 1 ? 12 : mes - 1;
+    const ini = `${anoAnt}-${String(mesAnt).padStart(2, "0")}-16`;
+    const fim = `${ano}-${String(mes).padStart(2, "0")}-15`;
+    return { periodoIni: ini, periodoFim: fim };
+  }, [cicloInicio, cicloFim, mesAno]);
+
   // Dias úteis (Seg–Sáb) no ciclo de fechamento — usado para calcular % de presença
   const diasUteisNoPeriodo = useMemo(() => {
-    if (!cicloInicio || !cicloFim) return null;
+    if (!periodoIni || !periodoFim) return null;
     let count = 0;
-    const cur = new Date(cicloInicio + "T12:00:00Z");
-    const end = new Date(cicloFim + "T12:00:00Z");
+    const cur = new Date(periodoIni + "T12:00:00Z");
+    const end = new Date(periodoFim + "T12:00:00Z");
     while (cur <= end) {
-      const dow = cur.getUTCDay(); // 0=Dom, 6=Sáb
-      if (dow !== 0) count++; // conta Seg–Sáb (excluindo domingo)
+      if (cur.getUTCDay() !== 0) count++; // Seg–Sáb, exclui domingo
       cur.setUTCDate(cur.getUTCDate() + 1);
     }
     return count;
-  }, [cicloInicio, cicloFim]);
+  }, [periodoIni, periodoFim]);
 
   // Formata data YYYY-MM-DD para DD/MM/YYYY
   const fmtPeriodo = (d: string | null) => d ? d.split("-").reverse().join("/") : "";
@@ -2065,9 +2077,9 @@ export default function FechamentoPonto() {
                             {rankingModal === "faltosos"  && <><CalendarDays className="h-5 w-5 text-slate-600" /> Menos Dias Trabalhados</>}
                           </DialogTitle>
                           <span className="text-sm text-muted-foreground shrink-0">Referência: <strong>{mesAno?.replace("-", "/")}</strong></span>
-                          {cicloInicio && cicloFim && (
+                          {periodoIni && periodoFim && (
                             <span className="text-xs text-muted-foreground bg-slate-100 border rounded px-2 py-0.5 shrink-0">
-                              Período: <strong>{fmtPeriodo(cicloInicio)}</strong> → <strong>{fmtPeriodo(cicloFim)}</strong>
+                              Período: <strong>{fmtPeriodo(periodoIni)}</strong> → <strong>{fmtPeriodo(periodoFim)}</strong>
                               {diasUteisNoPeriodo && <span className="ml-1 text-slate-500">({diasUteisNoPeriodo} dias úteis Seg–Sáb)</span>}
                             </span>
                           )}
