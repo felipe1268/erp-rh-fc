@@ -2084,6 +2084,18 @@ export default function FechamentoPonto() {
                         </div>
                       </div>
 
+                      {/* ── Legenda ── */}
+                      <div className="shrink-0 px-6 py-2 border-b bg-blue-50/60 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-slate-600">
+                        <span className="font-semibold text-blue-800 mr-1">Legenda:</span>
+                        <span><strong className="text-slate-800">Dias Trabalhados</strong> = quantidade de dias com registro de ponto no mês</span>
+                        <span><strong className="text-slate-800">H. Total</strong> = soma total das horas trabalhadas (entrada → saída)</span>
+                        {rankingModal === "pontuais"  && <span><strong className="text-green-800">Atraso Acum.</strong> = soma de todos os minutos de atraso no mês (zero = sempre pontual)</span>}
+                        {rankingModal === "atrasados" && <span><strong className="text-red-800">Atraso Acum.</strong> = soma total dos atrasos do mês em horas e minutos — quanto maior, pior</span>}
+                        {rankingModal === "extras"    && <><span><strong className="text-emerald-800">Total HE</strong> = horas trabalhadas além do horário contratado no mês</span><span><strong className="text-orange-800">Solicitação HE</strong> = se foi aberta (e aprovada) uma solicitação formal de hora extra</span></>}
+                        {rankingModal === "faltosos"  && <span><strong className="text-slate-800">Dias Trabalhados</strong> = colaboradores com menos dias de presença no mês — pode indicar faltas, afastamentos ou escala reduzida</span>}
+                        {rankingModal === "faltosos"  && <span><strong className="text-green-800">Justificada</strong> = possui atestado médico registrado no mês</span>}
+                      </div>
+
                       {/* ── Tabela ── */}
                       <div className="flex-1 overflow-auto">
                         <table className="w-full text-xs border-collapse">
@@ -2093,12 +2105,12 @@ export default function FechamentoPonto() {
                               <th className="px-3 py-2.5 font-semibold text-slate-600 text-left min-w-[180px]">Nome</th>
                               <th className="px-3 py-2.5 font-semibold text-slate-600 text-left min-w-[130px]">Função</th>
                               <th className="px-3 py-2.5 font-semibold text-slate-600 text-left">Obra(s)</th>
-                              <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-20">Dias</th>
-                              <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-20">H. Total</th>
-                              {rankingModal === "pontuais"  && <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-28">Atraso Acum.</th>}
-                              {rankingModal === "atrasados" && <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-28">Atraso Acum.</th>}
-                              {rankingModal === "extras"    && <><th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-20">Total HE</th><th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-36">Solicitação HE</th></>}
-                              {rankingModal === "faltosos"  && <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-36">Justificativa</th>}
+                              <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-24">Dias Trabalhados</th>
+                              <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-24">H. Total no Mês</th>
+                              {rankingModal === "pontuais"  && <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-32">Atraso Acumulado</th>}
+                              {rankingModal === "atrasados" && <th className="px-3 py-2.5 font-semibold text-red-600   text-center w-32">Atraso Acumulado</th>}
+                              {rankingModal === "extras"    && <><th className="px-3 py-2.5 font-semibold text-emerald-700 text-center w-24">Total HE</th><th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-36">Solicitação HE</th></>}
+                              {rankingModal === "faltosos"  && <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-36">Atestado / Justificativa</th>}
                             </tr>
                           </thead>
                           <tbody>
