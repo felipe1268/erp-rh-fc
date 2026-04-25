@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1289,
+    titulo: "Colaboradores: cards CLT e PJ contam todos os ativos, não só status=Ativo",
+    descricao: "O contador dos cards CLT e PJ estava limitado a colaboradores com status='Ativo', ignorando os que estão de Férias, Afastados, Licença, Recluso, etc. Corrigido para excluir apenas Desligados e Blacklist — alinhado com o comportamento do filtro de lista. Agora CLT + PJ + Sócio soma o mesmo que o total de não-desligados.",
+    tipo: "bugfix",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 12:00:00",
+  },
+  {
     version: 1288,
     titulo: "Colaboradores: filtros CLT, PJ e Sócio excluem desligados e blacklist",
     descricao: "Os filtros de tipo de contrato (CLT, PJ, Sócio) agora mostram apenas colaboradores ativos na empresa — Ativo, Férias, Afastado, Licença, Recluso e similares. Colaboradores com status 'Desligado', 'Lista_Negra' ou com o campo listaNegra ativado são excluídos automaticamente desses filtros, pois possuem filtros próprios ('Desligados' e 'Blacklist'). Antes, ao clicar em 'CLT', apareciam misturados todos os colaboradores CLT independente de terem sido desligados ou não.",
