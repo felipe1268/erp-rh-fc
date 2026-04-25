@@ -926,16 +926,26 @@ export default function Colaboradores() {
                       {calcTempoEmpresaTexto((emp as any).dataAdmissao, emp.status === "Desligado" ? (emp as any).dataDesligamentoEfetiva : undefined) || "-"}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1 items-center">
-                        <span className={`text-xs font-medium px-2.5 py-1 rounded ${statusColors[emp.status] ?? ""}`}>
-                          {statusLabels[emp.status] ?? emp.status}
-                        </span>
-                        {(emp as any).listaNegra === 1 && emp.status !== "Lista_Negra" && (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-300" title="Este colaborador também está na Lista Negra">
-                            ⚑ Blacklist
+                      {(() => {
+                        const isBlacklist = emp.status === "Lista_Negra" || (emp as any).listaNegra === 1 || (emp as any).listaNegra === true;
+                        if (isBlacklist) {
+                          return (
+                            <div className="flex flex-col gap-0.5 items-start">
+                              <span className={`text-xs font-medium px-2.5 py-1 rounded ${statusColors["Desligado"]}`}>
+                                Desligado
+                              </span>
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-300">
+                                ⚑ Blacklist
+                              </span>
+                            </div>
+                          );
+                        }
+                        return (
+                          <span className={`text-xs font-medium px-2.5 py-1 rounded ${statusColors[emp.status] ?? ""}`}>
+                            {statusLabels[emp.status] ?? emp.status}
                           </span>
-                        )}
-                      </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1286,
+    titulo: "Colaboradores: badge Blacklist padronizado para todos na lista negra",
+    descricao: "Corrigida inconsistência visual na coluna Status: colaboradores com status='Lista_Negra' exibiam texto puro 'Lista_Negra' (sem badge estilizado) porque a chave no dicionário estava errada, enquanto quem tinha status='Desligado'+listaNegra=1 exibia badges estilizados duplos. Agora ambos os casos renderizam exatamente o mesmo padrão visual: badge 'Desligado' (rosa) empilhado sobre badge '⚑ Blacklist' (vermelho com borda), garantindo uniformidade independente de como o colaborador entrou na lista negra.",
+    tipo: "bugfix",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 11:15:00",
+  },
+  {
     version: 1285,
     titulo: "Colaboradores: Blacklist restrita ao Admin Master + separação do filtro Desligado",
     descricao: "Duas correções relacionadas à Lista Negra na tela de Colaboradores: (1) O card KPI 'Blacklist', a opção 'Blacklist' no filtro de status e todos os colaboradores com status='Lista_Negra' ou listaNegra=1 agora ficam completamente ocultos para usuários que não são Admin Master — somente o Admin Master vê e acessa a lista negra. (2) O filtro 'Desligado' agora mostra apenas desligamentos normais: colaboradores que estão simultaneamente desligados E na lista negra não aparecem mais no filtro de Desligados (já que pertencem exclusivamente à Blacklist). Essas mudanças são aplicadas no frontend via isAdminMaster (user.role === 'admin_master').",
