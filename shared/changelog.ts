@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1285,
+    titulo: "Colaboradores: Blacklist restrita ao Admin Master + separação do filtro Desligado",
+    descricao: "Duas correções relacionadas à Lista Negra na tela de Colaboradores: (1) O card KPI 'Blacklist', a opção 'Blacklist' no filtro de status e todos os colaboradores com status='Lista_Negra' ou listaNegra=1 agora ficam completamente ocultos para usuários que não são Admin Master — somente o Admin Master vê e acessa a lista negra. (2) O filtro 'Desligado' agora mostra apenas desligamentos normais: colaboradores que estão simultaneamente desligados E na lista negra não aparecem mais no filtro de Desligados (já que pertencem exclusivamente à Blacklist). Essas mudanças são aplicadas no frontend via isAdminMaster (user.role === 'admin_master').",
+    tipo: "melhoria",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 11:00:00",
+  },
+  {
     version: 1284,
     titulo: "Colaboradores: badge duplo para Desligado + Blacklist",
     descricao: "Na coluna Status da lista de colaboradores, quando um colaborador tem o campo listaNegra ativado mas seu status é 'Desligado' (não 'Lista_Negra'), agora aparecem dois badges juntos: o badge do status atual ('Desligado') e um badge adicional vermelho '⚑ Blacklist'. Isso esclarece que o colaborador está simultaneamente desligado E na lista negra — situação que ocorre quando alguém foi desligado e depois incluído na blacklist por outro caminho (importação, edição manual, ou fluxo antigo). Não é um bug: os campos status e listaNegra são independentes no banco e podem coexistir.",

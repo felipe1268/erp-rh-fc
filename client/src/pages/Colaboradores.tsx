@@ -178,6 +178,7 @@ function formatDate(val: unknown): string {
 export default function Colaboradores() {
   const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const { user } = useAuth();
+  const isAdminMaster = user?.role === "admin_master";
   const selectedCompany = selectedCompanyId;
   const [search, setSearch] = useState("");
   const [skillFilter, setSkillFilter] = useState<string>("all");
@@ -263,11 +264,19 @@ export default function Colaboradores() {
   // Apply skill filter to employees
   const displayEmployees = useMemo(() => {
     let list = employees ?? [];
+    // Usuários não-master nunca veem colaboradores da lista negra
+    if (!isAdminMaster) {
+      list = list.filter(e => e.status !== "Lista_Negra" && (e as any).listaNegra !== 1 && (e as any).listaNegra !== true);
+    }
     if (skillEmployeeIds) list = list.filter(e => skillEmployeeIds.has(e.id));
     if (statusFilter === "CLT") list = list.filter(e => (e as any).tipoContrato === "CLT");
     if (statusFilter === "PJ") list = list.filter(e => (e as any).tipoContrato === "PJ");
     if (statusFilter === "Socio") list = list.filter(e => (e as any).tipoContrato === "Socio");
     if (statusFilter === "ListaNegra") list = list.filter(e => (e as any).listaNegra === 1 || (e as any).listaNegra === true);
+    // Filtro "Desligado" mostra apenas desligamentos normais — exclui quem está na lista negra
+    if (statusFilter === "Desligado") {
+      list = list.filter(e => e.status !== "Lista_Negra" && (e as any).listaNegra !== 1 && (e as any).listaNegra !== true);
+    }
     if (statusFilter === "Desligado" && (desligDe || desligAte)) {
       list = list.filter(e => {
         const d = (e as any).dataDesligamentoEfetiva;
@@ -732,7 +741,7 @@ export default function Colaboradores() {
                 { label: "Afastados", value: statsQ.data.afastados, icon: HeartPulse, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", filter: "Afastado" },
                 { label: "Licença", value: statsQ.data.licenca, icon: Clock, color: "text-purple-700", bg: "bg-purple-50 border-purple-200", filter: "Licenca" },
                 { label: "Desligados", value: statsQ.data.desligados, icon: UserX, color: "text-red-700", bg: "bg-red-50 border-red-200", filter: "Desligado" },
-                { label: "Blacklist", value: statsQ.data.blacklist || 0, icon: ShieldX, color: "text-red-800", bg: "bg-red-100 border-red-300", filter: "ListaNegra" },
+                ...(isAdminMaster ? [{ label: "Blacklist", value: statsQ.data.blacklist || 0, icon: ShieldX, color: "text-red-800", bg: "bg-red-100 border-red-300", filter: "ListaNegra" }] : []),
                 { label: "Reclusos", value: statsQ.data.reclusos, icon: Ban, color: "text-gray-700", bg: "bg-gray-50 border-gray-200", filter: "Recluso" },
               ].map(item => (
                 <button
@@ -774,7 +783,7 @@ export default function Colaboradores() {
               {EMPLOYEE_STATUS.map(s => (
                 <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
               ))}
-              <SelectItem value="ListaNegra">Blacklist</SelectItem>
+              {isAdminMaster && <SelectItem value="ListaNegra">Blacklist</SelectItem>}
             </SelectContent>
           </Select>
           <Select value={idadeFilter} onValueChange={setIdadeFilter}>
