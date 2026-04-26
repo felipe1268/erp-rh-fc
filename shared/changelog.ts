@@ -8896,4 +8896,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-26 22:00:00",
   },
+  {
+    version: 1296,
+    titulo: "Seguro de Vida: modal em tela cheia (fullscreen)",
+    descricao: "Modal de importação do corretor agora ocupa a tela inteira (100vw × 100vh, sem bordas arredondadas). Formulário de upload centralizado com largura máxima de 768px para boa legibilidade. Layout dois painéis de resultados ocupa toda a tela disponível.",
+    tipo: "melhoria",
+    modulos: "Seguro de Vida",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-26 22:30:00",
+  },
 ];

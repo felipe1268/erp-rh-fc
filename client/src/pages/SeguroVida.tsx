@@ -266,7 +266,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) { onClose(); reset(); } }}>
-      <DialogContent className={cn("flex flex-col p-0 gap-0 w-[1280px] max-w-[96vw]", resultados ? "h-[88vh]" : "max-h-[88vh]")}>
+      <DialogContent className="flex flex-col p-0 gap-0 w-screen h-screen max-w-none rounded-none border-0">
 
         {/* Header */}
         <DialogHeader className="px-6 py-4 border-b shrink-0 bg-gradient-to-r from-indigo-50 to-slate-50">
@@ -279,9 +279,9 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
           </p>
         </DialogHeader>
 
-        <div className={cn("flex-1 overflow-hidden", !resultados ? "overflow-auto px-6 py-5 space-y-5" : "flex")}>
+        <div className={cn("flex-1 min-h-0", !resultados ? "overflow-auto px-8 py-6 space-y-5" : "flex overflow-hidden")}>
           {!resultados ? (
-            <>
+            <div className="max-w-3xl mx-auto w-full space-y-5">
               {/* Modo tabs */}
               <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
                 {([["pdf", FileUp, "Upload de PDF"], ["texto", FileText, "Colar texto"]] as const).map(([key, Icon, label]) => (
@@ -431,7 +431,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
                   </div>
                 </div>
               )}
-            </>
+            </div>
           ) : (
             /* ── Layout dois painéis: lista de meses + detalhe ── */
             <>
