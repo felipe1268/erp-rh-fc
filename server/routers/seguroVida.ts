@@ -188,6 +188,7 @@ function extrairNomesP6(linhas: string[], enableDiag = false): SeguradoParsed[] 
   const reNome = /^([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]{1,}(?:\s+[A-Za-záàãâéêíóôõúüçñA-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]{2,}){1,})/;
   const resultado: SeguradoParsed[] = [];
   let idx = 1;
+  const nomesVistos = new Set<string>(); // deduplicação: mesmo nome normalizado só entra uma vez
   for (let i = 0; i < linhas.length; i++) {
     const linha = linhas[i];
     const match = linha.match(reNome);
@@ -201,6 +202,13 @@ function extrairNomesP6(linhas: string[], enableDiag = false): SeguradoParsed[] 
     if (palavras.some(w => P6_BLACKLIST.has(norma(w)))) continue;
     // Exige ao menos uma palavra com 4+ chars (descarta "DE E A" isolados)
     if (!palavras.some(w => w.length >= 4)) continue;
+    // Deduplicação: descarta entradas repetidas (mesmo nome normalizado)
+    const nomeNorm = normalizeName(nomeRaw);
+    if (nomesVistos.has(nomeNorm)) {
+      if (enableDiag) console.log(`[SeguroVida] P6 dedup: "${nomeRaw}" ignorado (duplicata na linha ${i})`);
+      continue;
+    }
+    nomesVistos.add(nomeNorm);
     const valores = coletarValoresAdjacentes(linhas, i, linha);
     // Log diagnóstico para os primeiros 5 segurados
     if (enableDiag && resultado.length < 5) {
@@ -400,11 +408,16 @@ async function executarCruzamento(
   }[] = [];
 
   const idxUsados = new Set<number>();
+  // Mapa: employeeId → índice do PDF que ele foi associado (para detectar duplicatas no PDF)
+  const empParaPdfIdx = new Map<number, number>();
 
   // Lista combinada: CLT sempre + PJ/Sócios opcionalmente
   const empsParaCruzar = incluirPJ
     ? [...cltAtivos, ...pjAtivos.map((p: any) => ({ ...p, dataAdmissao: null }))]
     : cltAtivos;
+
+  // Normaliza todos os ativos para o fallback bidirecional
+  const cltAtivosNorm = cltAtivos.map((e: any) => ({ ...e, _norm: normalizeName(e.nomeCompleto) }));
 
   for (const emp of empsParaCruzar) {
     const nNorm = normalizeName(emp.nomeCompleto);
@@ -421,6 +434,7 @@ async function executarCruzamento(
 
     if (melhorSim >= THRESHOLD && melhorIdx >= 0) {
       idxUsados.add(melhorIdx);
+      empParaPdfIdx.set(emp.id, melhorIdx);
       const matchedSeg = seguradosCorretora[melhorIdx];
       // nome = nome exato do PDF (corretor); nomeHR = nome do sistema RH; valores = importâncias do PDF
       // Nota: não fazemos UPDATE de coberturas aqui — apenas coletamos o resultado para o usuário confirmar.
@@ -438,6 +452,35 @@ async function executarCruzamento(
   seguradosCorretora.forEach((s, i) => {
     if (idxUsados.has(i)) return;
     const sNorm = normalizeName(s.nome);
+
+    // --- FALLBACK BIDIRECIONAL ---
+    // Antes de marcar como indevido, verifica se existe funcionário CLT ativo que corresponde
+    // a esta entrada do PDF. Isso detecta:
+    // (a) entradas duplicadas no PDF (mesmo funcionário com dois itens)
+    // (b) casos onde o matching direcional associou o funcionário a outro item com sim maior
+    let melhorSimAtivo = 0;
+    let melhorEmpAtivo: any = null;
+    for (const emp of cltAtivosNorm) {
+      const sim = nameSimilarity(sNorm, emp._norm);
+      if (sim > melhorSimAtivo) { melhorSimAtivo = sim; melhorEmpAtivo = emp; }
+    }
+    if (melhorSimAtivo >= THRESHOLD && melhorEmpAtivo) {
+      // Funcionário ativo corresponde a esta entrada do PDF
+      // Se ele já foi associado a outro item (empParaPdfIdx), esta é uma duplicata → ignorar silenciosamente
+      if (empParaPdfIdx.has(melhorEmpAtivo.id)) {
+        console.log(`[SeguroVida] PDF entrada duplicada ignorada: "${s.nome}" (item ${s.item}) → já associado a ${melhorEmpAtivo.nomeCompleto} via item ${seguradosCorretora[empParaPdfIdx.get(melhorEmpAtivo.id)!]?.item}`);
+        return; // não adiciona ao resultado
+      }
+      // Funcionário ativo ainda não associado → reclassificar como "ok"
+      const cobAtual = coberturasAtivas.find((c: any) => c.employee_id === melhorEmpAtivo.id);
+      const dataAdmissao = melhorEmpAtivo.dataAdmissao ? String(melhorEmpAtivo.dataAdmissao) : undefined;
+      idxUsados.add(i);
+      empParaPdfIdx.set(melhorEmpAtivo.id, i);
+      console.log(`[SeguroVida] Fallback bidirecional: "${s.nome}" (item ${s.item}) → ${melhorEmpAtivo.nomeCompleto} (${(melhorSimAtivo*100).toFixed(0)}%)`);
+      resultado.push({ status: "ok", nome: s.nome, item: s.item, employeeId: melhorEmpAtivo.id, nomeHR: melhorEmpAtivo.nomeCompleto, tipoContrato: melhorEmpAtivo.tipoContrato, similaridade: melhorSimAtivo, dataAdmissao, coberturaId: cobAtual?.id, valores: s.valores, seguradora: seguradora ?? null });
+      return;
+    }
+    // ---
 
     // Verifica se é PJ/Sócio ativo (quando não inclui PJ no cruzamento)
     let possivelPJ: { nome: string; tipo: string } | undefined;
@@ -480,8 +523,12 @@ async function executarCruzamento(
     .slice(0, 3)
     .map(r => `${r.nomeHR}(${(r.similaridade! * 100).toFixed(0)}%)`);
   console.log(`[SeguroVida] cruzamento ${competencia}: ok=${totalOk}, semSeguro=${totalSemSeguro}, pagar=${totalPagarIndevido}, novo=${totalNovos}, exemplos=${matchesDebug.join(", ") || "nenhum"}`);
+  if (totalPagarIndevido > 0) {
+    const indevidoNomes = resultado.filter(r => r.status === "pagar_indevido").map(r => `${r.nome}(item:${r.item})`).join(", ");
+    console.log(`[SeguroVida] pagar_indevido: ${indevidoNomes}`);
+  }
   if (totalSemSeguro > 0) {
-    const semSeguroNomes = resultado.filter(r => r.status === "sem_seguro").slice(0, 5).map(r => r.nome);
+    const semSeguroNomes = resultado.filter(r => r.status === "sem_seguro").slice(0, 5).map(r => r.nomeHR ?? r.nome);
     console.log(`[SeguroVida] sem seguro (primeiros): ${semSeguroNomes.join(", ")}`);
   }
 
