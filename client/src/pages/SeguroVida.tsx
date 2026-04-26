@@ -180,7 +180,11 @@ function ResultadoMesDetalhe({ res }: { res: any }) {
                     </span>
                   </td>
                   <td className="px-4 py-2.5 font-medium text-slate-800">{r.nomeHR ?? <span className="text-slate-300 italic">—</span>}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{r.nome}</td>
+                  <td className="px-4 py-2.5 text-slate-600">
+                    {r.nome
+                      ? <span className={r.nome !== r.nomeHR && r.nomeHR ? "text-indigo-700 font-medium" : ""}>{r.nome}</span>
+                      : <span className="text-slate-300 italic">—</span>}
+                  </td>
                   <td className="px-4 py-2.5 font-mono text-slate-400 text-xs">{r.item || "—"}</td>
                   <td className="px-4 py-2.5 text-slate-400 text-xs">
                     {r.similaridade != null ? `${Math.round(r.similaridade * 100)}%` : "—"}

@@ -319,7 +319,8 @@ async function executarCruzamento(
     if (melhorSim >= THRESHOLD && melhorIdx >= 0) {
       idxUsados.add(melhorIdx);
       const matchedSeg = seguradosCorretora[melhorIdx];
-      resultado.push({ status: "ok", nome: emp.nomeCompleto, item: matchedSeg.item, employeeId: emp.id, nomeHR: emp.nomeCompleto, similaridade: melhorSim, dataAdmissao, coberturaId: cobAtual?.id });
+      // nome = nome exato do PDF (corretor); nomeHR = nome do sistema RH
+      resultado.push({ status: "ok", nome: matchedSeg.nome, item: matchedSeg.item, employeeId: emp.id, nomeHR: emp.nomeCompleto, similaridade: melhorSim, dataAdmissao, coberturaId: cobAtual?.id });
       // Persiste valores do PDF na cobertura já existente
       if (cobAtual?.id && matchedSeg.valores.length > 0) {
         const v = matchedSeg.valores;
@@ -339,9 +340,11 @@ async function executarCruzamento(
         `);
       }
     } else if (isNovo) {
-      resultado.push({ status: "novo", nome: emp.nomeCompleto, item: "", employeeId: emp.id, nomeHR: emp.nomeCompleto, dataAdmissao, coberturaId: cobAtual?.id });
+      // Recém-admitido: não estava no PDF ainda — sem nome do corretor
+      resultado.push({ status: "novo", nome: "", item: "", employeeId: emp.id, nomeHR: emp.nomeCompleto, dataAdmissao, coberturaId: cobAtual?.id });
     } else {
-      resultado.push({ status: "sem_seguro", nome: emp.nomeCompleto, item: "", employeeId: emp.id, nomeHR: emp.nomeCompleto, dataAdmissao, coberturaId: cobAtual?.id });
+      // Sem seguro: não foi encontrado no PDF — sem nome do corretor
+      resultado.push({ status: "sem_seguro", nome: "", item: "", employeeId: emp.id, nomeHR: emp.nomeCompleto, dataAdmissao, coberturaId: cobAtual?.id });
     }
   }
 
