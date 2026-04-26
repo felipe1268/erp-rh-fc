@@ -1450,7 +1450,9 @@ export default function SeguroVida() {
         {tabAtiva === "inconsistencias" && (() => {
           const inc = inconsistenciasQ.data;
           const loading = inconsistenciasQ.isLoading;
-          const demitidos: any[] = inc?.demitidos ?? [];
+          const demitidosCobertura: any[] = inc?.demitidosCobertura ?? [];
+          const demitidosPDF: any[] = inc?.demitidosPDF ?? [];
+          const semSeguro: any[] = inc?.semSeguro ?? [];
           const pjs: any[] = inc?.pjsComCobertura ?? [];
           const naoId: any[] = inc?.naoIdentificados ?? [];
 
@@ -1462,12 +1464,15 @@ export default function SeguroVida() {
 
           if (!inc) return null;
 
-          const SectionCard = ({ title, count, colorClass, bgClass, borderClass, children }: {
-            title: string; count: number; colorClass: string; bgClass: string; borderClass: string; children: any;
+          const SectionCard = ({ title, count, colorClass, bgClass, borderClass, subtitle, children }: {
+            title: string; count: number; colorClass: string; bgClass: string; borderClass: string; subtitle?: string; children: any;
           }) => (
             <div className={cn("rounded-xl border overflow-hidden", borderClass)}>
               <div className={cn("flex items-center gap-3 px-5 py-3", bgClass)}>
-                <span className={cn("font-semibold text-sm", colorClass)}>{title}</span>
+                <div>
+                  <span className={cn("font-semibold text-sm", colorClass)}>{title}</span>
+                  {subtitle && <p className="text-[10px] text-slate-500 mt-0.5">{subtitle}</p>}
+                </div>
                 <span className={cn("ml-auto text-xl font-bold", colorClass)}>{count}</span>
               </div>
               {count > 0 ? children : (
@@ -1478,6 +1483,8 @@ export default function SeguroVida() {
               )}
             </div>
           );
+
+          const totalDemitidos = demitidosCobertura.length + demitidosPDF.length;
 
           return (
             <div className="space-y-5 pt-1">
@@ -1490,35 +1497,88 @@ export default function SeguroVida() {
                 </div>
               )}
 
-              {/* Seção 1 — Demitidos na apólice */}
+              {/* Seção 1 — Demitidos/Inativos ainda na apólice */}
               <SectionCard
                 title="🔴 Demitidos/Inativos ainda na apólice"
-                count={demitidos.length}
+                count={totalDemitidos}
                 colorClass="text-red-700" bgClass="bg-red-50" borderClass="border-red-200">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-red-50/60 border-b border-red-100">
                       <tr>
-                        <th className="px-4 py-2 text-left font-semibold text-red-800">Nome (RH)</th>
-                        <th className="px-4 py-2 text-left font-semibold text-red-800">Cargo/Função</th>
+                        <th className="px-4 py-2 text-left font-semibold text-red-800">Nome</th>
                         <th className="px-4 py-2 text-left font-semibold text-red-800">Situação</th>
                         <th className="px-4 py-2 text-left font-semibold text-red-800">Data Demissão</th>
                         <th className="px-4 py-2 text-left font-semibold text-red-800">Item Apólice</th>
-                        <th className="px-4 py-2 text-left font-semibold text-red-800">Status Cobertura</th>
+                        <th className="px-4 py-2 text-left font-semibold text-red-800">Origem</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-red-50">
-                      {demitidos.map((d: any, i: number) => (
-                        <tr key={i} className="hover:bg-red-50/40">
-                          <td className="px-4 py-2.5 font-medium text-slate-800">{d.nome_rh ?? d.nome_completo}</td>
-                          <td className="px-4 py-2.5 text-slate-600 text-xs">{d.funcao ?? d.cargo ?? "—"}</td>
+                      {demitidosCobertura.map((d: any, i: number) => (
+                        <tr key={`cob-${i}`} className="hover:bg-red-50/40">
+                          <td className="px-4 py-2.5">
+                            <p className="font-medium text-slate-800">{d.nome_rh ?? d.nome_completo}</p>
+                            <p className="text-[10px] text-slate-400">{d.funcao ?? d.cargo ?? ""}</p>
+                          </td>
                           <td className="px-4 py-2.5">
                             <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">{d.emp_status ?? "—"}</span>
                           </td>
-                          <td className="px-4 py-2.5 text-red-700 font-semibold">{fmtDate(d.dataDemissao?.split?.("T")?.[0]) || "—"}</td>
+                          <td className="px-4 py-2.5 text-red-700 font-semibold text-sm">
+                            {d.dataDemissao ? fmtDate(d.dataDemissao?.split?.("T")?.[0]) : <span className="text-slate-400 font-normal italic">sem data</span>}
+                          </td>
                           <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{d.item_segurador || "—"}</td>
                           <td className="px-4 py-2.5">
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">{d.cobertura_status}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">Cadastro</span>
+                          </td>
+                        </tr>
+                      ))}
+                      {demitidosPDF.map((d: any, i: number) => {
+                        const pd = d.possivelDesligado;
+                        const [ano, mes] = (d.competencia ?? "").split("-");
+                        return (
+                          <tr key={`pdf-${i}`} className="hover:bg-red-50/40 bg-red-50/20">
+                            <td className="px-4 py-2.5">
+                              <p className="font-medium text-slate-800">{pd?.nome ?? d.nome}</p>
+                              <p className="text-[10px] text-slate-400">PDF do corretor: <span className="font-semibold">{d.nome}</span></p>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">{pd?.status ?? "Desligado"}</span>
+                            </td>
+                            <td className="px-4 py-2.5 text-red-700 font-semibold text-sm">
+                              {pd?.dataDemissao ? fmtDate(pd.dataDemissao) : <span className="text-slate-400 font-normal italic">sem data</span>}
+                            </td>
+                            <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{d.item || "—"}</td>
+                            <td className="px-4 py-2.5">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">{MESES[Number(mes) - 1]} {ano}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </SectionCard>
+
+              {/* Seção 2 — Sem Seguro (ativos sem cobertura na última importação) */}
+              <SectionCard
+                title="🛡️ Sem Seguro — ativos não cobertos"
+                count={semSeguro.length}
+                subtitle={inc.semSeguroCompetencia ? `Competência: ${(() => { const [a,m] = (inc.semSeguroCompetencia ?? "").split("-"); return `${MESES[Number(m)-1]} ${a}`; })()}` : undefined}
+                colorClass="text-red-800" bgClass="bg-red-100" borderClass="border-red-300">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-red-50 border-b border-red-200">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-semibold text-red-900">Nome (RH)</th>
+                        <th className="px-4 py-2 text-left font-semibold text-red-900">Data Admissão</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-red-50">
+                      {semSeguro.map((s: any, i: number) => (
+                        <tr key={i} className="hover:bg-red-50/60">
+                          <td className="px-4 py-2.5 font-medium text-slate-800">{s.nomeHR}</td>
+                          <td className="px-4 py-2.5 text-slate-600 text-sm">
+                            {s.dataAdmissao ? fmtDate(s.dataAdmissao?.split?.("T")?.[0]) : "—"}
                           </td>
                         </tr>
                       ))}
@@ -1527,7 +1587,7 @@ export default function SeguroVida() {
                 </div>
               </SectionCard>
 
-              {/* Seção 2 — PJs / Sócios na apólice */}
+              {/* Seção 3 — PJs / Sócios na apólice */}
               <SectionCard
                 title="🟡 PJs / Sócios na apólice"
                 count={pjs.length}
@@ -1562,14 +1622,12 @@ export default function SeguroVida() {
                 </div>
               </SectionCard>
 
-              {/* Seção 3 — Não identificados */}
+              {/* Seção 4 — Não identificados (sem match algum no HR) */}
               <SectionCard
                 title="❓ Não identificados nas últimas importações"
                 count={naoId.length}
+                subtitle="Nomes no PDF sem correspondência no ERP (últimas 6 competências)"
                 colorClass="text-slate-700" bgClass="bg-slate-100" borderClass="border-slate-200">
-                <div className="px-4 py-2 bg-slate-50 border-b text-xs text-slate-500 italic">
-                  Nomes presentes nos PDFs do corretor que não foram cruzados com nenhum funcionário no sistema (últimas 6 competências com divergência).
-                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b">
@@ -1588,20 +1646,7 @@ export default function SeguroVida() {
                             <td className="px-4 py-2.5">
                               <span className="text-xs font-semibold text-slate-700">{MESES[Number(mes) - 1]} {ano}</span>
                             </td>
-                            <td className="px-4 py-2.5">
-                              <span className="font-medium text-slate-800">{n.nome}</span>
-                              {n.possivelDesligado && (
-                                <div className="text-[10px] text-red-700 bg-red-50 border border-red-100 rounded px-1.5 py-0.5 mt-0.5 inline-flex items-center gap-1">
-                                  🔴 {n.possivelDesligado.status ?? "Desligado"}: <strong>{n.possivelDesligado.nome}</strong>
-                                  {n.possivelDesligado.dataDemissao && <span> — {fmtDate(n.possivelDesligado.dataDemissao)}</span>}
-                                </div>
-                              )}
-                              {n.possivelPJ && (
-                                <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5 mt-0.5 inline-flex items-center gap-1">
-                                  ⚠️ Possível {n.possivelPJ.tipo}: <strong>{n.possivelPJ.nome}</strong>
-                                </div>
-                              )}
-                            </td>
+                            <td className="px-4 py-2.5 font-medium text-slate-800">{n.nome}</td>
                             <td className="px-4 py-2.5 font-mono text-xs text-slate-400">{n.item || "—"}</td>
                             <td className="px-4 py-2.5 text-xs text-slate-400">{fmtDate(n.dataImportacao?.split?.("T")?.[0])}</td>
                           </tr>
